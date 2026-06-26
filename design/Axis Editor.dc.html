@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:#0c0c0e; overscroll-behavior:none; }
+  ::selection{ background:#35c9d6; color:#06181a; }
+  .axs-scroll::-webkit-scrollbar{ width:9px; height:9px; }
+  .axs-scroll::-webkit-scrollbar-track{ background:transparent; }
+  .axs-scroll::-webkit-scrollbar-thumb{ background:#2a2a31; border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  @keyframes axsOverlay{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes axsPalette{ from{ opacity:0; transform:translateY(10px) scale(.985); } to{ opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes axsSheet{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
+  @keyframes axsToast{ 0%{ opacity:0; transform:translate(-50%,10px); } 12%{ opacity:1; transform:translate(-50%,0); } 88%{ opacity:1; transform:translate(-50%,0); } 100%{ opacity:0; transform:translate(-50%,6px); } }
+  @keyframes axsPlace{ 0%{ transform:scale(.7); opacity:0; } 60%{ transform:scale(1.06); } 100%{ transform:scale(1); opacity:1; } }
+</style>
+</helmet>
+
+<div style="position:fixed; inset:0; display:flex; flex-direction:row; background:#0c0c0e; color:#e9e9ee; font-family:'Hanken Grotesk',system-ui,sans-serif; overflow:hidden;">
+
+  <!-- ===================== LEFT RAIL ===================== -->
+  <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Tool Rail" style="width:66px; flex:none; display:flex; flex-direction:column; align-items:center; gap:5px; padding:13px 0; background:#0f0f12; border-right:1px solid #1d1d22; z-index:10;">
+    <div style="margin-bottom:10px;">
+      <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
+    </div>
+    <sc-for list="{{ railItems }}" as="r" hint-placeholder-count="6">
+      <div data-rail="{{ r.id }}" onClick="{{ onRail }}" title="{{ r.label }}" style="{{ r.style }}" style-hover="background:#1c1c21; color:#cfcfd6;">
+        <span style="font-size:19px; line-height:1;">{{ r.icon }}</span>
+        <span style="font-size:8.5px; font-weight:600; letter-spacing:.02em;">{{ r.short }}</span>
+      </div>
+    </sc-for>
+    <div style="flex:1;"></div>
+    <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
+      <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
+      <span style="font:600 8px/1 'JetBrains Mono'; color:#4a4a52;">FW1.4</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== MAIN COLUMN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+
+  <!-- ===================== TOP BAR ===================== -->
+  <div data-screen-label="Top Bar" style="{{ topbarStyle }}">
+
+    <sc-if value="{{ isMobileView }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:center; gap:9px;">
+      <svg width="26" height="26" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle></svg>
+    </div>
+    </sc-if>
+
+    <!-- preset cluster -->
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div onClick="{{ onPresetPrev }}" style="width:34px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px 4px 4px 9px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">‹</div>
+      <div onClick="{{ onPresetPick }}" style="display:flex; align-items:center; gap:9px; height:38px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:4px; cursor:pointer; min-width:0;" style-hover="border-color:#3f3f48;">
+        <span style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em;">PRE</span>
+        <span style="font:700 14px/1 'JetBrains Mono'; color:#f5a623;">430</span>
+        <span style="font-size:13px; font-weight:600; color:#e3e3e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">DEBUG</span>
+        <span style="font-size:10px; color:#56565e;">▾</span>
+      </div>
+      <div onClick="{{ onPresetNext }}" style="width:34px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:4px 9px 9px 4px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">›</div>
+    </div>
+
+    <!-- scenes -->
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em;">SCN</span>
+      <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid #26262c; border-radius:9px; padding:3px;">
+        <sc-for list="{{ scenes }}" as="s" hint-placeholder-count="8">
+          <div data-scene="{{ s.n }}" onClick="{{ onScene }}" style="{{ s.style }}">{{ s.n }}</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <!-- selected block readout (desktop) -->
+    <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; align-items:center; gap:9px; height:38px; padding:0 13px; background:#0e0e10; border:1px solid #20202a; border-radius:9px; max-width:300px;">
+      <span style="font-size:12px; font-weight:600; color:#9a9aa3; white-space:nowrap;">{{ crumbTitle }}</span>
+      <span style="font:500 12px/1 'JetBrains Mono'; color:#f5a623; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ crumbType }}</span>
+    </div>
+    </sc-if>
+
+    <button onClick="{{ openPalette }}" style="{{ addBtnStyle }}">
+      <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.6"></circle><path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.6" stroke-linecap="round"></path></svg>
+      Add block
+      <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}"><span style="font:600 10px/1 'JetBrains Mono'; color:#5e8a8c; background:#0d1516; border:1px solid #234142; border-radius:5px; padding:4px 6px;">⌘K</span></sc-if>
+    </button>
+
+    <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; align-items:center; gap:7px;">
+      <div title="Tuner" style="width:38px; height:38px; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; font-size:16px; color:#9a9aa3;" style-hover="border-color:#3f3f48;">♪</div>
+      <div title="Tap tempo" style="display:flex; align-items:baseline; gap:4px; height:38px; padding:0 12px; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer;"><span style="font:700 13px/1 'JetBrains Mono'; color:#e9e9ee;">{{ bpm }}</span><span style="font-size:9px; color:#6e6e78; font-weight:600;">BPM</span></div>
+      <div title="DSP usage" style="display:flex; flex-direction:column; gap:4px; width:64px;">
+        <div style="display:flex; justify-content:space-between; font:600 8px/1 'JetBrains Mono';"><span style="color:#6e6e78;">CPU</span><span style="{{ cpuTextStyle }}">{{ cpuText }}</span></div>
+        <div style="height:6px; background:#0e0e10; border:1px solid #26262c; border-radius:4px; overflow:hidden;"><div style="{{ cpuBarStyle }}"></div></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <button onClick="{{ onSave }}" style="{{ saveBtnStyle }}">
+      <span style="width:8px; height:8px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px #f5a623;"></span>Save
+    </button>
+  </div>
+
+  <!-- ===================== GRID ===================== -->
+  <div class="axs-scroll" data-screen-label="Signal Grid" style="{{ gridScrollStyle }}">
+    <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
+      <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
+        <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
+          <path d="{{ cab.d }}" fill="none" stroke="{{ cab.stroke }}" stroke-width="2"></path>
+          <path d="{{ cab.d }}" data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="18" style="pointer-events:stroke; cursor:pointer;"></path>
+          <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" style="cursor:pointer; opacity:0.62; pointer-events:auto;" style-hover="opacity:1;">
+            <circle cx="{{ cab.mx }}" cy="{{ cab.my }}" r="9" fill="#16161b" stroke="#6a6a74" stroke-width="1.5"></circle>
+            <text x="{{ cab.mx }}" y="{{ cab.my }}" text-anchor="middle" dominant-baseline="central" fill="#c7c7cf" font-size="13" font-weight="700" style="pointer-events:none;">×</text>
+          </g>
+        </sc-for>
+        <sc-if value="{{ linkPath }}" hint-placeholder-val="{{ false }}">
+          <path d="{{ linkPath }}" fill="none" stroke="#35c9d6" stroke-width="2.5" stroke-dasharray="6 5"></path>
+        </sc-if>
+      </svg>
+      <div style="{{ gridStyle }}">
+        <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="48">
+          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
+            <sc-if value="{{ cell.isBlock }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ cell.fillStyle }}"></div>
+              <div style="{{ cell.glyphStyle }}">{{ cell.glyph }}</div>
+              <div style="position:relative; z-index:2; font-weight:700; font-size:14px; color:#fff; letter-spacing:.01em; text-shadow:0 1px 2px rgba(0,0,0,.4); text-align:center; line-height:1.05;">{{ cell.label }}</div>
+              <div style="position:relative; z-index:2; font:500 9px/1.1 'JetBrains Mono'; color:rgba(255,255,255,.62); text-align:center; max-width:92%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cell.type }}</div>
+              <sc-if value="{{ cell.showChan }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:6px; right:7px; z-index:3; font:700 9px/1 'JetBrains Mono'; color:rgba(255,255,255,.85); background:rgba(0,0,0,.28); border-radius:4px; padding:3px 4px;">{{ cell.channel }}</div>
+              </sc-if>
+              <sc-if value="{{ cell.bypassed }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:6px; left:7px; z-index:3; font:700 8px/1 'JetBrains Mono'; color:#0c0c0e; background:#9a9aa3; border-radius:4px; padding:3px 4px; letter-spacing:.05em;">BYP</div>
+              </sc-if>
+              <sc-if value="{{ cell.showDots }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; bottom:5px; left:0; right:0; z-index:3; display:flex; gap:3px; justify-content:center;">
+                  <sc-for list="{{ cell.dots }}" as="d" hint-placeholder-count="2">
+                    <span style="{{ d.style }}"></span>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ cell.adjusting }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; inset:0; z-index:7; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(8,8,10,.58);">
+                  <div style="font:700 24px/1 'JetBrains Mono'; color:#fff;">{{ cell.adjustValue }}</div>
+                  <div style="font-size:10px; font-weight:700; color:#35c9d6; margin-top:4px; letter-spacing:.04em; text-transform:uppercase;">{{ cell.adjustLabel }}</div>
+                </div>
+              </sc-if>
+            </sc-if>
+            <sc-if value="{{ cell.isShunt }}" hint-placeholder-val="{{ false }}">
+              <div style="width:62%; height:2px; background:#4a4a55; border-radius:1px;"></div>
+            </sc-if>
+            <sc-if value="{{ cell.isEmpty }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:22px; color:#2f2f37; font-weight:300; line-height:1;">+</div>
+            </sc-if>
+            <sc-if value="{{ cell.showOut }}" hint-placeholder-val="{{ false }}">
+              <div data-port="{{ cell.idx }}" onPointerDown="{{ onPortDown }}" style="{{ cell.outStyle }}" style-hover="transform:scale(1.25);"></div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <sc-if value="{{ pager.show }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex; align-items:center; justify-content:center; gap:16px; padding:10px 12px 14px; background:#0f0f12; border-top:1px solid #1a1a1f; flex:none;">
+    <div onClick="{{ onPagePrev }}" style="width:46px; height:40px; display:flex; align-items:center; justify-content:center; background:#17171a; border:1px solid #2a2a31; border-radius:11px; cursor:pointer; color:#cfcfd6; font-size:18px;">‹</div>
+    <div style="display:flex; align-items:center; gap:7px;">
+      <sc-for list="{{ pager.dots }}" as="d" hint-placeholder-count="3">
+        <div data-p="{{ d.i }}" onClick="{{ onPageDot }}" style="{{ d.style }}"></div>
+      </sc-for>
+    </div>
+    <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; min-width:64px; text-align:center;">{{ pager.rangeLabel }}</div>
+    <div onClick="{{ onPageNext }}" style="width:46px; height:40px; display:flex; align-items:center; justify-content:center; background:#17171a; border:1px solid #2a2a31; border-radius:11px; cursor:pointer; color:#cfcfd6; font-size:18px;">›</div>
+  </div>
+  </sc-if>
+  </div>
+
+  <!-- ===================== EDITOR ===================== -->
+  <sc-if value="{{ editorOpen }}" hint-placeholder-val="{{ true }}">
+  <div onClick="{{ closeEditor }}" data-screen-label="Block Editor" style="{{ ed.overlayStyle }}">
+   <div onClick="{{ stop }}" style="{{ ed.cardStyle }}">
+
+    <!-- HEADER -->
+    <div style="display:flex; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid #1c1c22; flex:none;">
+      <div style="{{ ed.iconStyle }}">{{ ed.icon }}</div>
+      <div style="flex:1; min-width:0; line-height:1.15;">
+        <div style="font-weight:700; font-size:19px; color:#fff;">{{ ed.title }}</div>
+        <div style="font-size:13px; color:#f5a623; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ed.type }}</div>
+      </div>
+      <div style="display:flex; gap:4px; background:#0d0d10; border:1px solid #26262c; border-radius:11px; padding:4px;">
+        <sc-for list="{{ ed.modes }}" as="m" hint-placeholder-count="2">
+          <div data-mode="{{ m.id }}" onClick="{{ onMode }}" style="{{ m.style }}">{{ m.label }}</div>
+        </sc-for>
+      </div>
+      <div onClick="{{ closeEditor }}" style="width:44px; height:44px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:12px; cursor:pointer; font-size:18px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
+    </div>
+
+    <!-- META: type + channel -->
+    <div style="{{ ed.metaStyle }}">
+      <div onClick="{{ onRetype }}" style="flex:1; min-width:200px; display:flex; align-items:center; gap:10px; height:48px; padding:0 14px; background:#0d0d10; border:1px solid #2c2c34; border-radius:12px; cursor:pointer;" style-hover="border-color:#35c9d6;">
+        <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em;">TYPE</span>
+        <span style="font-size:15px; font-weight:600; color:#f5a623; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ed.type }}</span>
+        <span style="flex:1;"></span>
+        <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.5"></circle><path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.5" stroke-linecap="round"></path></svg>
+      </div>
+      <sc-if value="{{ ed.isAmp }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; gap:6px; align-items:center;">
+        <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em; margin-right:4px;">CH</span>
+        <sc-for list="{{ ed.channels }}" as="ch" hint-placeholder-count="4">
+          <div data-ch="{{ ch.id }}" onClick="{{ onChannel }}" style="{{ ch.style }}">{{ ch.id }}</div>
+        </sc-for>
+      </div>
+      </sc-if>
+    </div>
+
+    <!-- TABS -->
+    <div class="axs-scroll" style="display:flex; gap:8px; padding:14px 18px 4px; overflow-x:auto; flex:none;">
+      <sc-for list="{{ ed.pages }}" as="p" hint-placeholder-count="4">
+        <div data-page="{{ p.name }}" onClick="{{ onPage }}" style="{{ p.style }}">{{ p.name }}</div>
+      </sc-for>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="axs-scroll" style="flex:1; min-height:0; overflow:auto; padding:10px 18px 16px;">
+          <!-- KNOBS -->
+          <sc-if value="{{ ed.isKnobs }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:18px 8px; padding:14px 4px; justify-items:center;">
+            <sc-for list="{{ ed.knobs }}" as="k" hint-placeholder-count="6">
+              <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:9px; width:108px;">
+                <div data-key="{{ k.key }}" onPointerDown="{{ onKnobDown }}" onDoubleClick="{{ onKnobReset }}" style="position:relative; width:92px; height:92px; cursor:ns-resize; touch-action:none;">
+                  <svg width="92" height="92" viewBox="0 0 64 64" style="display:block;">
+                    <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                    <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                    <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                    <g transform="{{ k.pt }}"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623"></circle></g>
+                  </svg>
+                  <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:600 14px/1 'JetBrains Mono'; color:#e9e9ee; pointer-events:none;">{{ k.valueText }}</div>
+                </div>
+                <div data-q="{{ k.label }}" onClick="{{ onQuickToggle }}" title="Add to swipe controls" style="{{ k.swipeStyle }}">⚡</div>
+                <div style="font-weight:600; font-size:13px; color:#c3c3cb; text-align:center; line-height:1.2;">{{ k.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <!-- INPUT EQ -->
+          <sc-if value="{{ ed.isIeq }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:2px 4px;">
+            <div style="display:flex; gap:6px; margin-bottom:12px;">
+              <sc-for list="{{ ieq.typeSeg }}" as="t" hint-placeholder-count="4">
+                <div data-t="{{ t.id }}" onClick="{{ onIeqType }}" style="{{ t.style }}">{{ t.label }}</div>
+              </sc-for>
+            </div>
+            <div style="position:relative; background:#0a0a0c; border:1px solid #232329; border-radius:12px; padding:10px 12px 4px;">
+              <svg viewBox="0 0 1000 300" style="width:100%; height:auto; display:block; touch-action:none; cursor:crosshair;">
+                <line x1="250" y1="14" x2="250" y2="286" stroke="#1c1c22" stroke-width="1"></line>
+                <line x1="500" y1="14" x2="500" y2="286" stroke="#1c1c22" stroke-width="1"></line>
+                <line x1="750" y1="14" x2="750" y2="286" stroke="#1c1c22" stroke-width="1"></line>
+                <line x1="0" y1="150" x2="1000" y2="150" stroke="#2a2a31" stroke-width="1" stroke-dasharray="4 5"></line>
+                <path d="{{ ieq.fillPath }}" fill="rgba(53,201,214,.10)" stroke="none"></path>
+                <path d="{{ ieq.curvePath }}" fill="none" stroke="#35c9d6" stroke-width="2.5" stroke-linejoin="round"></path>
+                <line x1="{{ ieq.lowX }}" y1="14" x2="{{ ieq.lowX }}" y2="286" stroke="#9b8cf0" stroke-width="1.5" stroke-dasharray="3 4"></line>
+                <circle data-eq="ilow" data-bi="0" onPointerDown="{{ onEqDown }}" cx="{{ ieq.lowX }}" cy="270" r="13" fill="#9b8cf0" stroke="#0a0a0c" stroke-width="2" style="cursor:ew-resize;"></circle>
+                <line x1="{{ ieq.highX }}" y1="14" x2="{{ ieq.highX }}" y2="286" stroke="#d65b9e" stroke-width="1.5" stroke-dasharray="3 4"></line>
+                <circle data-eq="ihigh" data-bi="0" onPointerDown="{{ onEqDown }}" cx="{{ ieq.highX }}" cy="270" r="13" fill="#d65b9e" stroke="#0a0a0c" stroke-width="2" style="cursor:ew-resize;"></circle>
+                <circle data-eq="iband" data-bi="0" onPointerDown="{{ onEqDown }}" cx="{{ ieq.bx }}" cy="{{ ieq.by }}" r="14" fill="#f5a623" stroke="#0a0a0c" stroke-width="2.5" style="cursor:grab;"></circle>
+                <circle cx="{{ ieq.bx }}" cy="{{ ieq.by }}" r="4" fill="#0a0a0c"></circle>
+              </svg>
+              <div style="display:flex; justify-content:space-between; font:500 9px/1 'JetBrains Mono'; color:#56565e; padding:2px 4px 6px;"><span>20 Hz</span><span>200</span><span>2k</span><span>20k</span></div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:14px;">
+              <sc-for list="{{ ieq.readouts }}" as="r" hint-placeholder-count="4">
+                <div style="flex:1; min-width:96px; background:#0d0d10; border:1px solid #26262c; border-radius:10px; padding:9px 12px;">
+                  <div style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.08em; text-transform:uppercase;">{{ r.label }}</div>
+                  <div style="font:600 16px/1.2 'JetBrains Mono'; color:{{ r.color }}; margin-top:5px;">{{ r.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:18px; margin-top:14px;">
+              <sc-for list="{{ ieq.sliders }}" as="s" hint-placeholder-count="2">
+                <div style="flex:1; min-width:160px;">
+                  <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:12px; font-weight:600; color:#c3c3cb;">{{ s.label }}</span><span style="font:500 11px/1 'JetBrains Mono'; color:#7fd8de;">{{ s.value }}</span></div>
+                  <div data-path="{{ s.path }}" data-min="{{ s.min }}" data-max="{{ s.max }}" onPointerDown="{{ onSliderDown }}" style="position:relative; height:30px; display:flex; align-items:center; cursor:pointer; touch-action:none;">
+                    <div style="position:absolute; left:0; right:0; height:6px; background:#1c1c22; border-radius:3px;"></div>
+                    <div style="{{ s.fillStyle }}"></div>
+                    <div style="{{ s.thumbStyle }}"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- OUTPUT EQ -->
+          <sc-if value="{{ ed.isOeq }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:2px 4px;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+              <div data-toggle="oeqon" onClick="{{ onOnOff }}" style="{{ oeq.onStyle }}">{{ oeq.onLabel }}</div>
+              <sc-for list="{{ oeq.typeSeg }}" as="t" hint-placeholder-count="2">
+                <div data-t="{{ t.id }}" onClick="{{ onOeqType }}" style="{{ t.style }}">{{ t.label }}</div>
+              </sc-for>
+              <span style="flex:1;"></span>
+              <div onClick="{{ onZeroAll }}" style="height:38px; padding:0 16px; display:flex; align-items:center; background:#17171a; border:1px solid #2a2a31; border-radius:9px; font-size:12px; font-weight:600; color:#9a9aa3; cursor:pointer;" style-hover="border-color:#3f3f48;">Zero All</div>
+            </div>
+            <div style="background:#0a0a0c; border:1px solid #232329; border-radius:12px; padding:10px 12px 4px;">
+              <svg viewBox="0 0 1000 300" style="width:100%; height:auto; display:block; touch-action:none;">
+                <line x1="0" y1="150" x2="1000" y2="150" stroke="#2a2a31" stroke-width="1" stroke-dasharray="4 5"></line>
+                <path d="{{ oeq.fillPath }}" fill="rgba(127,174,74,.12)" stroke="none"></path>
+                <path d="{{ oeq.curvePath }}" fill="none" stroke="#9ac24a" stroke-width="2.5" stroke-linejoin="round"></path>
+                <sc-for list="{{ oeq.nodes }}" as="n" hint-placeholder-count="8">
+                  <line x1="{{ n.x }}" y1="150" x2="{{ n.x }}" y2="{{ n.y }}" stroke="#3a4a28" stroke-width="2"></line>
+                  <circle data-eq="oband" data-bi="{{ n.bi }}" onPointerDown="{{ onEqDown }}" cx="{{ n.x }}" cy="{{ n.y }}" r="13" fill="#9ac24a" stroke="#0a0a0c" stroke-width="2.5" style="cursor:ns-resize;"></circle>
+                </sc-for>
+              </svg>
+              <div style="display:flex; padding:2px 0 6px;">
+                <sc-for list="{{ oeq.labels }}" as="l" hint-placeholder-count="8">
+                  <div style="flex:1; text-align:center; font:500 9px/1 'JetBrains Mono'; color:#56565e;">{{ l }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- STUB -->
+          <sc-if value="{{ ed.isStub }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#4a4a52; padding:50px 20px;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#3a3a44" stroke-width="1.6"></rect><path d="M3 9 H21 M8 4 V20" stroke="#3a3a44" stroke-width="1.4"></path></svg>
+            <div style="font-size:13px; font-weight:600;">{{ ed.activePage }}</div>
+            <div style="font-size:12px; color:#3c3c44; text-align:center;">Advanced page — not built in this prototype.</div>
+          </div>
+          </sc-if>
+        </div>
+
+    <!-- FOOTER common controls -->
+    <div style="{{ ed.footerStyle }}">
+      <div style="display:flex; gap:16px;">
+        <sc-for list="{{ ed.commonKnobs }}" as="k" hint-placeholder-count="2">
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:6px; width:66px;">
+            <div data-key="{{ k.key }}" onPointerDown="{{ onKnobDown }}" onDoubleClick="{{ onKnobReset }}" style="position:relative; width:58px; height:58px; cursor:ns-resize; touch-action:none;">
+              <svg width="58" height="58" viewBox="0 0 64 64" style="display:block;">
+                <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                <g transform="{{ k.pt }}"><circle cx="32" cy="20.5" r="2.6" fill="#f5a623"></circle></g>
+              </svg>
+            </div>
+            <div data-q="{{ k.label }}" onClick="{{ onQuickToggle }}" title="Add to swipe controls" style="{{ k.swipeStyle }}">⚡</div>
+            <div style="font-weight:600; font-size:11px; color:#9a9aa3;">{{ k.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <span style="flex:1; min-width:10px;"></span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div onClick="{{ onMute }}" style="{{ ed.muteStyle }}">{{ ed.muteLabel }}</div>
+        <div onClick="{{ onSceneIgnore }}" style="{{ ed.sceneStyle }}">Scene Ignore</div>
+        <div onClick="{{ onBypass }}" style="{{ ed.bypassStyle }}">{{ ed.bypassLabel }}</div>
+        <div onClick="{{ onRemove }}" style="{{ ed.removeStyle }}">Remove</div>
+      </div>
+    </div>
+   </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== COMMAND PALETTE ===================== -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePalette }}" style="position:absolute; inset:0; background:rgba(6,6,8,.66); backdrop-filter:blur(3px); z-index:200; display:flex; align-items:flex-start; justify-content:center; padding:7vh 12px 12px; animation:axsOverlay .12s ease;">
+    <div onClick="{{ stop }}" style="width:760px; max-width:100%; max-height:84vh; background:#161619; border:1px solid #2e2e36; border-radius:16px; box-shadow:0 32px 80px rgba(0,0,0,.6); display:flex; flex-direction:column; overflow:hidden; animation:axsPalette .15s cubic-bezier(.2,.8,.3,1);">
+      <div style="display:flex; align-items:center; gap:13px; padding:18px 20px; border-bottom:1px solid #232329;">
+        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5"></circle><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <input value="{{ query }}" onInput="{{ onQuery }}" onKeyDown="{{ onPaletteKey }}" placeholder="{{ placeholder }}" autofocus="{{ true }}" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#f2f2f5; font-family:inherit; font-size:17px; font-weight:500;">
+        <span style="font:500 12px/1 'JetBrains Mono'; color:#5d5d66; white-space:nowrap;">{{ resultCount }}</span>
+      </div>
+      <div class="axs-scroll" style="display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid #1f1f25; overflow-x:auto;">
+        <div style="display:flex; align-items:center; gap:6px; flex:none; padding:6px 11px; background:#11201f; border:1px solid #244040; border-radius:7px; font-size:11px; font-weight:600; color:#7fd8de; white-space:nowrap;">{{ targetLabel }}</div>
+        <div style="width:1px; height:18px; background:#2a2a31; flex:none;"></div>
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="8">
+          <div data-cat="{{ c.id }}" onClick="{{ onChip }}" style="{{ c.style }}">{{ c.name }}</div>
+        </sc-for>
+      </div>
+      <sc-if value="{{ showRecents }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:13px 18px 5px;">
+        <div style="font:600 10px/1 'JetBrains Mono'; color:#5d5d66; letter-spacing:.1em; margin-bottom:9px;">RECENT</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <sc-for list="{{ recents }}" as="r" hint-placeholder-count="3">
+            <div data-ri="{{ r.i }}" onClick="{{ onRecent }}" style="display:flex; align-items:center; gap:8px; padding:9px 12px; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+              <span style="{{ r.dot }}"></span>
+              <span style="font-size:12px; font-weight:600; color:#d4d4da;">{{ r.typeName }}</span>
+              <span style="font-size:11px; color:#6e6e78;">{{ r.cat }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+      <div class="axs-scroll" style="flex:1; min-height:140px; overflow-y:auto; padding:8px 8px 10px;">
+        <sc-for list="{{ results }}" as="r" hint-placeholder-count="8">
+          <div data-i="{{ r.i }}" onClick="{{ onResult }}" onMouseEnter="{{ onResultHover }}" style="{{ r.rowStyle }}">
+            <div style="{{ r.chipStyle }}">{{ r.tag }}</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:14px; font-weight:600; color:#ededf2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</div>
+              <div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">{{ r.sub }}</div>
+            </div>
+            <div style="{{ r.kindStyle }}">{{ r.kind }}</div>
+            <sc-if value="{{ r.active }}" hint-placeholder-val="{{ false }}">
+              <span style="font:600 10px/1 'JetBrains Mono'; color:#35c9d6; background:#11201f; border:1px solid #244040; border-radius:5px; padding:4px 6px;">↵</span>
+            </sc-if>
+          </div>
+        </sc-for>
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:40px 20px; text-align:center; color:#56565e; font-size:13px;">No blocks or types match “{{ query }}”.</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== MOVE / RECYCLE ===================== -->
+  <sc-if value="{{ moveMode }}" hint-placeholder-val="{{ false }}">
+  <div data-bin="1" style="{{ binStyle }}">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7 H20"></path><path d="M9 7 V5 H15 V7"></path><rect x="6" y="7" width="12" height="13" rx="2"></rect><path d="M10 11 V16 M14 11 V16"></path></svg>
+    <span>Drop here to delete</span>
+  </div>
+  <sc-if value="{{ moveGhost }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ moveGhost.style }}">{{ moveGhost.label }}</div>
+  </sc-if>
+  </sc-if>
+
+  <!-- ===================== TOAST ===================== -->
+  <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute; bottom:24px; left:50%; z-index:300; display:flex; align-items:center; gap:11px; padding:12px 17px; background:#1c1c21; border:1px solid #2e2e36; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:axsToast 2.2s ease forwards;">
+    <span style="{{ toast.dot }}"></span>
+    <span style="font-size:13px; font-weight:600; color:#e9e9ee;">{{ toast.text }}</span>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const AMP = ["5F1 Tweed","5F1 Tweed EC","5F8 Tweed Bright","5F8 Tweed Jumped","5F8 Tweed Normal","6G4 Super","6G12 Concert","59 Bassguy Bright","59 Bassguy Jumped","59 Bassguy Normal","59 Bassguy RI Jumped","65 Bassguy Bass","65 Bassguy Normal","1959SLP Jumped","1959SLP Normal","1959SLP Treble","1987X Jumped","1987X Normal","1987X Treble","5153 50W Blue","5153 100W Blue","5153 100W Green","5153 100W Red","5153 100W Stealth Blue","5153 100W Stealth Green","5153 100W Stealth Red","AC-20 12AX7 Bass","AC-20 12AX7 Treble","AC-20 EF86 Bass","AC-20 EF86 Treble","Angle Severe 1","Angle Severe 2","Archean","Archean Bright","Archean Clean","Atomica High","Atomica Low","Band-Commander","Big Hair","Blankenship Leeds","Bludojai Clean","Bludojai Lead","Bludojai Lead PAB","Bogfish Brown","Bogfish Strato","Brit 800 #34","Brit 800 2203 High","Brit 800 2203 Low","Brit 800 2204 High","Brit 800 2204 Low","Brit 800 Mod","Brit 800 Studio 20","Brit AFS100 1","Brit AFS100 2","Brit Brown","Brit JM45","Brit JM45 Jumped","Brit JVM OD1 Green","Brit JVM OD1 Orange","Brit JVM OD1 Red","Brit JVM OD2 Green","Brit JVM OD2 Orange","Brit JVM OD2 Red","Brit Pre","Brit Silver","Brit Super","Buddah DuoMaster","CA3+ Clean","CA3+ Lead","CA3+ Rhythm","Cameron CCV 1A","Cameron CCV 1B","Cameron CCV 2A","Cameron CCV 2B","Cameron CCV 2C","Cameron CCV 2D","Capt Hook 1A","Capt Hook 1B","Capt Hook 2A","Capt Hook 2B","Capt Hook 3A","Capt Hook 3B","Car Ambler","Carol-Ann OD-2","Carol-Ann Triptik Classic","Carol-Ann Triptik Clean","Carol-Ann Triptik Modern","Carol-Ann Tucana Clean","Carol-Ann Tucana Lead","Citrus A30 Clean","Citrus A30 Dirty","Citrus Bass 200","Citrus RV50","Citrus Terrier","Class-A 15W TB","Class-A 30W","Class-A 30W Bright","Class-A 30W Brilliant","Class-A 30W Hot","Class-A 30W TB","Comet 60","Comet Concourse","Cornfed M50","Das Metall","Deluxe 6G3","Deluxe Tweed","Deluxe Tweed Jumped","Deluxe Verb Normal","Deluxe Verb Vibrato","Diamante Fire","Dirty Shirley 1","Dirty Shirley 2","Div/13 CJ","Div/13 CJ Boost","Div/13 FT37 High","Div/13 FT37 Low","Dizzy V4 Blue 2","Dizzy V4 Blue 3","Dizzy V4 Blue 4","Dizzy V4 Silver 2","Dizzy V4 Silver 3","Dizzy V4 Silver 4","Double Verb Normal","Double Verb Silverface","Double Verb Vibrato","Dweezil's Bassguy","Energyball","Euro Blue","Euro Blue Modern","Euro Red"];
+
+    this.CATS = [
+      { id:"in", name:"Input", short:"In", accent:"#4f6bed", glyph:"→", types:["Input 1","Input 2"], knobs:["Gate","Level"] },
+      { id:"out", name:"Output", short:"Out", accent:"#2fa15f", glyph:"⇥", types:["Output 1","Output 2"], knobs:["Level","Balance"] },
+      { id:"amp", name:"Amp", short:"Amp", accent:"#d98a2b", glyph:"◣", types:AMP, knobs:[] },
+      { id:"cab", name:"Cab", short:"Cab", accent:"#5f6168", glyph:"▦", types:["4x12 Brit 65","4x12 Brit 70","2x12 USA Deluxe","1x12 Tweed","4x12 Recto","1x12 Princeton","2x12 Brit Silver","4x12 Mesa OS","1x8 Champ","UltraRes Mix 1"], knobs:["Low Cut","High Cut","Air","Level","Room","Mic"] },
+      { id:"drive", name:"Drive", short:"Drive", accent:"#d6543f", glyph:"◈", types:["TS808 OD","TS9 OD","T808 Mod","Tube Drive","Klone Chiron","Esoteric RCB","Esoteric ROD","Face Fuzz","Fat Rat","FET Boost","Treble Boost","BB Pre","Bender Fuzz","Octave Distortion","Shred Distortion","Plus Distortion","Master Fuzz","Rat Distortion","Mid Boost","Tape Distortion","Bit Crusher"], knobs:["Drive","Tone","Level","Bass","Treble","Mix"] },
+      { id:"chorus", name:"Chorus", short:"Chorus", accent:"#2fb0c9", glyph:"∿", types:["Digital Stereo","Analog Mono","Analog Stereo","Dimension","Triangle Chorus","Ensemble","Vibrato"], knobs:["Rate","Depth","Mix","Voices","Low Cut","High Cut"] },
+      { id:"comp", name:"Comp", short:"Comp", accent:"#b3a52b", glyph:"▮", types:["Pedal 1","Pedal 2","Studio","Optical","Tube","Juice 70","Dynamic","Class A"], knobs:["Threshold","Ratio","Attack","Release","Level","Mix"] },
+      { id:"delay", name:"Delay", short:"Delay", accent:"#4a82e0", glyph:"⟫", types:["Digital Mono","Digital Stereo","Tube Tape","Tape","BBD Mono","BBD Stereo","Reverse","Multitap","Ping-Pong","Diffusor","Sweep Echo","Ducking"], knobs:["Time","Feedback","Mix","Low Cut","High Cut","Mod"] },
+      { id:"reverb", name:"Reverb", short:"Reverb", accent:"#3fa890", glyph:"◜", types:["Medium Hall","Large Hall","Small Room","Large Room","Plate 1","Plate 2","Spring 1","Spring 2","Cathedral","Chamber","Ambience","Shimmer"], knobs:["Time","Mix","Low Cut","High Cut","Color","Size"] },
+      { id:"enhance", name:"Enhancer", short:"Enhance", accent:"#9b8cf0", glyph:"◎", types:["Stereo Width","Mono","Haas","Dimension"], knobs:["Width","Delay","Mix","Low Cut","High Cut","Level"] },
+      { id:"filter", name:"Filter", short:"Filter", accent:"#d65b9e", glyph:"⌇", types:["Lowpass","Highpass","Bandpass","Notch","Peaking","Low Shelf","High Shelf","Auto-Wah","Talk"], knobs:["Freq","Q","Gain","Drive","Mix","Level"] },
+      { id:"flange", name:"Flanger", short:"Flange", accent:"#c95bc0", glyph:"≋", types:["Digital Mono","Digital Stereo","Analog","Through-Zero","Jet"], knobs:["Rate","Depth","Feedback","Mix","Low Cut","High Cut"] },
+      { id:"formant", name:"Formant", short:"Formnt", accent:"#b5654d", glyph:"◐", types:["Vowel A-E-I","Vowel Sweep","Talk Box","Robot"], knobs:["Rate","Depth","Resonance","Mix","Low Cut","Level"] },
+      { id:"phaser", name:"Phaser", short:"Phaser", accent:"#8a6fd6", glyph:"◠", types:["Script 90","Block 90","Bi-Phase","4-Stage","8-Stage","12-Stage"], knobs:["Rate","Depth","Feedback","Stages","Mix","Level"] },
+      { id:"tremolo", name:"Tremolo", short:"Trem", accent:"#cf9242", glyph:"◢", types:["Opto","Bias","Photo","Harmonic","Pan"], knobs:["Rate","Depth","Duty","Shape","Mix","Level"] },
+      { id:"pitch", name:"Pitch", short:"Pitch", accent:"#5fb0d6", glyph:"♯", types:["Detune","Whammy","Octave Up","Octave Down","Harmony Diatonic","Crystals","Arpeggiator"], knobs:["Pitch","Detune","Mix","Feedback","Low Cut","Level"] },
+      { id:"eq", name:"Graphic EQ", short:"EQ", accent:"#7fae4a", glyph:"▤", types:["Graphic 10-Band","Parametric 5-Band","Tilt","Low/High Cut"], knobs:["Low","Low Mid","Mid","High Mid","High","Level"] },
+      { id:"gate", name:"Gate / Exp", short:"Gate", accent:"#9aa15f", glyph:"⊓", types:["Gate","Expander","Ducker"], knobs:["Threshold","Ratio","Attack","Release","Hold","Range"] },
+      { id:"wah", name:"Wah", short:"Wah", accent:"#d68a4f", glyph:"◞", types:["Clyde Wah","Wahwah 846","Modern Wah","Bass Wah"], knobs:["Position","Range","Q","Drive","Mix","Level"] },
+      { id:"rotary", name:"Rotary", short:"Rotary", accent:"#c95b7a", glyph:"◉", types:["Rotary Slow/Fast","Vintage Rotary","Modern Rotary"], knobs:["Rate","Depth","Drive","Mic Spacing","Mix","Level"] },
+      { id:"synth", name:"Synth", short:"Synth", accent:"#7a5bd6", glyph:"◇", types:["Mono Synth","Poly Synth","Sub Octave","Sustain Pad"], knobs:["Tune","Filter","Resonance","Attack","Release","Level"] },
+      { id:"send", name:"Send", short:"Send", accent:"#4a90b8", glyph:"←", types:["Send"], knobs:["Level","Pan"] },
+      { id:"return", name:"Return", short:"Return", accent:"#c0694f", glyph:"↪", types:["Return"], knobs:["Level","Pan"] },
+      { id:"looper", name:"Looper", short:"Looper", accent:"#5b9ed6", glyph:"⟳", types:["Looper"], knobs:["Level","Pan"] },
+      { id:"ringmod", name:"Ring Mod", short:"RngMod", accent:"#9b6fd6", glyph:"≈", types:["Ring Modulator","Frequency Shifter","Bode Shifter"], knobs:["Freq","Depth","Mix","Tone","Low Cut","Level"] }
+    ];
+    this.byId = {}; this.CATS.forEach(c => this.byId[c.id] = c);
+
+    // grid is 12 cols x 4 rows; idx = row*12 + col
+    const g = new Array(48).fill(null);
+    const put = (i, catId, type, label, extra) => { g[i] = Object.assign({ catId, type: type || this.byId[catId].types[0], label: label || this.byId[catId].short, channel:"A", bypassed:false }, extra||{}); };
+    // showcase preset: series chain with a 3-way parallel section, on row 1
+    put(12,"in","Input 1","In 1");
+    put(13,"pitch","Detune","Pitch",{bypassed:true});
+    put(14,"gate","Gate","Gate");
+    put(15,"wah","Clyde Wah","Wah");
+    put(4,"drive","TS808 OD","Drive"); put(16,"comp","Studio","Comp"); put(28,"ringmod","Ring Modulator","RngMod");
+    put(5,"eq","Parametric 5-Band","PEQ"); g[17]={shunt:true}; put(29,"synth","Mono Synth","Synth",{bypassed:true});
+    put(18,"amp","5153 100W Stealth Red","Amp");
+    put(19,"cab","4x12 Recto","Cab");
+    put(20,"eq","Parametric 5-Band","PEQ");
+    g[21]={shunt:true};
+    put(22,"reverb","Large Hall","Reverb");
+    put(23,"out","Output 1","Out 1"); put(35,"out","Output 2","Out 2");
+
+    const routes = {
+      12:[13], 13:[14], 14:[15], 15:[4,16,28],
+      4:[5], 16:[17], 28:[29],
+      5:[18], 17:[18], 29:[18],
+      18:[19], 19:[20], 20:[21], 21:[22], 22:[23,35]
+    };
+
+    this.state = {
+      grid:g, routes, rects:{}, selected:18, editorOpen:false, mode:"basic", activePage:"Ideal", railActive:"build", scene:1, page:0,
+      paletteOpen:false, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place",
+      recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
+      knobs:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, moveMode:false, moveIdx:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
+      ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
+      oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] }
+    };
+    this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.connectDrag=null; this._toastT=null;
+    this.OF=[62,125,250,500,1000,2000,4000,8000];
+    this.L0=Math.log10(20); this.L1=Math.log10(20000);
+  }
+
+  componentDidMount(){
+    this._key = (e) => {
+      if ((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); this.openPalette(); return; }
+      if (e.key==="Escape" && this.state.paletteOpen) this.closePalette();
+    };
+    this._move = (e) => {
+      if (this.gesture){
+        const g=this.gesture; g.curX=e.clientX; g.curY=e.clientY;
+        if (this.moveModeActive){ this.updateMove(e); return; }
+        const dx=e.clientX-g.startX, dy=e.clientY-g.startY;
+        if (!g.axis){ if (Math.abs(dx)>9||Math.abs(dy)>9){ clearTimeout(this._lpTimer); g.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; g.moved=true; } else return; }
+        if (g.axis==="v"){ if(!g.isBlock) return; const v=Math.max(0,Math.min(100,g.startVal+(g.startY-e.clientY)*0.6)); this.setState({ knobs:Object.assign({},this.state.knobs,{[g.qcKey]:v}), adjust:{idx:g.idx,label:g.label,value:Math.round(v)} }); }
+        else { if(!g.isBlock) return; const steps=Math.round(dx/55); if(steps!==g.lastSteps){ g.lastSteps=steps; const ni=((g.qi+steps)%g.qcList.length+g.qcList.length)%g.qcList.length; const label=g.qcList[ni], key=this.qcKey(g.idx,label); g.label=label; g.qcKey=key; this.setState({ qc:Object.assign({},this.state.qc,{[g.idx]:ni}), adjust:{idx:g.idx,label,value:Math.round(this.kval(key))} }); } }
+        return;
+      }
+      if (this.drag){
+        const d=this.drag, v=Math.max(0,Math.min(100,d.startVal+(d.startY-e.clientY)*0.6));
+        this.setState({ knobs: Object.assign({}, this.state.knobs, { [d.key]: v }) }); return;
+      }
+      if (this.eqDrag){ this.eqMove(e); return; }
+      if (this.connectDrag){ const ir=this._innerRect; if(ir) this.setState({ linkTo:{ x:e.clientX-ir.left, y:e.clientY-ir.top } }); return; }
+      if (this.sliderDrag){
+        const s=this.sliderDrag, frac=Math.max(0,Math.min(1,(e.clientX-s.rect.left)/s.rect.width));
+        this.setNested(s.path, s.min + frac*(s.max-s.min)); return;
+      }
+    };
+    this._up = (e) => {
+      if (this.gesture){
+        clearTimeout(this._lpTimer); const g=this.gesture;
+        if (this.moveModeActive){ this.finishMove(e); }
+        else if (!g.moved){ this.handleTap(g.idx); }
+        this.gesture=null; this.moveModeActive=false;
+        this.setState({ adjust:null, moveMode:false, moveIdx:null }); return;
+      }
+      if (this.connectDrag){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
+      this.drag=null; this.eqDrag=null; this.sliderDrag=null; document.body.style.cursor="";
+    };
+    this._resize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener("keydown", this._key);
+    window.addEventListener("pointermove", this._move);
+    window.addEventListener("pointerup", this._up);
+    window.addEventListener("resize", this._resize);
+    this.setState({ vw: window.innerWidth });
+    [0,120,400,900].forEach(t=>setTimeout(()=>this.remeasure(), t));
+  }
+  componentDidUpdate(){
+    const sig = this.state.vw+":"+this.isMobile()+":"+this.state.editorOpen;
+    if(sig!==this._rsig){ this._rsig=sig; requestAnimationFrame(()=>this.remeasure()); }
+  }
+  remeasure(){
+    const inner=document.querySelector("[data-grid-inner]"); if(!inner) return false;
+    const cells=inner.querySelectorAll("[data-idx]"); if(!cells.length) return false;
+    const ir=inner.getBoundingClientRect(); const map={};
+    cells.forEach(el=>{ const r=el.getBoundingClientRect(); map[+el.dataset.idx]={ left:r.left-ir.left, right:r.right-ir.left, cx:(r.left+r.right)/2-ir.left, cy:(r.top+r.bottom)/2-ir.top }; });
+    map._w=ir.width; map._h=ir.height;
+    this.setState({ rects:map }); return true;
+  }
+  componentWillUnmount(){
+    window.removeEventListener("keydown", this._key);
+    window.removeEventListener("pointermove", this._move);
+    window.removeEventListener("pointerup", this._up);
+    window.removeEventListener("resize", this._resize);
+    if (this._toastT) clearTimeout(this._toastT);
+  }
+
+  // ---- math helpers ----
+  shade(hex,p){ const n=parseInt(hex.slice(1),16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255; const t=Math.abs(p),to=p<0?0:255; r=Math.round((to-r)*t+r); g=Math.round((to-g)*t+g); b=Math.round((to-b)*t+b); return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
+  seed(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return 24+(h%56); }
+  kval(key){ const v=this.state.knobs[key]; return v==null?this.seed(key):v; }
+  clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  fToX(f){ return (Math.log10(this.clamp(f,20,20000))-this.L0)/(this.L1-this.L0)*1000; }
+  xToF(x){ return Math.pow(10, this.L0 + this.clamp(x,0,1000)/1000*(this.L1-this.L0)); }
+  dbToY(db,r){ return 150 - (db/r)*126; }
+  yToDb(y,r){ return (150-y)/126*r; }
+  setNested(path,val){ const p=path.split("."); const o=Object.assign({}, this.state[p[0]]); o[p[1]]=val; this.setState({ [p[0]]:o }); }
+
+  inputMag(f){
+    const e=this.state.ieq; let db=0;
+    if(e.lowCut>20){ const o=Math.log2(e.lowCut/f); if(o>0) db-=12*o; }
+    if(e.highCut<20000){ const o=Math.log2(f/e.highCut); if(o>0) db-=12*o; }
+    const oct=Math.log2(f/e.freq);
+    if(e.type==="Peaking"){ const bw=1/Math.max(0.25,e.q); db+= e.gain*Math.exp(-(oct*oct)/(2*bw*bw)); }
+    else if(e.type==="Lowshelf"){ db+= e.gain*(0.5-0.5*Math.tanh(oct*1.4)); }
+    else if(e.type==="Highshelf"){ db+= e.gain*(0.5+0.5*Math.tanh(oct*1.4)); }
+    else if(e.type==="Tilt EQ"){ db+= e.gain*Math.tanh(oct*0.7); }
+    return this.clamp(db,-20,20);
+  }
+  outputMag(f){
+    const b=this.state.oeq; if(!b.on) return 0;
+    const F=this.OF, lf=Math.log10(f);
+    if(f<=F[0]) return b.bands[0];
+    if(f>=F[7]) return b.bands[7];
+    for(let i=0;i<7;i++){ if(f>=F[i]&&f<=F[i+1]){ const t=(lf-Math.log10(F[i]))/(Math.log10(F[i+1])-Math.log10(F[i])); const s=0.5-0.5*Math.cos(t*Math.PI); return b.bands[i]*(1-s)+b.bands[i+1]*s; } }
+    return 0;
+  }
+  buildPath(fn,r){ let cur=""; const N=170; for(let i=0;i<=N;i++){ const x=i/N*1000, y=this.dbToY(fn(this.xToF(x)),r); cur+=(i?" L":"M")+x.toFixed(1)+" "+y.toFixed(1); } const fill=cur+" L1000 150 L0 150 Z"; return { cur, fill }; }
+
+  fmtF(f){ return f>=1000 ? (f/1000).toFixed(f<9950?2:1).replace(/\.?0+$/,"")+"k" : Math.round(f)+""; }
+  fmtG(g){ return (g>=0?"+":"")+g.toFixed(1); }
+
+  showToast(text,accent){ if(this._toastT) clearTimeout(this._toastT); this.setState({ toast:{show:true,text,accent:accent||"#33c46b"} }); this._toastT=setTimeout(()=>this.setState({toast:null}),2150); }
+  firstEmpty(){ const g=this.state.grid; for(let i=0;i<g.length;i++) if(!g[i]) return i; return null; }
+  isMobile(){ return this.state.vw < 760; }
+
+  // ---- palette ----
+  openPalette = () => this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place" });
+  openPaletteFor = (idx) => this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:null, placeTarget:idx, paletteMode:"place" });
+  closePalette = () => this.setState({ paletteOpen:false });
+  stop = (e) => e.stopPropagation();
+  onQuery = (e) => this.setState({ query:e.target.value, hi:0 });
+  onChip = (e) => { const id=e.currentTarget.dataset.cat; this.setState({ paletteCat:this.state.paletteCat===id?null:id, hi:0 }); };
+  onPaletteKey = (e) => {
+    const res=this._lastResults||[];
+    if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({hi:Math.min(res.length-1,this.state.hi+1)}); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({hi:Math.max(0,this.state.hi-1)}); }
+    else if(e.key==="Enter"){ e.preventDefault(); const r=res[this.state.hi]; if(r) this.place(r.catId,r.typeName); }
+    else if(e.key==="Tab"){ e.preventDefault(); const cats=this.CATS.map(c=>c.id); const cur=cats.indexOf(this.state.paletteCat); const next=e.shiftKey?(cur<=0?cats.length-1:cur-1):(cur+1>=cats.length?-1:cur+1); this.setState({paletteCat:next<0?null:cats[next],hi:0}); }
+  };
+  onResultHover = (e) => this.setState({ hi:+e.currentTarget.dataset.i });
+  onResult = (e) => { const r=(this._lastResults||[])[+e.currentTarget.dataset.i]; if(r) this.place(r.catId,r.typeName); };
+  onRecent = (e) => { const r=this.state.recents[+e.currentTarget.dataset.ri]; if(r) this.place(r.catId,r.type); };
+
+  defaultPage(catId, mode){ if(catId==="amp") return mode==="basic"?"Ideal":"Tone"; return "Controls"; }
+  place(catId,type){
+    const cat=this.byId[catId];
+    if(this.state.paletteMode==="retype"){
+      const idx=this.state.placeTarget, grid=this.state.grid.slice();
+      grid[idx]=Object.assign({},grid[idx],{type});
+      this.setState({grid,paletteOpen:false}); this.showToast("Type changed to "+type,cat.accent); this.pushRecent(catId,type); return;
+    }
+    let idx=this.state.placeTarget!=null?this.state.placeTarget:(this.state.grid[this.state.selected]?this.firstEmpty():this.state.selected);
+    if(idx==null) idx=this.firstEmpty();
+    if(idx==null){ this.showToast("Grid is full","#d6543f"); this.setState({paletteOpen:false}); return; }
+    const grid=this.state.grid.slice();
+    grid[idx]={catId,type,label:cat.short,channel:"A",bypassed:false};
+    this.setState({grid,paletteOpen:false,selected:idx,editorOpen:true,activePage:this.defaultPage(catId,this.state.mode),_placed:idx});
+    setTimeout(()=>this.setState({_placed:null}),360);
+    this.pushRecent(catId,type); this.showToast("Placed "+type+" · "+cat.name,cat.accent);
+  }
+  pushRecent(catId,type){ const rec=this.state.recents.filter(r=>!(r.catId===catId&&r.type===type)); rec.unshift({catId,type}); this.setState({recents:rec.slice(0,6)}); }
+
+  buildResults(){
+    const q=this.state.query.trim().toLowerCase(), catF=this.state.paletteCat;
+    let entries=[];
+    this.CATS.forEach(c=>{ if(catF&&c.id!==catF) return;
+      entries.push({kind:"block",catId:c.id,typeName:c.types[0],name:c.name+" block",sub:"Default · "+c.types[0],tag:c.short,kindLabel:"Block"});
+      c.types.forEach(t=>entries.push({kind:"type",catId:c.id,typeName:t,name:t,sub:c.name,tag:c.short,kindLabel:c.name+" type"}));
+    });
+    if(!q){ entries = catF ? entries.filter(e=>e.kind==="type") : entries.filter(e=>e.kind==="block"); return entries; }
+    const scored=[];
+    entries.forEach(e=>{ const name=e.typeName.toLowerCase(), cn=this.byId[e.catId].name.toLowerCase(); let s=Infinity;
+      const ni=name.indexOf(q); if(ni>=0) s=ni===0?0:(name[ni-1]===" "?ni-0.5:ni+1);
+      const ci=cn.indexOf(q); if(ci>=0) s=Math.min(s,200+ci);
+      if(e.kind==="block") s+=0.2; if(s!==Infinity) scored.push({e,s}); });
+    scored.sort((a,b)=>a.s-b.s||a.e.name.localeCompare(b.e.name));
+    return scored.map(x=>x.e).slice(0,60);
+  }
+
+  // ---- grid + routing ----
+  gridRef = (el) => { this.gridInnerEl = el; };
+  cellHas(i){ const c=this.state.grid[i]; return !!(c && (c.catId || c.shunt)); }
+  availParams(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return ["Level"]; const cat=this.byId[c.catId]; const base=["Level","Balance"]; const extra=(c.catId==="amp")?["Gain","Master","Bass","Mid","Treble","Presence"]:(cat.knobs||[]); extra.forEach(k=>{ if(base.indexOf(k)<0) base.push(k); }); return base; }
+  qcList(idx){ const sel=this.state.qcSel&&this.state.qcSel[idx]; if(sel&&sel.length) return sel; const c=this.state.grid[idx]; if(!c||!c.catId) return ["Level"]; if(c.catId==="amp") return ["Level","Gain","Master","Bass","Treble"]; const cat=this.byId[c.catId]; const a=["Level"]; (cat.knobs||[]).slice(0,3).forEach(k=>{ if(a.indexOf(k)<0) a.push(k); }); return a; }
+  onQuickToggle = (e) => { const label=e.currentTarget.dataset.q; const idx=this.state.selected; const cur=(this.state.qcSel&&this.state.qcSel[idx])?this.state.qcSel[idx].slice():this.qcList(idx).slice(); const i=cur.indexOf(label); if(i>=0){ if(cur.length>1) cur.splice(i,1); } else { cur.push(label); } this.setState({ qcSel:Object.assign({},this.state.qcSel,{[idx]:cur}), qc:Object.assign({},this.state.qc,{[idx]:0}) }); };
+  qcKey(idx,label){ return (label==="Level"||label==="Balance") ? "k:"+idx+":common:"+label : "k:"+idx+":qc:"+label; }
+  onCellClick = (e) => {
+    const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
+    if(c && (c.catId||c.shunt)) return; // filled handled by pointer gesture
+    this.openPaletteFor(idx);
+  };
+  openBlock(idx){ const c=this.state.grid[idx]; if(c&&c.shunt){ this.removeNode(idx); return; } if(c) this.setState({ selected:idx, editorOpen:true, activePage:this.defaultPage(c.catId,this.state.mode) }); }
+  handleTap(idx){
+    const c=this.state.grid[idx];
+    if(c && c.shunt){ this.removeNode(idx); return; }
+    const now=Date.now();
+    if(this._lastTap && this._lastTap.idx===idx && now-this._lastTap.t<300){
+      clearTimeout(this._tapTimer); this._lastTap=null;
+      const grid=this.state.grid.slice(); grid[idx]=Object.assign({},grid[idx],{bypassed:!grid[idx].bypassed});
+      this.setState({grid}); this.showToast(grid[idx].bypassed?"Bypassed":"Engaged", grid[idx].bypassed?"#d6543f":"#5fc46b");
+    } else {
+      this._lastTap={idx,t:now};
+      this._tapTimer=setTimeout(()=>{ this._lastTap=null; this.openBlock(idx); }, 240);
+    }
+  }
+
+  onBlockDown = (e) => {
+    const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
+    if(!c || (!c.catId && !c.shunt) || this._portActive) return;
+    const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label);
+    this.gesture={ idx, isBlock:!!c.catId, startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, axis:null, moved:false, qcKey:key, startVal:this.kval(key), label, qcList:qcl, qi, lastSteps:0 };
+    clearTimeout(this._lpTimer);
+    this._lpTimer=setTimeout(()=>{ const g=this.gesture; if(g && !g.axis && !this.moveModeActive) this.startMove(g.idx); }, 380);
+  };
+  startMove(idx){ this.moveModeActive=true; const g=this.gesture||{}; this.setState({ moveMode:true, moveIdx:idx, movePos:{x:g.curX||0,y:g.curY||0}, moveOverBin:false, adjust:null }); }
+  updateMove(e){ const el=document.elementFromPoint(e.clientX,e.clientY); const overBin=!!(el&&el.closest&&el.closest("[data-bin]")); this.setState({ movePos:{x:e.clientX,y:e.clientY}, moveOverBin:overBin }); }
+  finishMove(e){ const from=this.state.moveIdx; const el=document.elementFromPoint(e.clientX,e.clientY); if(el&&el.closest&&el.closest("[data-bin]")){ this.removeAt(from); this.showToast("Block deleted","#d6543f"); } else { const ce=el&&el.closest?el.closest("[data-idx]"):null; if(ce){ const to=+ce.dataset.idx; if(to!==from) this.moveBlock(from,to); } } }
+  moveBlock(from,to){ const grid=this.state.grid.slice(); const t=grid[to]; grid[to]=grid[from]; grid[from]=t; const remap=i=> i===from?to:(i===to?from:i); const routes={}; Object.keys(this.state.routes).forEach(k=>{ routes[remap(+k)]=this.state.routes[k].map(remap); }); this.setState({grid,routes,selected:to}); this.showToast("Moved","#35c9d6"); }
+  removeAt(idx){ const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes}); }
+  onBlockWheel = (e) => { const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx]; if(!c||!c.catId) return; e.preventDefault(); const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label); const v=Math.max(0,Math.min(100,this.kval(key)-Math.sign(e.deltaY)*4)); this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:v}), adjust:{idx,label,value:Math.round(v)} }); clearTimeout(this._flashTimer); this._flashTimer=setTimeout(()=>this.setState({adjust:null}),800); };
+  onPortDown = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const from=+e.currentTarget.dataset.port;
+    const inner=document.querySelector("[data-grid-inner]"); this._innerRect = inner ? inner.getBoundingClientRect() : null;
+    this.connectDrag={ from }; this._didConnect=true; this._portActive=true;
+    document.body.style.cursor="crosshair";
+    const ir=this._innerRect; if(ir) this.setState({ linkTo:{ x:e.clientX-ir.left, y:e.clientY-ir.top } });
+  };
+  finishConnect(e){
+    const from=this.connectDrag.from;
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    const cellEl=el && el.closest ? el.closest("[data-idx]") : null;
+    if(!cellEl){ return; }
+    const to=+cellEl.dataset.idx;
+    const fc=from%12, tc=to%12;
+    if(tc!==fc+1){ this.showToast("Connect to the next column","#d6543f"); return; }
+    const grid=this.state.grid.slice();
+    if(!this.cellHas(to)){ grid[to]={shunt:true}; }
+    const routes=Object.assign({},this.state.routes);
+    const list=(routes[from]||[]).slice();
+    if(list.indexOf(to)<0) list.push(to);
+    routes[from]=list;
+    this.setState({ grid, routes }); this.showToast("Connected","#35c9d6");
+  }
+  removeRoute = (e) => {
+    e.stopPropagation();
+    const from=+e.currentTarget.dataset.from, to=+e.currentTarget.dataset.to;
+    const routes=Object.assign({},this.state.routes);
+    routes[from]=(routes[from]||[]).filter(x=>x!==to);
+    if(!routes[from].length) delete routes[from];
+    this.setState({ routes }); this.showToast("Connection removed","#9a9aa3");
+  };
+  removeNode(idx){
+    const grid=this.state.grid.slice(); grid[idx]=null;
+    const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; });
+    this.setState({ grid, routes }); this.showToast("Shunt removed","#9a9aa3");
+  }
+
+  // ---- editor ----
+  onMode = (e) => { const m=e.currentTarget.dataset.mode; const sel=this.state.grid[this.state.selected]; this.setState({ mode:m, activePage: sel?this.defaultPage(sel.catId,m):"Ideal" }); };
+  onChannel = (e) => { const ch=e.currentTarget.dataset.ch; const grid=this.state.grid.slice(); grid[this.state.selected]=Object.assign({},grid[this.state.selected],{channel:ch}); this.setState({grid}); };
+  onPage = (e) => this.setState({ activePage:e.currentTarget.dataset.page });
+  onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
+  onBypass = () => { const grid=this.state.grid.slice(); const c=grid[this.state.selected]; grid[this.state.selected]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); };
+  onMute = () => {};
+  onSceneIgnore = () => {};
+  onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
+  onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id }); const m={controllers:"Controllers",fc:"Footswitch layout",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build","#35c9d6"); };
+  onPresetPrev = () => this.showToast("Previous preset","#35c9d6");
+  onPresetNext = () => this.showToast("Next preset","#35c9d6");
+  onPresetPick = () => this.showToast("Preset browser","#35c9d6");
+  onPagePrev = () => this.setState({ page:Math.max(0,(this.state.page||0)-1) });
+  onPageNext = () => this.setState({ page:Math.min(2,(this.state.page||0)+1) });
+  onPageDot = (e) => this.setState({ page:+e.currentTarget.dataset.p });
+  onSave = () => this.showToast("Preset saved","#f5a623");
+  closeEditor = () => this.setState({ editorOpen:false });
+  onRemove = () => { const idx=this.state.selected; const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:this.isMobile()?false:true}); this.showToast("Block removed","#d6543f"); };
+
+  onKnobDown = (e) => { e.preventDefault(); const key=e.currentTarget.dataset.key; this.drag={key,startY:e.clientY,startVal:this.kval(key)}; document.body.style.cursor="ns-resize"; };
+  onKnobReset = (e) => { const key=e.currentTarget.dataset.key; this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:50}) }); };
+
+  // ---- eq ----
+  onEqDown = (e) => { e.preventDefault(); e.stopPropagation(); this.eqDrag={ kind:e.currentTarget.dataset.eq, bi:+e.currentTarget.dataset.bi, svg:e.currentTarget.ownerSVGElement }; this.eqMove(e); };
+  eqMove(e){
+    const d=this.eqDrag; if(!d||!d.svg) return;
+    const r=d.svg.getBoundingClientRect();
+    const vx=(e.clientX-r.left)/r.width*1000, vy=(e.clientY-r.top)/r.height*300;
+    if(d.kind==="iband"){ const eq=Object.assign({},this.state.ieq); eq.freq=this.clamp(this.xToF(vx),20,20000); eq.gain=this.clamp(this.yToDb(vy,18),-18,18); this.setState({ieq:eq}); }
+    else if(d.kind==="ilow"){ const eq=Object.assign({},this.state.ieq); eq.lowCut=this.clamp(this.xToF(vx),20,2000); this.setState({ieq:eq}); }
+    else if(d.kind==="ihigh"){ const eq=Object.assign({},this.state.ieq); eq.highCut=this.clamp(this.xToF(vx),2000,20000); this.setState({ieq:eq}); }
+    else if(d.kind==="oband"){ const eq=Object.assign({},this.state.oeq); const b=eq.bands.slice(); b[d.bi]=this.clamp(this.yToDb(vy,12),-12,12); eq.bands=b; this.setState({oeq:eq}); }
+  }
+  onSliderDown = (e) => { e.preventDefault(); this.sliderDrag={ path:e.currentTarget.dataset.path, min:+e.currentTarget.dataset.min, max:+e.currentTarget.dataset.max, rect:e.currentTarget.getBoundingClientRect() }; const s=this.sliderDrag, frac=this.clamp((e.clientX-s.rect.left)/s.rect.width,0,1); this.setNested(s.path, s.min+frac*(s.max-s.min)); };
+  onIeqType = (e) => this.setNested("ieq.type", e.currentTarget.dataset.t);
+  onOeqType = (e) => this.setNested("oeq.type", e.currentTarget.dataset.t);
+  onOnOff = () => this.setNested("oeq.on", !this.state.oeq.on);
+  onZeroAll = () => this.setNested("oeq.bands", [0,0,0,0,0,0,0,0]);
+
+  // ---- knob render ----
+  mkKnob(label, group, suffix){
+    const key="k:"+this.state.selected+":"+group+":"+label;
+    const v=this.kval(key); const ang=-135+2.7*v;
+    const qa=this.qcList(this.state.selected);
+    const inSwipe=qa.indexOf(label)>=0;
+    const swipeStyle={ position:"absolute", top:-4, right:-2, width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, cursor:"pointer", zIndex:4, background:inSwipe?"#35c9d6":"#1c1c21", border:"1px solid "+(inSwipe?"#35c9d6":"#33333c"), color:inSwipe?"#06181a":"#5d5d66", boxShadow:inSwipe?"0 0 8px rgba(53,201,214,.5)":"none" };
+    return { key, label, valueText:Math.round(v)+(suffix||""), dash:((v/100)*113.1).toFixed(1)+" 300", pt:"rotate("+ang.toFixed(1)+" 32 32)", inSwipe, swipeStyle };
+  }
+
+  renderVals(){
+    const S=this.state, mob=this.isMobile(), sel=S.grid[S.selected];
+    const showFull=!mob;
+
+    // topbar (slim single row)
+    const topbarStyle={ display:"flex", alignItems:"center", gap:mob?8:12, padding:mob?"0 12px":"0 16px", height:60, background:"linear-gradient(180deg,#141416,#0f0f12)", borderBottom:"1px solid #1d1d22", flex:"none", overflowX:mob?"auto":"visible", overflowY:"hidden" };
+    const addBtnStyle={ display:"flex", alignItems:"center", gap:9, height:38, padding:"0 14px 0 13px", background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:10, color:"#bfeef2", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
+    const saveBtnStyle={ display:"flex", alignItems:"center", gap:8, height:38, padding:mob?"0 13px":"0 15px", background:"#241a12", border:"1px solid #5a3f1f", borderRadius:9, color:"#f5c878", fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
+
+    const RAIL=[ {id:"build",label:"Build",short:"Grid",icon:"▦"}, {id:"controllers",label:"Controllers",short:"Ctrl",icon:"⊜"}, {id:"fc",label:"Footswitches",short:"FC",icon:"⬚"}, {id:"scenes",label:"Scene Mgr",short:"Scn",icon:"❏"}, {id:"perform",label:"Perform",short:"Live",icon:"▷"}, {id:"sets",label:"Sets & Songs",short:"Sets",icon:"≣"}, {id:"settings",label:"Settings",short:"Setup",icon:"⚙"} ];
+    const railItems=RAIL.map(r=>{ const act=(S.railActive||"build")===r.id; return { id:r.id, label:r.label, short:r.short, icon:r.icon, style:{ width:52, height:50, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, borderRadius:12, cursor:"pointer", color:act?"#35c9d6":"#6e6e78", background:act?"rgba(53,201,214,.12)":"transparent", border:"1px solid "+(act?"rgba(53,201,214,.3)":"transparent") } }; });
+
+    const scenes=[1,2,3,4,5,6,7,8].map(n=>({ n, style:{ width:26, height:28, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:6, fontFamily:"'JetBrains Mono',monospace", fontSize:11, fontWeight:700, cursor:"pointer", background:n===(S.scene||1)?"#35c9d6":"transparent", color:n===(S.scene||1)?"#06181a":"#7a7a83" }}));
+    const cpu=38, cpuColor=cpu>80?"#d6543f":(cpu>60?"#f5a623":"#33c46b");
+
+    // grid + routing
+    const gap=mob?16:26;
+    const colW=mob?Math.max(74,Math.floor((S.vw-24-3*gap)/4)):0;
+    const pageCount=3, page=Math.min(S.page||0,pageCount-1);
+    const pageShift=4*(colW+gap);
+    const gridScrollStyle=mob
+      ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" }
+      : { flex:1, minHeight:0, overflow:"auto", padding:"26px 22px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" };
+    const gridInnerStyle=mob
+      ? { position:"relative", width:(12*colW+11*gap)+"px", transform:"translateX("+(-page*pageShift)+"px)", transition:"transform .26s cubic-bezier(.3,.8,.3,1)" }
+      : { position:"relative", width:"100%", maxWidth:1680, margin:"0 auto" };
+    const gridStyle={ display:"grid", gridTemplateColumns:mob?("repeat(12, "+colW+"px)"):"repeat(12, minmax(72px,1fr))", gap, width:"100%", position:"relative", zIndex:1, pointerEvents:"none" };
+    const pager={ show:mob, page, count:pageCount, prevDisabled:page<=0, nextDisabled:page>=pageCount-1, dots:[0,1,2].map(i=>({ style:{ width:i===page?20:7, height:7, borderRadius:4, background:i===page?"#35c9d6":"#2e2e36", transition:"all .2s", cursor:"pointer" }, i })), rangeLabel:"Cols "+(page*4+1)+"–"+(page*4+4) };
+
+    const cells=S.grid.map((c,idx)=>{
+      const col=idx%12, selected=idx===S.selected;
+      const base={ position:"relative", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, aspectRatio:"1 / 0.95", borderRadius:11, userSelect:"none", pointerEvents:"auto", transition:"box-shadow .12s, transform .12s" };
+      const outStyle={ position:"absolute", right:-8, top:"50%", marginTop:-10, width:20, height:20, borderRadius:"50%", border:"2px solid #0c0c0e", cursor:"crosshair", zIndex:6, background:selected?"#35c9d6":"#3a3a44", boxShadow:selected?"0 0 9px rgba(53,201,214,.6)":"none" };
+      if(!c || (!c.catId && !c.shunt)) return { idx, isBlock:false, isShunt:false, isEmpty:true, canDrag:false, showOut:false, outStyle:{}, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:"#121215",border:"1px dashed #26262c",cursor:"pointer"}), hoverStyle:"border-color:#35c9d6; background:#15191a;" };
+      if(c.shunt) return { idx, isBlock:false, isShunt:true, isEmpty:false, canDrag:true, showOut:col<11, outStyle, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:"#0e0e10",border:"1px solid "+(selected?"#f5a623":"#20202a"),cursor:"grab"}), hoverStyle:"border-color:#35c9d6;" };
+      const cat=this.byId[c.catId], a=cat.accent;
+      const moving=S.moveMode && S.moveIdx===idx;
+      const box=Object.assign({},base,{ background:"linear-gradient(180deg,"+this.shade(a,-0.42)+","+this.shade(a,-0.62)+")", border:"1px solid "+this.shade(a,-0.05), cursor:"pointer", touchAction:"none", overflow:"hidden",
+        boxShadow:selected?"inset 0 1px 0 rgba(255,255,255,.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245,166,35,.34)":"inset 0 1px 0 rgba(255,255,255,.1), 0 2px 6px rgba(0,0,0,.35)",
+        opacity:c.bypassed?0.45:(moving?0.3:1), filter:c.bypassed?"grayscale(.6)":"none" });
+      if(S._placed===idx) box.animation="axsPlace .34s cubic-bezier(.2,.9,.3,1)";
+      const qcl=this.qcList(idx), qi=(S.qc[idx]||0)%qcl.length, qlabel=qcl[qi];
+      const fillPct=Math.round(this.kval(this.qcKey(idx,qlabel)));
+      const adjusting=!!(S.adjust && S.adjust.idx===idx);
+      const fillStyle={ position:"absolute", left:0, right:0, bottom:0, height:fillPct+"%", background:"linear-gradient(180deg,"+this.shade(a,0.35)+","+a+")", opacity:adjusting?1:0.78, borderTop:"2px solid rgba(255,255,255,.7)", pointerEvents:"none", transition:"height .05s linear" };
+      const dots=qcl.map((l,i)=>({ style:{ width:4, height:4, borderRadius:"50%", background:i===qi?"#fff":"rgba(255,255,255,.32)" } }));
+      return { idx, isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:c.catId==="amp", channel:c.channel, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
+    });
+
+    // cables
+    const R=S.rects||{};
+    const cableD=(x1,y1,x2,y2)=>{ const dx=Math.max(22,(x2-x1)*0.5); return "M"+x1.toFixed(1)+" "+y1.toFixed(1)+" C"+(x1+dx).toFixed(1)+" "+y1.toFixed(1)+","+(x2-dx).toFixed(1)+" "+y2.toFixed(1)+","+x2.toFixed(1)+" "+y2.toFixed(1); };
+    const cables=[];
+    Object.keys(S.routes).forEach(k=>{ const from=+k, rf=R[from]; if(!rf) return; (S.routes[k]||[]).forEach(to=>{ const rt=R[to]; if(!rt) return; const dim=(S.grid[from]&&S.grid[from].bypassed); cables.push({ key:from+"-"+to, from, to, d:cableD(rf.right,rf.cy,rt.left,rt.cy), mx:((rf.right+rt.left)/2).toFixed(1), my:((rf.cy+rt.cy)/2).toFixed(1), stroke:dim?"#4a4a52":"#c7c7cf" }); }); });
+    let linkPath=null; if(S.linkTo && this.connectDrag){ const rf=R[this.connectDrag.from]; if(rf) linkPath=cableD(rf.right,rf.cy,S.linkTo.x,S.linkTo.y); }
+    const hasRects=!!R._w;
+
+    let crumbTitle="—", crumbType="";
+    if(sel){ const cat=this.byId[sel.catId]; crumbTitle=cat.name+" · Ch "+sel.channel; crumbType=sel.type; }
+
+    // ---- editor ----
+    const segItem=(active)=>({ flex:1, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:700, transition:"all .1s",
+      background:active?"#35c9d6":"transparent", color:active?"#06181a":"#9a9aa3" });
+
+    let ed={ isAmp:false, isKnobs:false, isIeq:false, isOeq:false, isStub:false, pages:[], knobs:[], commonKnobs:[], channels:[], modes:[], quickChips:[], title:"—", category:"", type:"", icon:"", iconStyle:{}, activePage:S.activePage, bypassLabel:"Bypass", bypassStyle:{}, muteLabel:"Mute", muteStyle:{}, sceneStyle:{}, removeStyle:{},
+      overlayStyle:{}, cardStyle:{}, metaStyle:{}, footerStyle:{} };
+
+    // modal layout styles
+    ed.overlayStyle = { position:"absolute", inset:0, zIndex:95, background:"rgba(6,6,8,.62)", backdropFilter:"blur(3px)", display:"flex", alignItems:mob?"stretch":"center", justifyContent:"center", padding:mob?0:"26px" };
+    ed.cardStyle = mob
+      ? { width:"100%", height:"100%", background:"linear-gradient(180deg,#15151a,#0f0f12)", display:"flex", flexDirection:"column", overflow:"hidden" }
+      : { width:"min(960px,94vw)", maxHeight:"90vh", background:"linear-gradient(180deg,#16161b,#0f0f12)", border:"1px solid #2a2a31", borderRadius:18, boxShadow:"0 30px 90px rgba(0,0,0,.62)", display:"flex", flexDirection:"column", overflow:"hidden" };
+    ed.metaStyle = { display:"flex", flexWrap:"wrap", gap:10, padding:"12px 18px", borderBottom:"1px solid #1c1c22", flex:"none" };
+    ed.footerStyle = { display:"flex", flexWrap:"wrap", alignItems:"center", gap:14, padding:"14px 18px", borderTop:"1px solid #1e1e25", background:"#101013", flex:"none" };
+
+    if(sel){
+      const cat=this.byId[sel.catId]; this._effGroup=S.activePage;
+      ed.isAmp=sel.catId==="amp"; ed.title=cat.short; ed.category=cat.name; ed.type=sel.type; ed.icon=cat.glyph;
+      ed.iconStyle={ width:44, height:44, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21, color:"#fff", background:"linear-gradient(180deg,"+this.shade(cat.accent,0.16)+","+this.shade(cat.accent,-0.18)+")", border:"1px solid "+this.shade(cat.accent,-0.3) };
+
+      ed.modes=[{id:"basic",label:"Basic"},{id:"advanced",label:"Advanced"}].map(m=>({ id:m.id, label:m.label, style:{ flex:"none", height:34, padding:"0 16px", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, background:S.mode===m.id?"#35c9d6":"transparent", color:S.mode===m.id?"#06181a":"#8a8a93" }}));
+
+      const pageList = ed.isAmp
+        ? (S.mode==="basic" ? ["Ideal","Input EQ","Output EQ"] : ["Tone","Ideal","Preamp","Power Amp","Pwr Tubes + CF","Power Supply","Speaker","Input EQ","Output EQ","Dynamics"])
+        : (S.mode==="basic" ? ["Controls"] : ["Controls","Tone","Mix","Modifiers"]);
+      const eff = pageList.includes(S.activePage) ? S.activePage : pageList[0];
+      ed.activePage=eff; this._effGroup=eff;
+      ed.pages=pageList.map(name=>({ name, style:{ flex:"none", padding:"9px 15px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:name===eff?"rgba(245,166,35,.12)":"#15151a", border:"1px solid "+(name===eff?"#5a3f1f":"#26262c"), color:name===eff?"#f5a623":"#8a8a93" }}));
+
+      ed.isIeq = ed.isAmp && eff==="Input EQ";
+      ed.isOeq = ed.isAmp && eff==="Output EQ";
+      const knobPages = ed.isAmp ? {Ideal:["Gain","Master","Bass","Mid","Treble","Presence"], Tone:["Bright Gain","Normal Gain","Bass","Mid","Treble","Presence","Input Trim"]} : null;
+      ed.isKnobs = ed.isAmp ? (eff==="Ideal"||eff==="Tone") : (eff==="Controls");
+      ed.isStub = !ed.isIeq && !ed.isOeq && !ed.isKnobs;
+      if(ed.isKnobs){
+        const labels = ed.isAmp ? knobPages[eff] : (cat.knobs.length?cat.knobs:["Mix","Level","Tone","Depth","Rate","Feedback"]).slice(0,6);
+        ed.knobs=labels.map(l=>this.mkKnob(l,eff));
+      }
+
+      ed.channels=["A","B","C","D"].map(id=>({ id, style:{ width:48, height:48, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:11, cursor:"pointer", fontWeight:700, fontSize:15, background:id===sel.channel?"#1d2a2c":"#0d0d10", border:"1px solid "+(id===sel.channel?"#35c9d6":"#26262c"), color:id===sel.channel?"#f5a623":"#56565e" }}));
+
+      ed.commonKnobs=[ this.mkKnob("Level","common"), this.mkKnob("Balance","common") ];
+      const qa=this.qcList(S.selected);
+      ed.quickChips=this.availParams(S.selected).map(p=>({ label:p, style:{ flex:"none", padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:qa.indexOf(p)>=0?"#1d2a2c":"#15151a", border:"1px solid "+(qa.indexOf(p)>=0?"#35c9d6":"#26262c"), color:qa.indexOf(p)>=0?"#7fd8de":"#7a7a83" } }));
+      const fbtn=(bg,bd,col)=>({ display:"flex", alignItems:"center", justifyContent:"center", height:48, padding:"0 18px", borderRadius:11, cursor:"pointer", fontSize:13, fontWeight:700, background:bg, border:"1px solid "+bd, color:col });
+      ed.bypassLabel=sel.bypassed?"Bypassed":"Engaged";
+      ed.bypassStyle=sel.bypassed?fbtn("#241516","#5a2f33","#d6543f"):fbtn("#142417","#2c4a31","#5fc46b");
+      ed.muteStyle=fbtn("#15151a","#2a2a31","#9a9aa3");
+      ed.sceneStyle=fbtn("#15151a","#2a2a31","#9a9aa3");
+      ed.removeStyle=fbtn("#1a1113","#4a2226","#d6543f");
+    }
+
+    // ---- input EQ render ----
+    const ie=S.ieq;
+    const ip=this.buildPath((f)=>this.inputMag(f),18);
+    const ieqTypes=["Lowshelf","Peaking","Highshelf","Tilt EQ"];
+    const ieq={
+      curvePath:ip.cur, fillPath:ip.fill,
+      bx:this.fToX(ie.freq).toFixed(1), by:this.dbToY(this.clamp(ie.gain,-18,18),18).toFixed(1),
+      lowX:this.fToX(ie.lowCut).toFixed(1), highX:this.fToX(ie.highCut).toFixed(1),
+      typeSeg:ieqTypes.map(t=>({ id:t, label:t, style:segItem(ie.type===t) })),
+      readouts:[ {label:"Frequency",value:this.fmtF(ie.freq)+" Hz",color:"#f5a623"}, {label:"Gain",value:this.fmtG(ie.gain)+" dB",color:"#f5a623"}, {label:"Low Cut",value:this.fmtF(ie.lowCut)+" Hz",color:"#9b8cf0"}, {label:"High Cut",value:this.fmtF(ie.highCut)+" Hz",color:"#d65b9e"} ],
+      sliders:[
+        this.mkSlider("Q", "ieq.q", 0.1, 10, ie.q, ie.q.toFixed(2)),
+        this.mkSlider("Definition", "ieq.def", 0, 100, ie.def, Math.round(ie.def)+"")
+      ]
+    };
+
+    // ---- output EQ render ----
+    const oe=S.oeq;
+    const op=this.buildPath((f)=>this.outputMag(f),12);
+    const oeqTypes=["Graphic 8-Band","Console 3-Band"];
+    const oeq={
+      curvePath:op.cur, fillPath:op.fill,
+      nodes:this.OF.map((f,bi)=>({ bi, x:this.fToX(f).toFixed(1), y:this.dbToY(oe.on?oe.bands[bi]:0,12).toFixed(1), freq:f })),
+      labels:["62","125","250","500","1k","2k","4k","8k"],
+      typeSeg:oeqTypes.map(t=>({ id:t, label:t, style:Object.assign(segItem(oe.type===t),{flex:"none",padding:"0 14px",height:38}) })),
+      onLabel:oe.on?"On":"Off",
+      onStyle:{ height:38, padding:"0 16px", display:"flex", alignItems:"center", gap:8, borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, background:oe.on?"#142417":"#1a1113", border:"1px solid "+(oe.on?"#2c4a31":"#4a2226"), color:oe.on?"#5fc46b":"#d6543f" }
+    };
+
+    // ---- palette ----
+    const results=this.buildResults(); this._lastResults=results;
+    const hi=Math.min(S.hi,Math.max(0,results.length-1));
+    const palResults=results.map((e,i)=>{ const cat=this.byId[e.catId], active=i===hi;
+      return { i, name:e.name, sub:e.sub, kind:e.kindLabel, tag:e.tag, active,
+        rowStyle:{ display:"flex", alignItems:"center", gap:13, padding:"11px 12px", borderRadius:10, cursor:"pointer", background:active?"rgba(53,201,214,.10)":"transparent", boxShadow:active?"inset 0 0 0 1px rgba(53,201,214,.3)":"none" },
+        chipStyle:{ flex:"none", width:52, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", background:"linear-gradient(180deg,"+this.shade(cat.accent,0.16)+","+this.shade(cat.accent,-0.18)+")", border:"1px solid "+this.shade(cat.accent,-0.3) },
+        kindStyle:{ flex:"none", fontSize:11, fontWeight:600, color:"#6e6e78", padding:"4px 9px", background:"#1a1a1f", border:"1px solid #2a2a31", borderRadius:6, whiteSpace:"nowrap" } };
+    });
+    const chips=this.CATS.map(c=>({ id:c.id, name:c.name, style:{ flex:"none", padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:S.paletteCat===c.id?this.shade(c.accent,-0.2):"#17171a", border:"1px solid "+(S.paletteCat===c.id?c.accent:"#26262c"), color:S.paletteCat===c.id?"#fff":"#9a9aa3" }}));
+    let targetLabel;
+    if(S.paletteMode==="retype") targetLabel="↻ Change type · "+(sel?this.byId[sel.catId].name:"");
+    else { const t=S.placeTarget!=null?S.placeTarget:(S.grid[S.selected]?this.firstEmpty():S.selected); targetLabel=t==null?"Grid full":("✛ Place in cell "+(t+1)); }
+    const recents=S.recents.map((r,i)=>({ i, typeName:r.type, cat:this.byId[r.catId].name, dot:{ width:9, height:9, borderRadius:3, background:this.byId[r.catId].accent, display:"inline-block" } }));
+    const toast=S.toast?{ show:true, text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.accent, boxShadow:"0 0 8px "+S.toast.accent, display:"inline-block" } }:{ show:false, text:"", dot:{} };
+
+    const moveGhost = (S.moveMode && S.moveIdx!=null && S.grid[S.moveIdx]) ? (()=>{ const c=S.grid[S.moveIdx]; const a=c.catId?this.byId[c.catId].accent:"#5f6168"; return { label:c.shunt?"Shunt":c.label, style:{ position:"absolute", left:S.movePos.x, top:S.movePos.y, transform:"translate(-50%,-50%) rotate(-3deg)", zIndex:160, pointerEvents:"none", padding:"12px 18px", borderRadius:12, background:"linear-gradient(180deg,"+this.shade(a,0.16)+","+this.shade(a,-0.18)+")", border:"1px solid "+this.shade(a,-0.3), color:"#fff", fontWeight:700, fontSize:14, boxShadow:"0 16px 36px rgba(0,0,0,.55)" } }; })() : null;
+    const binStyle={ position:"absolute", bottom:26, left:"50%", transform:S.moveOverBin?"translateX(-50%) scale(1.08)":"translateX(-50%)", zIndex:155, display:"flex", alignItems:"center", gap:10, padding:"14px 22px", borderRadius:16, background:S.moveOverBin?"#3a1518":"rgba(22,22,27,.96)", border:"1px solid "+(S.moveOverBin?"#d6543f":"#3a3a44"), color:S.moveOverBin?"#ff7a68":"#9a9aa3", boxShadow:"0 14px 40px rgba(0,0,0,.5)", transition:"all .12s", fontWeight:600, fontSize:13 };
+
+    return {
+      showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
+      scenes, onScene:this.onScene, bpm:S.bpm, cpuText:cpu+"%", cpuTextStyle:{color:cpuColor}, cpuBarStyle:{ width:cpu+"%", height:"100%", background:cpuColor, borderRadius:3 },
+      onPresetPrev:this.onPresetPrev, onPresetNext:this.onPresetNext, onPresetPick:this.onPresetPick,
+      openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
+      gridScrollStyle, gridInnerStyle, gridStyle, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
+      onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
+      cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute,
+      onCellClick:this.onCellClick,
+      editorOpen:S.editorOpen, ed, ieq, oeq,
+      onMode:this.onMode, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
+      onKnobDown:this.onKnobDown, onKnobReset:this.onKnobReset,
+      onBlockDown:this.onBlockDown, onBlockWheel:this.onBlockWheel, moveMode:S.moveMode, moveGhost, binStyle,
+      onEqDown:this.onEqDown, onSliderDown:this.onSliderDown, onIeqType:this.onIeqType, onOeqType:this.onOeqType, onOnOff:this.onOnOff, onZeroAll:this.onZeroAll,
+      paletteOpen:S.paletteOpen, query:S.query, onQuery:this.onQuery, onPaletteKey:this.onPaletteKey, closePalette:this.closePalette, stop:this.stop,
+      placeholder:S.paletteMode==="retype"?"Search types…":"Search amps, drives, delays, reverbs…",
+      resultCount:results.length+" result"+(results.length===1?"":"s"),
+      results:palResults, onResult:this.onResult, onResultHover:this.onResultHover, noResults:results.length===0,
+      chips, onChip:this.onChip, targetLabel,
+      showRecents:!S.query.trim()&&!S.paletteCat&&S.paletteMode!=="retype"&&recents.length>0, recents, onRecent:this.onRecent,
+      toast
+    };
+  }
+
+  mkSlider(label, path, min, max, val, valueText){
+    const frac=this.clamp((val-min)/(max-min),0,1);
+    return { label, path, min, max, value:valueText,
+      fillStyle:{ position:"absolute", left:0, width:(frac*100)+"%", height:6, background:"#35c9d6", borderRadius:3 },
+      thumbStyle:{ position:"absolute", left:"calc("+(frac*100)+"% - 11px)", width:22, height:22, borderRadius:"50%", background:"#f5a623", border:"3px solid #0d0d10", boxShadow:"0 2px 6px rgba(0,0,0,.4)" } };
+  }
+}
+</script>
+</body>
+</html>
