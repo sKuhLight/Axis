@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { forgefx, ForgeError } from '$lib/forgefx';
   import type { BlockParams } from '$lib/types';
+  import { colorOf, categoryOf } from '$lib/blocks';
 
   let blocks = $state<string[]>([]);
   let status = $state<'loading' | 'ready' | 'offline'>('loading');
@@ -9,9 +10,11 @@
   let openBlock = $state<string | null>(null);
   let sheet = $state<BlockParams | null>(null);
   let sheetState = $state<'loading' | 'ready' | 'error'>('loading');
+  let filter = $state('');
 
   onMount(load);
   async function load() {
+    status = 'loading';
     try {
       blocks = await forgefx.blocks();
       status = 'ready';
@@ -24,6 +27,7 @@
     openBlock = name;
     sheet = null;
     sheetState = 'loading';
+    filter = '';
     try {
       sheet = await forgefx.blockParams(name);
       sheetState = 'ready';
@@ -33,9 +37,15 @@
     }
   }
   const close = () => (openBlock = null);
+
+  const shown = $derived(
+    sheet?.named.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase())) ?? []
+  );
+  // clamp a norm (0..1) for the fill bar; some values are raw/enums
+  const pct = (n: number | undefined) => Math.max(0, Math.min(1, n ?? 0)) * 100;
 </script>
 
-<section class="grid-wrap" data-screen="Signal Grid">
+<section class="wrap" data-screen="Signal Grid">
   {#if status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if status === 'offline'}
@@ -47,53 +57,68 @@
   {:else}
     <div class="grid">
       {#each blocks as name}
-        <button class="block" onclick={() => open(name)}>
-          <span class="block-name">{name}</span>
-          <span class="block-tag mono">tap to edit</span>
+        <button class="block" style="--c:{colorOf(name)}" onclick={() => open(name)}>
+          <span class="stripe"></span>
+          <span class="b-name">{name}</span>
+          <span class="b-cat mono">{categoryOf(name)}</span>
         </button>
       {/each}
     </div>
   {/if}
 </section>
 
-<!-- Block Editor — bottom sheet / modal (touch-first; the prototype's sheet approach) -->
+<!-- Block Editor — bottom sheet (touch) / right dock (desktop) -->
 {#if openBlock}
   <div class="overlay" onclick={close} role="presentation"></div>
-  <aside class="sheet scroll" data-screen="Block Editor">
+  <aside class="sheet scroll" data-screen="Block Editor" style="--c:{colorOf(openBlock)}">
     <header class="sheet-head">
-      <h2>{openBlock}</h2>
+      <div>
+        <h2>{openBlock}</h2>
+        {#if sheet}
+          <span class="sub mono">page 0x{sheet.page.toString(16)} · {sheet.named.length} params</span>
+        {/if}
+      </div>
       <button class="x" onclick={close} aria-label="Close">✕</button>
     </header>
+
     {#if sheetState === 'loading'}
       <p class="hint">Reading parameters…</p>
     {:else if sheetState === 'error'}
       <p class="hint">Couldn't read this block.</p>
     {:else if sheet}
-      <p class="sub mono">page 0x{sheet.page.toString(16)} · {sheet.named.length} params</p>
+      {#if sheet.named.length > 10}
+        <input class="search" placeholder="Filter parameters…" bind:value={filter} />
+      {/if}
       <ul class="params">
-        {#each sheet.named as p}
+        {#each shown as p}
           <li class="param">
-            <span class="p-name">{p.name}</span>
-            <span class="p-val mono">
-              {p.value.toFixed(2)}{p.unit ? ` ${p.unit}` : ''}
-            </span>
+            <div class="p-top">
+              <span class="p-name">{p.name}</span>
+              <span class="p-val mono">{p.value.toFixed(2)}{p.unit ? ` ${p.unit}` : ''}</span>
+            </div>
+            <div class="bar"><span class="fill" style="width:{pct(p.norm)}%"></span></div>
           </li>
         {/each}
+        {#if shown.length === 0}
+          <li class="hint" style="padding:10px 2px">No params match "{filter}".</li>
+        {/if}
       </ul>
+      <p class="ro mono">read‑only preview · live editing coming once write addressing is verified</p>
     {/if}
   </aside>
 {/if}
 
 <style>
-  .grid-wrap {
+  .wrap {
     padding: 18px;
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
   }
   .block {
+    position: relative;
     aspect-ratio: 5 / 3;
     border: 1px solid var(--border-2);
     border-radius: var(--r-lg);
@@ -101,25 +126,37 @@
     color: var(--text);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: flex-start;
     padding: 12px 13px;
     cursor: pointer;
+    overflow: hidden;
     transition: border-color 0.12s, transform 0.08s;
   }
   .block:hover {
-    border-color: var(--accent);
+    border-color: var(--c);
   }
   .block:active {
     transform: scale(0.98);
   }
-  .block-name {
+  .stripe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--c);
+    opacity: 0.9;
+  }
+  .b-name {
     font-weight: 600;
     font-size: 14px;
   }
-  .block-tag {
+  .b-cat {
     font-size: 9px;
     color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   .hint {
@@ -159,37 +196,36 @@
     left: 0;
     right: 0;
     bottom: 0;
-    max-height: 78vh;
+    max-height: 80vh;
     overflow: auto;
     background: var(--panel-2);
-    border-top: 1px solid var(--border-strong);
+    border-top: 2px solid var(--c);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
-    padding: 16px 18px 28px;
+    padding: 16px 18px 24px;
     z-index: 50;
     animation: axsSheet 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  /* desktop: dock the editor to the right instead of a bottom sheet */
   @media (min-width: 900px) {
     .sheet {
       left: auto;
       top: 0;
       bottom: 0;
-      width: 380px;
+      width: 400px;
       max-height: none;
       border-top: 0;
-      border-left: 1px solid var(--border-strong);
+      border-left: 2px solid var(--c);
       border-radius: 0;
       animation: none;
     }
   }
   .sheet-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 12px;
   }
   .sheet-head h2 {
-    margin: 0;
+    margin: 0 0 2px;
     font-size: 18px;
   }
   .x {
@@ -199,23 +235,59 @@
     font-size: 16px;
     cursor: pointer;
   }
+  .search {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    border-radius: var(--r-sm);
+    color: var(--text);
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  .search:focus {
+    outline: none;
+    border-color: var(--c);
+  }
   .params {
     list-style: none;
-    margin: 12px 0 0;
+    margin: 0;
     padding: 0;
   }
   .param {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     padding: 9px 2px;
     border-bottom: 1px solid var(--hairline);
+  }
+  .p-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
   }
   .p-name {
     font-size: 13px;
   }
   .p-val {
     font-size: 12px;
-    color: var(--accent);
+    color: var(--c);
+  }
+  .bar {
+    height: 4px;
+    border-radius: 3px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .fill {
+    display: block;
+    height: 100%;
+    background: var(--c);
+    border-radius: 3px;
+  }
+  .ro {
+    margin-top: 14px;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-align: center;
   }
 </style>
