@@ -16,5 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: npm ci
+      - run: npx svelte-kit sync   # generates .svelte-kit/tsconfig.json for svelte-check
       - run: npx svelte-check --tsconfig ./tsconfig.json
       - run: npm run build
