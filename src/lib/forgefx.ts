@@ -40,7 +40,10 @@ export const forgefx = {
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),
-  blockTypes: (slug: string) => req<{ value: string; name: string }[]>(`/blocks/${slug}/types`),
+  blockTypes: (slug: string) =>
+    req<{ value: number; name: string; manufacturer: string | null; basedOn: string | null }[]>(
+      `/blocks/${slug}/types`
+    ),
 
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),
@@ -72,6 +75,19 @@ export const forgefx = {
     req<{ ok: boolean }>(`/preset/blocks/${slug}/channel`, {
       method: 'POST',
       body: JSON.stringify({ channel })
+    }),
+
+  // ── grid editing (1-indexed row/col) ──
+  /** Place a block (by effect id) at a cell, or clear it (blockId 0). */
+  placeCell: (row: number, col: number, blockId: number) =>
+    req<{ ok: boolean }>('/preset/grid/cell', {
+      method: 'PUT',
+      body: JSON.stringify({ row, col, blockId })
+    }),
+  clearCell: (row: number, col: number) =>
+    req<{ ok: boolean }>('/preset/grid/cell', {
+      method: 'PUT',
+      body: JSON.stringify({ row, col, blockId: 0 })
     }),
 
   // ── backup / restore ──
