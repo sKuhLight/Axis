@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { forgefx, ForgeError } from '$lib/forgefx';
-  import type { BlockParams } from '$lib/types';
+  import type { NamedParam } from '$lib/types';
   import { layoutFromGrid, cablesFor, type Cell, type Layout } from '$lib/grid';
+  import Knob from '$lib/Knob.svelte';
 
   let status = $state<'loading' | 'ready' | 'offline'>('loading');
   let layout = $state<Layout>({ cells: [], shunts: [], rows: 1, cols: 1, name: '', model: '', crcValid: true });
@@ -12,11 +13,12 @@
   const gh = $derived(Math.max(1, layout.rows) * (CH + GAP) - GAP);
   const cables = $derived(cablesFor(layout, CW, CH, GAP));
 
-  // editor sheet
-  let editing = $state<{ pack: string; display: string } | null>(null);
-  let sheet = $state<BlockParams | null>(null);
+  // ── block editor (live) ──
+  let editing = $state<Cell | null>(null);
+  let params = $state<NamedParam[]>([]);
   let sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
-  let filter = $state('');
+  const CHANNELS = ['A', 'B', 'C', 'D'];
+  const sendTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   let lastPreset = $state<number | null>(null);
   let everLoaded = $state(false);
@@ -58,20 +60,49 @@
     }
   }
 
+  const slugOf = (c: Cell) => (c.pack ?? '').toLowerCase();
+
   async function open(c: Cell) {
-    if (!c.pack) {
-      editing = { pack: '', display: c.display };
-      sheetState = 'nopack';
-      return;
+    editing = c;
+    if (!c.pack) { sheetState = 'nopack'; params = []; return; }
+    await loadParams();
+  }
+  async function loadParams() {
+    if (!editing?.pack) return;
+    sheetState = 'loading';
+    try {
+      const r = await forgefx.blockParams(slugOf(editing));
+      // knobs = editable params (drop the model-type selector + the inner bypass flag)
+      params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
+      sheetState = 'ready';
+    } catch (e) {
+      sheetState = 'error';
+      if (e instanceof ForgeError) console.warn(e.message);
     }
-    editing = { pack: c.pack, display: c.display };
-    sheet = null; sheetState = 'loading'; filter = '';
-    try { sheet = await forgefx.blockParams(c.pack.toLowerCase()); sheetState = 'ready'; }
-    catch (e) { sheetState = 'error'; if (e instanceof ForgeError) console.warn(e.message); }
   }
   const close = () => (editing = null);
-  const shown = $derived(sheet?.named.filter((p) => p.name.toLowerCase().includes(filter.toLowerCase())) ?? []);
-  const pct = (n: number | undefined) => Math.max(0, Math.min(1, n ?? 0)) * 100;
+
+  // live knob → device (optimistic + debounced continuous write)
+  function setKnob(p: NamedParam, v: number) {
+    p.norm = v;
+    if (!editing?.pack) return;
+    const slug = slugOf(editing);
+    clearTimeout(sendTimers[p.name]);
+    sendTimers[p.name] = setTimeout(() => forgefx.setParam(slug, p.name, v).catch(() => {}), 60);
+  }
+  async function toggleBypass() {
+    if (!editing?.pack) return;
+    const next = !(editing.bypassed ?? false);
+    editing.bypassed = next; // editing IS the grid cell → updates the grid too
+    try { await forgefx.setBypass(slugOf(editing), next); } catch { editing.bypassed = !next; }
+  }
+  async function setChannel(ch: string) {
+    if (!editing?.pack || editing.channel === ch) return;
+    const prev = editing.channel;
+    editing.channel = ch;
+    try { await forgefx.setChannel(slugOf(editing), ch); await loadParams(); }
+    catch { editing.channel = prev; }
+  }
   const pos = (row: number, col: number) =>
     `left:${col * (CW + GAP)}px; top:${row * (CH + GAP)}px; width:${CW}px; height:${CH}px;`;
 </script>
@@ -116,32 +147,51 @@
 
 {#if editing}
   <div class="overlay" onclick={close} role="presentation"></div>
-  <aside class="sheet scroll" data-screen="Block Editor" style="--c:{layout.cells.find((x) => x.pack === editing?.pack)?.color ?? 'var(--accent)'}">
-    <header class="sheet-head">
-      <div>
-        <h2>{editing.display}</h2>
-        {#if sheet}<span class="sub mono">page 0x{sheet.page.toString(16)} · {sheet.named.length} params</span>{/if}
+  <aside class="sheet scroll" data-screen="Block Editor" style="--c:{editing.color}">
+    <header class="ed-head">
+      <span class="ed-icon" style="background:{editing.color}"></span>
+      <div class="ed-id">
+        <div class="ed-title">{editing.display}</div>
+        <div class="ed-type mono">{editing.pack ?? '—'}</div>
       </div>
+      {#if editing.pack}
+        <div class="ch">
+          <span class="ch-lbl mono">CH</span>
+          {#each CHANNELS as ch}
+            <button class="ch-btn" class:on={editing.channel === ch} onclick={() => setChannel(ch)}>{ch}</button>
+          {/each}
+        </div>
+      {/if}
+      <span class="ed-spacer"></span>
       <button class="x" onclick={close} aria-label="Close">✕</button>
     </header>
+
     {#if sheetState === 'nopack'}
-      <p class="hint">No parameter pack for <b>{editing.display}</b> yet.</p>
+      <p class="hint">No parameter pack for <b>{editing.display}</b> yet — bypass/channel still work.</p>
     {:else if sheetState === 'loading'}
       <p class="hint">Reading parameters…</p>
     {:else if sheetState === 'error'}
       <p class="hint">Couldn't read this block.</p>
-    {:else if sheet}
-      {#if sheet.named.length > 10}<input class="search" placeholder="Filter parameters…" bind:value={filter} />{/if}
-      <ul class="params">
-        {#each shown as p}
-          <li class="param">
-            <div class="p-top"><span class="p-name">{p.name}</span><span class="p-val mono">{p.value.toFixed(2)}{p.unit ? ` ${p.unit}` : ''}</span></div>
-            <div class="bar"><span class="bfill" style="width:{pct(p.norm)}%"></span></div>
-          </li>
+    {:else}
+      <div class="knobs">
+        {#each params as p (p.name)}
+          <Knob
+            value={p.norm ?? 0}
+            label={p.name}
+            valueText={((p.norm ?? 0) * 10).toFixed(1)}
+            color={editing.color}
+            onInput={(v) => setKnob(p, v)}
+          />
         {/each}
-      </ul>
-      <p class="ro mono">read‑only preview</p>
+      </div>
+      <p class="ro mono">live · drag a knob to set it on the device</p>
     {/if}
+
+    <footer class="ed-foot">
+      <button class="act byp" class:on={editing.bypassed} onclick={toggleBypass}>
+        {editing.bypassed ? 'Bypassed' : 'Bypass'}
+      </button>
+    </footer>
   </aside>
 {/if}
 
@@ -183,17 +233,26 @@
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); animation: axsOverlay .15s ease; z-index: 40; }
   .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 80vh; overflow: auto; background: var(--panel-2); border-top: 2px solid var(--c); border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 16px 18px 24px; z-index: 50; animation: axsSheet .22s cubic-bezier(.16,1,.3,1); }
   @media (min-width: 900px) { .sheet { left: auto; top: 0; bottom: 0; width: 400px; max-height: none; border-top: 0; border-left: 2px solid var(--c); border-radius: 0; animation: none; } }
-  .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-  .sheet-head h2 { margin: 0 0 2px; font-size: 18px; }
+  /* block editor */
+  .ed-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .ed-icon { width: 30px; height: 30px; flex: none; border-radius: 9px; opacity: 0.9; }
+  .ed-id { min-width: 0; line-height: 1.15; }
+  .ed-title { font-weight: 700; font-size: 16px; color: #fff; }
+  .ed-type { font-size: 11px; color: var(--c); }
+  .ed-spacer { flex: 1; }
   .x { border: 0; background: transparent; color: var(--text-mut); font-size: 16px; cursor: pointer; }
-  .search { width: 100%; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-sm); color: var(--text); padding: 8px 10px; font: inherit; font-size: 13px; margin-bottom: 10px; }
-  .search:focus { outline: none; border-color: var(--c); }
-  .params { list-style: none; margin: 0; padding: 0; }
-  .param { padding: 9px 2px; border-bottom: 1px solid var(--hairline); }
-  .p-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-  .p-name { font-size: 13px; }
-  .p-val { font-size: 12px; color: var(--c); }
-  .bar { height: 4px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-  .bfill { display: block; height: 100%; background: var(--c); }
-  .ro { margin-top: 14px; font-size: 10px; color: var(--text-faint); text-align: center; }
+
+  .ch { display: flex; align-items: center; gap: 3px; }
+  .ch-lbl { font-size: 8px; font-weight: 600; color: var(--text-mut); letter-spacing: .08em; margin-right: 2px; }
+  .ch-btn { width: 24px; height: 26px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text-mut); border-radius: 6px; font: 600 12px/1 var(--font-mono); cursor: pointer; }
+  .ch-btn:hover { color: var(--text); }
+  .ch-btn.on { background: var(--c); color: var(--bg, #06181a); border-color: var(--c); }
+
+  .knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 14px 6px; padding: 4px 0 8px; }
+  .ro { margin: 8px 0 0; font-size: 10px; color: var(--text-faint); text-align: center; }
+
+  .ed-foot { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+  .act { height: 38px; padding: 0 16px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .act:hover { border-color: var(--border-strong); }
+  .act.byp.on { background: var(--coral, #d6543f); border-color: var(--coral, #d6543f); color: #fff; }
 </style>
