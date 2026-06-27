@@ -57,10 +57,21 @@ export const forgefx = {
 
   // ── live block parameters (named) ──
   blockParams: (slug: string) => req<BlockParams>(`/preset/blocks/${slug}/params`),
-  setParam: (slug: string, param: string, value: number) =>
-    req<{ ok: boolean; stored: number }>(`/preset/blocks/${slug}/params/${encodeURIComponent(param)}`, {
+  /** Set a parameter. continuous=true (knob, value 0..1) by default; typed=false sends an ordinal. */
+  setParam: (slug: string, param: string, value: number, continuous = true) =>
+    req<{ ok: boolean }>(`/preset/blocks/${slug}/params/${encodeURIComponent(param)}`, {
       method: 'PUT',
-      body: JSON.stringify({ value })
+      body: JSON.stringify({ value, continuous })
+    }),
+  setBypass: (slug: string, bypassed: boolean) =>
+    req<{ ok: boolean }>(`/preset/blocks/${slug}/bypass`, {
+      method: 'POST',
+      body: JSON.stringify({ bypassed })
+    }),
+  setChannel: (slug: string, channel: string) =>
+    req<{ ok: boolean }>(`/preset/blocks/${slug}/channel`, {
+      method: 'POST',
+      body: JSON.stringify({ channel })
     }),
 
   // ── backup / restore ──
