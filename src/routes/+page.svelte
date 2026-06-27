@@ -131,12 +131,20 @@
   }
 
   // ── drag a block to an empty cell to move it ──
+  // The device no-ops an insert of an already-placed instance, so a move =
+  // clear the source cell, then place the same block at the target.
+  // (Block settings reset on move for now — a settings-preserving move needs
+  //  an FM3-Edit capture of the real move op.)
   let dragSrc = $state<Cell | null>(null);
   async function dropOn(row: number, col: number) {
     const src = dragSrc;
     dragSrc = null;
     if (!src || cellAt.get(`${row},${col}`)) return; // empty targets only
-    try { await forgefx.placeCell(W(row), W(col), src.effectId); await load(); } catch { /* */ }
+    try {
+      await forgefx.clearCell(W(src.row), W(src.col));
+      await forgefx.placeCell(W(row), W(col), src.effectId);
+      await load();
+    } catch { /* */ }
   }
 
   async function removeBlock() {
@@ -150,11 +158,15 @@
   type TypeOpt = { value: number; name: string; manufacturer: string | null; basedOn: string | null };
   let typePicker = $state(false);
   let types = $state<TypeOpt[]>([]);
+  let typeState = $state<'loading' | 'ready' | 'error'>('loading');
   let realNames = $state(false);
   async function openTypePicker() {
     if (!editing?.pack) return;
     typePicker = true;
-    try { types = await forgefx.blockTypes(slugOf(editing)); } catch { types = []; }
+    typeState = 'loading';
+    types = [];
+    try { types = await forgefx.blockTypes(slugOf(editing)); typeState = 'ready'; }
+    catch (e) { typeState = 'error'; if (e instanceof ForgeError) console.warn(e.message); }
   }
   async function pickType(t: TypeOpt) {
     if (!editing?.pack) return;
@@ -301,13 +313,20 @@
       <button class="x" onclick={() => (typePicker = false)} aria-label="Close">✕</button>
     </header>
     <ul class="pk-list scroll">
-      {#each types as t (t.value)}
-        <li><button class="pk-item" onclick={() => pickType(t)}>
-          <span class="pk-name">{typeLabel(t)}</span>
-          {#if realNames && t.name && typeLabel(t) !== t.name}<span class="pk-sub mono">{t.name}</span>{/if}
-        </button></li>
-      {/each}
-      {#if types.length === 0}<li class="pk-empty">No model list for this block yet.</li>{/if}
+      {#if typeState === 'loading'}
+        <li class="pk-empty">Loading models…</li>
+      {:else if typeState === 'error'}
+        <li class="pk-empty">Couldn't load models (is the server reachable?).</li>
+      {:else if types.length === 0}
+        <li class="pk-empty">No model list for this block yet.</li>
+      {:else}
+        {#each types as t (t.value)}
+          <li><button class="pk-item" onclick={() => pickType(t)}>
+            <span class="pk-name">{typeLabel(t)}</span>
+            {#if realNames && t.name && typeLabel(t) !== t.name}<span class="pk-sub mono">{t.name}</span>{/if}
+          </button></li>
+        {/each}
+      {/if}
     </ul>
     <p class="ro mono">⚠ type change is beta — verify on the device</p>
   </div>
