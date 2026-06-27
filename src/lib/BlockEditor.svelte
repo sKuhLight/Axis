@@ -20,10 +20,11 @@
   const CHAN = ['A', 'B', 'C', 'D'];
 
   // Compact knob readout, computed LIVE from norm + device-true bounds so it tracks a drag.
-  function fmtVal(p: { norm?: number; unit?: string; min?: number; max?: number }): string {
+  function fmtVal(p: { norm?: number; unit?: string; min?: number; max?: number; log?: boolean }): string {
     const norm = p.norm ?? 0;
     if (p.min == null || p.max == null) return (norm * 10).toFixed(1); // no range → 0..10 position
-    const v = p.min + norm * (p.max - p.min);
+    // log taper (freq cuts etc.) interpolates geometrically; everything else linearly
+    const v = p.log && p.min > 0 ? p.min * Math.pow(p.max / p.min, norm) : p.min + norm * (p.max - p.min);
     if (p.unit === 'Hz') return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(v));
     if (p.unit === '%') return Math.round(v) + '%';
     return Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
