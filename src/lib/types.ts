@@ -39,3 +39,11 @@ export interface Health {
   ok: boolean;
   device: string;
 }
+
+/** One effect in the current preset (from /status, func 0x13). */
+export interface StatusBlock {
+  id: number;
+  name: string;
+  bypassed: boolean;
+  channel: string;
+}

@@ -1,73 +1,58 @@
-// Demo signal-grid layout (a LAYOUT PREVIEW until func 0x20 gives the real preset routing).
-// Uses real block names in a plausible chain so the design is faithful.
-import { colorOf } from './blocks';
+// Lay out the current preset's real blocks (from /status) into a grid.
+// Positions are a chain-ordered SNAKE layout (real routing/positions need the preset-blob
+// decode later) — but the block CONTENTS, bypass and channel are real device state.
+import type { StatusBlock } from './types';
+import { statusColor, baseName, packFor, chainOrder } from './blocks';
+
+export const COLS = 6;
 
 export interface Cell {
   row: number;
   col: number;
-  kind: 'block' | 'shunt' | 'empty';
-  block?: string;
-  glyph?: string;
-  type?: string;
-  channel?: string;
+  kind: 'block' | 'empty';
+  display?: string; // label, e.g. "Compressor"
+  pack?: string | null; // editor pack key, or null if none
   bypassed?: boolean;
-  level?: number; // 0..1 fill (demo)
+  channel?: string;
+  color?: string;
 }
 
-export const COLS = 6;
-export const ROWS = 4;
-
-const GLYPH: Record<string, string> = {
-  Input: 'I', Output: 'O', Comp: '⊐', Drive: '◣', Amp: 'A', Cab: '▥',
-  Reverb: '≋', Delay: '⊡', Pitch: '♯', Wah: 'W', Peq: '∿', Geq: '⊪',
-  Filter: 'ƒ', Chorus: '∽', Flanger: '⌇', Phaser: 'φ', Tremolo: 'T',
-  Rotary: '↻', Volume: 'V', Mixer: '⊞', Multitap: '⋮', Formant: 'ɵ', Enhancer: '✦'
-};
-const glyph = (b: string) => GLYPH[b] ?? b[0];
-const typeOf: Record<string, string> = {
-  Amp: '5153 100W', Cab: 'Legacy 4x12', Drive: 'TS9', Reverb: 'Large Hall',
-  Delay: 'Digital', Comp: 'Studio'
-};
-
-// A plausible main chain + a parallel branch — a preview, not the real preset.
-const MAIN = ['Input', 'Comp', 'Drive', 'Amp', 'Cab', 'Output'];
-const ROW1 = ['', 'Wah', '', 'Reverb', 'Delay', ''];
-
-function blk(row: number, col: number, b: string): Cell {
-  return {
-    row, col, kind: 'block', block: b, glyph: glyph(b),
-    type: typeOf[b] ?? b, level: 0.55 + ((col * 7) % 30) / 100,
-    channel: 'A', bypassed: b === 'Wah'
-  };
+export interface Layout {
+  cells: Cell[]; // block cells, in chain order
+  empties: Cell[]; // filler cells to complete the rectangle
+  rows: number;
 }
 
-export function demoGrid(available: string[]): Cell[] {
-  const has = new Set(available);
+export function layoutFromStatus(status: StatusBlock[]): Layout {
+  const sorted = [...status].sort((a, b) => chainOrder(a.name) - chainOrder(b.name));
+  const rows = Math.max(1, Math.ceil(sorted.length / COLS));
   const cells: Cell[] = [];
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++) {
-      const src = r === 0 ? MAIN[c] : r === 1 ? ROW1[c] : '';
-      if (src && has.has(src)) cells.push(blk(r, c, src));
-      else if (r === 0 && c > 0) cells.push({ row: r, col: c, kind: 'shunt' });
-      else cells.push({ row: r, col: c, kind: 'empty' });
-    }
-  return cells;
+  const used = new Set<string>();
+  sorted.forEach((b, i) => {
+    const row = Math.floor(i / COLS);
+    const col = row % 2 === 0 ? i % COLS : COLS - 1 - (i % COLS); // snake
+    used.add(`${row},${col}`);
+    cells.push({
+      row, col, kind: 'block',
+      display: baseName(b.name), pack: packFor(b.name),
+      bypassed: b.bypassed, channel: b.channel, color: statusColor(b.name)
+    });
+  });
+  const empties: Cell[] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < COLS; c++)
+      if (!used.has(`${r},${c}`)) empties.push({ row: r, col: c, kind: 'empty' });
+  return { cells, empties, rows };
 }
 
-// straight cable paths between consecutive blocks on a row (cell-center coords)
-export function demoCables(cells: Cell[], cw: number, ch: number, gap: number) {
+/** Straight cable paths between consecutive blocks in the chain (cell-center coords). */
+export function cablesFor(cells: Cell[], cw: number, ch: number, gap: number) {
+  const center = (c: Cell) => ({ x: c.col * (cw + gap) + cw / 2, y: c.row * (ch + gap) + ch / 2 });
   const paths: { d: string; stroke: string }[] = [];
-  const center = (c: Cell) => ({
-    x: c.col * (cw + gap) + cw / 2,
-    y: c.row * (ch + gap) + ch / 2
-  });
-  for (let r = 0; r < ROWS; r++) {
-    const row = cells.filter((c) => c.row === r && c.kind === 'block').sort((a, b) => a.col - b.col);
-    for (let i = 0; i < row.length - 1; i++) {
-      const a = center(row[i]);
-      const b = center(row[i + 1]);
-      paths.push({ d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, stroke: colorOf(row[i].block!) });
-    }
+  for (let i = 0; i < cells.length - 1; i++) {
+    const a = center(cells[i]);
+    const b = center(cells[i + 1]);
+    paths.push({ d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, stroke: cells[i].color ?? '#6e6e78' });
   }
   return paths;
 }

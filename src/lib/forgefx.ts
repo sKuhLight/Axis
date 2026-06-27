@@ -1,7 +1,7 @@
 // Typed client for the ForgeFX HTTP API.
 // Dev: Vite proxies /api -> http://localhost:5056 (see vite.config.ts).
 // Prod: ForgeFX.Server serves Axis, so /api is same-origin (set VITE_FORGEFX_BASE to override).
-import type { BlockParams, Firmware, Health } from './types';
+import type { BlockParams, Firmware, Health, StatusBlock } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
@@ -34,6 +34,9 @@ export const forgefx = {
 
   /** Current preset number + name. */
   currentPreset: () => req<{ number: number; name: string }>('/preset/current'),
+
+  /** Effects in the current preset (real device state): id, name, bypass, channel. */
+  status: () => req<StatusBlock[]>('/status'),
 
   /** Named, scaled parameter values for one block. */
   blockParams: (name: string) => req<BlockParams>(`/block/${encodeURIComponent(name)}/params`),
