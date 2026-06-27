@@ -140,6 +140,7 @@
     const src = dragSrc;
     dragSrc = null;
     if (!src || cellAt.get(`${row},${col}`)) return; // empty targets only
+    if (col !== src.col) return; // same-column moves only — cross-column needs re-cabling (TODO)
     try {
       await forgefx.clearCell(W(src.row), W(src.col));
       await forgefx.placeCell(W(row), W(col), src.effectId);
@@ -160,11 +161,23 @@
   let types = $state<TypeOpt[]>([]);
   let typeState = $state<'loading' | 'ready' | 'error'>('loading');
   let realNames = $state(false);
+  let typeFilter = $state('');
+  const TYPE_CAP = 60; // don't render hundreds of DOM nodes at once
+  const shownTypes = $derived.by(() => {
+    const q = typeFilter.trim().toLowerCase();
+    const match = q
+      ? types.filter((t) =>
+          (t.name + ' ' + (t.manufacturer ?? '') + ' ' + (t.basedOn ?? '')).toLowerCase().includes(q)
+        )
+      : types;
+    return match.slice(0, TYPE_CAP);
+  });
   async function openTypePicker() {
     if (!editing?.pack) return;
     typePicker = true;
     typeState = 'loading';
     types = [];
+    typeFilter = '';
     try { types = await forgefx.blockTypes(slugOf(editing)); typeState = 'ready'; }
     catch (e) { typeState = 'error'; if (e instanceof ForgeError) console.warn(e.message); }
   }
@@ -214,8 +227,8 @@
           {:else if cell?.kind === 'shunt'}
             <div class="cell shunt" style={pos(r, c)}><span class="sh-bar"></span></div>
           {:else}
-            <button class="cell empty" style={pos(r, c)}
-              ondragover={(e) => e.preventDefault()}
+            <button class="cell empty" class:droptarget={dragSrc && dragSrc.col === c} style={pos(r, c)}
+              ondragover={(e) => { if (dragSrc && dragSrc.col === c) e.preventDefault(); }}
               ondrop={(e) => { e.preventDefault(); dropOn(r, c); }}
               onclick={() => openPicker(r, c)}>
               <span class="plus">+</span>
@@ -312,6 +325,9 @@
       <label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>
       <button class="x" onclick={() => (typePicker = false)} aria-label="Close">✕</button>
     </header>
+    {#if typeState === 'ready' && types.length > 12}
+      <input class="pk-search" placeholder="Filter {types.length} models…" bind:value={typeFilter} />
+    {/if}
     <ul class="pk-list scroll">
       {#if typeState === 'loading'}
         <li class="pk-empty">Loading models…</li>
@@ -320,12 +336,15 @@
       {:else if types.length === 0}
         <li class="pk-empty">No model list for this block yet.</li>
       {:else}
-        {#each types as t (t.value)}
+        {#each shownTypes as t (t.value)}
           <li><button class="pk-item" onclick={() => pickType(t)}>
             <span class="pk-name">{typeLabel(t)}</span>
             {#if realNames && t.name && typeLabel(t) !== t.name}<span class="pk-sub mono">{t.name}</span>{/if}
           </button></li>
         {/each}
+        {#if shownTypes.length < (typeFilter ? Infinity : types.length)}
+          <li class="pk-empty">…{types.length - shownTypes.length} more — type to filter</li>
+        {/if}
       {/if}
     </ul>
     <p class="ro mono">⚠ type change is beta — verify on the device</p>
@@ -355,6 +374,7 @@
 
   .cell.empty { display: flex; align-items: center; justify-content: center; border: 1px dashed var(--hairline); background: transparent; cursor: pointer; z-index: 1; padding: 0; }
   .cell.empty:hover { border-color: var(--accent); }
+  .cell.empty.droptarget { border-color: var(--accent); border-style: solid; background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .plus { font-size: 22px; color: #2f2f37; font-weight: 300; line-height: 1; }
   .cell.shunt { display: flex; align-items: center; justify-content: center; z-index: 1; }
   .sh-bar { width: 60%; height: 2px; background: #4a4a55; border-radius: 1px; }
@@ -403,6 +423,8 @@
   .pk-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .pk-title { font-weight: 700; font-size: 15px; }
   .rn { margin-left: auto; font-size: 11px; color: var(--text-mut); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .pk-search { width: 100%; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-sm); color: var(--text); padding: 8px 10px; font: inherit; font-size: 13px; margin-bottom: 8px; }
+  .pk-search:focus { outline: none; border-color: var(--accent); }
   .pk-list { list-style: none; margin: 0; padding: 0; overflow: auto; }
   .pk-item { width: 100%; display: flex; align-items: baseline; gap: 8px; background: transparent; border: 0; border-radius: var(--r-sm); padding: 9px 8px; cursor: pointer; color: var(--text); text-align: left; }
   .pk-item:hover { background: var(--surface-2); }
