@@ -19,13 +19,14 @@
 
   const CHAN = ['A', 'B', 'C', 'D'];
 
-  // Compact knob readout: device-true value + unit where known, else the 0..10 position.
-  function fmtVal(p: { value?: number; unit?: string }): string {
-    const v = p.value ?? 0;
+  // Compact knob readout, computed LIVE from norm + device-true bounds so it tracks a drag.
+  function fmtVal(p: { norm?: number; unit?: string; min?: number; max?: number }): string {
+    const norm = p.norm ?? 0;
+    if (p.min == null || p.max == null) return (norm * 10).toFixed(1); // no range → 0..10 position
+    const v = p.min + norm * (p.max - p.min);
     if (p.unit === 'Hz') return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(v));
     if (p.unit === '%') return Math.round(v) + '%';
-    const r = Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
-    return p.unit ? `${r}${p.unit === '°' ? '°' : ''}` : r;
+    return Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
   }
 
   // ── docked resize (desktop) ──

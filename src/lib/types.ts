@@ -22,6 +22,9 @@ export interface NamedParam {
   value: number;
   unit?: string;
   norm?: number;
+  /** Device-true display bounds (for a live readout while dragging). */
+  min?: number;
+  max?: number;
 }
 
 export interface BlockParams {
