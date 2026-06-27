@@ -7,7 +7,7 @@
   let status = $state<'loading' | 'ready' | 'offline'>('loading');
   let layout = $state<Layout>({ cells: [], empties: [], rows: 1 });
 
-  const CW = 132, CH = 88, GAP = 10;
+  const CW = 96, CH = 72, GAP = 8;
   const gw = $derived(COLS * (CW + GAP) - GAP);
   const gh = $derived(Math.max(1, layout.rows) * (CH + GAP) - GAP);
   const cables = $derived(cablesFor(layout.cells, CW, CH, GAP));
@@ -18,7 +18,22 @@
   let sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
   let filter = $state('');
 
-  onMount(load);
+  let lastPreset = $state<number | null>(null);
+  onMount(() => {
+    init();
+    const t = setInterval(watchPreset, 3000); // live-update when the preset changes on the device
+    return () => clearInterval(t);
+  });
+  async function init() {
+    try { lastPreset = (await forgefx.currentPreset()).number; } catch { /* */ }
+    await load();
+  }
+  async function watchPreset() {
+    try {
+      const n = (await forgefx.currentPreset()).number;
+      if (n !== lastPreset) { lastPreset = n; await load(); }
+    } catch { /* offline; layout poll left as-is */ }
+  }
   async function load() {
     status = 'loading';
     try {

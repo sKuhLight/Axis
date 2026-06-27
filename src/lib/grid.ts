@@ -4,7 +4,8 @@
 import type { StatusBlock } from './types';
 import { statusColor, baseName, packFor, chainOrder } from './blocks';
 
-export const COLS = 6;
+export const COLS = 12; // FM3 grid is wider; real per-cell positions need the preset-blob decode
+export const MIN_ROWS = 4;
 
 export interface Cell {
   row: number;
@@ -25,7 +26,7 @@ export interface Layout {
 
 export function layoutFromStatus(status: StatusBlock[]): Layout {
   const sorted = [...status].sort((a, b) => chainOrder(a.name) - chainOrder(b.name));
-  const rows = Math.max(1, Math.ceil(sorted.length / COLS));
+  const rows = Math.max(MIN_ROWS, Math.ceil(sorted.length / COLS));
   const cells: Cell[] = [];
   const used = new Set<string>();
   sorted.forEach((b, i) => {
