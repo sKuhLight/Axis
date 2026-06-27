@@ -7,6 +7,7 @@
   import BlockEditor from '$lib/BlockEditor.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
+  import SaveDialog from '$lib/SaveDialog.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -49,6 +50,7 @@
   </div>
   <CommandPalette />
   <PresetPicker />
+  <SaveDialog />
   <Toast />
 </div>
 

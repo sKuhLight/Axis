@@ -57,6 +57,12 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ number })
     }),
+  /** Store the edit buffer to a preset slot. DESTRUCTIVE — overwrites that location. */
+  store: (number: number) =>
+    req<{ ok: boolean }>('/preset/store', {
+      method: 'POST',
+      body: JSON.stringify({ number })
+    }),
 
   // ── live block parameters (named) ──
   blockParams: (slug: string) => req<BlockParams>(`/preset/blocks/${slug}/params`),

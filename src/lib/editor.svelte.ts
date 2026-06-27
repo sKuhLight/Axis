@@ -397,6 +397,28 @@ class EditorStore {
     return this.selectPreset(n);
   };
 
+  // ── save (DESTRUCTIVE: overwrites a preset slot) ──
+  saveOpen = $state(false);
+  saveTarget = $state<number>(0);
+  openSave = () => {
+    this.saveTarget = this.preset?.number ?? this.lastPreset ?? 0;
+    this.saveOpen = true;
+  };
+  save = async (n: number) => {
+    try {
+      const r = await forgefx.store(n);
+      this.saveOpen = false;
+      if (r.ok) {
+        this.showToast(`Saved to preset ${n}`, '#f5a623');
+        await this.poll();
+      } else {
+        this.showToast('Save rejected by device', '#d6543f');
+      }
+    } catch {
+      this.showToast('Save failed', '#d6543f');
+    }
+  };
+
   // ── toast ──
   showToast = (text: string, accent = '#33c46b') => {
     if (this.#toastT) clearTimeout(this.#toastT);
