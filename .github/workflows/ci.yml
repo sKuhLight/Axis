@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: typecheck & build
+    runs-on: ubuntu-latest
+    # run inside a Node container so the only action is checkout@v5 (Node 24) —
+    # avoids the setup-node / Node 20 deprecation entirely.
+    container: node:22
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci
+      - run: npx svelte-check --tsconfig ./tsconfig.json
+      - run: npm run build
