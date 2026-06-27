@@ -89,6 +89,18 @@ export const forgefx = {
       method: 'PUT',
       body: JSON.stringify({ row, col, blockId: 0 })
     }),
+  /** Cable (srcRow,srcCol)→(destRow,srcCol+1). connect=false removes it. 1-indexed. */
+  cable: (srcRow: number, srcCol: number, destRow: number, connect = true) =>
+    req<{ ok: boolean }>('/preset/grid/cable', {
+      method: 'POST',
+      body: JSON.stringify({ srcRow, srcCol, destRow, connect })
+    }),
+  /** Move the device's edit cursor to a cell so the FM3 screen follows the UI. 1-indexed. */
+  selectCell: (row: number, col: number) =>
+    req<{ ok: boolean }>('/preset/grid/select', {
+      method: 'POST',
+      body: JSON.stringify({ row, col })
+    }),
 
   // ── backup / restore ──
   backupPreset: (n: number) => req<ArrayBuffer>(`/presets/${n}/backup`),
