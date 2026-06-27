@@ -25,6 +25,8 @@ export interface NamedParam {
   /** Device-true display bounds (for a live readout while dragging). */
   min?: number;
   max?: number;
+  /** Log10 taper (e.g. frequency cuts) — interpolate geometrically, not linearly. */
+  log?: boolean;
 }
 
 export interface BlockParams {
