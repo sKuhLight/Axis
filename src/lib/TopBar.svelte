@@ -76,7 +76,7 @@
       </div>
     {/if}
 
-    <button class="save" title="Store preset (coming soon)" onclick={() => editor.showToast('Save — store is beta', '#f5a623')}>
+    <button class="save" title="Store the edit buffer to a preset (beta)" onclick={() => editor.openSave()}>
       <span class="save-dot"></span>Save
     </button>
   </div>
