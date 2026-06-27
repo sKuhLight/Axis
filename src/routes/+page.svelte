@@ -184,8 +184,8 @@
   async function pickType(t: TypeOpt) {
     if (!editing?.pack) return;
     typePicker = false;
-    // wiki "Slot" is 1-based; the device type ordinal is 0-based
-    try { await forgefx.setParam(slugOf(editing), 'Type', Math.max(0, t.value - 1), false); await loadParams(); } catch { /* */ }
+    // t.value is the device-true model ordinal (from the dictionary) = the discrete-SET value
+    try { await forgefx.setParam(slugOf(editing), 'Type', t.value, false); await loadParams(); } catch { /* */ }
   }
   const typeLabel = (t: TypeOpt) =>
     realNames && (t.basedOn || t.manufacturer) ? `${t.manufacturer ?? ''} ${t.basedOn ?? ''}`.trim() : t.name;
