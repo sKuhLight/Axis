@@ -103,6 +103,68 @@
     try { await forgefx.setChannel(slugOf(editing), ch); await loadParams(); }
     catch { editing.channel = prev; }
   }
+
+  // ── full grid matrix lookup (block/shunt by position; everything else empty) ──
+  const cellAt = $derived.by(() => {
+    const m = new Map<string, Cell>();
+    for (const c of [...layout.cells, ...layout.shunts]) m.set(`${c.row},${c.col}`, c);
+    return m;
+  });
+  // write endpoints are 1-indexed; the decoded grid is 0-indexed
+  const W = (n: number) => n + 1;
+
+  // ── add-block picker (tap an empty cell) ──
+  type Family = { slug: string; name: string; page: number };
+  let picker = $state<{ row: number; col: number } | null>(null);
+  let families = $state<Family[]>([]);
+  async function openPicker(row: number, col: number) {
+    picker = { row, col };
+    if (families.length === 0) {
+      try { families = (await forgefx.blocks()).map((b) => ({ slug: b.slug, name: b.name, page: b.page })); } catch { /* */ }
+    }
+  }
+  async function addBlock(page: number) {
+    if (!picker) return;
+    const { row, col } = picker;
+    picker = null;
+    try { await forgefx.placeCell(W(row), W(col), page); await load(); } catch { /* */ }
+  }
+
+  // ── drag a block to an empty cell to move it ──
+  let dragSrc = $state<Cell | null>(null);
+  async function dropOn(row: number, col: number) {
+    const src = dragSrc;
+    dragSrc = null;
+    if (!src || cellAt.get(`${row},${col}`)) return; // empty targets only
+    try { await forgefx.placeCell(W(row), W(col), src.effectId); await load(); } catch { /* */ }
+  }
+
+  async function removeBlock() {
+    if (!editing) return;
+    const c = editing;
+    close();
+    try { await forgefx.clearCell(W(c.row), W(c.col)); await load(); } catch { /* */ }
+  }
+
+  // ── type / model picker ──
+  type TypeOpt = { value: number; name: string; manufacturer: string | null; basedOn: string | null };
+  let typePicker = $state(false);
+  let types = $state<TypeOpt[]>([]);
+  let realNames = $state(false);
+  async function openTypePicker() {
+    if (!editing?.pack) return;
+    typePicker = true;
+    try { types = await forgefx.blockTypes(slugOf(editing)); } catch { types = []; }
+  }
+  async function pickType(t: TypeOpt) {
+    if (!editing?.pack) return;
+    typePicker = false;
+    // wiki "Slot" is 1-based; the device type ordinal is 0-based
+    try { await forgefx.setParam(slugOf(editing), 'Type', Math.max(0, t.value - 1), false); await loadParams(); } catch { /* */ }
+  }
+  const typeLabel = (t: TypeOpt) =>
+    realNames && (t.basedOn || t.manufacturer) ? `${t.manufacturer ?? ''} ${t.basedOn ?? ''}`.trim() : t.name;
+
   const pos = (row: number, col: number) =>
     `left:${col * (CW + GAP)}px; top:${row * (CH + GAP)}px; width:${CW}px; height:${CH}px;`;
 </script>
@@ -122,19 +184,32 @@
         {#each cables as cab}<path d={cab.d} fill="none" stroke={cab.stroke} stroke-width="2" opacity="0.7" />{/each}
       </svg>
 
-      <!-- shunts: routing pass-through nodes -->
-      {#each layout.shunts as s}
-        <div class="shunt" style={pos(s.row, s.col)}><span class="dot"></span></div>
-      {/each}
-
-      <!-- placed blocks -->
-      {#each layout.cells as c}
-        <button class="cell block" class:byp={c.bypassed} style="{pos(c.row, c.col)} --c:{c.color}" onclick={() => open(c)}>
-          <span class="b-label">{c.display}</span>
-          <span class="b-pack mono">{c.pack ?? '—'}</span>
-          {#if c.channel}<span class="chan mono">{c.channel}</span>{/if}
-          {#if c.bypassed}<span class="bypb mono">BYP</span>{/if}
-        </button>
+      <!-- full grid matrix: block · shunt · empty(drop target / add) -->
+      {#each Array(layout.rows) as _, r}
+        {#each Array(layout.cols) as _, c}
+          {@const cell = cellAt.get(`${r},${c}`)}
+          {#if cell?.kind === 'block'}
+            <button class="cell block" class:byp={cell.bypassed} style="{pos(r, c)} --c:{cell.color}"
+              draggable="true"
+              ondragstart={() => (dragSrc = cell ?? null)}
+              ondragend={() => (dragSrc = null)}
+              onclick={() => cell && open(cell)}>
+              <span class="b-label">{cell.display}</span>
+              <span class="b-pack mono">{cell.pack ?? '—'}</span>
+              {#if cell.channel}<span class="chan mono">{cell.channel}</span>{/if}
+              {#if cell.bypassed}<span class="bypb mono">BYP</span>{/if}
+            </button>
+          {:else if cell?.kind === 'shunt'}
+            <div class="cell shunt" style={pos(r, c)}><span class="sh-bar"></span></div>
+          {:else}
+            <button class="cell empty" style={pos(r, c)}
+              ondragover={(e) => e.preventDefault()}
+              ondrop={(e) => { e.preventDefault(); dropOn(r, c); }}
+              onclick={() => openPicker(r, c)}>
+              <span class="plus">+</span>
+            </button>
+          {/if}
+        {/each}
       {/each}
     </div>
     <p class="preview mono">
@@ -150,10 +225,10 @@
   <aside class="sheet scroll" data-screen="Block Editor" style="--c:{editing.color}">
     <header class="ed-head">
       <span class="ed-icon" style="background:{editing.color}"></span>
-      <div class="ed-id">
+      <button class="ed-id" onclick={openTypePicker} disabled={!editing.pack} title="Change model/type">
         <div class="ed-title">{editing.display}</div>
-        <div class="ed-type mono">{editing.pack ?? '—'}</div>
-      </div>
+        <div class="ed-type mono">{editing.pack ?? '—'} {#if editing.pack}▾{/if}</div>
+      </button>
       {#if editing.pack}
         <div class="ch">
           <span class="ch-lbl mono">CH</span>
@@ -191,8 +266,51 @@
       <button class="act byp" class:on={editing.bypassed} onclick={toggleBypass}>
         {editing.bypassed ? 'Bypassed' : 'Bypass'}
       </button>
+      <span class="ed-spacer"></span>
+      {#if editing.pack}<button class="act rem" onclick={removeBlock}>Remove</button>{/if}
     </footer>
   </aside>
+{/if}
+
+<!-- add-block picker -->
+{#if picker}
+  <div class="overlay" onclick={() => (picker = null)} role="presentation"></div>
+  <div class="picker" data-screen="Add Block">
+    <header class="pk-head">
+      <span class="pk-title">Add block</span>
+      <button class="x" onclick={() => (picker = null)} aria-label="Close">✕</button>
+    </header>
+    <ul class="pk-list scroll">
+      {#each families as f (f.slug)}
+        <li><button class="pk-item" onclick={() => addBlock(f.page)}>
+          <span class="pk-name">{f.name}</span><span class="pk-sub mono">{f.slug}</span>
+        </button></li>
+      {/each}
+    </ul>
+    <p class="ro mono">⚠ grid edits are beta — verify on the device</p>
+  </div>
+{/if}
+
+<!-- type / model picker -->
+{#if typePicker && editing}
+  <div class="overlay" onclick={() => (typePicker = false)} role="presentation"></div>
+  <div class="picker" data-screen="Type Picker">
+    <header class="pk-head">
+      <span class="pk-title">{editing.display} · model</span>
+      <label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>
+      <button class="x" onclick={() => (typePicker = false)} aria-label="Close">✕</button>
+    </header>
+    <ul class="pk-list scroll">
+      {#each types as t (t.value)}
+        <li><button class="pk-item" onclick={() => pickType(t)}>
+          <span class="pk-name">{typeLabel(t)}</span>
+          {#if realNames && t.name && typeLabel(t) !== t.name}<span class="pk-sub mono">{t.name}</span>{/if}
+        </button></li>
+      {/each}
+      {#if types.length === 0}<li class="pk-empty">No model list for this block yet.</li>{/if}
+    </ul>
+    <p class="ro mono">⚠ type change is beta — verify on the device</p>
+  </div>
 {/if}
 
 <style>
@@ -216,9 +334,11 @@
   .chan { position: absolute; top: 6px; right: 7px; font-size: 9px; font-weight: 700; color: rgba(255,255,255,.85); background: rgba(0,0,0,.3); border-radius: 4px; padding: 2px 4px; }
   .bypb { position: absolute; top: 6px; left: 7px; font-size: 8px; font-weight: 700; color: var(--bg); background: var(--text-dim); border-radius: 4px; padding: 2px 4px; letter-spacing: .05em; }
 
-  /* shunt: a small routing node the cables thread through */
-  .shunt { position: absolute; display: flex; align-items: center; justify-content: center; z-index: 1; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--border-2); }
+  .cell.empty { display: flex; align-items: center; justify-content: center; border: 1px dashed var(--hairline); background: transparent; cursor: pointer; z-index: 1; padding: 0; }
+  .cell.empty:hover { border-color: var(--accent); }
+  .plus { font-size: 22px; color: #2f2f37; font-weight: 300; line-height: 1; }
+  .cell.shunt { display: flex; align-items: center; justify-content: center; z-index: 1; }
+  .sh-bar { width: 60%; height: 2px; background: #4a4a55; border-radius: 1px; }
 
   .preview { margin-top: 18px; font-size: 10px; color: var(--text-faint); display: flex; align-items: center; gap: 8px; }
   .edit { color: var(--amber, #f5a623); }
@@ -236,7 +356,9 @@
   /* block editor */
   .ed-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
   .ed-icon { width: 30px; height: 30px; flex: none; border-radius: 9px; opacity: 0.9; }
-  .ed-id { min-width: 0; line-height: 1.15; }
+  .ed-id { min-width: 0; line-height: 1.15; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; }
+  .ed-id:hover .ed-type { color: var(--text); }
+  .ed-id:disabled { cursor: default; }
   .ed-title { font-weight: 700; font-size: 16px; color: #fff; }
   .ed-type { font-size: 11px; color: var(--c); }
   .ed-spacer { flex: 1; }
@@ -255,4 +377,17 @@
   .act { height: 38px; padding: 0 16px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .act:hover { border-color: var(--border-strong); }
   .act.byp.on { background: var(--coral, #d6543f); border-color: var(--coral, #d6543f); color: #fff; }
+  .act.rem:hover { border-color: var(--coral, #d6543f); color: var(--coral, #d6543f); }
+
+  /* add-block / type pickers */
+  .picker { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, 92vw); max-height: 70vh; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 14px 16px 12px; z-index: 60; animation: axsOverlay 0.15s ease; }
+  .pk-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .pk-title { font-weight: 700; font-size: 15px; }
+  .rn { margin-left: auto; font-size: 11px; color: var(--text-mut); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .pk-list { list-style: none; margin: 0; padding: 0; overflow: auto; }
+  .pk-item { width: 100%; display: flex; align-items: baseline; gap: 8px; background: transparent; border: 0; border-radius: var(--r-sm); padding: 9px 8px; cursor: pointer; color: var(--text); text-align: left; }
+  .pk-item:hover { background: var(--surface-2); }
+  .pk-name { font-size: 13px; font-weight: 600; }
+  .pk-sub { font-size: 10px; color: var(--text-mut); }
+  .pk-empty { color: var(--text-dim); padding: 10px 8px; font-size: 13px; }
 </style>
