@@ -285,8 +285,18 @@ class EditorStore {
     const outgoing = [...this.layout.cells, ...this.layout.shunts]
       .filter((c) => c.col === sc + 1 && c.fromRows.includes(sr))
       .map((c) => c.row);
-    // optimistic relocate
-    const relocate = (c: Cell): Cell => (c === src ? { ...c, row, col } : c);
+    // optimistic relocate — also carry the routing so wires move with the block:
+    //  • the block keeps its incoming feeders on a same-col move (drops them cross-col)
+    //  • downstream cells re-point from the old row to the new one (same-col), or drop it (cross-col)
+    const relocate = (c: Cell): Cell => {
+      if (c === src) return { ...c, row, col, fromRows: sameCol ? c.fromRows : [] };
+      if (c.col === sc + 1 && c.fromRows.includes(sr)) {
+        const fr = c.fromRows.filter((r) => r !== sr);
+        if (sameCol) fr.push(row);
+        return { ...c, fromRows: fr };
+      }
+      return c;
+    };
     this.layout = { ...this.layout, cells: this.layout.cells.map(relocate), shunts: this.layout.shunts.map(relocate) };
     this.selKey = `${row},${col}`;
     try {
