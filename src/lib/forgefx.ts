@@ -1,7 +1,15 @@
-// Typed client for the ForgeFX HTTP API.
-// Dev: Vite proxies /api -> http://localhost:5056 (see vite.config.ts).
+// Typed client for the ForgeFX HTTP API (resource-oriented, named).
+// Dev: Vite proxies /api -> http://localhost:5056 (vite.config.ts strips /api).
 // Prod: ForgeFX.Server serves Axis, so /api is same-origin (set VITE_FORGEFX_BASE to override).
-import type { BlockParams, Firmware, Health, StatusBlock } from './types';
+import type {
+  BlockParams,
+  BlockSummary,
+  DeviceInfo,
+  Health,
+  PresetBlock,
+  PresetGrid,
+  PresetRef
+} from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
@@ -26,51 +34,44 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const forgefx = {
+  // ── system ──
   health: () => req<Health>('/healthz'),
-  firmware: () => req<Firmware>('/firmware'),
+  device: () => req<DeviceInfo>('/device'),
 
-  /** All blocks that have a definition pack (names). */
-  blocks: () => req<string[]>('/blocks'),
+  // ── catalog (static) ──
+  blocks: () => req<BlockSummary[]>('/blocks'),
+  blockTypes: (slug: string) => req<{ value: string; name: string }[]>(`/blocks/${slug}/types`),
 
-  /** Current preset number + name. */
-  currentPreset: () => req<{ number: number; name: string }>('/preset/current'),
-
-  /** Effects in the current preset (real device state): id, name, bypass, channel. */
-  status: () => req<StatusBlock[]>('/status'),
-
-  /** Named, scaled parameter values for one block. */
-  blockParams: (name: string) => req<BlockParams>(`/block/${encodeURIComponent(name)}/params`),
-
-  /** Select a preset by number. */
-  selectPreset: (n: number) =>
-    req<{ ok: boolean; preset: number }>('/preset', {
+  // ── preset + grid (live) ──
+  currentPreset: () => req<PresetRef>('/preset'),
+  preset: (n: number) => req<PresetRef>(`/presets/${n}`),
+  grid: () => req<PresetGrid>('/preset/grid'),
+  presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
+  /** Placed blocks: position + routing + live bypass/channel. */
+  presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),
+  selectPreset: (number: number) =>
+    req<{ ok: boolean; number: number }>('/preset/select', {
       method: 'POST',
-      body: JSON.stringify({ n })
+      body: JSON.stringify({ number })
     }),
 
-  /** Set a parameter. effect = block id/page; addr = SET address bytes; value = float. */
-  setParam: (effect: number, addr: number[], value: number) =>
-    req<{ ok: boolean; stored: number }>('/param', {
-      method: 'POST',
-      body: JSON.stringify({ effect, addr, value })
+  // ── live block parameters (named) ──
+  blockParams: (slug: string) => req<BlockParams>(`/preset/blocks/${slug}/params`),
+  setParam: (slug: string, param: string, value: number) =>
+    req<{ ok: boolean; stored: number }>(`/preset/blocks/${slug}/params/${encodeURIComponent(param)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value })
     }),
 
-  /** Raw dump of a block page (3-byte ÷65536 normalized values). */
-  dump: (page: number) => req<number[]>(`/dump/${page}`),
-
-  backupPreset: (n: number) => req<ArrayBuffer>(`/preset/${n}/backup`),
-  backupCurrent: () => req<ArrayBuffer>('/preset/current/backup'),
+  // ── backup / restore ──
+  backupPreset: (n: number) => req<ArrayBuffer>(`/presets/${n}/backup`),
+  backupCurrent: () => req<ArrayBuffer>('/preset/backup'),
   restorePreset: (bytes: ArrayBuffer) =>
-    fetch(`${BASE}/preset/restore`, {
+    fetch(`${BASE}/presets/restore`, {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: bytes
     })
 };
-
-/** Build the SET address for a (page, index) on a block. effect == page (block id == page). */
-export function paramAddr(page: number, index: number): { effect: number; addr: number[] } {
-  return { effect: page, addr: [0, page, 0, index, 0] };
-}
 
 export { ForgeError };

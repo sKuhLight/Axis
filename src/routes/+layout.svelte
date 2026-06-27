@@ -22,9 +22,12 @@
   async function poll() {
     try {
       const h = await forgefx.health();
-      const fw = await forgefx.firmware().catch(() => undefined);
-      conn = { state: 'online', fw: fw?.version, device: h.device };
-      preset = await forgefx.currentPreset().catch(() => null);
+      const dev = await forgefx.device().catch(() => null);
+      conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
+      // 0x0D returns -1 on a transient failure / modified edit buffer; keep the
+      // last good preset rather than flashing "-1".
+      const p = await forgefx.currentPreset().catch(() => null);
+      if (p && p.number >= 0) preset = p;
     } catch {
       conn = { state: 'offline' };
     }
@@ -72,7 +75,7 @@
         <button class="pbtn left" title="Previous preset">‹</button>
         <button class="pset">
           <span class="mono tag">PRE</span>
-          <span class="mono num">{preset ? preset.number : '—'}</span>
+          <span class="mono num">{preset && preset.number >= 0 ? preset.number : '—'}</span>
           <span class="pname">{preset?.name || (conn.state === 'online' ? '—' : 'offline')}</span>
           <span class="caret">▾</span>
         </button>

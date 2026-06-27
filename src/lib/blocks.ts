@@ -6,13 +6,21 @@ const MAP: Record<string, Category> = {
   Cab: 'cab',
   Drive: 'drive',
   Peq: 'eq',
+  PEQ: 'eq',
   Geq: 'eq',
+  GEQ: 'eq',
   Filter: 'eq',
   Comp: 'dynamics',
+  MultiComp: 'dynamics',
+  Gate: 'dynamics',
   Volume: 'dynamics',
+  'Vol/Pan': 'dynamics',
   Input: 'util',
   Output: 'util',
   Mixer: 'util',
+  Send: 'util',
+  Return: 'util',
+  Multiplexer: 'util',
   Enhancer: 'util',
   Formant: 'mod',
   Chorus: 'mod',
@@ -21,9 +29,17 @@ const MAP: Record<string, Category> = {
   Rotary: 'mod',
   Tremolo: 'mod',
   Wah: 'mod',
+  RingMod: 'mod',
+  Synth: 'mod',
   Reverb: 'time',
   Delay: 'time',
+  'Plex Delay': 'time',
   Multitap: 'time',
+  MultiTap: 'time',
+  'Ten-Tap': 'time',
+  Megatap: 'time',
+  Looper: 'time',
+  Resonator: 'time',
   Pitch: 'pitch'
 };
 
@@ -79,10 +95,9 @@ export function chainOrder(display: string): number {
   return ORDER[baseName(display)] ?? 13;
 }
 
-// color for a status block (via its pack, or category of its base name)
-const BASE_CAT: Record<string, Category> = { Gate: 'dynamics', 'Ring Mod': 'mod' };
+// color for a status/grid block (via its pack, else the category of its base name)
 export function statusColor(display: string): string {
   const pack = packFor(display);
   if (pack) return colorOf(pack);
-  return CAT_COLOR[BASE_CAT[baseName(display)] ?? 'util'];
+  return colorOf(baseName(display)); // categoryOf → MAP, falls back to util
 }
