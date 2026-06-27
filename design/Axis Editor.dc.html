@@ -68,8 +68,8 @@
       <div onClick="{{ onPresetPrev }}" style="width:34px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px 4px 4px 9px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">‹</div>
       <div onClick="{{ onPresetPick }}" style="display:flex; align-items:center; gap:9px; height:38px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:4px; cursor:pointer; min-width:0;" style-hover="border-color:#3f3f48;">
         <span style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em;">PRE</span>
-        <span style="font:700 14px/1 'JetBrains Mono'; color:#f5a623;">430</span>
-        <span style="font-size:13px; font-weight:600; color:#e3e3e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">DEBUG</span>
+        <span style="font:700 14px/1 'JetBrains Mono'; color:#f5a623;">{{ presetNum }}</span>
+        <span style="font-size:13px; font-weight:600; color:#e3e3e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ presetName }}</span>
         <span style="font-size:10px; color:#56565e;">▾</span>
       </div>
       <div onClick="{{ onPresetNext }}" style="width:34px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:4px 9px 9px 4px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">›</div>
@@ -140,11 +140,15 @@
     <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
       <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
         <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
-          <path d="{{ cab.d }}" fill="none" stroke="{{ cab.stroke }}" stroke-width="2"></path>
-          <path d="{{ cab.d }}" data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="18" style="pointer-events:stroke; cursor:pointer;"></path>
-          <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" style="cursor:pointer; opacity:0.62; pointer-events:auto;" style-hover="opacity:1;">
-            <circle cx="{{ cab.mx }}" cy="{{ cab.my }}" r="9" fill="#16161b" stroke="#6a6a74" stroke-width="1.5"></circle>
-            <text x="{{ cab.mx }}" y="{{ cab.my }}" text-anchor="middle" dominant-baseline="central" fill="#c7c7cf" font-size="13" font-weight="700" style="pointer-events:none;">×</text>
+          <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onMouseEnter="{{ onCableEnter }}" onMouseLeave="{{ onCableLeave }}">
+            <path d="{{ cab.d }}" fill="none" stroke="{{ cab.stroke }}" stroke-width="2"></path>
+            <path d="{{ cab.d }}" data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="18" style="pointer-events:stroke; cursor:pointer;"></path>
+            <sc-if value="{{ cab.hovered }}" hint-placeholder-val="{{ false }}">
+            <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" style="cursor:pointer;">
+              <circle cx="{{ cab.mx }}" cy="{{ cab.my }}" r="9" fill="#16161b" stroke="#6a6a74" stroke-width="1.5"></circle>
+              <text x="{{ cab.mx }}" y="{{ cab.my }}" text-anchor="middle" dominant-baseline="central" fill="#c7c7cf" font-size="13" font-weight="700" style="pointer-events:none;">×</text>
+            </g>
+            </sc-if>
           </g>
         </sc-for>
         <sc-if value="{{ linkPath }}" hint-placeholder-val="{{ false }}">
@@ -254,12 +258,13 @@
       </sc-for>
     </div>
 
-    <!-- CONTENT -->
-    <div class="axs-scroll" style="flex:1; min-height:0; overflow:auto; padding:10px 18px 16px;">
-          <!-- KNOBS -->
+    <!-- CONTENT (swipe horizontally to change page) -->
+    <div onPointerDown="{{ onContentDown }}" class="axs-scroll" style="flex:1; min-height:0; overflow:auto; padding:10px 18px 16px;">
+          <!-- CONTROLS: knobs · faders · dropdowns -->
           <sc-if value="{{ ed.isKnobs }}" hint-placeholder-val="{{ true }}">
           <div style="{{ ed.knobGridStyle }}">
-            <sc-for list="{{ ed.knobs }}" as="k" hint-placeholder-count="6">
+            <sc-for list="{{ ed.controls }}" as="k" hint-placeholder-count="6">
+              <sc-if value="{{ k.isKnob }}" hint-placeholder-val="{{ true }}">
               <div style="{{ k.wrapStyle }}">
                 <div data-key="{{ k.key }}" onPointerDown="{{ onKnobDown }}" onDoubleClick="{{ onKnobReset }}" style="{{ k.boxStyle }}">
                   <svg width="{{ k.size }}" height="{{ k.size }}" viewBox="0 0 64 64" style="display:block;">
@@ -273,8 +278,32 @@
                 <div data-q="{{ k.label }}" onClick="{{ onQuickToggle }}" title="Add to swipe controls" style="{{ k.swipeStyle }}">⚡</div>
                 <div style="{{ k.labelStyle }}">{{ k.label }}</div>
               </div>
+              </sc-if>
+              <sc-if value="{{ k.isFader }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ k.wrapStyle }}">
+                <div style="{{ k.valTopStyle }}">{{ k.valueText }}</div>
+                <div data-key="{{ k.key }}" onPointerDown="{{ onFaderDown }}" onDoubleClick="{{ onFaderReset }}" style="{{ k.trackStyle }}">
+                  <div style="{{ k.fillStyle }}"></div>
+                  <div style="{{ k.handleStyle }}"></div>
+                </div>
+                <div style="{{ k.labelStyle }}">{{ k.label }}</div>
+              </div>
+              </sc-if>
             </sc-for>
           </div>
+          <sc-if value="{{ ed.hasSelects }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-wrap:wrap; gap:16px; padding:16px 4px 4px; margin-top:4px; border-top:1px solid #1c1c22;">
+            <sc-for list="{{ ed.selects }}" as="k" hint-placeholder-count="2">
+              <div style="{{ k.wrapStyle }}">
+                <div style="{{ k.labelTopStyle }}">{{ k.label }}</div>
+                <div data-sel="{{ k.skey }}" onClick="{{ onSelectOpen }}" style="{{ k.fieldStyle }}">
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ k.value }}</span>
+                  <span style="font-size:10px; color:#6e6e78; flex:none; margin-left:8px;">▾</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
           </sc-if>
 
           <!-- INPUT EQ -->
@@ -448,6 +477,90 @@
   </div>
   </sc-if>
 
+  <!-- ===================== PRESET PICKER ===================== -->
+  <sc-if value="{{ presetOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePresetPicker }}" data-screen-label="Preset Picker" style="{{ pp.overlayStyle }}">
+    <div onClick="{{ stop }}" style="{{ pp.cardStyle }}">
+
+      <sc-if value="{{ pp.mobile }}" hint-placeholder-val="{{ false }}">
+      <div style="height:14px; flex:none; display:flex; align-items:center; justify-content:center; background:#0d0d10; border-bottom:1px solid #1a1a1f;">
+        <div style="width:48px; height:4px; border-radius:3px; background:#3a3a44;"></div>
+      </div>
+      </sc-if>
+
+      <div style="padding:16px 18px 13px; border-bottom:1px solid #232329; flex:none;">
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:13px;">
+          <span style="font-size:16px; font-weight:700; color:#fff;">Presets</span>
+          <span style="font:700 10px/1 'JetBrains Mono'; color:#f5c878; background:#241a12; border:1px solid #5a3f1f; border-radius:6px; padding:5px 8px; letter-spacing:.04em;">PRE {{ presetNum }}</span>
+          <span style="flex:1;"></span>
+          <div onClick="{{ closePresetPicker }}" style="width:34px; height:34px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; font-size:14px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; height:46px; padding:0 14px; background:#0e0e10; border:1px solid #26262c; border-radius:11px;">
+          <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5"></circle><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round"></path></svg>
+          <input ref="{{ presetRef }}" value="{{ presetQuery }}" onInput="{{ onPresetQuery }}" onKeyDown="{{ onPresetKey }}" placeholder="Search presets by name or number…" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#f2f2f5; font-family:inherit; font-size:15px; font-weight:500;">
+          <span style="font:500 12px/1 'JetBrains Mono'; color:#5d5d66; white-space:nowrap;">{{ pp.count }}</span>
+        </div>
+      </div>
+
+      <div class="axs-scroll" style="display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid #1f1f25; overflow-x:auto;">
+        <sc-for list="{{ pp.filters }}" as="c" hint-placeholder-count="6">
+          <div data-pf="{{ c.id }}" onClick="{{ onPresetFilter }}" style="{{ c.style }}">{{ c.label }}</div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ pp.showRecent }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:13px 18px 4px;">
+        <div style="font:600 10px/1 'JetBrains Mono'; color:#5d5d66; letter-spacing:.1em; margin-bottom:9px;">RECENT</div>
+        <div class="axs-scroll" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:3px;">
+          <sc-for list="{{ pp.recent }}" as="r" hint-placeholder-count="3">
+            <div data-pn="{{ r.pn }}" onClick="{{ onPresetRow }}" style="display:flex; align-items:center; gap:9px; flex:none; padding:9px 13px; background:#1c1c21; border:1px solid #2a2a31; border-radius:10px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+              <span style="{{ r.numStyle }}">{{ r.num }}</span>
+              <span style="font-size:12px; font-weight:600; color:#d4d4da; white-space:nowrap;">{{ r.name }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <div class="axs-scroll" style="flex:1; min-height:140px; overflow-y:auto; padding:8px 10px 12px;">
+        <sc-for list="{{ pp.rows }}" as="r" hint-placeholder-count="8">
+          <div data-pn="{{ r.pn }}" data-i="{{ r.i }}" onClick="{{ onPresetRow }}" onMouseEnter="{{ onPresetHover }}" style="{{ r.rowStyle }}">
+            <div style="{{ r.numStyle }}">{{ r.num }}</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:14px; font-weight:600; color:#ededf2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+                <span style="{{ r.dotStyle }}"></span>
+                <span style="font-size:11.5px; color:#7a7a83;">{{ r.tag }}</span>
+              </div>
+            </div>
+            <sc-if value="{{ r.active }}" hint-placeholder-val="{{ false }}">
+              <span style="font:700 9px/1 'JetBrains Mono'; color:#f5c878; background:#241a12; border:1px solid #5a3f1f; border-radius:5px; padding:4px 7px; letter-spacing:.06em;">ACTIVE</span>
+            </sc-if>
+            <div data-fav="{{ r.pn }}" onClick="{{ onFav }}" title="Toggle favorite" style="{{ r.starStyle }}" style-hover="color:#f5a623;">{{ r.star }}</div>
+            <sc-if value="{{ r.showEnter }}" hint-placeholder-val="{{ false }}">
+              <span style="font:600 10px/1 'JetBrains Mono'; color:#35c9d6; background:#11201f; border:1px solid #244040; border-radius:5px; padding:4px 6px;">↵</span>
+            </sc-if>
+          </div>
+        </sc-for>
+        <sc-if value="{{ pp.empty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:40px 20px; text-align:center; color:#56565e; font-size:13px;">No presets match this filter.</div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ pp.desktop }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:18px; padding:10px 18px; border-top:1px solid #1f1f25; flex:none;">
+        <div style="display:flex; align-items:center; gap:7px;"><span style="font:600 10px/1 'JetBrains Mono'; color:#5e8a8c; background:#0d1516; border:1px solid #234142; border-radius:5px; padding:4px 6px;">↑↓</span><span style="font-size:11.5px; color:#6e6e78;">Navigate</span></div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="font:600 10px/1 'JetBrains Mono'; color:#5e8a8c; background:#0d1516; border:1px solid #234142; border-radius:5px; padding:4px 6px;">↵</span><span style="font-size:11.5px; color:#6e6e78;">Load</span></div>
+        <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:13px; color:#f5a623;">★</span><span style="font-size:11.5px; color:#6e6e78;">Favorite</span></div>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px; color:#56565e;">Esc to close</span>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+  </sc-if>
+
   <!-- ===================== MOVE / RECYCLE ===================== -->
   <sc-if value="{{ moveMode }}" hint-placeholder-val="{{ false }}">
   <div data-bin="1" style="{{ binStyle }}">
@@ -457,6 +570,19 @@
   <sc-if value="{{ moveGhost }}" hint-placeholder-val="{{ false }}">
   <div style="{{ moveGhost.style }}">{{ moveGhost.label }}</div>
   </sc-if>
+  </sc-if>
+
+  <!-- ===================== DROPDOWN MENU ===================== -->
+  <sc-if value="{{ selectMenu }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ onSelectClose }}" style="position:fixed; inset:0; z-index:119;"></div>
+  <div class="axs-scroll" style="{{ selectMenu.style }}">
+    <sc-for list="{{ selectMenu.options }}" as="o" hint-placeholder-count="4">
+      <div data-pick="{{ o.key }}" data-oi="{{ o.oi }}" onClick="{{ onSelectPick }}" style="{{ o.style }}" style-hover="background:rgba(255,255,255,.05);">
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.label }}</span>
+        <sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><span style="color:#35c9d6; flex:none;">✓</span></sc-if>
+      </div>
+    </sc-for>
+  </div>
   </sc-if>
 
   <!-- ===================== TOAST ===================== -->
@@ -504,6 +630,52 @@ class Component extends DCLogic {
     ];
     this.byId = {}; this.CATS.forEach(c => this.byId[c.id] = c);
 
+    // ---- presets ----
+    this.PTAGS = { Clean:"#35c9d6", Crunch:"#f5a623", "Hi-Gain":"#d6543f", Lead:"#d65b9e", Ambient:"#9b8cf0", Bass:"#4f6bed", Acoustic:"#7fae4a", FX:"#2fb0c9" };
+    this.PRESETS = [
+      {n:0,name:"Studio Clean",tag:"Clean"}, {n:1,name:"Glassy Twang",tag:"Clean"}, {n:2,name:"Pristine Chime",tag:"Clean"},
+      {n:3,name:"Jazz Box",tag:"Clean"}, {n:4,name:"Funk Strat",tag:"Clean"}, {n:5,name:"Pedal Platform",tag:"Clean"},
+      {n:6,name:"Blackface Edge",tag:"Crunch"}, {n:7,name:"Tweed Breakup",tag:"Crunch"}, {n:8,name:"Plexi Roar",tag:"Crunch"},
+      {n:9,name:"Top Boost Bite",tag:"Crunch"}, {n:10,name:"Class A Grind",tag:"Crunch"}, {n:11,name:"Brown Sound",tag:"Hi-Gain"},
+      {n:12,name:"Modern Metal",tag:"Hi-Gain"}, {n:13,name:"Djent Machine",tag:"Hi-Gain"}, {n:14,name:"Recto Crush",tag:"Hi-Gain"},
+      {n:15,name:"Stealth Rhythm",tag:"Hi-Gain"}, {n:16,name:"5150 Chug",tag:"Hi-Gain"}, {n:17,name:"Singing Lead",tag:"Lead"},
+      {n:18,name:"Liquid Solo",tag:"Lead"}, {n:19,name:"Violin Lead",tag:"Lead"}, {n:20,name:"Soaring Lead",tag:"Lead"},
+      {n:21,name:"Smooth Fusion",tag:"Lead"}, {n:22,name:"Cathedral",tag:"Ambient"}, {n:23,name:"Shimmer Pad",tag:"Ambient"},
+      {n:24,name:"Frozen Hall",tag:"Ambient"}, {n:25,name:"Tape Dreams",tag:"Ambient"}, {n:26,name:"Cosmic Wash",tag:"Ambient"},
+      {n:27,name:"Octave Bass",tag:"Bass"}, {n:28,name:"Rock Bass DI",tag:"Bass"}, {n:29,name:"Synth Bass",tag:"Bass"},
+      {n:30,name:"Fingerstyle Warm",tag:"Bass"}, {n:31,name:"Steel String",tag:"Acoustic"}, {n:32,name:"Parlor Pickup",tag:"Acoustic"},
+      {n:33,name:"12-String Air",tag:"Acoustic"}, {n:34,name:"Nylon Soft",tag:"Acoustic"}, {n:35,name:"Wah Filter",tag:"FX"},
+      {n:36,name:"Ring Mod Chaos",tag:"FX"}, {n:37,name:"Pitch Harmony",tag:"FX"}, {n:38,name:"Stutter Gate",tag:"FX"},
+      {n:39,name:"Rotary Swirl",tag:"FX"}, {n:40,name:"Ambient Swell",tag:"Ambient"}, {n:41,name:"Country Spank",tag:"Clean"},
+      {n:42,name:"Blues Driver",tag:"Crunch"}, {n:43,name:"Doom Wall",tag:"Hi-Gain"}, {n:44,name:"Worship Lead",tag:"Lead"},
+      {n:45,name:"Post Rock Build",tag:"Ambient"}, {n:46,name:"Slap Bass",tag:"Bass"}, {n:47,name:"Live Rig Master",tag:"Clean"},
+      {n:430,name:"DEBUG",tag:"FX"}
+    ];
+    this.PBYN = {}; this.PRESETS.forEach(p => this.PBYN[p.n] = p);
+
+    // ---- mixed controls: which params render as faders / dropdowns (everything else = knob) ----
+    this.FADER_LABELS = { Mix:1, Depth:1, Width:1 };
+    this.SELECT_OPTS = {
+      Voices:["2 Voice","3 Voice","4 Voice","6 Voice"],
+      Stages:["4-Stage","6-Stage","8-Stage","10-Stage","12-Stage"],
+      Shape:["Sine","Triangle","Square","Saw Up","Saw Down","Random"],
+      Sync:["Off","1/1","1/2","1/4","1/4 dot","1/8","1/8 dot","1/16","Triplet"],
+      Mode:["Stereo","Mono","Dual Mono"],
+      Mic:["SM57 Dyn","SM7 Dyn","MD421 Dyn","R-121 Ribbon","U87 Cond","C414 Cond","D112 Dyn"],
+      "Mic Spacing":["Close","Medium","Wide"],
+      Slope:["6 dB/oct","12 dB/oct","18 dB/oct","24 dB/oct"],
+      Duty:["25%","50%","75%"]
+    };
+    // extra dropdowns injected per category (beyond what's in the knob list)
+    this.CAT_SELECTS = {
+      delay:[{label:"Sync",opts:"Sync"},{label:"Mode",opts:"Mode"}],
+      chorus:[{label:"Shape",opts:"Shape"}],
+      flange:[{label:"Shape",opts:"Shape"}],
+      phaser:[{label:"Shape",opts:"Shape"}],
+      rotary:[{label:"Mic Spacing",opts:"Mic Spacing"}],
+      reverb:[{label:"Mode",opts:"Mode"}]
+    };
+
     // grid is 12 cols x 4 rows; idx = row*12 + col
     const g = new Array(48).fill(null);
     const put = (i, catId, type, label, extra) => { g[i] = Object.assign({ catId, type: type || this.byId[catId].types[0], label: label || this.byId[catId].short, channel:"A", bypassed:false }, extra||{}); };
@@ -531,6 +703,8 @@ class Component extends DCLogic {
     this.state = {
       grid:g, routes, rects:{}, selected:18, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Ideal", railActive:"build", scene:1, page:0,
       paletteOpen:false, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place",
+      currentPreset:430, presetOpen:false, presetQuery:"", presetHi:0, presetFilter:"all", favPresets:[7,14,18,25], recentPresets:[430,18,7,2],
+      selects:{}, openSelect:null, openSelectRect:null,
       recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
       knobs:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, moveMode:false, moveIdx:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
@@ -545,6 +719,7 @@ class Component extends DCLogic {
     this._key = (e) => {
       if ((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); this.openPalette(); return; }
       if (e.key==="Escape" && this.state.paletteOpen) this.closePalette();
+      if (e.key==="Escape" && this.state.presetOpen) this.closePresetPicker();
     };
     this._move = (e) => {
       if (this.edResize){ const h=this.clamp(this.edResize.startH+(this.edResize.startY-e.clientY),240,(this.state.vh||800)-150); this.setState({ editorH:h }); this.remeasure(); return; }
@@ -559,11 +734,17 @@ class Component extends DCLogic {
         return;
       }
       if (this.drag){
-        const d=this.drag, v=Math.max(0,Math.min(100,d.startVal+(d.startY-e.clientY)*0.6));
+        const d=this.drag;
+        if(!d.axis){ const dx=e.clientX-d.startX, dy=e.clientY-d.startY; if(Math.abs(dx)>8||Math.abs(dy)>8){ d.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; if(d.axis==="h"){ this.contentSwipe={startX:d.startX,startY:d.startY}; this.drag=null; document.body.style.cursor=""; return; } } else return; }
+        const v=Math.max(0,Math.min(100,d.startVal+(d.startY-e.clientY)*0.6));
         this.setState({ knobs: Object.assign({}, this.state.knobs, { [d.key]: v }) }); return;
       }
       if (this.eqDrag){ this.eqMove(e); return; }
       if (this.connectDrag){ const ir=this._innerRect; if(ir) this.setState({ linkTo:{ x:e.clientX-ir.left, y:e.clientY-ir.top } }); return; }
+      if (this.faderDrag){
+        const f=this.faderDrag, frac=this.clamp(1-(e.clientY-f.rect.top)/f.rect.height,0,1);
+        this.setState({ knobs: Object.assign({}, this.state.knobs, { [f.key]: frac*100 }) }); return;
+      }
       if (this.sliderDrag){
         const s=this.sliderDrag, frac=Math.max(0,Math.min(1,(e.clientX-s.rect.left)/s.rect.width));
         this.setNested(s.path, s.min + frac*(s.max-s.min)); return;
@@ -571,6 +752,7 @@ class Component extends DCLogic {
     };
     this._up = (e) => {
       if (this.tabsDrag){ const moved=this.tabsDrag.moved; this.tabsDrag=null; document.body.style.cursor=""; if(moved) this._suppressTab=Date.now(); return; }
+      if (this.contentSwipe){ const c=this.contentSwipe; this.contentSwipe=null; const dx=e.clientX-c.startX, dy=e.clientY-c.startY; if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.4) this.swipePage(dx<0?1:-1); return; }
       if (this.gesture){
         clearTimeout(this._lpTimer); const g=this.gesture;
         if (this.moveModeActive){ this.finishMove(e); }
@@ -579,7 +761,7 @@ class Component extends DCLogic {
         this.setState({ adjust:null, moveMode:false, moveIdx:null }); return;
       }
       if (this.connectDrag){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
-      this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.edResize=null; document.body.style.cursor="";
+      this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
     };
     this._resize = () => this.setState({ vw: window.innerWidth, vh: window.innerHeight });
     window.addEventListener("keydown", this._key);
@@ -587,6 +769,7 @@ class Component extends DCLogic {
     window.addEventListener("pointerup", this._up);
     window.addEventListener("resize", this._resize);
     this.setState({ vw: window.innerWidth, vh: window.innerHeight });
+    this.loadPersist();
     [0,120,400,900].forEach(t=>setTimeout(()=>this.remeasure(), t));
   }
   componentDidUpdate(){
@@ -594,6 +777,8 @@ class Component extends DCLogic {
     if(sig!==this._rsig){ this._rsig=sig; requestAnimationFrame(()=>this.remeasure()); }
     if(this.state.paletteOpen && !this._palWasOpen){ this._palWasOpen=true; requestAnimationFrame(()=>{ if(this.paletteEl){ try{ this.paletteEl.focus(); this.paletteEl.select(); }catch(e){} } }); }
     if(!this.state.paletteOpen) this._palWasOpen=false;
+    if(this.state.presetOpen && !this._ppWasOpen){ this._ppWasOpen=true; requestAnimationFrame(()=>{ if(this.presetEl){ try{ this.presetEl.focus(); }catch(e){} } }); }
+    if(!this.state.presetOpen) this._ppWasOpen=false;
   }
   remeasure(){
     const inner=document.querySelector("[data-grid-inner]"); if(!inner) return false;
@@ -779,6 +964,8 @@ class Component extends DCLogic {
     routes[from]=list;
     this.setState({ grid, routes }); this.showToast("Connected","#35c9d6");
   }
+  onCableEnter = (e) => { const f=e.currentTarget.dataset.from, t=e.currentTarget.dataset.to; this.setState({ hoverCable:f+"-"+t }); };
+  onCableLeave = () => { if(this.state.hoverCable) this.setState({ hoverCable:null }); };
   removeRoute = (e) => {
     e.stopPropagation();
     const from=+e.currentTarget.dataset.from, to=+e.currentTarget.dataset.to;
@@ -795,7 +982,7 @@ class Component extends DCLogic {
 
   // ---- editor ----
   effMode(idx){ const o=this.state.blockModes||{}; return (idx!=null && o[idx]) ? o[idx] : (this.state.globalMode||"basic"); }
-  onMode = (e) => { const m=e.currentTarget.dataset.mode; const idx=this.state.selected; const sel=this.state.grid[idx]; this.setState({ blockModes:Object.assign({},this.state.blockModes,{[idx]:m}), activePage: sel?this.defaultPage(sel.catId,m):"Ideal" }); };
+  onMode = (e) => { const m=e.currentTarget.dataset.mode; const idx=this.state.selected; const sel=this.state.grid[idx]; this.setState({ blockModes:Object.assign({},this.state.blockModes,{[idx]:m}), activePage: sel?this.defaultPage(sel.catId,m):"Ideal", openSelect:null }); };
   onGlobalMode = (e) => { const m=e.currentTarget.dataset.gmode; const sel=this.state.grid[this.state.selected]; this.setState({ globalMode:m, blockModes:{}, activePage: sel?this.defaultPage(sel.catId,m):this.state.activePage }); this.showToast(m==="basic"?"All blocks → Basic view":"All blocks → Advanced view","#35c9d6"); };
   onResetMode = () => { const bm=Object.assign({},this.state.blockModes); delete bm[this.state.selected]; this.setState({ blockModes:bm }); };
   onTuner = () => this.showToast("Tuner — play a string","#35c9d6");
@@ -803,18 +990,37 @@ class Component extends DCLogic {
   onEditorResizeDown = (e) => { e.preventDefault(); this.edResize={ startY:e.clientY, startH:this.state.editorH||380 }; document.body.style.cursor="ns-resize"; };
   paletteRef = (el) => { this.paletteEl=el; };
   onChannel = (e) => { const ch=e.currentTarget.dataset.ch; const grid=this.state.grid.slice(); grid[this.state.selected]=Object.assign({},grid[this.state.selected],{channel:ch}); this.setState({grid}); };
-  onPage = (e) => { if(this._suppressTab && Date.now()-this._suppressTab<160) return; this.setState({ activePage:e.currentTarget.dataset.page }); };
+  onPage = (e) => { if(this._suppressTab && Date.now()-this._suppressTab<160) return; this.setState({ activePage:e.currentTarget.dataset.page, openSelect:null }); };
   onTabsDown = (e) => { if(!this.tabsEl) return; this.tabsDrag={ startX:e.clientX, scroll:this.tabsEl.scrollLeft, moved:false }; document.body.style.cursor="grabbing"; };
   tabsRef = (el) => { this.tabsEl=el; };
+  onContentDown = (e) => { if(e.target&&e.target.closest&&e.target.closest("[data-key],[data-eq],[data-path],[data-t],[data-q],[data-page],[data-ch],[data-toggle],[data-sel],[data-pick]")) return; this.contentSwipe={ startX:e.clientX, startY:e.clientY }; };
+  swipePage(dir){ const list=this._pageNames||[]; if(list.length<2) return; let i=list.indexOf(this.state.activePage); if(i<0) i=0; const ni=this.clamp(i+dir,0,list.length-1); if(ni!==i){ this.setState({ activePage:list[ni] }); this.showToast(list[ni],"#35c9d6"); } }
   onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
   onBypass = () => { const grid=this.state.grid.slice(); const c=grid[this.state.selected]; grid[this.state.selected]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); };
   onMute = () => {};
   onSceneIgnore = () => {};
   onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
   onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id }); const m={controllers:"Controllers",fc:"Footswitch layout",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build","#35c9d6"); };
-  onPresetPrev = () => this.showToast("Previous preset","#35c9d6");
-  onPresetNext = () => this.showToast("Next preset","#35c9d6");
-  onPresetPick = () => this.showToast("Preset browser","#35c9d6");
+  // ---- preset picker ----
+  pad(n){ return String(n).padStart(3,"0"); }
+  presetByN(n){ return this.PBYN[n]; }
+  openPresetPicker = () => this.setState({ presetOpen:true, presetQuery:"", presetHi:0 });
+  closePresetPicker = () => this.setState({ presetOpen:false });
+  onPresetPick = () => this.openPresetPicker();
+  onPresetQuery = (e) => this.setState({ presetQuery:e.target.value, presetHi:0 });
+  onPresetFilter = (e) => this.setState({ presetFilter:e.currentTarget.dataset.pf, presetHi:0 });
+  onPresetHover = (e) => this.setState({ presetHi:+e.currentTarget.dataset.i });
+  onPresetRow = (e) => { this.loadPreset(+e.currentTarget.dataset.pn); };
+  onFav = (e) => { e.stopPropagation(); const n=+e.currentTarget.dataset.fav; const f=this.state.favPresets.slice(); const i=f.indexOf(n); if(i>=0) f.splice(i,1); else f.push(n); this.setState({ favPresets:f }); this.persist(); this.showToast(i>=0?"Removed from favorites":"Added to favorites", i>=0?"#9a9aa3":"#f5a623"); };
+  loadPreset(n){ const p=this.presetByN(n); if(!p) return; const rec=this.state.recentPresets.filter(x=>x!==n); rec.unshift(n); this.setState({ currentPreset:n, recentPresets:rec.slice(0,8), presetOpen:false }); this.persist(); this.showToast("Loaded "+this.pad(n)+" · "+p.name, this.PTAGS[p.tag]||"#35c9d6"); }
+  stepPreset(dir){ const nums=this.PRESETS.map(p=>p.n).sort((a,b)=>a-b); let i=nums.indexOf(this.state.currentPreset); if(i<0) i=0; const ni=(i+dir+nums.length)%nums.length; this.loadPreset(nums[ni]); }
+  onPresetPrev = () => this.stepPreset(-1);
+  onPresetNext = () => this.stepPreset(1);
+  onPresetKey = (e) => { const list=this._lastPresetList||[]; if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({presetHi:Math.min(list.length-1,this.state.presetHi+1)}); } else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({presetHi:Math.max(0,this.state.presetHi-1)}); } else if(e.key==="Enter"){ e.preventDefault(); const p=list[Math.min(this.state.presetHi,list.length-1)]; if(p) this.loadPreset(p.n); } else if(e.key==="Escape"){ this.closePresetPicker(); } };
+  presetRef = (el) => { this.presetEl=el; };
+  buildPresetList(){ const q=this.state.presetQuery.trim().toLowerCase(); const f=this.state.presetFilter; let list; if(f==="recent"){ list=this.state.recentPresets.map(n=>this.presetByN(n)).filter(Boolean); } else { list=this.PRESETS.slice(); if(f==="fav") list=list.filter(p=>this.state.favPresets.indexOf(p.n)>=0); else if(f!=="all") list=list.filter(p=>p.tag===f); list.sort((a,b)=>a.n-b.n); } if(q){ list=list.filter(p=> p.name.toLowerCase().indexOf(q)>=0 || this.pad(p.n).indexOf(q)>=0 || String(p.n).indexOf(q)>=0 || p.tag.toLowerCase().indexOf(q)>=0 ); } return list; }
+  persist(){ try{ localStorage.setItem("axs.presets", JSON.stringify({ cur:this.state.currentPreset, fav:this.state.favPresets, rec:this.state.recentPresets })); }catch(e){} }
+  loadPersist(){ try{ const j=JSON.parse(localStorage.getItem("axs.presets")||"null"); if(j){ const s={}; if(typeof j.cur==="number") s.currentPreset=j.cur; if(Array.isArray(j.fav)) s.favPresets=j.fav; if(Array.isArray(j.rec)) s.recentPresets=j.rec; this.setState(s); } }catch(e){} }
   onPagePrev = () => this.setState({ page:Math.max(0,(this.state.page||0)-1) });
   onPageNext = () => this.setState({ page:Math.min(2,(this.state.page||0)+1) });
   onPageDot = (e) => this.setState({ page:+e.currentTarget.dataset.p });
@@ -822,7 +1028,7 @@ class Component extends DCLogic {
   closeEditor = () => this.setState({ editorOpen:false });
   onRemove = () => { const idx=this.state.selected; const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:this.isMobile()?false:true}); this.showToast("Block removed","#d6543f"); };
 
-  onKnobDown = (e) => { e.preventDefault(); const key=e.currentTarget.dataset.key; this.drag={key,startY:e.clientY,startVal:this.kval(key)}; document.body.style.cursor="ns-resize"; };
+  onKnobDown = (e) => { e.preventDefault(); const key=e.currentTarget.dataset.key; this.drag={key,startX:e.clientX,startY:e.clientY,startVal:this.kval(key),axis:null}; document.body.style.cursor="ns-resize"; };
   onKnobReset = (e) => { const key=e.currentTarget.dataset.key; this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:50}) }); };
 
   // ---- eq ----
@@ -855,6 +1061,46 @@ class Component extends DCLogic {
       boxStyle:{ position:"relative", width:sz, height:sz, cursor:"ns-resize", touchAction:"none" },
       valStyle:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", font:"600 "+vf+"px/1 'JetBrains Mono'", color:"#e9e9ee", pointerEvents:"none" },
       labelStyle:{ fontWeight:600, fontSize:Math.max(11,Math.round(sz*0.135)), color:"#c3c3cb", textAlign:"center", lineHeight:1.2 } };
+  }
+
+  // ---- mixed controls (knob / fader / dropdown) ----
+  controlKind(label){ if(this.SELECT_OPTS[label]) return "dropdown"; if(this.FADER_LABELS[label]) return "fader"; return "knob"; }
+  seedIdx(key,n){ return this.seed(key)%n; }
+  onFaderDown = (e) => { e.preventDefault(); const t=e.currentTarget; this.faderDrag={ key:t.dataset.key, rect:t.getBoundingClientRect() }; const f=this.faderDrag, frac=this.clamp(1-(e.clientY-f.rect.top)/f.rect.height,0,1); this.setState({ knobs:Object.assign({},this.state.knobs,{[f.key]:frac*100}) }); document.body.style.cursor="ns-resize"; };
+  onFaderReset = (e) => { const key=e.currentTarget.dataset.key; this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:50}) }); };
+  onSelectOpen = (e) => { e.stopPropagation(); const key=e.currentTarget.dataset.sel; if(this.state.openSelect===key){ this.setState({ openSelect:null }); return; } const r=e.currentTarget.getBoundingClientRect(); this.setState({ openSelect:key, openSelectRect:{ left:r.left, top:r.bottom+6, width:Math.max(r.width,150) } }); };
+  onSelectClose = (e) => { if(e) e.stopPropagation(); this.setState({ openSelect:null }); };
+  onSelectPick = (e) => { e.stopPropagation(); const key=e.currentTarget.dataset.pick, oi=+e.currentTarget.dataset.oi; this.setState({ selects:Object.assign({},this.state.selects,{[key]:oi}), openSelect:null }); };
+  selectVal(skey,opts){ let oi=this.state.selects[skey]; if(oi==null) oi=this.seedIdx(skey,opts.length); return Math.min(oi,opts.length-1); }
+
+  mkControl(c, group, size){
+    if(c.kind==="dropdown"){
+      const optsKey=c.optsKey||c.label, opts=this.SELECT_OPTS[optsKey]||["Default"];
+      const skey="s:"+this.state.selected+":"+group+":"+c.label, oi=this.selectVal(skey,opts), open=this.state.openSelect===skey;
+      const maxLen=opts.reduce((m,o)=>Math.max(m,o.length),c.label.length), fieldW=Math.round(this.clamp(maxLen*8+50,112,236));
+      return { kind:"dropdown", isKnob:false, isFader:false, isDropdown:true, label:c.label, skey, open, value:opts[oi],
+        wrapStyle:{ display:"flex", flexDirection:"column", gap:7, width:fieldW },
+        labelTopStyle:{ fontWeight:600, fontSize:12, color:"#c3c3cb" },
+        fieldStyle:{ display:"flex", alignItems:"center", justifyContent:"space-between", height:40, padding:"0 12px", background:"#0d0d10", border:"1px solid "+(open?"#35c9d6":"#2c2c34"), borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:600, color:"#ededf2", minWidth:0 } };
+    }
+    if(c.kind==="fader"){
+      const key="k:"+this.state.selected+":"+group+":"+c.label, v=this.kval(key), pct=Math.round(v), sz=size||92;
+      return { kind:"fader", isKnob:false, isFader:true, isDropdown:false, label:c.label, key, valueText:pct+"",
+        wrapStyle:{ display:"flex", flexDirection:"column", alignItems:"center", gap:Math.max(4,Math.round(sz*0.09)), width:sz+18 },
+        valTopStyle:{ font:"600 "+Math.max(11,Math.round(sz*0.155))+"px/1 'JetBrains Mono'", color:"#e9e9ee" },
+        trackStyle:{ position:"relative", width:14, height:sz, borderRadius:8, background:"#16161b", border:"1px solid #26262c", cursor:"ns-resize", touchAction:"none" },
+        fillStyle:{ position:"absolute", left:0, right:0, bottom:0, height:pct+"%", background:"linear-gradient(180deg,#5fe0ea,#35c9d6)", borderRadius:8 },
+        handleStyle:{ position:"absolute", left:"50%", bottom:"calc("+pct+"% - 7px)", transform:"translateX(-50%)", width:26, height:14, borderRadius:5, background:"#f5a623", border:"3px solid #0d0d10", boxShadow:"0 2px 5px rgba(0,0,0,.5)" },
+        labelStyle:{ fontWeight:600, fontSize:Math.max(11,Math.round(sz*0.135)), color:"#c3c3cb", textAlign:"center", lineHeight:1.2 } };
+    }
+    const k=this.mkKnob(c.label, group, "", size); k.kind="knob"; k.isKnob=true; k.isFader=false; k.isDropdown=false; return k;
+  }
+  buildControls(sel, cat, eff, isAmp, knobPages, kSize){
+    let labels = isAmp ? knobPages[eff] : (cat.knobs.length?cat.knobs:["Mix","Level","Tone","Depth","Rate","Feedback"]).slice(0,6);
+    let ctrls = labels.map(l=>({ label:l, kind:this.controlKind(l) }));
+    if(!isAmp){ (this.CAT_SELECTS[sel.catId]||[]).forEach(d=>{ if(!ctrls.find(c=>c.label===d.label)) ctrls.push({ label:d.label, kind:"dropdown", optsKey:d.opts }); }); }
+    const built=ctrls.map(c=>this.mkControl(c, eff, kSize));
+    return { grid:built.filter(c=>!c.isDropdown), selects:built.filter(c=>c.isDropdown) };
   }
 
   renderVals(){
@@ -912,7 +1158,7 @@ class Component extends DCLogic {
     const R=S.rects||{};
     const cableD=(x1,y1,x2,y2)=>{ const dx=Math.max(22,(x2-x1)*0.5); return "M"+x1.toFixed(1)+" "+y1.toFixed(1)+" C"+(x1+dx).toFixed(1)+" "+y1.toFixed(1)+","+(x2-dx).toFixed(1)+" "+y2.toFixed(1)+","+x2.toFixed(1)+" "+y2.toFixed(1); };
     const cables=[];
-    Object.keys(S.routes).forEach(k=>{ const from=+k, rf=R[from]; if(!rf) return; (S.routes[k]||[]).forEach(to=>{ const rt=R[to]; if(!rt) return; const dim=(S.grid[from]&&S.grid[from].bypassed); cables.push({ key:from+"-"+to, from, to, d:cableD(rf.right,rf.cy,rt.left,rt.cy), mx:((rf.right+rt.left)/2).toFixed(1), my:((rf.cy+rt.cy)/2).toFixed(1), stroke:dim?"#4a4a52":"#c7c7cf" }); }); });
+    Object.keys(S.routes).forEach(k=>{ const from=+k, rf=R[from]; if(!rf) return; (S.routes[k]||[]).forEach(to=>{ const rt=R[to]; if(!rt) return; const dim=(S.grid[from]&&S.grid[from].bypassed); const ck=from+"-"+to; cables.push({ key:ck, from, to, d:cableD(rf.right,rf.cy,rt.left,rt.cy), mx:((rf.right+rt.left)/2).toFixed(1), my:((rf.cy+rt.cy)/2).toFixed(1), stroke:dim?"#4a4a52":"#c7c7cf", hovered:S.hoverCable===ck }); }); });
     let linkPath=null; if(S.linkTo && this.connectDrag){ const rf=R[this.connectDrag.from]; if(rf) linkPath=cableD(rf.right,rf.cy,S.linkTo.x,S.linkTo.y); }
     const hasRects=!!R._w;
 
@@ -923,13 +1169,13 @@ class Component extends DCLogic {
     const segItem=(active)=>({ flex:1, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:700, transition:"all .1s",
       background:active?"#35c9d6":"transparent", color:active?"#06181a":"#9a9aa3" });
 
-    let ed={ isAmp:false, isKnobs:false, isIeq:false, isOeq:false, isStub:false, pages:[], knobs:[], commonKnobs:[], channels:[], modes:[], quickChips:[], title:"—", category:"", type:"", icon:"", iconStyle:{}, activePage:S.activePage, bypassLabel:"Bypass", bypassStyle:{}, muteLabel:"Mute", muteStyle:{}, sceneStyle:{}, removeStyle:{},
+    let ed={ isAmp:false, isKnobs:false, isIeq:false, isOeq:false, isStub:false, pages:[], knobs:[], controls:[], selects:[], hasSelects:false, commonKnobs:[], channels:[], modes:[], quickChips:[], title:"—", category:"", type:"", icon:"", iconStyle:{}, activePage:S.activePage, bypassLabel:"Bypass", bypassStyle:{}, muteLabel:"Mute", muteStyle:{}, sceneStyle:{}, removeStyle:{},
       overlayStyle:{}, cardStyle:{}, metaStyle:{}, footerStyle:{} };
 
     // editor layout — docked bottom pane on desktop, full-screen sheet on mobile
     const edH=this.clamp(S.editorH||380,240,(S.vh||800)-150);
-    const kSize=mob?86:this.clamp(Math.round((edH-150)/3.2),34,92);
-    ed.knobGridStyle={ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax("+(kSize+18)+"px,1fr))", gap:(mob?16:Math.max(8,Math.round(kSize*0.16)))+"px 8px", padding:"6px 4px", justifyItems:"center" };
+    const kSize=mob?86:this.clamp(Math.round((edH-130)/3.0),66,108);
+    ed.knobGridStyle={ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax("+(kSize+18)+"px,1fr))", gap:(mob?16:Math.max(10,Math.round(kSize*0.18)))+"px 8px", padding:"6px 4px", alignItems:"start", justifyItems:"center" };
     ed.dock=!mob;
     if(mob){
       ed.overlayStyle = { position:"absolute", inset:0, zIndex:95, background:"rgba(6,6,8,.62)", backdropFilter:"blur(3px)", display:"flex", alignItems:"stretch", justifyContent:"center" };
@@ -954,7 +1200,7 @@ class Component extends DCLogic {
         ? (emode==="basic" ? ["Ideal","Input EQ","Output EQ"] : ["Tone","Ideal","Preamp","Power Amp","Pwr Tubes + CF","Power Supply","Speaker","Input EQ","Output EQ","Dynamics"])
         : (emode==="basic" ? ["Controls"] : ["Controls","Tone","Mix","Modifiers"]);
       const eff = pageList.includes(S.activePage) ? S.activePage : pageList[0];
-      ed.activePage=eff; this._effGroup=eff;
+      ed.activePage=eff; this._effGroup=eff; this._pageNames=pageList;
       ed.pages=pageList.map(name=>({ name, style:{ flex:"none", padding:"9px 15px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:name===eff?"rgba(245,166,35,.12)":"#15151a", border:"1px solid "+(name===eff?"#5a3f1f":"#26262c"), color:name===eff?"#f5a623":"#8a8a93" }}));
 
       ed.isIeq = ed.isAmp && eff==="Input EQ";
@@ -963,8 +1209,8 @@ class Component extends DCLogic {
       ed.isKnobs = ed.isAmp ? (eff==="Ideal"||eff==="Tone") : (eff==="Controls");
       ed.isStub = !ed.isIeq && !ed.isOeq && !ed.isKnobs;
       if(ed.isKnobs){
-        const labels = ed.isAmp ? knobPages[eff] : (cat.knobs.length?cat.knobs:["Mix","Level","Tone","Depth","Rate","Feedback"]).slice(0,6);
-        ed.knobs=labels.map(l=>this.mkKnob(l,eff,"",kSize));
+        const bc = this.buildControls(sel, cat, eff, ed.isAmp, knobPages, kSize);
+        ed.controls = bc.grid; ed.selects = bc.selects; ed.hasSelects = bc.selects.length>0;
       }
 
       ed.channels=["A","B","C","D"].map(id=>({ id, style:{ width:34, height:34, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:"pointer", fontWeight:700, fontSize:13, background:id===sel.channel?"#1d2a2c":"#0d0d10", border:"1px solid "+(id===sel.channel?"#35c9d6":"#26262c"), color:id===sel.channel?"#f5a623":"#56565e" }}));
@@ -1028,6 +1274,43 @@ class Component extends DCLogic {
     const moveGhost = (S.moveMode && S.moveIdx!=null && S.grid[S.moveIdx]) ? (()=>{ const c=S.grid[S.moveIdx]; const a=c.catId?this.byId[c.catId].accent:"#5f6168"; return { label:c.shunt?"Shunt":c.label, style:{ position:"absolute", left:S.movePos.x, top:S.movePos.y, transform:"translate(-50%,-50%) rotate(-3deg)", zIndex:160, pointerEvents:"none", padding:"12px 18px", borderRadius:12, background:"linear-gradient(180deg,"+this.shade(a,0.16)+","+this.shade(a,-0.18)+")", border:"1px solid "+this.shade(a,-0.3), color:"#fff", fontWeight:700, fontSize:14, boxShadow:"0 16px 36px rgba(0,0,0,.55)" } }; })() : null;
     const binStyle={ position:"absolute", bottom:26, left:"50%", transform:S.moveOverBin?"translateX(-50%) scale(1.08)":"translateX(-50%)", zIndex:155, display:"flex", alignItems:"center", gap:10, padding:"14px 22px", borderRadius:16, background:S.moveOverBin?"#3a1518":"rgba(22,22,27,.96)", border:"1px solid "+(S.moveOverBin?"#d6543f":"#3a3a44"), color:S.moveOverBin?"#ff7a68":"#9a9aa3", boxShadow:"0 14px 40px rgba(0,0,0,.5)", transition:"all .12s", fontWeight:600, fontSize:13 };
 
+    // ---- preset picker ----
+    const ppOverlay = mob
+      ? { position:"absolute", inset:0, zIndex:200, background:"rgba(6,6,8,.62)", backdropFilter:"blur(3px)", display:"flex", alignItems:"stretch", justifyContent:"center" }
+      : { position:"absolute", inset:0, zIndex:200, background:"rgba(6,6,8,.66)", backdropFilter:"blur(3px)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"7vh 12px 12px", animation:"axsOverlay .12s ease" };
+    const ppCard = mob
+      ? { width:"100%", height:"100%", background:"linear-gradient(180deg,#15151a,#0f0f12)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
+      : { width:680, maxWidth:"100%", maxHeight:"84vh", background:"#161619", border:"1px solid #2e2e36", borderRadius:16, boxShadow:"0 32px 80px rgba(0,0,0,.6)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsPalette .15s cubic-bezier(.2,.8,.3,1)" };
+    const ptags=Object.keys(this.PTAGS);
+    const pfilterDefs=[{id:"all",label:"All",col:"#35c9d6"},{id:"fav",label:"★ Favorites",col:"#f5a623"},{id:"recent",label:"Recent",col:"#35c9d6"}].concat(ptags.map(t=>({id:t,label:t,col:this.PTAGS[t]})));
+    const pfilters=pfilterDefs.map(d=>{ const act=S.presetFilter===d.id; return { id:d.id, label:d.label, style:{ flex:"none", padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:act?this.shade(d.col,-0.45):"#17171a", border:"1px solid "+(act?d.col:"#26262c"), color:act?"#fff":"#9a9aa3" } }; });
+    const plist=this.buildPresetList(); this._lastPresetList=plist;
+    const phi=Math.min(S.presetHi,Math.max(0,plist.length-1));
+    const ppRows=plist.map((p,i)=>{ const col=this.PTAGS[p.tag]||"#9a9aa3"; const fav=S.favPresets.indexOf(p.n)>=0; const active=p.n===S.currentPreset; const hi=i===phi;
+      return { i, pn:p.n, num:this.pad(p.n), name:p.name, tag:p.tag, star:fav?"★":"☆", active, showEnter:hi&&!mob,
+        rowStyle:{ display:"flex", alignItems:"center", gap:13, padding:mob?"9px 10px":"8px 10px", borderRadius:11, cursor:"pointer", background:hi?"rgba(53,201,214,.10)":(active?"rgba(245,166,35,.07)":"transparent"), boxShadow:hi?"inset 0 0 0 1px rgba(53,201,214,.3)":(active?"inset 0 0 0 1px rgba(245,166,35,.25)":"none") },
+        numStyle:{ flex:"none", width:mob?52:56, height:mob?46:42, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", background:"#0e0e10", border:"1px solid "+(active?"#5a3f1f":"#26262c"), font:"700 "+(mob?15:14)+"px/1 'JetBrains Mono'", color:col },
+        dotStyle:{ width:8, height:8, borderRadius:3, background:col, display:"inline-block", flex:"none" },
+        starStyle:{ flex:"none", width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:10, cursor:"pointer", fontSize:18, color:fav?"#f5a623":"#4a4a52" } };
+    });
+    const ppRecent=S.recentPresets.map(n=>this.presetByN(n)).filter(Boolean).map(p=>{ const col=this.PTAGS[p.tag]||"#9a9aa3"; return { pn:p.n, num:this.pad(p.n), name:p.name, numStyle:{ font:"700 12px/1 'JetBrains Mono'", color:col } }; });
+    const pp={ mobile:mob, desktop:!mob, overlayStyle:ppOverlay, cardStyle:ppCard, filters:pfilters, rows:ppRows, recent:ppRecent, showRecent:S.presetFilter==="all" && !S.presetQuery.trim() && ppRecent.length>0, empty:ppRows.length===0, count:plist.length+" preset"+(plist.length===1?"":"s") };
+    const curP=this.presetByN(S.currentPreset)||{n:S.currentPreset,name:"—",tag:"FX"};
+    const presetNum=this.pad(curP.n), presetName=curP.name;
+
+    // ---- open dropdown menu (rendered as a fixed popover so it escapes the editor's overflow) ----
+    let selectMenu=null;
+    if(S.openSelect && S.openSelectRect){
+      const label=S.openSelect.split(":").slice(3).join(":");
+      const opts=this.SELECT_OPTS[label]||["Default"];
+      const oi=this.selectVal(S.openSelect,opts);
+      const rc=S.openSelectRect;
+      selectMenu={ key:S.openSelect,
+        style:{ position:"fixed", left:rc.left, top:rc.top, width:rc.width, maxHeight:248, overflowY:"auto", background:"#1a1a1f", border:"1px solid #2e2e36", borderRadius:11, boxShadow:"0 18px 40px rgba(0,0,0,.55)", zIndex:120, padding:6 },
+        options:opts.map((o,i)=>({ label:o, oi:i, key:S.openSelect, active:i===oi,
+          style:{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"10px 11px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:i===oi?700:500, color:i===oi?"#fff":"#c3c3cb", background:i===oi?"rgba(53,201,214,.12)":"transparent" } })) };
+    }
+
     return {
       showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
       scenes, onScene:this.onScene, bpm:S.bpm, cpuText:cpu+"%", cpuTextStyle:{font:"700 11px/1 'JetBrains Mono'",color:cpuColor}, cpuBarStyle:{ width:cpu+"%", height:"100%", background:cpuColor, borderRadius:3 },
@@ -1036,10 +1319,10 @@ class Component extends DCLogic {
       openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
       gridScrollStyle, gridInnerStyle, gridStyle, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
-      cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute,
+      cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
       onCellClick:this.onCellClick,
       editorOpen:S.editorOpen, ed, ieq, oeq,
-      onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
+      onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onContentDown:this.onContentDown, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
       onKnobDown:this.onKnobDown, onKnobReset:this.onKnobReset,
       onBlockDown:this.onBlockDown, onBlockWheel:this.onBlockWheel, moveMode:S.moveMode, moveGhost, binStyle,
       onEqDown:this.onEqDown, onSliderDown:this.onSliderDown, onIeqType:this.onIeqType, onOeqType:this.onOeqType, onOnOff:this.onOnOff, onZeroAll:this.onZeroAll,
@@ -1049,7 +1332,11 @@ class Component extends DCLogic {
       results:palResults, onResult:this.onResult, onResultHover:this.onResultHover, noResults:results.length===0,
       chips, onChip:this.onChip, targetLabel,
       showRecents:!S.query.trim()&&!S.paletteCat&&S.paletteMode!=="retype"&&recents.length>0, recents, onRecent:this.onRecent,
-      toast
+      toast,
+      presetNum, presetName, presetOpen:S.presetOpen, presetQuery:S.presetQuery, pp,
+      closePresetPicker:this.closePresetPicker, onPresetQuery:this.onPresetQuery, onPresetKey:this.onPresetKey, presetRef:this.presetRef,
+      onPresetFilter:this.onPresetFilter, onPresetRow:this.onPresetRow, onPresetHover:this.onPresetHover, onFav:this.onFav,
+      selectMenu, onFaderDown:this.onFaderDown, onFaderReset:this.onFaderReset, onSelectOpen:this.onSelectOpen, onSelectClose:this.onSelectClose, onSelectPick:this.onSelectPick
     };
   }
 
