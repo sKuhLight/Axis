@@ -32,6 +32,9 @@ export const forgefx = {
   /** All blocks that have a definition pack (names). */
   blocks: () => req<string[]>('/blocks'),
 
+  /** Current preset number + name. */
+  currentPreset: () => req<{ number: number; name: string }>('/preset/current'),
+
   /** Named, scaled parameter values for one block. */
   blockParams: (name: string) => req<BlockParams>(`/block/${encodeURIComponent(name)}/params`),
 
