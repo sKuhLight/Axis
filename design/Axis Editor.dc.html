@@ -21,6 +21,7 @@
   @keyframes axsOverlay{ from{ opacity:0; } to{ opacity:1; } }
   @keyframes axsPalette{ from{ opacity:0; transform:translateY(10px) scale(.985); } to{ opacity:1; transform:translateY(0) scale(1); } }
   @keyframes axsSheet{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
+  @keyframes axsDrawer{ from{ transform:translateX(-100%); } to{ transform:translateX(0); } }
   @keyframes axsToast{ 0%{ opacity:0; transform:translate(-50%,10px); } 12%{ opacity:1; transform:translate(-50%,0); } 88%{ opacity:1; transform:translate(-50%,0); } 100%{ opacity:0; transform:translate(-50%,6px); } }
   @keyframes axsPlace{ 0%{ transform:scale(.7); opacity:0; } 60%{ transform:scale(1.06); } 100%{ transform:scale(1); opacity:1; } }
 </style>
@@ -58,8 +59,10 @@
     <div class="axs-scroll" style="flex:1; min-width:0; display:flex; align-items:center; gap:12px; overflow-x:auto; overflow-y:hidden;">
 
     <sc-if value="{{ isMobileView }}" hint-placeholder-val="{{ false }}">
-    <div style="display:flex; align-items:center; gap:9px;">
-      <svg width="26" height="26" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle></svg>
+    <div onClick="{{ toggleDrawer }}" title="Menu" style="width:42px; height:42px; flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:#121214; border:1px solid #2a2a31; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+      <span style="width:17px; height:2px; border-radius:2px; background:#cfcfd6;"></span>
+      <span style="width:17px; height:2px; border-radius:2px; background:#cfcfd6;"></span>
+      <span style="width:17px; height:2px; border-radius:2px; background:#cfcfd6;"></span>
     </div>
     </sc-if>
 
@@ -75,7 +78,8 @@
       <div onClick="{{ onPresetNext }}" style="width:34px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:4px 9px 9px 4px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">›</div>
     </div>
 
-    <!-- scenes -->
+    <!-- scenes (desktop only — on mobile lives in the menu drawer) -->
+    <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
     <div style="display:flex; align-items:center; gap:8px;">
       <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em;">SCN</span>
       <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid #26262c; border-radius:9px; padding:3px;">
@@ -84,6 +88,7 @@
         </sc-for>
       </div>
     </div>
+    </sc-if>
 
     </div><!-- /left region -->
 
@@ -104,7 +109,7 @@
 
     <button onClick="{{ openPalette }}" style="{{ addBtnStyle }}">
       <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.6"></circle><path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.6" stroke-linecap="round"></path></svg>
-      Add block
+      <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}"><span style="white-space:nowrap;">Add block</span></sc-if>
       <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}"><span style="font:600 10px/1 'JetBrains Mono'; color:#5e8a8c; background:#0d1516; border:1px solid #234142; border-radius:5px; padding:4px 6px;">⌘K</span></sc-if>
     </button>
 
@@ -130,13 +135,14 @@
     </sc-if>
 
     <button onClick="{{ onSave }}" style="{{ saveBtnStyle }}">
-      <span style="width:8px; height:8px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px #f5a623;"></span>Save
+      <span style="width:8px; height:8px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px #f5a623;"></span><sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}"><span>Save</span></sc-if>
     </button>
     </div><!-- /right region -->
   </div>
 
-  <!-- ===================== GRID ===================== -->
-  <div class="axs-scroll" data-screen-label="Signal Grid" style="{{ gridScrollStyle }}">
+  <!-- ===================== GRID (Build) ===================== -->
+  <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+  <div class="axs-scroll" data-screen-label="Signal Grid" onPointerDown="{{ onGridDown }}" style="{{ gridScrollStyle }}">
     <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
       <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
         <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
@@ -198,17 +204,257 @@
     </div>
   </div>
   <sc-if value="{{ pager.show }}" hint-placeholder-val="{{ false }}">
-  <div style="display:flex; align-items:center; justify-content:center; gap:16px; padding:10px 12px 14px; background:#0f0f12; border-top:1px solid #1a1a1f; flex:none;">
-    <div onClick="{{ onPagePrev }}" style="width:46px; height:40px; display:flex; align-items:center; justify-content:center; background:#17171a; border:1px solid #2a2a31; border-radius:11px; cursor:pointer; color:#cfcfd6; font-size:18px;">‹</div>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 14px 13px; background:#0f0f12; border-top:1px solid #1a1a1f; flex:none;">
+    <!-- column density -->
+    <div style="display:flex; align-items:center; gap:6px; background:#141417; border:1px solid #2a2a31; border-radius:12px; padding:4px;">
+      <div onClick="{{ onColsLess }}" title="Bigger blocks" style="{{ pager.lessStyle }}">−</div>
+      <div onClick="{{ onColsFit }}" title="Tap for full overview" style="display:flex; flex-direction:column; align-items:center; line-height:1; min-width:30px; cursor:pointer;">
+        <span style="font:700 14px/1 'JetBrains Mono'; color:#e9e9ee;">{{ pager.cols }}</span>
+        <span style="font:600 7px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em; margin-top:3px;">COLS</span>
+      </div>
+      <div onClick="{{ onColsMore }}" title="Fit more columns" style="{{ pager.moreStyle }}">+</div>
+    </div>
+    <!-- page dots -->
+    <sc-if value="{{ pager.multi }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:center; gap:7px;">
       <sc-for list="{{ pager.dots }}" as="d" hint-placeholder-count="3">
         <div data-p="{{ d.i }}" onClick="{{ onPageDot }}" style="{{ d.style }}"></div>
       </sc-for>
     </div>
-    <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; min-width:64px; text-align:center;">{{ pager.rangeLabel }}</div>
-    <div onClick="{{ onPageNext }}" style="width:46px; height:40px; display:flex; align-items:center; justify-content:center; background:#17171a; border:1px solid #2a2a31; border-radius:11px; cursor:pointer; color:#cfcfd6; font-size:18px;">›</div>
+    </sc-if>
+    <!-- gesture hint -->
+    <div style="display:flex; align-items:center; gap:6px; color:#56565e;">
+      <svg width="16" height="16" viewBox="0 0 16 16" style="flex:none;"><path d="M2 8 H7 M5.2 5.6 L7.6 8 L5.2 10.4 M14 8 H9 M10.8 5.6 L8.4 8 L10.8 10.4" fill="none" stroke="#56565e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      <span style="font:600 8.5px/1.25 'JetBrains Mono'; max-width:96px;">{{ pager.hint }}</span>
+    </div>
   </div>
   </sc-if>
+  </sc-if><!-- /isBuild -->
+
+  <!-- ===================== FC CONTROLLERS ===================== -->
+  <sc-if value="{{ isFc }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="FC Controllers" style="flex:1; min-height:0; display:flex; flex-direction:column; background:#0c0c0e; overflow:hidden;">
+
+    <!-- header strip -->
+    <div style="display:flex; align-items:center; gap:13px; padding:12px 18px; border-bottom:1px solid #1c1c22; flex:none; flex-wrap:wrap;">
+      <span style="font:700 12px/1 'JetBrains Mono'; letter-spacing:.16em; color:#cfcfd6;">FC CONTROLLERS</span>
+      <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid #26262c; border-radius:9px; padding:3px;">
+        <sc-for list="{{ fc.devices }}" as="d" hint-placeholder-count="3">
+          <div data-fcdev="{{ d.id }}" onClick="{{ fc.onDevice }}" style="{{ d.style }}">{{ d.label }}</div>
+        </sc-for>
+      </div>
+      <span style="flex:1; min-width:6px;"></span>
+      <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">{{ fc.deviceNote }}</span>
+    </div>
+
+    <!-- LAYOUTS (top strip) -->
+    <div class="axs-scroll" style="{{ fc.stripStyle }}">
+      <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.14em; color:#56565e; flex:none; margin-right:2px;">LAYOUTS</span>
+      <sc-for list="{{ fc.layoutItems }}" as="L" hint-placeholder-count="3">
+        <div data-fclay="{{ L.i }}" onClick="{{ fc.onLayout }}" style="{{ L.style }}">
+          <span style="{{ L.nameStyle }}">{{ L.name }}</span>
+          <span style="{{ L.subStyle }}">{{ L.count }}</span>
+        </div>
+      </sc-for>
+      <div onClick="{{ fc.onAddLayout }}" title="Add layout" style="flex:none; display:flex; align-items:center; gap:6px; align-self:stretch; padding:0 14px; background:#121215; border:1px dashed #2e2e36; border-radius:10px; cursor:pointer; font:700 12px/1 'JetBrains Mono'; color:#9fe9f0;" style-hover="border-color:#35c9d6;">+ New</div>
+    </div>
+
+    <!-- BOARD (hero) -->
+    <div style="{{ fc.boardStyle }}">
+        <div style="display:flex; align-items:center; gap:12px; margin:0 auto 14px; max-width:1060px;">
+          <input value="{{ fc.layoutName }}" onInput="{{ fc.onLayoutName }}" placeholder="Layout name" style="flex:1; min-width:0; background:#0e0e10; border:1px solid #26262c; border-radius:11px; padding:11px 14px; color:#fff; font:700 15px/1 'Hanken Grotesk',sans-serif; outline:none;" />
+          <div onClick="{{ fc.onDupLayout }}" title="Duplicate layout" style="width:40px; height:40px; flex:none; display:flex; align-items:center; justify-content:center; background:#141417; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">⧉</div>
+          <div onClick="{{ fc.onDelLayout }}" title="Delete layout" style="width:40px; height:40px; flex:none; display:flex; align-items:center; justify-content:center; background:#141417; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#5a3030; color:#e0857d;">🗑</div>
+        </div>
+        <div style="{{ fc.boardGridStyle }}">
+          <sc-for list="{{ fc.board }}" as="b" hint-placeholder-count="3">
+            <div data-fcsw="{{ b.i }}" onClick="{{ fc.onSwitch }}" style="{{ b.tileStyle }}">
+              <div style="{{ b.ledStyle }}"></div>
+              <span style="{{ b.numStyle }}">{{ b.num }}</span>
+              <span style="{{ b.labelStyle }}">{{ b.label }}</span>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:4px;">
+                <div style="{{ b.tapRowStyle }}">
+                  <span style="{{ b.tapBadgeStyle }}">T</span>
+                  <span style="{{ b.tapTextStyle }}">{{ b.tapText }}</span>
+                </div>
+                <div style="{{ b.tapRowStyle }}">
+                  <span style="{{ b.holdBadgeStyle }}">H</span>
+                  <span style="{{ b.holdTextStyle }}">{{ b.holdText }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px;">
+          <span style="font:600 11px/1.4 'JetBrains Mono'; color:#56565e; text-align:center;">Tap a switch to edit its Tap &amp; Hold actions below</span>
+        </div>
+      </div>
+
+      <!-- INSPECTOR -->
+      <sc-if value="{{ fc.scrimStyle }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ fc.onCloseInsp }}" style="{{ fc.scrimStyle }}"></div>
+      </sc-if>
+      <sc-if value="{{ fc.inspShow }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Switch Inspector" onClick="{{ stop }}" style="{{ fc.inspStyle }}">
+        <div style="display:flex; align-items:center; gap:11px; padding:16px 18px 13px; border-bottom:1px solid #1c1c22; flex:none;">
+          <span style="font:700 11px/1 'JetBrains Mono'; letter-spacing:.14em; color:#6e6e78;">SWITCH</span>
+          <span style="font:700 17px/1 'JetBrains Mono'; color:#fff;">{{ fc.sw.num }}</span>
+          <span style="flex:1;"></span>
+          <sc-if value="{{ fc.isMobile }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ fc.onCloseInsp }}" style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:14px;">✕</div>
+          </sc-if>
+        </div>
+
+        <div class="axs-scroll" style="{{ fc.inspBodyStyle }}">
+
+          <!-- identity: label + color + mini-display -->
+          <div style="{{ fc.identityStyle }}">
+            <input value="{{ fc.sw.label }}" onInput="{{ fc.onLabel }}" placeholder="{{ fc.sw.placeholder }}" style="width:100%; box-sizing:border-box; background:#0e0e10; border:1px solid #2a2a31; border-radius:11px; padding:12px 14px; color:#fff; font:600 14px/1 'Hanken Grotesk',sans-serif; outline:none;" />
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em; width:100%;">LED COLOR</span>
+              <sc-for list="{{ fc.sw.colorList }}" as="c" hint-placeholder-count="9">
+                <div data-fccol="{{ c.c }}" onClick="{{ fc.onColor }}" style="{{ c.style }}"></div>
+              </sc-for>
+              <div data-fccol="auto" onClick="{{ fc.onColor }}" title="Follow category color" style="height:28px; padding:0 10px; display:flex; align-items:center; border-radius:8px; cursor:pointer; font:600 10px/1 'JetBrains Mono'; color:#9a9aa3; background:#16161b; border:1px solid #2a2a31;">AUTO</div>
+            </div>
+            <!-- mini-display label -->
+            <div style="display:flex; flex-direction:column; gap:9px;">
+              <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">MINI-DISPLAY LABEL</span>
+              <div style="display:flex; gap:4px; background:#0e0e10; border:1px solid #26262c; border-radius:10px; padding:4px;">
+                <sc-for list="{{ fc.sw.labelModes }}" as="m" hint-placeholder-count="3">
+                  <div data-lm="{{ m.id }}" onClick="{{ fc.onLabelMode }}" style="{{ m.style }}">{{ m.label }}</div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ fc.sw.showCustom }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ fc.sw.custom }}" onInput="{{ fc.onCustom }}" placeholder="Custom label…" style="width:100%; box-sizing:border-box; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; padding:11px 13px; color:#fff; font:600 13px/1 'Hanken Grotesk',sans-serif; outline:none;" />
+              </sc-if>
+            </div>
+          </div>
+
+          <!-- actions: tap + hold -->
+          <sc-for list="{{ fc.sw.actions }}" as="act" hint-placeholder-count="2">
+            <div style="{{ act.cardStyle }}">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <span style="width:9px; height:9px; border-radius:3px; background:{{ act.dotColor }};"></span>
+                <span style="font:700 12px/1 'JetBrains Mono'; letter-spacing:.12em; color:#e9e9ee;">{{ act.title }}</span>
+                <span style="flex:1;"></span>
+                <span style="font:600 11px/1 'JetBrains Mono'; color:#6e6e78;">{{ act.summary }}</span>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">CATEGORY</span>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ act.cats }}" as="c" hint-placeholder-count="6">
+                    <div data-fcact="{{ act.which }}" data-cat="{{ c.id }}" onClick="{{ fc.onCat }}" style="{{ c.style }}">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <sc-if value="{{ act.showFns }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">FUNCTION</span>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ act.fns }}" as="f" hint-placeholder-count="3">
+                    <div data-fcact="{{ act.which }}" data-fn="{{ f.id }}" onClick="{{ fc.onFn }}" style="{{ f.style }}">{{ f.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showPreset }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="flex:1; font:600 12px/1 'Hanken Grotesk',sans-serif; color:#c3c3cb;">Preset number</span>
+                <div style="display:flex; align-items:center; gap:5px; background:#141417; border:1px solid #2a2a31; border-radius:10px; padding:4px;">
+                  <div data-fcact="{{ act.which }}" data-d="-10" onClick="{{ fc.onPreset }}" style="{{ act.stepStyle }}">«</div>
+                  <div data-fcact="{{ act.which }}" data-d="-1" onClick="{{ fc.onPreset }}" style="{{ act.stepStyle }}">−</div>
+                  <span style="min-width:38px; text-align:center; font:700 14px/1 'JetBrains Mono'; color:#fff;">{{ act.presetVal }}</span>
+                  <div data-fcact="{{ act.which }}" data-d="1" onClick="{{ fc.onPreset }}" style="{{ act.stepStyle }}">+</div>
+                  <div data-fcact="{{ act.which }}" data-d="10" onClick="{{ fc.onPreset }}" style="{{ act.stepStyle }}">»</div>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showScene }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">SCENE</span>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ act.sceneChips }}" as="s" hint-placeholder-count="8">
+                    <div data-fcact="{{ act.which }}" data-scene="{{ s.n }}" onClick="{{ fc.onScene }}" style="{{ s.style }}">{{ s.n }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showBlock }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">BLOCK</span>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ act.blockChips }}" as="bk" hint-placeholder-count="4">
+                    <div data-fcact="{{ act.which }}" data-block="{{ bk.b }}" onClick="{{ fc.onBlock }}" style="{{ bk.style }}">{{ bk.b }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showChannel }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">CHANNEL</span>
+                <div style="display:flex; gap:6px;">
+                  <sc-for list="{{ act.chanChips }}" as="ch" hint-placeholder-count="4">
+                    <div data-fcact="{{ act.which }}" data-ch="{{ ch.ch }}" onClick="{{ fc.onChannel }}" style="{{ ch.style }}">{{ ch.ch }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showLayoutTo }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">TARGET LAYOUT</span>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ act.layoutChips }}" as="lt" hint-placeholder-count="3">
+                    <div data-fcact="{{ act.which }}" data-lto="{{ lt.i }}" onClick="{{ fc.onLayoutTo }}" style="{{ lt.style }}">{{ lt.name }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showLimits }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:18px;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="font:600 11px/1 'Hanken Grotesk',sans-serif; color:#c3c3cb;">Low</span>
+                  <div style="display:flex; align-items:center; gap:4px; background:#141417; border:1px solid #2a2a31; border-radius:9px; padding:3px;">
+                    <div data-fcact="{{ act.which }}" data-lim="lo" data-d="-1" onClick="{{ fc.onLimit }}" style="{{ act.stepStyle }}">−</div>
+                    <span style="min-width:26px; text-align:center; font:700 12px/1 'JetBrains Mono'; color:#fff;">{{ act.lo }}</span>
+                    <div data-fcact="{{ act.which }}" data-lim="lo" data-d="1" onClick="{{ fc.onLimit }}" style="{{ act.stepStyle }}">+</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="font:600 11px/1 'Hanken Grotesk',sans-serif; color:#c3c3cb;">High</span>
+                  <div style="display:flex; align-items:center; gap:4px; background:#141417; border:1px solid #2a2a31; border-radius:9px; padding:3px;">
+                    <div data-fcact="{{ act.which }}" data-lim="hi" data-d="-1" onClick="{{ fc.onLimit }}" style="{{ act.stepStyle }}">−</div>
+                    <span style="min-width:26px; text-align:center; font:700 12px/1 'JetBrains Mono'; color:#fff;">{{ act.hi }}</span>
+                    <div data-fcact="{{ act.which }}" data-lim="hi" data-d="1" onClick="{{ fc.onLimit }}" style="{{ act.stepStyle }}">+</div>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+
+              <sc-if value="{{ act.showWrap }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="flex:1; font:600 12px/1 'Hanken Grotesk',sans-serif; color:#c3c3cb;">Wrap at limits</span>
+                <div data-fcact="{{ act.which }}" onClick="{{ fc.onWrap }}" style="{{ act.wrapStyle }}">
+                  <div style="{{ act.wrapDotStyle }}"></div>
+                </div>
+              </div>
+              </sc-if>
+            </div>
+          </sc-for>
+
+        </div>
+      </div>
+      </sc-if>
+  </div>
+  </sc-if><!-- /isFc -->
 
   <!-- ===================== EDITOR ===================== -->
   <sc-if value="{{ editorOpen }}" hint-placeholder-val="{{ true }}">
@@ -314,7 +560,7 @@
                 <div data-t="{{ t.id }}" onClick="{{ onIeqType }}" style="{{ t.style }}">{{ t.label }}</div>
               </sc-for>
             </div>
-            <div style="position:relative; background:#0a0a0c; border:1px solid #232329; border-radius:12px; padding:10px 12px 4px;">
+            <div style="{{ ieq.cardStyle }}">
               <svg viewBox="0 0 1000 300" style="width:100%; height:auto; display:block; touch-action:none; cursor:crosshair;">
                 <line x1="250" y1="14" x2="250" y2="286" stroke="#1c1c22" stroke-width="1"></line>
                 <line x1="500" y1="14" x2="500" y2="286" stroke="#1c1c22" stroke-width="1"></line>
@@ -365,7 +611,7 @@
               <span style="flex:1;"></span>
               <div onClick="{{ onZeroAll }}" style="height:38px; padding:0 16px; display:flex; align-items:center; background:#17171a; border:1px solid #2a2a31; border-radius:9px; font-size:12px; font-weight:600; color:#9a9aa3; cursor:pointer;" style-hover="border-color:#3f3f48;">Zero All</div>
             </div>
-            <div style="background:#0a0a0c; border:1px solid #232329; border-radius:12px; padding:10px 12px 4px;">
+            <div style="{{ oeq.cardStyle }}">
               <svg viewBox="0 0 1000 300" style="width:100%; height:auto; display:block; touch-action:none;">
                 <line x1="0" y1="150" x2="1000" y2="150" stroke="#2a2a31" stroke-width="1" stroke-dasharray="4 5"></line>
                 <path d="{{ oeq.fillPath }}" fill="rgba(127,174,74,.12)" stroke="none"></path>
@@ -424,6 +670,71 @@
   </div>
   </sc-if>
   </div><!-- /main column -->
+
+  <!-- ===================== MOBILE DRAWER ===================== -->
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeDrawer }}" style="position:absolute; inset:0; z-index:150; background:rgba(6,6,8,.6); backdrop-filter:blur(3px); animation:axsOverlay .14s ease;">
+    <div onClick="{{ stop }}" data-screen-label="Menu" style="position:absolute; left:0; top:0; bottom:0; width:286px; max-width:84vw; display:flex; flex-direction:column; background:linear-gradient(180deg,#141417,#0f0f12); border-right:1px solid #20202a; box-shadow:8px 0 44px rgba(0,0,0,.55); animation:axsDrawer .26s cubic-bezier(.2,.8,.3,1);">
+      <div style="display:flex; align-items:center; gap:11px; padding:18px 18px 16px; border-bottom:1px solid #1c1c22; flex:none;">
+        <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:15px; font-weight:700; color:#fff;">AX-3 Editor</div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:#33c46b; box-shadow:0 0 7px #33c46b;"></span>
+            <span style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83;">Connected · FW 1.4.0</span>
+          </div>
+        </div>
+        <div onClick="{{ closeDrawer }}" style="width:34px; height:34px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; font-size:14px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
+      </div>
+      <div class="axs-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:13px;">
+        <div style="display:flex; flex-direction:column; gap:3px;">
+          <sc-for list="{{ drawerNav }}" as="r" hint-placeholder-count="7">
+            <div data-rail="{{ r.id }}" onClick="{{ onRail }}" style="{{ r.style }}" style-hover="background:#1a1a1f;">
+              <span style="font-size:18px; width:24px; text-align:center; flex:none;">{{ r.icon }}</span>
+              <span style="font-size:14px; font-weight:600;">{{ r.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:22px;">
+          <div style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.13em; margin-bottom:11px;">SCENE</div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:7px;">
+            <sc-for list="{{ drawerScenes }}" as="s" hint-placeholder-count="8">
+              <div data-scene="{{ s.n }}" onClick="{{ onScene }}" style="{{ s.style }}">{{ s.n }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="margin-top:22px;">
+          <div style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.13em; margin-bottom:11px;">DEFAULT VIEW</div>
+          <div style="display:flex; gap:6px; background:#0e0e10; border:1px solid #26262c; border-radius:11px; padding:4px;">
+            <sc-for list="{{ drawerModes }}" as="g" hint-placeholder-count="2">
+              <div data-gmode="{{ g.id }}" onClick="{{ onGlobalMode }}" style="{{ g.style }}">{{ g.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="margin-top:22px;">
+          <div style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.13em; margin-bottom:11px;">STATUS</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div onClick="{{ onTuner }}" style="display:flex; align-items:center; gap:11px; height:44px; padding:0 13px; background:#141417; border:1px solid #26262c; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+              <span style="font-size:16px; color:#9a9aa3;">♪</span>
+              <span style="flex:1; font-size:13px; font-weight:600; color:#cfcfd6;">Tuner</span>
+              <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">A · 440</span>
+            </div>
+            <div onClick="{{ onTap }}" style="display:flex; align-items:center; gap:11px; height:44px; padding:0 13px; background:#141417; border:1px solid #26262c; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+              <span style="font:700 15px/1 'JetBrains Mono'; color:#e9e9ee; min-width:30px;">{{ bpm }}</span>
+              <span style="flex:1; font-size:13px; font-weight:600; color:#cfcfd6;">Tap tempo</span>
+              <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">BPM</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:11px; height:44px; padding:0 13px; background:#141417; border:1px solid #26262c; border-radius:11px;">
+              <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">CPU</span>
+              <div style="flex:1; height:7px; background:#0e0e10; border:1px solid #26262c; border-radius:4px; overflow:hidden;"><div style="{{ cpuBarStyle }}"></div></div>
+              <span style="{{ cpuTextStyle }}">{{ cpuText }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
 
   <!-- ===================== COMMAND PALETTE ===================== -->
   <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
@@ -701,7 +1012,8 @@ class Component extends DCLogic {
     };
 
     this.state = {
-      grid:g, routes, rects:{}, selected:18, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Ideal", railActive:"build", scene:1, page:0,
+      grid:g, routes, rects:{}, selected:18, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Ideal", railActive:"build", scene:1, page:0, mobCols:4, drawerOpen:false,
+      fcDevice:"FM3", fcLayout:0, fcSwitch:0, fcInspOpen:false, fcLayouts:this.fcSeed(),
       paletteOpen:false, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place",
       currentPreset:430, presetOpen:false, presetQuery:"", presetHi:0, presetFilter:"all", favPresets:[7,14,18,25], recentPresets:[430,18,7,2],
       selects:{}, openSelect:null, openSelectRect:null,
@@ -722,6 +1034,11 @@ class Component extends DCLogic {
       if (e.key==="Escape" && this.state.presetOpen) this.closePresetPicker();
     };
     this._move = (e) => {
+      if (this.gridSwipe){
+        const s=this.gridSwipe; const dx=e.clientX-s.startX, dy=e.clientY-s.startY;
+        if(!s.axis){ if(Math.abs(dx)>8||Math.abs(dy)>8){ s.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; if(s.axis==="v"){ this.gridSwipe=null; } else { s.moved=true; } } }
+        if(this.gridSwipe) return;
+      }
       if (this.edResize){ const h=this.clamp(this.edResize.startH+(this.edResize.startY-e.clientY),240,(this.state.vh||800)-150); this.setState({ editorH:h }); this.remeasure(); return; }
       if (this.tabsDrag){ const dx=e.clientX-this.tabsDrag.startX; if(Math.abs(dx)>4) this.tabsDrag.moved=true; if(this.tabsEl) this.tabsEl.scrollLeft=this.tabsDrag.scroll-dx; return; }
       if (this.gesture){
@@ -729,6 +1046,7 @@ class Component extends DCLogic {
         if (this.moveModeActive){ this.updateMove(e); return; }
         const dx=e.clientX-g.startX, dy=e.clientY-g.startY;
         if (!g.axis){ if (Math.abs(dx)>6||Math.abs(dy)>6){ clearTimeout(this._lpTimer); g.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; g.moved=true; } else return; }
+        if (g.paramLock){ return; }  // dense grid: ignore param swipe; horizontal handled as page-pan on release
         if (g.axis==="v"){ if(!g.isBlock) return; const v=Math.max(0,Math.min(100,g.startVal+(g.startY-e.clientY)*0.6)); this.setState({ knobs:Object.assign({},this.state.knobs,{[g.qcKey]:v}), adjust:{idx:g.idx,label:g.label,value:Math.round(v)} }); }
         else { if(!g.isBlock) return; const steps=-Math.round(dx/38); if(steps!==g.lastSteps){ g.lastSteps=steps; const ni=((g.qi+steps)%g.qcList.length+g.qcList.length)%g.qcList.length; const label=g.qcList[ni], key=this.qcKey(g.idx,label); g.label=label; g.qcKey=key; this.setState({ qc:Object.assign({},this.state.qc,{[g.idx]:ni}), adjust:{idx:g.idx,label,value:Math.round(this.kval(key))} }); } }
         return;
@@ -751,11 +1069,13 @@ class Component extends DCLogic {
       }
     };
     this._up = (e) => {
+      if (this.gridSwipe){ const s=this.gridSwipe; this.gridSwipe=null; if(s.moved){ const dx=e.clientX-s.startX, dy=e.clientY-s.startY; if(Math.abs(dx)>48 && Math.abs(dx)>Math.abs(dy)){ this.changePage(dx<0?1:-1); this._suppressCell=Date.now(); } } return; }
       if (this.tabsDrag){ const moved=this.tabsDrag.moved; this.tabsDrag=null; document.body.style.cursor=""; if(moved) this._suppressTab=Date.now(); return; }
       if (this.contentSwipe){ const c=this.contentSwipe; this.contentSwipe=null; const dx=e.clientX-c.startX, dy=e.clientY-c.startY; if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.4) this.swipePage(dx<0?1:-1); return; }
       if (this.gesture){
         clearTimeout(this._lpTimer); const g=this.gesture;
         if (this.moveModeActive){ this.finishMove(e); }
+        else if (g.paramLock && g.moved && g.axis==="h"){ const dx=e.clientX-g.startX; if(Math.abs(dx)>44) this.changePage(dx<0?1:-1); }
         else if (!g.moved){ this.handleTap(g.idx); }
         this.gesture=null; this.moveModeActive=false;
         this.setState({ adjust:null, moveMode:false, moveIdx:null }); return;
@@ -764,10 +1084,17 @@ class Component extends DCLogic {
       this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
     };
     this._resize = () => this.setState({ vw: window.innerWidth, vh: window.innerHeight });
+    this._touchStart = (e) => { if(!this.isMobile()) return; if(e.touches && e.touches.length===2){ const t=e.touches, dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; this._pinch={ startDist:Math.hypot(dx,dy)||1, startCols:this.clamp(this.state.mobCols||4,3,12) }; clearTimeout(this._lpTimer); this.gesture=null; this.gridSwipe=null; this.moveModeActive=false; this.connectDrag=null; this.setState({ moveMode:false, moveIdx:null, adjust:null, linkTo:null }); } };
+    this._touchMove = (e) => { if(this._pinch && e.touches && e.touches.length===2){ e.preventDefault(); const t=e.touches, dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; const dist=Math.hypot(dx,dy)||1; let nc=Math.round(this._pinch.startCols*(this._pinch.startDist/dist)); nc=this.clamp(nc,3,12); const cur=this.clamp(this.state.mobCols||4,3,12); if(nc!==cur){ const pc=Math.ceil(12/nc); this.setState({ mobCols:nc, page:Math.min(this.state.page||0,pc-1) }); } } };
+    this._touchEnd = (e) => { if(!e.touches || e.touches.length<2) this._pinch=null; };
     window.addEventListener("keydown", this._key);
     window.addEventListener("pointermove", this._move);
     window.addEventListener("pointerup", this._up);
     window.addEventListener("resize", this._resize);
+    window.addEventListener("touchstart", this._touchStart, {passive:false});
+    window.addEventListener("touchmove", this._touchMove, {passive:false});
+    window.addEventListener("touchend", this._touchEnd);
+    window.addEventListener("touchcancel", this._touchEnd);
     this.setState({ vw: window.innerWidth, vh: window.innerHeight });
     this.loadPersist();
     [0,120,400,900].forEach(t=>setTimeout(()=>this.remeasure(), t));
@@ -802,6 +1129,10 @@ class Component extends DCLogic {
     window.removeEventListener("pointermove", this._move);
     window.removeEventListener("pointerup", this._up);
     window.removeEventListener("resize", this._resize);
+    window.removeEventListener("touchstart", this._touchStart);
+    window.removeEventListener("touchmove", this._touchMove);
+    window.removeEventListener("touchend", this._touchEnd);
+    window.removeEventListener("touchcancel", this._touchEnd);
     if (this._toastT) clearTimeout(this._toastT);
   }
 
@@ -907,6 +1238,7 @@ class Component extends DCLogic {
   onQuickToggle = (e) => { const label=e.currentTarget.dataset.q; const idx=this.state.selected; const cur=(this.state.qcSel&&this.state.qcSel[idx])?this.state.qcSel[idx].slice():this.qcList(idx).slice(); const i=cur.indexOf(label); if(i>=0){ if(cur.length>1) cur.splice(i,1); } else { cur.push(label); } this.setState({ qcSel:Object.assign({},this.state.qcSel,{[idx]:cur}), qc:Object.assign({},this.state.qc,{[idx]:0}) }); };
   qcKey(idx,label){ return (label==="Level"||label==="Balance") ? "k:"+idx+":common:"+label : "k:"+idx+":qc:"+label; }
   onCellClick = (e) => {
+    if(this._suppressCell && Date.now()-this._suppressCell<350) return;
     const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
     if(c && (c.catId||c.shunt)) return; // filled handled by pointer gesture
     this.openPaletteFor(idx);
@@ -930,7 +1262,7 @@ class Component extends DCLogic {
     const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
     if(!c || (!c.catId && !c.shunt) || this._portActive) return;
     const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label);
-    this.gesture={ idx, isBlock:!!c.catId, startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, axis:null, moved:false, qcKey:key, startVal:this.kval(key), label, qcList:qcl, qi, lastSteps:0 };
+    this.gesture={ idx, isBlock:!!c.catId, paramLock:!!this._dense, startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, axis:null, moved:false, qcKey:key, startVal:this.kval(key), label, qcList:qcl, qi, lastSteps:0 };
     clearTimeout(this._lpTimer);
     this._lpTimer=setTimeout(()=>{ const g=this.gesture; if(g && !g.axis && !this.moveModeActive) this.startMove(g.idx); }, 380);
   };
@@ -1000,7 +1332,7 @@ class Component extends DCLogic {
   onMute = () => {};
   onSceneIgnore = () => {};
   onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
-  onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id }); const m={controllers:"Controllers",fc:"Footswitch layout",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build","#35c9d6"); };
+  onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id, drawerOpen:false }); const m={controllers:"Controllers",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build & FC","#35c9d6"); };
   // ---- preset picker ----
   pad(n){ return String(n).padStart(3,"0"); }
   presetByN(n){ return this.PBYN[n]; }
@@ -1021,9 +1353,18 @@ class Component extends DCLogic {
   buildPresetList(){ const q=this.state.presetQuery.trim().toLowerCase(); const f=this.state.presetFilter; let list; if(f==="recent"){ list=this.state.recentPresets.map(n=>this.presetByN(n)).filter(Boolean); } else { list=this.PRESETS.slice(); if(f==="fav") list=list.filter(p=>this.state.favPresets.indexOf(p.n)>=0); else if(f!=="all") list=list.filter(p=>p.tag===f); list.sort((a,b)=>a.n-b.n); } if(q){ list=list.filter(p=> p.name.toLowerCase().indexOf(q)>=0 || this.pad(p.n).indexOf(q)>=0 || String(p.n).indexOf(q)>=0 || p.tag.toLowerCase().indexOf(q)>=0 ); } return list; }
   persist(){ try{ localStorage.setItem("axs.presets", JSON.stringify({ cur:this.state.currentPreset, fav:this.state.favPresets, rec:this.state.recentPresets })); }catch(e){} }
   loadPersist(){ try{ const j=JSON.parse(localStorage.getItem("axs.presets")||"null"); if(j){ const s={}; if(typeof j.cur==="number") s.currentPreset=j.cur; if(Array.isArray(j.fav)) s.favPresets=j.fav; if(Array.isArray(j.rec)) s.recentPresets=j.rec; this.setState(s); } }catch(e){} }
-  onPagePrev = () => this.setState({ page:Math.max(0,(this.state.page||0)-1) });
-  onPageNext = () => this.setState({ page:Math.min(2,(this.state.page||0)+1) });
-  onPageDot = (e) => this.setState({ page:+e.currentTarget.dataset.p });
+  pageCountNow(){ const v=this.clamp(this.state.mobCols||4,3,12); return Math.ceil(12/v); }
+  changePage(d){ const pc=this.pageCountNow(); const np=this.clamp((this.state.page||0)+d,0,pc-1); if(np!==(this.state.page||0)) this.setState({ page:np }); }
+  changeCols(d){ const cur=this.clamp(this.state.mobCols||4,3,12); const nc=this.clamp(cur+d,3,12); if(nc===cur) return; const pc=Math.ceil(12/nc); this.setState({ mobCols:nc, page:Math.min(this.state.page||0,pc-1) }); }
+  onColsLess = () => this.changeCols(-1);
+  onColsMore = () => this.changeCols(1);
+  onColsFit = () => { const c=this.clamp(this.state.mobCols||4,3,12); this.setState({ mobCols: c>=12?4:12, page:0 }); this.showToast(c>=12?"Edit view":"Overview — connect across columns","#35c9d6"); };
+  toggleDrawer = () => this.setState({ drawerOpen:!this.state.drawerOpen });
+  closeDrawer = () => this.setState({ drawerOpen:false });
+  onGridDown = (e) => { if(!this.isMobile()) return; if(e.target&&e.target.closest&&e.target.closest("[data-port]")) return; const ce=e.target&&e.target.closest?e.target.closest("[data-idx]"):null; if(ce && this.cellHas(+ce.dataset.idx)) return; this.gridSwipe={ startX:e.clientX, startY:e.clientY, axis:null, moved:false }; };
+  onPagePrev = () => this.changePage(-1);
+  onPageNext = () => this.changePage(1);
+  onPageDot = (e) => { const pc=this.pageCountNow(); this.setState({ page:this.clamp(+e.currentTarget.dataset.p,0,pc-1) }); };
   onSave = () => this.showToast("Preset saved","#f5a623");
   closeEditor = () => this.setState({ editorOpen:false });
   onRemove = () => { const idx=this.state.selected; const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:this.isMobile()?false:true}); this.showToast("Block removed","#d6543f"); };
@@ -1103,14 +1444,196 @@ class Component extends DCLogic {
     return { grid:built.filter(c=>!c.isDropdown), selects:built.filter(c=>c.isDropdown) };
   }
 
+  // ===================== FC CONTROLLERS =====================
+  get FC_CATS(){ return this._fcCats || (this._fcCats=[
+    { id:"none", label:"None", color:"#5a5a62", fns:[] },
+    { id:"preset", label:"Preset", color:"#f5a623", fns:[
+      { id:"bank", label:"Select in Bank", params:["preset"] },
+      { id:"inc", label:"Next", params:["wrap"] },
+      { id:"dec", label:"Previous", params:["wrap"] },
+      { id:"num", label:"Go to #", params:["preset"] } ] },
+    { id:"scene", label:"Scene", color:"#35c9d6", fns:[
+      { id:"sel", label:"Select", params:["scene"] },
+      { id:"inc", label:"Next", params:["wrap"] },
+      { id:"dec", label:"Previous", params:["wrap"] } ] },
+    { id:"bank", label:"Bank", color:"#4f6bed", fns:[
+      { id:"inc", label:"Increment", params:["wrap","limits"] },
+      { id:"dec", label:"Decrement", params:["wrap","limits"] } ] },
+    { id:"block", label:"Effect Block", color:"#33c46b", fns:[
+      { id:"byp", label:"Bypass", params:["block"] },
+      { id:"chan", label:"Channel", params:["block","channel"] } ] },
+    { id:"looper", label:"Looper", color:"#e0556f", fns:[
+      { id:"rec", label:"Record" }, { id:"play", label:"Play / Stop" }, { id:"dub", label:"Overdub" },
+      { id:"undo", label:"Undo" }, { id:"half", label:"Half Speed" }, { id:"rev", label:"Reverse" } ] },
+    { id:"tap", label:"Tap Tempo", color:"#c084fc", fns:[] },
+    { id:"tuner", label:"Tuner", color:"#9aa0a6", fns:[] },
+    { id:"layout", label:"Layout", color:"#46c2d6", fns:[
+      { id:"go", label:"Go to Layout", params:["layout"] },
+      { id:"inc", label:"Next" }, { id:"dec", label:"Previous" } ] }
+  ]); }
+  get FC_COLORS(){ return ["#e23b3b","#f5871f","#f5c518","#33c46b","#35c9d6","#4f6bed","#9b59f5","#ffffff","#ec4f9c"]; }
+  get FC_BLOCKS(){ return ["Amp 1","Cab 1","Drive 1","Delay 1","Reverb 1","Comp 1"]; }
+  fcCat(id){ return this.FC_CATS.find(c=>c.id===id)||this.FC_CATS[0]; }
+  fcFn(catId,fnId){ const c=this.fcCat(catId); return (c.fns||[]).find(f=>f.id===fnId)||null; }
+  fcAct(cat,fn,extra){ return Object.assign({ cat:cat||"none", fn:fn||null, preset:0, scene:1, wrap:true, lo:0, hi:127, block:"Amp 1", channel:"A", layoutTo:0 }, extra||{}); }
+  fcMakeSwitch(o){ o=o||{}; return { label:o.label||"", color:o.color||null, labelMode:o.labelMode||"auto", custom:o.custom||"", tap:o.tap||this.fcAct("none"), hold:o.hold||this.fcAct("none") }; }
+  fcEmptyRow(n){ const a=[]; for(let i=0;i<n;i++) a.push(this.fcMakeSwitch()); return a; }
+  fcSeed(){
+    const mk=this.fcMakeSwitch.bind(this), act=this.fcAct.bind(this);
+    const lay=(name,sw)=>{ const list=sw.slice(); while(list.length<12) list.push(mk()); return { name, switches:list }; };
+    return [
+      lay("PRESETS", [
+        mk({ label:"6160 Block", color:"#f5871f", tap:act("preset","num",{preset:63}), hold:act("bank","dec") }),
+        mk({ label:"6160 II", color:"#e23b3b", tap:act("preset","num",{preset:64}), hold:act("layout","go",{layoutTo:1}) }),
+        mk({ label:"Spawn Q-Ro", color:"#33c46b", tap:act("preset","num",{preset:120}), hold:act("bank","inc") }) ]),
+      lay("SCENES", [
+        mk({ label:"Rhythm", color:"#35c9d6", tap:act("scene","sel",{scene:1}), hold:act("tap") }),
+        mk({ label:"Lead", color:"#f5c518", tap:act("scene","sel",{scene:2}), hold:act("tuner") }),
+        mk({ label:"Clean", color:"#4f6bed", tap:act("scene","sel",{scene:3}), hold:act("scene","inc") }) ]),
+      lay("LOOPER", [
+        mk({ label:"Record", color:"#e23b3b", tap:act("looper","rec"), hold:act("looper","undo") }),
+        mk({ label:"Play", color:"#33c46b", tap:act("looper","play"), hold:act("looper","half") }),
+        mk({ label:"Overdub", color:"#9b59f5", tap:act("looper","dub"), hold:act("looper","rev") }) ])
+    ];
+  }
+  fcDeviceCount(d){ return d==="FC-12"?12:(d==="FC-6"?6:3); }
+  fcAutoLabel(a){
+    if(!a||a.cat==="none") return "—";
+    const c=this.fcCat(a.cat), f=this.fcFn(a.cat,a.fn);
+    if(a.cat==="preset"){ if(a.fn==="inc")return"Preset +1"; if(a.fn==="dec")return"Preset −1"; return "Preset "+(a.preset||0); }
+    if(a.cat==="scene"){ if(a.fn==="inc")return"Scene +1"; if(a.fn==="dec")return"Scene −1"; return "Scene "+(a.scene||1); }
+    if(a.cat==="bank") return "Bank "+(a.fn==="dec"?"−1":"+1");
+    if(a.cat==="block") return (a.block||"Block")+(a.fn==="chan"?" "+(a.channel||"A"):"");
+    if(a.cat==="looper") return f?f.label:"Looper";
+    if(a.cat==="tap") return "Tap Tempo";
+    if(a.cat==="tuner") return "Tuner";
+    if(a.cat==="layout"){ if(a.fn==="inc")return"Layout +1"; if(a.fn==="dec")return"Layout −1"; return "Layout "+((a.layoutTo||0)+1); }
+    return c.label;
+  }
+  fcSummary(a){ if(!a||a.cat==="none") return "Empty"; const c=this.fcCat(a.cat), f=this.fcFn(a.cat,a.fn); return c.label+(f?" · "+f.label:""); }
+  fcCurLayout(){ const S=this.state; return S.fcLayouts[this.clamp(S.fcLayout,0,S.fcLayouts.length-1)]; }
+  fcWriteSwitch(mut){
+    const S=this.state, li=this.clamp(S.fcLayout,0,S.fcLayouts.length-1), si=this.clamp(S.fcSwitch,0,11);
+    const fcLayouts=S.fcLayouts.map((L,i)=>{ if(i!==li) return L; const switches=L.switches.map((s,j)=>{ if(j!==si) return s; const ns=Object.assign({},s); mut(ns); return ns; }); return Object.assign({},L,{switches}); });
+    this.setState({ fcLayouts });
+  }
+  fcSetAct(which,patch){ this.fcWriteSwitch(s=>{ s[which]=Object.assign({},s[which],patch); }); }
+  onFcDevice = (e) => this.setState({ fcDevice:e.currentTarget.dataset.fcdev, fcSwitch:0 });
+  onFcLayout = (e) => this.setState({ fcLayout:+e.currentTarget.dataset.fclay, fcSwitch:0 });
+  onFcAddLayout = () => { const L=this.state.fcLayouts.concat([{ name:"LAYOUT "+(this.state.fcLayouts.length+1), switches:this.fcEmptyRow(12) }]); this.setState({ fcLayouts:L, fcLayout:L.length-1, fcSwitch:0 }); this.showToast("Layout added","#35c9d6"); };
+  onFcDupLayout = () => { const cur=this.fcCurLayout(); const copy=JSON.parse(JSON.stringify(cur)); copy.name=(cur.name||"LAYOUT")+" COPY"; const L=this.state.fcLayouts.slice(); L.splice(this.state.fcLayout+1,0,copy); this.setState({ fcLayouts:L, fcLayout:this.state.fcLayout+1 }); this.showToast("Layout duplicated","#35c9d6"); };
+  onFcDelLayout = () => { if(this.state.fcLayouts.length<=1){ this.showToast("Keep at least one layout","#d6543f"); return; } const L=this.state.fcLayouts.filter((x,i)=>i!==this.state.fcLayout); this.setState({ fcLayouts:L, fcLayout:Math.max(0,this.state.fcLayout-1), fcSwitch:0 }); this.showToast("Layout deleted","#9a9aa3"); };
+  onFcLayoutName = (e) => { const v=e.target.value; const li=this.state.fcLayout; this.setState({ fcLayouts:this.state.fcLayouts.map((L,i)=> i===li?Object.assign({},L,{name:v}):L) }); };
+  onFcSwitch = (e) => this.setState({ fcSwitch:+e.currentTarget.dataset.fcsw, fcInspOpen:true });
+  onFcCloseInsp = () => this.setState({ fcInspOpen:false });
+  onFcLabel = (e) => { const v=e.target.value; this.fcWriteSwitch(s=>{ s.label=v; }); };
+  onFcCustom = (e) => { const v=e.target.value; this.fcWriteSwitch(s=>{ s.custom=v; }); };
+  onFcColor = (e) => { const c=e.currentTarget.dataset.fccol; this.fcWriteSwitch(s=>{ s.color = (c==="auto"?null:(s.color===c?null:c)); }); };
+  onFcLabelMode = (e) => { const m=e.currentTarget.dataset.lm; this.fcWriteSwitch(s=>{ s.labelMode=m; }); };
+  onFcCat = (e) => { const w=e.currentTarget.dataset.fcact, cat=e.currentTarget.dataset.cat, c=this.fcCat(cat), f=(c.fns&&c.fns[0])?c.fns[0].id:null; this.fcWriteSwitch(s=>{ s[w]=this.fcAct(cat,f); }); };
+  onFcFn = (e) => this.fcSetAct(e.currentTarget.dataset.fcact, { fn:e.currentTarget.dataset.fn });
+  onFcScene = (e) => this.fcSetAct(e.currentTarget.dataset.fcact, { scene:+e.currentTarget.dataset.scene });
+  onFcChannel = (e) => this.fcSetAct(e.currentTarget.dataset.fcact, { channel:e.currentTarget.dataset.ch });
+  onFcBlock = (e) => this.fcSetAct(e.currentTarget.dataset.fcact, { block:e.currentTarget.dataset.block });
+  onFcLayoutTo = (e) => this.fcSetAct(e.currentTarget.dataset.fcact, { layoutTo:+e.currentTarget.dataset.lto });
+  onFcWrap = (e) => { const w=e.currentTarget.dataset.fcact; this.fcWriteSwitch(s=>{ s[w]=Object.assign({},s[w],{wrap:!s[w].wrap}); }); };
+  onFcPreset = (e) => { const w=e.currentTarget.dataset.fcact, d=+e.currentTarget.dataset.d; this.fcWriteSwitch(s=>{ s[w]=Object.assign({},s[w],{preset:this.clamp((s[w].preset||0)+d,0,511)}); }); };
+  onFcLimit = (e) => { const w=e.currentTarget.dataset.fcact, k=e.currentTarget.dataset.lim, d=+e.currentTarget.dataset.d; this.fcWriteSwitch(s=>{ s[w]=Object.assign({},s[w],{[k]:this.clamp((s[w][k]||0)+d,0,127)}); }); };
+
+  fcChip(active,col){ return { display:"flex", alignItems:"center", justifyContent:"center", gap:6, height:34, padding:"0 13px", borderRadius:9, cursor:"pointer", fontSize:12.5, fontWeight:600, whiteSpace:"nowrap", color:active?"#06181a":"#b8b8c0", background:active?(col||"#35c9d6"):"#16161b", border:"1px solid "+(active?(col||"#35c9d6"):"#2a2a31") }; }
+  fcMini(active){ return { width:34, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"700 13px/1 'JetBrains Mono'", color:active?"#06181a":"#b8b8c0", background:active?"#35c9d6":"#16161b", border:"1px solid "+(active?"#35c9d6":"#2a2a31") }; }
+  fcStep(){ return { width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"600 13px/1 'JetBrains Mono'", color:"#cfcfd6", background:"#16161b", border:"1px solid #2a2a31" }; }
+  fcActionView(which,a){
+    const ACC="#35c9d6", cat=this.fcCat(a.cat), fObj=this.fcFn(a.cat,a.fn), pp=(fObj&&fObj.params)||[];
+    return {
+      which, title:which==="tap"?"TAP":"HOLD", dotColor:which==="tap"?ACC:"#f5a623", summary:this.fcSummary(a), stepStyle:this.fcStep(),
+      cats:this.FC_CATS.map(c=>({ id:c.id, label:c.label, style:this.fcChip(c.id===a.cat,c.color) })),
+      showFns:(cat.fns||[]).length>0,
+      fns:(cat.fns||[]).map(f=>({ id:f.id, label:f.label, style:this.fcChip(f.id===a.fn,ACC) })),
+      showPreset:pp.indexOf("preset")>=0, presetVal:a.preset||0,
+      showScene:pp.indexOf("scene")>=0, sceneChips:[1,2,3,4,5,6,7,8].map(n=>({ n, style:this.fcMini(a.scene===n) })),
+      showWrap:pp.indexOf("wrap")>=0, wrapOn:!!a.wrap,
+      wrapStyle:{ width:42, height:24, flex:"none", borderRadius:13, cursor:"pointer", background:a.wrap?ACC:"#2a2a31", position:"relative", transition:"background .15s" },
+      wrapDotStyle:{ position:"absolute", top:3, left:a.wrap?21:3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .15s" },
+      showChannel:pp.indexOf("channel")>=0, chanChips:["A","B","C","D"].map(ch=>({ ch, style:this.fcMini(a.channel===ch) })),
+      showBlock:pp.indexOf("block")>=0, blockChips:this.FC_BLOCKS.map(b=>({ b, style:this.fcChip(a.block===b,ACC) })),
+      showLimits:pp.indexOf("limits")>=0, lo:a.lo||0, hi:a.hi||0,
+      showLayoutTo:pp.indexOf("layout")>=0, layoutChips:this.state.fcLayouts.map((L,i)=>({ i, name:L.name||("L"+(i+1)), style:this.fcChip(a.layoutTo===i,ACC) })),
+      hasParams:pp.length>0
+    };
+  }
+  fcView(mob){
+    const S=this.state, ACC="#35c9d6";
+    const layouts=S.fcLayouts, li=this.clamp(S.fcLayout,0,layouts.length-1), L=layouts[li];
+    const count=this.fcDeviceCount(S.fcDevice), si=this.clamp(S.fcSwitch,0,count-1), sw=L.switches[si];
+    const devices=["FM3","FC-6","FC-12"].map(d=>({ id:d, label:d, style:{ height:28, padding:"0 13px", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, background:S.fcDevice===d?ACC:"transparent", color:S.fcDevice===d?"#06181a":"#8a8a93" } }));
+    const layoutItems=layouts.map((Ly,i)=>{ const active=i===li, used=Ly.switches.filter(s=>s.tap.cat!=="none"||s.hold.cat!=="none").length;
+      return { i, name:Ly.name||("LAYOUT "+(i+1)), count:used+" assigned",
+        style:{ display:"flex", flexDirection:"column", gap:3, padding:"8px 14px", borderRadius:10, cursor:"pointer", minWidth:118, flex:"none", background:active?"rgba(53,201,214,.12)":"#121215", border:"1px solid "+(active?"rgba(53,201,214,.45)":"#1e1e24") },
+        nameStyle:{ font:"700 12.5px/1.1 'JetBrains Mono'", color:active?"#9fe9f0":"#cfcfd6", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" },
+        subStyle:{ font:"600 9px/1 'JetBrains Mono'", color:active?"#5fbac4":"#6e6e78", letterSpacing:".04em" } }; });
+    const boardCols=S.fcDevice==="FM3"?3:(S.fcDevice==="FC-6"?3:6);
+    const board=[]; for(let i=0;i<count;i++){ const s=L.switches[i], selected=i===si, empty=s.tap.cat==="none"&&s.hold.cat==="none";
+      const col=s.color||this.fcCat(s.tap.cat).color||"#5a5a62";
+      const lbl = s.labelMode==="custom" ? (s.custom||"—") : (s.labelMode==="action" ? this.fcAutoLabel(s.tap) : (s.label|| this.fcAutoLabel(s.tap)));
+      board.push({ i, num:i+1, label:lbl, empty, selected,
+        tapText:this.fcAutoLabel(s.tap), holdText:this.fcAutoLabel(s.hold),
+        tileStyle:{ position:"relative", display:"flex", flexDirection:"column", gap:5, minHeight:112, padding:"15px 13px 12px", borderRadius:14, cursor:"pointer", userSelect:"none", background:empty?"#0f0f12":"linear-gradient(180deg,#181820,#121217)", border:"1px solid "+(selected?ACC:(empty?"#1c1c22":"#28282f")), boxShadow:selected?("0 0 0 1px "+ACC+", 0 8px 26px rgba(53,201,214,.18)"):"0 2px 10px rgba(0,0,0,.35)", overflow:"hidden", transition:"border-color .12s, box-shadow .12s" },
+        ledStyle:{ position:"absolute", top:0, left:0, right:0, height:5, background:empty?"#26262c":col, boxShadow:empty?"none":"0 0 12px "+col, opacity:empty?0.6:1 },
+        numStyle:{ position:"absolute", top:11, right:11, width:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:6, font:"700 10px/1 'JetBrains Mono'", color:"#6e6e78", background:"rgba(12,12,14,.7)", border:"1px solid #26262c" },
+        labelStyle:{ font:"700 13.5px/1.2 "+(empty?"'JetBrains Mono'":"'Hanken Grotesk',sans-serif"), color:empty?"#45454e":"#fff", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", wordBreak:"normal", overflowWrap:"normal", paddingRight:20 },
+        tapRowStyle:{ display:"flex", alignItems:"center", gap:7 },
+        tapBadgeStyle:{ flex:"none", width:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:4, font:"700 8px/1 'JetBrains Mono'", color:"#0a191a", background:"#35c9d6" },
+        holdBadgeStyle:{ flex:"none", width:16, height:16, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:4, font:"700 8px/1 'JetBrains Mono'", color:"#1c1206", background:"#f5a623" },
+        tapTextStyle:{ font:"600 11px/1.2 'JetBrains Mono'", color:"#c3c3cb", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" },
+        holdTextStyle:{ font:"600 11px/1.2 'JetBrains Mono'", color:"#7e7e88", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" } }); }
+    const colorList=this.FC_COLORS.map(c=>({ c, style:{ width:28, height:28, borderRadius:8, cursor:"pointer", background:c, border:(sw.color===c)?"2px solid #fff":"2px solid transparent", boxShadow:(sw.color===c)?"0 0 0 2px "+ACC:"none" } }));
+    const labelModes=[{id:"auto",label:"Name"},{id:"action",label:"Action"},{id:"custom",label:"Custom"}].map(m=>({ id:m.id, label:m.label, style:{ flex:1, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, background:sw.labelMode===m.id?ACC:"transparent", color:sw.labelMode===m.id?"#06181a":"#8a8a93" } }));
+    const inspShow = !mob || S.fcInspOpen;
+    const dockH = this.clamp(Math.round((S.vh||760)*0.42), 228, 330);
+    return {
+      isMobile:mob, desktop:!mob, devices, onDevice:this.onFcDevice,
+      layoutName:L.name||("LAYOUT "+(li+1)), onLayoutName:this.onFcLayoutName,
+      onAddLayout:this.onFcAddLayout, onDupLayout:this.onFcDupLayout, onDelLayout:this.onFcDelLayout,
+      layoutItems, onLayout:this.onFcLayout,
+      deviceNote:count+" switch"+(count===1?"":"es")+" · "+S.fcDevice,
+      board, onSwitch:this.onFcSwitch,
+      boardGridStyle:{ display:"grid", gridTemplateColumns:"repeat("+boardCols+",1fr)", gap:mob?10:14, maxWidth:boardCols<=3?620:1060, margin:"0 auto", width:"100%" },
+      bodyStyle:{ flex:1, minHeight:0, display:"flex", flexDirection:mob?"column":"row" },
+      stripStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"11px 14px", borderBottom:"1px solid #1c1c22", overflowX:"auto" },
+      barStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"10px 18px", borderTop:"1px solid #1c1c22", background:"#0b0b0d", overflowX:"auto" },
+      boardStyle:{ flex:1, minWidth:0, overflowY:"auto", padding:mob?"16px 14px 24px":"16px 20px 20px" },
+      inspShow,
+      inspStyle: mob ? { position:"fixed", left:0, right:0, bottom:0, maxHeight:"84vh", display:"flex", flexDirection:"column", background:"linear-gradient(180deg,#141417,#0e0e11)", borderTop:"1px solid #26262c", borderTopLeftRadius:20, borderTopRightRadius:20, boxShadow:"0 -10px 44px rgba(0,0,0,.55)", zIndex:160, animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
+                     : { flex:"none", height:dockH, display:"flex", flexDirection:"column", borderTop:"1px solid #1c1c22", background:"#0d0d10" },
+      inspBodyStyle: mob ? { flex:1, minHeight:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:18, padding:"16px 18px 26px" }
+                         : { flex:1, minHeight:0, display:"flex" },
+      identityStyle: mob ? { display:"flex", flexDirection:"column", gap:16 }
+                         : { width:266, flex:"none", overflowY:"auto", padding:"16px 18px", borderRight:"1px solid #18181f", display:"flex", flexDirection:"column", gap:18 },
+      scrimStyle: mob ? { position:"fixed", inset:0, background:"rgba(6,6,8,.55)", backdropFilter:"blur(2px)", zIndex:159, animation:"axsOverlay .14s ease" } : null,
+      onCloseInsp:this.onFcCloseInsp,
+      sw:{ index:si, num:si+1, label:sw.label, placeholder:this.fcAutoLabel(sw.tap), custom:sw.custom,
+           labelMode:sw.labelMode, labelModes, showCustom:sw.labelMode==="custom",
+           colorList, onColor:this.onFcColor, onLabel:this.onFcLabel, onLabelMode:this.onFcLabelMode, onCustom:this.onFcCustom,
+           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:"#0e0e10", border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:13, borderRight: idx===0?"1px solid #18181f":"none" }; return a; }) },
+      onCat:this.onFcCat, onFn:this.onFcFn, onScene:this.onFcScene, onChannel:this.onFcChannel, onBlock:this.onFcBlock,
+      onLayoutTo:this.onFcLayoutTo, onWrap:this.onFcWrap, onPreset:this.onFcPreset, onLimit:this.onFcLimit
+    };
+  }
+
   renderVals(){
     const S=this.state, mob=this.isMobile(), sel=S.grid[S.selected];
+    const isFc=(S.railActive==="fc"), isBuild=!isFc, fc=this.fcView(mob);
     const showFull=!mob;
 
     // topbar (slim single row)
     const topbarStyle={ display:"flex", alignItems:"center", gap:mob?8:12, padding:mob?"0 12px":"0 16px", height:60, background:"linear-gradient(180deg,#141416,#0f0f12)", borderBottom:"1px solid #1d1d22", flex:"none", overflowX:"hidden", overflowY:"hidden" };
-    const addBtnStyle={ display:"flex", alignItems:"center", gap:9, height:38, padding:"0 14px 0 13px", background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:10, color:"#bfeef2", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
-    const saveBtnStyle={ display:"flex", alignItems:"center", gap:8, height:38, padding:mob?"0 13px":"0 15px", background:"#241a12", border:"1px solid #5a3f1f", borderRadius:9, color:"#f5c878", fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
+    const addBtnStyle=mob
+      ? { display:"flex", alignItems:"center", justifyContent:"center", width:42, height:42, padding:0, background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:11, color:"#bfeef2", cursor:"pointer", flex:"none" }
+      : { display:"flex", alignItems:"center", gap:9, height:38, padding:"0 14px 0 13px", background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:10, color:"#bfeef2", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
+    const saveBtnStyle=mob
+      ? { display:"flex", alignItems:"center", justifyContent:"center", width:42, height:42, padding:0, background:"#241a12", border:"1px solid #5a3f1f", borderRadius:11, color:"#f5c878", cursor:"pointer", flex:"none" }
+      : { display:"flex", alignItems:"center", gap:8, height:38, padding:"0 15px", background:"#241a12", border:"1px solid #5a3f1f", borderRadius:9, color:"#f5c878", fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
 
     const RAIL=[ {id:"build",label:"Build",short:"Grid",icon:"▦"}, {id:"controllers",label:"Controllers",short:"Ctrl",icon:"⊜"}, {id:"fc",label:"Footswitches",short:"FC",icon:"⬚"}, {id:"scenes",label:"Scene Mgr",short:"Scn",icon:"❏"}, {id:"perform",label:"Perform",short:"Live",icon:"▷"}, {id:"sets",label:"Sets & Songs",short:"Sets",icon:"≣"}, {id:"settings",label:"Settings",short:"Setup",icon:"⚙"} ];
     const railItems=RAIL.map(r=>{ const act=(S.railActive||"build")===r.id; return { id:r.id, label:r.label, short:r.short, icon:r.icon, style:{ width:52, height:50, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, borderRadius:12, cursor:"pointer", color:act?"#35c9d6":"#6e6e78", background:act?"rgba(53,201,214,.12)":"transparent", border:"1px solid "+(act?"rgba(53,201,214,.3)":"transparent") } }; });
@@ -1119,12 +1642,20 @@ class Component extends DCLogic {
     const cpu=38, cpuColor=cpu>80?"#d6543f":(cpu>60?"#f5a623":"#33c46b");
     const gmStyle=(active)=>({ flex:"none", height:26, padding:"0 11px", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, background:active?"#35c9d6":"transparent", color:active?"#06181a":"#8a8a93" });
     const globalModes=[{id:"basic",label:"Basic"},{id:"advanced",label:"Advanced"}].map(g=>({ id:g.id, label:g.label, style:gmStyle((S.globalMode||"basic")===g.id) }));
+    const drawerNav=RAIL.map(r=>{ const act=(S.railActive||"build")===r.id; return { id:r.id, label:r.label, icon:r.icon, style:{ display:"flex", alignItems:"center", gap:13, height:46, padding:"0 13px", borderRadius:11, cursor:"pointer", color:act?"#35c9d6":"#9a9aa3", background:act?"rgba(53,201,214,.1)":"transparent", border:"1px solid "+(act?"rgba(53,201,214,.28)":"transparent") } }; });
+    const drawerScenes=[1,2,3,4,5,6,7,8].map(n=>({ n, style:{ height:38, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, fontFamily:"'JetBrains Mono',monospace", fontSize:13, fontWeight:700, cursor:"pointer", background:n===(S.scene||1)?"#35c9d6":"#141417", color:n===(S.scene||1)?"#06181a":"#9a9aa3", border:"1px solid "+(n===(S.scene||1)?"#35c9d6":"#26262c") } }));
+    const dmStyle=(active)=>({ flex:1, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, background:active?"#35c9d6":"transparent", color:active?"#06181a":"#8a8a93" });
+    const drawerModes=[{id:"basic",label:"Basic"},{id:"advanced",label:"Advanced"}].map(g=>({ id:g.id, label:g.label, style:dmStyle((S.globalMode||"basic")===g.id) }));
 
     // grid + routing
-    const gap=mob?16:26;
-    const colW=mob?Math.max(74,Math.floor((S.vw-24-3*gap)/4)):0;
-    const pageCount=3, page=Math.min(S.page||0,pageCount-1);
-    const pageShift=4*(colW+gap);
+    const visCols = mob ? this.clamp(S.mobCols||4, 3, 12) : 12;
+    const gap = mob ? (visCols<=4?16:visCols<=6?12:visCols<=8?9:6) : 26;
+    const colW = mob ? Math.max(20, Math.floor(((S.vw||360)-24-(visCols-1)*gap)/visCols)) : 0;
+    const pageCount = mob ? Math.ceil(12/visCols) : 1;
+    const page = this.clamp(S.page||0, 0, pageCount-1);
+    const pageShift = visCols*(colW+gap);
+    const denseGrid = mob && visCols>6;  // blocks too small for per-block param swipe — disable it
+    this._dense = denseGrid;
     const gridScrollStyle=mob
       ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" }
       : { flex:1, minHeight:0, overflow:"auto", padding:"26px 22px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" };
@@ -1132,7 +1663,10 @@ class Component extends DCLogic {
       ? { position:"relative", width:(12*colW+11*gap)+"px", transform:"translateX("+(-page*pageShift)+"px)", transition:"transform .26s cubic-bezier(.3,.8,.3,1)" }
       : { position:"relative", width:"100%", maxWidth:1680, margin:"0 auto" };
     const gridStyle={ display:"grid", gridTemplateColumns:mob?("repeat(12, "+colW+"px)"):"repeat(12, minmax(72px,1fr))", gap, width:"100%", position:"relative", zIndex:1, pointerEvents:"none" };
-    const pager={ show:mob, page, count:pageCount, prevDisabled:page<=0, nextDisabled:page>=pageCount-1, dots:[0,1,2].map(i=>({ style:{ width:i===page?20:7, height:7, borderRadius:4, background:i===page?"#35c9d6":"#2e2e36", transition:"all .2s", cursor:"pointer" }, i })), rangeLabel:"Cols "+(page*4+1)+"–"+(page*4+4) };
+    const stepStyle=(dis)=>({ width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:dis?"default":"pointer", fontSize:19, fontWeight:600, color:dis?"#3a3a44":"#cfcfd6", background:dis?"transparent":"#1c1c21" });
+    const pager={ show:mob, multi:pageCount>1, cols:visCols, lessStyle:stepStyle(visCols<=3), moreStyle:stepStyle(visCols>=12),
+      dots:Array.from({length:pageCount},(v,i)=>({ i, style:{ width:i===page?20:7, height:7, borderRadius:4, background:i===page?"#35c9d6":"#2e2e36", transition:"all .2s", cursor:"pointer" } })),
+      hint: pageCount>1 ? "Swipe to pan \u00b7 pinch to zoom" : "Pinch to fit more" };
 
     const cells=S.grid.map((c,idx)=>{
       const col=idx%12, selected=idx===S.selected;
@@ -1151,7 +1685,7 @@ class Component extends DCLogic {
       const adjusting=!!(S.adjust && S.adjust.idx===idx);
       const fillStyle={ position:"absolute", left:0, right:0, bottom:0, height:fillPct+"%", background:"linear-gradient(180deg,"+this.shade(a,0.35)+","+a+")", opacity:adjusting?1:0.78, borderTop:"2px solid rgba(255,255,255,.7)", pointerEvents:"none", transition:"height .05s linear" };
       const dots=qcl.map((l,i)=>({ style:{ width:i===qi?11:4, height:4, borderRadius:3, background:i===qi?"#fff":"rgba(255,255,255,.32)", transition:"width .12s ease, background .12s ease" } }));
-      return { idx, isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:c.catId==="amp", channel:c.channel, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
+      return { idx, isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:c.catId==="amp", channel:c.channel, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1 && !denseGrid, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
     });
 
     // cables
@@ -1230,7 +1764,11 @@ class Component extends DCLogic {
     const ie=S.ieq;
     const ip=this.buildPath((f)=>this.inputMag(f),18);
     const ieqTypes=["Lowshelf","Peaking","Highshelf","Tilt EQ"];
+    // responsive graph sizing — cap the plot height to the panel and center it (keeps 1000:300 aspect → round handles + aligned axis labels)
+    const gH=this.clamp((edH||380)*0.5,150,300);
+    const gCardMaxW=Math.round(gH*(1000/300))+26;
     const ieq={
+      cardStyle:{ position:"relative", background:"#0a0a0c", border:"1px solid #232329", borderRadius:12, padding:"10px 12px 4px", maxWidth:gCardMaxW+"px", margin:"0 auto" },
       curvePath:ip.cur, fillPath:ip.fill,
       bx:this.fToX(ie.freq).toFixed(1), by:this.dbToY(this.clamp(ie.gain,-18,18),18).toFixed(1),
       lowX:this.fToX(ie.lowCut).toFixed(1), highX:this.fToX(ie.highCut).toFixed(1),
@@ -1247,6 +1785,7 @@ class Component extends DCLogic {
     const op=this.buildPath((f)=>this.outputMag(f),12);
     const oeqTypes=["Graphic 8-Band","Console 3-Band"];
     const oeq={
+      cardStyle:{ background:"#0a0a0c", border:"1px solid #232329", borderRadius:12, padding:"10px 12px 4px", maxWidth:gCardMaxW+"px", margin:"0 auto" },
       curvePath:op.cur, fillPath:op.fill,
       nodes:this.OF.map((f,bi)=>({ bi, x:this.fToX(f).toFixed(1), y:this.dbToY(oe.on?oe.bands[bi]:0,12).toFixed(1), freq:f })),
       labels:["62","125","250","500","1k","2k","4k","8k"],
@@ -1313,11 +1852,14 @@ class Component extends DCLogic {
 
     return {
       showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
+      isBuild, isFc, fc,
+      drawerOpen:S.drawerOpen, toggleDrawer:this.toggleDrawer, closeDrawer:this.closeDrawer, drawerNav, drawerScenes, drawerModes,
       scenes, onScene:this.onScene, bpm:S.bpm, cpuText:cpu+"%", cpuTextStyle:{font:"700 11px/1 'JetBrains Mono'",color:cpuColor}, cpuBarStyle:{ width:cpu+"%", height:"100%", background:cpuColor, borderRadius:3 },
       globalModes, onGlobalMode:this.onGlobalMode, onTuner:this.onTuner, onTap:this.onTap, showCrumb:showFull && !S.editorOpen,
       onPresetPrev:this.onPresetPrev, onPresetNext:this.onPresetNext, onPresetPick:this.onPresetPick,
       openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
       gridScrollStyle, gridInnerStyle, gridStyle, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
+      onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
       onCellClick:this.onCellClick,

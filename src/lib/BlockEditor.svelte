@@ -19,6 +19,15 @@
 
   const CHAN = ['A', 'B', 'C', 'D'];
 
+  // Compact knob readout: device-true value + unit where known, else the 0..10 position.
+  function fmtVal(p: { value?: number; unit?: string }): string {
+    const v = p.value ?? 0;
+    if (p.unit === 'Hz') return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(v));
+    if (p.unit === '%') return Math.round(v) + '%';
+    const r = Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
+    return p.unit ? `${r}${p.unit === '°' ? '°' : ''}` : r;
+  }
+
   // ── docked resize (desktop) ──
   let resizing = false;
   function resizeDown(e: PointerEvent) {
@@ -112,7 +121,7 @@
               <Knob
                 value={p.norm ?? 0}
                 label={p.name}
-                valueText={((p.norm ?? 0) * 10).toFixed(1)}
+                valueText={fmtVal(p)}
                 color={cat.accent}
                 onInput={(v) => editor.setParam(p, v)}
               />
