@@ -12,8 +12,13 @@
   ];
 
   function pick(id: string, label: string) {
-    editor.railActive = id;
-    if (id !== 'build') editor.showToast(label + ' — coming soon', '#35c9d6');
+    // only 'build' (the grid) is implemented — the rest stay un-highlighted and just announce WIP,
+    // so the rail never shows an active screen that isn't there.
+    if (id === 'build') {
+      editor.railActive = id;
+      return;
+    }
+    editor.showToast(label + ' — coming soon', '#35c9d6');
   }
 
   const dot = $derived(
@@ -114,5 +119,14 @@
   .fw {
     font-size: 8px;
     color: #4a4a52;
+  }
+  /* phones: slim icon-only rail to reclaim width */
+  @media (max-width: 760px) {
+    .rail {
+      width: 46px;
+    }
+    .item .sh {
+      display: none;
+    }
   }
 </style>

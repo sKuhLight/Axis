@@ -6,6 +6,7 @@
   import { editor } from './editor.svelte';
   import EQGraph, { type EQBand } from './EQGraph.svelte';
   import { fmtCompact, normFromValue } from './format';
+  import { idealIds } from './layouts';
   import type { NamedParam, EnumParam } from './types';
 
   let {
@@ -65,15 +66,23 @@
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
 
   const isMobile = $derived(vw < 760);
-  const cell = $derived(Math.max(isMobile ? 42 : 48, Math.min(230, Math.floor((containerW - (cols - 1) * GAP) / cols))));
-  const effCompact = $derived(compact || isMobile);
   const board = $derived(bySlug[slug]);
   const widgets = $derived(board ? (board.boards[board.page] ?? []) : []);
   const onPage = $derived(new Set(widgets.map((w) => w.key)));
   const tray = $derived(catalog.filter((c) => !onPage.has(c.key)));
 
+  // Display grid: on a phone the saved (wide) layout is re-packed into however many columns
+  // actually fit the width — so controls reflow & stay legible instead of overflowing sideways.
+  // Desktop renders the real layout (cols), with the cell sized to fill the width.
+  const fitCols = $derived(Math.max(2, Math.floor((containerW + GAP) / (76 + GAP))));
+  const displayCols = $derived(isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : cols);
+  const cell = $derived(clamp(Math.floor((containerW - (displayCols - 1) * GAP) / displayCols), isMobile ? 60 : 48, 230));
+  const viewWidgets = $derived(isMobile ? packInto(widgets, displayCols, 256) : widgets);
+  const viewRows = $derived(isMobile ? Math.max(1, ...viewWidgets.map((w) => w.y + w.h)) : rows);
+  const effCompact = $derived(compact || isMobile);
+
   // persisted global grid prefs
-  const GKEY = 'axs.surface.grid';
+  const GKEY = 'axs.surface2.grid';
   function loadGrid() {
     try {
       const j = JSON.parse(localStorage.getItem(GKEY) || 'null');
@@ -95,7 +104,7 @@
       /* */
     }
   }
-  const sKey = (s: string) => `axs.surface.${s}`;
+  const sKey = (s: string) => `axs.surface2.${s}`;
   function saveBoard(s: string) {
     if (!s || !bySlug[s]) return;
     try {
@@ -109,10 +118,20 @@
     return Math.max(a, Math.min(b, v));
   }
 
-  // build a default board: every catalog control auto-packed onto one page
+  // Default board: a curated "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an
+  // "Advanced" page with everything else — instead of dumping every parameter on one wall.
   function defaultBoard(): Board {
-    const list: Widget[] = catalog.map((c) => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view }));
-    return { pageOrder: ['Main'], page: 'Main', boards: { Main: packList(list) } };
+    const ideal = new Set(idealIds(editor.params));
+    const mk = (c: Ctl): Widget => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view });
+    const main = catalog.filter((c) => c.key === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
+    const rest = catalog.filter((c) => !main.includes(c));
+    const boards: Record<string, Widget[]> = { Main: packList(main.map(mk)) };
+    const pageOrder = ['Main'];
+    if (rest.length) {
+      boards.Advanced = packList(rest.map(mk));
+      pageOrder.push('Advanced');
+    }
+    return { pageOrder, page: 'Main', boards };
   }
   // reconcile a saved board against the current catalog (drop vanished controls, clamp sizes)
   function reconcile(b: Board): Board {
@@ -143,6 +162,11 @@
       b = existing ? reconcile(existing) : defaultBoard();
     }
     bySlug = { ...bySlug, [slug]: b };
+  });
+
+  // arrange is a desktop affordance — never leave it on when we drop to the phone layout
+  $effect(() => {
+    if (isMobile && editMode) editMode = false;
   });
 
   // viewport + container measurement
@@ -211,20 +235,27 @@
     for (let y = 0; y <= rows - h; y++) for (let x = 0; x <= cols - w; x++) if (fits(m, x, y, w, h)) return { x, y };
     return null;
   }
-  function packList(list: Widget[]) {
-    const m = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  // gravity-pack a list into a c×r grid (used for the arrange board AND the mobile reflow)
+  function packInto(list: Widget[], c: number, r: number) {
+    const m = Array.from({ length: r }, () => new Array(c).fill(false));
+    const fit = (x: number, y: number, w: number, h: number) => {
+      if (x < 0 || y < 0 || x + w > c || y + h > r) return false;
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (m[j][i]) return false;
+      return true;
+    };
     const out: Widget[] = [];
     for (const w of list.slice().sort((a, b) => a.y - b.y || a.x - b.x)) {
-      const pw = Math.min(w.w, cols),
-        ph = Math.min(w.h, rows);
+      const pw = Math.min(w.w, c),
+        ph = Math.min(w.h, r);
       let pos: { x: number; y: number } | null = null;
-      for (let y = 0; y <= rows - ph && !pos; y++) for (let x = 0; x <= cols - pw && !pos; x++) if (fits(m, x, y, pw, ph)) pos = { x, y };
+      for (let y = 0; y <= r - ph && !pos; y++) for (let x = 0; x <= c - pw && !pos; x++) if (fit(x, y, pw, ph)) pos = { x, y };
       if (!pos) pos = { x: 0, y: 0 };
       for (let j = pos.y; j < pos.y + ph; j++) for (let i = pos.x; i < pos.x + pw; i++) if (m[j]) m[j][i] = true;
       out.push({ ...w, x: pos.x, y: pos.y, w: pw, h: ph });
     }
     return out;
   }
+  const packList = (list: Widget[]) => packInto(list, cols, rows);
 
   // ── arrange-mode actions ──
   const toggleEdit = () => {
@@ -321,7 +352,12 @@
   // a widget's pixel footprint + the knob dial size that fits it (reserves room for the label)
   const pxOf = (n: number) => n * cell + (n - 1) * GAP;
   const dialFor = (w: Widget) => clamp(Math.round(Math.min(pxOf(w.w), pxOf(w.h) - 26) * 0.74), 28, 220);
-  const valFont = (d: number) => Math.max(10, Math.round(d * 0.22));
+  // knob-face value font: scales with dial size, and shrinks for long readouts (30000, -60.0)
+  // so they don't overflow the inner circle.
+  const valFont = (d: number, len = 2) => {
+    const base = Math.max(10, Math.round(d * 0.22));
+    return len <= 3 ? base : Math.max(9, Math.round(base * (3.2 / len) + 1));
+  };
 
   // move a widget to an adjacent page (drag to the left/right edge of the board)
   function migrateWidget(id: string, dir: number) {
@@ -537,9 +573,11 @@
     <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
   {/if}
   <span class="tab-sp"></span>
-  <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
-    <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
-  </button>
+  {#if !isMobile}
+    <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
+      <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
+    </button>
+  {/if}
 </div>
 
 <!-- arrange toolbar -->
@@ -558,19 +596,19 @@
 <!-- board -->
 <div class="content scroll" bind:this={containerEl}>
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{cols * cell + (cols - 1) * GAP}px" style:height="{rows * cell + (rows - 1) * GAP}px">
+  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{displayCols * cell + (displayCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
     {#if editMode}
       <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
         {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
       </div>
     {/if}
 
-    <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
+    <div class="gridlayer" style:grid-template-columns="repeat({displayCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
       {#if drag}
         <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
       {/if}
 
-      {#each widgets as w (w.id)}
+      {#each viewWidgets as w (w.id)}
         {@const c = catByKey.get(w.key)}
         {#if c}
           <div style:grid-column="{w.x + 1} / span {w.w}" style:grid-row="{w.y + 1} / span {w.h}" style:min-width="0" style:min-height="0" style:position="relative">
@@ -595,7 +633,7 @@
                     <input id="cs-input" class="kinput" style:font-size="{valFont(d)}px" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
                   {:else}
                     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-                    <div class="kval" style:font-size="{valFont(d)}px" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+                    <div class="kval" style:font-size="{valFont(d, valText(c.id).length)}px" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
                   {/if}
                 </div>
                 <div class="lbl">{c.label}</div>
@@ -914,6 +952,9 @@
   .card.editing {
     cursor: grab;
     border-color: #2c2c34;
+    /* reserve the top + bottom bands so the ✕ / type-chip / ⚡ / resize don't sit on the label */
+    padding-top: 22px;
+    padding-bottom: 26px;
   }
   /* in arrange mode the whole tile is grabbable — the controls don't intercept the pointer,
      only the chrome buttons (remove / retype / resize) stay interactive */

@@ -471,4 +471,13 @@
     font-size: 13px;
     line-height: 1.5;
   }
+  .foot {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid #232329;
+    font-size: 10px;
+    color: var(--text-faint);
+    flex: none;
+  }
 </style>

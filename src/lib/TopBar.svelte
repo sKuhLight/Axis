@@ -40,6 +40,12 @@
         {/each}
       </div>
     </div>
+
+    {#if editor.isMobile}
+      <!-- tuner + tap-tempo live here on mobile (the desktop status strip is hidden) -->
+      <button class="mbtn" class:on={editor.tuner.active} onclick={() => editor.toggleTuner()} title="Tuner">♪ {editor.tuner.active ? (editor.tuner.note ?? '…') : 'Tune'}</button>
+      <button class="mbtn" onclick={() => editor.tapTempo()} title="Tap tempo">{editor.bpm}<span class="mono"> BPM</span></button>
+    {/if}
   </div>
 
   <!-- right region (always visible) -->
@@ -232,6 +238,26 @@
   .scn.on {
     background: var(--accent);
     color: var(--accent-ink);
+  }
+
+  /* mobile tuner / tempo buttons (desktop status strip is hidden on phones) */
+  .mbtn {
+    flex: none;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 8px;
+    border: 1px solid var(--surface-3);
+    background: var(--panel-2);
+    color: #cfcfd6;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .mbtn.on {
+    background: rgba(53, 201, 214, 0.16);
+    border-color: #2c4a4b;
+    color: var(--accent);
   }
 
   /* view switch */

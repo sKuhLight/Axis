@@ -27,14 +27,23 @@ function priority(label: string): number {
   return IDEAL_PRIORITY.length;
 }
 
-/** Heuristic "Ideal" set: highest-priority knobs first, capped, stable by device order. */
+/** Heuristic "Ideal" set: highest-priority knobs, but at most one per keyword bucket on the first
+ * pass so we get variety (one Gain, one Drive, then Bass/Mid/Treble…) instead of four Gains. */
 export function idealIds(params: NamedParam[]): number[] {
-  return params
+  const scored = params
     .filter((p) => p.id != null)
-    .map((p, idx) => ({ id: p.id as number, score: priority(p.name), idx }))
-    .sort((a, b) => a.score - b.score || a.idx - b.idx)
-    .slice(0, IDEAL_MAX)
-    .map((s) => s.id);
+    .map((p, idx) => ({ id: p.id as number, k: priority(p.name), idx }))
+    .sort((a, b) => a.k - b.k || a.idx - b.idx);
+  const first: typeof scored = [];
+  const rest: typeof scored = [];
+  const seen = new Map<number, number>();
+  for (const s of scored) {
+    const n = seen.get(s.k) ?? 0;
+    seen.set(s.k, n + 1);
+    if (n === 0 && s.k < IDEAL_PRIORITY.length) first.push(s);
+    else rest.push(s);
+  }
+  return [...first, ...rest].slice(0, IDEAL_MAX).map((s) => s.id);
 }
 
 /** Build the editor's tab list for an open block: [Ideal, Advanced, ...custom].
