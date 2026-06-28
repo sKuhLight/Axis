@@ -63,7 +63,9 @@
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
   let renamingPage = $state<string | null>(null);
-  let tipKey = $state<string | null>(null); // widget whose value bubble is shown (hover / tap / adjust)
+  // value bubble: a single fixed-position tooltip (escapes the editor's scroll clipping + stays on top)
+  let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
+  let dragging = $state(false);
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
 
   const isMobile = $derived(vw < 760);
@@ -355,6 +357,27 @@
   // the value lives in the hover/tap bubble now, so the dial fills the tile — but leave room for the
   // card padding (16) + gap (5) + the label (~16) so the label never clips.
   const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxOf(w.h) - 38), 30, 260);
+  // anchor the value bubble above an element (knob/card), in screen coords (fixed-position)
+  function showTip(el: HTMLElement, id: number, edit: boolean) {
+    const r = el.getBoundingClientRect();
+    tip = { id, cx: r.left + r.width / 2, cy: r.top, edit };
+    if (edit) {
+      editBuf = valText(id);
+      setTimeout(() => {
+        const i = document.getElementById('cs-input') as HTMLInputElement | null;
+        i?.focus();
+        i?.select();
+      }, 0);
+    }
+  }
+  function commitTip() {
+    if (tip) {
+      const p = knob(tip.id);
+      const n = parseFloat(editBuf);
+      if (p && !isNaN(n)) setNorm(tip.id, p.min != null && p.max != null ? normFromValue(n, p) : clamp(n / 100, 0, 1));
+    }
+    tip = null;
+  }
   // full, readable value for the bubble — with units (4.0 dB, 470 Hz, 12 kHz, 63%)
   const fullVal = (id: number): string => {
     const p = knob(id);
@@ -410,7 +433,8 @@
     }
     if (kind === 'cont') {
       vd = { id: pid, sy: e.clientY, sn: knob(pid)?.norm ?? 0 };
-      tipKey = key; // surface the value bubble while adjusting / on tap
+      dragging = true; // keep the value bubble alive for the whole adjust, even if the cursor leaves
+      showTip(e.currentTarget as HTMLElement, pid, false);
       e.stopPropagation();
     }
   }
@@ -433,7 +457,7 @@
   }
   function onBoardDown(e: PointerEvent) {
     if (editMode) return;
-    tipKey = null; // tapping empty board dismisses any value bubble (mobile)
+    if (!tip?.edit) tip = null; // tapping empty board dismisses the value bubble
     sw = { sx: e.clientX, moved: false };
   }
 
@@ -509,7 +533,11 @@
         if (effCompact) setWidgets(packList(widgets));
       }
       tk = null;
-      vd = null;
+      if (vd) {
+        vd = null;
+        dragging = false;
+        if (tip && !tip.edit) tip = null; // adjust released → hide the value bubble
+      }
       if (sw) {
         const moved = sw.moved,
           dx = e.clientX - sw.sx;
@@ -635,19 +663,10 @@
                   class="dialwrap"
                   style:width="{d}px"
                   style:height="{d}px"
-                  onmouseenter={() => { if (!isMobile && !editMode) tipKey = w.key; }}
-                  onmouseleave={() => { if (!isMobile && tipKey === w.key && editingKey !== w.key) tipKey = null; }}
-                  ondblclick={() => startType(w.key, c.id)}
+                  onmouseenter={(e) => { if (!isMobile && !editMode) showTip(e.currentTarget, c.id, false); }}
+                  onmouseleave={() => { if (!dragging && !tip?.edit) tip = null; }}
+                  ondblclick={(e) => { if (!editMode) showTip(e.currentTarget, c.id, true); }}
                 >
-                  {#if !editMode && (tipKey === w.key || editingKey === w.key)}
-                    <div class="tip">
-                      {#if editingKey === w.key}
-                        <input id="cs-input" class="tipinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
-                      {:else}
-                        {fullVal(c.id)}
-                      {/if}
-                    </div>
-                  {/if}
                   <svg width={d} height={d} viewBox="0 0 64 64" style="display:block">
                     <circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
                     <circle cx="32" cy="32" r="25" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray="{((pct(c.id) / 100) * 117.8).toFixed(1)} 300" transform="rotate(135 32 32)" />
@@ -774,6 +793,17 @@
       {/each}
       {#if tray.length === 0}<div class="tray-empty">All controls are on the board.</div>{/if}
     </div>
+  </div>
+{/if}
+
+<!-- value bubble: one fixed-position tooltip, above everything, never clipped -->
+{#if tip}
+  <div class="tip" style:left="{tip.cx}px" style:top="{tip.cy}px">
+    {#if tip.edit}
+      <input id="cs-input" class="tipinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitTip() : e.key === 'Escape' ? (tip = null) : null)} onblur={commitTip} onpointerdown={(e) => e.stopPropagation()} />
+    {:else}
+      {fullVal(tip.id)}
+    {/if}
   </div>
 {/if}
 
@@ -989,22 +1019,20 @@
     align-items: center;
     justify-content: center;
   }
-  /* value speech-bubble above the knob (hover / tap / while adjusting) */
+  /* value speech-bubble — fixed-position so it floats above everything and is never clipped */
   .tip {
-    position: absolute;
-    bottom: calc(100% + 7px);
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
-    padding: 5px 10px;
-    border-radius: 9px;
+    position: fixed;
+    transform: translate(-50%, calc(-100% - 11px));
+    z-index: 9999;
+    padding: 8px 14px;
+    border-radius: 10px;
     background: #0a0a0c;
-    border: 1px solid color-mix(in srgb, var(--accent, #35c9d6) 45%, #2a2a31);
+    border: 1px solid color-mix(in srgb, var(--accent, #35c9d6) 55%, #2a2a31);
     color: #f2f2f5;
-    font: 700 13px/1 var(--font-mono);
+    font: 700 17px/1 var(--font-mono);
     white-space: nowrap;
     pointer-events: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   }
   .tip::after {
     content: '';
@@ -1012,17 +1040,17 @@
     top: 100%;
     left: 50%;
     transform: translateX(-50%);
-    border: 5px solid transparent;
+    border: 6px solid transparent;
     border-top-color: #0a0a0c;
   }
   .tipinput {
-    width: 64px;
+    width: 90px;
     text-align: center;
     background: transparent;
     border: 0;
     outline: none;
     color: #fff;
-    font: 700 13px/1 var(--font-mono);
+    font: 700 17px/1 var(--font-mono);
     pointer-events: auto;
   }
   .kval {
