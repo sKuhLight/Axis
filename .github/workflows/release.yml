@@ -46,7 +46,7 @@ jobs:
       - name: Build Axis UI
         working-directory: Axis
         env:
-          VITE_FORGEFX_BASE: http://localhost:5056
+          VITE_FORGEFX_BASE: '' # same-origin: the UI is served by ForgeFX, so it finds the API on whatever port it bound
         run: npm run build
 
       # Rebuild ForgeFX's native serialport binding for Electron's ABI, then package.

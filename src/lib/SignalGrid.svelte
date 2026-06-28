@@ -334,7 +334,7 @@
   {:else if editor.status === 'offline'}
     <div class="offline">
       <p class="hint">Device offline.</p>
-      <p class="sub">Start the ForgeFX server (<code class="mono">localhost:5056</code>) and reconnect.</p>
+      <p class="sub">Connect your device and make sure the ForgeFX engine is running, then reconnect.</p>
       <button class="retry" onclick={() => editor.load()}>Retry</button>
     </div>
   {:else}
