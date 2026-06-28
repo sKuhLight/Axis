@@ -5,7 +5,7 @@
   // a square responsive grid. Driven by the live editor params; layouts persist per block family.
   import { editor } from './editor.svelte';
   import EQGraph, { type EQBand } from './EQGraph.svelte';
-  import { fmtCompact, normFromValue } from './format';
+  import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
   import { idealIds } from './layouts';
   import type { NamedParam, EnumParam } from './types';
 
@@ -63,6 +63,7 @@
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
   let renamingPage = $state<string | null>(null);
+  let tipKey = $state<string | null>(null); // widget whose value bubble is shown (hover / tap / adjust)
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
 
   const isMobile = $derived(vw < 760);
@@ -351,12 +352,18 @@
 
   // a widget's pixel footprint + the knob dial size that fits it (reserves room for the label)
   const pxOf = (n: number) => n * cell + (n - 1) * GAP;
-  const dialFor = (w: Widget) => clamp(Math.round(Math.min(pxOf(w.w), pxOf(w.h) - 26) * 0.74), 28, 220);
-  // knob-face value font: scales with dial size, and shrinks for long readouts (30000, -60.0)
-  // so they don't overflow the inner circle.
-  const valFont = (d: number, len = 2) => {
-    const base = Math.max(10, Math.round(d * 0.22));
-    return len <= 3 ? base : Math.max(9, Math.round(base * (3.2 / len) + 1));
+  // the value lives in the hover/tap bubble now, so the dial fills the tile — but leave room for the
+  // card padding (16) + gap (5) + the label (~16) so the label never clips.
+  const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxOf(w.h) - 38), 30, 260);
+  // full, readable value for the bubble — with units (4.0 dB, 470 Hz, 12 kHz, 63%)
+  const fullVal = (id: number): string => {
+    const p = knob(id);
+    if (!p) return '–';
+    const v = paramValue(p);
+    if (p.unit === 'Hz' && Math.abs(v) >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + ' kHz';
+    const u = paramUnit(p);
+    const num = Math.abs(v) >= 100 ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
+    return u ? `${num} ${u}` : num;
   };
 
   // move a widget to an adjacent page (drag to the left/right edge of the board)
@@ -390,7 +397,7 @@
     const r = boardEl?.getBoundingClientRect() ?? ({ left: 0, top: 0 } as DOMRect);
     return { left: r.left, top: r.top, step: cell + GAP };
   }
-  function onWidgetDown(e: PointerEvent, id: string, kind: Kind, pid: number) {
+  function onWidgetDown(e: PointerEvent, id: string, kind: Kind, pid: number, key: string) {
     if (editMode) {
       e.stopPropagation();
       const w = find(id);
@@ -403,6 +410,7 @@
     }
     if (kind === 'cont') {
       vd = { id: pid, sy: e.clientY, sn: knob(pid)?.norm ?? 0 };
+      tipKey = key; // surface the value bubble while adjusting / on tap
       e.stopPropagation();
     }
   }
@@ -425,6 +433,7 @@
   }
   function onBoardDown(e: PointerEvent) {
     if (editMode) return;
+    tipKey = null; // tapping empty board dismisses any value bubble (mobile)
     sw = { sx: e.clientX, moved: false };
   }
 
@@ -554,7 +563,6 @@
   });
 
   // svg knob pointer transform
-  const knobDash = (p: number) => ((p / 100) * 113.1).toFixed(1) + ' 300';
   const knobRot = (p: number) => (-135 + 2.7 * p).toFixed(1);
 </script>
 
@@ -618,23 +626,34 @@
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq'}
               class:dragging={drag?.id === w.id}
-              onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id)}
+              onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
             >
               {#if c.kind === 'cont' && w.view === 'knob'}
                 {@const d = dialFor(w)}
-                <div class="dialwrap" style:width="{d}px" style:height="{d}px">
-                  <svg width={d} height={d} viewBox="0 0 64 64" style="display:block">
-                    <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
-                    <circle cx="32" cy="32" r="24" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray={knobDash(pct(c.id))} transform="rotate(135 32 32)" />
-                    <circle cx="32" cy="32" r="14" fill="#141417" stroke="#000" stroke-width="1" />
-                    <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="21" r="2.6" fill="#f5a623" /></g>
-                  </svg>
-                  {#if editingKey === w.key}
-                    <input id="cs-input" class="kinput" style:font-size="{valFont(d)}px" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
-                  {:else}
-                    <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-                    <div class="kval" style:font-size="{valFont(d, valText(c.id).length)}px" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+                <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+                <div
+                  class="dialwrap"
+                  style:width="{d}px"
+                  style:height="{d}px"
+                  onmouseenter={() => { if (!isMobile && !editMode) tipKey = w.key; }}
+                  onmouseleave={() => { if (!isMobile && tipKey === w.key && editingKey !== w.key) tipKey = null; }}
+                  ondblclick={() => startType(w.key, c.id)}
+                >
+                  {#if !editMode && (tipKey === w.key || editingKey === w.key)}
+                    <div class="tip">
+                      {#if editingKey === w.key}
+                        <input id="cs-input" class="tipinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
+                      {:else}
+                        {fullVal(c.id)}
+                      {/if}
+                    </div>
                   {/if}
+                  <svg width={d} height={d} viewBox="0 0 64 64" style="display:block">
+                    <circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
+                    <circle cx="32" cy="32" r="25" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray="{((pct(c.id) / 100) * 117.8).toFixed(1)} 300" transform="rotate(135 32 32)" />
+                    <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1" />
+                    <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
+                  </svg>
                 </div>
                 <div class="lbl">{c.label}</div>
               {:else if c.kind === 'cont' && w.view === 'fader'}
@@ -939,7 +958,7 @@
     justify-content: center;
     gap: 5px;
     padding: 8px;
-    overflow: hidden;
+    overflow: visible; /* let the value bubble pop above the tile */
     user-select: none;
     touch-action: none;
     cursor: ns-resize;
@@ -969,6 +988,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  /* value speech-bubble above the knob (hover / tap / while adjusting) */
+  .tip {
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 5px 10px;
+    border-radius: 9px;
+    background: #0a0a0c;
+    border: 1px solid color-mix(in srgb, var(--accent, #35c9d6) 45%, #2a2a31);
+    color: #f2f2f5;
+    font: 700 13px/1 var(--font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  }
+  .tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #0a0a0c;
+  }
+  .tipinput {
+    width: 64px;
+    text-align: center;
+    background: transparent;
+    border: 0;
+    outline: none;
+    color: #fff;
+    font: 700 13px/1 var(--font-mono);
+    pointer-events: auto;
   }
   .kval {
     position: absolute;
