@@ -400,6 +400,9 @@
               {@const cat = catFor(cell.pack, baseName(cell.display))}
               {@const sel = editor.selKey === `${r},${c}`}
               {@const base = baseName(cell.display)}
+              {@const inst = cell.display.match(/\s(\d+)$/)?.[1] ?? ''}
+              {@const sameFam = editor.layout.cells.filter((x) => baseName(x.display) === base).length}
+              {@const label = inst && (inst !== '1' || sameFam > 1) ? `${cat.short} ${inst}` : cat.short}
               {@const meter = editor.meterFor(cell)}
               <div
                 class="cell block"
@@ -423,7 +426,7 @@
                   </div>
                 {/if}
                 <span class="glyph">{cat.glyph}</span>
-                <span class="b-label">{cat.short}</span>
+                <span class="b-label">{label}</span>
                 {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
                 {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
                 {#if cell.pack}

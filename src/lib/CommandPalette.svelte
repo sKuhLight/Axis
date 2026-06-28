@@ -17,6 +17,9 @@
   let hi = $state(0);
   let realNames = $state(false);
   let inputEl = $state<HTMLInputElement | null>(null);
+  // effect ids already on the grid — placed instances are greyed out + non-pickable (no point re-placing)
+  const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
+  const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
 
   const retype = $derived(editor.paletteMode === 'retype');
   const target = $derived(editor.placeTarget ?? editor.firstEmptyCell);
@@ -174,7 +177,8 @@
       const rows = seq(results.filter((r) => catOf(r.name) === cat));
       return { sections: [{ label: CAT_LABEL[cat] ?? cat, rows }], flat: rows };
     }
-    const bySlug = new Map(families.map((f) => [f.slug, f]));
+    const bySlug = new Map<string, Family>(); // family slug → its first instance (for Fav/Recent rows)
+    for (const f of families) if (!bySlug.has(f.slug)) bySlug.set(f.slug, f);
     const toRow = (f: Family): Omit<Row, 'fi'> => ({ key: f.slug, name: f.name, sub: f.slug, kind: 'Block', value: 0, page: f.page, mfr: '' });
     const mk = (slugs: string[]) => slugs.map((s) => bySlug.get(s)).filter((f): f is Family => !!f).map(toRow);
     const raw: { label: string; rows: Omit<Row, 'fi'>[] }[] = [];
@@ -189,6 +193,10 @@
 
   function pick(r: Row | undefined) {
     if (!r) return;
+    if (isPlaced(r)) {
+      editor.showToast(`${r.name} is already on the grid`, '#d6543f');
+      return;
+    }
     if (retype) {
       editor.retype(r.value);
       pushTypeRecent(r.value);
@@ -275,15 +283,16 @@
             {#if s.label}<div class="section mono">{s.label}</div>{/if}
             {#each s.rows as r (`${r.key}#${r.fi}`)}
               {@const cat = chipFor(r)}
-              <div class="rowwrap" class:hi={r.fi === hi}>
-                <button class="row" onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
+              <div class="rowwrap" class:hi={r.fi === hi} class:isplaced={isPlaced(r)}>
+                <button class="row" disabled={isPlaced(r)} onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
                   <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
                   <span class="rtext">
                     <span class="rname">{r.name}</span>
                     {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
                   </span>
+                  {#if isPlaced(r)}<span class="placed" title="This instance is already on the grid">on grid</span>{/if}
                   <span class="kind">{r.kind}</span>
-                  {#if r.fi === hi}<span class="ret mono">↵</span>{/if}
+                  {#if r.fi === hi && !isPlaced(r)}<span class="ret mono">↵</span>{/if}
                 </button>
                 {#if retype}
                   <button class="star" class:on={isTypeFav(r.value)} title={isTypeFav(r.value) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleTypeFav(r.value)}>{isTypeFav(r.value) ? '★' : '☆'}</button>
@@ -449,6 +458,19 @@
     cursor: pointer;
     text-align: left;
   }
+  /* already on the grid → greyed + non-interactive (the instance can't be placed twice) */
+  .rowwrap.isplaced .rname,
+  .rowwrap.isplaced .rsub,
+  .rowwrap.isplaced .chip {
+    opacity: 0.4;
+  }
+  .rowwrap.isplaced {
+    background: transparent;
+    box-shadow: none;
+  }
+  .row:disabled {
+    cursor: default;
+  }
   .star {
     flex: none;
     width: 40px;
@@ -504,6 +526,17 @@
     padding: 4px 9px;
     background: #1a1a1f;
     border: 1px solid var(--border-2);
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .placed {
+    flex: none;
+    font-size: 10px;
+    font-weight: 600;
+    color: #f5a623;
+    padding: 3px 8px;
+    background: rgba(245, 166, 35, 0.12);
+    border: 1px solid rgba(245, 166, 35, 0.3);
     border-radius: 6px;
     white-space: nowrap;
   }
