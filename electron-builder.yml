@@ -25,7 +25,9 @@ extraResources:
     to: forgefx/vendor
 npmRebuild: false
 linux:
-  target: [AppImage, deb]
+  # AppImage is universal (runs on CachyOS/Arch and everything else); deb = Debian/Ubuntu,
+  # pacman = Arch/CachyOS native package, rpm = Fedora/openSUSE.
+  target: [AppImage, deb, pacman, rpm]
   category: AudioVideo
 mac:
   target: [dmg, zip]
