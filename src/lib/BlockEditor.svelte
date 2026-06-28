@@ -82,14 +82,13 @@
       <!-- header -->
       <header class="head">
         <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</div>
-        <button class="typebtn" onclick={() => editor.openRetype()} disabled={!sel.pack} title="Change type">
-          <div class="t-wrap">
-            <div class="t-title">{cat.short}</div>
-            <div class="t-type mono">{editor.blockType?.name || sel.pack || '—'} {#if sel.pack}▾{/if}</div>
-          </div>
-          {#if sel.pack}
-            <svg width="14" height="14" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.5" /><path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.5" stroke-linecap="round" /></svg>
-          {/if}
+        <button class="typebtn" onclick={() => editor.openRetype()} disabled={!sel.pack} title="Change type — search models">
+          <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+          <span class="t-wrap">
+            <span class="t-title">{cat.short} · type</span>
+            <span class="t-type">{editor.blockType?.name || sel.pack || '—'}</span>
+          </span>
+          {#if sel.pack}<span class="t-go">Change ▾</span>{/if}
         </button>
 
         {#if sel.pack && sel.channel != null}
@@ -100,8 +99,6 @@
             {/each}
           </div>
         {/if}
-
-        <span class="spacer"></span>
 
         <button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>
       </header>
@@ -228,42 +225,64 @@
     color: #fff;
     border: 1px solid;
   }
+  /* the type button doubles as the model search — grows to fill the header so the full name shows */
   .typebtn {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 11px;
+    flex: 1;
     min-width: 0;
-    height: 42px;
-    padding: 0 12px;
-    background: #0d0d10;
-    border: 1px solid #2c2c34;
+    height: 46px;
+    padding: 0 12px 0 13px;
+    background: linear-gradient(180deg, #101015, #0c0c0f);
+    border: 1px solid #34343d;
     border-radius: 11px;
     cursor: pointer;
+    color: var(--accent);
   }
-  .typebtn:hover {
+  .typebtn:hover:not(:disabled) {
     border-color: var(--accent);
+    background: #0f1518;
   }
   .typebtn:disabled {
     cursor: default;
+    opacity: 0.7;
+  }
+  .t-mag {
+    flex: none;
+    color: var(--accent);
   }
   .t-wrap {
+    flex: 1;
     min-width: 0;
-    line-height: 1.1;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
     text-align: left;
   }
   .t-title {
-    font-weight: 700;
-    font-size: 14px;
-    color: #fff;
-    white-space: nowrap;
+    font: 700 9px/1 var(--font-mono);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-mut);
   }
   .t-type {
-    font: 500 11px/1.25 var(--font-mono);
-    color: var(--amber);
+    font-weight: 700;
+    font-size: 15px;
+    color: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 210px;
+  }
+  .t-go {
+    flex: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    white-space: nowrap;
   }
   .ch {
     display: flex;

@@ -48,6 +48,16 @@
     {/if}
   </div>
 
+  <!-- center: new-version notification (desktop) -->
+  {#if !editor.isMobile && editor.update}
+    <div class="update">
+      <span class="up-dot"></span>
+      <span class="up-txt">New version <b>v{editor.update.version}</b> available</span>
+      <a class="up-go" href={editor.update.url} target="_blank" rel="noopener noreferrer">Update ↗</a>
+      <button class="up-x" aria-label="Dismiss" onclick={() => editor.dismissUpdate()}>✕</button>
+    </div>
+  {/if}
+
   <!-- right region (always visible) -->
   <div class="right">
     {#if !editor.isMobile}
@@ -103,6 +113,7 @@
 
 <style>
   .topbar {
+    position: relative;
     height: 60px;
     flex: none;
     display: flex;
@@ -112,6 +123,69 @@
     background: linear-gradient(180deg, #141416, #0f0f12);
     border-bottom: 1px solid var(--border);
     overflow: hidden;
+  }
+
+  /* new-version pill, centered in the bar */
+  .update {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 34px;
+    padding: 0 6px 0 13px;
+    max-width: 46%;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #1d2a2c, #16201f);
+    border: 1px solid #2c4a4b;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+  .up-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 7px var(--accent);
+  }
+  .up-txt {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #bfeef2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .up-txt b {
+    color: #fff;
+  }
+  .up-go {
+    flex: none;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-ink);
+    background: var(--accent);
+    padding: 6px 10px;
+    border-radius: 7px;
+    text-decoration: none;
+  }
+  .up-x {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #7fb3b6;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .up-x:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
   }
   .topbar.mob {
     gap: 8px;

@@ -67,6 +67,33 @@
   let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
   let dragging = $state(false);
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
+  let q = $state(''); // live control-search query
+  let resSel = $state<{ id: number; left: number; top: number; width: number } | null>(null); // results select popover
+
+  // ── live control search: flat list of every matching control, ignoring tabs/groupings ──
+  const searching = $derived(q.trim().length > 0);
+  const matches = $derived.by(() => {
+    const s = q.trim().toLowerCase();
+    return s ? catalog.filter((c) => c.kind !== 'eq' && c.label.toLowerCase().includes(s)) : [];
+  });
+  // honor each control's configured view (knob/fader/slider/number · button/switch) in the results,
+  // falling back to the catalog default when the control isn't placed on any page yet
+  const viewByKey = $derived.by(() => {
+    const m = new Map<string, string>();
+    const b = bySlug[slug];
+    if (b) for (const pg of b.pageOrder) for (const w of b.boards[pg] ?? []) if (!m.has(w.key)) m.set(w.key, w.view);
+    return m;
+  });
+  const viewOf = (c: Ctl) => viewByKey.get(c.key) ?? c.view;
+  function resKnobDown(e: PointerEvent, id: number) {
+    vd = { id, sy: e.clientY, sn: knob(id)?.norm ?? 0 };
+    dragging = true;
+    showTip(e.currentTarget as HTMLElement, id, false);
+  }
+  function openResSel(e: MouseEvent, id: number) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    resSel = resSel?.id === id ? null : { id, left: r.left, top: r.bottom + 4, width: Math.max(r.width, 180) };
+  }
 
   const isMobile = $derived(vw < 760);
   const board = $derived(bySlug[slug]);
@@ -170,6 +197,10 @@
   // arrange is a desktop affordance — never leave it on when we drop to the phone layout
   $effect(() => {
     if (isMobile && editMode) editMode = false;
+  });
+  // searching shows a flat, live results list — leave arrange mode so results stay interactive
+  $effect(() => {
+    if (searching && editMode) editMode = false;
   });
 
   // viewport + container measurement
@@ -594,28 +625,125 @@
   const knobRot = (p: number) => (-135 + 2.7 * p).toFixed(1);
 </script>
 
-<!-- page tabs -->
+<!-- page tabs + live control search -->
 <div class="tabs ws-scroll">
-  {#if board}
-    {#each board.pageOrder as pg (pg)}
-      {#if renamingPage === pg}
-        <input class="tab tabedit" value={pg} use:focusEl onkeydown={(e) => (e.key === 'Enter' ? e.currentTarget.blur() : e.key === 'Escape' ? (renamingPage = null) : null)} onblur={(e) => renamePage(pg, e.currentTarget.value)} />
-      {:else}
-        <button class="tab" class:on={pg === board.page} onclick={() => setPage(pg)} ondblclick={() => editMode && (renamingPage = pg)} title={editMode ? 'Double-click to rename' : ''}>{pg}</button>
-      {/if}
-    {/each}
-  {/if}
-  {#if editMode}
-    <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
-  {/if}
-  <span class="tab-sp"></span>
-  {#if !isMobile}
-    <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
-      <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
-    </button>
+  <div class="csearch" class:active={searching}>
+    <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+    <input class="csin" placeholder="Find a control…" bind:value={q} />
+    {#if searching}<button class="csx" aria-label="Clear search" onclick={() => { q = ''; resSel = null; }}>✕</button>{/if}
+  </div>
+  {#if !searching}
+    {#if board}
+      {#each board.pageOrder as pg (pg)}
+        {#if renamingPage === pg}
+          <input class="tab tabedit" value={pg} use:focusEl onkeydown={(e) => (e.key === 'Enter' ? e.currentTarget.blur() : e.key === 'Escape' ? (renamingPage = null) : null)} onblur={(e) => renamePage(pg, e.currentTarget.value)} />
+        {:else}
+          <button class="tab" class:on={pg === board.page} onclick={() => setPage(pg)} ondblclick={() => editMode && (renamingPage = pg)} title={editMode ? 'Double-click to rename' : ''}>{pg}</button>
+        {/if}
+      {/each}
+    {/if}
+    {#if editMode}
+      <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
+    {/if}
+    <span class="tab-sp"></span>
+    {#if !isMobile}
+      <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
+        <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
+      </button>
+    {/if}
   {/if}
 </div>
 
+{#if searching}
+  <!-- live search results: every matching control, flat, ignoring tabs -->
+  <div class="content scroll">
+    <div class="results">
+      {#each matches as c (c.key)}
+        {@const view = viewOf(c)}
+        <div class="restile" class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')} class:nobg={c.kind === 'action'}>
+          {#if c.kind === 'cont' && view === 'knob'}
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div class="dialwrap" style:width="60px" style:height="60px"
+              onpointerdown={(e) => resKnobDown(e, c.id)}
+              onmouseenter={(e) => { if (!isMobile) showTip(e.currentTarget, c.id, false); }}
+              onmouseleave={() => { if (!dragging && !tip?.edit) tip = null; }}
+              ondblclick={(e) => showTip(e.currentTarget, c.id, true)}>
+              <svg width="60" height="60" viewBox="0 0 64 64" style="display:block">
+                <circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
+                <circle cx="32" cy="32" r="25" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray="{((pct(c.id) / 100) * 117.8).toFixed(1)} 300" transform="rotate(135 32 32)" />
+                <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1" />
+                <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
+              </svg>
+            </div>
+            <div class="lbl">{c.label}</div>
+          {:else if c.kind === 'cont' && view === 'fader'}
+            {#if editingKey === c.key}
+              <input id="cs-input" class="kinput rel" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
+            {:else}
+              <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+              <div class="kval rel" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+            {/if}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="vtrack" onpointerdown={(e) => onTrackDown(e, c.key, c.id, true)}>
+              <div class="vfill" style:height="{pct(c.id)}%"></div>
+              <div class="vhandle" style:bottom="calc({pct(c.id)}% - 8px)"></div>
+            </div>
+            <div class="lbl">{c.label}</div>
+          {:else if c.kind === 'cont' && view === 'number'}
+            <div class="numrow">
+              <button class="step" onclick={() => nudge(c.id, -1)}>−</button>
+              {#if editingKey === c.key}
+                <input id="cs-input" class="kinput big" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
+              {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+                <div class="kval big" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+              {/if}
+              <button class="step" onclick={() => nudge(c.id, 1)}>＋</button>
+            </div>
+            <div class="lbl">{c.label}</div>
+          {:else if c.kind === 'cont'}
+            <!-- slider (default for cont) -->
+            <div class="srow">
+              <span class="slbl">{c.label}</span>
+              {#if editingKey === c.key}
+                <input id="cs-input" class="kinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
+              {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+                <div class="kval cy" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+              {/if}
+            </div>
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="htrack" onpointerdown={(e) => onTrackDown(e, c.key, c.id, false)}>
+              <div class="hfill" style:width="{pct(c.id)}%"></div>
+              <div class="hhandle" style:left="calc({pct(c.id)}% - 8px)"></div>
+            </div>
+          {:else if c.kind === 'toggle' && view === 'switch'}
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div class="switch" class:on={togOn(c.id)} onclick={() => toggleEnum(c.id)}><div class="snob"></div></div>
+            <div class="lbl">{c.label}</div>
+          {:else if c.kind === 'toggle'}
+            <!-- button (default for toggle) -->
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div class="onoff" class:on={togOn(c.id)} onclick={() => toggleEnum(c.id)} title={togLabel(c.id)}>
+              <span class="dot"></span><span class="onoff-l">{c.label}</span>
+            </div>
+          {:else if c.kind === 'select'}
+            <div class="seltop">{c.label}</div>
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div class="selfield" class:open={resSel?.id === c.id} onclick={(e) => openResSel(e, c.id)}>
+              <span class="seltxt">{enm(c.id)?.options.find((o) => o.value === enm(c.id)?.value)?.label ?? '–'}</span>
+              <span class="caret">▾</span>
+            </div>
+          {:else if c.kind === 'action'}
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div class="action" class:byp={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>{editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}</div>
+          {/if}
+        </div>
+      {/each}
+      {#if matches.length === 0}<div class="nores">No controls match “{q}”.</div>{/if}
+    </div>
+  </div>
+{:else}
 <!-- arrange toolbar -->
 {#if editMode}
   <div class="arrbar">
@@ -795,6 +923,7 @@
     </div>
   </div>
 {/if}
+{/if}
 
 <!-- value bubble: one fixed-position tooltip, above everything, never clipped -->
 {#if tip}
@@ -805,6 +934,21 @@
       {fullVal(tip.id)}
     {/if}
   </div>
+{/if}
+
+<!-- results select popover: fixed-position, anchored to the field (escapes the scroll container) -->
+{#if resSel}
+  {@const re = enm(resSel.id)}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="respop-bg" onpointerdown={() => (resSel = null)}></div>
+  {#if re}
+    <div class="respop" style:left="{resSel.left}px" style:top="{resSel.top}px" style:width="{resSel.width}px">
+      {#each re.options as o (o.value)}
+        <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+        <div class="selopt" class:on={o.value === re.value} onpointerdown={(e) => e.stopPropagation()} onclick={() => { editor.setEnum(re, o.value); resSel = null; }}>{o.label}</div>
+      {/each}
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -1565,5 +1709,101 @@
     padding: 0 14px;
     color: #46464f;
     font-size: 12px;
+  }
+
+  /* live control search */
+  .csearch {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 11px;
+    border-radius: 10px;
+    background: #0d0d10;
+    border: 1px solid #26262c;
+    color: #6a6a74;
+    min-width: 140px;
+  }
+  .csearch.active {
+    flex: 1;
+    border-color: var(--accent, #35c9d6);
+    color: var(--accent, #35c9d6);
+  }
+  .csin {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    outline: none;
+    color: #ededf2;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .csx {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 0;
+    background: #1c1c21;
+    color: #cfcfd6;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  /* results = a flat wrap of control tiles (same look as the board cells), respecting each view */
+  .results {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+    align-content: flex-start;
+  }
+  .restile {
+    flex: none;
+    width: 118px;
+    min-height: 112px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 11px;
+    background: linear-gradient(180deg, #17171c, #101015);
+    border: 1px solid #212129;
+    overflow: visible;
+  }
+  .restile.wide {
+    width: 240px;
+  }
+  .restile.nobg {
+    background: transparent;
+    border-color: transparent;
+  }
+  .nores {
+    width: 100%;
+    padding: 30px 10px;
+    text-align: center;
+    color: #56565e;
+    font-size: 13px;
+  }
+  .respop-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+  }
+  .respop {
+    position: fixed;
+    z-index: 9999;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #161619;
+    border: 1px solid #2e2e36;
+    border-radius: 11px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+    padding: 6px;
   }
 </style>

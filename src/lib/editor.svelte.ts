@@ -94,6 +94,7 @@ class EditorStore {
   vh = $state(800);
 
   // ── overlays ──
+  update = $state<{ version: string; url: string } | null>(null); // newer release available (top-bar pill)
   paletteOpen = $state(false);
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
@@ -245,6 +246,7 @@ class EditorStore {
   init = async () => {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
+    this.#checkUpdate();
     this.#openEvents();
     // auto-detect the attached unit and warn if it isn't a model we have a live codec for
     forgefx
@@ -263,6 +265,30 @@ class EditorStore {
     await this.load();
     this.#syncTelemetry();
   };
+
+  // one-shot check against GitHub releases — surface a top-bar pill when a newer beta is out
+  #checkUpdate = async () => {
+    try {
+      const r = await fetch('https://api.github.com/repos/sKuhLight/Axis/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+      if (!r.ok) return;
+      const j = await r.json();
+      const tag = String(j.tag_name ?? '');
+      const latest = tag.replace(/^v/, '').split('-')[0];
+      if (this.#isNewer(latest, __APP_VERSION__)) this.update = { version: tag.replace(/^v/, ''), url: j.html_url || 'https://github.com/sKuhLight/Axis/releases/latest' };
+    } catch {
+      /* offline / rate-limited — no notification */
+    }
+  };
+  #isNewer = (a: string, b: string): boolean => {
+    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x > y) return true;
+      if (x < y) return false;
+    }
+    return false;
+  };
+  dismissUpdate = () => (this.update = null);
 
   // live tuner/tempo/scene/cpu pushes from the device
   #openEvents = () => {
