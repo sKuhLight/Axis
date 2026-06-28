@@ -1,7 +1,12 @@
 {
   "name": "axis",
   "version": "0.0.1",
-  "description": "Axis — web frontend for the ForgeFX Fractal device platform",
+  "description": "Axis — editor for Fractal devices (FM3), bundling the ForgeFX engine",
+  "author": {
+    "name": "sKuhLight",
+    "email": "sKuhLight@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/sKuhLight/Axis",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
