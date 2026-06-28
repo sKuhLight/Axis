@@ -73,7 +73,7 @@ jobs:
           files: |
             Axis/dist-desktop/*.AppImage
             Axis/dist-desktop/*.deb
-            Axis/dist-desktop/*.pkg.tar.*
+            Axis/dist-desktop/*.pacman
             Axis/dist-desktop/*.rpm
             Axis/dist-desktop/*.dmg
             Axis/dist-desktop/*.zip
