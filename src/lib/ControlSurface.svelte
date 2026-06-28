@@ -672,6 +672,10 @@
                 {#if c.views.length > 1}
                   <button class="vcyc" onpointerdown={(e) => e.stopPropagation()} onclick={() => cycleView(w.id)} title="Change control type"><span>{VIEW_ICON[w.view]}</span>{w.view}</button>
                 {/if}
+                {#if c.kind === 'cont'}
+                  {@const sp = knob(c.id)}
+                  <button class="qbadge" class:on={editor.isSwipeControl(c.id)} onpointerdown={(e) => e.stopPropagation()} onclick={() => sp && editor.toggleSwipeControl(sp)} title="Map to grid swipe control (adjust from the Signal Grid tile)">⚡</button>
+                {/if}
                 <button class="rsz" onpointerdown={(e) => onResizeDown(e, w.id)} aria-label="Resize">
                   <svg width="13" height="13" viewBox="0 0 13 13"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke={accent} stroke-width="1.6" stroke-linecap="round" /></svg>
                 </button>
@@ -913,7 +917,7 @@
   }
   /* in arrange mode the whole tile is grabbable — the controls don't intercept the pointer,
      only the chrome buttons (remove / retype / resize) stay interactive */
-  .card.editing > :not(.wx):not(.vcyc):not(.rsz) {
+  .card.editing > :not(.wx):not(.vcyc):not(.rsz):not(.qbadge) {
     pointer-events: none;
   }
   .card.dragging {
@@ -1258,6 +1262,28 @@
     color: #ff7a68;
     cursor: pointer;
     font-size: 12px;
+  }
+  .qbadge {
+    position: absolute;
+    bottom: 4px;
+    right: 30px;
+    z-index: 8;
+    width: 21px;
+    height: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 11px;
+    background: rgba(245, 166, 35, 0.12);
+    border: 1px solid rgba(245, 166, 35, 0.4);
+    color: #6a6a72;
+  }
+  .qbadge.on {
+    background: rgba(245, 166, 35, 0.22);
+    border-color: #f5a623;
+    color: #f5a623;
   }
   .vcyc {
     position: absolute;

@@ -949,9 +949,6 @@
     padding: 7px 14px;
     cursor: pointer;
   }
-  code {
-    color: var(--accent);
-  }
 
   .ghost {
     position: fixed;
