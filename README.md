@@ -39,8 +39,8 @@ puts on unsigned downloads. Clear it once:
    ```
 3. Launch Axis normally.
 
-✅ Field-tested on macOS with an **Axe-Fx III** — works end-to-end after this step. (Signing /
-notarization to remove this is on the roadmap.)
+✅ A tester confirmed Axis **launches and runs** on macOS with an **Axe-Fx III** after this step.
+(Signing / notarization to remove the quarantine prompt is on the roadmap.)
 
 ## Run (dev)
 
