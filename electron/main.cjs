@@ -4,15 +4,32 @@
 // No separate install — ForgeFX + the built UI are shipped inside the app.
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
+const net = require('node:net');
 const { pathToFileURL } = require('node:url');
 
 const DEV = process.env.ELECTRON_DEV === '1' || !app.isPackaged;
-const PORT = process.env.PORT || '5056';
-const ORIGIN = `http://localhost:${PORT}`;
+let PORT = process.env.PORT || '5056';
+let ORIGIN = `http://localhost:${PORT}`;
 
 // Bundled locations: packaged → resources/…; dev → the sibling ForgeFX repo + this repo's build.
 const forgefxRoot = DEV ? path.join(__dirname, '..', '..', 'ForgeFX') : path.join(process.resourcesPath, 'forgefx');
 const staticDir = DEV ? path.join(__dirname, '..', 'build') : path.join(process.resourcesPath, 'axis-ui');
+
+// Find a usable port: prefer 5056, but if it's blocked, let the OS hand us a free one — so the
+// app always starts. The UI is served by this same port (same-origin), so Axis finds it for free.
+function pickPort(preferred) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => {
+      const any = net.createServer();
+      any.listen(0, '127.0.0.1', () => {
+        const p = any.address().port;
+        any.close(() => resolve(p));
+      });
+    });
+    probe.listen(preferred, '127.0.0.1', () => probe.close(() => resolve(preferred)));
+  });
+}
 
 async function startForgeFX() {
   process.env.PORT = PORT;
@@ -64,6 +81,10 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (!DEV) {
+    PORT = String(await pickPort(Number(PORT)));
+    ORIGIN = `http://localhost:${PORT}`;
+  }
   await startForgeFX();
   if (!DEV) await waitForServer();
   createWindow();
