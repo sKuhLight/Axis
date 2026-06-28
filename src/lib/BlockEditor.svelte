@@ -1,34 +1,45 @@
 <script lang="ts">
   import { editor, baseName } from './editor.svelte';
   import { catFor, shade } from './catalog';
-  import Knob from './Knob.svelte';
+  import ControlSurface from './ControlSurface.svelte';
+  import { type EQBand } from './EQGraph.svelte';
+  import { geqFreqs, shapeFromLabel } from './eq';
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
-  const isAmp = $derived(sel?.pack === 'Amp');
-
-  // page tabs by block kind + view mode
-  const pages = $derived.by(() => {
-    const m = editor.effMode;
-    if (isAmp) return m === 'basic' ? ['Ideal', 'Input EQ', 'Output EQ'] : ['Tone', 'Ideal', 'Preamp', 'Speaker', 'Input EQ', 'Output EQ', 'Dynamics'];
-    return m === 'basic' ? ['Controls'] : ['Controls', 'Tone', 'Mix', 'Modifiers'];
+  const isEQ = $derived(sel?.pack === 'Peq' || sel?.pack === 'Geq');
+  const isCab = $derived(sel?.pack === 'Cab');
+  // EQ bands from the live params (PEQ: freq 0-4 / Q 5-9 / gain 10-14; GEQ: fixed-freq gains 0-9)
+  const eqBands = $derived.by((): EQBand[] => {
+    if (!isEQ) return [];
+    const byId = new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
+    if (sel?.pack === 'Geq') {
+      // band frequencies depend on the selected GEQ model (10-band vs 7-band, Mark, …)
+      const freqs = geqFreqs(editor.blockType?.name ?? '', 10);
+      const out: EQBand[] = [];
+      for (let i = 0; i < freqs.length && i <= 9; i++) {
+        const g = byId.get(i);
+        if (g) out.push({ key: `g${i}`, gain: g, centerHz: freqs[i], shape: 'bell' });
+      }
+      return out;
+    }
+    const enumById = new Map(editor.enums.map((e) => [e.id, e]));
+    const out: EQBand[] = [];
+    for (let i = 0; i < 5; i++) {
+      const g = byId.get(10 + i);
+      const f = byId.get(i);
+      if (g && f) {
+        const te = enumById.get(15 + i);
+        const label = te?.options.find((o) => o.value === te.value)?.label;
+        out.push({ key: `b${i}`, gain: g, freq: f, q: byId.get(5 + i), shape: shapeFromLabel(label, i < 2) });
+      }
+    }
+    return out;
   });
-  const activePage = $derived(pages.includes(editor.activePage) ? editor.activePage : pages[0]);
-  const isKnobs = $derived(isAmp ? activePage === 'Ideal' || activePage === 'Tone' : activePage === 'Controls');
-  const isEq = $derived(activePage === 'Input EQ' || activePage === 'Output EQ');
+  // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
+  const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
 
   const CHAN = ['A', 'B', 'C', 'D'];
-
-  // Compact knob readout, computed LIVE from norm + device-true bounds so it tracks a drag.
-  function fmtVal(p: { norm?: number; unit?: string; min?: number; max?: number; log?: boolean }): string {
-    const norm = p.norm ?? 0;
-    if (p.min == null || p.max == null) return (norm * 10).toFixed(1); // no range → 0..10 position
-    // log taper (freq cuts etc.) interpolates geometrically; everything else linearly
-    const v = p.log && p.min > 0 ? p.min * Math.pow(p.max / p.min, norm) : p.min + norm * (p.max - p.min);
-    if (p.unit === 'Hz') return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(v));
-    if (p.unit === '%') return Math.round(v) + '%';
-    return Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
-  }
 
   // ── docked resize (desktop) ──
   let resizing = false;
@@ -74,14 +85,14 @@
         <button class="typebtn" onclick={() => editor.openRetype()} disabled={!sel.pack} title="Change type">
           <div class="t-wrap">
             <div class="t-title">{cat.short}</div>
-            <div class="t-type mono">{sel.pack ?? '—'} {#if sel.pack}▾{/if}</div>
+            <div class="t-type mono">{editor.blockType?.name || sel.pack || '—'} {#if sel.pack}▾{/if}</div>
           </div>
           {#if sel.pack}
             <svg width="14" height="14" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.5" /><path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.5" stroke-linecap="round" /></svg>
           {/if}
         </button>
 
-        {#if isAmp}
+        {#if sel.pack && sel.channel != null}
           <div class="ch">
             <span class="ch-lbl mono">CH</span>
             {#each CHAN as id}
@@ -92,55 +103,36 @@
 
         <span class="spacer"></span>
 
-        <div class="modeseg">
-          <button class="ms" class:on={editor.effMode === 'basic'} onclick={() => editor.setBlockMode('basic')}>Basic</button>
-          <button class="ms" class:on={editor.effMode === 'advanced'} onclick={() => editor.setBlockMode('advanced')}>Advanced</button>
-        </div>
-        {#if editor.overriding}
-          <button class="ovr" title="Overrides the global view — click to follow global" onclick={() => editor.resetBlockMode()}>OVR <span class="x">✕</span></button>
-        {/if}
         <button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>
       </header>
 
-      <!-- tabs -->
-      <div class="tabs scroll">
-        {#each pages as p}
-          <button class="tab" class:on={p === activePage} onclick={() => (editor.activePage = p)}>{p}</button>
-        {/each}
-      </div>
-
-      <!-- content -->
-      <div class="content scroll">
-        {#if editor.sheetState === 'nopack'}
-          <p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p>
-        {:else if editor.sheetState === 'loading'}
-          <p class="hint">Reading parameters…</p>
-        {:else if editor.sheetState === 'error'}
-          <p class="hint">Couldn't read this block.</p>
-        {:else if isKnobs}
-          <div class="knobs">
-            {#each editor.params as p (p.name)}
-              <Knob
-                value={p.norm ?? 0}
-                label={p.name}
-                valueText={fmtVal(p)}
-                color={cat.accent}
-                onInput={(v) => editor.setParam(p, v)}
-              />
-            {/each}
-          </div>
-        {:else if isEq}
-          <div class="stub">
-            <div class="stub-t">{activePage}</div>
-            <div class="stub-s">Interactive EQ editor — coming next.</div>
-          </div>
-        {:else}
-          <div class="stub">
-            <div class="stub-t">{activePage}</div>
-            <div class="stub-s">Advanced page — not built yet.</div>
-          </div>
+      <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
+      {#if editor.sheetState === 'nopack'}
+        <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
+      {:else if editor.sheetState === 'loading'}
+        <div class="content scroll"><p class="hint">Reading parameters…</p></div>
+      {:else if editor.sheetState === 'error'}
+        <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
+      {:else}
+        {#if isCab}
+          <button class="cabpick" style="--ac:{cat.accent}" onclick={() => editor.openCabPicker()}>
+            <span class="cp-ic">▦</span>
+            <span class="cp-txt">
+              <span class="cp-lbl">Cab IR · DynaCab</span>
+              <span class="cp-name">Browse cabinet library →</span>
+            </span>
+            <span class="cp-go">Open</span>
+          </button>
         {/if}
-      </div>
+        <ControlSurface
+          slug={sel.pack ?? sel.display ?? 'block'}
+          accent={cat.accent}
+          eqBands={isEQ ? eqBands : []}
+          eqGainRange={sel.pack === 'Geq' ? 12 : 20}
+          eqTitle={editor.blockType?.name || (sel.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ')}
+          hideIds={isCab ? CAB_PICKER_IDS : []}
+        />
+      {/if}
 
       <!-- footer -->
       <footer class="foot">
@@ -305,49 +297,6 @@
     flex: 1;
     min-width: 6px;
   }
-  .modeseg {
-    display: flex;
-    gap: 4px;
-    background: #0d0d10;
-    border: 1px solid var(--surface-3);
-    border-radius: 10px;
-    padding: 3px;
-    flex: none;
-  }
-  .ms {
-    height: 34px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: #8a8a93;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .ms.on {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .ovr {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 30px;
-    padding: 0 9px;
-    background: #1a1510;
-    border: 1px solid #4a3a1f;
-    border-radius: 9px;
-    cursor: pointer;
-    font: 700 10px/1 var(--font-mono);
-    letter-spacing: 0.04em;
-    color: #f5c878;
-    flex: none;
-  }
-  .ovr .x {
-    font-size: 12px;
-    color: #caa05a;
-  }
   .close {
     width: 38px;
     height: 38px;
@@ -367,64 +316,62 @@
     color: var(--text);
   }
 
-  .tabs {
+  .cabpick {
     display: flex;
-    gap: 8px;
-    padding: 11px 16px 4px;
-    overflow-x: auto;
-    flex: none;
-  }
-  .tab {
-    flex: none;
-    padding: 9px 15px;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 600;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    margin: 2px 0 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--ac) 35%, #2a2a30);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, #16161a), #131316);
     cursor: pointer;
-    white-space: nowrap;
-    background: #15151a;
-    border: 1px solid var(--surface-3);
-    color: #8a8a93;
+    text-align: left;
+    transition: border-color 0.12s;
   }
-  .tab.on {
-    background: rgba(245, 166, 35, 0.12);
-    border-color: #5a3f1f;
-    color: var(--amber);
+  .cabpick:hover {
+    border-color: color-mix(in srgb, var(--ac) 60%, #2a2a30);
   }
-
-  .content {
+  .cp-ic {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    font-size: 18px;
+    color: #fff;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 80%, #000), color-mix(in srgb, var(--ac) 45%, #000));
+  }
+  .cp-txt {
     flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding: 10px 18px 16px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
-  .knobs {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-    gap: 16px 8px;
-    padding: 6px 4px;
-    align-items: start;
-    justify-items: center;
+  .cp-lbl {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ededf2;
+  }
+  .cp-name {
+    font-size: 11.5px;
+    color: var(--text-mut);
+  }
+  .cp-go {
+    flex: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ac);
+    padding: 7px 14px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--ac) 14%, transparent);
   }
   .hint {
     color: var(--text-dim);
-  }
-  .stub {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: #4a4a52;
-    padding: 50px 20px;
-  }
-  .stub-t {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .stub-s {
-    font-size: 12px;
-    color: #3c3c44;
   }
 
   .foot {

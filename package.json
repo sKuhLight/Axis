@@ -4,16 +4,21 @@
   "description": "Axis — web frontend for the ForgeFX Fractal device platform",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "electron:dev": "ELECTRON_DEV=1 electron .",
+    "desktop:build": "vite build && electron-builder"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
     "svelte": "^5.1.0",
     "svelte-check": "^4.0.0",
     "typescript": "^5.6.0",

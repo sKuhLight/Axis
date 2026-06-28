@@ -3,6 +3,11 @@
 
   const pnum = $derived(editor.preset && editor.preset.number >= 0 ? String(editor.preset.number).padStart(3, '0') : '—');
   const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? '—' : 'offline'));
+
+  // link latency readout (replaces the un-obtainable CPU%)
+  const ms = $derived(editor.linkMs);
+  const linkColor = $derived(ms == null ? '#56565e' : ms < 40 ? '#33c46b' : ms < 120 ? '#f5a623' : '#d6543f');
+  const linkPct = $derived(ms == null ? 0 : Math.max(10, Math.min(100, 100 - ms / 2)));
 </script>
 
 <header class="topbar" class:mob={editor.isMobile}>
@@ -31,7 +36,7 @@
       <span class="mono scn-lbl">SCN</span>
       <div class="scn-group">
         {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
-          <button class="scn" class:on={editor.scene === s} onclick={() => (editor.scene = s)}>{s}</button>
+          <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
         {/each}
       </div>
     </div>
@@ -60,18 +65,26 @@
 
     {#if !editor.isMobile}
       <div class="status">
-        <button class="st" title="Tuner" onclick={() => editor.showToast('Tuner — coming soon', '#35c9d6')}>
-          <span class="note">♪</span><span class="mono st-lbl">TUNE</span>
+        <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
+          <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
         </button>
         <div class="div"></div>
-        <button class="st" title="Tap tempo" onclick={() => editor.showToast('Tap tempo — coming soon', '#35c9d6')}>
-          <span class="mono bpm">{editor.bpm}</span><span class="mono st-lbl">BPM</span>
-        </button>
+        <div class="st tempo" title="Tempo — type to set, TAP to tap">
+          <input
+            class="mono bpm"
+            type="number"
+            min="20"
+            max="250"
+            value={editor.bpm}
+            onchange={(e) => editor.setBpm(Number((e.currentTarget as HTMLInputElement).value))}
+          />
+          <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
+        </div>
         <div class="div"></div>
-        <div class="st cpu" title="DSP usage (telemetry pending)">
-          <span class="mono st-lbl">CPU</span>
-          <div class="bar"><div class="fill"></div></div>
-          <span class="mono cpu-t">—</span>
+        <div class="st cpu" title="Device link round-trip latency">
+          <span class="mono st-lbl">LINK</span>
+          <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
+          <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
         </div>
       </div>
     {/if}
@@ -321,10 +334,49 @@
     color: var(--text-mut);
     letter-spacing: 0.08em;
   }
+  button.st.on {
+    background: #16252a;
+  }
+  button.st.on .note,
+  button.st.on .st-lbl {
+    color: var(--accent);
+  }
+  .tempo {
+    gap: 7px;
+    cursor: default;
+  }
   .bpm {
+    width: 38px;
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
+    background: transparent;
+    border: 0;
+    padding: 0;
+    text-align: right;
+    font-family: var(--font-mono);
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .bpm::-webkit-outer-spin-button,
+  .bpm::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .bpm:focus {
+    outline: none;
+    color: var(--accent);
+  }
+  .taplbl {
+    background: #16161b;
+    border: 1px solid var(--surface-3);
+    border-radius: 5px;
+    padding: 3px 5px;
+    cursor: pointer;
+  }
+  .taplbl:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .div {
     width: 1px;

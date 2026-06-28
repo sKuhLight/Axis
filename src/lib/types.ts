@@ -18,6 +18,8 @@ export interface ParamDef {
 
 /** A named parameter value read back from the device (GET /block/{name}/params). */
 export interface NamedParam {
+  /** Device-true paramId — disambiguates duplicate display labels (e.g. amp's two "Depth"s). */
+  id?: number;
   name: string;
   value: number;
   unit?: string;
@@ -29,11 +31,96 @@ export interface NamedParam {
   log?: boolean;
 }
 
+/** A discrete (enum) parameter read back from the device — rendered as a dropdown/switch. */
+export interface EnumParam {
+  id: number;
+  name: string;
+  value: number;
+  options: { value: number; label: string }[];
+}
+
 export interface BlockParams {
   block: string;
   slug?: string;
   page: number;
   named: NamedParam[];
+  enums: EnumParam[];
+  type: { value: number; name: string } | null;
+}
+
+/** Result of the device auto-detect handshake (GET /device/detect). */
+export interface DetectResult {
+  connected: boolean;
+  modelId: number;
+  name: string;
+  short: string;
+  gen: number;
+  supported: boolean;
+  port: string | null;
+}
+
+/** One cab slot's current selection + the param ids to write it. */
+export interface CabSlot {
+  slot: number;
+  bankParam: number;
+  irParam: number;
+  dynaParam: number;
+  bank: { value: number; label: string };
+  irIndex: number;
+  irName: string;
+  dyna: { value: number; label: string };
+}
+/** Cab block state for the IR picker (GET /preset/blocks/:eid/cab). */
+export interface CabState {
+  modeParam: number;
+  mode: { value: number; label: string };
+  modeOptions: { value: number; label: string }[];
+  bankOptions: string[];
+  dynaOptions: { value: number; label: string }[];
+  slots: CabSlot[];
+  error?: string;
+}
+
+/** A control value on the grid meter (norm for the fill + device-true display value). */
+export interface MeterVal {
+  norm: number;
+  value: number;
+  unit?: string;
+  min?: number;
+  max?: number;
+  log?: boolean;
+}
+/** A placed block's meter payload (GET /preset/meters). */
+export interface BlockMeter {
+  effectId: number;
+  slug: string;
+  defaultId: number;
+  defaultName: string;
+  typeName: string;
+  vals: Record<number, MeterVal>;
+}
+
+/** Live device push streamed over SSE (GET /events). */
+export type DeviceEvent =
+  | { type: 'tuner'; freq: number; note?: string; cents?: number; octave?: number }
+  | { type: 'tempo'; bpm: number }
+  | { type: 'scene'; index: number }
+  | { type: 'cpu'; percent: number };
+
+/** A user-defined parameter tab within a block family (persisted client-side). */
+export interface TabDef {
+  id: string;
+  name: string;
+  /** Device-true paramIds assigned to this tab, in display order. */
+  paramIds: number[];
+}
+
+/** A tab as rendered in the editor: built-in (Ideal/Advanced) or a user custom tab. */
+export interface ResolvedTab {
+  id: string;
+  name: string;
+  ids: number[];
+  builtin: boolean;
 }
 
 export interface Firmware {

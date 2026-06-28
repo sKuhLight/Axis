@@ -40,6 +40,8 @@ const MAP: Record<string, Category> = {
   Megatap: 'time',
   Looper: 'time',
   Resonator: 'time',
+  TenTap: 'time',
+  Plex: 'time',
   Pitch: 'pitch'
 };
 
@@ -70,13 +72,22 @@ export function baseName(display: string): string {
 }
 
 // map a status base name to the ForgeFX definition-pack key (for the editor + color)
+// Maps a block's base name → editor pack key. Covers BOTH the /status display names
+// (Compressor, Parametric EQ, Volume/Pan…) AND the grid-decoder base names
+// (Comp, PEQ, Vol/Pan, MultiTap, RingMod…) so every placeable block resolves a pack.
 const NAME2PACK: Record<string, string> = {
+  // status-style names
   Input: 'Input', Output: 'Output', Compressor: 'Comp', 'Parametric EQ': 'Peq',
   'Graphic EQ': 'Geq', Amp: 'Amp', Cab: 'Cab', Reverb: 'Reverb', Delay: 'Delay',
   'Multitap Delay': 'Multitap', Pitch: 'Pitch', Fuzz: 'Drive', Drive: 'Drive',
   Chorus: 'Chorus', Flanger: 'Flanger', Phaser: 'Phaser', Rotary: 'Rotary',
   Tremolo: 'Tremolo', Wah: 'Wah', 'Volume/Pan': 'Volume', Volume: 'Volume',
-  Mixer: 'Mixer', Formant: 'Formant', Enhancer: 'Enhancer', Filter: 'Filter'
+  Mixer: 'Mixer', Formant: 'Formant', Enhancer: 'Enhancer', Filter: 'Filter',
+  // grid-decoder base names (EFFECT_BASES)
+  Comp: 'Comp', PEQ: 'Peq', GEQ: 'Geq', MultiTap: 'Multitap', 'Vol/Pan': 'Volume',
+  Synth: 'Synth', Megatap: 'Megatap', Gate: 'Gate', RingMod: 'RingMod', MultiComp: 'MultiComp',
+  'Ten-Tap': 'TenTap', Resonator: 'Resonator', Looper: 'Looper', 'Plex Delay': 'Plex',
+  Send: 'Send', Return: 'Return', Multiplexer: 'Multiplexer'
 };
 /** pack key for the editor, or null if no pack exists (Gate, Ring Mod, …) */
 export function packFor(display: string): string | null {

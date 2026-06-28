@@ -24,6 +24,7 @@
   @keyframes axsDrawer{ from{ transform:translateX(-100%); } to{ transform:translateX(0); } }
   @keyframes axsToast{ 0%{ opacity:0; transform:translate(-50%,10px); } 12%{ opacity:1; transform:translate(-50%,0); } 88%{ opacity:1; transform:translate(-50%,0); } 100%{ opacity:0; transform:translate(-50%,6px); } }
   @keyframes axsPlace{ 0%{ transform:scale(.7); opacity:0; } 60%{ transform:scale(1.06); } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes axsFlow{ to{ stroke-dashoffset:-12; } }
 </style>
 </helmet>
 
@@ -148,6 +149,9 @@
         <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
           <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onMouseEnter="{{ onCableEnter }}" onMouseLeave="{{ onCableLeave }}">
             <path d="{{ cab.d }}" fill="none" stroke="{{ cab.stroke }}" stroke-width="2"></path>
+            <sc-if value="{{ cab.flow }}" hint-placeholder-val="{{ false }}">
+            <path d="{{ cab.d }}" fill="none" stroke="{{ cab.flowStroke }}" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" style="{{ cab.flowStyle }}"></path>
+            </sc-if>
             <path d="{{ cab.d }}" data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="18" style="pointer-events:stroke; cursor:pointer;"></path>
             <sc-if value="{{ cab.hovered }}" hint-placeholder-val="{{ false }}">
             <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" style="cursor:pointer;">
@@ -163,17 +167,24 @@
       </svg>
       <div style="{{ gridStyle }}">
         <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="48">
-          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
+          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" onMouseEnter="{{ onCellEnter }}" onMouseLeave="{{ onCellLeave }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
             <sc-if value="{{ cell.isBlock }}" hint-placeholder-val="{{ false }}">
               <div style="{{ cell.fillStyle }}"></div>
               <div style="{{ cell.glyphStyle }}">{{ cell.glyph }}</div>
               <div style="position:relative; z-index:2; font-weight:700; font-size:14px; color:#fff; letter-spacing:.01em; text-shadow:0 1px 2px rgba(0,0,0,.4); text-align:center; line-height:1.05;">{{ cell.label }}</div>
+              <sc-if value="{{ cell.showType }}" hint-placeholder-val="{{ true }}">
               <div style="position:relative; z-index:2; font:500 9px/1.1 'JetBrains Mono'; color:rgba(255,255,255,.62); text-align:center; max-width:92%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cell.type }}</div>
+              </sc-if>
               <sc-if value="{{ cell.showChan }}" hint-placeholder-val="{{ false }}">
                 <div style="position:absolute; top:6px; right:7px; z-index:3; font:700 9px/1 'JetBrains Mono'; color:rgba(255,255,255,.85); background:rgba(0,0,0,.28); border-radius:4px; padding:3px 4px;">{{ cell.channel }}</div>
               </sc-if>
               <sc-if value="{{ cell.bypassed }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute; top:6px; left:7px; z-index:3; font:700 8px/1 'JetBrains Mono'; color:#0c0c0e; background:#9a9aa3; border-radius:4px; padding:3px 4px; letter-spacing:.05em;">BYP</div>
+                <div style="{{ cell.hatchStyle }}"></div>
+              </sc-if>
+              <sc-if value="{{ cell.canBypass }}" hint-placeholder-val="{{ false }}">
+                <div data-idx="{{ cell.idx }}" onPointerDown="{{ stop }}" onClick="{{ onBlockToggle }}" title="On / Off" style="{{ cell.togStyle }}" style-hover="{{ cell.togHover }}">
+                  <span style="{{ cell.togDotStyle }}"></span>
+                </div>
               </sc-if>
               <sc-if value="{{ cell.showDots }}" hint-placeholder-val="{{ false }}">
                 <div style="position:absolute; bottom:5px; left:0; right:0; z-index:3; display:flex; gap:3px; justify-content:center;">
@@ -193,7 +204,7 @@
               <div style="width:62%; height:2px; background:#4a4a55; border-radius:1px;"></div>
             </sc-if>
             <sc-if value="{{ cell.isEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="font-size:22px; color:#2f2f37; font-weight:300; line-height:1;">+</div>
+              <div style="{{ cell.plusStyle }}">{{ cell.plus }}</div>
             </sc-if>
             <sc-if value="{{ cell.showOut }}" hint-placeholder-val="{{ false }}">
               <div data-port="{{ cell.idx }}" onPointerDown="{{ onPortDown }}" style="{{ cell.outStyle }}" style-hover="transform:scale(1.25);"></div>
@@ -250,21 +261,24 @@
     <!-- LAYOUTS (top strip) -->
     <div class="axs-scroll" style="{{ fc.stripStyle }}">
       <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.14em; color:#56565e; flex:none; margin-right:2px;">LAYOUTS</span>
-      <sc-for list="{{ fc.layoutItems }}" as="L" hint-placeholder-count="3">
+      <sc-for list="{{ fc.layoutNav }}" as="L" hint-placeholder-count="9">
         <div data-fclay="{{ L.i }}" onClick="{{ fc.onLayout }}" style="{{ L.style }}">
-          <span style="{{ L.nameStyle }}">{{ L.name }}</span>
-          <span style="{{ L.subStyle }}">{{ L.count }}</span>
+          {{ L.label }}
+          <sc-if value="{{ L.dotStyle }}" hint-placeholder-val="{{ false }}"><span style="{{ L.dotStyle }}"></span></sc-if>
         </div>
       </sc-for>
-      <div onClick="{{ fc.onAddLayout }}" title="Add layout" style="flex:none; display:flex; align-items:center; gap:6px; align-self:stretch; padding:0 14px; background:#121215; border:1px dashed #2e2e36; border-radius:10px; cursor:pointer; font:700 12px/1 'JetBrains Mono'; color:#9fe9f0;" style-hover="border-color:#35c9d6;">+ New</div>
     </div>
 
     <!-- BOARD (hero) -->
     <div style="{{ fc.boardStyle }}">
         <div style="display:flex; align-items:center; gap:12px; margin:0 auto 14px; max-width:1060px;">
           <input value="{{ fc.layoutName }}" onInput="{{ fc.onLayoutName }}" placeholder="Layout name" style="flex:1; min-width:0; background:#0e0e10; border:1px solid #26262c; border-radius:11px; padding:11px 14px; color:#fff; font:700 15px/1 'Hanken Grotesk',sans-serif; outline:none;" />
-          <div onClick="{{ fc.onDupLayout }}" title="Duplicate layout" style="width:40px; height:40px; flex:none; display:flex; align-items:center; justify-content:center; background:#141417; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; color:#9a9aa3; font-size:15px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">⧉</div>
-          <div onClick="{{ fc.onDelLayout }}" title="Delete layout" style="width:40px; height:40px; flex:none; display:flex; align-items:center; justify-content:center; background:#141417; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#5a3030; color:#e0857d;">🗑</div>
+          <div style="display:flex; align-items:center; gap:7px; flex:none;">
+            <span style="font:700 9px/1 'JetBrains Mono'; letter-spacing:.12em; color:#56565e;">VIEW</span>
+            <sc-for list="{{ fc.viewNav }}" as="v" hint-placeholder-count="4">
+              <div data-fcview="{{ v.v }}" onClick="{{ fc.onViewSel }}" style="{{ v.style }}">{{ v.label }}<sc-if value="{{ v.dotStyle }}" hint-placeholder-val="{{ false }}"><span style="{{ v.dotStyle }}"></span></sc-if></div>
+            </sc-for>
+          </div>
         </div>
         <div style="{{ fc.boardGridStyle }}">
           <sc-for list="{{ fc.board }}" as="b" hint-placeholder-count="3">
@@ -299,6 +313,11 @@
         <div style="display:flex; align-items:center; gap:11px; padding:16px 18px 13px; border-bottom:1px solid #1c1c22; flex:none;">
           <span style="font:700 11px/1 'JetBrains Mono'; letter-spacing:.14em; color:#6e6e78;">SWITCH</span>
           <span style="font:700 17px/1 'JetBrains Mono'; color:#fff;">{{ fc.sw.num }}</span>
+          <span style="width:1px; height:18px; background:#26262c; margin:0 3px;"></span>
+          <span style="font:700 9px/1 'JetBrains Mono'; letter-spacing:.12em; color:#56565e;">VIEW</span>
+          <sc-for list="{{ fc.viewNav }}" as="v" hint-placeholder-count="4">
+            <div data-fcview="{{ v.v }}" onClick="{{ fc.onViewSel }}" style="{{ v.style }}">{{ v.label }}<sc-if value="{{ v.dotStyle }}" hint-placeholder-val="{{ false }}"><span style="{{ v.dotStyle }}"></span></sc-if></div>
+          </sc-for>
           <span style="flex:1;"></span>
           <sc-if value="{{ fc.isMobile }}" hint-placeholder-val="{{ false }}">
             <div onClick="{{ fc.onCloseInsp }}" style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:14px;">✕</div>
@@ -531,6 +550,15 @@
                 <div data-key="{{ k.key }}" onPointerDown="{{ onFaderDown }}" onDoubleClick="{{ onFaderReset }}" style="{{ k.trackStyle }}">
                   <div style="{{ k.fillStyle }}"></div>
                   <div style="{{ k.handleStyle }}"></div>
+                </div>
+                <div style="{{ k.labelStyle }}">{{ k.label }}</div>
+              </div>
+              </sc-if>
+              <sc-if value="{{ k.isToggle }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ k.wrapStyle }}">
+                <div style="{{ k.valStyle }}">{{ k.valueText }}</div>
+                <div data-tkey="{{ k.tkey }}" onClick="{{ onToggleSwitch }}" style="{{ k.switchStyle }}">
+                  <div style="{{ k.knobStyle }}"></div>
                 </div>
                 <div style="{{ k.labelStyle }}">{{ k.label }}</div>
               </div>
@@ -986,6 +1014,12 @@ class Component extends DCLogic {
       rotary:[{label:"Mic Spacing",opts:"Mic Spacing"}],
       reverb:[{label:"Mode",opts:"Mode"}]
     };
+    // per-block on/off (toggle-switch) params, shown beside the knobs
+    this.CAT_TOGGLES = {
+      amp:["Boost","Bright"], drive:["Boost"], comp:["Auto Release"], reverb:["Spillover","Kill Dry"],
+      delay:["Tempo Sync","Kill Dry"], gate:["Auto Mode"], pitch:["Track"], wah:["Auto Engage"],
+      ringmod:["Stereo"], synth:["Glide"], cab:["Stereo"], chorus:["Stereo"], flange:["Stereo"], phaser:["Stereo"]
+    };
 
     // grid is 12 cols x 4 rows; idx = row*12 + col
     const g = new Array(48).fill(null);
@@ -1013,12 +1047,12 @@ class Component extends DCLogic {
 
     this.state = {
       grid:g, routes, rects:{}, selected:18, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Ideal", railActive:"build", scene:1, page:0, mobCols:4, drawerOpen:false,
-      fcDevice:"FM3", fcLayout:0, fcSwitch:0, fcInspOpen:false, fcLayouts:this.fcSeed(),
+      fcDevice:"FM3", fcLayout:0, fcView:0, fcSwitch:0, fcInspOpen:false, fcLayouts:this.fcSeed(),
       paletteOpen:false, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place",
       currentPreset:430, presetOpen:false, presetQuery:"", presetHi:0, presetFilter:"all", favPresets:[7,14,18,25], recentPresets:[430,18,7,2],
       selects:{}, openSelect:null, openSelectRect:null,
       recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
-      knobs:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, moveMode:false, moveIdx:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
+      knobs:{}, toggles:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, hoverCell:null, moveMode:false, moveIdx:null, moveOver:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
       oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] }
     };
@@ -1078,7 +1112,7 @@ class Component extends DCLogic {
         else if (g.paramLock && g.moved && g.axis==="h"){ const dx=e.clientX-g.startX; if(Math.abs(dx)>44) this.changePage(dx<0?1:-1); }
         else if (!g.moved){ this.handleTap(g.idx); }
         this.gesture=null; this.moveModeActive=false;
-        this.setState({ adjust:null, moveMode:false, moveIdx:null }); return;
+        this.setState({ adjust:null, moveMode:false, moveIdx:null, moveOver:null }); return;
       }
       if (this.connectDrag){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
       this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
@@ -1140,6 +1174,7 @@ class Component extends DCLogic {
   shade(hex,p){ const n=parseInt(hex.slice(1),16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255; const t=Math.abs(p),to=p<0?0:255; r=Math.round((to-r)*t+r); g=Math.round((to-g)*t+g); b=Math.round((to-b)*t+b); return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
   seed(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0; return 24+(h%56); }
   kval(key){ const v=this.state.knobs[key]; return v==null?this.seed(key):v; }
+  togVal(key){ const v=this.state.toggles[key]; return v==null ? (this.seed(key)%2===0) : v; }
   clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
   fToX(f){ return (Math.log10(this.clamp(f,20,20000))-this.L0)/(this.L1-this.L0)*1000; }
   xToF(x){ return Math.pow(10, this.L0 + this.clamp(x,0,1000)/1000*(this.L1-this.L0)); }
@@ -1243,6 +1278,8 @@ class Component extends DCLogic {
     if(c && (c.catId||c.shunt)) return; // filled handled by pointer gesture
     this.openPaletteFor(idx);
   };
+  onCellEnter = (e) => { if(this.state.moveMode) return; const idx=+e.currentTarget.dataset.idx; if(this.state.grid[idx]) return; if(this.state.hoverCell!==idx) this.setState({ hoverCell:idx }); };
+  onCellLeave = (e) => { const idx=+e.currentTarget.dataset.idx; if(this.state.hoverCell===idx) this.setState({ hoverCell:null }); };
   openBlock(idx){ const c=this.state.grid[idx]; if(c&&c.shunt){ this.removeNode(idx); return; } if(!c) return; const wasOpen=this.state.editorOpen; this.setState({ selected:idx, editorOpen:true, editorH:wasOpen?this.state.editorH:this.computeDockH(), activePage:this.defaultPage(c.catId,this.effMode(idx)) }); }
   handleTap(idx){
     const c=this.state.grid[idx];
@@ -1266,8 +1303,8 @@ class Component extends DCLogic {
     clearTimeout(this._lpTimer);
     this._lpTimer=setTimeout(()=>{ const g=this.gesture; if(g && !g.axis && !this.moveModeActive) this.startMove(g.idx); }, 380);
   };
-  startMove(idx){ this.moveModeActive=true; const g=this.gesture||{}; this.setState({ moveMode:true, moveIdx:idx, movePos:{x:g.curX||0,y:g.curY||0}, moveOverBin:false, adjust:null }); }
-  updateMove(e){ const el=document.elementFromPoint(e.clientX,e.clientY); const overBin=!!(el&&el.closest&&el.closest("[data-bin]")); this.setState({ movePos:{x:e.clientX,y:e.clientY}, moveOverBin:overBin }); }
+  startMove(idx){ this.moveModeActive=true; const g=this.gesture||{}; this.setState({ moveMode:true, moveIdx:idx, movePos:{x:g.curX||0,y:g.curY||0}, moveOverBin:false, adjust:null, hoverCell:null }); }
+  updateMove(e){ const el=document.elementFromPoint(e.clientX,e.clientY); const overBin=!!(el&&el.closest&&el.closest("[data-bin]")); const ce=el&&el.closest?el.closest("[data-idx]"):null; const over=ce?+ce.dataset.idx:null; this.setState({ movePos:{x:e.clientX,y:e.clientY}, moveOverBin:overBin, moveOver:over }); }
   finishMove(e){ const from=this.state.moveIdx; const el=document.elementFromPoint(e.clientX,e.clientY); if(el&&el.closest&&el.closest("[data-bin]")){ this.removeAt(from); this.showToast("Block deleted","#d6543f"); } else { const ce=el&&el.closest?el.closest("[data-idx]"):null; if(ce){ const to=+ce.dataset.idx; if(to!==from) this.moveBlock(from,to); } } }
   moveBlock(from,to){ const grid=this.state.grid.slice(); const t=grid[to]; grid[to]=grid[from]; grid[from]=t; const remap=i=> i===from?to:(i===to?from:i); const routes={}; Object.keys(this.state.routes).forEach(k=>{ routes[remap(+k)]=this.state.routes[k].map(remap); }); this.setState({grid,routes,selected:to}); this.showToast("Moved","#35c9d6"); }
   removeAt(idx){ const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes}); }
@@ -1329,6 +1366,8 @@ class Component extends DCLogic {
   swipePage(dir){ const list=this._pageNames||[]; if(list.length<2) return; let i=list.indexOf(this.state.activePage); if(i<0) i=0; const ni=this.clamp(i+dir,0,list.length-1); if(ni!==i){ this.setState({ activePage:list[ni] }); this.showToast(list[ni],"#35c9d6"); } }
   onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
   onBypass = () => { const grid=this.state.grid.slice(); const c=grid[this.state.selected]; grid[this.state.selected]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); };
+  onBlockToggle = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out") return; const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); this.showToast((c.bypassed?"On · ":"Off · ")+this.byId[c.catId].name, c.bypassed?"#46d17f":"#9a9aa3"); };
+  onToggleSwitch = (e) => { const key=e.currentTarget.dataset.tkey; this.setState({ toggles:Object.assign({},this.state.toggles,{[key]:!this.togVal(key)}) }); };
   onMute = () => {};
   onSceneIgnore = () => {};
   onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
@@ -1434,12 +1473,22 @@ class Component extends DCLogic {
         handleStyle:{ position:"absolute", left:"50%", bottom:"calc("+pct+"% - 7px)", transform:"translateX(-50%)", width:26, height:14, borderRadius:5, background:"#f5a623", border:"3px solid #0d0d10", boxShadow:"0 2px 5px rgba(0,0,0,.5)" },
         labelStyle:{ fontWeight:600, fontSize:Math.max(11,Math.round(sz*0.135)), color:"#c3c3cb", textAlign:"center", lineHeight:1.2 } };
     }
-    const k=this.mkKnob(c.label, group, "", size); k.kind="knob"; k.isKnob=true; k.isFader=false; k.isDropdown=false; return k;
+    if(c.kind==="toggle"){
+      const tkey="t:"+this.state.selected+":"+group+":"+c.label, on=this.togVal(tkey), sz=size||92;
+      return { kind:"toggle", isKnob:false, isFader:false, isDropdown:false, isToggle:true, label:c.label, tkey, on, valueText:on?"On":"Off",
+        wrapStyle:{ display:"flex", flexDirection:"column", alignItems:"center", gap:Math.max(6,Math.round(sz*0.11)), width:sz+18 },
+        valStyle:{ font:"700 11px/1 'JetBrains Mono'", letterSpacing:".06em", color:on?"#5fd98f":"#6e6e78" },
+        switchStyle:{ position:"relative", width:58, height:32, borderRadius:16, cursor:"pointer", background:on?"#173a26":"#16161b", border:"1px solid "+(on?"#3a7d4f":"#2a2a31"), boxShadow:on?"inset 0 0 10px rgba(70,209,127,.25)":"inset 0 1px 3px rgba(0,0,0,.4)", transition:"background .15s, border-color .15s, box-shadow .15s" },
+        knobStyle:{ position:"absolute", top:3, left:on?29:3, width:24, height:24, borderRadius:"50%", background:on?"#46d17f":"#5a5a62", boxShadow:on?"0 0 8px rgba(70,209,127,.7), 0 1px 2px rgba(0,0,0,.5)":"0 1px 2px rgba(0,0,0,.5)", transition:"left .16s cubic-bezier(.3,.8,.3,1), background .15s" },
+        labelStyle:{ fontWeight:600, fontSize:Math.max(11,Math.round(sz*0.135)), color:"#c3c3cb", textAlign:"center", lineHeight:1.2 } };
+    }
+    const k=this.mkKnob(c.label, group, "", size); k.kind="knob"; k.isKnob=true; k.isFader=false; k.isDropdown=false; k.isToggle=false; return k;
   }
   buildControls(sel, cat, eff, isAmp, knobPages, kSize){
     let labels = isAmp ? knobPages[eff] : (cat.knobs.length?cat.knobs:["Mix","Level","Tone","Depth","Rate","Feedback"]).slice(0,6);
     let ctrls = labels.map(l=>({ label:l, kind:this.controlKind(l) }));
     if(!isAmp){ (this.CAT_SELECTS[sel.catId]||[]).forEach(d=>{ if(!ctrls.find(c=>c.label===d.label)) ctrls.push({ label:d.label, kind:"dropdown", optsKey:d.opts }); }); }
+    const togs=this.CAT_TOGGLES[sel.catId]||[]; if(isAmp ? (eff==="Ideal") : true){ togs.forEach(l=>{ if(!ctrls.find(c=>c.label===l)) ctrls.push({ label:l, kind:"toggle" }); }); }
     const built=ctrls.map(c=>this.mkControl(c, eff, kSize));
     return { grid:built.filter(c=>!c.isDropdown), selects:built.filter(c=>c.isDropdown) };
   }
@@ -1480,8 +1529,9 @@ class Component extends DCLogic {
   fcEmptyRow(n){ const a=[]; for(let i=0;i<n;i++) a.push(this.fcMakeSwitch()); return a; }
   fcSeed(){
     const mk=this.fcMakeSwitch.bind(this), act=this.fcAct.bind(this);
-    const lay=(name,sw)=>{ const list=sw.slice(); while(list.length<12) list.push(mk()); return { name, switches:list }; };
-    return [
+    const views=(v0)=>{ const arr=[ this.fcEmptyRow(12), this.fcEmptyRow(12), this.fcEmptyRow(12), this.fcEmptyRow(12) ]; if(v0){ v0.forEach((s,i)=>{ if(s) arr[0][i]=s; }); } return arr; };
+    const lay=(name,v0)=>({ name, views:views(v0) });
+    const out=[
       lay("PRESETS", [
         mk({ label:"6160 Block", color:"#f5871f", tap:act("preset","num",{preset:63}), hold:act("bank","dec") }),
         mk({ label:"6160 II", color:"#e23b3b", tap:act("preset","num",{preset:64}), hold:act("layout","go",{layoutTo:1}) }),
@@ -1495,6 +1545,9 @@ class Component extends DCLogic {
         mk({ label:"Play", color:"#33c46b", tap:act("looper","play"), hold:act("looper","half") }),
         mk({ label:"Overdub", color:"#9b59f5", tap:act("looper","dub"), hold:act("looper","rev") }) ])
     ];
+    for(let i=4;i<=8;i++) out.push(lay("LAYOUT "+i));
+    out.push(lay("MASTER"));
+    return out; // 9 layouts: 1-8 + 9/Master
   }
   fcDeviceCount(d){ return d==="FC-12"?12:(d==="FC-6"?6:3); }
   fcAutoLabel(a){
@@ -1512,17 +1565,16 @@ class Component extends DCLogic {
   }
   fcSummary(a){ if(!a||a.cat==="none") return "Empty"; const c=this.fcCat(a.cat), f=this.fcFn(a.cat,a.fn); return c.label+(f?" · "+f.label:""); }
   fcCurLayout(){ const S=this.state; return S.fcLayouts[this.clamp(S.fcLayout,0,S.fcLayouts.length-1)]; }
+  fcCurView(){ const L=this.fcCurLayout(); return L.views[this.clamp(this.state.fcView,0,3)]; }
   fcWriteSwitch(mut){
-    const S=this.state, li=this.clamp(S.fcLayout,0,S.fcLayouts.length-1), si=this.clamp(S.fcSwitch,0,11);
-    const fcLayouts=S.fcLayouts.map((L,i)=>{ if(i!==li) return L; const switches=L.switches.map((s,j)=>{ if(j!==si) return s; const ns=Object.assign({},s); mut(ns); return ns; }); return Object.assign({},L,{switches}); });
+    const S=this.state, li=this.clamp(S.fcLayout,0,S.fcLayouts.length-1), vi=this.clamp(S.fcView,0,3), si=this.clamp(S.fcSwitch,0,11);
+    const fcLayouts=S.fcLayouts.map((L,i)=>{ if(i!==li) return L; const views=L.views.map((v,vj)=>{ if(vj!==vi) return v; return v.map((s,j)=>{ if(j!==si) return s; const ns=Object.assign({},s); mut(ns); return ns; }); }); return Object.assign({},L,{views}); });
     this.setState({ fcLayouts });
   }
   fcSetAct(which,patch){ this.fcWriteSwitch(s=>{ s[which]=Object.assign({},s[which],patch); }); }
   onFcDevice = (e) => this.setState({ fcDevice:e.currentTarget.dataset.fcdev, fcSwitch:0 });
-  onFcLayout = (e) => this.setState({ fcLayout:+e.currentTarget.dataset.fclay, fcSwitch:0 });
-  onFcAddLayout = () => { const L=this.state.fcLayouts.concat([{ name:"LAYOUT "+(this.state.fcLayouts.length+1), switches:this.fcEmptyRow(12) }]); this.setState({ fcLayouts:L, fcLayout:L.length-1, fcSwitch:0 }); this.showToast("Layout added","#35c9d6"); };
-  onFcDupLayout = () => { const cur=this.fcCurLayout(); const copy=JSON.parse(JSON.stringify(cur)); copy.name=(cur.name||"LAYOUT")+" COPY"; const L=this.state.fcLayouts.slice(); L.splice(this.state.fcLayout+1,0,copy); this.setState({ fcLayouts:L, fcLayout:this.state.fcLayout+1 }); this.showToast("Layout duplicated","#35c9d6"); };
-  onFcDelLayout = () => { if(this.state.fcLayouts.length<=1){ this.showToast("Keep at least one layout","#d6543f"); return; } const L=this.state.fcLayouts.filter((x,i)=>i!==this.state.fcLayout); this.setState({ fcLayouts:L, fcLayout:Math.max(0,this.state.fcLayout-1), fcSwitch:0 }); this.showToast("Layout deleted","#9a9aa3"); };
+  onFcLayout = (e) => this.setState({ fcLayout:+e.currentTarget.dataset.fclay, fcView:0, fcSwitch:0 });
+  onFcViewSel = (e) => this.setState({ fcView:+e.currentTarget.dataset.fcview, fcSwitch:0 });
   onFcLayoutName = (e) => { const v=e.target.value; const li=this.state.fcLayout; this.setState({ fcLayouts:this.state.fcLayouts.map((L,i)=> i===li?Object.assign({},L,{name:v}):L) }); };
   onFcSwitch = (e) => this.setState({ fcSwitch:+e.currentTarget.dataset.fcsw, fcInspOpen:true });
   onFcCloseInsp = () => this.setState({ fcInspOpen:false });
@@ -1540,8 +1592,8 @@ class Component extends DCLogic {
   onFcPreset = (e) => { const w=e.currentTarget.dataset.fcact, d=+e.currentTarget.dataset.d; this.fcWriteSwitch(s=>{ s[w]=Object.assign({},s[w],{preset:this.clamp((s[w].preset||0)+d,0,511)}); }); };
   onFcLimit = (e) => { const w=e.currentTarget.dataset.fcact, k=e.currentTarget.dataset.lim, d=+e.currentTarget.dataset.d; this.fcWriteSwitch(s=>{ s[w]=Object.assign({},s[w],{[k]:this.clamp((s[w][k]||0)+d,0,127)}); }); };
 
-  fcChip(active,col){ return { display:"flex", alignItems:"center", justifyContent:"center", gap:6, height:34, padding:"0 13px", borderRadius:9, cursor:"pointer", fontSize:12.5, fontWeight:600, whiteSpace:"nowrap", color:active?"#06181a":"#b8b8c0", background:active?(col||"#35c9d6"):"#16161b", border:"1px solid "+(active?(col||"#35c9d6"):"#2a2a31") }; }
-  fcMini(active){ return { width:34, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"700 13px/1 'JetBrains Mono'", color:active?"#06181a":"#b8b8c0", background:active?"#35c9d6":"#16161b", border:"1px solid "+(active?"#35c9d6":"#2a2a31") }; }
+  fcChip(active,col){ return { display:"flex", alignItems:"center", justifyContent:"center", gap:6, height:31, padding:"0 11px", borderRadius:9, cursor:"pointer", fontSize:12, fontWeight:600, whiteSpace:"nowrap", color:active?"#06181a":"#b8b8c0", background:active?(col||"#35c9d6"):"#16161b", border:"1px solid "+(active?(col||"#35c9d6"):"#2a2a31") }; }
+  fcMini(active){ return { width:31, height:30, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"700 12px/1 'JetBrains Mono'", color:active?"#06181a":"#b8b8c0", background:active?"#35c9d6":"#16161b", border:"1px solid "+(active?"#35c9d6":"#2a2a31") }; }
   fcStep(){ return { width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"600 13px/1 'JetBrains Mono'", color:"#cfcfd6", background:"#16161b", border:"1px solid #2a2a31" }; }
   fcActionView(which,a){
     const ACC="#35c9d6", cat=this.fcCat(a.cat), fObj=this.fcFn(a.cat,a.fn), pp=(fObj&&fObj.params)||[];
@@ -1565,15 +1617,19 @@ class Component extends DCLogic {
   fcView(mob){
     const S=this.state, ACC="#35c9d6";
     const layouts=S.fcLayouts, li=this.clamp(S.fcLayout,0,layouts.length-1), L=layouts[li];
-    const count=this.fcDeviceCount(S.fcDevice), si=this.clamp(S.fcSwitch,0,count-1), sw=L.switches[si];
+    const count=this.fcDeviceCount(S.fcDevice), vi=this.clamp(S.fcView,0,3), view=L.views[vi], si=this.clamp(S.fcSwitch,0,count-1), sw=view[si];
+    const hasAny=(arr)=>arr.some(s=>s.tap.cat!=="none"||s.hold.cat!=="none");
     const devices=["FM3","FC-6","FC-12"].map(d=>({ id:d, label:d, style:{ height:28, padding:"0 13px", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, background:S.fcDevice===d?ACC:"transparent", color:S.fcDevice===d?"#06181a":"#8a8a93" } }));
-    const layoutItems=layouts.map((Ly,i)=>{ const active=i===li, used=Ly.switches.filter(s=>s.tap.cat!=="none"||s.hold.cat!=="none").length;
-      return { i, name:Ly.name||("LAYOUT "+(i+1)), count:used+" assigned",
-        style:{ display:"flex", flexDirection:"column", gap:3, padding:"8px 14px", borderRadius:10, cursor:"pointer", minWidth:118, flex:"none", background:active?"rgba(53,201,214,.12)":"#121215", border:"1px solid "+(active?"rgba(53,201,214,.45)":"#1e1e24") },
-        nameStyle:{ font:"700 12.5px/1.1 'JetBrains Mono'", color:active?"#9fe9f0":"#cfcfd6", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" },
-        subStyle:{ font:"600 9px/1 'JetBrains Mono'", color:active?"#5fbac4":"#6e6e78", letterSpacing:".04em" } }; });
+    const layoutNav=layouts.map((Ly,i)=>{ const active=i===li, master=i===8, assigned=Ly.views.some(hasAny);
+      return { i, label: master?"MASTER":String(i+1),
+        style:{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center", height:34, minWidth:master?80:34, padding:master?"0 13px":"0", borderRadius:9, cursor:"pointer", font:(master?"700 11px/1 ":"700 14px/1 ")+"'JetBrains Mono'", letterSpacing:master?".08em":"0", color:active?"#06181a":(assigned?"#dcdce2":"#5c5c64"), background:active?ACC:"#16161b", border:"1px solid "+(active?ACC:"#2a2a31") },
+        dotStyle:(assigned&&!active)?{ position:"absolute", top:5, right:5, width:5, height:5, borderRadius:"50%", background:ACC }:null }; });
+    const viewNav=[0,1,2,3].map(v=>{ const active=v===vi, assigned=hasAny(L.views[v]);
+      return { v, label:String(v+1),
+        style:{ position:"relative", width:34, height:30, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", font:"700 13px/1 'JetBrains Mono'", color:active?"#06181a":(assigned?"#cfcfd6":"#6e6e78"), background:active?ACC:"#16161b", border:"1px solid "+(active?ACC:"#2a2a31") },
+        dotStyle:(assigned&&!active)?{ position:"absolute", top:4, right:4, width:4, height:4, borderRadius:"50%", background:ACC }:null }; });
     const boardCols=S.fcDevice==="FM3"?3:(S.fcDevice==="FC-6"?3:6);
-    const board=[]; for(let i=0;i<count;i++){ const s=L.switches[i], selected=i===si, empty=s.tap.cat==="none"&&s.hold.cat==="none";
+    const board=[]; for(let i=0;i<count;i++){ const s=view[i], selected=i===si, empty=s.tap.cat==="none"&&s.hold.cat==="none";
       const col=s.color||this.fcCat(s.tap.cat).color||"#5a5a62";
       const lbl = s.labelMode==="custom" ? (s.custom||"—") : (s.labelMode==="action" ? this.fcAutoLabel(s.tap) : (s.label|| this.fcAutoLabel(s.tap)));
       board.push({ i, num:i+1, label:lbl, empty, selected,
@@ -1590,32 +1646,30 @@ class Component extends DCLogic {
     const colorList=this.FC_COLORS.map(c=>({ c, style:{ width:28, height:28, borderRadius:8, cursor:"pointer", background:c, border:(sw.color===c)?"2px solid #fff":"2px solid transparent", boxShadow:(sw.color===c)?"0 0 0 2px "+ACC:"none" } }));
     const labelModes=[{id:"auto",label:"Name"},{id:"action",label:"Action"},{id:"custom",label:"Custom"}].map(m=>({ id:m.id, label:m.label, style:{ flex:1, height:32, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:700, background:sw.labelMode===m.id?ACC:"transparent", color:sw.labelMode===m.id?"#06181a":"#8a8a93" } }));
     const inspShow = !mob || S.fcInspOpen;
-    const dockH = this.clamp(Math.round((S.vh||760)*0.42), 228, 330);
     return {
       isMobile:mob, desktop:!mob, devices, onDevice:this.onFcDevice,
       layoutName:L.name||("LAYOUT "+(li+1)), onLayoutName:this.onFcLayoutName,
-      onAddLayout:this.onFcAddLayout, onDupLayout:this.onFcDupLayout, onDelLayout:this.onFcDelLayout,
-      layoutItems, onLayout:this.onFcLayout,
-      deviceNote:count+" switch"+(count===1?"":"es")+" · "+S.fcDevice,
+      layoutNav, onLayout:this.onFcLayout, viewNav, onViewSel:this.onFcViewSel, viewNum:vi+1,
+      deviceNote:count+" switch"+(count===1?"":"es")+" · "+S.fcDevice+" · View "+(vi+1)+"/4",
       board, onSwitch:this.onFcSwitch,
       boardGridStyle:{ display:"grid", gridTemplateColumns:"repeat("+boardCols+",1fr)", gap:mob?10:14, maxWidth:boardCols<=3?620:1060, margin:"0 auto", width:"100%" },
       bodyStyle:{ flex:1, minHeight:0, display:"flex", flexDirection:mob?"column":"row" },
       stripStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"11px 14px", borderBottom:"1px solid #1c1c22", overflowX:"auto" },
       barStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"10px 18px", borderTop:"1px solid #1c1c22", background:"#0b0b0d", overflowX:"auto" },
-      boardStyle:{ flex:1, minWidth:0, overflowY:"auto", padding:mob?"16px 14px 24px":"16px 20px 20px" },
+      boardStyle:{ flex: mob?"none":"0 3 auto", minWidth:0, minHeight:mob?"auto":96, overflowY:"auto", padding:mob?"16px 14px 24px":"16px 20px 14px" },
       inspShow,
       inspStyle: mob ? { position:"fixed", left:0, right:0, bottom:0, maxHeight:"84vh", display:"flex", flexDirection:"column", background:"linear-gradient(180deg,#141417,#0e0e11)", borderTop:"1px solid #26262c", borderTopLeftRadius:20, borderTopRightRadius:20, boxShadow:"0 -10px 44px rgba(0,0,0,.55)", zIndex:160, animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
-                     : { flex:"none", height:dockH, display:"flex", flexDirection:"column", borderTop:"1px solid #1c1c22", background:"#0d0d10" },
+                     : { flex:"1 1 0%", minHeight:300, display:"flex", flexDirection:"column", borderTop:"1px solid #1c1c22", background:"#0d0d10" },
       inspBodyStyle: mob ? { flex:1, minHeight:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:18, padding:"16px 18px 26px" }
                          : { flex:1, minHeight:0, display:"flex" },
       identityStyle: mob ? { display:"flex", flexDirection:"column", gap:16 }
-                         : { width:266, flex:"none", overflowY:"auto", padding:"16px 18px", borderRight:"1px solid #18181f", display:"flex", flexDirection:"column", gap:18 },
+                         : { width:266, flex:"none", overflowY:"auto", padding:"14px 16px", borderRight:"1px solid #18181f", display:"flex", flexDirection:"column", gap:14 },
       scrimStyle: mob ? { position:"fixed", inset:0, background:"rgba(6,6,8,.55)", backdropFilter:"blur(2px)", zIndex:159, animation:"axsOverlay .14s ease" } : null,
       onCloseInsp:this.onFcCloseInsp,
       sw:{ index:si, num:si+1, label:sw.label, placeholder:this.fcAutoLabel(sw.tap), custom:sw.custom,
            labelMode:sw.labelMode, labelModes, showCustom:sw.labelMode==="custom",
            colorList, onColor:this.onFcColor, onLabel:this.onFcLabel, onLabelMode:this.onFcLabelMode, onCustom:this.onFcCustom,
-           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:"#0e0e10", border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:13, borderRight: idx===0?"1px solid #18181f":"none" }; return a; }) },
+           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:"#0e0e10", border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"14px 16px", display:"flex", flexDirection:"column", gap:10, borderRight: idx===0?"1px solid #18181f":"none" }; return a; }) },
       onCat:this.onFcCat, onFn:this.onFcFn, onScene:this.onFcScene, onChannel:this.onFcChannel, onBlock:this.onFcBlock,
       onLayoutTo:this.onFcLayoutTo, onWrap:this.onFcWrap, onPreset:this.onFcPreset, onLimit:this.onFcLimit
     };
@@ -1656,6 +1710,7 @@ class Component extends DCLogic {
     const pageShift = visCols*(colW+gap);
     const denseGrid = mob && visCols>6;  // blocks too small for per-block param swipe — disable it
     this._dense = denseGrid;
+    const showType = !mob || colW>=56;   // progressive disclosure: drop the type sub-label when blocks get small
     const gridScrollStyle=mob
       ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" }
       : { flex:1, minHeight:0, overflow:"auto", padding:"26px 22px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" };
@@ -1663,17 +1718,40 @@ class Component extends DCLogic {
       ? { position:"relative", width:(12*colW+11*gap)+"px", transform:"translateX("+(-page*pageShift)+"px)", transition:"transform .26s cubic-bezier(.3,.8,.3,1)" }
       : { position:"relative", width:"100%", maxWidth:1680, margin:"0 auto" };
     const gridStyle={ display:"grid", gridTemplateColumns:mob?("repeat(12, "+colW+"px)"):"repeat(12, minmax(72px,1fr))", gap, width:"100%", position:"relative", zIndex:1, pointerEvents:"none" };
+    const gridClass = S.moveMode ? "axsDrag" : "";
     const stepStyle=(dis)=>({ width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:dis?"default":"pointer", fontSize:19, fontWeight:600, color:dis?"#3a3a44":"#cfcfd6", background:dis?"transparent":"#1c1c21" });
     const pager={ show:mob, multi:pageCount>1, cols:visCols, lessStyle:stepStyle(visCols<=3), moreStyle:stepStyle(visCols>=12),
       dots:Array.from({length:pageCount},(v,i)=>({ i, style:{ width:i===page?20:7, height:7, borderRadius:4, background:i===page?"#35c9d6":"#2e2e36", transition:"all .2s", cursor:"pointer" } })),
       hint: pageCount>1 ? "Swipe to pan \u00b7 pinch to zoom" : "Pinch to fit more" };
 
+    // --- signal-graph + adjacency: drives live-cable flow and "quiet empty" treatment ---
+    const isFilled = (i)=> i>=0 && i<48 && S.grid[i] && (S.grid[i].catId || S.grid[i].shunt);
+    const liveSet = new Set(); // every block reachable from an input — i.e. carrying signal
+    (function(){ const stack=[]; S.grid.forEach((c,i)=>{ if(c&&c.catId==="in") stack.push(i); }); const seen=new Set(); while(stack.length){ const n=stack.pop(); if(seen.has(n))continue; seen.add(n); liveSet.add(n); (S.routes[n]||[]).forEach(t=>{ if(!seen.has(t)) stack.push(t); }); } })();
+    const paraEmpty=(idx)=> isFilled(idx-12) || isFilled(idx+12);  // empty cell directly above/below the chain → "open a parallel row here"
+
     const cells=S.grid.map((c,idx)=>{
       const col=idx%12, selected=idx===S.selected;
       const base={ position:"relative", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, aspectRatio:"1 / 0.95", borderRadius:11, userSelect:"none", pointerEvents:"auto", transition:"box-shadow .12s, transform .12s" };
       const outStyle={ position:"absolute", right:-8, top:"50%", marginTop:-10, width:20, height:20, borderRadius:"50%", border:"2px solid #0c0c0e", cursor:"crosshair", zIndex:6, background:selected?"#35c9d6":"#3a3a44", boxShadow:selected?"0 0 9px rgba(53,201,214,.6)":"none" };
-      if(!c || (!c.catId && !c.shunt)) return { idx, isBlock:false, isShunt:false, isEmpty:true, canDrag:false, showOut:false, outStyle:{}, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:"#121215",border:"1px dashed #26262c",cursor:"pointer"}), hoverStyle:"border-color:#35c9d6; background:#15191a;" };
-      if(c.shunt) return { idx, isBlock:false, isShunt:true, isEmpty:false, canDrag:true, showOut:col<11, outStyle, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:"#0e0e10",border:"1px solid "+(selected?"#f5a623":"#20202a"),cursor:"grab"}), hoverStyle:"border-color:#35c9d6;" };
+      if(!c || (!c.catId && !c.shunt)){
+        const dragging=S.moveMode, para=paraEmpty(idx), over=(dragging && S.moveOver===idx), hov=(!dragging && S.hoverCell===idx);
+        let bd="1px solid transparent", bg="transparent", boxShadow="none", plusColor="#35c9d6", plusScale=1, plusOp=1, showPlus=false;
+        if(dragging){
+          showPlus=true;
+          if(over){ bd="1px dashed #35c9d6"; bg="rgba(53,201,214,.18)"; boxShadow="inset 0 0 0 1px rgba(53,201,214,.5)"; plusScale=1.15; plusColor="#9fe9ef"; }
+          else if(para){ bd="1px dashed #5066b0"; bg="rgba(79,107,237,.12)"; plusColor="#8fa0f5"; plusOp=0.9; }
+          else { bd="1px dashed #3f4f54"; bg="rgba(120,180,190,.05)"; plusColor="#566b6e"; plusOp=0.55; }
+        } else if(hov){ showPlus=true; bd="1px dashed #35c9d6"; bg="rgba(53,201,214,.08)"; boxShadow="inset 0 0 0 1px rgba(53,201,214,.3)"; }
+        const plusStyle = showPlus
+          ? { fontSize:"19px", fontWeight:300, lineHeight:1, color:plusColor, opacity:plusOp, transform:"scale("+plusScale+")", transition:"opacity .15s ease, transform .15s ease, color .15s ease" }
+          : { width:"5px", height:"5px", borderRadius:"50%", background:"#33333d", transition:"all .15s ease" };  // resting nav dot
+        return { idx, isBlock:false, isShunt:false, isEmpty:true, cls:"", canDrag:false, showOut:false, outStyle:{}, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"",
+          plus:(showPlus?"+":""), plusStyle,
+          boxStyle:Object.assign({},base,{ background:bg, border:bd, boxShadow, cursor:"pointer", transition:"border-color .15s ease, background-color .15s ease, box-shadow .15s ease" }),
+          hoverStyle:"" };
+      }
+      if(c.shunt) return { idx, cls:"", isBlock:false, isShunt:true, isEmpty:false, canDrag:true, showOut:col<11, outStyle, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:"#0e0e10",border:"1px solid "+(selected?"#f5a623":"#20202a"),cursor:"grab"}), hoverStyle:"border-color:#35c9d6;" };
       const cat=this.byId[c.catId], a=cat.accent;
       const moving=S.moveMode && S.moveIdx===idx;
       const box=Object.assign({},base,{ background:"linear-gradient(180deg,"+this.shade(a,-0.42)+","+this.shade(a,-0.62)+")", border:"1px solid "+this.shade(a,-0.05), cursor:"pointer", touchAction:"none", overflow:"hidden",
@@ -1685,14 +1763,21 @@ class Component extends DCLogic {
       const adjusting=!!(S.adjust && S.adjust.idx===idx);
       const fillStyle={ position:"absolute", left:0, right:0, bottom:0, height:fillPct+"%", background:"linear-gradient(180deg,"+this.shade(a,0.35)+","+a+")", opacity:adjusting?1:0.78, borderTop:"2px solid rgba(255,255,255,.7)", pointerEvents:"none", transition:"height .05s linear" };
       const dots=qcl.map((l,i)=>({ style:{ width:i===qi?11:4, height:4, borderRadius:3, background:i===qi?"#fff":"rgba(255,255,255,.32)", transition:"width .12s ease, background .12s ease" } }));
-      return { idx, isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:c.catId==="amp", channel:c.channel, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1 && !denseGrid, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
+      const canBypass = c.catId!=="in" && c.catId!=="out", on=!c.bypassed;
+      const togStyle={ position:"absolute", top:6, left:7, zIndex:5, width:17, height:17, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:"50%", cursor:"pointer", background:on?"rgba(70,209,127,.16)":"rgba(0,0,0,.34)", border:"1px solid "+(on?"rgba(70,209,127,.6)":"rgba(160,160,170,.45)"), transition:"all .12s" };
+      const togDotStyle={ width:7, height:7, borderRadius:"50%", background:on?"#46d17f":"#80808a", boxShadow:on?"0 0 6px rgba(70,209,127,.85)":"none", transition:"all .12s" };
+      return { idx, cls:"", isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:(c.catId==="amp")||(c.channel&&c.channel!=="A"), channel:c.channel, canBypass, togStyle, togDotStyle, togHover:"transform:scale(1.2);", showType, hatchStyle:{ position:"absolute", inset:0, zIndex:1, borderRadius:10, background:"repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 5px, rgba(0,0,0,0) 5px 11px)", pointerEvents:"none" }, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1 && !denseGrid, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
     });
 
     // cables
     const R=S.rects||{};
     const cableD=(x1,y1,x2,y2)=>{ const dx=Math.max(22,(x2-x1)*0.5); return "M"+x1.toFixed(1)+" "+y1.toFixed(1)+" C"+(x1+dx).toFixed(1)+" "+y1.toFixed(1)+","+(x2-dx).toFixed(1)+" "+y2.toFixed(1)+","+x2.toFixed(1)+" "+y2.toFixed(1); };
     const cables=[];
-    Object.keys(S.routes).forEach(k=>{ const from=+k, rf=R[from]; if(!rf) return; (S.routes[k]||[]).forEach(to=>{ const rt=R[to]; if(!rt) return; const dim=(S.grid[from]&&S.grid[from].bypassed); const ck=from+"-"+to; cables.push({ key:ck, from, to, d:cableD(rf.right,rf.cy,rt.left,rt.cy), mx:((rf.right+rt.left)/2).toFixed(1), my:((rf.cy+rt.cy)/2).toFixed(1), stroke:dim?"#4a4a52":"#c7c7cf", hovered:S.hoverCable===ck }); }); });
+    Object.keys(S.routes).forEach(k=>{ const from=+k, rf=R[from]; if(!rf) return; (S.routes[k]||[]).forEach(to=>{ const rt=R[to]; if(!rt) return;
+      const srcByp=(S.grid[from]&&S.grid[from].bypassed), live=liveSet.has(from), ck=from+"-"+to;
+      const stroke = !live ? "#26262c" : (srcByp ? "#33333c" : "#46464f");
+      cables.push({ key:ck, from, to, d:cableD(rf.right,rf.cy,rt.left,rt.cy), mx:((rf.right+rt.left)/2).toFixed(1), my:((rf.cy+rt.cy)/2).toFixed(1), stroke, hovered:S.hoverCable===ck,
+        flow:live, flowStroke:srcByp?"#5a6b6e":"#35c9d6", flowStyle:{ animation:"axsFlow 1.15s linear infinite", opacity:srcByp?0.5:1, pointerEvents:"none" } }); }); });
     let linkPath=null; if(S.linkTo && this.connectDrag){ const rf=R[this.connectDrag.from]; if(rf) linkPath=cableD(rf.right,rf.cy,S.linkTo.x,S.linkTo.y); }
     const hasRects=!!R._w;
 
@@ -1858,11 +1943,11 @@ class Component extends DCLogic {
       globalModes, onGlobalMode:this.onGlobalMode, onTuner:this.onTuner, onTap:this.onTap, showCrumb:showFull && !S.editorOpen,
       onPresetPrev:this.onPresetPrev, onPresetNext:this.onPresetNext, onPresetPick:this.onPresetPick,
       openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
-      gridScrollStyle, gridInnerStyle, gridStyle, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
+      gridScrollStyle, gridInnerStyle, gridStyle, gridClass, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
       onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
-      onCellClick:this.onCellClick,
+      onCellClick:this.onCellClick, onCellEnter:this.onCellEnter, onCellLeave:this.onCellLeave, onBlockToggle:this.onBlockToggle, onToggleSwitch:this.onToggleSwitch,
       editorOpen:S.editorOpen, ed, ieq, oeq,
       onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onContentDown:this.onContentDown, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
       onKnobDown:this.onKnobDown, onKnobReset:this.onKnobReset,

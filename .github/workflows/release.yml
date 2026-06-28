@@ -1,0 +1,80 @@
+name: release
+
+# Tag a version (e.g. v0.1.0-beta) to build the bundled Axis + ForgeFX desktop app for
+# Windows, macOS, and Linux, and attach the installers to a DRAFT GitHub release to publish.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          path: Axis
+      - name: Checkout ForgeFX (bundled engine)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/ForgeFX
+          path: ForgeFX
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Build ForgeFX (the bundled server) and keep only production deps for shipping.
+      - name: Build ForgeFX server
+        working-directory: ForgeFX/server
+        run: |
+          npm ci
+          npm run build
+          npm prune --omit=dev
+
+      # Install Axis (incl. Electron) and build the static UI pointed at the local engine.
+      - name: Install Axis
+        working-directory: Axis
+        run: npm ci
+      - name: Build Axis UI
+        working-directory: Axis
+        env:
+          VITE_FORGEFX_BASE: http://localhost:5056
+        run: npm run build
+
+      # Rebuild ForgeFX's native serialport binding for Electron's ABI, then package.
+      - name: Rebuild native modules for Electron
+        working-directory: Axis
+        run: npx --yes @electron/rebuild@latest -m ../ForgeFX/server -f -w serialport || npx --yes @electron/rebuild@latest -m ../ForgeFX/server
+
+      - name: Package desktop app
+        working-directory: Axis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish never
+
+      - name: Upload installers to draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Axis ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            Axis/dist-desktop/*.AppImage
+            Axis/dist-desktop/*.deb
+            Axis/dist-desktop/*.dmg
+            Axis/dist-desktop/*.zip
+            Axis/dist-desktop/*.exe
+          body: |
+            Axis ${{ github.ref_name }} — community beta. A standalone editor for Fractal devices
+            (FM3) that bundles the ForgeFX engine — one install, no setup.
+
+            Independent, third-party software. Not affiliated with Fractal Audio Systems.
+            Use at your own risk — see DISCLAIMER.md. Always back up your presets.

@@ -2,6 +2,10 @@
   import { editor, baseName } from './editor.svelte';
   import { forgefx } from './forgefx';
   import { catFor, shade } from './catalog';
+  import { categoryOf, packFor } from './blocks';
+
+  const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };
+  const catOf = (name: string) => categoryOf(packFor(name) ?? name);
 
   type Family = { slug: string; name: string; page: number };
   type TypeOpt = { value: number; name: string; manufacturer: string | null; basedOn: string | null };
@@ -16,16 +20,99 @@
 
   const retype = $derived(editor.paletteMode === 'retype');
   const target = $derived(editor.placeTarget ?? editor.firstEmptyCell);
+  let cat = $state('all');
+  const categories = $derived.by(() => {
+    const seen = new Set<string>();
+    for (const f of families) seen.add(catOf(f.name));
+    return ['all', ...['amp', 'cab', 'drive', 'eq', 'dynamics', 'mod', 'time', 'pitch', 'util'].filter((c) => seen.has(c))];
+  });
+
+  // block recents + favorites (slugs), persisted client-side
+  let recents = $state<string[]>([]);
+  let favs = $state<string[]>([]);
+  const BKEY = 'axs.blocks';
+  function loadBlockStore() {
+    try {
+      const j = JSON.parse(localStorage.getItem(BKEY) || 'null');
+      if (Array.isArray(j?.rec)) recents = j.rec;
+      if (Array.isArray(j?.fav)) favs = j.fav;
+    } catch {
+      /* */
+    }
+  }
+  function persistBlocks() {
+    try {
+      localStorage.setItem(BKEY, JSON.stringify({ rec: recents, fav: favs }));
+    } catch {
+      /* */
+    }
+  }
+  function pushBlockRecent(slug: string) {
+    recents = [slug, ...recents.filter((s) => s !== slug)].slice(0, 10);
+    persistBlocks();
+  }
+  const isFav = (slug: string) => favs.includes(slug);
+  function toggleFav(slug: string) {
+    favs = isFav(slug) ? favs.filter((s) => s !== slug) : [slug, ...favs].slice(0, 60);
+    persistBlocks();
+  }
+
+  // per-family TYPE recents + favorites (retype mode), keyed by block slug
+  const blockSlug = $derived(retype ? (editor.selected?.pack?.toLowerCase() ?? '') : '');
+  let typeRec = $state<number[]>([]);
+  let typeFav = $state<number[]>([]);
+  let brand = $state('all');
+  const TKEY = 'axs.types';
+  function loadTypeStore(slug: string) {
+    typeRec = [];
+    typeFav = [];
+    try {
+      const j = JSON.parse(localStorage.getItem(TKEY) || 'null');
+      if (Array.isArray(j?.[slug]?.rec)) typeRec = j[slug].rec;
+      if (Array.isArray(j?.[slug]?.fav)) typeFav = j[slug].fav;
+    } catch {
+      /* */
+    }
+  }
+  function persistTypes(slug: string) {
+    try {
+      const j = JSON.parse(localStorage.getItem(TKEY) || '{}') || {};
+      j[slug] = { rec: typeRec, fav: typeFav };
+      localStorage.setItem(TKEY, JSON.stringify(j));
+    } catch {
+      /* */
+    }
+  }
+  function pushTypeRecent(v: number) {
+    typeRec = [v, ...typeRec.filter((x) => x !== v)].slice(0, 10);
+    persistTypes(blockSlug);
+  }
+  const isTypeFav = (v: number) => typeFav.includes(v);
+  function toggleTypeFav(v: number) {
+    typeFav = isTypeFav(v) ? typeFav.filter((x) => x !== v) : [v, ...typeFav].slice(0, 60);
+    persistTypes(blockSlug);
+  }
+  // brand filter tabs (retype + real names)
+  const brands = $derived.by(() => {
+    if (!retype || !realNames) return [] as string[];
+    const seen = new Set<string>();
+    for (const t of types) if (t.manufacturer) seen.add(t.manufacturer);
+    return ['all', ...[...seen].sort()];
+  });
 
   // load catalog when opened
   $effect(() => {
     if (!editor.paletteOpen) return;
     query = '';
     hi = 0;
+    cat = 'all';
+    brand = 'all';
+    loadBlockStore();
     setTimeout(() => inputEl?.focus(), 0);
     if (retype) {
       const c = editor.selected;
       if (!c?.pack) return;
+      loadTypeStore(c.pack.toLowerCase());
       loading = true;
       forgefx
         .blockTypes(c.pack.toLowerCase())
@@ -51,17 +138,60 @@
       const list = q
         ? types.filter((t) => (t.name + ' ' + (t.manufacturer ?? '') + ' ' + (t.basedOn ?? '')).toLowerCase().includes(q))
         : types;
-      return list.slice(0, 80).map((t) => ({ key: String(t.value), name: typeLabel(t), sub: t.name, kind: 'Model', value: t.value, page: 0 }));
+      return list.slice(0, 80).map((t) => ({ key: String(t.value), name: typeLabel(t), sub: t.name, kind: 'Model', value: t.value, page: 0, mfr: t.manufacturer ?? '' }));
     }
     const list = q ? families.filter((f) => (f.name + ' ' + f.slug).toLowerCase().includes(q)) : families;
-    return list.slice(0, 80).map((f) => ({ key: f.slug, name: f.name, sub: f.slug, kind: 'Block', value: 0, page: f.page }));
+    return list.slice(0, 80).map((f) => ({ key: f.slug, name: f.name, sub: f.slug, kind: 'Block', value: 0, page: f.page, mfr: '' }));
   });
 
-  function pick(i: number) {
-    const r = results[i];
+  type Row = { key: string; name: string; sub: string; kind: string; value: number; page: number; mfr: string; fi: number };
+  // sectioned view: query overrides; retype = Fav/Recent/All of models (or brand-filtered);
+  // block-mode = Fav/Recent/All of blocks (or category-filtered)
+  const view = $derived.by(() => {
+    let i = 0;
+    const seq = (rows: Omit<Row, 'fi'>[]) => rows.map((r) => ({ ...r, fi: i++ }));
+    if (query.trim()) {
+      const rows = seq(results);
+      return { sections: [{ label: `${rows.length} result${rows.length === 1 ? '' : 's'}`, rows }], flat: rows };
+    }
+    if (retype) {
+      if (realNames && brand !== 'all') {
+        const rows = seq(results.filter((r) => r.mfr === brand));
+        return { sections: [{ label: brand.toUpperCase(), rows }], flat: rows };
+      }
+      const byVal = new Map(results.map((r) => [r.value, r]));
+      const mk = (vals: number[]) => vals.map((v) => byVal.get(v)).filter((r): r is Omit<Row, 'fi'> => !!r);
+      const raw: { label: string; rows: Omit<Row, 'fi'>[] }[] = [];
+      const fr = mk(typeFav);
+      if (fr.length) raw.push({ label: 'FAVORITES', rows: fr });
+      const rr = mk(typeRec);
+      if (rr.length) raw.push({ label: 'RECENT', rows: rr });
+      raw.push({ label: 'ALL MODELS', rows: results });
+      const sections = raw.map((s) => ({ label: s.label, rows: seq(s.rows) }));
+      return { sections, flat: sections.flatMap((s) => s.rows) };
+    }
+    if (cat !== 'all') {
+      const rows = seq(results.filter((r) => catOf(r.name) === cat));
+      return { sections: [{ label: CAT_LABEL[cat] ?? cat, rows }], flat: rows };
+    }
+    const bySlug = new Map(families.map((f) => [f.slug, f]));
+    const toRow = (f: Family): Omit<Row, 'fi'> => ({ key: f.slug, name: f.name, sub: f.slug, kind: 'Block', value: 0, page: f.page, mfr: '' });
+    const mk = (slugs: string[]) => slugs.map((s) => bySlug.get(s)).filter((f): f is Family => !!f).map(toRow);
+    const raw: { label: string; rows: Omit<Row, 'fi'>[] }[] = [];
+    const fr = mk(favs);
+    if (fr.length) raw.push({ label: 'FAVORITES', rows: fr });
+    const rr = mk(recents);
+    if (rr.length) raw.push({ label: 'RECENT', rows: rr });
+    raw.push({ label: 'ALL BLOCKS', rows: results });
+    const sections = raw.map((s) => ({ label: s.label, rows: seq(s.rows) }));
+    return { sections, flat: sections.flatMap((s) => s.rows) };
+  });
+
+  function pick(r: Row | undefined) {
     if (!r) return;
     if (retype) {
       editor.retype(r.value);
+      pushTypeRecent(r.value);
       editor.showToast('Type changed', '#35c9d6');
     } else {
       const t = target;
@@ -69,6 +199,7 @@
         editor.showToast('Grid is full', '#d6543f');
       } else {
         editor.place(t.row, t.col, r.page, r.name);
+        pushBlockRecent(r.sub);
         editor.showToast(`Placed ${r.name}`, '#35c9d6');
       }
     }
@@ -79,13 +210,13 @@
   function onKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      hi = Math.min(results.length - 1, hi + 1);
+      hi = Math.min(view.flat.length - 1, hi + 1);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       hi = Math.max(0, hi - 1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      pick(hi);
+      pick(view.flat[hi]);
     } else if (e.key === 'Escape') {
       editor.paletteOpen = false;
     }
@@ -120,30 +251,53 @@
         {/if}
       </div>
 
+      {#if !retype}
+        <div class="cats scroll">
+          {#each categories as c (c)}
+            <button class="cat" class:on={cat === c} onclick={() => { cat = c; hi = 0; }}>{c === 'all' ? 'All' : CAT_LABEL[c] ?? c}</button>
+          {/each}
+        </div>
+      {:else if realNames && brands.length > 1}
+        <div class="cats scroll">
+          {#each brands as b (b)}
+            <button class="cat" class:on={brand === b} onclick={() => { brand = b; hi = 0; }}>{b === 'all' ? 'All' : b}</button>
+          {/each}
+        </div>
+      {/if}
+
       <div class="list scroll">
         {#if loading}
           <div class="empty">Loading…</div>
-        {:else if results.length === 0}
+        {:else if view.flat.length === 0}
           <div class="empty">No matches for “{query}”.</div>
         {:else}
-          {#each results as r, i (r.key)}
-            {@const cat = chipFor(r)}
-            <button
-              class="row"
-              class:hi={i === hi}
-              onmouseenter={() => (hi = i)}
-              onclick={() => pick(i)}
-            >
-              <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
-              <span class="rtext">
-                <span class="rname">{r.name}</span>
-                {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
-              </span>
-              <span class="kind">{r.kind}</span>
-              {#if i === hi}<span class="ret mono">↵</span>{/if}
-            </button>
+          {#each view.sections as s (s.label)}
+            {#if s.label}<div class="section mono">{s.label}</div>{/if}
+            {#each s.rows as r (`${r.key}#${r.fi}`)}
+              {@const cat = chipFor(r)}
+              <div class="rowwrap" class:hi={r.fi === hi}>
+                <button class="row" onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
+                  <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
+                  <span class="rtext">
+                    <span class="rname">{r.name}</span>
+                    {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
+                  </span>
+                  <span class="kind">{r.kind}</span>
+                  {#if r.fi === hi}<span class="ret mono">↵</span>{/if}
+                </button>
+                {#if retype}
+                  <button class="star" class:on={isTypeFav(r.value)} title={isTypeFav(r.value) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleTypeFav(r.value)}>{isTypeFav(r.value) ? '★' : '☆'}</button>
+                {:else}
+                  <button class="star" class:on={isFav(r.sub)} title={isFav(r.sub) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleFav(r.sub)}>{isFav(r.sub) ? '★' : '☆'}</button>
+                {/if}
+              </div>
+            {/each}
           {/each}
         {/if}
+      </div>
+
+      <div class="foot mono">
+        <span>↑↓ Navigate</span><span>⏎ {retype ? 'Change' : 'Place'}</span>{#if !retype}<span>★ Favorite</span>{/if}<span>Esc Close</span>
       </div>
     </div>
   </div>
@@ -224,14 +378,67 @@
     gap: 5px;
     cursor: pointer;
   }
+  .cats {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    border-bottom: 1px solid #1f1f25;
+  }
+  .cat {
+    flex: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--surface-3);
+    background: var(--panel-2);
+    color: #9a9aa3;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    outline: none;
+  }
+  .cat:focus-visible {
+    border-color: var(--accent);
+  }
+  .cat.on {
+    background: rgba(53, 201, 214, 0.14);
+    border-color: #2c4a4b;
+    color: var(--accent);
+  }
   .list {
     flex: 1;
     min-height: 140px;
     overflow-y: auto;
     padding: 8px 8px 10px;
   }
+  .foot {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid #232329;
+    font-size: 10px;
+    color: var(--text-faint);
+    flex: none;
+  }
+  .section {
+    font: 600 10px/1 var(--font-mono);
+    color: #5d5d66;
+    letter-spacing: 0.1em;
+    padding: 13px 10px 8px;
+  }
+  .rowwrap {
+    display: flex;
+    align-items: center;
+    border-radius: 10px;
+  }
+  .rowwrap.hi {
+    background: rgba(53, 201, 214, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(53, 201, 214, 0.3);
+  }
   .row {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 13px;
@@ -242,9 +449,21 @@
     cursor: pointer;
     text-align: left;
   }
-  .row.hi {
-    background: rgba(53, 201, 214, 0.1);
-    box-shadow: inset 0 0 0 1px rgba(53, 201, 214, 0.3);
+  .star {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    margin-right: 6px;
+    border: 0;
+    background: transparent;
+    color: #44444d;
+    font-size: 17px;
+    cursor: pointer;
+    border-radius: 9px;
+  }
+  .star:hover,
+  .star.on {
+    color: var(--amber);
   }
   .chip {
     flex: none;
