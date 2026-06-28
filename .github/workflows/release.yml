@@ -54,6 +54,10 @@ jobs:
         working-directory: Axis
         run: npx --yes @electron/rebuild@latest -m ../ForgeFX/server -f -w serialport || npx --yes @electron/rebuild@latest -m ../ForgeFX/server
 
+      - name: Install Linux packaging tools (pacman needs bsdtar; rpm needs rpmbuild)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
+
       - name: Package desktop app
         working-directory: Axis
         env:
