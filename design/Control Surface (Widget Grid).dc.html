@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:#0c0c0e; overscroll-behavior:none; }
+  ::selection{ background:#35c9d6; color:#06181a; }
+  input{ font-family:inherit; }
+  .ws-scroll::-webkit-scrollbar{ width:9px; height:9px; }
+  .ws-scroll::-webkit-scrollbar-track{ background:transparent; }
+  .ws-scroll::-webkit-scrollbar-thumb{ background:#2a2a31; border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  @keyframes wsPop{ 0%{ transform:scale(.82); opacity:0; } 60%{ transform:scale(1.05); } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes wsToast{ 0%{ opacity:0; transform:translate(-50%,8px); } 14%{ opacity:1; transform:translate(-50%,0); } 86%{ opacity:1; transform:translate(-50%,0); } 100%{ opacity:0; transform:translate(-50%,5px); } }
+</style>
+</helmet>
+
+<div style="position:fixed; inset:0; display:flex; flex-direction:column; background:radial-gradient(130% 120% at 50% -10%,#131316,#0a0a0c 72%); color:#e9e9ee; font-family:'Hanken Grotesk',system-ui,sans-serif; overflow:hidden;">
+
+  <!-- ===================== HEADER ===================== -->
+  <div data-screen-label="Editor Header" style="display:flex; align-items:center; gap:10px; padding:11px 16px; border-bottom:1px solid #1c1c22; flex:none; background:linear-gradient(180deg,#141418,#0f0f12);">
+    <div style="width:40px; height:40px; flex:none; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:19px; color:#fff; background:linear-gradient(180deg,#3b2c14,#241a0e); border:1px solid #4a3a1f;">◣</div>
+    <div style="min-width:0; line-height:1.15;">
+      <div style="font-weight:700; font-size:15px; color:#fff;">Amp</div>
+      <div style="font:500 11px/1.2 'JetBrains Mono'; color:#f5a623; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:230px;">5153 100W Stealth Red</div>
+    </div>
+    <div style="display:flex; gap:4px; align-items:center; margin-left:6px;">
+      <span style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.08em; margin-right:2px;">CH</span>
+      <sc-for list="{{ channels }}" as="c" hint-placeholder-count="4">
+        <div data-ch="{{ c.id }}" onClick="{{ onChannel }}" style="{{ c.style }}">{{ c.id }}</div>
+      </sc-for>
+    </div>
+    <span style="flex:1; min-width:6px;"></span>
+    <div onClick="{{ toggleEdit }}" title="Lock = use controls · Unlock = arrange the board" style="{{ editBtnStyle }}">
+      <span style="font-size:15px; line-height:1;">{{ editIcon }}</span>
+      <span style="white-space:nowrap;">{{ editLabel }}</span>
+    </div>
+    <div style="width:38px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; font-size:16px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
+  </div>
+
+  <!-- ===================== PAGE TABS ===================== -->
+  <div class="ws-scroll" style="display:flex; gap:8px; padding:11px 16px 5px; overflow-x:auto; flex:none;">
+    <sc-for list="{{ pages }}" as="p" hint-placeholder-count="3">
+      <div data-page="{{ p.name }}" onClick="{{ onTab }}" style="{{ p.style }}">{{ p.name }}</div>
+    </sc-for>
+    <sc-if value="{{ editMode }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ addPage }}" title="Add page" style="flex:none; width:38px; padding:9px 0; border-radius:9px; text-align:center; font-size:16px; font-weight:600; cursor:pointer; background:#15151a; border:1px dashed #33333c; color:#6e6e78;" style-hover="border-color:#35c9d6; color:#35c9d6;">+</div>
+    </sc-if>
+  </div>
+
+  <!-- ===================== ARRANGE TOOLBAR ===================== -->
+  <sc-if value="{{ editMode }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Arrange Toolbar" style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:9px 16px; flex:none; background:rgba(53,201,214,.05); border-top:1px solid rgba(53,201,214,.14); border-bottom:1px solid rgba(53,201,214,.14);">
+    <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.1em; color:#7fd8de;">ARRANGE</span>
+    <div style="display:flex; align-items:center; gap:7px; height:34px; padding:0 5px 0 11px; background:#0e0e10; border:1px solid #26262c; border-radius:10px;">
+      <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.06em;">COLS</span>
+      <div onClick="{{ decCols }}" style="{{ stepStyle }}">−</div>
+      <span style="font:700 13px/1 'JetBrains Mono'; color:#e9e9ee; width:14px; text-align:center;">{{ cols }}</span>
+      <div onClick="{{ incCols }}" style="{{ stepStyle }}">+</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:7px; height:34px; padding:0 5px 0 11px; background:#0e0e10; border:1px solid #26262c; border-radius:10px;">
+      <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.06em;">ROWS</span>
+      <div onClick="{{ decRows }}" style="{{ stepStyle }}">−</div>
+      <span style="font:700 13px/1 'JetBrains Mono'; color:#e9e9ee; width:14px; text-align:center;">{{ rows }}</span>
+      <div onClick="{{ incRows }}" style="{{ stepStyle }}">+</div>
+    </div>
+    <span style="font:500 10px/1 'JetBrains Mono'; color:#5b5b64;">applies to every block</span>
+    <span style="flex:1;"></span>
+    <div onClick="{{ toggleCompact }}" title="Free = leave gaps · Packed = no holes" style="{{ compactStyle }}">{{ compactLabel }}</div>
+    <div onClick="{{ tidyUp }}" style="display:flex; align-items:center; gap:7px; height:34px; padding:0 13px; background:#15151a; border:1px solid #2a2a31; border-radius:10px; cursor:pointer; font-size:12px; font-weight:600; color:#cfcfd6;" style-hover="border-color:#35c9d6; color:#fff;">
+      <span style="font-size:13px;">⤢</span><span>Tidy up</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== BOARD ===================== -->
+  <div ref="{{ contentRef }}" class="ws-scroll" style="{{ contentStyle }}">
+    <div ref="{{ boardRef }}" onPointerDown="{{ onBoardDown }}" style="{{ boardWrapStyle }}">
+
+      <sc-if value="{{ editMode }}" hint-placeholder-val="{{ false }}">
+      <div style="{{ gridLayerStyle }}">
+        <sc-for list="{{ cells }}" as="c" hint-placeholder-count="32">
+          <div style="{{ c.style }}"></div>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <div style="{{ gridLayerStyle }}">
+        <sc-if value="{{ ghost }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ ghostStyle }}"></div>
+        </sc-if>
+
+        <sc-for list="{{ widgets }}" as="w" hint-placeholder-count="12">
+        <div style="{{ w.cellStyle }}">
+          <div data-id="{{ w.id }}" data-param="{{ w.param }}" onPointerDown="{{ onWidgetDown }}" style="{{ w.cardStyle }}" style-hover="{{ w.hoverStyle }}">
+
+            <!-- KNOB -->
+            <sc-if value="{{ w.viewKnob }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ w.dialWrapStyle }}">
+              <svg width="{{ w.dial }}" height="{{ w.dial }}" viewBox="0 0 64 64" style="display:block;">
+                <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ w.dash }}" transform="rotate(135 32 32)"></circle>
+                <circle cx="32" cy="32" r="14" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                <g transform="{{ w.pt }}"><circle cx="32" cy="21" r="2.6" fill="#f5a623"></circle></g>
+              </svg>
+              <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}"><input ref="{{ valRef }}" value="{{ editBuf }}" onChange="{{ onValueInput }}" onKeyDown="{{ onValueKey }}" onBlur="{{ onValueBlur }}" onPointerDown="{{ stop }}" style="{{ w.inputStyle }}"></sc-if>
+              <sc-if value="{{ w.notEditing }}" hint-placeholder-val="{{ true }}"><div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onValueDown }}" style="{{ w.valStyle }}">{{ w.valueText }}</div></sc-if>
+            </div>
+            <div style="{{ w.labelStyle }}">{{ w.label }}</div>
+            </sc-if>
+
+            <!-- FADER (vertical) -->
+            <sc-if value="{{ w.viewFader }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}"><input ref="{{ valRef }}" value="{{ editBuf }}" onChange="{{ onValueInput }}" onKeyDown="{{ onValueKey }}" onBlur="{{ onValueBlur }}" onPointerDown="{{ stop }}" style="{{ w.inputStyle }}"></sc-if>
+            <sc-if value="{{ w.notEditing }}" hint-placeholder-val="{{ true }}"><div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onValueDown }}" style="{{ w.valStyle }}">{{ w.valueText }}</div></sc-if>
+            <div data-id="{{ w.id }}" onPointerDown="{{ onTrackDown }}" style="{{ w.trackStyle }}">
+              <div style="{{ w.fillStyle }}"></div>
+              <div style="{{ w.handleStyle }}"></div>
+            </div>
+            <div style="{{ w.labelStyle }}">{{ w.label }}</div>
+            </sc-if>
+
+            <!-- SLIDER (horizontal) -->
+            <sc-if value="{{ w.viewSlider }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; width:100%; gap:8px; margin-bottom:auto; padding:2px 2px 0;">
+              <span style="font-weight:600; font-size:12px; color:#bdbdc6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">{{ w.label }}</span>
+              <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}"><input ref="{{ valRef }}" value="{{ editBuf }}" onChange="{{ onValueInput }}" onKeyDown="{{ onValueKey }}" onBlur="{{ onValueBlur }}" onPointerDown="{{ stop }}" style="{{ w.inputStyle }}"></sc-if>
+              <sc-if value="{{ w.notEditing }}" hint-placeholder-val="{{ true }}"><div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onValueDown }}" style="{{ w.valStyle }}">{{ w.valueText }}</div></sc-if>
+            </div>
+            <div data-id="{{ w.id }}" onPointerDown="{{ onTrackDown }}" style="{{ w.trackStyle }}">
+              <div style="{{ w.fillStyle }}"></div>
+              <div style="{{ w.handleStyle }}"></div>
+            </div>
+            </sc-if>
+
+            <!-- NUMBER -->
+            <sc-if value="{{ w.viewNumber }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div data-id="{{ w.id }}" data-dir="-1" onPointerDown="{{ stop }}" onClick="{{ onNudge }}" style="{{ w.stepBtn }}">−</div>
+              <sc-if value="{{ w.editing }}" hint-placeholder-val="{{ false }}"><input ref="{{ valRef }}" value="{{ editBuf }}" onChange="{{ onValueInput }}" onKeyDown="{{ onValueKey }}" onBlur="{{ onValueBlur }}" onPointerDown="{{ stop }}" style="{{ w.inputStyle }}"></sc-if>
+              <sc-if value="{{ w.notEditing }}" hint-placeholder-val="{{ true }}"><div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onValueDown }}" style="{{ w.valStyle }}">{{ w.valueText }}</div></sc-if>
+              <div data-id="{{ w.id }}" data-dir="1" onPointerDown="{{ stop }}" onClick="{{ onNudge }}" style="{{ w.stepBtn }}">+</div>
+            </div>
+            <div style="{{ w.labelStyle }}">{{ w.label }}</div>
+            </sc-if>
+
+            <!-- ON / OFF BUTTON -->
+            <sc-if value="{{ w.viewButton }}" hint-placeholder-val="{{ false }}">
+            <div data-param="{{ w.param }}" onPointerDown="{{ stop }}" onClick="{{ onToggleClick }}" style="{{ w.onoffStyle }}">
+              <span style="{{ w.onoffDot }}"></span>{{ w.valueText }}
+            </div>
+            <div style="{{ w.labelStyle }}">{{ w.label }}</div>
+            </sc-if>
+
+            <!-- SWITCH -->
+            <sc-if value="{{ w.viewSwitch }}" hint-placeholder-val="{{ false }}">
+            <div data-param="{{ w.param }}" onPointerDown="{{ stop }}" onClick="{{ onToggleClick }}" style="{{ w.switchStyle }}">
+              <div style="{{ w.knobStyle }}"></div>
+            </div>
+            <div style="{{ w.labelStyle }}">{{ w.label }}</div>
+            </sc-if>
+
+            <!-- DROPDOWN -->
+            <sc-if value="{{ w.viewSelect }}" hint-placeholder-val="{{ false }}">
+            <div style="{{ w.labelTopStyle }}">{{ w.label }}</div>
+            <div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onSelectOpen }}" style="{{ w.fieldStyle }}">
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ w.value }}</span>
+              <span style="font-size:10px; color:#6e6e78; flex:none; margin-left:8px;">▾</span>
+            </div>
+            </sc-if>
+
+            <!-- EQ -->
+            <sc-if value="{{ w.viewEq }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; top:9px; left:12px; z-index:2; font-weight:700; font-size:12px; color:#c3c3cb;">{{ w.label }}</div>
+            <div style="width:100%; height:100%; display:flex; flex-direction:column; padding:6px 4px 2px;">
+              <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style="width:100%; flex:1; min-height:0; display:block; touch-action:none;">
+                <line x1="0" y1="150" x2="1000" y2="150" stroke="#26262c" stroke-width="1" stroke-dasharray="4 6"></line>
+                <path d="{{ w.fillPath }}" fill="rgba(53,201,214,.10)" stroke="none"></path>
+                <path d="{{ w.curvePath }}" fill="none" stroke="#35c9d6" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+                <sc-if value="{{ w.eqFull }}" hint-placeholder-val="{{ false }}">
+                <circle data-id="{{ w.id }}" onPointerDown="{{ onEqDown }}" cx="{{ w.bandX }}" cy="{{ w.bandY }}" r="18" fill="#f5a623" stroke="#0a0a0c" stroke-width="3" style="cursor:grab;"></circle>
+                </sc-if>
+              </svg>
+              <sc-if value="{{ w.eqReadouts }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <sc-for list="{{ w.readouts }}" as="r" hint-placeholder-count="2">
+                  <div style="flex:1; background:#0d0d10; border:1px solid #26262c; border-radius:9px; padding:7px 10px;">
+                    <div style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.06em; text-transform:uppercase;">{{ r.label }}</div>
+                    <div style="font:600 14px/1.2 'JetBrains Mono'; color:{{ r.color }}; margin-top:4px;">{{ r.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              </sc-if>
+            </div>
+            </sc-if>
+
+            <!-- ACTION -->
+            <sc-if value="{{ w.viewAction }}" hint-placeholder-val="{{ false }}">
+            <div data-param="{{ w.param }}" onPointerDown="{{ stop }}" onClick="{{ onActionClick }}" style="{{ w.btnStyle }}">{{ w.valueText }}</div>
+            </sc-if>
+
+            <!-- ARRANGE CHROME -->
+            <sc-if value="{{ w.edit }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; inset:0; z-index:6; border-radius:11px; border:1px dashed rgba(53,201,214,.45); background:rgba(53,201,214,.04); pointer-events:none;"></div>
+            <div style="position:absolute; top:5px; right:5px; z-index:8; font:700 8px/1 'JetBrains Mono'; color:#5b5b64; background:rgba(0,0,0,.4); border-radius:5px; padding:3px 4px; pointer-events:none;">{{ w.dims }}</div>
+            <div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onRemoveWidget }}" style="position:absolute; top:4px; left:4px; z-index:8; width:21px; height:21px; border-radius:7px; display:flex; align-items:center; justify-content:center; background:rgba(214,84,63,.16); border:1px solid rgba(214,84,63,.5); color:#ff7a68; cursor:pointer; font-size:12px;" style-hover="background:rgba(214,84,63,.3);">✕</div>
+            <sc-if value="{{ w.canCycle }}" hint-placeholder-val="{{ false }}">
+            <div data-id="{{ w.id }}" onPointerDown="{{ stop }}" onClick="{{ onCycleView }}" title="Change control type" style="position:absolute; bottom:4px; left:4px; z-index:8; display:flex; align-items:center; gap:5px; height:21px; padding:0 8px; border-radius:7px; background:rgba(53,201,214,.14); border:1px solid rgba(53,201,214,.5); color:#9fe9ef; cursor:pointer; font:700 9px/1 'JetBrains Mono';" style-hover="background:rgba(53,201,214,.28);">
+              <span style="font-size:11px;">{{ w.viewIcon }}</span><span>{{ w.viewName }}</span>
+            </div>
+            </sc-if>
+            <div data-id="{{ w.id }}" onPointerDown="{{ onResizeDown }}" style="position:absolute; bottom:2px; right:2px; z-index:8; width:24px; height:24px; display:flex; align-items:flex-end; justify-content:flex-end; padding:4px; cursor:nwse-resize; touch-action:none;">
+              <svg width="13" height="13" viewBox="0 0 13 13"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke="#35c9d6" stroke-width="1.6" stroke-linecap="round"></path></svg>
+            </div>
+            </sc-if>
+
+          </div>
+        </div>
+        </sc-for>
+      </div>
+
+      <!-- SELECT POPOVER -->
+      <sc-if value="{{ selectMenu.open }}" hint-placeholder-val="{{ false }}">
+      <div onPointerDown="{{ closeSelect }}" style="position:absolute; inset:0; z-index:40;"></div>
+      <div style="{{ selectMenu.style }}">
+        <sc-for list="{{ selectMenu.opts }}" as="o" hint-placeholder-count="5">
+          <div data-id="{{ selectMenu.id }}" data-oi="{{ o.i }}" onPointerDown="{{ stop }}" onClick="{{ onSelectPick }}" style="{{ o.style }}">{{ o.label }}</div>
+        </sc-for>
+      </div>
+      </sc-if>
+
+    </div>
+
+    <sc-if value="{{ boardEmpty }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#3c3c44; font-size:13px; pointer-events:none;">Empty page — add controls from the tray below</div>
+    </sc-if>
+  </div>
+
+  <!-- ===================== WIDGET TRAY ===================== -->
+  <sc-if value="{{ editMode }}" hint-placeholder-val="{{ false }}">
+  <div data-screen-label="Widget Tray" style="flex:none; padding:11px 16px 13px; border-top:1px solid #1c1c22; background:linear-gradient(180deg,#101013,#0c0c0e);">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:9px;">
+      <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.1em; color:#6e6e78;">ADD CONTROL</span>
+      <span style="font:500 10px/1 'JetBrains Mono'; color:#46464f;">tap to drop into the first free slot</span>
+    </div>
+    <div class="ws-scroll" style="display:flex; gap:9px; overflow-x:auto; padding-bottom:3px;">
+      <sc-for list="{{ tray }}" as="t" hint-placeholder-count="6">
+        <div data-param="{{ t.param }}" onClick="{{ onTrayAdd }}" style="flex:none; display:flex; align-items:center; gap:9px; height:46px; padding:0 13px; background:#15151a; border:1px solid #2a2a31; border-radius:11px; cursor:pointer; transition:border-color .1s;" style-hover="border-color:#35c9d6;">
+          <span style="width:30px; height:30px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; color:#7fd8de; background:#0e1718; border:1px solid #234142;">{{ t.icon }}</span>
+          <div style="line-height:1.2;">
+            <div style="font-size:13px; font-weight:600; color:#e3e3e8; white-space:nowrap;">{{ t.param }}</div>
+            <div style="font:500 9px/1 'JetBrains Mono'; color:#6e6e78; margin-top:3px;">{{ t.meta }}</div>
+          </div>
+          <span style="font-size:16px; color:#56565e; margin-left:2px;">+</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ trayEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; height:46px; padding:0 14px; color:#46464f; font-size:12px;">All controls are on the board.</div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== FOOTER ===================== -->
+  <div data-screen-label="Footer" style="display:flex; flex-wrap:wrap; align-items:center; gap:9px; padding:10px 16px; border-top:1px solid #1e1e25; background:#0e0e10; flex:none;">
+    <div style="font:500 11px/1.3 'JetBrains Mono'; color:#56565e; max-width:360px;">{{ hintText }}</div>
+    <span style="flex:1; min-width:10px;"></span>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; justify-content:center; height:42px; padding:0 16px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:700; background:#15151a; border:1px solid #2a2a31; color:#9a9aa3;" style-hover="border-color:#3f3f48;">Mute</div>
+      <div onClick="{{ onActionClick }}" data-param="Bypass" style="{{ bypassStyle }}">{{ bypassLabel }}</div>
+      <div style="display:flex; align-items:center; justify-content:center; height:42px; padding:0 16px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:700; background:#1a1113; border:1px solid #4a2226; color:#d6543f;" style-hover="border-color:#6a2f33;">Remove</div>
+    </div>
+  </div>
+
+  <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute; bottom:90px; left:50%; transform:translateX(-50%); z-index:300; display:flex; align-items:center; gap:9px; padding:11px 18px; background:rgba(22,22,27,.97); border:1px solid #2e2e36; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); font-size:13px; font-weight:600; color:#e9e9ee; animation:wsToast 2.1s ease forwards;">
+    <span style="{{ toast.dot }}"></span>{{ toast.text }}
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    // kind: cont | toggle | select | eq | action.  view = display form.
+    this.CAT = {
+      "Gain":{kind:"cont",w:2,h:2,view:"knob"}, "Master":{kind:"cont",w:1,h:1,view:"knob"},
+      "Bass":{kind:"cont",w:1,h:1,view:"knob"}, "Mid":{kind:"cont",w:1,h:1,view:"knob"},
+      "Treble":{kind:"cont",w:1,h:1,view:"knob"}, "Presence":{kind:"cont",w:1,h:1,view:"knob"},
+      "Input Trim":{kind:"cont",w:1,h:1,view:"knob"}, "Depth":{kind:"cont",w:1,h:1,view:"knob"},
+      "Definition":{kind:"cont",w:1,h:1,view:"knob"}, "Sag":{kind:"cont",w:1,h:1,view:"knob"},
+      "Low Cut":{kind:"cont",w:1,h:1,view:"knob"}, "High Cut":{kind:"cont",w:1,h:1,view:"knob"},
+      "Level":{kind:"cont",w:1,h:2,view:"fader"}, "Balance":{kind:"cont",w:1,h:1,view:"knob"},
+      "Bright":{kind:"toggle",w:1,h:1,view:"button"}, "Boost":{kind:"toggle",w:1,h:1,view:"button"},
+      "Amp Type":{kind:"select",w:2,h:1,view:"select",opts:["5153 100W Red","5153 100W Blue","Brit 800","Recto Orange","USA Lead","Plexi 100","JZ Clean"]},
+      "Mode":{kind:"select",w:2,h:1,view:"select",opts:["Ideal","Authentic"]},
+      "Tone EQ":{kind:"eq",w:4,h:2,view:"eq"}, "Bypass":{kind:"action",w:2,h:1,view:"action"}
+    };
+    this.VIEW_ICON={ knob:"◉", fader:"⇕", slider:"⇔", number:"#", button:"⏻", switch:"⊙", select:"▾", eq:"∿", action:"⏼" };
+    this.CONT_VIEWS=["knob","fader","slider","number"];
+    this.TOG_VIEWS=["button","switch"];
+
+    let id=0; const W=(param,x,y,w,h,view)=>{ const c=this.CAT[param]; return { id:"w"+(++id), param, x, y, w:w||c.w, h:h||c.h, view:view||c.view }; };
+    const boards = {
+      "Ideal":[
+        W("Gain",0,0), W("Tone EQ",2,0), W("Amp Type",6,0), W("Mode",6,1),
+        W("Level",0,2), W("Master",1,2), W("Bass",2,2), W("Mid",3,2), W("Treble",4,2), W("Presence",5,2), W("Bright",6,2), W("Boost",7,2),
+        W("Balance",1,3), W("Input Trim",2,3), W("Depth",3,3), W("Definition",4,3), W("Sag",5,3), W("Bypass",6,3)
+      ],
+      "Tone":[ W("Input Trim",0,0,2,2,"knob"), W("Depth",2,0), W("Definition",3,0), W("Sag",2,1), W("Boost",3,1), W("Mode",4,0) ],
+      "EQ":[ W("Tone EQ",0,0,6,3,"eq"), W("Low Cut",0,3), W("High Cut",1,3) ]
+    };
+    const all=Object.keys(this.CAT);
+    const hiddenFor=(pg)=>all.filter(p=>!boards[pg].some(w=>w.param===p));
+    const hidden={ "Ideal":hiddenFor("Ideal"), "Tone":hiddenFor("Tone"), "EQ":hiddenFor("EQ") };
+
+    const _vw=(typeof window!=="undefined"?window.innerWidth:1100), _avail=_vw-32;
+    const _cols=_vw<760 ? this.clamp(Math.round(_avail/84),4,8) : this.clamp(Math.round(_avail/108),6,20);
+    this.state = {
+      cols:_cols, rows:4, editMode:false, compact:false, contentW:_avail,
+      page:"Ideal", pageOrder:["Ideal","Tone","EQ"],
+      boards, hidden,
+      vals:{ Gain:72, Master:59, Bass:56, Mid:39, Treble:29, Presence:28, Level:26, Balance:50,
+             "Input Trim":50, Depth:55, Definition:60, Sag:40, "Low Cut":18, "High Cut":82 },
+      toggles:{ Bright:true, Boost:false },
+      selects:{ "Amp Type":0, "Mode":0 },
+      eq:{ freq:1200, gain:4 }, bypassed:false, channel:"A",
+      vw:(typeof window!=="undefined"?window.innerWidth:1100),
+      drag:null, toast:null, editingId:null, editBuf:"", openSelect:null
+    };
+    this.GAP=8;
+  }
+  componentDidMount(){
+    this._move=(e)=>this.onMove(e); this._up=(e)=>this.onUp(e); this._rz=()=>this.setState({vw:window.innerWidth});
+    window.addEventListener("pointermove",this._move,{passive:false});
+    window.addEventListener("pointerup",this._up);
+    window.addEventListener("resize",this._rz);
+  }
+  componentDidUpdate(){ if(this.state.editingId && this.state.editingId!==this._focusedId){ this._focusedId=this.state.editingId; if(this.valInputEl){ try{ this.valInputEl.focus(); this.valInputEl.select(); }catch(e){} } } if(!this.state.editingId) this._focusedId=null; }
+  componentWillUnmount(){ window.removeEventListener("pointermove",this._move); window.removeEventListener("pointerup",this._up); window.removeEventListener("resize",this._rz); if(this._ro) this._ro.disconnect(); }
+
+  contentRef=(el)=>{ this.contentEl=el; if(el && !this._ro && typeof ResizeObserver!=="undefined"){ this._ro=new ResizeObserver(()=>{ const w=(el.clientWidth||0)-32; if(w>0 && Math.abs(w-(this.state.contentW||0))>1) this.setState({contentW:w}); }); this._ro.observe(el); } };
+  isMobile(){ return this.state.vw < 760; }
+  // square cells that always fill the available width; column count controls density
+  cell(){ const g=this.GAP, cols=this.state.cols, cw=this.state.contentW||((this.state.vw||1100)-32);
+    return this.clamp(Math.floor((cw-(cols-1)*g)/cols), this.isMobile()?42:48, 230); }
+  clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  stop=(e)=>{ e.stopPropagation(); };
+  boardRef=(el)=>{ this.boardEl=el; };
+  valRef=(el)=>{ this.valInputEl=el; };
+
+  board(){ return this.state.boards[this.state.page]||[]; }
+  setBoard(list){ this.setState({ boards:Object.assign({},this.state.boards,{[this.state.page]:list}) }); }
+  find(id){ return this.board().find(w=>w.id===id); }
+  effCompact(){ return this.state.compact || this.isMobile(); }
+  val(p){ const v=this.state.vals[p]; return v==null?50:v; }
+  tog(p){ return !!this.state.toggles[p]; }
+  selIdx(p){ const i=this.state.selects[p]; return i==null?0:i; }
+  viewsFor(p){ const k=this.CAT[p].kind; return k==="cont"?this.CONT_VIEWS:(k==="toggle"?this.TOG_VIEWS:[this.CAT[p].view]); }
+
+  metrics(){ const r=this.boardEl?this.boardEl.getBoundingClientRect():{left:0,top:0}; const c=this.cell(); return { left:r.left, top:r.top, cw:c, ch:c, g:this.GAP }; }
+  occupancy(except){ const {cols,rows}=this.state; const m=Array.from({length:rows},()=>new Array(cols).fill(false));
+    this.board().forEach(w=>{ if(w.id===except) return; for(let y=w.y;y<w.y+w.h;y++) for(let x=w.x;x<w.x+w.w;x++) if(y<rows&&x<cols) m[y][x]=true; }); return m; }
+  fits(m,x,y,w,h){ const {cols,rows}=this.state; if(x<0||y<0||x+w>cols||y+h>rows) return false; for(let j=y;j<y+h;j++) for(let i=x;i<x+w;i++) if(m[j][i]) return false; return true; }
+  firstFit(m,w,h){ const {cols,rows}=this.state; for(let y=0;y<=rows-h;y++) for(let x=0;x<=cols-w;x++) if(this.fits(m,x,y,w,h)) return {x,y}; return null; }
+
+  toggleEdit=()=>this.setState({ editMode:!this.state.editMode, drag:null, editingId:null, openSelect:null });
+  toggleCompact=()=>{ const c=!this.state.compact; this.setState({compact:c}); if(c) setTimeout(()=>this.pack(),0); };
+  onChannel=(e)=>this.setState({channel:e.currentTarget.dataset.ch});
+  onTab=(e)=>{ if(this.state.drag) return; this.setState({page:e.currentTarget.dataset.page, openSelect:null, editingId:null}); };
+  addPage=()=>{ const n="Page "+(this.state.pageOrder.length+1); const order=this.state.pageOrder.concat(n);
+    this.setState({ pageOrder:order, page:n, boards:Object.assign({},this.state.boards,{[n]:[]}), hidden:Object.assign({},this.state.hidden,{[n]:Object.keys(this.CAT)}) }); };
+
+  incCols=()=>this.gridResize("cols",1); decCols=()=>this.gridResize("cols",-1);
+  incRows=()=>this.gridResize("rows",1); decRows=()=>this.gridResize("rows",-1);
+  gridResize(dim,d){
+    const v=this.clamp(this.state[dim]+d, 4, dim==="cols"?24:8); if(v===this.state[dim]) return;
+    const cols=dim==="cols"?v:this.state.cols, rows=dim==="rows"?v:this.state.rows;
+    const next={}; Object.keys(this.state.boards).forEach(pg=>{ next[pg]=this.state.boards[pg].map(w=>{ let nw=Math.min(w.w,cols), nh=Math.min(w.h,rows);
+      return Object.assign({},w,{ w:nw, h:nh, x:this.clamp(w.x,0,cols-nw), y:this.clamp(w.y,0,rows-nh) }); }); });
+    this.setState({ [dim]:v, boards:next }); setTimeout(()=>{ if(this.effCompact()) this.packAll(); },0);
+  }
+  pack(){ this.setBoard(this.packList(this.board())); }
+  packAll(){ const next={}; Object.keys(this.state.boards).forEach(pg=>next[pg]=this.packList(this.state.boards[pg])); this.setState({boards:next}); }
+  packList(list){ const {cols,rows}=this.state; const m=Array.from({length:rows},()=>new Array(cols).fill(false)); const out=[];
+    list.slice().sort((a,b)=> a.y-b.y || a.x-b.x).forEach(w=>{ let pw=Math.min(w.w,cols), ph=Math.min(w.h,rows), pos=null;
+      for(let y=0;y<=rows-ph&&!pos;y++) for(let x=0;x<=cols-pw&&!pos;x++){ let ok=true; for(let j=y;j<y+ph;j++) for(let i=x;i<x+pw;i++) if(m[j][i]) ok=false; if(ok) pos={x,y}; }
+      if(!pos) pos={x:0,y:0}; for(let j=pos.y;j<pos.y+ph;j++) for(let i=pos.x;i<pos.x+pw;i++) if(m[j]&&m[j][i]!=null) m[j][i]=true;
+      out.push(Object.assign({},w,{x:pos.x,y:pos.y,w:pw,h:ph})); });
+    return out; }
+  tidyUp=()=>{ this.pack(); this.toast("Board tidied","#35c9d6"); };
+
+  onTrayAdd=(e)=>{ const param=e.currentTarget.dataset.param, c=this.CAT[param];
+    const m=this.occupancy(), pos=this.firstFit(m,c.w,c.h)||this.firstFit(m,1,1);
+    if(!pos){ this.toast("No room — enlarge the grid","#d6543f"); return; }
+    const w=Math.min(c.w,this.state.cols-pos.x), h=Math.min(c.h,this.state.rows-pos.y), id="w"+Date.now().toString(36);
+    this.setBoard(this.board().concat([{ id, param, x:pos.x, y:pos.y, w, h, view:c.view, _new:1 }]));
+    this.setState({ hidden:Object.assign({},this.state.hidden,{[this.state.page]:(this.state.hidden[this.state.page]||[]).filter(p=>p!==param)}) });
+    setTimeout(()=>{ const b=this.board().map(x=>x.id===id?Object.assign({},x,{_new:0}):x); this.setBoard(b); },380);
+  };
+  onRemoveWidget=(e)=>{ const id=e.currentTarget.dataset.id, w=this.find(id); if(!w) return;
+    this.setBoard(this.board().filter(x=>x.id!==id));
+    const hid=(this.state.hidden[this.state.page]||[]); const nh=hid.indexOf(w.param)>=0?hid:hid.concat([w.param]);
+    this.setState({ hidden:Object.assign({},this.state.hidden,{[this.state.page]:nh}) });
+  };
+  onCycleView=(e)=>{ const id=e.currentTarget.dataset.id, w=this.find(id); if(!w) return; const vs=this.viewsFor(w.param); const i=vs.indexOf(w.view); const nv=vs[(i+1)%vs.length];
+    this.setBoard(this.board().map(x=>x.id===id?Object.assign({},x,{view:nv}):x)); };
+
+  onWidgetDown=(e)=>{ const id=e.currentTarget.dataset.id, param=e.currentTarget.dataset.param;
+    if(this.state.editMode){ this.startMove(e,id); return; }
+    if(this.CAT[param].kind==="cont"){ this.vd={ param, sy:e.clientY, sv:this.val(param) }; e.stopPropagation(); } };
+  onBoardDown=(e)=>{ if(this.state.editMode) return; this.sw={ sx:e.clientX, moved:false }; };
+  onTrackDown=(e)=>{ if(this.state.editMode) return; e.stopPropagation(); const id=e.currentTarget.dataset.id, w=this.find(id); if(!w) return;
+    const r=e.currentTarget.getBoundingClientRect(); this.tk={ param:w.param, rect:r, vertical:(w.view==="fader") }; this.trackMove(e); };
+  trackMove(e){ const t=this.tk; const frac=t.vertical?this.clamp(1-(e.clientY-t.rect.top)/t.rect.height,0,1):this.clamp((e.clientX-t.rect.left)/t.rect.width,0,1);
+    this.setState({ vals:Object.assign({},this.state.vals,{[t.param]:frac*100}) }); }
+
+  startMove(e,id){ e.stopPropagation(); const w=this.find(id); if(!w) return; const m=this.metrics();
+    const gx=Math.floor((e.clientX-m.left)/(m.cw+m.g)), gy=Math.floor((e.clientY-m.top)/(m.ch+m.g));
+    this.mv={ id, w:w.w, h:w.h, offx:this.clamp(gx-w.x,0,w.w-1), offy:this.clamp(gy-w.y,0,w.h-1), m };
+    this.setState({ drag:{ id, x:w.x, y:w.y, w:w.w, h:w.h, valid:true } }); }
+  onResizeDown=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id, w=this.find(id); if(!w) return; this.rz={ id, sx:e.clientX, sy:e.clientY, ow:w.w, oh:w.h, m:this.metrics() }; };
+  onEqDown=(e)=>{ e.stopPropagation(); const svg=e.currentTarget.ownerSVGElement; this.eqd={ rect:svg.getBoundingClientRect() }; this.eqMove(e); };
+
+  onMove(e){
+    if(this.mv){ e.preventDefault(); const v=this.mv, m=v.m;
+      let nx=Math.round((e.clientX-m.left-(v.offx*(m.cw+m.g)))/(m.cw+m.g));
+      let ny=Math.round((e.clientY-m.top-(v.offy*(m.ch+m.g)))/(m.ch+m.g));
+      nx=this.clamp(nx,0,this.state.cols-v.w); ny=this.clamp(ny,0,this.state.rows-v.h);
+      const occ=this.occupancy(v.id); const valid=this.effCompact()?true:this.fits(occ,nx,ny,v.w,v.h);
+      const d=this.state.drag; if(!d||d.x!==nx||d.y!==ny||d.valid!==valid) this.setState({ drag:{ id:v.id, x:nx, y:ny, w:v.w, h:v.h, valid } }); return; }
+    if(this.rz){ e.preventDefault(); const r=this.rz, m=r.m; const dw=Math.round((e.clientX-r.sx)/(m.cw+m.g)), dh=Math.round((e.clientY-r.sy)/(m.ch+m.g)); const w=this.find(r.id); if(!w) return;
+      let nw=this.clamp(r.ow+dw,1,this.state.cols-w.x), nh=this.clamp(r.oh+dh,1,this.state.rows-w.y); if(nw===w.w&&nh===w.h) return;
+      const occ=this.occupancy(r.id); if(!this.effCompact() && !this.fits(occ,w.x,w.y,nw,nh)) return;
+      this.setBoard(this.board().map(x=>x.id===r.id?Object.assign({},x,{w:nw,h:nh}):x)); return; }
+    if(this.tk){ e.preventDefault(); this.trackMove(e); return; }
+    if(this.vd){ e.preventDefault(); const nv=this.clamp(this.vd.sv+(this.vd.sy-e.clientY)*0.5,0,100); this.setState({ vals:Object.assign({},this.state.vals,{[this.vd.param]:nv}) }); return; }
+    if(this.eqd){ e.preventDefault(); this.eqMove(e); return; }
+    if(this.sw){ if(Math.abs(e.clientX-this.sw.sx)>8) this.sw.moved=true; }
+  }
+  eqMove(e){ const r=this.eqd.rect; const fx=this.clamp((e.clientX-r.left)/r.width,0,1), fy=this.clamp((e.clientY-r.top)/r.height,0,1);
+    const freq=Math.round(20*Math.pow(1000,fx)); const gain=this.clamp((0.5-fy)*36,-18,18); this.setState({ eq:{ freq, gain:Math.round(gain*10)/10 } }); }
+  onUp(e){
+    if(this.mv){ const d=this.state.drag; if(d&&d.valid){ let b=this.board().map(x=>x.id===this.mv.id?Object.assign({},x,{x:d.x,y:d.y}):x); if(this.effCompact()) b=this.packList(b); this.setBoard(b); } this.mv=null; this.setState({drag:null}); }
+    if(this.rz){ this.rz=null; if(this.effCompact()) this.pack(); }
+    if(this.tk) this.tk=null; if(this.vd) this.vd=null; if(this.eqd) this.eqd=null;
+    if(this.sw){ const moved=this.sw.moved, dx=e.clientX-this.sw.sx; this.sw=null; if(moved && Math.abs(dx)>60){ const o=this.state.pageOrder, i=o.indexOf(this.state.page); const ni=this.clamp(i+(dx<0?1:-1),0,o.length-1); if(ni!==i) this.setState({page:o[ni]}); } }
+  }
+
+  // value typing
+  onValueDown=(e)=>{ if(this.state.editMode) return; e.stopPropagation(); const id=e.currentTarget.dataset.id, w=this.find(id); if(!w) return; this.setState({ editingId:id, editBuf:String(Math.round(this.val(w.param))) }); };
+  onValueInput=(e)=>this.setState({ editBuf:e.target.value });
+  onValueKey=(e)=>{ if(e.key==="Enter"){ e.preventDefault(); this.commitVal(); } else if(e.key==="Escape"){ this.setState({editingId:null}); } };
+  onValueBlur=()=>this.commitVal();
+  commitVal(){ const w=this.find(this.state.editingId); if(w){ let n=parseFloat(this.state.editBuf); if(!isNaN(n)){ n=this.clamp(n,0,100); this.setState({ vals:Object.assign({},this.state.vals,{[w.param]:n}), editingId:null }); return; } } this.setState({editingId:null}); }
+
+  onNudge=(e)=>{ const id=e.currentTarget.dataset.id, dir=+e.currentTarget.dataset.dir, w=this.find(id); if(!w) return; const nv=this.clamp(this.val(w.param)+dir,0,100); this.setState({ vals:Object.assign({},this.state.vals,{[w.param]:nv}) }); };
+  onToggleClick=(e)=>{ if(this.state.editMode) return; const p=e.currentTarget.dataset.param; this.setState({ toggles:Object.assign({},this.state.toggles,{[p]:!this.tog(p)}) }); };
+  onActionClick=(e)=>{ if(this.state.editMode) return; this.setState({ bypassed:!this.state.bypassed }); };
+  onSelectOpen=(e)=>{ if(this.state.editMode) return; e.stopPropagation(); const id=e.currentTarget.dataset.id; this.setState({ openSelect:this.state.openSelect===id?null:id }); };
+  closeSelect=(e)=>{ if(e) e.stopPropagation(); this.setState({openSelect:null}); };
+  onSelectPick=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id, oi=+e.currentTarget.dataset.oi, w=this.find(id); if(!w) return; this.setState({ selects:Object.assign({},this.state.selects,{[w.param]:oi}), openSelect:null }); };
+
+  toast(text,accent){ if(this._t) clearTimeout(this._t); this.setState({ toast:{text,accent:accent||"#35c9d6"} }); this._t=setTimeout(()=>this.setState({toast:null}),2100); }
+
+  fToX(f){ return Math.log10(this.clamp(f,20,20000)/20)/3*1000; }
+  dbToY(db){ return 150 - (db/18)*120; }
+  mag(f){ const e=this.state.eq; const oct=Math.log2(f/e.freq); let db=e.gain*Math.exp(-(oct*oct)/(2*0.9*0.9));
+    const lo=this.val("Low Cut"), hi=this.val("High Cut"); const loF=20*Math.pow(10,(lo/100)*1.7), hiF=400*Math.pow(10,(hi/100)*1.7);
+    if(f<loF) db-=12*Math.log2(loF/f); if(f>hiF) db-=12*Math.log2(f/hiF); return this.clamp(db,-22,22); }
+  curve(){ let cur="",fill="M0 300"; for(let i=0;i<=60;i++){ const f=20*Math.pow(1000,i/60); const x=this.fToX(f).toFixed(1), y=this.dbToY(this.mag(f)).toFixed(1); cur+=(i?" L":"M")+x+" "+y; fill+=" L"+x+" "+y; } fill+=" L1000 300 Z"; return {cur,fill}; }
+  fmtF(f){ return f>=1000?(f/1000).toFixed(f>=10000?0:1)+"k":Math.round(f)+""; }
+
+  mkWidget(wd, drag){
+    const c=this.CAT[wd.param], ed=this.state.editMode, dragging=drag&&drag.id===wd.id, cell=this.cell(), g=this.GAP;
+    const pxW=wd.w*cell+(wd.w-1)*g, pxH=wd.h*cell+(wd.h-1)*g;
+    const o={ id:wd.id, param:wd.param, label:wd.param, edit:ed, dims:wd.w+"×"+wd.h,
+      viewKnob:false, viewFader:false, viewSlider:false, viewNumber:false, viewButton:false, viewSwitch:false, viewSelect:false, viewEq:false, viewAction:false,
+      canCycle:this.viewsFor(wd.param).length>1, viewIcon:this.VIEW_ICON[wd.view], viewName:wd.view,
+      cellStyle:{ gridColumn:(wd.x+1)+" / span "+wd.w, gridRow:(wd.y+1)+" / span "+wd.h, minWidth:0, minHeight:0, position:"relative" },
+      editing:this.state.editingId===wd.id, notEditing:this.state.editingId!==wd.id };
+    const noBg = (wd.view==="action"||wd.view==="eq");
+    const card={ position:"relative", width:"100%", height:"100%", borderRadius:11, boxSizing:"border-box",
+      background:noBg?"transparent":"linear-gradient(180deg,#17171c,#101015)", border:"1px solid "+(ed?"#2c2c34":(noBg?"transparent":"#212129")),
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:Math.max(3,Math.round(cell*0.06)), padding:noBg?0:8, overflow:"hidden",
+      transition:"border-color .12s, box-shadow .12s, opacity .12s", userSelect:"none", touchAction:"none",
+      cursor: ed?"grab":(c.kind==="cont"?"ns-resize":"default"), opacity: dragging?0.28:1 };
+    if(wd._new) card.animation="wsPop .34s cubic-bezier(.2,.9,.3,1)";
+    o.cardStyle=card; o.hoverStyle = ed?"border-color:#35c9d6;":(noBg?"":"border-color:#33333c;");
+
+    const labelStyle={ fontWeight:600, fontSize:Math.max(10,Math.min(13,Math.round(cell*0.135))), color:"#bdbdc6", textAlign:"center", lineHeight:1.1, width:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
+    o.labelStyle=labelStyle;
+
+    if(c.kind==="cont"){
+      const v=this.val(wd.param), pct=Math.round(v), ang=-135+2.7*v;
+      o.valueText=pct+""; o.dash=((v/100)*113.1).toFixed(1)+" 300"; o.pt="rotate("+ang.toFixed(1)+" 32 32)";
+      const view=wd.view;
+      if(view==="knob"){
+        o.viewKnob=true; const avail=Math.min(pxW,pxH-22); const dial=this.clamp(Math.round(avail*0.78),34,150); o.dial=dial;
+        const vf=this.clamp(Math.round(dial*0.26),12,30);
+        o.dialWrapStyle={ position:"relative", width:dial, height:dial, display:"flex", alignItems:"center", justifyContent:"center" };
+        o.valStyle={ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", font:"600 "+vf+"px/1 'JetBrains Mono'", color:"#e9e9ee", cursor:"text" };
+        o.inputStyle={ position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)", width:Math.round(dial*0.8), textAlign:"center", background:"#0a0a0c", border:"1px solid #35c9d6", borderRadius:6, color:"#fff", font:"600 "+vf+"px/1 'JetBrains Mono'", outline:"none", padding:"3px 0" };
+      } else if(view==="fader"){
+        o.viewFader=true; const vf=this.clamp(Math.round(cell*0.16),12,18);
+        o.valStyle={ font:"600 "+vf+"px/1 'JetBrains Mono'", color:"#e9e9ee", cursor:"text" };
+        o.inputStyle={ width:Math.round(cell*0.7), textAlign:"center", background:"#0a0a0c", border:"1px solid #35c9d6", borderRadius:6, color:"#fff", font:"600 "+vf+"px/1 'JetBrains Mono'", outline:"none", padding:"2px 0" };
+        o.trackStyle={ position:"relative", width:14, flex:1, minHeight:18, margin:"7px 0", borderRadius:8, background:"#16161b", border:"1px solid #26262c", cursor:"ns-resize" };
+        o.fillStyle={ position:"absolute", left:0, right:0, bottom:0, height:pct+"%", background:"linear-gradient(180deg,#5fe0ea,#35c9d6)", borderRadius:8 };
+        o.handleStyle={ position:"absolute", left:"50%", bottom:"calc("+pct+"% - 8px)", transform:"translateX(-50%)", width:28, height:14, borderRadius:5, background:"#f5a623", border:"3px solid #0d0d10", boxShadow:"0 2px 5px rgba(0,0,0,.5)" };
+      } else if(view==="slider"){
+        o.viewSlider=true; const vf=this.clamp(Math.round(cell*0.16),12,17);
+        o.valStyle={ font:"600 "+vf+"px/1 'JetBrains Mono'", color:"#7fd8de", cursor:"text" };
+        o.inputStyle={ width:46, textAlign:"right", background:"#0a0a0c", border:"1px solid #35c9d6", borderRadius:6, color:"#fff", font:"600 "+vf+"px/1 'JetBrains Mono'", outline:"none", padding:"2px 4px" };
+        o.trackStyle={ position:"relative", width:"100%", height:10, marginTop:"auto", marginBottom:"auto", borderRadius:6, background:"#16161b", border:"1px solid #26262c", cursor:"ew-resize" };
+        o.fillStyle={ position:"absolute", left:0, top:0, bottom:0, width:pct+"%", background:"linear-gradient(90deg,#35c9d6,#5fe0ea)", borderRadius:6 };
+        o.handleStyle={ position:"absolute", top:"50%", left:"calc("+pct+"% - 8px)", transform:"translateY(-50%)", width:16, height:16, borderRadius:"50%", background:"#f5a623", border:"3px solid #0d0d10", boxShadow:"0 2px 5px rgba(0,0,0,.5)" };
+      } else {
+        o.viewNumber=true; const vf=this.clamp(Math.round(Math.min(pxW,pxH)*0.32),18,44);
+        o.stepBtn={ width:Math.max(24,Math.round(cell*0.32)), height:Math.max(24,Math.round(cell*0.32)), borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", background:"#1c1c21", border:"1px solid #33333c", color:"#cfcfd6", cursor:"pointer", fontSize:16, flex:"none" };
+        o.valStyle={ font:"700 "+vf+"px/1 'JetBrains Mono'", color:"#e9e9ee", cursor:"text", minWidth:Math.round(vf*1.6), textAlign:"center" };
+        o.inputStyle={ width:Math.round(vf*2.0), textAlign:"center", background:"#0a0a0c", border:"1px solid #35c9d6", borderRadius:7, color:"#fff", font:"700 "+vf+"px/1 'JetBrains Mono'", outline:"none", padding:"2px 0" };
+      }
+    } else if(c.kind==="toggle"){
+      const on=this.tog(wd.param);
+      if(wd.view==="switch"){
+        o.viewSwitch=true;
+        o.switchStyle={ position:"relative", width:54, height:30, borderRadius:15, cursor:"pointer", background:on?"#173a26":"#16161b", border:"1px solid "+(on?"#3a7d4f":"#2a2a31"), boxShadow:on?"inset 0 0 10px rgba(70,209,127,.25)":"inset 0 1px 3px rgba(0,0,0,.4)", transition:"all .15s" };
+        o.knobStyle={ position:"absolute", top:3, left:on?27:3, width:22, height:22, borderRadius:"50%", background:on?"#46d17f":"#5a5a62", boxShadow:on?"0 0 8px rgba(70,209,127,.7)":"0 1px 2px rgba(0,0,0,.5)", transition:"left .16s cubic-bezier(.3,.8,.3,1), background .15s" };
+      } else {
+        o.viewButton=true; o.valueText=on?"On":"Off";
+        o.onoffStyle={ display:"flex", alignItems:"center", justifyContent:"center", gap:7, width:"100%", maxWidth:pxW-16, minHeight:Math.max(30,Math.round(cell*0.42)), padding:"0 10px", borderRadius:9, cursor:"pointer", fontSize:Math.max(12,Math.round(cell*0.16)), fontWeight:700,
+          background:on?"#142417":"#16161b", border:"1px solid "+(on?"#2c4a31":"#2a2a31"), color:on?"#5fc46b":"#7a7a83", transition:"all .12s" };
+        o.onoffDot={ width:8, height:8, borderRadius:"50%", flex:"none", background:on?"#46d17f":"#55555d", boxShadow:on?"0 0 7px rgba(70,209,127,.8)":"none" };
+      }
+    } else if(c.kind==="select"){
+      o.viewSelect=true; const opts=c.opts, oi=this.clamp(this.selIdx(wd.param),0,opts.length-1); o.value=opts[oi];
+      o.labelTopStyle={ fontWeight:600, fontSize:11, color:"#9a9aa3", alignSelf:"flex-start", marginBottom:6, lineHeight:1.15 };
+      o.fieldStyle={ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", height:Math.max(34,Math.round(cell*0.46)), padding:"0 11px", background:"#0d0d10", border:"1px solid "+(this.state.openSelect===wd.id?"#35c9d6":"#2c2c34"), borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:600, color:"#ededf2" };
+    } else if(c.kind==="action"){
+      o.viewAction=true; const byp=this.state.bypassed; o.valueText=byp?"Bypassed":"Engaged";
+      o.btnStyle={ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", height:"100%", borderRadius:11, cursor:"pointer", fontSize:Math.max(13,Math.round(cell*0.17)), fontWeight:700,
+        background:byp?"#241516":"#142417", border:"1px solid "+(byp?"#5a2f33":"#2c4a31"), color:byp?"#d6543f":"#5fc46b" };
+    } else if(c.kind==="eq"){
+      o.viewEq=true; const cv=this.curve(); o.curvePath=cv.cur; o.fillPath=cv.fill;
+      o.eqFull = wd.w>=3&&wd.h>=2; o.eqReadouts = wd.w>=4&&wd.h>=3;
+      o.bandX=this.fToX(this.state.eq.freq).toFixed(1); o.bandY=this.dbToY(this.clamp(this.state.eq.gain,-18,18)).toFixed(1);
+      o.readouts=[ {label:"Frequency",value:this.fmtF(this.state.eq.freq)+" Hz",color:"#f5a623"}, {label:"Gain",value:(this.state.eq.gain>0?"+":"")+this.state.eq.gain.toFixed(1)+" dB",color:"#f5a623"} ];
+    }
+    return o;
+  }
+
+  renderVals(){
+    const S=this.state, mob=this.isMobile(), {cols,rows}=S, drag=S.drag, cell=this.cell(), g=this.GAP;
+    const tabStyle=(act)=>({ flex:"none", padding:"9px 15px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap",
+      background:act?"rgba(245,166,35,.12)":"#15151a", border:"1px solid "+(act?"#5a3f1f":"#26262c"), color:act?"#f5a623":"#8a8a93" });
+    const pages=S.pageOrder.map(n=>({ name:n, style:tabStyle(n===S.page) }));
+    const channels=["A","B","C","D"].map(id=>({ id, style:{ width:30, height:30, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:12, background:id===S.channel?"#1d2a2c":"#0d0d10", border:"1px solid "+(id===S.channel?"#35c9d6":"#26262c"), color:id===S.channel?"#f5a623":"#56565e" }}));
+    const editBtnStyle={ display:"flex", alignItems:"center", gap:7, height:38, padding:"0 14px", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:700, flex:"none", whiteSpace:"nowrap",
+      background:S.editMode?"linear-gradient(180deg,#1d2a2c,#16201f)":"#15151a", border:"1px solid "+(S.editMode?"#35c9d6":"#2a2a31"), color:S.editMode?"#bfeef2":"#9a9aa3" };
+    const stepStyle={ width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:15, fontWeight:600, color:"#cfcfd6", background:"#1c1c21" };
+    const compactStyle={ display:"flex", alignItems:"center", gap:7, height:34, padding:"0 13px", borderRadius:10, cursor:"pointer", fontSize:12, fontWeight:600,
+      background:this.effCompact()?"#1d2a2c":"#15151a", border:"1px solid "+(this.effCompact()?"#35c9d6":"#2a2a31"), color:this.effCompact()?"#7fd8de":"#cfcfd6" };
+    const compactLabel=this.effCompact()?"⊞ Packed":"⊡ Free";
+
+    const boardW=cols*cell+(cols-1)*g, boardH=rows*cell+(rows-1)*g;
+    const contentStyle={ flex:1, minHeight:0, position:"relative", overflow:"auto", padding:"16px", display:"flex", justifyContent:"center", alignItems:"flex-start" };
+    const boardWrapStyle={ position:"relative", width:boardW+"px", height:boardH+"px", flex:"none" };
+    const gridLayerStyle={ position:"absolute", inset:0, display:"grid", gridTemplateColumns:"repeat("+cols+","+cell+"px)", gridTemplateRows:"repeat("+rows+","+cell+"px)", gap:g+"px" };
+
+    const cells=[]; if(S.editMode){ for(let y=0;y<rows;y++) for(let x=0;x<cols;x++) cells.push({ style:{ gridColumn:(x+1)+" / span 1", gridRow:(y+1)+" / span 1", borderRadius:8, border:"1px dashed #1f1f26", background:"rgba(255,255,255,.012)" } }); }
+
+    const widgets=this.board().map(w=>this.mkWidget(w,drag));
+
+    let ghost=false, ghostStyle={};
+    if(drag){ ghost=true; ghostStyle={ gridColumn:(drag.x+1)+" / span "+drag.w, gridRow:(drag.y+1)+" / span "+drag.h, borderRadius:11, zIndex:5,
+      border:"2px dashed "+(drag.valid?"#35c9d6":"#d6543f"), background:(drag.valid?"rgba(53,201,214,.12)":"rgba(214,84,63,.12)") }; }
+
+    // select popover
+    let selectMenu={ open:false, opts:[], style:{}, id:null };
+    if(S.openSelect){ const w=this.find(S.openSelect); if(w){ const c=this.CAT[w.param]; const cur=this.clamp(this.selIdx(w.param),0,c.opts.length-1);
+      const left=w.x*(cell+g), top=(w.y+w.h)*(cell+g)+2, width=Math.max(w.w*cell+(w.w-1)*g,150);
+      selectMenu={ open:true, id:w.id,
+        style:{ position:"absolute", left:left+"px", top:top+"px", width:width+"px", zIndex:50, background:"#161619", border:"1px solid #2e2e36", borderRadius:11, boxShadow:"0 18px 44px rgba(0,0,0,.6)", padding:6, maxHeight:"230px", overflowY:"auto" },
+        opts:c.opts.map((label,i)=>({ i, label, style:{ display:"flex", alignItems:"center", padding:"9px 11px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, color:i===cur?"#7fd8de":"#cfcfd6", background:i===cur?"rgba(53,201,214,.12)":"transparent" } })) }; } }
+
+    const hid=(S.hidden[S.page]||[]).filter(p=>this.CAT[p]);
+    const tray=hid.map(p=>{ const c=this.CAT[p]; return { param:p, icon:this.VIEW_ICON[c.view], meta:c.kind+" · "+c.w+"×"+c.h }; });
+
+    const bypassLabel=S.bypassed?"Bypassed":"Engaged";
+    const bypassStyle={ display:"flex", alignItems:"center", justifyContent:"center", height:42, padding:"0 16px", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:700,
+      background:S.bypassed?"#241516":"#142417", border:"1px solid "+(S.bypassed?"#5a2f33":"#2c4a31"), color:S.bypassed?"#d6543f":"#5fc46b" };
+    const hintText = S.editMode
+      ? "Drag tiles to move · ⌟ resize · ◉ button changes control type · ✕ removes"
+      : "Drag a control to set it · tap its value to type a number · swipe to change page · unlock to rearrange";
+    const toast=S.toast?{ show:true, text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.accent, boxShadow:"0 0 8px "+S.toast.accent, display:"inline-block" } }:{ show:false, text:"", dot:{} };
+
+    return {
+      pages, channels, editMode:S.editMode, cols, rows, editBtnStyle, editBuf:S.editBuf,
+      editIcon:S.editMode?"🔓":"🔒", editLabel:S.editMode?"Arranging":"Arrange",
+      stepStyle, compactStyle, compactLabel,
+      contentStyle, boardWrapStyle, gridLayerStyle, cells, widgets, ghost, ghostStyle, selectMenu,
+      boardEmpty:widgets.length===0, tray, trayEmpty:tray.length===0,
+      bypassLabel, bypassStyle, hintText, toast,
+      boardRef:this.boardRef, valRef:this.valRef, contentRef:this.contentRef, onBoardDown:this.onBoardDown,
+      toggleEdit:this.toggleEdit, toggleCompact:this.toggleCompact, tidyUp:this.tidyUp,
+      onChannel:this.onChannel, onTab:this.onTab, addPage:this.addPage,
+      incCols:this.incCols, decCols:this.decCols, incRows:this.incRows, decRows:this.decRows,
+      onWidgetDown:this.onWidgetDown, onResizeDown:this.onResizeDown, onRemoveWidget:this.onRemoveWidget, onCycleView:this.onCycleView,
+      onTrackDown:this.onTrackDown, onNudge:this.onNudge, onToggleClick:this.onToggleClick, onActionClick:this.onActionClick, onEqDown:this.onEqDown,
+      onValueDown:this.onValueDown, onValueInput:this.onValueInput, onValueKey:this.onValueKey, onValueBlur:this.onValueBlur,
+      onSelectOpen:this.onSelectOpen, onSelectPick:this.onSelectPick, closeSelect:this.closeSelect,
+      onTrayAdd:this.onTrayAdd, stop:this.stop
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -2,12 +2,20 @@
   import { onMount } from 'svelte';
   import { editor, baseName } from './editor.svelte';
   import { catFor, shade } from './catalog';
+  import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
 
-  // ── responsive metrics ──
-  const gap = $derived(editor.isMobile ? 16 : 26);
+  // ── responsive metrics (mobile = column-density + horizontal paging) ──
   const cols = $derived(editor.layout.rows ? editor.layout.cols : 12);
   const rows = $derived(editor.layout.rows || 4);
+  const mob = $derived(editor.isMobile);
+  const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
+  const gap = $derived(mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : 26);
+  const colW = $derived(mob ? Math.max(20, Math.floor((editor.vw - 24 - (visCols - 1) * gap) / visCols)) : 0);
+  const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
+  const pageShift = $derived(visCols * (colW + gap));
+  const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
+  const showType = $derived(!mob || colW >= 56); // progressive disclosure
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -51,11 +59,12 @@
       window.removeEventListener('resize', onResize);
     };
   });
-  // re-measure whenever the grid contents change
+  // re-measure whenever the grid contents or column density change
   $effect(() => {
     void editor.layout;
     void editor.editorOpen;
     void editor.vw;
+    void editor.mobCols;
     requestAnimationFrame(measure);
   });
 
@@ -64,7 +73,7 @@
     return `M${x1.toFixed(1)} ${y1.toFixed(1)} C${(x1 + dx).toFixed(1)} ${y1.toFixed(1)},${(x2 - dx).toFixed(1)} ${y2.toFixed(1)},${x2.toFixed(1)} ${y2.toFixed(1)}`;
   }
 
-  type Cable = { key: string; srcRow: number; srcCol: number; destRow: number; d: string; mx: number; my: number; stroke: string };
+  type Cable = { key: string; srcRow: number; srcCol: number; destRow: number; d: string; mx: number; my: number; stroke: string; flow: boolean; flowStroke: string };
   const cables = $derived.by(() => {
     const list: Cable[] = [];
     for (const c of [...editor.layout.cells, ...editor.layout.shunts]) {
@@ -74,7 +83,7 @@
       for (const fr of c.fromRows) {
         const src = rects[`${fr},${c.col - 1}`];
         if (!src) continue;
-        const dim = cellAt.get(`${fr},${c.col - 1}`)?.bypassed;
+        const srcByp = !!cellAt.get(`${fr},${c.col - 1}`)?.bypassed;
         list.push({
           key: `${fr},${c.col - 1}->${c.row},${c.col}`,
           srcRow: fr,
@@ -83,7 +92,9 @@
           d: cableD(src.right, src.cy, dst.left, dst.cy),
           mx: (src.right + dst.left) / 2,
           my: (src.cy + dst.cy) / 2,
-          stroke: dim ? '#4a4a52' : '#c7c7cf'
+          stroke: srcByp ? '#33333c' : '#46464f', // muted base; the animated flow rides on top
+          flow: !srcByp, // signal flows when the source is engaged
+          flowStroke: srcByp ? '#5a6b6e' : '#35c9d6'
         });
       }
     }
@@ -92,8 +103,16 @@
 
   let hoverCable = $state<string | null>(null);
 
-  // ── pointer gestures: tap / double-tap / long-press move / port connect ──
-  let gesture: { cell: Cell; startX: number; startY: number; moved: boolean } | null = null;
+  // ── pointer gestures: tap / double-tap / long-press move / port connect / swipe ──
+  // On a block: horizontal swipe cycles the active control (continuous), vertical adjusts its value.
+  let gesture: { cell: Cell; startX: number; startY: number; lastY: number; cycleX: number; moved: boolean; swiping: boolean; axis: '' | 'h' | 'v' } | null = null;
+  const hasSwipe = (cell: Cell) => !dense && cell.kind === 'block' && !!cell.pack && editor.controlsFor(cell).length > 0;
+  // live value/name overlay shown on the tile while swiping
+  let swipeHud = $state<{ key: string; m: NonNullable<ReturnType<typeof editor.meterFor>> } | null>(null);
+  function showHud(cell: Cell) {
+    const m = editor.meterFor(cell);
+    if (m) swipeHud = { key: `${cell.row},${cell.col}`, m };
+  }
   let lpTimer: ReturnType<typeof setTimeout> | null = null;
   let lastTap: { key: string; t: number } | null = null;
 
@@ -115,11 +134,22 @@
 
   function onBlockDown(cell: Cell, e: PointerEvent) {
     if (connectSrc) return;
-    gesture = { cell, startX: e.clientX, startY: e.clientY, moved: false };
+    gesture = { cell, startX: e.clientX, startY: e.clientY, lastY: e.clientY, cycleX: e.clientX, moved: false, swiping: false, axis: '' };
     if (lpTimer) clearTimeout(lpTimer);
     lpTimer = setTimeout(() => {
       if (gesture && !gesture.moved && !moveMode) startMove();
     }, 380);
+  }
+
+  // wheel over a block with controls nudges the active one (desktop)
+  let hudTimer: ReturnType<typeof setTimeout> | null = null;
+  function onBlockWheel(cell: Cell, e: WheelEvent) {
+    if (!hasSwipe(cell)) return;
+    e.preventDefault();
+    editor.adjustSwipe(cell, -e.deltaY / 1600);
+    showHud(cell);
+    if (hudTimer) clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => (swipeHud = null), 800);
   }
 
   function onPortDown(cell: Cell, e: PointerEvent) {
@@ -154,10 +184,32 @@
       if (gesture) {
         const dx = e.clientX - gesture.startX;
         const dy = e.clientY - gesture.startY;
-        if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        if (!gesture.moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
           gesture.moved = true;
+          gesture.axis = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
           if (lpTimer) clearTimeout(lpTimer);
         }
+        // swipe on a block: vertical adjusts the active control, horizontal cycles (continuously)
+        if (gesture.moved && hasSwipe(gesture.cell)) {
+          gesture.swiping = true;
+          if (gesture.axis === 'v') {
+            editor.adjustSwipe(gesture.cell, (gesture.lastY - e.clientY) / 220);
+          } else {
+            // each ~90px of horizontal travel advances one control (deliberate, low overshoot);
+            // keep moving to keep cycling. Right = previous, left = next (reversed per feedback).
+            const STEP = 90;
+            while (e.clientX - gesture.cycleX > STEP) {
+              editor.cycleControl(gesture.cell, -1);
+              gesture.cycleX += STEP;
+            }
+            while (e.clientX - gesture.cycleX < -STEP) {
+              editor.cycleControl(gesture.cell, 1);
+              gesture.cycleX -= STEP;
+            }
+          }
+          showHud(gesture.cell);
+        }
+        gesture.lastY = e.clientY;
       }
     };
     const up = (e: PointerEvent) => {
@@ -192,7 +244,8 @@
       if (gesture) {
         const g = gesture;
         gesture = null;
-        if (!g.moved) tap(g.cell);
+        swipeHud = null;
+        if (!g.moved && !g.swiping) tap(g.cell);
       }
     };
     window.addEventListener('pointermove', move);
@@ -229,9 +282,53 @@
   function tileBg(accent: string) {
     return `linear-gradient(180deg, ${shade(accent, -0.42)}, ${shade(accent, -0.62)})`;
   }
+
+  // ── mobile: pinch to change column density, swipe the background to page ──
+  let pinch: { dist: number; cols: number } | null = null;
+  let pageSwipeX: number | null = null;
+  function touchStart(e: TouchEvent) {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinch = { dist: Math.hypot(dx, dy) || 1, cols: visCols };
+    }
+  }
+  function touchMove(e: TouchEvent) {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy) || 1;
+    editor.setCols(Math.round(pinch.cols * (pinch.dist / dist)));
+  }
+  function touchEnd() {
+    pinch = null;
+  }
+  function bgDown(e: PointerEvent) {
+    if (!mob) return;
+    if ((e.target as HTMLElement).closest('[data-idx]')) return; // started on a block
+    pageSwipeX = e.clientX;
+  }
+  function bgUp(e: PointerEvent) {
+    if (pageSwipeX == null) return;
+    const dx = e.clientX - pageSwipeX;
+    pageSwipeX = null;
+    if (Math.abs(dx) > 50) editor.changePage(dx < 0 ? 1 : -1);
+  }
 </script>
 
-<div class="gridwrap scroll" class:mob={editor.isMobile} data-screen="Signal Grid">
+<div
+  class="gridwrap scroll"
+  class:mob={editor.isMobile}
+  data-screen="Signal Grid"
+  role="group"
+  aria-label="Signal grid"
+  ontouchstart={touchStart}
+  ontouchmove={touchMove}
+  ontouchend={touchEnd}
+  onpointerdown={bgDown}
+  onpointerup={bgUp}
+>
   {#if editor.status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if editor.status === 'offline'}
@@ -245,7 +342,9 @@
       class="inner"
       class:mob={editor.isMobile}
       bind:this={innerEl}
-      style="--gap:{gap}px; --cols:{cols};"
+      style={mob
+        ? `width:${12 * colW + 11 * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
+        : ''}
     >
       <svg class="cables" width={innerW} height={innerH} style="width:{innerW}px;height:{innerH}px;">
         {#each cables as cab (cab.key)}
@@ -255,6 +354,9 @@
             onmouseleave={() => (hoverCable = null)}
           >
             <path d={cab.d} fill="none" stroke={cab.stroke} stroke-width="2" />
+            {#if cab.flow}
+              <path class="flow" d={cab.d} fill="none" stroke={cab.flowStroke} stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" />
+            {/if}
             <path
               d={cab.d}
               fill="none"
@@ -290,7 +392,7 @@
         {/if}
       </svg>
 
-      <div class="grid">
+      <div class="grid" style="grid-template-columns:{mob ? `repeat(${cols}, ${colW}px)` : `repeat(${cols}, minmax(72px, 1fr))`}; gap:{gap}px;">
         {#each Array(rows) as _, r}
           {#each Array(cols) as _, c}
             {@const cell = cellAt.get(`${r},${c}`)}
@@ -298,22 +400,50 @@
               {@const cat = catFor(cell.pack, baseName(cell.display))}
               {@const sel = editor.selKey === `${r},${c}`}
               {@const base = baseName(cell.display)}
+              {@const meter = editor.meterFor(cell)}
               <div
                 class="cell block"
                 class:byp={cell.bypassed}
                 class:sel
                 class:moving={moveMode && moveCell === cell}
+                class:swipe={!!meter}
                 data-idx="{r},{c}"
                 role="button"
                 tabindex="0"
                 style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.05)};"
                 onpointerdown={(e) => onBlockDown(cell, e)}
+                onwheel={(e) => onBlockWheel(cell, e)}
               >
+                {#if meter}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
+                {#if cell.bypassed}<span class="hatch"></span>{/if}
+                {#if swipeHud && swipeHud.key === `${r},${c}`}
+                  <div class="swhud">
+                    <div class="sh-val mono">{fmtNumber(swipeHud.m)}{#if paramUnit(swipeHud.m)}<span class="sh-unit">{paramUnit(swipeHud.m)}</span>{/if}</div>
+                    <div class="sh-name">{swipeHud.m.name}</div>
+                  </div>
+                {/if}
                 <span class="glyph">{cat.glyph}</span>
                 <span class="b-label">{cat.short}</span>
-                {#if base && base !== cat.short}<span class="b-type mono">{base}</span>{/if}
-                {#if cell.pack === 'Amp' && cell.channel}<span class="chan mono">{cell.channel}</span>{/if}
-                {#if cell.bypassed}<span class="bypb mono">BYP</span>{/if}
+                {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
+                {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
+                {#if cell.pack}
+                  <button
+                    class="bypdot"
+                    class:on={!cell.bypassed}
+                    title="On / Off"
+                    aria-label="Toggle bypass"
+                    onpointerdown={(e) => e.stopPropagation()}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      editor.toggleBypass(cell);
+                    }}
+                  ><span class="bypdot-i"></span></button>
+                {/if}
+                {#if meter && meter.count > 0}
+                  <span class="dots">
+                    {#each Array(meter.count) as _, di (di)}<span class="dot" class:on={di === meter.active}></span>{/each}
+                  </span>
+                {/if}
                 {#if c < cols - 1 && cell.pack !== 'Output'}
                   <button
                     class="port"
@@ -340,6 +470,7 @@
               </div>
             {:else}
               <button class="cell empty" data-idx="{r},{c}" onclick={() => { editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
+                <span class="restdot"></span>
                 <span class="plus">+</span>
               </button>
             {/if}
@@ -355,6 +486,27 @@
     </p>
   {/if}
 </div>
+
+<!-- mobile column-density pager + page dots -->
+{#if editor.isMobile && editor.status === 'ready'}
+  <div class="pager">
+    <div class="density">
+      <button class="step" disabled={visCols <= 3} title="Bigger blocks" onclick={() => editor.changeCols(-1)}>−</button>
+      <button class="dnum" title="Tap for full overview" onclick={() => editor.colsFit()}>
+        <span class="dn mono">{visCols}</span><span class="dl mono">COLS</span>
+      </button>
+      <button class="step" disabled={visCols >= 12} title="Fit more columns" onclick={() => editor.changeCols(1)}>+</button>
+    </div>
+    {#if editor.pageCount > 1}
+      <div class="dots">
+        {#each Array(editor.pageCount) as _, i (i)}
+          <button class="pdot" class:on={i === page} aria-label="Page {i + 1}" onclick={() => editor.setPage(i)}></button>
+        {/each}
+      </div>
+    {/if}
+    <span class="phint mono">{editor.pageCount > 1 ? 'Swipe to pan · pinch to zoom' : 'Pinch to fit more'}</span>
+  </div>
+{/if}
 
 <!-- move ghost + delete bin -->
 {#if moveMode && moveCell}
@@ -384,6 +536,7 @@
   }
   .gridwrap.mob {
     padding: 14px 12px;
+    overflow-x: hidden;
   }
   .inner {
     position: relative;
@@ -392,7 +545,6 @@
     margin: 0 auto;
   }
   .inner.mob {
-    width: max-content;
     max-width: none;
     margin: 0;
   }
@@ -408,14 +560,92 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(var(--cols), minmax(72px, 1fr));
-    gap: var(--gap);
     width: 100%;
     position: relative;
     z-index: 1;
   }
-  .inner.mob .grid {
-    grid-template-columns: repeat(var(--cols), 74px);
+
+  /* mobile column-density pager */
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 14px 13px;
+    background: #0f0f12;
+    border-top: 1px solid #1a1a1f;
+    flex: none;
+  }
+  .density {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #141417;
+    border: 1px solid #2a2a31;
+    border-radius: 12px;
+    padding: 4px;
+  }
+  .step {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 0;
+    background: #1c1c21;
+    color: #cfcfd6;
+    font-size: 19px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .step:disabled {
+    background: transparent;
+    color: #3a3a44;
+    cursor: default;
+  }
+  .dnum {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+    min-width: 30px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .dn {
+    font: 700 14px/1 var(--font-mono);
+    color: #e9e9ee;
+  }
+  .dl {
+    font: 600 7px/1 var(--font-mono);
+    color: #6e6e78;
+    letter-spacing: 0.12em;
+    margin-top: 3px;
+  }
+  .dots {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .pdot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    background: #2e2e36;
+    border: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pdot.on {
+    width: 20px;
+    background: var(--accent);
+  }
+  .phint {
+    font: 600 8.5px/1.25 var(--font-mono);
+    color: #56565e;
+    max-width: 110px;
   }
 
   .cell {
@@ -491,17 +721,114 @@
     border-radius: 4px;
     padding: 3px 4px;
   }
-  .bypb {
+  .lvlfill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    opacity: 0.5;
+    border-top: 2px solid rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+    transition: height 0.06s linear;
+  }
+  .swhud {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: rgba(8, 8, 10, 0.55);
+    backdrop-filter: blur(1px);
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  .sh-val {
+    font: 800 28px/1 var(--font-mono);
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  }
+  .sh-unit {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    margin-left: 3px;
+  }
+  .sh-name {
+    font: 700 10px/1 var(--font-mono);
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    max-width: 92%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dots {
+    position: absolute;
+    bottom: 5px;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.28);
+  }
+  .dot.on {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .hatch {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 10px;
+    background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.07) 0 5px, rgba(0, 0, 0, 0) 5px 11px);
+    pointer-events: none;
+  }
+  .bypdot {
     position: absolute;
     top: 6px;
     left: 7px;
-    z-index: 3;
-    font: 700 8px/1 var(--font-mono);
-    color: #0c0c0e;
-    background: var(--text-dim);
-    border-radius: 4px;
-    padding: 3px 4px;
-    letter-spacing: 0.05em;
+    z-index: 5;
+    width: 17px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid rgba(160, 160, 170, 0.45);
+    transition: all 0.12s;
+  }
+  .bypdot.on {
+    background: rgba(70, 209, 127, 0.16);
+    border-color: rgba(70, 209, 127, 0.6);
+  }
+  .bypdot-i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #80808a;
+    transition: all 0.12s;
+  }
+  .bypdot.on .bypdot-i {
+    background: #46d17f;
+    box-shadow: 0 0 6px rgba(70, 209, 127, 0.85);
+  }
+  .flow {
+    animation: axsFlow 1.15s linear infinite;
   }
   .port {
     position: absolute;
@@ -527,21 +854,37 @@
   }
 
   .empty {
-    border: 1px dashed var(--surface-3);
-    background: #121215;
+    border: 1px dashed transparent;
+    background: transparent;
     cursor: pointer;
     z-index: 1;
     padding: 0;
+    transition: background 0.15s, border-color 0.15s;
   }
   .empty:hover {
     border-color: var(--accent);
-    background: #15191a;
+    background: rgba(53, 201, 214, 0.06);
+  }
+  .restdot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #33333d;
+    transition: opacity 0.15s;
+  }
+  .empty:hover .restdot {
+    opacity: 0;
+    position: absolute;
   }
   .plus {
-    font-size: 22px;
-    color: #2f2f37;
+    display: none;
+    font-size: 19px;
+    color: var(--accent);
     font-weight: 300;
     line-height: 1;
+  }
+  .empty:hover .plus {
+    display: block;
   }
   .shunt {
     background: var(--panel-2);

@@ -6,8 +6,10 @@
   import SignalGrid from '$lib/SignalGrid.svelte';
   import BlockEditor from '$lib/BlockEditor.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
+  import CabPicker from '$lib/CabPicker.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
   import SaveDialog from '$lib/SaveDialog.svelte';
+  import TunerOverlay from '$lib/TunerOverlay.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -25,7 +27,9 @@
         editor.placeTarget = null;
         editor.paletteOpen = true;
       } else if (e.key === 'Escape') {
-        if (editor.paletteOpen) editor.paletteOpen = false;
+        if (editor.tuner.active) editor.toggleTuner();
+        else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
+        else if (editor.paletteOpen) editor.paletteOpen = false;
         else if (editor.presetOpen) editor.presetOpen = false;
         else if (editor.editorOpen) editor.closeEditor();
       }
@@ -49,8 +53,10 @@
     <BlockEditor />
   </div>
   <CommandPalette />
+  <CabPicker />
   <PresetPicker />
   <SaveDialog />
+  <TunerOverlay />
   <Toast />
 </div>
 

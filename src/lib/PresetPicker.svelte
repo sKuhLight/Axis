@@ -3,31 +3,43 @@
 
   type Recent = { n: number; name: string };
   let recents = $state<Recent[]>([]);
+  let favs = $state<Recent[]>([]);
   let query = $state('');
   let inputEl = $state<HTMLInputElement | null>(null);
 
   const KEY = 'axs.presets';
-  function loadRecents() {
+  function persist() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ rec: recents, fav: favs }));
+    } catch {
+      /* */
+    }
+  }
+  function loadStore() {
     try {
       const j = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (Array.isArray(j?.rec)) recents = j.rec;
+      if (Array.isArray(j?.fav)) favs = j.fav;
     } catch {
       /* */
     }
   }
   function pushRecent(n: number, name: string) {
     recents = [{ n, name }, ...recents.filter((r) => r.n !== n)].slice(0, 12);
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ rec: recents }));
-    } catch {
-      /* */
-    }
+    persist();
+  }
+  const isFav = (n: number) => favs.some((f) => f.n === n);
+  function toggleFav(n: number, name: string) {
+    favs = isFav(n) ? favs.filter((f) => f.n !== n) : [{ n, name: name || nameOf(n) }, ...favs].slice(0, 60);
+    persist();
   }
 
+  let filter = $state<'all' | 'fav' | 'recent'>('all');
   $effect(() => {
     if (!editor.presetOpen) return;
     query = '';
-    loadRecents();
+    filter = 'all';
+    loadStore();
     setTimeout(() => inputEl?.focus(), 0);
   });
 
@@ -46,6 +58,14 @@
     const all = Array.from({ length: editor.presetCount }, (_, n) => ({ n, name: nameOf(n) }));
     if (!q) return all;
     return all.filter((r) => r.name.toLowerCase().includes(q) || pad(r.n).includes(q) || String(r.n).includes(q));
+  });
+
+  // the list shown under the tabs (search overrides the active filter)
+  const mainList = $derived.by(() => {
+    if (query.trim()) return rows;
+    if (filter === 'fav') return favs.map((f) => ({ n: f.n, name: f.name || nameOf(f.n) }));
+    if (filter === 'recent') return recents.map((r) => ({ n: r.n, name: r.name || nameOf(r.n) }));
+    return rows;
   });
 
   async function go(n: number, name = '') {
@@ -78,33 +98,49 @@
           <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
           <input bind:this={inputEl} bind:value={query} onkeydown={onKey} placeholder="Type a preset number, then Enter…" />
         </div>
+        <div class="tabs scroll">
+          <button class="tab" class:on={filter === 'all'} onclick={() => (filter = 'all')}>All</button>
+          <button class="tab" class:on={filter === 'fav'} onclick={() => (filter = 'fav')}>★ Favorites</button>
+          <button class="tab" class:on={filter === 'recent'} onclick={() => (filter = 'recent')}>Recent</button>
+        </div>
       </div>
 
-      <div class="list scroll">
-        {#if !query.trim() && recents.length}
-          <div class="section mono">RECENT</div>
-          {#each recents as r (r.n)}
-            <button class="row" class:active={editor.preset?.number === r.n} onclick={() => go(r.n, r.name)}>
-              <span class="num mono">{pad(r.n)}</span>
-              <span class="rtext"><span class="rname">{r.name || '—'}</span></span>
-              {#if editor.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
-            </button>
-          {/each}
-        {/if}
-        <div class="section mono">{query.trim() ? `${rows.length} MATCH${rows.length === 1 ? '' : 'ES'}` : 'ALL PRESETS'}</div>
-        {#each rows.slice(0, 300) as r (r.n)}
-          <button class="row" class:active={editor.preset?.number === r.n} onclick={() => go(r.n, r.name)}>
+      {#snippet presetRow(r: Recent)}
+        <div class="rowwrap" class:active={editor.preset?.number === r.n}>
+          <button class="row" onclick={() => go(r.n, r.name)}>
             <span class="num mono">{pad(r.n)}</span>
             <span class="rtext"><span class="rname">{r.name || `Preset ${r.n}`}</span></span>
             {#if editor.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
           </button>
-        {/each}
-        {#if rows.length > 300}
-          <div class="empty">+{rows.length - 300} more — type a number or name to filter</div>
+          <button class="star" class:on={isFav(r.n)} title={isFav(r.n) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleFav(r.n, r.name)}>{isFav(r.n) ? '★' : '☆'}</button>
+        </div>
+      {/snippet}
+
+      <div class="list scroll">
+        {#if !query.trim() && filter === 'all' && recents.length}
+          <div class="section mono">RECENT</div>
+          <div class="chiprow scroll">
+            {#each recents as r (r.n)}
+              <button class="chip" class:active={editor.preset?.number === r.n} onclick={() => go(r.n, r.name)}>
+                <span class="cnum mono">{pad(r.n)}</span><span class="cname">{r.name || `Preset ${r.n}`}</span>
+              </button>
+            {/each}
+          </div>
         {/if}
-        {#if rows.length === 0}
-          <div class="empty">No presets match “{query}”.</div>
+        <div class="section mono">
+          {query.trim() ? `${mainList.length} MATCH${mainList.length === 1 ? '' : 'ES'}` : filter === 'fav' ? 'FAVORITES' : filter === 'recent' ? 'RECENT' : 'ALL PRESETS'}
+        </div>
+        {#each mainList.slice(0, 300) as r (r.n)}{@render presetRow(r)}{/each}
+        {#if mainList.length > 300}
+          <div class="empty">+{mainList.length - 300} more — type a number or name to filter</div>
         {/if}
+        {#if mainList.length === 0}
+          <div class="empty">{filter === 'fav' ? 'No favorites yet — tap ☆ on a preset.' : `No presets match “${query}”.`}</div>
+        {/if}
+      </div>
+
+      <div class="foot mono">
+        <span>Type # + ⏎ Load</span><span>★ Favorite</span><span>Esc Close</span>
       </div>
     </div>
   </div>
@@ -214,11 +250,81 @@
     font-size: 15px;
     font-weight: 500;
   }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-top: 11px;
+    overflow-x: auto;
+  }
+  .tab {
+    flex: none;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--surface-3);
+    background: var(--panel-2);
+    color: #9a9aa3;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    outline: none;
+  }
+  .tab:focus-visible {
+    border-color: var(--accent);
+  }
+  .tab.on {
+    background: rgba(53, 201, 214, 0.14);
+    border-color: #2c4a4b;
+    color: var(--accent);
+  }
   .list {
     flex: 1;
     min-height: 140px;
     overflow-y: auto;
     padding: 8px 10px 12px;
+  }
+  .chiprow {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding: 2px 8px 8px;
+  }
+  .chip {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--surface-3);
+    background: var(--panel-2);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip:hover {
+    border-color: var(--border-strong);
+  }
+  .chip.active {
+    border-color: #5a3f1f;
+    background: rgba(245, 166, 35, 0.08);
+  }
+  .cnum {
+    font: 700 11px/1 var(--font-mono);
+    color: var(--accent);
+  }
+  .cname {
+    font-size: 12px;
+    font-weight: 600;
+    color: #d6d6dc;
+  }
+  .foot {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid #232329;
+    font-size: 10px;
+    color: var(--text-faint);
+    flex: none;
   }
   .section {
     font: 600 10px/1 var(--font-mono);
@@ -226,8 +332,20 @@
     letter-spacing: 0.1em;
     padding: 13px 8px 9px;
   }
+  .rowwrap {
+    display: flex;
+    align-items: center;
+    border-radius: 11px;
+  }
+  .rowwrap:hover {
+    background: rgba(53, 201, 214, 0.1);
+  }
+  .rowwrap.active {
+    background: rgba(245, 166, 35, 0.07);
+  }
   .row {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 13px;
@@ -238,11 +356,23 @@
     cursor: pointer;
     text-align: left;
   }
-  .row:hover {
-    background: rgba(53, 201, 214, 0.1);
+  .star {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    margin-right: 6px;
+    border: 0;
+    background: transparent;
+    color: #44444d;
+    font-size: 17px;
+    cursor: pointer;
+    border-radius: 9px;
   }
-  .row.active {
-    background: rgba(245, 166, 35, 0.07);
+  .star:hover {
+    color: var(--amber);
+  }
+  .star.on {
+    color: var(--amber);
   }
   .num {
     flex: none;

@@ -41,7 +41,11 @@ const CATALOG: Record<string, CatEntry> = {
   Resonator: { accent: '#3fa890', glyph: '≣', short: 'Reson' },
   Synth: { accent: '#7a5bd6', glyph: '◇', short: 'Synth' },
   Gate: { accent: '#9aa15f', glyph: '⊓', short: 'Gate' },
-  RingMod: { accent: '#9b6fd6', glyph: '≈', short: 'RngMod' }
+  RingMod: { accent: '#9b6fd6', glyph: '≈', short: 'RngMod' },
+  Megatap: { accent: '#4a82e0', glyph: '⟫', short: 'Megtap' },
+  TenTap: { accent: '#4a82e0', glyph: '⟫', short: '10-Tap' },
+  Plex: { accent: '#4a82e0', glyph: '⟫', short: 'Plex' },
+  Multiplexer: { accent: '#4a90b8', glyph: '⋔', short: 'Mux' }
 };
 
 // base-name aliases for packless grid blocks (display has trailing index stripped)

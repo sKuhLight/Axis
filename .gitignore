@@ -7,3 +7,6 @@ node_modules/
 !.env.example
 .DS_Store
 *.local
+
+# electron desktop build output
+dist-desktop/

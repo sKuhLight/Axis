@@ -4,6 +4,9 @@
 import type {
   BlockParams,
   BlockSummary,
+  CabState,
+  DetectResult,
+  DeviceEvent,
   DeviceInfo,
   Health,
   PresetBlock,
@@ -24,8 +27,12 @@ class ForgeError extends Error {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  // Serial-backed requests are serialized on the server; under load a few can queue.
+  // A 12s ceiling means a genuinely hung request surfaces as an error instead of an
+  // endless 'loading' spinner. Well above any healthy round-trip (~0.6s worst case).
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'content-type': 'application/json' },
+    signal: AbortSignal.timeout(12000),
     ...init
   });
   if (!res.ok) throw new ForgeError(res.status, `${init?.method ?? 'GET'} ${path} → ${res.status}`);
@@ -37,6 +44,8 @@ export const forgefx = {
   // ── system ──
   health: () => req<Health>('/healthz'),
   device: () => req<DeviceInfo>('/device'),
+  /** Auto-detect the connected Fractal unit (FM3/FM9/Axe-Fx/…) via the handshake. */
+  detect: () => req<DetectResult>('/device/detect'),
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),
@@ -64,21 +73,28 @@ export const forgefx = {
       body: JSON.stringify({ number })
     }),
 
-  // ── live block parameters (named) ──
-  blockParams: (slug: string) => req<BlockParams>(`/preset/blocks/${slug}/params`),
-  /** Set a parameter. continuous=true (knob, value 0..1) by default; typed=false sends an ordinal. */
-  setParam: (slug: string, param: string, value: number, continuous = true) =>
-    req<{ ok: boolean }>(`/preset/blocks/${slug}/params/${encodeURIComponent(param)}`, {
+  // ── live block parameters (addressed by the placed instance's effect id) ──
+  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`),
+  /** Set a parameter. continuous=true (knob, value 0..1) by default; false sends an enum ordinal. */
+  setParam: (eid: number, paramId: number, value: number, continuous = true) =>
+    req<{ ok: boolean }>(`/preset/blocks/${eid}/params/${paramId}`, {
       method: 'PUT',
       body: JSON.stringify({ value, continuous })
     }),
-  setBypass: (slug: string, bypassed: boolean) =>
-    req<{ ok: boolean }>(`/preset/blocks/${slug}/bypass`, {
+  /** Cab IR names per bank (Factory 1/2, Legacy, Scratchpad) — for the cab IR picker. */
+  cabIrs: () => req<Record<string, string[]>>(`/cab/irs`),
+  /** Current cab block state (mode / per-slot bank + IR + dyna type) for the picker. */
+  cabState: (eid: number) => req<CabState>(`/preset/blocks/${eid}/cab`),
+  /** Change the block's model/type by ordinal. */
+  setType: (eid: number, value: number) =>
+    req<{ ok: boolean }>(`/preset/blocks/${eid}/type`, { method: 'POST', body: JSON.stringify({ value }) }),
+  setBypass: (eid: number, bypassed: boolean) =>
+    req<{ ok: boolean }>(`/preset/blocks/${eid}/bypass`, {
       method: 'POST',
       body: JSON.stringify({ bypassed })
     }),
-  setChannel: (slug: string, channel: string) =>
-    req<{ ok: boolean }>(`/preset/blocks/${slug}/channel`, {
+  setChannel: (eid: number, channel: string) =>
+    req<{ ok: boolean }>(`/preset/blocks/${eid}/channel`, {
       method: 'POST',
       body: JSON.stringify({ channel })
     }),
@@ -107,6 +123,34 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ row, col })
     }),
+
+  // ── telemetry: tuner · tempo · scene ──
+  setTuner: (on: boolean) => req<{ ok: boolean }>('/tuner', { method: 'POST', body: JSON.stringify({ on }) }),
+  getTempo: () => req<{ bpm: number }>('/tempo'),
+  setTempo: (bpm: number) => req<{ ok: boolean }>('/tempo', { method: 'POST', body: JSON.stringify({ bpm }) }),
+  tapTempo: () => req<{ ok: boolean }>('/tempo/tap', { method: 'POST' }),
+  getScene: () => req<{ index: number }>('/scene'),
+  setScene: (index: number) => req<{ ok: boolean }>('/scene', { method: 'POST', body: JSON.stringify({ index }) }),
+  /** Per-block meter values (always-on grid level fill + swipe controls). */
+  meters: (wants: Record<string, number[]> = {}) =>
+    req<import('./types').BlockMeter[]>('/preset/meters', {
+      method: 'POST',
+      body: JSON.stringify({ wants })
+    }),
+
+  /** Subscribe to the live event stream (tuner/tempo/scene/cpu). Returns the EventSource so the
+   * caller can close it. Reconnects automatically (EventSource default). */
+  events: (onEvent: (e: DeviceEvent) => void): EventSource => {
+    const es = new EventSource(`${BASE}/events`);
+    es.onmessage = (m) => {
+      try {
+        onEvent(JSON.parse(m.data) as DeviceEvent);
+      } catch {
+        /* ignore malformed frame */
+      }
+    };
+    return es;
+  },
 
   // ── backup / restore ──
   backupPreset: (n: number) => req<ArrayBuffer>(`/presets/${n}/backup`),

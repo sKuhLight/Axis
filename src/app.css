@@ -137,3 +137,18 @@ body {
     opacity: 1;
   }
 }
+
+@keyframes axsFlow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes axsDrawer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

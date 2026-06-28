@@ -13,6 +13,8 @@ jobs:
     # run inside a Node container so the only action is checkout@v5 (Node 24) —
     # avoids the setup-node / Node 20 deprecation entirely.
     container: node:22
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # web check/build doesn't need the Electron binary
     steps:
       - uses: actions/checkout@v5
       - run: npm ci
