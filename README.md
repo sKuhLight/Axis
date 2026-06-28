@@ -26,6 +26,22 @@ no separate setup. Connect your FM3 over USB and launch.
 > On Windows the FM3 is a COM port via Fractal's USB driver; on Linux/macOS it's native CDC, no
 > driver needed. Quit Fractal's FM3-Edit (or any other editor) first — only one app can hold the port.
 
+### macOS: first launch
+
+Axis isn't code-signed/notarized yet (it's a free beta), so macOS Gatekeeper marks the downloaded
+app as **"damaged and cannot be opened."** It isn't damaged — that's just the quarantine flag macOS
+puts on unsigned downloads. Clear it once:
+
+1. Move **Axis.app** into **/Applications**.
+2. In **Terminal**, run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Axis.app
+   ```
+3. Launch Axis normally.
+
+✅ Field-tested on macOS with an **Axe-Fx III** — works end-to-end after this step. (Signing /
+notarization to remove this is on the roadmap.)
+
 ## Run (dev)
 
 Requires **Node 20+**. Axis talks to a running ForgeFX server.
