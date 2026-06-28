@@ -1,25 +1,46 @@
 // Axis desktop shell (Electron). One app: it starts the bundled ForgeFX server in-process
-// (so the native `serialport` runs under Electron's Node) and loads the built Axis UI, which
-// talks to that local server. No separate install — ForgeFX is shipped inside the app.
+// (so the native `serialport` runs under Electron's Node) and loads the Axis UI *served by that
+// same server over http* — which sidesteps SvelteKit's absolute /_app/ asset paths under file://.
+// No separate install — ForgeFX + the built UI are shipped inside the app.
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const DEV = process.env.ELECTRON_DEV === '1' || !app.isPackaged;
 const PORT = process.env.PORT || '5056';
+const ORIGIN = `http://localhost:${PORT}`;
 
-// Where the bundled ForgeFX lives: packaged → resources/forgefx; dev → the sibling repo.
+// Bundled locations: packaged → resources/…; dev → the sibling ForgeFX repo + this repo's build.
 const forgefxRoot = DEV ? path.join(__dirname, '..', '..', 'ForgeFX') : path.join(process.resourcesPath, 'forgefx');
+const staticDir = DEV ? path.join(__dirname, '..', 'build') : path.join(process.resourcesPath, 'axis-ui');
 
-function startForgeFX() {
+async function startForgeFX() {
   process.env.PORT = PORT;
   process.env.FORGEFX_DEFINITIONS = path.join(forgefxRoot, 'definitions');
+  process.env.FORGEFX_STATIC = staticDir; // serve the Axis SPA from the engine
   try {
-    // run the Fastify server in this (Node) process — native serial works under Electron's ABI
-    require(path.join(forgefxRoot, 'server', 'dist', 'index.js'));
-    console.log('[axis] ForgeFX started on :' + PORT);
+    // ForgeFX is ESM — load it with dynamic import (require() can't load ES modules).
+    // It runs the Fastify server in this (Node) process; native serial works under Electron's ABI.
+    await import(pathToFileURL(path.join(forgefxRoot, 'server', 'dist', 'index.js')).href);
+    console.log('[axis] ForgeFX started on ' + ORIGIN);
   } catch (err) {
     console.error('[axis] failed to start ForgeFX:', err);
   }
+}
+
+// wait until the server answers before loading the window (listen() resolves async)
+async function waitForServer(timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`${ORIGIN}/healthz`);
+      if (r.ok) return true;
+    } catch {
+      /* not up yet */
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return false;
 }
 
 function createWindow() {
@@ -33,17 +54,18 @@ function createWindow() {
     title: 'Axis',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
   });
-  // open external links in the system browser, not inside the app
+  // open external links (Ko-fi, GitHub) in the system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) shell.openExternal(url);
     return { action: 'deny' };
   });
-  if (DEV) win.loadURL('http://localhost:5173');
-  else win.loadFile(path.join(__dirname, '..', 'build', 'index.html'));
+  // DEV → the Vite dev server; packaged → the engine-served SPA
+  win.loadURL(DEV ? 'http://localhost:5173' : ORIGIN);
 }
 
-app.whenReady().then(() => {
-  startForgeFX();
+app.whenReady().then(async () => {
+  await startForgeFX();
+  if (!DEV) await waitForServer();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

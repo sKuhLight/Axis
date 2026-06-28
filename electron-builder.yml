@@ -9,10 +9,11 @@ copyright: Axis — independent, not affiliated with Fractal Audio Systems
 directories:
   output: dist-desktop
 files:
-  - build/**
   - electron/**
   - package.json
 extraResources:
+  - from: build
+    to: axis-ui
   - from: ../ForgeFX/server/dist
     to: forgefx/server/dist
   - from: ../ForgeFX/server/node_modules
