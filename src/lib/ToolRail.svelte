@@ -11,13 +11,25 @@
     { id: 'settings', label: 'Settings', short: 'Setup', icon: '⚙' }
   ];
 
+  // Rail items backed by a virtual effect: "the block editor pointed at effectId N".
+  const VIRTUAL: Record<string, { eid: number; slug: string; name: string }> = {
+    settings: { eid: 1, slug: 'global', name: 'Setup' },
+    controllers: { eid: 2, slug: 'controllers', name: 'Controllers' },
+    fc: { eid: 199, slug: 'fc', name: 'Footswitches' }
+  };
+
   function pick(id: string, label: string) {
-    // only 'build' (the grid) is implemented — the rest stay un-highlighted and just announce WIP,
-    // so the rail never shows an active screen that isn't there.
     if (id === 'build') {
-      editor.railActive = id;
+      editor.openBuild();
       return;
     }
+    const v = VIRTUAL[id];
+    if (v) {
+      editor.railActive = id;
+      editor.openVirtual(v.eid, v.slug, v.name);
+      return;
+    }
+    // not-yet-built screens stay un-highlighted and just announce WIP
     editor.showToast(label + ' — coming soon', '#35c9d6');
   }
 

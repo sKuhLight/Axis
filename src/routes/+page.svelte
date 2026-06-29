@@ -5,6 +5,7 @@
   import TopBar from '$lib/TopBar.svelte';
   import SignalGrid from '$lib/SignalGrid.svelte';
   import BlockEditor from '$lib/BlockEditor.svelte';
+  import VirtualScreen from '$lib/VirtualScreen.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
   import CabPicker from '$lib/CabPicker.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
@@ -49,8 +50,12 @@
   <ToolRail />
   <div class="main">
     <TopBar />
-    <SignalGrid />
-    <BlockEditor />
+    {#if editor.virtual}
+      <VirtualScreen />
+    {:else}
+      <SignalGrid />
+      <BlockEditor />
+    {/if}
   </div>
   <CommandPalette />
   <CabPicker />

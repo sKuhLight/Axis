@@ -39,6 +39,19 @@ export interface EnumParam {
   options: { value: number; label: string }[];
 }
 
+/** One control on a device-authentic editor page: a display label bound to a paramId. */
+export interface LayoutControl {
+  label: string;
+  paramName: string;
+  paramId: number | null;
+  col?: number;
+}
+/** Device-authentic UI layout for a block/virtual effect: editor pages (tabs) → controls. */
+export interface DeviceLayout {
+  editorName?: string;
+  pages: { name: string; controls: LayoutControl[] }[];
+}
+
 export interface BlockParams {
   block: string;
   slug?: string;
@@ -46,6 +59,8 @@ export interface BlockParams {
   named: NamedParam[];
   enums: EnumParam[];
   type: { value: number; name: string } | null;
+  /** Device-authentic editor pages (seeds the ControlSurface "Default" layout). */
+  layout?: DeviceLayout;
 }
 
 /** Result of the device auto-detect handshake (GET /device/detect). */
