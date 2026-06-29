@@ -1,8 +1,9 @@
 # electron-builder config for the Axis desktop app.
 # The app bundles ForgeFX (built server + prod node_modules + definitions + vendor) as resources;
 # the Electron main process runs it in-process. ForgeFX must be checked out + built next to Axis
-# (sibling ../ForgeFX) before building — the release workflow does this. Its native `serialport`
-# binding is rebuilt for Electron's ABI by the workflow (`@electron/rebuild`) before packaging.
+# (sibling ../ForgeFX) before building — the release workflow does this. Its only native dep
+# (`serialport`) is N-API with a universal darwin-x64+arm64 prebuild (and win/linux prebuilds), so
+# no per-arch rebuild is needed — the bundled binary loads on every target via node-gyp-build.
 appId: dev.skuhlight.axis
 productName: Axis
 copyright: Axis — independent, not affiliated with Fractal Audio Systems
@@ -31,7 +32,13 @@ linux:
   target: [AppImage, deb, pacman, rpm]
   category: AudioVideo
 mac:
-  target: [dmg, zip]
   category: public.app-category.music
+  # Build for both Apple Silicon and Intel (separate dmg/zip per arch). serialport's universal
+  # N-API prebuild runs on both, so each artifact bundles the same binary — no per-arch rebuild.
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
 win:
   target: [nsis, zip]
