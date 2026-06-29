@@ -104,8 +104,39 @@
   }
   let m = $state<Vals>(defaults());
   let sourceOpen = $state(false);
-
   const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
+
+  // ── read-back: load the modifier slot's live state on open (the bulk read returns real wire values
+  //    for the virtual MOD effect; per-pid GET does not). Norm fields are 0..65534 wire → 0..100 UI;
+  //    ordinal/ref fields are the raw integer. Falls back to defaults if the read fails. ──
+  const WIRE_MAX = 65534;
+  let loadedKey = $state(''); // guards one load per (open, eid)
+  $effect(() => {
+    if (!open || !mm) return;
+    const key = `${eid}`;
+    if (loadedKey === key) return;
+    loadedKey = key;
+    forgefx
+      .rawBlock(eid)
+      .then(({ values }) => {
+        const next = defaults();
+        for (const [k, f] of Object.entries(mm!.fields)) {
+          if (!(k in next)) continue; // skip targetEffectId/targetParam (binding, shown separately)
+          const w = values[f.pid];
+          if (w == null) continue;
+          const rec = next as unknown as Record<string, number | boolean>;
+          if (k === 'pcReset') rec[k] = w >= 0.5;
+          else if (f.kind === 'ordinal' || f.kind === 'ref') rec[k] = Math.round(w);
+          else rec[k] = clamp(Math.round((w / WIRE_MAX) * 100));
+        }
+        m = next;
+      })
+      .catch(() => {});
+  });
+  $effect(() => {
+    if (!open) loadedKey = ''; // reset so the next open re-reads
+  });
+
   const srcOn = $derived(m.source > 0);
 
   // ── write any modifier field to the device, encoded by its kind (from the model) ──
