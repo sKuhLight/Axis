@@ -33,6 +33,27 @@
     editor.showToast(label + ' — coming soon', '#35c9d6');
   }
 
+  // USB-MIDI units (Axe-Fx III / FM9) expose In + Out as separate ports — pick one and pair the
+  // matching opposite-direction port by name stem (e.g. "Axe-Fx III MIDI In" ⇄ "… MIDI Out").
+  const stem = (s: string) =>
+    s.toLowerCase().replace(/\b(midi|usb)\b/g, '').replace(/\b(in|out|input|output|rx|tx)\b/g, '').replace(/\s+/g, ' ').trim();
+  type Port = { transport: 'serial' | 'midi'; id: string; dir?: 'input' | 'output' };
+  function pickConn(p: Port) {
+    if (p.transport !== 'midi') {
+      editor.pickPort({ transport: 'serial', id: p.id });
+      return;
+    }
+    const opp = editor.ports.filter((o) => o.transport === 'midi' && o.dir !== p.dir);
+    const mate = opp.find((o) => stem(o.id) === stem(p.id)) ?? opp[0];
+    const inId = p.dir === 'input' ? p.id : (mate?.id ?? p.id); // ForgeFX receives here (device's "Out")
+    const outId = p.dir === 'output' ? p.id : (mate?.id ?? p.id); // ForgeFX sends here (device's "In")
+    editor.pickPort({ transport: 'midi', id: p.id, inId, outId });
+  }
+  const rowSel = (p: Port) => {
+    const c = editor.portChosen;
+    return !!c && c.transport === p.transport && (c.id === p.id || c.inId === p.id || c.outId === p.id);
+  };
+
   const dot = $derived(
     editor.conn.state === 'online'
       ? 'var(--ok)'
@@ -76,9 +97,9 @@
     <button class="pp-auto" class:on={!editor.portOverride} onclick={() => editor.pickPort(null)}>✦ Auto-detect</button>
     <div class="pp-list">
       {#each editor.ports as p (p.transport + p.id)}
-        {@const sel = editor.portChosen?.transport === p.transport && editor.portChosen?.id === p.id}
-        <button class="pp-row" class:on={sel} class:fr={p.fractal} onclick={() => editor.pickPort({ transport: p.transport, id: p.id })}>
-          <span class="pp-kind" class:midi={p.transport === 'midi'}>{p.transport === 'midi' ? 'MIDI' : 'SER'}</span>
+        {@const sel = rowSel(p)}
+        <button class="pp-row" class:on={sel} class:fr={p.fractal} onclick={() => pickConn(p)}>
+          <span class="pp-kind" class:midi={p.transport === 'midi'}>{p.transport === 'midi' ? (p.dir === 'output' ? 'M·OUT' : 'M·IN') : 'SER'}</span>
           <span class="pp-label">{p.label}</span>
           {#if p.fractal}<span class="pp-star" title="Fractal device">★</span>{/if}
           {#if sel}<span class="pp-dot">●</span>{/if}
