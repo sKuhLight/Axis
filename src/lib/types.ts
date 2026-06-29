@@ -256,11 +256,13 @@ export interface PresetGrid {
 }
 
 // connection picker (serial + MIDI ports)
-export type ConnPick = { transport: 'serial' | 'midi'; id: string };
+export type ConnPick = { transport: 'serial' | 'midi'; id: string; inId?: string; outId?: string };
 export interface ConnInfo extends ConnPick {
   label: string;
   fractal: boolean;
   model?: string;
+  /** MIDI only: which endpoint (USB-MIDI units expose In + Out separately). */
+  dir?: 'input' | 'output';
 }
 export interface PortList {
   chosen: ConnPick | null;
