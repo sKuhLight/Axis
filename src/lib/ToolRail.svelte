@@ -96,7 +96,7 @@
     <div class="pp-note">Auto-detect picks a Fractal device. Override here if it grabs the wrong port — or for a USB-MIDI unit (Axe-Fx III).</div>
     <button class="pp-auto" class:on={!editor.portOverride} onclick={() => editor.pickPort(null)}>✦ Auto-detect</button>
     <div class="pp-list">
-      {#each editor.ports as p (p.transport + p.id)}
+      {#each editor.ports as p (p.transport + ':' + (p.dir ?? '') + ':' + p.id)}
         {@const sel = rowSel(p)}
         <button class="pp-row" class:on={sel} class:fr={p.fractal} onclick={() => pickConn(p)}>
           <span class="pp-kind" class:midi={p.transport === 'midi'}>{p.transport === 'midi' ? (p.dir === 'output' ? 'M·OUT' : 'M·IN') : 'SER'}</span>
