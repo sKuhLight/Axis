@@ -5,6 +5,7 @@
   // a square responsive grid. Driven by the live editor params; layouts persist per block family.
   import { editor } from './editor.svelte';
   import EQGraph, { type EQBand } from './EQGraph.svelte';
+  import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
   import { idealIds } from './layouts';
   import type { NamedParam, EnumParam } from './types';
@@ -62,6 +63,15 @@
   let profileMeta = $state<Record<string, { active: string; names: string[] }>>({});
   let profMenuOpen = $state(false);
   let profMenuPos = $state<{ top: number; right: number } | null>(null); // fixed-position (escapes tab-row clip)
+  // ── modifier flyout (∿ badge) ── opens the editor for the device's active modifier; per-control
+  // target binding isn't decoded yet, so the clicked control's label is kept for context only.
+  let modOpen = $state(false);
+  let modLabel = $state('');
+  function openMod(lbl: string) {
+    if (editMode) return;
+    modLabel = lbl;
+    modOpen = true;
+  }
   let editingKey = $state<string | null>(null);
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
@@ -961,6 +971,10 @@
               class:dragging={drag?.id === w.id}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
             >
+              {#if !editMode && c.kind === 'cont'}
+                <!-- MODIFIER BADGE — opens the modifier editor (active modifier; per-control binding pending decode) -->
+                <button class="modbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => openMod(c.label)} title="Edit modifier">∿</button>
+              {/if}
               {#if c.kind === 'cont' && w.view === 'knob'}
                 {@const d = dialFor(w)}
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
@@ -1128,7 +1142,34 @@
   {/if}
 {/if}
 
+<!-- modifier editor flyout (opened from a control's ∿ badge) -->
+<ModifierFlyout open={modOpen} label={modLabel} onClose={() => (modOpen = false)} />
+
 <style>
+  .modbadge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 7;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid #26262c;
+    color: #56565e;
+    transition: all 0.12s;
+  }
+  .modbadge:hover {
+    border-color: #a06bed;
+    color: #c9a6ff;
+    background: rgba(160, 107, 237, 0.14);
+  }
   .tabs {
     display: flex;
     align-items: center;
