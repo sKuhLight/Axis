@@ -109,7 +109,9 @@
   // Desktop renders the real layout (cols), with the cell sized to fill the width.
   const fitCols = $derived(Math.max(2, Math.floor((containerW + GAP) / (76 + GAP))));
   const displayCols = $derived(isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : cols);
-  const cell = $derived(clamp(Math.floor((containerW - (displayCols - 1) * GAP) / displayCols), isMobile ? 60 : 48, 230));
+  // cell = exactly the width split across the columns, so the board ALWAYS fills the full horizontal
+  // space (fewer cols = bigger tiles = zoomed in). No upper cap — cols is the zoom control.
+  const cell = $derived(Math.max(isMobile ? 60 : 48, Math.floor((containerW - (displayCols - 1) * GAP) / displayCols)));
   const viewWidgets = $derived(isMobile ? packInto(widgets, displayCols, 256) : widgets);
   // board height = content extent, with `rows` as a minimum — grows downward (vertical scroll), never sideways
   const viewRows = $derived(Math.max(isMobile ? 1 : rows, 1, ...viewWidgets.map((w) => w.y + w.h)));
