@@ -63,13 +63,17 @@
   let profileMeta = $state<Record<string, { active: string; names: string[] }>>({});
   let profMenuOpen = $state(false);
   let profMenuPos = $state<{ top: number; right: number } | null>(null); // fixed-position (escapes tab-row clip)
-  // ── modifier flyout (∿ badge) ── opens the editor for the device's active modifier; per-control
-  // target binding isn't decoded yet, so the clicked control's label is kept for context only.
+  // ── modifier flyout (∿ badge) ── opens the modifier editor for the clicked control. The target
+  // binding (block eid + paramId) is now decoded, so the flyout can assign a modifier to THIS control.
   let modOpen = $state(false);
   let modLabel = $state('');
-  function openMod(lbl: string) {
+  let modTargetEid = $state<number | null>(null);
+  let modTargetParam = $state<number | null>(null);
+  function openMod(c: Ctl) {
     if (editMode) return;
-    modLabel = lbl;
+    modLabel = c.label;
+    modTargetParam = c.id;
+    modTargetEid = editor.selected?.effectId ?? null;
     modOpen = true;
   }
   let editingKey = $state<string | null>(null);
@@ -973,7 +977,7 @@
             >
               {#if !editMode && c.kind === 'cont'}
                 <!-- MODIFIER BADGE — opens the modifier editor (active modifier; per-control binding pending decode) -->
-                <button class="modbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => openMod(c.label)} title="Edit modifier">∿</button>
+                <button class="modbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => openMod(c)} title="Edit modifier">∿</button>
               {/if}
               {#if c.kind === 'cont' && w.view === 'knob'}
                 {@const d = dialFor(w)}
@@ -1143,7 +1147,7 @@
 {/if}
 
 <!-- modifier editor flyout (opened from a control's ∿ badge) -->
-<ModifierFlyout open={modOpen} label={modLabel} onClose={() => (modOpen = false)} />
+<ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
 
 <style>
   .modbadge {

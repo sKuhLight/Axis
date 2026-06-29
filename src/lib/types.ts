@@ -103,12 +103,19 @@ export interface FcModel {
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
   pid: number;
-  kind: 'ordinal' | 'norm';
+  kind: 'ordinal' | 'norm' | 'bipolar' | 'ref';
   verified: boolean;
+  role?: string;
+}
+export interface ModSource {
+  name: string;
+  ordinal: number;
 }
 export interface ModModel {
   effectId: number;
+  slotCount?: number;
   fields: Record<string, ModFieldDef>;
+  sources?: ModSource[];
 }
 
 /** Result of the device auto-detect handshake (GET /device/detect). */

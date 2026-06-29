@@ -16,18 +16,25 @@
   let {
     open = false,
     label = '',
+    targetEffectId = null,
+    targetParam = null,
+    slot = 1,
     model = undefined,
     onClose
   }: {
     open?: boolean;
     label?: string;
+    /** The control this flyout was opened for: target block eid + paramId (for binding). */
+    targetEffectId?: number | null;
+    targetParam?: number | null;
+    /** Modifier slot to use (1-based). */
+    slot?: number;
     /** Pre-fetched address map; if omitted the flyout fetches /mod/model on first open. */
     model?: ModModel | null;
     onClose: () => void;
   } = $props();
 
-  // ── design enums (placeholders — vocabularies not decoded) ──
-  const SOURCES = ['None', 'Expression 1', 'Expression 2', 'LFO 1', 'LFO 2', 'Envelope', 'ADSR', 'Sequencer'];
+  // ── enum vocabularies (ordinal lists; channel/damping/etc. labels are conventional) ──
   const CHANNELS = ['All', '1', '2', '3', '4'];
   const UPDATE = ['Fast', 'Medium', 'Slow'];
   const DAMP = ['None', 'Linear', 'Exponential', 'Logarithmic'];
@@ -36,7 +43,11 @@
   // ── address map ──
   let fetched = $state<ModModel | null>(null);
   const mm = $derived(model ?? fetched);
-  const eid = $derived(mm?.effectId ?? 3);
+  // the chosen modifier slot's effectId (slot N = base + N-1); curve/field writes + binding go here
+  const eid = $derived((mm?.effectId ?? 3) + (Math.max(1, slot) - 1));
+  // source list (name → ordinal) from the model, with an explicit None=0 at the top
+  const SOURCES = $derived<{ name: string; ordinal: number }[]>([{ name: 'None', ordinal: 0 }, ...(mm?.sources ?? [])]);
+  const canBind = $derived(targetEffectId != null && targetParam != null);
   let loading = $state(false);
 
   $effect(() => {
@@ -97,14 +108,16 @@
   const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
   const srcOn = $derived(m.source > 0);
 
-  // ── which curve fields write live (pid from the model, written continuous as 0..1) ──
-  const CURVE_KEYS = ['min', 'max', 'start', 'mid', 'end', 'slope', 'scale', 'offset'] as const;
-  type CurveKey = (typeof CURVE_KEYS)[number];
-
-  function writeCurve(key: CurveKey, v100: number) {
+  // ── write any modifier field to the device, encoded by its kind (from the model) ──
+  //   norm    → 0..1 continuous (UI 0..100)
+  //   bipolar → -1..1, sent discrete (the continuous opcode clamps to 0..1, killing the sign)
+  //   ordinal/ref → integer, discrete
+  function writeField(key: string, ui: number) {
     const f = mm?.fields?.[key];
     if (!f) return; // model not loaded → keep it local-only
-    forgefx.setParam(eid, f.pid, clamp(v100) / 100, true).catch(() => {});
+    if (f.kind === 'ordinal' || f.kind === 'ref') forgefx.setParam(eid, f.pid, Math.round(ui), false).catch(() => {});
+    else if (f.kind === 'bipolar') forgefx.setParam(eid, f.pid, (clamp(ui) - 50) / 50, false).catch(() => {});
+    else forgefx.setParam(eid, f.pid, clamp(ui) / 100, true).catch(() => {});
   }
 
   // ── knob drag (vertical), mirrors the design's onModKnobDown ──
@@ -119,7 +132,7 @@
     const dy = drag.sy - e.clientY; // up = increase
     const nv = clamp(drag.sv + dy * 0.6);
     m = { ...m, [drag.key]: nv };
-    if ((CURVE_KEYS as readonly string[]).includes(drag.key as string)) writeCurve(drag.key as CurveKey, nv);
+    writeField(drag.key as string, nv);
   }
   function knobUp(e: PointerEvent) {
     if (!drag) return;
@@ -147,8 +160,8 @@
     { key: 'max', label: 'Max', live: true }
   ];
   const dampKnobs: KnobSpec[] = [
-    { key: 'attack', label: 'Attack', live: false },
-    { key: 'release', label: 'Release', live: false }
+    { key: 'attack', label: 'Attack', live: true },
+    { key: 'release', label: 'Release', live: true }
   ];
   const mapKnobs: KnobSpec[] = [
     { key: 'start', label: 'Start', live: true },
@@ -158,7 +171,20 @@
     { key: 'scale', label: 'Scale', live: true },
     { key: 'offset', label: 'Offset', live: true }
   ];
-  const engageKnobs: KnobSpec[] = [{ key: 'offValue', label: 'Off Value', live: false }];
+  const engageKnobs: KnobSpec[] = [{ key: 'offValue', label: 'Off Value', live: true }];
+
+  // cycle an ordinal enum field (Channel / PC Reset / Update Rate / Damping / Auto Engage)
+  function cycleEnum(key: keyof Vals, optCount: number) {
+    const cur = Number(m[key]) || 0;
+    const next = (cur + 1) % optCount;
+    m = { ...m, [key]: next };
+    writeField(key as string, next);
+  }
+  function setBoolEnum(key: keyof Vals) {
+    const next = !m[key];
+    m = { ...m, [key]: next };
+    writeField(key as string, next ? 1 : 0);
+  }
 
   // ── response curve path (ported from the design's modCurve) ──
   const curve = $derived.by(() => {
@@ -184,11 +210,27 @@
     return { cur, fill };
   });
 
-  function pickSource(i: number) {
-    m = { ...m, source: i };
+  // Picking a source binds this modifier slot to the control it was opened for: one /mod/bind call
+  // writes targetEffectId (pid 8) + targetParam (pid 9) + source (pid 0) on the slot's eid. Choosing
+  // None (ordinal 0) clears the source — mirrors FM3-Edit's NONE↔source toggle creating/removing the link.
+  let binding = $state(false);
+  let bindMsg = $state('');
+  function pickSource(ordinal: number) {
+    m = { ...m, source: ordinal };
     sourceOpen = false;
-    const f = mm?.fields?.source;
-    if (f) forgefx.setParam(eid, f.pid, i, false).catch(() => {}); // ordinal → discrete, best-effort
+    if (canBind) {
+      binding = true;
+      bindMsg = '';
+      forgefx
+        .modBind(slot, targetEffectId!, targetParam!, ordinal)
+        .then((r) => (bindMsg = r?.ok ? (ordinal ? 'assigned' : 'cleared') : `error: ${r?.error ?? 'failed'}`))
+        .catch((e) => (bindMsg = `error: ${e?.message ?? e}`))
+        .finally(() => (binding = false));
+    } else {
+      // no target context → fall back to writing just the source ordinal on the slot
+      const f = mm?.fields?.source;
+      if (f) forgefx.setParam(eid, f.pid, ordinal, false).catch(() => {});
+    }
   }
 </script>
 
@@ -206,9 +248,13 @@
     <div class="close" onclick={onClose} title="Close">✕</div>
   </div>
 
-  <!-- banner: target binding undecoded -->
-  <div class="banner">
-    Editing the active modifier (effect {eid}) — per-control binding pending decode.
+  <!-- banner: live binding status -->
+  <div class="banner" class:ok={canBind}>
+    {#if canBind}
+      Modifier slot {slot} → <b>{label}</b>{#if bindMsg}<span class="bindmsg"> · {bindMsg}</span>{:else if binding}<span class="bindmsg"> · binding…</span>{/if}
+    {:else}
+      Editing modifier slot {slot} (effect {eid}) — open from a control's ∿ to assign it to that control.
+    {/if}
   </div>
 
   <div class="body">
@@ -217,20 +263,20 @@
       <div>
         <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
         <div class="srcbox" class:on={srcOn} onclick={() => (sourceOpen = !sourceOpen)}>
-          <span class="srctxt">{srcOn ? SOURCES[m.source] : 'NONE'}</span>
+          <span class="srctxt">{SOURCES.find((s) => s.ordinal === m.source)?.name ?? (srcOn ? `Source ${m.source}` : 'NONE')}</span>
           <span class="caret">▾</span>
         </div>
         <div class="caption center">MODULATION SOURCE</div>
-        <div class="flag center">source list unconfirmed</div>
+        {#if (mm?.sources?.length ?? 0) <= 1}<div class="flag center">more sources pending capture</div>{/if}
       </div>
       <div class="enum-row">
         <div class="enum-col">
-          <div class="enumbtn disabled" title="pending decode">{CHANNELS[m.channel]}</div>
-          <div class="caption">Channel <span class="pend">·pending</span></div>
+          <div class="enumbtn" onclick={() => cycleEnum('channel', CHANNELS.length)}>{CHANNELS[m.channel]}</div>
+          <div class="caption">Channel</div>
         </div>
         <div class="enum-col">
-          <div class="enumbtn disabled" title="pending decode">{m.pcReset ? 'On' : 'Off'}</div>
-          <div class="caption">PC Reset <span class="pend">·pending</span></div>
+          <div class="enumbtn" onclick={() => setBoolEnum('pcReset')}>{m.pcReset ? 'On' : 'Off'}</div>
+          <div class="caption">PC Reset</div>
         </div>
       </div>
     </div>
@@ -260,8 +306,8 @@
           {@render modKnob(k)}
         {/each}
         <div class="enum-col self-center">
-          <div class="enumbtn disabled" title="pending decode">{UPDATE[m.updateRate]}</div>
-          <div class="caption">Update Rate <span class="pend">·pending</span></div>
+          <div class="enumbtn" onclick={() => cycleEnum('updateRate', UPDATE.length)}>{UPDATE[m.updateRate]}</div>
+          <div class="caption">Update Rate</div>
         </div>
       </div>
     </div>
@@ -274,8 +320,8 @@
           {@render modKnob(k)}
         {/each}
         <div class="enum-col self-center">
-          <div class="enumbtn disabled" title="pending decode">{DAMP[m.damping]}</div>
-          <div class="caption">Damping <span class="pend">·pending</span></div>
+          <div class="enumbtn" onclick={() => cycleEnum('damping', DAMP.length)}>{DAMP[m.damping]}</div>
+          <div class="caption">Damping</div>
         </div>
       </div>
     </div>
@@ -298,8 +344,8 @@
           {@render modKnob(k)}
         {/each}
         <div class="enum-col self-center">
-          <div class="enumbtn disabled" title="pending decode">{ENGAGE[m.autoEngage]}</div>
-          <div class="caption">Auto Engage <span class="pend">·pending</span></div>
+          <div class="enumbtn" onclick={() => cycleEnum('autoEngage', ENGAGE.length)}>{ENGAGE[m.autoEngage]}</div>
+          <div class="caption">Auto Engage</div>
         </div>
       </div>
     </div>
@@ -310,9 +356,9 @@
     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
     <div class="srcmenu-scrim" onclick={() => (sourceOpen = false)}></div>
     <div class="srcmenu">
-      {#each SOURCES as label, i (i)}
+      {#each SOURCES as s (s.ordinal)}
         <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-        <div class="srcopt" class:sel={i === m.source} class:none={i === 0} onclick={() => pickSource(i)}>{label}</div>
+        <div class="srcopt" class:sel={s.ordinal === m.source} class:none={s.ordinal === 0} onclick={() => pickSource(s.ordinal)}>{s.name}</div>
       {/each}
     </div>
   {/if}
@@ -540,10 +586,11 @@
     border: 1px solid #2a2a31;
     color: #e3e3e8;
   }
-  .enumbtn.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    color: #8a8a93;
+  .enumbtn {
+    cursor: pointer;
+  }
+  .enumbtn:hover {
+    border-color: #3f3f48;
   }
   .graph {
     position: relative;

@@ -93,6 +93,12 @@ export const forgefx = {
   fcModel: () => req<FcModel | null>(`/fc/model`),
   /** Modifier address model (field → paramId); null if not decoded. */
   modModel: () => req<ModModel | null>(`/mod/model`),
+  /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */
+  modBind: (slot: number, targetEffectId: number, targetParam: number, source: number) =>
+    req<{ ok: boolean; slotEid?: number; error?: string }>(`/mod/bind`, {
+      method: 'POST',
+      body: JSON.stringify({ slot, targetEffectId, targetParam, source })
+    }),
   /** Raw param values for an effect (FC 199 / Modifier 3), keyed by paramId. */
   rawBlock: (eid: number) => req<{ eid: number; values: Record<string, number> }>(`/preset/blocks/${eid}/raw`),
   /** Read specific paramIds via per-pid GET (FC current state). Returns {pid: value}. */
