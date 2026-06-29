@@ -89,6 +89,14 @@
     await write(side + 'Category', v);
     await write(side + 'Function', 0);
   }
+
+  // Nav setters. (Live FC state read-back via per-pid GET is wired server-side at
+  // POST /preset/blocks/199/read, but the GET-response value decode still returns a constant in
+  // testing — left disabled here so the editor shows clean defaults rather than wrong values.
+  // The editor is write-only for now; read-back is the documented follow-up.)
+  const selLayout = (i: number) => (layout = i);
+  const selView = (i: number) => (view = i);
+  const selSwitch = (i: number) => (sw = i);
 </script>
 
 <section class="fc" style="--c:{ACC}">
@@ -109,13 +117,13 @@
       <div class="row">
         <span class="rlbl">LAYOUT</span>
         {#each Array(model.layouts) as _, i (i)}
-          <button class="chip" class:on={layout === i} onclick={() => (layout = i)}>{layoutLabel(i)}</button>
+          <button class="chip" class:on={layout === i} onclick={() => selLayout(i)}>{layoutLabel(i)}</button>
         {/each}
       </div>
       <div class="row">
         <span class="rlbl">VIEW</span>
         {#each Array(model.views) as _, i (i)}
-          <button class="chip mini" class:on={view === i} onclick={() => (view = i)}>{i + 1}</button>
+          <button class="chip mini" class:on={view === i} onclick={() => selView(i)}>{i + 1}</button>
         {/each}
       </div>
 
@@ -123,7 +131,7 @@
         {#each Array(switches) as _, i (i)}
           {@const cfg = layout * model.configsPerLayout + view * model.switches + i}
           {@const col = colorList.find((x) => x.v === cur('color', cfg))?.hex ?? ACC}
-          <button class="swtile" class:on={sw === i} onclick={() => (sw = i)}>
+          <button class="swtile" class:on={sw === i} onclick={() => selSwitch(i)}>
             <span class="led" style="background:{col}"></span>
             <span class="swnum mono">{i + 1}</span>
             <span class="swcat">{catName(cur('tapCategory', cfg))}</span>
