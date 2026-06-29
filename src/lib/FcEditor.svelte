@@ -31,7 +31,6 @@
   const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
   const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
   const colorList = $derived(model ? Object.entries(model.colors).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
-  const labelModeList = $derived(model ? Object.entries(model.labelModes).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
 
   function pidOf(field: string, cfg = config, index = 0): number {
     const f = model!.fields[field];
@@ -63,6 +62,33 @@
   }
   const layoutLabel = (i: number) => (i === 8 ? 'Master' : String(i + 1));
   const catName = (v: number | undefined) => (v != null ? (model?.categories[String(v)] ?? 'Cat ' + v) : '—');
+
+  // ── function model: the selected function for a side drives its value-slots + label options ──
+  const labelModeFallback = $derived(model ? Object.entries(model.labelModes).map(([, l]) => l) : []);
+  function funcsFor(side: string) {
+    const cat = cur(side + 'Category');
+    return cat != null ? (model?.functions[String(cat)] ?? []) : [];
+  }
+  function fnDefFor(side: string) {
+    const sel = cur(side + 'Function') ?? 0;
+    return funcsFor(side).find((f) => f.ord === sel);
+  }
+  const slotKey = (side: string, i: number) => `${side}Params#${i}:${config}`;
+  const curSlot = (side: string, i: number) => edits[slotKey(side, i)];
+  async function writeSlot(side: string, i: number, value: number) {
+    if (!model) return;
+    edits = { ...edits, [slotKey(side, i)]: value };
+    try {
+      await forgefx.setParam(model.effectId, pidOf(side + 'Params', config, i), value, false);
+    } catch (e) {
+      editor.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
+    }
+  }
+  // changing category also resets the function to 0 (matches the editor)
+  async function setCategory(side: string, v: number) {
+    await write(side + 'Category', v);
+    await write(side + 'Function', 0);
+  }
 </script>
 
 <section class="fc" style="--c:{ACC}">
@@ -109,68 +135,81 @@
       <div class="insp">
         <div class="ititle mono">SWITCH {sw + 1} · {layoutLabel(layout)} · View {view + 1} <span class="cfg">config {config}</span></div>
 
-        <div class="cols">
-          <!-- TAP -->
+        {#snippet actionCol(side: string, badge: string, badgeClass: string)}
+          {@const fns = funcsFor(side)}
+          {@const fnSel = cur(side + 'Function') ?? 0}
+          {@const fnDef = fnDefFor(side)}
+          {@const labels = fnDef?.labels?.length ? fnDef.labels : labelModeFallback}
           <div class="actcol">
-            <div class="ahdr"><span class="abadge tap">TAP</span></div>
+            <div class="ahdr"><span class="abadge {badgeClass}">{badge}</span></div>
             <div class="field">
-              <label for="tap-cat">Category</label>
-              <select id="tap-cat" value={cur('tapCategory') ?? ''} onchange={(e) => write('tapCategory', +e.currentTarget.value)}>
+              <span class="flbl">Category</span>
+              <select value={cur(side + 'Category') ?? ''} onchange={(e) => setCategory(side, +e.currentTarget.value)}>
                 <option value="" disabled>—</option>
                 {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
               </select>
             </div>
             <div class="field">
-              <label for="tap-fn">Function <span class="todo">raw</span></label>
-              <input id="tap-fn" type="number" min="0" value={cur('tapFunction') ?? 0} onchange={(e) => write('tapFunction', +e.currentTarget.value)} />
+              <span class="flbl">Function {#if !fns.length}<span class="todo">raw</span>{/if}</span>
+              {#if fns.length}
+                <select value={fnSel} onchange={(e) => write(side + 'Function', +e.currentTarget.value)}>
+                  {#each fns as f (f.ord)}<option value={f.ord}>{f.name}</option>{/each}
+                </select>
+              {:else}
+                <input type="number" min="0" value={cur(side + 'Function') ?? 0} onchange={(e) => write(side + 'Function', +e.currentTarget.value)} />
+              {/if}
             </div>
+            {#if fnDef}
+              {#each fnDef.slots as slot (slot.i)}
+                <div class="field">
+                  <span class="flbl">{slot.role}</span>
+                  {#if slot.type === 'bool'}
+                    <select value={curSlot(side, slot.i) ?? 0} onchange={(e) => writeSlot(side, slot.i, +e.currentTarget.value)}>
+                      <option value={0}>Off</option><option value={1}>On</option>
+                    </select>
+                  {:else if slot.type === 'enum'}
+                    <select value={curSlot(side, slot.i) ?? 0} onchange={(e) => writeSlot(side, slot.i, +e.currentTarget.value)}>
+                      {#each slot.options ?? [] as opt, oi (oi)}<option value={oi}>{opt}</option>{/each}
+                    </select>
+                  {:else if slot.type === 'channel'}
+                    <select value={curSlot(side, slot.i) ?? 0} onchange={(e) => writeSlot(side, slot.i, +e.currentTarget.value)}>
+                      {#each model!.channels as ch, ci (ci)}<option value={ci}>{ch}</option>{/each}
+                    </select>
+                  {:else}
+                    <input
+                      type="number"
+                      min={slot.min}
+                      max={slot.max}
+                      value={curSlot(side, slot.i) ?? slot.min ?? 0}
+                      onchange={(e) => writeSlot(side, slot.i, +e.currentTarget.value)}
+                    />
+                    {#if slot.type === 'block'}<span class="hint">block id</span>{/if}
+                  {/if}
+                </div>
+              {/each}
+            {:else}
+              <div class="field">
+                <span class="flbl">Value <span class="todo">raw</span></span>
+                <input type="number" min="0" onchange={(e) => writeSlot(side, 0, +e.currentTarget.value)} />
+              </div>
+            {/if}
             <div class="field">
-              <label for="tap-val">Value <span class="todo">raw</span></label>
-              <input id="tap-val" type="number" min="0" onchange={(e) => write('tapParams', +e.currentTarget.value, config, 0)} />
-            </div>
-            <div class="field">
-              <label for="tap-lm">Label</label>
-              <select id="tap-lm" value={cur('tapDisplay') ?? ''} onchange={(e) => write('tapDisplay', +e.currentTarget.value)}>
+              <span class="flbl">Label</span>
+              <select value={cur(side + 'Display') ?? ''} onchange={(e) => write(side + 'Display', +e.currentTarget.value)}>
                 <option value="" disabled>—</option>
-                {#each labelModeList as m (m.v)}<option value={m.v}>{m.label}</option>{/each}
+                {#each labels as lab, li (li)}<option value={li}>{lab}</option>{/each}
               </select>
             </div>
             <div class="field">
-              <label for="tap-lbl">Custom Label</label>
-              <input id="tap-lbl" maxlength={model.labelLen} placeholder="≤{model.labelLen} chars" onchange={(e) => writeLabel('tapLabel', e.currentTarget.value)} />
+              <span class="flbl">Custom Label</span>
+              <input maxlength={model!.labelLen} placeholder="≤{model!.labelLen} chars" onchange={(e) => writeLabel(side + 'Label', e.currentTarget.value)} />
             </div>
           </div>
+        {/snippet}
 
-          <!-- HOLD -->
-          <div class="actcol">
-            <div class="ahdr"><span class="abadge hold">HOLD</span></div>
-            <div class="field">
-              <label for="hold-cat">Category</label>
-              <select id="hold-cat" value={cur('holdCategory') ?? ''} onchange={(e) => write('holdCategory', +e.currentTarget.value)}>
-                <option value="" disabled>—</option>
-                {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
-              </select>
-            </div>
-            <div class="field">
-              <label for="hold-fn">Function <span class="todo">raw</span></label>
-              <input id="hold-fn" type="number" min="0" value={cur('holdFunction') ?? 0} onchange={(e) => write('holdFunction', +e.currentTarget.value)} />
-            </div>
-            <div class="field">
-              <label for="hold-val">Value <span class="todo">raw</span></label>
-              <input id="hold-val" type="number" min="0" onchange={(e) => write('holdParams', +e.currentTarget.value, config, 0)} />
-            </div>
-            <div class="field">
-              <label for="hold-lm">Label</label>
-              <select id="hold-lm" value={cur('holdDisplay') ?? ''} onchange={(e) => write('holdDisplay', +e.currentTarget.value)}>
-                <option value="" disabled>—</option>
-                {#each labelModeList as m (m.v)}<option value={m.v}>{m.label}</option>{/each}
-              </select>
-            </div>
-            <div class="field">
-              <label for="hold-lbl">Custom Label</label>
-              <input id="hold-lbl" maxlength={model.labelLen} placeholder="≤{model.labelLen} chars" onchange={(e) => writeLabel('holdLabel', e.currentTarget.value)} />
-            </div>
-          </div>
+        <div class="cols">
+          {@render actionCol('tap', 'TAP', 'tap')}
+          {@render actionCol('hold', 'HOLD', 'hold')}
         </div>
 
         <!-- color -->
@@ -183,7 +222,7 @@
           </div>
         </div>
 
-        <p class="note">Edits write to the FM3 immediately. Function/Value are raw numbers pending the per-category function + value-slot decode (in progress). State read-back is pending (FC space isn't bulk-readable yet).</p>
+        <p class="note">Edits write to the FM3 immediately. Bank/Preset/Scene/Effect are fully modelled (function + typed value-slots); other categories show raw fields until decoded. State read-back is pending (FC space isn't bulk-readable yet).</p>
       </div>
     </div>
   {/if}
@@ -377,7 +416,7 @@
     flex-direction: column;
     gap: 6px;
   }
-  .field label,
+
   .flbl {
     font-size: 12px;
     color: #8a8a93;

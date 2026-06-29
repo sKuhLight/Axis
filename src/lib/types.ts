@@ -70,6 +70,20 @@ export interface FcFieldDef {
   stride: number;
   verified: boolean;
 }
+export interface FcSlot {
+  i: number;
+  role: string;
+  type: 'preset' | 'scene' | 'channel' | 'block' | 'int' | 'enum' | 'bool';
+  min?: number;
+  max?: number;
+  options?: string[];
+}
+export interface FcFunctionDef {
+  ord: number;
+  name: string;
+  slots: FcSlot[];
+  labels: string[];
+}
 export interface FcModel {
   effectId: number;
   switches: number;
@@ -82,6 +96,9 @@ export interface FcModel {
   categories: Record<string, string>;
   colors: Record<string, { name: string; hex: string }>;
   labelModes: Record<string, string>;
+  /** category ordinal → its function definitions (may be empty for not-yet-modelled categories). */
+  functions: Record<string, FcFunctionDef[]>;
+  channels: string[];
 }
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
