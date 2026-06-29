@@ -208,6 +208,11 @@
             <div data-param="{{ w.param }}" onPointerDown="{{ stop }}" onClick="{{ onActionClick }}" style="{{ w.btnStyle }}">{{ w.valueText }}</div>
             </sc-if>
 
+            <!-- MODIFIER BADGE -->
+            <sc-if value="{{ w.showMod }}" hint-placeholder-val="{{ false }}">
+            <div data-param="{{ w.param }}" onPointerDown="{{ stop }}" onClick="{{ openMod }}" title="Edit modifier" style="{{ w.modBtnStyle }}">∿</div>
+            </sc-if>
+
             <!-- ARRANGE CHROME -->
             <sc-if value="{{ w.edit }}" hint-placeholder-val="{{ false }}">
             <div style="position:absolute; inset:0; z-index:6; border-radius:11px; border:1px dashed rgba(53,201,214,.45); background:rgba(53,201,214,.04); pointer-events:none;"></div>
@@ -270,6 +275,188 @@
   </div>
   </sc-if>
 
+  <!-- ===================== MODIFIER FLYOUT ===================== -->
+  <div onPointerDown="{{ closeMod }}" style="{{ modScrimStyle }}"></div>
+  <div data-screen-label="Modifier Editor" style="{{ modPanelStyle }}">
+
+    <!-- header -->
+    <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid #1c1c22; flex:none; background:linear-gradient(180deg,#15151a,#0f0f12);">
+      <span style="width:7px; height:7px; border-radius:50%; flex:none; background:#f5a623; box-shadow:0 0 8px rgba(245,166,35,.8);"></span>
+      <div style="min-width:0; font-weight:700; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ modTitle }}</div>
+      <span style="flex:1;"></span>
+      <div onClick="{{ closeMod }}" style="width:32px; height:32px; flex:none; display:flex; align-items:center; justify-content:center; background:#1a1a1f; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; font-size:14px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#fff;">✕</div>
+    </div>
+
+    <!-- body -->
+    <div class="ws-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px;">
+
+      <!-- SOURCE / CHANNEL / PC RESET -->
+      <div style="display:flex; flex-direction:column; gap:13px;">
+        <div>
+          <div onClick="{{ onModSourceOpen }}" style="{{ srcBoxStyle }}">
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ srcLabel }}</span>
+            <span style="font-size:10px; color:#6e6e78; flex:none; margin-left:8px;">▾</span>
+          </div>
+          <div style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.08em; text-align:center; margin-top:8px;">MODULATION SOURCE</div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px;">
+            <div onClick="{{ onModChannel }}" style="{{ chanBtnStyle }}">{{ chanLabel }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">Channel</div>
+          </div>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px;">
+            <div onClick="{{ onModPc }}" style="{{ pcBtnStyle }}">{{ pcLabel }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">PC Reset</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESPONSE CURVE -->
+      <div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:8px;">
+          <span style="flex:1; height:1px; background:#222229;"></span>
+          <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.13em; color:#6e6e78;">RESPONSE</span>
+          <span style="flex:1; height:1px; background:#222229;"></span>
+        </div>
+        <div style="position:relative; width:100%; aspect-ratio:1/1; max-height:230px; background:#08080a; border:1px solid #1c1c22; border-radius:10px; overflow:hidden;">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; touch-action:none;">
+            <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#16161b" stroke-width="0.5"></line>
+            <line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#16161b" stroke-width="0.5"></line>
+            <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#16161b" stroke-width="0.5"></line>
+            <line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#16161b" stroke-width="0.5"></line>
+            <path d="{{ curveFill }}" fill="rgba(53,201,214,.10)" stroke="none"></path>
+            <path d="{{ curvePath }}" fill="none" stroke="#35c9d6" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+          </svg>
+          <div style="position:absolute; left:9px; bottom:7px; font:600 8px/1 'JetBrains Mono'; color:#3c3c44; letter-spacing:.06em;">SOURCE →</div>
+          <div style="position:absolute; left:9px; top:7px; font:600 8px/1 'JetBrains Mono'; color:#3c3c44; letter-spacing:.06em; writing-mode:vertical-rl;">↑ VALUE</div>
+        </div>
+      </div>
+
+      <!-- PARAMETER RANGE -->
+      <div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:6px;">
+          <span style="flex:1; height:1px; background:#222229;"></span>
+          <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.13em; color:#6e6e78;">PARAMETER RANGE</span>
+          <span style="flex:1; height:1px; background:#222229;"></span>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:20px; justify-content:center;">
+          <sc-for list="{{ rangeKnobs }}" as="k" hint-placeholder-count="2">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+              <div style="width:54px; height:17px; border-radius:5px; background:#0c0c0e; border:1px solid #202027; display:flex; align-items:center; justify-content:center; font:600 10px/1 'JetBrains Mono'; color:#cfcfd6;">{{ k.valueText }}</div>
+              <div data-mk="{{ k.key }}" onPointerDown="{{ onModKnobDown }}" style="cursor:ns-resize; touch-action:none;">
+                <svg width="54" height="54" viewBox="0 0 64 64" style="display:block;">
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1"></circle>
+                  <g transform="{{ k.pt }}"><circle cx="32" cy="20" r="2.6" fill="#dcdce2"></circle></g>
+                </svg>
+              </div>
+              <div style="font-weight:600; font-size:11px; color:#9a9aa3;">{{ k.label }}</div>
+            </div>
+          </sc-for>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:7px; align-self:center;">
+            <div onClick="{{ onModUpdate }}" style="{{ updateBtnStyle }}">{{ updateLabel }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">Update Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DAMPING -->
+      <div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:6px;">
+          <span style="flex:1; height:1px; background:#222229;"></span>
+          <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.13em; color:#6e6e78;">DAMPING</span>
+          <span style="flex:1; height:1px; background:#222229;"></span>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:20px; justify-content:center;">
+          <sc-for list="{{ dampKnobs }}" as="k" hint-placeholder-count="2">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+              <div style="width:54px; height:17px; border-radius:5px; background:#0c0c0e; border:1px solid #202027; display:flex; align-items:center; justify-content:center; font:600 10px/1 'JetBrains Mono'; color:#cfcfd6;">{{ k.valueText }}</div>
+              <div data-mk="{{ k.key }}" onPointerDown="{{ onModKnobDown }}" style="cursor:ns-resize; touch-action:none;">
+                <svg width="54" height="54" viewBox="0 0 64 64" style="display:block;">
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1"></circle>
+                  <g transform="{{ k.pt }}"><circle cx="32" cy="20" r="2.6" fill="#dcdce2"></circle></g>
+                </svg>
+              </div>
+              <div style="font-weight:600; font-size:11px; color:#9a9aa3;">{{ k.label }}</div>
+            </div>
+          </sc-for>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:7px; align-self:center;">
+            <div onClick="{{ onModDamping }}" style="{{ dampBtnStyle }}">{{ dampLabel }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">Damping</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAPPING -->
+      <div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:8px;">
+          <span style="flex:1; height:1px; background:#222229;"></span>
+          <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.13em; color:#6e6e78;">MAPPING</span>
+          <span style="flex:1; height:1px; background:#222229;"></span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px 6px; justify-items:center;">
+          <sc-for list="{{ mapKnobs }}" as="k" hint-placeholder-count="6">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+              <div style="width:54px; height:17px; border-radius:5px; background:#0c0c0e; border:1px solid #202027; display:flex; align-items:center; justify-content:center; font:600 10px/1 'JetBrains Mono'; color:#cfcfd6;">{{ k.valueText }}</div>
+              <div data-mk="{{ k.key }}" onPointerDown="{{ onModKnobDown }}" style="cursor:ns-resize; touch-action:none;">
+                <svg width="54" height="54" viewBox="0 0 64 64" style="display:block;">
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1"></circle>
+                  <g transform="{{ k.pt }}"><circle cx="32" cy="20" r="2.6" fill="#dcdce2"></circle></g>
+                </svg>
+              </div>
+              <div style="font-weight:600; font-size:11px; color:#9a9aa3;">{{ k.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- AUTO ENGAGE -->
+      <div>
+        <div style="display:flex; align-items:center; gap:11px; margin-bottom:6px;">
+          <span style="flex:1; height:1px; background:#222229;"></span>
+          <span style="font:700 10px/1 'JetBrains Mono'; letter-spacing:.13em; color:#6e6e78;">AUTO ENGAGE</span>
+          <span style="flex:1; height:1px; background:#222229;"></span>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:20px; justify-content:center;">
+          <sc-for list="{{ engageKnobs }}" as="k" hint-placeholder-count="1">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+              <div style="width:54px; height:17px; border-radius:5px; background:#0c0c0e; border:1px solid #202027; display:flex; align-items:center; justify-content:center; font:600 10px/1 'JetBrains Mono'; color:#cfcfd6;">{{ k.valueText }}</div>
+              <div data-mk="{{ k.key }}" onPointerDown="{{ onModKnobDown }}" style="cursor:ns-resize; touch-action:none;">
+                <svg width="54" height="54" viewBox="0 0 64 64" style="display:block;">
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                  <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1"></circle>
+                  <g transform="{{ k.pt }}"><circle cx="32" cy="20" r="2.6" fill="#dcdce2"></circle></g>
+                </svg>
+              </div>
+              <div style="font-weight:600; font-size:11px; color:#9a9aa3;">{{ k.label }}</div>
+            </div>
+          </sc-for>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:7px; align-self:center;">
+            <div onClick="{{ onModEngage }}" style="{{ engageBtnStyle }}">{{ engageLabel }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">Auto Engage</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SOURCE MENU -->
+    <sc-if value="{{ modSourceOpen }}" hint-placeholder-val="{{ false }}">
+    <div onPointerDown="{{ onModSourceOpen }}" style="position:absolute; inset:0; z-index:8;"></div>
+    <div class="ws-scroll" style="position:absolute; left:16px; right:16px; top:62px; z-index:9; background:#16161b; border:1px solid #2e2e36; border-radius:11px; box-shadow:0 18px 44px rgba(0,0,0,.6); padding:6px; max-height:320px; overflow-y:auto;">
+      <sc-for list="{{ srcOpts }}" as="o" hint-placeholder-count="6">
+        <div data-oi="{{ o.i }}" onClick="{{ onModSourcePick }}" style="{{ o.style }}">{{ o.label }}</div>
+      </sc-for>
+    </div>
+    </sc-if>
+  </div>
+
   <!-- ===================== FOOTER ===================== -->
   <div data-screen-label="Footer" style="display:flex; flex-wrap:wrap; align-items:center; gap:9px; padding:10px 16px; border-top:1px solid #1e1e25; background:#0e0e10; flex:none;">
     <div style="font:500 11px/1.3 'JetBrains Mono'; color:#56565e; max-width:360px;">{{ hintText }}</div>
@@ -310,6 +497,13 @@ class Component extends DCLogic {
     this.VIEW_ICON={ knob:"◉", fader:"⇕", slider:"⇔", number:"#", button:"⏻", switch:"⊙", select:"▾", eq:"∿", action:"⏼" };
     this.CONT_VIEWS=["knob","fader","slider","number"];
     this.TOG_VIEWS=["button","switch"];
+    // ---- modifier editor enums ----
+    this.SOURCES=["None","Expression 1","Expression 2","LFO 1","LFO 2","Envelope","ADSR","Sequencer"];
+    this.CHANNELS=["All","1","2","3","4"];
+    this.UPDATE=["Fast","Medium","Slow"];
+    this.DAMP=["None","Linear","Exponential","Logarithmic"];
+    this.ENGAGE=["Off","Fast Pos","Slow Pos","Auto"];
+    this.MAP_KEYS=[["start","Start"],["mid","Mid"],["end","End"],["slope","Slope"],["scale","Scale"],["offset","Offset"]];
 
     let id=0; const W=(param,x,y,w,h,view)=>{ const c=this.CAT[param]; return { id:"w"+(++id), param, x, y, w:w||c.w, h:h||c.h, view:view||c.view }; };
     const boards = {
@@ -337,12 +531,13 @@ class Component extends DCLogic {
       selects:{ "Amp Type":0, "Mode":0 },
       eq:{ freq:1200, gain:4 }, bypassed:false, channel:"A",
       vw:(typeof window!=="undefined"?window.innerWidth:1100),
-      drag:null, toast:null, editingId:null, editBuf:"", openSelect:null
+      drag:null, toast:null, editingId:null, editBuf:"", openSelect:null,
+      modOpen:false, modParam:null, modSourceOpen:false, mods:{}, modTop:0, modBottom:0
     };
     this.GAP=8;
   }
   componentDidMount(){
-    this._move=(e)=>this.onMove(e); this._up=(e)=>this.onUp(e); this._rz=()=>this.setState({vw:window.innerWidth});
+    this._move=(e)=>this.onMove(e); this._up=(e)=>this.onUp(e); this._rz=()=>this.setState(Object.assign({vw:window.innerWidth}, this.state.modOpen?this.modRect():{}));
     window.addEventListener("pointermove",this._move,{passive:false});
     window.addEventListener("pointerup",this._up);
     window.addEventListener("resize",this._rz);
@@ -445,6 +640,7 @@ class Component extends DCLogic {
       const occ=this.occupancy(r.id); if(!this.effCompact() && !this.fits(occ,w.x,w.y,nw,nh)) return;
       this.setBoard(this.board().map(x=>x.id===r.id?Object.assign({},x,{w:nw,h:nh}):x)); return; }
     if(this.tk){ e.preventDefault(); this.trackMove(e); return; }
+    if(this.mk){ e.preventDefault(); const nv=this.clamp(this.mk.sv+(this.mk.sy-e.clientY)*0.5,0,100); this.setMod(this.mk.param,{[this.mk.key]:nv}); return; }
     if(this.vd){ e.preventDefault(); const nv=this.clamp(this.vd.sv+(this.vd.sy-e.clientY)*0.5,0,100); this.setState({ vals:Object.assign({},this.state.vals,{[this.vd.param]:nv}) }); return; }
     if(this.eqd){ e.preventDefault(); this.eqMove(e); return; }
     if(this.sw){ if(Math.abs(e.clientX-this.sw.sx)>8) this.sw.moved=true; }
@@ -454,7 +650,7 @@ class Component extends DCLogic {
   onUp(e){
     if(this.mv){ const d=this.state.drag; if(d&&d.valid){ let b=this.board().map(x=>x.id===this.mv.id?Object.assign({},x,{x:d.x,y:d.y}):x); if(this.effCompact()) b=this.packList(b); this.setBoard(b); } this.mv=null; this.setState({drag:null}); }
     if(this.rz){ this.rz=null; if(this.effCompact()) this.pack(); }
-    if(this.tk) this.tk=null; if(this.vd) this.vd=null; if(this.eqd) this.eqd=null;
+    if(this.tk) this.tk=null; if(this.vd) this.vd=null; if(this.eqd) this.eqd=null; if(this.mk) this.mk=null;
     if(this.sw){ const moved=this.sw.moved, dx=e.clientX-this.sw.sx; this.sw=null; if(moved && Math.abs(dx)>60){ const o=this.state.pageOrder, i=o.indexOf(this.state.page); const ni=this.clamp(i+(dx<0?1:-1),0,o.length-1); if(ni!==i) this.setState({page:o[ni]}); } }
   }
 
@@ -473,6 +669,41 @@ class Component extends DCLogic {
   onSelectPick=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id, oi=+e.currentTarget.dataset.oi, w=this.find(id); if(!w) return; this.setState({ selects:Object.assign({},this.state.selects,{[w.param]:oi}), openSelect:null }); };
 
   toast(text,accent){ if(this._t) clearTimeout(this._t); this.setState({ toast:{text,accent:accent||"#35c9d6"} }); this._t=setTimeout(()=>this.setState({toast:null}),2100); }
+
+  // ---------- MODIFIER EDITOR ----------
+  defaultMod(){ return { source:0, channel:0, pcReset:false, updateRate:0, damping:2, autoEngage:1,
+    min:0, max:100, attack:20, release:35, start:0, mid:50, end:100, slope:50, scale:50, offset:50, offValue:0 }; }
+  getMod(p){ return Object.assign(this.defaultMod(), this.state.mods[p]||{}); }
+  setMod(p,patch){ const cur=this.getMod(p); this.setState({ mods:Object.assign({},this.state.mods,{[p]:Object.assign({},cur,patch)}) }); }
+  modActive(p){ const m=this.state.mods[p]; return !!(m && m.source>0); }
+  modRect(){ const r=this.contentEl?this.contentEl.getBoundingClientRect():{top:120,bottom:window.innerHeight-70};
+    return { modTop:Math.round(r.top), modBottom:Math.round(window.innerHeight-r.bottom) }; }
+  openMod=(e)=>{ const param=e.currentTarget.dataset.param; this.setState(Object.assign({ modOpen:true, modParam:param, modSourceOpen:false }, this.modRect())); };
+  closeMod=(e)=>{ if(e) e.stopPropagation(); this.setState({ modOpen:false, modSourceOpen:false }); };
+  onModSourceOpen=(e)=>{ if(e) e.stopPropagation(); this.setState({ modSourceOpen:!this.state.modSourceOpen }); };
+  onModSourcePick=(e)=>{ e.stopPropagation(); const oi=+e.currentTarget.dataset.oi; this.setMod(this.state.modParam,{source:oi}); this.setState({ modSourceOpen:false }); };
+  onModChannel=()=>{ const m=this.getMod(this.state.modParam); this.setMod(this.state.modParam,{ channel:(m.channel+1)%this.CHANNELS.length }); };
+  onModPc=()=>{ const m=this.getMod(this.state.modParam); this.setMod(this.state.modParam,{ pcReset:!m.pcReset }); };
+  onModUpdate=()=>{ const m=this.getMod(this.state.modParam); this.setMod(this.state.modParam,{ updateRate:(m.updateRate+1)%this.UPDATE.length }); };
+  onModDamping=()=>{ const m=this.getMod(this.state.modParam); this.setMod(this.state.modParam,{ damping:(m.damping+1)%this.DAMP.length }); };
+  onModEngage=()=>{ const m=this.getMod(this.state.modParam); this.setMod(this.state.modParam,{ autoEngage:(m.autoEngage+1)%this.ENGAGE.length }); };
+  onModKnobDown=(e)=>{ e.stopPropagation(); const key=e.currentTarget.dataset.mk; this.mk={ key, param:this.state.modParam, sy:e.clientY, sv:this.getMod(this.state.modParam)[key] }; };
+  modKnobFmt(key,v){ if(key==="attack"||key==="release") return Math.round(v*5)+" ms";
+    if(key==="slope") return ((v-50)/12.5).toFixed(1);
+    if(key==="offset"){ const n=Math.round(v-50); return (n>0?"+":"")+n; }
+    return Math.round(v)+"%"; }
+  mkModKnob(key,label){ const v=this.getMod(this.state.modParam)[key], ang=-135+2.7*v;
+    return { key, label, dash:((v/100)*113.1).toFixed(1)+" 300", pt:"rotate("+ang.toFixed(1)+" 32 32)", valueText:this.modKnobFmt(key,v) }; }
+  modCurve(){ const m=this.getMod(this.state.modParam);
+    const s=m.start/100, mid=m.mid/100, e=m.end/100, scaleF=m.scale/50, off=(m.offset-50)/50, slope=(m.slope-50)/50;
+    let cur="", fill="M0 100";
+    for(let i=0;i<=50;i++){ const x=i/50;
+      let base = x<0.5 ? s+(mid-s)*(x*2) : mid+(e-mid)*((x-0.5)*2);
+      let y = (base-0.5)*scaleF + 0.5 + off*0.4 + slope*(x-0.5)*0.6;
+      y=this.clamp(y,0,1);
+      const px=(x*100).toFixed(1), py=((1-y)*100).toFixed(1);
+      cur+=(i?" L":"M")+px+" "+py; fill+=" L"+px+" "+py; }
+    fill+=" L100 100 Z"; return { cur, fill }; }
 
   fToX(f){ return Math.log10(this.clamp(f,20,20000)/20)/3*1000; }
   dbToY(db){ return 150 - (db/18)*120; }
@@ -498,6 +729,11 @@ class Component extends DCLogic {
       cursor: ed?"grab":(c.kind==="cont"?"ns-resize":"default"), opacity: dragging?0.28:1 };
     if(wd._new) card.animation="wsPop .34s cubic-bezier(.2,.9,.3,1)";
     o.cardStyle=card; o.hoverStyle = ed?"border-color:#35c9d6;":(noBg?"":"border-color:#33333c;");
+
+    o.showMod = (c.kind==="cont") && !ed;
+    const modOn = this.modActive(wd.param);
+    o.modBtnStyle={ position:"absolute", top:5, right:5, zIndex:7, width:22, height:22, borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, lineHeight:1, cursor:"pointer", transition:"all .12s",
+      background:modOn?"rgba(245,166,35,.16)":"rgba(255,255,255,.035)", border:"1px solid "+(modOn?"#5a3f1f":"#26262c"), color:modOn?"#f5a623":"#56565e" };
 
     const labelStyle={ fontWeight:600, fontSize:Math.max(10,Math.min(13,Math.round(cell*0.135))), color:"#bdbdc6", textAlign:"center", lineHeight:1.1, width:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" };
     o.labelStyle=labelStyle;
@@ -606,7 +842,40 @@ class Component extends DCLogic {
       : "Drag a control to set it · tap its value to type a number · swipe to change page · unlock to rearrange";
     const toast=S.toast?{ show:true, text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.accent, boxShadow:"0 0 8px "+S.toast.accent, display:"inline-block" } }:{ show:false, text:"", dot:{} };
 
+    // ---- modifier flyout ----
+    const m=this.getMod(S.modParam), srcOn=m.source>0;
+    const modScrimStyle={ position:"fixed", top:S.modTop+"px", bottom:S.modBottom+"px", left:0, right:0, zIndex:190, background:"rgba(6,6,8,.45)", opacity:S.modOpen?1:0, pointerEvents:S.modOpen?"auto":"none", transition:"opacity .26s ease" };
+    const modPanelStyle={ position:"fixed", top:S.modTop+"px", bottom:S.modBottom+"px", right:0, width:"min(420px,94vw)", zIndex:200,
+      background:"linear-gradient(180deg,#121216,#0d0d10)", borderLeft:"1px solid #222229", boxShadow:"-26px 0 60px rgba(0,0,0,.55)",
+      transform:S.modOpen?"translateX(0)":"translateX(112%)", transition:"transform .28s cubic-bezier(.2,.85,.25,1)", display:"flex", flexDirection:"column", overflow:"hidden" };
+    const modTitle="Edit Modifier: "+(S.modParam||"");
+    const srcLabel=srcOn?this.SOURCES[m.source]:"NONE";
+    const srcBoxStyle={ display:"flex", alignItems:"center", justifyContent:"center", width:"100%", height:46, padding:"0 14px", borderRadius:10, cursor:"pointer", fontSize:15, fontWeight:700,
+      background:srcOn?"#102023":"#0a0a0c", border:(srcOn?"1px solid #2c5d63":"1px dashed #3a3a44"), color:srcOn?"#7fd8de":"#cfcfd6" };
+    const enumBtn=(active)=>({ display:"flex", alignItems:"center", justifyContent:"center", minWidth:96, width:"100%", maxWidth:150, height:38, padding:"0 16px", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, whiteSpace:"nowrap",
+      background:active?"#102023":"#16161b", border:"1px solid "+(active?"#2c5d63":"#2a2a31"), color:active?"#7fd8de":"#e3e3e8" });
+    const chanBtnStyle=enumBtn(m.channel!==0);
+    const pcBtnStyle=enumBtn(m.pcReset);
+    const updateBtnStyle=enumBtn(m.updateRate!==0);
+    const dampBtnStyle=enumBtn(m.damping!==0);
+    const engageBtnStyle=enumBtn(m.autoEngage!==0);
+    const srcOpts=this.SOURCES.map((label,i)=>({ i, label, style:{ display:"flex", alignItems:"center", padding:"10px 12px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600,
+      color:i===m.source?"#7fd8de":(i===0?"#8a8a93":"#cfcfd6"), background:i===m.source?"rgba(53,201,214,.12)":"transparent" } }));
+    const rangeKnobs=[ this.mkModKnob("min","Min"), this.mkModKnob("max","Max") ];
+    const dampKnobs=[ this.mkModKnob("attack","Attack"), this.mkModKnob("release","Release") ];
+    const mapKnobs=this.MAP_KEYS.map(([k,l])=>this.mkModKnob(k,l));
+    const engageKnobs=[ this.mkModKnob("offValue","Off Value") ];
+    const cv=this.modCurve();
+
     return {
+      modScrimStyle, modPanelStyle, modTitle, srcLabel, srcBoxStyle, modSourceOpen:S.modSourceOpen, srcOpts,
+      chanLabel:this.CHANNELS[m.channel], chanBtnStyle, pcLabel:m.pcReset?"On":"Off", pcBtnStyle,
+      updateLabel:this.UPDATE[m.updateRate], updateBtnStyle, dampLabel:this.DAMP[m.damping], dampBtnStyle,
+      engageLabel:this.ENGAGE[m.autoEngage], engageBtnStyle,
+      rangeKnobs, dampKnobs, mapKnobs, engageKnobs, curvePath:cv.cur, curveFill:cv.fill,
+      openMod:this.openMod, closeMod:this.closeMod, onModSourceOpen:this.onModSourceOpen, onModSourcePick:this.onModSourcePick,
+      onModChannel:this.onModChannel, onModPc:this.onModPc, onModUpdate:this.onModUpdate, onModDamping:this.onModDamping, onModEngage:this.onModEngage,
+      onModKnobDown:this.onModKnobDown,
       pages, channels, editMode:S.editMode, cols, rows, editBtnStyle, editBuf:S.editBuf,
       editIcon:S.editMode?"🔓":"🔒", editLabel:S.editMode?"Arranging":"Arrange",
       stepStyle, compactStyle, compactLabel,
