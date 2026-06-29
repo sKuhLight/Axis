@@ -77,9 +77,11 @@ export interface FcModel {
   layouts: number;
   configsPerLayout: number;
   labelLen: number;
+  paramsWidth: number;
   fields: Record<string, FcFieldDef>;
   categories: Record<string, string>;
-  colors: Record<string, string>;
+  colors: Record<string, { name: string; hex: string }>;
+  labelModes: Record<string, string>;
 }
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
