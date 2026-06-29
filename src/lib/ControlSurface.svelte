@@ -58,7 +58,10 @@
   let rows = $state(4);
   let compact = $state(false);
   let editMode = $state(false);
-  let bySlug = $state<Record<string, Board>>({});
+  let bySlug = $state<Record<string, Board>>({}); // the ACTIVE profile's board, per slug
+  let profileMeta = $state<Record<string, { active: string; names: string[] }>>({});
+  let profMenuOpen = $state(false);
+  let profMenuPos = $state<{ top: number; right: number } | null>(null); // fixed-position (escapes tab-row clip)
   let editingKey = $state<string | null>(null);
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
@@ -134,14 +137,111 @@
       /* */
     }
   }
-  const sKey = (s: string) => `axs.surface2.${s}`;
-  function saveBoard(s: string) {
-    if (!s || !bySlug[s]) return;
+  // ── Axis-Layouts: named layout profiles per context (slug). "Default" = device-authentic (seeded
+  // from the served layout), "Blank" = empty canvas, plus user-created copies. The ACTIVE profile's
+  // board is bySlug[slug] (so every mutator below is unchanged); switching just swaps it + repoints
+  // persistence. Boards persist at axs.surface3.<slug>.<profile>; meta (active + names) at the meta key.
+  const LEGACY_KEY = (s: string) => `axs.surface2.${s}`; // pre-profile single board → migrated into Default
+  const PMKEY = (s: string) => `axs.surface3meta.${s}`;
+  const bKey = (s: string, prof: string) => `axs.surface3.${s}.${prof}`;
+  const activeProfile = $derived(profileMeta[slug]?.active ?? 'Default');
+  const profileNames = $derived(profileMeta[slug]?.names ?? ['Default', 'Blank']);
+  function emptyBoard(): Board {
+    return { pageOrder: ['Page 1'], page: 'Page 1', boards: { 'Page 1': [] } };
+  }
+  function seedFor(prof: string): Board {
+    return prof === 'Blank' ? emptyBoard() : defaultBoard();
+  }
+  function loadProfileBoard(s: string, prof: string): Board {
     try {
-      localStorage.setItem(sKey(s), JSON.stringify(bySlug[s]));
+      const raw = localStorage.getItem(bKey(s, prof));
+      if (raw) return reconcile(JSON.parse(raw));
+      if (prof === 'Default') {
+        const legacy = localStorage.getItem(LEGACY_KEY(s)); // carry a pre-profile board into Default
+        if (legacy) return reconcile(JSON.parse(legacy));
+      }
     } catch {
       /* */
     }
+    return seedFor(prof);
+  }
+  function saveMeta(s: string) {
+    try {
+      if (profileMeta[s]) localStorage.setItem(PMKEY(s), JSON.stringify(profileMeta[s]));
+    } catch {
+      /* */
+    }
+  }
+  function saveBoard(s: string) {
+    if (!s || !bySlug[s]) return;
+    try {
+      localStorage.setItem(bKey(s, profileMeta[s]?.active ?? 'Default'), JSON.stringify(bySlug[s]));
+    } catch {
+      /* */
+    }
+  }
+  // switch the active profile (saving the current one first); reseeds Default/Blank or loads a custom copy
+  function setProfile(name: string) {
+    if (!slug) return;
+    profMenuOpen = false;
+    if (name === activeProfile) return;
+    saveBoard(slug); // persist the current profile before leaving it
+    const meta = profileMeta[slug] ?? { active: 'Default', names: ['Default', 'Blank'] };
+    const names = meta.names.includes(name) ? meta.names : [...meta.names, name];
+    profileMeta = { ...profileMeta, [slug]: { active: name, names } };
+    saveMeta(slug);
+    bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, name) };
+  }
+  // create a new profile as a copy of the current board, and switch to it
+  function addProfile() {
+    if (!slug) return;
+    profMenuOpen = false;
+    saveBoard(slug);
+    const meta = profileMeta[slug] ?? { active: 'Default', names: ['Default', 'Blank'] };
+    let i = 1;
+    let name = `Layout ${i}`;
+    while (meta.names.includes(name)) name = `Layout ${++i}`;
+    const copy: Board = JSON.parse(JSON.stringify(bySlug[slug] ?? defaultBoard()));
+    profileMeta = { ...profileMeta, [slug]: { active: name, names: [...meta.names, name] } };
+    saveMeta(slug);
+    try {
+      localStorage.setItem(bKey(slug, name), JSON.stringify(copy));
+    } catch {
+      /* */
+    }
+    bySlug = { ...bySlug, [slug]: copy };
+  }
+  // remove a custom profile (built-ins stay); fall back to Default
+  function deleteProfile(name: string) {
+    if (!slug || name === 'Default' || name === 'Blank') return;
+    const meta = profileMeta[slug];
+    if (!meta) return;
+    const names = meta.names.filter((n) => n !== name);
+    const active = meta.active === name ? 'Default' : meta.active;
+    profileMeta = { ...profileMeta, [slug]: { active, names } };
+    saveMeta(slug);
+    try {
+      localStorage.removeItem(bKey(slug, name));
+    } catch {
+      /* */
+    }
+    bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, active) };
+  }
+  function toggleProfMenu(e: MouseEvent) {
+    if (profMenuOpen) {
+      profMenuOpen = false;
+      return;
+    }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    profMenuPos = { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) };
+    profMenuOpen = true;
+  }
+  // re-seed the active profile from the device-authentic layout (discard customization)
+  function resetActiveToDevice() {
+    if (!slug) return;
+    profMenuOpen = false;
+    bySlug = { ...bySlug, [slug]: defaultBoard() };
+    saveBoard(slug);
   }
 
   function clamp(v: number, a: number, b: number) {
@@ -156,29 +256,28 @@
     if (enumById.has(pid)) return `e${pid}`;
     return null;
   }
-  // Device-authentic Default layout: pages/labels/columns straight from the editor layout the server
-  // serves (blockLayout). Controls land at their editor column (x), stacked vertically per column.
-  // Anything the layout doesn't reference gets swept onto a trailing "More" page so nothing is lost.
+  // Device-authentic Default layout: one page per editor page, controls in the editor's order with the
+  // editor's labels. Positions are gravity-packed into the grid (NOT the editor's absolute columns —
+  // those assume a far wider canvas and read as sparse/overlapping here). Anything the layout doesn't
+  // reference gets swept onto a trailing "More" page so nothing is lost.
   function layoutBoard(): Board | null {
     const lay = editor.blockLayout;
     if (!lay?.pages?.length) return null;
     const boards: Record<string, Widget[]> = {};
     const pageOrder: string[] = [];
     for (const pg of lay.pages) {
-      const colY: Record<number, number> = {};
       const ws: Widget[] = [];
+      const seen = new Set<string>();
       for (const ctl of pg.controls) {
         const key = keyForParam(ctl.paramId);
         const cat = key ? catByKey.get(key) : undefined;
-        if (!cat) continue;
-        const x = clamp(ctl.col ?? 0, 0, Math.max(0, cols - cat.w));
-        const y = colY[x] ?? 0;
-        ws.push({ id: 'w' + key, key: key!, x, y, w: cat.w, h: cat.h, view: cat.view });
-        colY[x] = y + cat.h;
+        if (!cat || seen.has(key!)) continue; // skip unknown params + dupes (a param listed twice)
+        seen.add(key!);
+        ws.push(mk(cat));
       }
       if (!ws.length) continue;
       const name = pg.name?.trim() || `Page ${pageOrder.length + 1}`;
-      boards[name] = ws;
+      boards[name] = packList(ws); // tidy left→right, top→bottom in editor order
       pageOrder.push(name);
     }
     if (!pageOrder.length) return null;
@@ -223,18 +322,19 @@
     const sig = slug + '|' + catalog.map((c) => c.key).join(',');
     if (!slug || catalog.length <= 1 || sig === loadedSig) return;
     loadedSig = sig;
-    let b: Board | null = null;
-    try {
-      const raw = localStorage.getItem(sKey(slug));
-      if (raw) b = reconcile(JSON.parse(raw));
-    } catch {
-      /* */
+    // restore (or initialise) this context's profile set, then load the active profile's board
+    let meta = profileMeta[slug];
+    if (!meta) {
+      try {
+        const raw = localStorage.getItem(PMKEY(slug));
+        if (raw) meta = JSON.parse(raw);
+      } catch {
+        /* */
+      }
+      if (!meta) meta = { active: 'Default', names: ['Default', 'Blank'] };
+      profileMeta = { ...profileMeta, [slug]: meta };
     }
-    if (!b || !b.boards[b.page]?.length) {
-      const existing = bySlug[slug];
-      b = existing ? reconcile(existing) : defaultBoard();
-    }
-    bySlug = { ...bySlug, [slug]: b };
+    bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, meta.active) };
   });
 
   // arrange is a desktop affordance — never leave it on when we drop to the phone layout
@@ -689,6 +789,30 @@
       <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
     {/if}
     <span class="tab-sp"></span>
+    <!-- Axis-Layouts: switch between named layout profiles (Default = device-authentic, Blank, custom) -->
+    <div class="profwrap">
+      <button class="profbtn" class:on={profMenuOpen} onclick={toggleProfMenu} title="Layout profile">
+        <span class="prof-ic">▤</span><span class="prof-name">{activeProfile}</span><span class="prof-caret">▾</span>
+      </button>
+      {#if profMenuOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+        <div class="profmenu" style="top:{profMenuPos?.top ?? 100}px; right:{profMenuPos?.right ?? 8}px" onpointerleave={() => (profMenuOpen = false)}>
+          {#each profileNames as p (p)}
+            <button class="profitem" class:on={p === activeProfile} onclick={() => setProfile(p)}>
+              <span class="pi-name">{p === 'Default' ? '✦ Default' : p === 'Blank' ? '▢ Blank' : p}</span>
+              {#if p === 'Default'}<span class="pi-hint">device</span>{/if}
+              {#if p !== 'Default' && p !== 'Blank'}
+                <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+                <span class="pi-del" role="button" tabindex="0" title="Delete layout" onclick={(e) => { e.stopPropagation(); deleteProfile(p); }}>✕</span>
+              {/if}
+            </button>
+          {/each}
+          <div class="profsep"></div>
+          <button class="profitem act" onclick={addProfile}>＋ New layout (copy)</button>
+          <button class="profitem act" onclick={resetActiveToDevice} title="Discard customization, reseed from the device layout">↺ Reset to device</button>
+        </div>
+      {/if}
+    </div>
     {#if !isMobile}
       <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
         <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
@@ -1034,6 +1158,103 @@
   }
   .tab-sp {
     flex: 1;
+  }
+  /* ── layout-profile switcher ── */
+  .profwrap {
+    position: relative;
+    flex: none;
+  }
+  .profbtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 11px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: #15151a;
+    border: 1px solid #2a2a31;
+    color: #cfcfd6;
+  }
+  .profbtn.on,
+  .profbtn:hover {
+    border-color: #4f6bed;
+    color: #cdd6ff;
+  }
+  .prof-ic {
+    opacity: 0.7;
+  }
+  .prof-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .prof-caret {
+    font-size: 9px;
+    opacity: 0.7;
+  }
+  .profmenu {
+    position: fixed;
+    z-index: 80;
+    min-width: 200px;
+    padding: 5px;
+    background: #15151a;
+    border: 1px solid #2e2e36;
+    border-radius: 12px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  }
+  .profitem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #cfcfd6;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .profitem:hover {
+    background: #1e1e25;
+  }
+  .profitem.on {
+    color: #cdd6ff;
+    background: rgba(79, 107, 237, 0.14);
+  }
+  .profitem.act {
+    color: #9a9aa3;
+    font-weight: 500;
+  }
+  .pi-name {
+    flex: 1;
+  }
+  .pi-hint {
+    font-size: 10px;
+    color: #6f6f78;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .pi-del {
+    color: #6f6f78;
+    font-size: 11px;
+    padding: 2px 5px;
+    border-radius: 6px;
+  }
+  .pi-del:hover {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.12);
+  }
+  .profsep {
+    height: 1px;
+    margin: 5px 2px;
+    background: #2a2a31;
   }
   .arrange {
     flex: none;
