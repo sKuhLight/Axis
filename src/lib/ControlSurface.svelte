@@ -148,11 +148,54 @@
     return Math.max(a, Math.min(b, v));
   }
 
-  // Default board: a curated "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an
-  // "Advanced" page with everything else — instead of dumping every parameter on one wall.
+  const mk = (c: Ctl): Widget => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view });
+  // catalog key for a layout control's paramId (cont → k<id>, enum → e<id>); null if not on this device
+  function keyForParam(pid: number | null): string | null {
+    if (pid == null) return null;
+    if (knobById.has(pid)) return `k${pid}`;
+    if (enumById.has(pid)) return `e${pid}`;
+    return null;
+  }
+  // Device-authentic Default layout: pages/labels/columns straight from the editor layout the server
+  // serves (blockLayout). Controls land at their editor column (x), stacked vertically per column.
+  // Anything the layout doesn't reference gets swept onto a trailing "More" page so nothing is lost.
+  function layoutBoard(): Board | null {
+    const lay = editor.blockLayout;
+    if (!lay?.pages?.length) return null;
+    const boards: Record<string, Widget[]> = {};
+    const pageOrder: string[] = [];
+    for (const pg of lay.pages) {
+      const colY: Record<number, number> = {};
+      const ws: Widget[] = [];
+      for (const ctl of pg.controls) {
+        const key = keyForParam(ctl.paramId);
+        const cat = key ? catByKey.get(key) : undefined;
+        if (!cat) continue;
+        const x = clamp(ctl.col ?? 0, 0, Math.max(0, cols - cat.w));
+        const y = colY[x] ?? 0;
+        ws.push({ id: 'w' + key, key: key!, x, y, w: cat.w, h: cat.h, view: cat.view });
+        colY[x] = y + cat.h;
+      }
+      if (!ws.length) continue;
+      const name = pg.name?.trim() || `Page ${pageOrder.length + 1}`;
+      boards[name] = ws;
+      pageOrder.push(name);
+    }
+    if (!pageOrder.length) return null;
+    const placed = new Set(pageOrder.flatMap((p) => boards[p]!.map((w) => w.key)));
+    const rest = catalog.filter((c) => !placed.has(c.key));
+    if (rest.length) {
+      boards['More'] = packList(rest.map(mk));
+      pageOrder.push('More');
+    }
+    return { pageOrder, page: pageOrder[0]!, boards };
+  }
+  // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
+  // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
   function defaultBoard(): Board {
+    const lay = layoutBoard();
+    if (lay) return lay;
     const ideal = new Set(idealIds(editor.params));
-    const mk = (c: Ctl): Widget => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view });
     const main = catalog.filter((c) => c.key === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
     const rest = catalog.filter((c) => !main.includes(c));
     const boards: Record<string, Widget[]> = { Main: packList(main.map(mk)) };

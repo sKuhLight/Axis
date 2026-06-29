@@ -7,7 +7,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, DeviceLayout } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -35,6 +35,10 @@ class EditorStore {
   enums = $state<EnumParam[]>([]);
   blockType = $state<{ value: number; name: string } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
+  /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
+  blockLayout = $state<DeviceLayout | null>(null);
+  /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
+  virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
 
   // ── view + chrome ──
   globalMode = $state<ViewMode>('basic');
@@ -115,6 +119,12 @@ class EditorStore {
     return this.vw < 760;
   }
   get selected(): Cell | null {
+    if (this.virtual) {
+      // virtual effects (Setup/Controllers/Modifier/FC) aren't on the grid — synthesize a cell so the
+      // same param/load/write machinery (and the ControlSurface) work unchanged.
+      const v = this.virtual;
+      return { row: -1, col: -1, kind: 'block', effectId: v.eid, display: v.name, pack: v.slug, color: '#35c9d6', fromRows: [] };
+    }
     if (!this.selKey) return null;
     return [...this.layout.cells, ...this.layout.shunts].find((c) => `${c.row},${c.col}` === this.selKey) ?? null;
   }
@@ -379,6 +389,7 @@ class EditorStore {
   };
 
   openCell = async (c: Cell) => {
+    this.virtual = null; // leaving any rail/virtual screen — back to a real grid block
     this.selectCellOnDevice(c.row, c.col);
     if (c.kind === 'shunt') return; // shunts have no editor
     this.selKey = `${c.row},${c.col}`;
@@ -396,6 +407,23 @@ class EditorStore {
   closeEditor = () => {
     this.editorOpen = false;
   };
+
+  // Return to the Signal Grid (Build) from any rail/virtual screen.
+  openBuild = () => {
+    this.virtual = null;
+    this.railActive = 'build';
+  };
+
+  // Open a virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) as a rail screen. Same param
+  // path as a block — "the block editor pointed at effectId N" — rendered full-view by VirtualScreen.
+  openVirtual = async (eid: number, slug: string, name: string) => {
+    this.virtual = { eid, slug, name };
+    this.selKey = null;
+    this.editorOpen = false;
+    this.editingTabs = false;
+    this.activePage = '';
+    await this.#loadParams();
+  };
   // default tab when opening a block: Ideal in Basic view, Advanced in Advanced view
   #defaultPage = () => (this.globalMode === 'basic' ? '__ideal' : '__advanced');
 
@@ -408,6 +436,7 @@ class EditorStore {
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
       this.enums = r.enums ?? [];
       this.blockType = r.type ?? null;
+      this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
         const m = this.meters[c.effectId];
