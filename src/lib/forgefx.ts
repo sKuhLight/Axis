@@ -13,7 +13,9 @@ import type {
   Health,
   PresetBlock,
   PresetGrid,
-  PresetRef
+  PresetRef,
+  FcModel,
+  ModModel
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -87,6 +89,12 @@ export const forgefx = {
       method: 'PUT',
       body: JSON.stringify({ value, continuous })
     }),
+  /** Foot Controller address model (field bases + config formula + enums); null if not decoded. */
+  fcModel: () => req<FcModel | null>(`/fc/model`),
+  /** Modifier address model (field → paramId); null if not decoded. */
+  modModel: () => req<ModModel | null>(`/mod/model`),
+  /** Raw param values for an effect (FC 199 / Modifier 3), keyed by paramId. */
+  rawBlock: (eid: number) => req<{ eid: number; values: Record<string, number> }>(`/preset/blocks/${eid}/raw`),
   /** Cab IR names per bank (Factory 1/2, Legacy, Scratchpad) — for the cab IR picker. */
   cabIrs: () => req<Record<string, string[]>>(`/cab/irs`),
   /** Current cab block state (mode / per-slot bank + IR + dyna type) for the picker. */

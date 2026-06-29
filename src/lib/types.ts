@@ -63,6 +63,35 @@ export interface BlockParams {
   layout?: DeviceLayout;
 }
 
+/** Foot Controller (eid 199) address model — field bases + config formula + enums. */
+export interface FcFieldDef {
+  base: number;
+  width: number;
+  stride: number;
+  verified: boolean;
+}
+export interface FcModel {
+  effectId: number;
+  switches: number;
+  views: number;
+  layouts: number;
+  configsPerLayout: number;
+  labelLen: number;
+  fields: Record<string, FcFieldDef>;
+  categories: Record<string, string>;
+  colors: Record<string, string>;
+}
+/** Modifier (eid 3) address model — field → paramId. */
+export interface ModFieldDef {
+  pid: number;
+  kind: 'ordinal' | 'norm';
+  verified: boolean;
+}
+export interface ModModel {
+  effectId: number;
+  fields: Record<string, ModFieldDef>;
+}
+
 /** Result of the device auto-detect handshake (GET /device/detect). */
 export interface DetectResult {
   connected: boolean;
