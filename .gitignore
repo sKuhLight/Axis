@@ -10,3 +10,7 @@ node_modules/
 
 # electron desktop build output
 dist-desktop/
+
+# local decompile/installer working dirs — never publish (RE source material)
+axe3/
+fm9/
