@@ -1,8 +1,10 @@
 <script lang="ts">
-  // Foot Controller editor (effectId 199). Renders the device-authentic layout/view/switch grid from
-  // the served FC address model and writes edits straight to the FM3 by computing
-  //   pid = field.base + config*stride,  config = layout*FM3configsPerLayout(12) + view*switches(3) + switch
-  // (the decoded FC address formula — tapCategory verified on-device). Writes use setParam(199, pid, val).
+  // Foot Controller editor (effectId 199). Device-authentic layout/view/switch grid from the served
+  // FC address model; writes by computing pid = field.base + config*stride (+index for value/label
+  // blocks), config = layout*12 + view*3 + switch. tapCategory formula is device-verified; the field
+  // structure + enum vocabularies (categories 0-13, colors 1-12, label modes 0-2) are cache/capture
+  // confirmed. Per-category FUNCTION lists + the 6 value-slot meanings are still being mined from the
+  // editor decompile — until then Function/Value are raw numeric fields.
   import { onMount } from 'svelte';
   import { editor } from './editor.svelte';
   import { forgefx } from './forgefx';
@@ -11,11 +13,10 @@
   const ACC = '#f5a623';
   let model = $state<FcModel | null>(null);
   let err = $state<string | null>(null);
-  let layout = $state(0); // 0..8 (8 = Master)
-  let view = $state(0); // 0..3
-  let sw = $state(0); // 0..(switches-1)
-  // local echo of edits (the FC space isn't bulk-readable yet, so we track what we set this session)
-  let edits = $state<Record<string, number>>({});
+  let layout = $state(0);
+  let view = $state(0);
+  let sw = $state(0);
+  let edits = $state<Record<string, number>>({}); // local echo (FC space not bulk-readable yet)
 
   onMount(async () => {
     try {
@@ -26,45 +27,42 @@
     }
   });
 
-  const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
   const switches = $derived(model?.switches ?? 3);
-  const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })) : []);
-  const colorList = $derived(model ? Object.entries(model.colors).map(([v, label]) => ({ v: +v, label })) : []);
+  const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
+  const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
+  const colorList = $derived(model ? Object.entries(model.colors).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
+  const labelModeList = $derived(model ? Object.entries(model.labelModes).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
 
-  function pid(field: string, cfg = config): number {
+  function pidOf(field: string, cfg = config, index = 0): number {
     const f = model!.fields[field];
-    return f.base + cfg * f.stride;
+    return f.base + cfg * f.stride + index;
   }
-  const editKey = (field: string, cfg = config) => `${field}:${cfg}`;
-  function cur(field: string): number | undefined {
-    return edits[editKey(field)];
-  }
+  const ek = (field: string, cfg = config) => `${field}:${cfg}`;
+  const cur = (field: string, cfg = config) => edits[ek(field, cfg)];
 
-  async function write(field: string, value: number) {
+  async function write(field: string, value: number, cfg = config, index = 0) {
     if (!model) return;
-    edits = { ...edits, [editKey(field)]: value };
+    if (index === 0) edits = { ...edits, [ek(field, cfg)]: value };
     try {
-      await forgefx.setParam(model.effectId, pid(field), value, false);
+      await forgefx.setParam(model.effectId, pidOf(field, cfg, index), value, false);
     } catch (e) {
       editor.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
     }
   }
-  // labels are 11 ASCII pids; write each char (zero-padded)
   async function writeLabel(field: string, text: string) {
     if (!model) return;
-    edits = { ...edits, [editKey(field)]: text.length }; // mark touched
-    const base = pid(field);
+    edits = { ...edits, [ek(field)]: text.length };
+    const base = pidOf(field);
     for (let i = 0; i < model.labelLen; i++) {
-      const code = i < text.length ? text.charCodeAt(i) : 0;
       try {
-        await forgefx.setParam(model.effectId, base + i, code, false);
+        await forgefx.setParam(model.effectId, base + i, i < text.length ? text.charCodeAt(i) : 0, false);
       } catch {
         /* */
       }
     }
   }
-
   const layoutLabel = (i: number) => (i === 8 ? 'Master' : String(i + 1));
+  const catName = (v: number | undefined) => (v != null ? (model?.categories[String(v)] ?? 'Cat ' + v) : '—');
 </script>
 
 <section class="fc" style="--c:{ACC}">
@@ -82,14 +80,12 @@
     <div class="msg">Loading Foot Controller model…</div>
   {:else}
     <div class="body">
-      <!-- layouts -->
       <div class="row">
         <span class="rlbl">LAYOUT</span>
         {#each Array(model.layouts) as _, i (i)}
           <button class="chip" class:on={layout === i} onclick={() => (layout = i)}>{layoutLabel(i)}</button>
         {/each}
       </div>
-      <!-- views -->
       <div class="row">
         <span class="rlbl">VIEW</span>
         {#each Array(model.views) as _, i (i)}
@@ -97,47 +93,97 @@
         {/each}
       </div>
 
-      <!-- switch board -->
       <div class="board" style="grid-template-columns:repeat({switches},1fr)">
         {#each Array(switches) as _, i (i)}
-          {@const c = layout * model.configsPerLayout + view * model.switches + i}
-          {@const catV = edits[`tapCategory:${c}`]}
+          {@const cfg = layout * model.configsPerLayout + view * model.switches + i}
+          {@const col = colorList.find((x) => x.v === cur('color', cfg))?.hex ?? ACC}
           <button class="swtile" class:on={sw === i} onclick={() => (sw = i)}>
-            <span class="led" style="background:{ACC}"></span>
+            <span class="led" style="background:{col}"></span>
             <span class="swnum mono">{i + 1}</span>
-            <span class="swcat">{catV != null ? (model.categories[catV] ?? 'Cat ' + catV) : '—'}</span>
+            <span class="swcat">{catName(cur('tapCategory', cfg))}</span>
+            <span class="swhold mono">HOLD · {catName(cur('holdCategory', cfg))}</span>
           </button>
         {/each}
       </div>
 
-      <!-- inspector for the selected switch -->
       <div class="insp">
         <div class="ititle mono">SWITCH {sw + 1} · {layoutLabel(layout)} · View {view + 1} <span class="cfg">config {config}</span></div>
 
-        <div class="field">
-          <label for="fc-cat">Tap Category</label>
-          <select id="fc-cat" value={cur('tapCategory') ?? ''} onchange={(e) => write('tapCategory', +e.currentTarget.value)}>
-            <option value="" disabled>—</option>
-            {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
-          </select>
+        <div class="cols">
+          <!-- TAP -->
+          <div class="actcol">
+            <div class="ahdr"><span class="abadge tap">TAP</span></div>
+            <div class="field">
+              <label for="tap-cat">Category</label>
+              <select id="tap-cat" value={cur('tapCategory') ?? ''} onchange={(e) => write('tapCategory', +e.currentTarget.value)}>
+                <option value="" disabled>—</option>
+                {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <label for="tap-fn">Function <span class="todo">raw</span></label>
+              <input id="tap-fn" type="number" min="0" value={cur('tapFunction') ?? 0} onchange={(e) => write('tapFunction', +e.currentTarget.value)} />
+            </div>
+            <div class="field">
+              <label for="tap-val">Value <span class="todo">raw</span></label>
+              <input id="tap-val" type="number" min="0" onchange={(e) => write('tapParams', +e.currentTarget.value, config, 0)} />
+            </div>
+            <div class="field">
+              <label for="tap-lm">Label</label>
+              <select id="tap-lm" value={cur('tapDisplay') ?? ''} onchange={(e) => write('tapDisplay', +e.currentTarget.value)}>
+                <option value="" disabled>—</option>
+                {#each labelModeList as m (m.v)}<option value={m.v}>{m.label}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <label for="tap-lbl">Custom Label</label>
+              <input id="tap-lbl" maxlength={model.labelLen} placeholder="≤{model.labelLen} chars" onchange={(e) => writeLabel('tapLabel', e.currentTarget.value)} />
+            </div>
+          </div>
+
+          <!-- HOLD -->
+          <div class="actcol">
+            <div class="ahdr"><span class="abadge hold">HOLD</span></div>
+            <div class="field">
+              <label for="hold-cat">Category</label>
+              <select id="hold-cat" value={cur('holdCategory') ?? ''} onchange={(e) => write('holdCategory', +e.currentTarget.value)}>
+                <option value="" disabled>—</option>
+                {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <label for="hold-fn">Function <span class="todo">raw</span></label>
+              <input id="hold-fn" type="number" min="0" value={cur('holdFunction') ?? 0} onchange={(e) => write('holdFunction', +e.currentTarget.value)} />
+            </div>
+            <div class="field">
+              <label for="hold-val">Value <span class="todo">raw</span></label>
+              <input id="hold-val" type="number" min="0" onchange={(e) => write('holdParams', +e.currentTarget.value, config, 0)} />
+            </div>
+            <div class="field">
+              <label for="hold-lm">Label</label>
+              <select id="hold-lm" value={cur('holdDisplay') ?? ''} onchange={(e) => write('holdDisplay', +e.currentTarget.value)}>
+                <option value="" disabled>—</option>
+                {#each labelModeList as m (m.v)}<option value={m.v}>{m.label}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <label for="hold-lbl">Custom Label</label>
+              <input id="hold-lbl" maxlength={model.labelLen} placeholder="≤{model.labelLen} chars" onchange={(e) => writeLabel('holdLabel', e.currentTarget.value)} />
+            </div>
+          </div>
         </div>
 
+        <!-- color -->
         <div class="field">
           <span class="flbl">Color</span>
           <div class="colors">
             {#each colorList as c (c.v)}
-              <button class="csw" class:on={cur('color') === c.v} title={c.label} style="background:#1f5fd0" onclick={() => write('color', c.v)}>{c.label}</button>
+              <button class="csw" class:on={cur('color') === c.v} title={c.name} style="background:{c.hex}" onclick={() => write('color', c.v)} aria-label={c.name}></button>
             {/each}
-            {#if !colorList.length}<span class="hint">colour ordinals partial</span>{/if}
           </div>
         </div>
 
-        <div class="field">
-          <label for="fc-lbl">Custom Label (TAP)</label>
-          <input id="fc-lbl" maxlength={model.labelLen} placeholder="≤{model.labelLen} chars" onchange={(e) => writeLabel('tapLabel', e.currentTarget.value)} />
-        </div>
-
-        <p class="note">Edits write to the FM3 immediately. Reading current state back is pending (FC space isn't bulk-readable yet), so only changes made here are reflected.</p>
+        <p class="note">Edits write to the FM3 immediately. Function/Value are raw numbers pending the per-category function + value-slot decode (in progress). State read-back is pending (FC space isn't bulk-readable yet).</p>
       </div>
     </div>
   {/if}
@@ -237,14 +283,14 @@
   .board {
     display: grid;
     gap: 12px;
-    max-width: 640px;
+    max-width: 700px;
   }
   .swtile {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-height: 92px;
+    gap: 5px;
+    min-height: 96px;
     padding: 16px 13px 12px;
     border-radius: 14px;
     border: 1px solid #28282f;
@@ -276,13 +322,17 @@
     font-weight: 700;
     color: #fff;
   }
+  .swhold {
+    font-size: 10px;
+    color: #7e7e88;
+  }
   .insp {
     border-top: 1px solid #1c1c22;
     padding-top: 14px;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    max-width: 520px;
+    max-width: 620px;
   }
   .ititle {
     font-size: 11px;
@@ -291,6 +341,36 @@
   }
   .cfg {
     color: #56565e;
+  }
+  .cols {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .actcol {
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ahdr {
+    display: flex;
+    align-items: center;
+  }
+  .abadge {
+    font: 700 10px/1 ui-monospace, monospace;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .abadge.tap {
+    background: #1d2a2c;
+    color: #7fd8de;
+  }
+  .abadge.hold {
+    background: #2a2212;
+    color: #f5c518;
   }
   .field {
     display: flex;
@@ -302,9 +382,16 @@
     font-size: 12px;
     color: #8a8a93;
   }
+  .todo {
+    font-size: 9px;
+    color: #6e6e78;
+    border: 1px solid #2a2a31;
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
   select,
   input {
-    height: 36px;
+    height: 34px;
     background: #0d0d10;
     border: 1px solid #2a2a31;
     border-radius: 9px;
@@ -324,13 +411,10 @@
     gap: 8px;
   }
   .csw {
+    width: 30px;
     height: 30px;
-    padding: 0 11px;
     border-radius: 8px;
     border: 2px solid transparent;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
     cursor: pointer;
   }
   .csw.on {
@@ -342,6 +426,7 @@
     color: #6e6e78;
     line-height: 1.5;
     margin: 0;
+    max-width: 620px;
   }
   .msg {
     flex: 1;
@@ -351,10 +436,6 @@
     font-size: 14px;
     padding: 24px;
     text-align: center;
-  }
-  .hint {
-    font-size: 11px;
-    color: #6e6e78;
   }
   .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
