@@ -111,7 +111,8 @@
   const displayCols = $derived(isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : cols);
   const cell = $derived(clamp(Math.floor((containerW - (displayCols - 1) * GAP) / displayCols), isMobile ? 60 : 48, 230));
   const viewWidgets = $derived(isMobile ? packInto(widgets, displayCols, 256) : widgets);
-  const viewRows = $derived(isMobile ? Math.max(1, ...viewWidgets.map((w) => w.y + w.h)) : rows);
+  // board height = content extent, with `rows` as a minimum — grows downward (vertical scroll), never sideways
+  const viewRows = $derived(Math.max(isMobile ? 1 : rows, 1, ...viewWidgets.map((w) => w.y + w.h)));
   const effCompact = $derived(compact || isMobile);
 
   // persisted global grid prefs
@@ -310,7 +311,12 @@
     const valid = new Set(catalog.map((c) => c.key));
     const boards: Record<string, Widget[]> = {};
     for (const pg of b.pageOrder) {
-      boards[pg] = (b.boards[pg] ?? []).filter((w) => valid.has(w.key)).map((w) => ({ ...w, w: clamp(w.w, 1, cols), h: clamp(w.h, 1, rows) }));
+      let ws = (b.boards[pg] ?? []).filter((w) => valid.has(w.key)).map((w) => ({ ...w, w: clamp(w.w, 1, cols), h: clamp(w.h, 1, rows) }));
+      // a board saved at a wider column count would put widgets at x beyond the current `cols`, which
+      // overflows/clips on the right. If anything sticks out, re-pack the page so it wraps onto new
+      // rows instead (never clip right) — keeps positions otherwise untouched.
+      if (ws.some((w) => w.x < 0 || w.x + w.w > cols)) ws = packInto(ws, cols, MAX_ROWS);
+      boards[pg] = ws;
     }
     const page = b.pageOrder.includes(b.page) ? b.page : b.pageOrder[0] ?? 'Main';
     return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards };
@@ -432,7 +438,8 @@
     }
     return out;
   }
-  const packList = (list: Widget[]) => packInto(list, cols, rows);
+  const MAX_ROWS = 512; // rows grow as needed — packing never caps vertically (only horizontally, by cols)
+  const packList = (list: Widget[]) => packInto(list, cols, MAX_ROWS);
 
   // ── arrange-mode actions ──
   const toggleEdit = () => {
@@ -451,12 +458,13 @@
     if (dim === 'cols') cols = v;
     else rows = v;
     saveGrid();
-    // clamp every page of every slug to the new grid
+    // cols is a ZOOM level: re-pack every page into the new column count so tiles resize and wrap onto
+    // new rows — never overflow sideways. (rows is just a minimum canvas height; content grows past it.)
     const next: Record<string, Board> = {};
     for (const s of Object.keys(bySlug)) {
       const b = bySlug[s];
       const boards: Record<string, Widget[]> = {};
-      for (const pg of b.pageOrder) boards[pg] = (b.boards[pg] ?? []).map((w) => ({ ...w, w: Math.min(w.w, cols), h: Math.min(w.h, rows), x: clamp(w.x, 0, cols - Math.min(w.w, cols)), y: clamp(w.y, 0, rows - Math.min(w.h, rows)) }));
+      for (const pg of b.pageOrder) boards[pg] = packInto((b.boards[pg] ?? []).map((w) => ({ ...w, w: Math.min(w.w, cols), h: Math.min(w.h, rows) })), cols, MAX_ROWS);
       next[s] = { ...b, boards };
     }
     bySlug = next;
@@ -1351,11 +1359,39 @@
     flex: 1;
     min-height: 0;
     position: relative;
-    overflow: auto;
+    overflow-x: hidden; /* board is a zoom grid — it wraps to new rows, never scrolls sideways */
+    overflow-y: auto;
     padding: 16px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
+  }
+  /* styled scrollbars (vertical) across the surface's scroll areas */
+  .content::-webkit-scrollbar,
+  .tray-row::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .content::-webkit-scrollbar-thumb,
+  .tray-row::-webkit-scrollbar-thumb {
+    background: #34343d;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 8px;
+  }
+  .content::-webkit-scrollbar-thumb:hover,
+  .tray-row::-webkit-scrollbar-thumb:hover {
+    background: #45454f;
+    background-clip: content-box;
+  }
+  .content::-webkit-scrollbar-track,
+  .tray-row::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .content,
+  .tray-row {
+    scrollbar-width: thin;
+    scrollbar-color: #34343d transparent;
   }
   .boardwrap {
     position: relative;
@@ -1913,8 +1949,10 @@
   }
   .tray-row {
     display: flex;
+    flex-wrap: wrap; /* available controls wrap onto new lines — never a sideways scroll */
     gap: 9px;
-    overflow-x: auto;
+    max-height: 132px;
+    overflow-y: auto;
     padding-bottom: 3px;
   }
   .traychip {
