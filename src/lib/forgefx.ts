@@ -95,6 +95,9 @@ export const forgefx = {
   modModel: () => req<ModModel | null>(`/mod/model`),
   /** Raw param values for an effect (FC 199 / Modifier 3), keyed by paramId. */
   rawBlock: (eid: number) => req<{ eid: number; values: Record<string, number> }>(`/preset/blocks/${eid}/raw`),
+  /** Read specific paramIds via per-pid GET (FC current state). Returns {pid: value}. */
+  readParams: (eid: number, pids: number[]) =>
+    req<Record<string, number>>(`/preset/blocks/${eid}/read`, { method: 'POST', body: JSON.stringify({ pids }) }),
   /** Cab IR names per bank (Factory 1/2, Legacy, Scratchpad) — for the cab IR picker. */
   cabIrs: () => req<Record<string, string[]>>(`/cab/irs`),
   /** Current cab block state (mode / per-slot bank + IR + dyna type) for the picker. */
