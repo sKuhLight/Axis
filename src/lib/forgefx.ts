@@ -5,7 +5,9 @@ import type {
   BlockParams,
   BlockSummary,
   CabState,
+  ConnPick,
   DetectResult,
+  PortList,
   DeviceEvent,
   DeviceInfo,
   Health,
@@ -46,6 +48,10 @@ export const forgefx = {
   device: () => req<DeviceInfo>('/device'),
   /** Auto-detect the connected Fractal unit (FM3/FM9/Axe-Fx/…) via the handshake. */
   detect: () => req<DetectResult>('/device/detect'),
+  /** List all serial + MIDI connections (Fractal flagged) + the chosen one / manual override. */
+  listPorts: () => req<PortList>('/ports'),
+  /** Manually pick a connection, or null to clear back to auto-detect. */
+  selectPort: (conn: ConnPick | null) => req<{ ok: boolean }>('/ports/select', { method: 'POST', body: JSON.stringify(conn ?? { id: null }) }),
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),

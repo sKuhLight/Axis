@@ -7,7 +7,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -95,6 +95,11 @@ class EditorStore {
 
   // ── overlays ──
   update = $state<{ version: string; url: string } | null>(null); // newer release available (top-bar pill)
+  // ── connection picker (serial + MIDI ports) ──
+  portsOpen = $state(false);
+  ports = $state<ConnInfo[]>([]);
+  portChosen = $state<ConnPick | null>(null);
+  portOverride = $state<ConnPick | null>(null);
   paletteOpen = $state(false);
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
@@ -678,6 +683,37 @@ class EditorStore {
     await forgefx.setTuner(next).catch(() => {
       this.tuner = { active: !next };
     });
+  };
+
+  // ── connection picker ──
+  openPorts = async () => {
+    this.portsOpen = true;
+    await this.loadPorts();
+  };
+  loadPorts = async () => {
+    try {
+      const r = await forgefx.listPorts();
+      this.ports = [...r.ports].sort((a, b) => Number(b.fractal) - Number(a.fractal)); // Fractal first
+      this.portChosen = r.chosen;
+      this.portOverride = r.override;
+    } catch {
+      /* offline */
+    }
+  };
+  // pick a port (or null to clear back to auto-detect); reconnect + re-detect + reload
+  pickPort = async (conn: ConnPick | null) => {
+    this.portsOpen = false;
+    try {
+      await forgefx.selectPort(conn);
+      this.conn = { state: 'connecting' };
+      await this.poll();
+      const d = await forgefx.detect().catch(() => null);
+      if (d) this.detected = d;
+      await this.load();
+      this.showToast(conn ? 'Connection changed' : 'Back to auto-detect', '#35c9d6');
+    } catch {
+      this.showToast('Could not switch connection', '#d6543f');
+    }
   };
 
   // ── preset nav ──

@@ -191,3 +191,16 @@ export interface PresetGrid {
   scenes: string[];
   cells: GridCell[];
 }
+
+// connection picker (serial + MIDI ports)
+export type ConnPick = { transport: 'serial' | 'midi'; id: string };
+export interface ConnInfo extends ConnPick {
+  label: string;
+  fractal: boolean;
+  model?: string;
+}
+export interface PortList {
+  chosen: ConnPick | null;
+  override: ConnPick | null;
+  ports: ConnInfo[];
+}
