@@ -90,8 +90,9 @@
   .vbody {
     flex: 1;
     min-height: 0;
-    overflow: auto;
-    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* the ControlSurface scrolls internally (vertical only) — no sideways scroll here */
   }
   .msg {
     flex: 1;
