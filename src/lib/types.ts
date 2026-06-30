@@ -119,6 +119,19 @@ export interface FcSwitchState {
   tap: FcSideState;
   hold: FcSideState;
 }
+/** Decoded current switch state (GET /fc/state) read via the sub-0x1b value channel — the read that
+ *  tracks param edits. `fields` holds raw ordinals keyed by FC field name (tapCategory, tapFunction,
+ *  tapDisplay, holdCategory, holdFunction, holdDisplay, color); `null` = unreadable. Labels are text. */
+export interface FcReadState {
+  effectId: number;
+  layout: number;
+  view: number;
+  switch: number;
+  config: number;
+  fields: Record<string, number | null>;
+  tapLabel: string;
+  holdLabel: string;
+}
 
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
