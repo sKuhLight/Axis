@@ -64,12 +64,32 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --publish never
 
+      # Build the release body from the CHANGELOG section matching this tag (per-release notes,
+      # not a static template). Falls back to a generic line if no section is found.
+      - name: Assemble release notes
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v hdr="## $VERSION" '
+            /^## / { if (seen) exit; if (index($0, hdr) == 1) { seen = 1; next } }
+            seen { print }
+          ' Axis/CHANGELOG.md > notes-body.md
+          {
+            echo "**Axis $GITHUB_REF_NAME** — community beta. A standalone editor for Fractal devices that bundles the ForgeFX engine — one install, no setup."
+            echo
+            if [ -s notes-body.md ]; then cat notes-body.md; else echo "_See the commit history for changes in this build._"; fi
+            echo
+            echo "---"
+            echo "Independent, third-party software. Not affiliated with Fractal Audio Systems. Use at your own risk — see DISCLAIMER.md. Always back up your presets."
+          } > release-notes.md
+          cat release-notes.md
+
       - name: Upload installers to release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           name: Axis ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: release-notes.md
           files: |
             Axis/dist-desktop/*.AppImage
             Axis/dist-desktop/*.deb
@@ -80,9 +100,3 @@ jobs:
             Axis/dist-desktop/*.exe
             Axis/dist-desktop/*.blockmap
             Axis/dist-desktop/latest*.yml
-          body: |
-            Axis ${{ github.ref_name }} — community beta. A standalone editor for Fractal devices
-            (FM3) that bundles the ForgeFX engine — one install, no setup.
-
-            Independent, third-party software. Not affiliated with Fractal Audio Systems.
-            Use at your own risk — see DISCLAIMER.md. Always back up your presets.
