@@ -829,19 +829,30 @@ class EditorStore {
       this.showToast('Connect to a later column', '#d6543f');
       return;
     }
-    const at = (r: number, c: number) => [...this.layout.cells, ...this.layout.shunts].find((x) => x.row === r && x.col === c);
+    const all = [...this.layout.cells, ...this.layout.shunts];
+    const at = (r: number, c: number) => all.find((x) => x.row === r && x.col === c);
+    // FM3-Edit gives every shunt a UNIQUE instance id (SHUNT_ID + n); reusing one id makes the
+    // device accept the first and silently dedupe the rest — which is why a multi-cell connect
+    // only ever placed one shunt. Allocate the lowest free instance for each shunt we add.
+    const usedShunts = new Set(all.filter((x) => x.effectId >= SHUNT_ID).map((x) => x.effectId - SHUNT_ID));
+    let nextInst = 0;
+    const allocShunt = () => {
+      while (usedShunts.has(nextInst)) nextInst++;
+      usedShunts.add(nextInst);
+      return SHUNT_ID + nextInst;
+    };
     try {
       // ensure a carrier cell exists in every intermediate column (along src.row)
       for (let c = src.col + 1; c < destCol; c++) {
         const cell = at(src.row, c);
-        if (!cell) await forgefx.placeCell(this.#W(src.row), this.#W(c), SHUNT_ID);
+        if (!cell) await forgefx.placeCell(this.#W(src.row), this.#W(c), allocShunt());
         else if (cell.kind === 'block') {
           this.showToast('Clear the cells in between to route through', '#d6543f');
           return;
         }
       }
       // ensure the destination exists (shunt if dropped on an empty cell)
-      if (!at(destRow, destCol)) await forgefx.placeCell(this.#W(destRow), this.#W(destCol), SHUNT_ID);
+      if (!at(destRow, destCol)) await forgefx.placeCell(this.#W(destRow), this.#W(destCol), allocShunt());
       // chain the cables: straight along src.row, then bend into destRow on the last hop
       for (let c = src.col; c < destCol - 1; c++) await forgefx.cable(this.#W(src.row), this.#W(c), this.#W(src.row), true);
       await forgefx.cable(this.#W(src.row), this.#W(destCol - 1), this.#W(destRow), true);
