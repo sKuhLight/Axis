@@ -16,14 +16,13 @@
   let layout = $state(0);
   let view = $state(0);
   let sw = $state(0);
-  let edits = $state<Record<string, number>>({}); // local echo of values written this session
-  // Device read-back via the sub-0x01 structured config-selector read (GET /fc/state). The device
-  // returns, per (config, side), a record whose config/side echo is byte-confirmed; `present` tells us
-  // the switch slot exists on the unit. The interior field bytes (category/value/label) are not yet
-  // decoded (the format is neither the write path's 5×7bit-f32 nor plain 7-bit ASCII, and could not be
-  // validated live because sub-0x09 param writes don't surface in this read), so we expose presence +
-  // the raw record but don't synthesise category/value into `cur()` — that would risk wrong values.
-  let present = $state<Record<number, { tap: boolean; hold: boolean; raw: { tap: number[]; hold: number[] } }>>({});
+  let edits = $state<Record<string, number>>({}); // field ordinals (read from unit + written this session)
+  let labelText = $state<Record<string, string>>({}); // decoded label text, keyed `${side}Label:${config}`
+  // Device read-back via the sub-0x1b value channel (GET /fc/state → Device.fcReadState). It returns the
+  // live ordinals (category/function/display/color) + decoded label text per switch — the channel that
+  // actually tracks param edits — so we populate cur()/labels from it and the controls reflect the unit.
+  // `present` flags a switch as configured (its category is not Unassigned).
+  let present = $state<Record<number, boolean>>({});
   let reading = $state(false);
 
   onMount(async () => {
@@ -45,13 +44,21 @@
       const states = await Promise.all(
         Array.from({ length: n }, (_, i) => forgefx.fcState(layout, view, i).catch(() => null))
       );
-      const next = { ...present };
+      const e = { ...edits };
+      const lb = { ...labelText };
+      const pr = { ...present };
       states.forEach((s) => {
         if (!s) return;
-        // a switch is "configured on the unit" when either side reads non-empty
-        next[s.config] = { tap: !s.tap.empty, hold: !s.hold.empty, raw: { tap: s.tap.raw, hold: s.hold.raw } };
+        const c = s.config;
+        for (const [f, v] of Object.entries(s.fields)) if (v != null) e[`${f}:${c}`] = v;
+        lb[`tapLabel:${c}`] = s.tapLabel;
+        lb[`holdLabel:${c}`] = s.holdLabel;
+        // configured on the unit = either side has a real (non-Unassigned) category
+        pr[c] = (s.fields.tapCategory ?? 0) !== 0 || (s.fields.holdCategory ?? 0) !== 0;
       });
-      present = next;
+      edits = e;
+      labelText = lb;
+      present = pr;
     } catch (e) {
       editor.showToast('FC read failed: ' + (e as Error).message, '#ff6b6b');
     } finally {
@@ -95,6 +102,7 @@
   async function writeLabel(field: string, text: string) {
     if (!model) return;
     edits = { ...edits, [ek(field)]: text.length };
+    labelText = { ...labelText, [ek(field)]: text };
     const base = pidOf(field);
     for (let i = 0; i < model.labelLen; i++) {
       try {
@@ -144,7 +152,7 @@
   const selLayout = (i: number) => (layout = i);
   const selView = (i: number) => (view = i);
   const selSwitch = (i: number) => (sw = i);
-  const onDevice = (cfg: number) => present[cfg];
+  const onDevice = (cfg: number) => !!present[cfg];
 </script>
 
 <section class="fc" style="--c:{ACC}">
@@ -182,7 +190,7 @@
           <button class="swtile" class:on={sw === i} onclick={() => selSwitch(i)}>
             <span class="led" style="background:{col}"></span>
             <span class="swnum mono">{i + 1}</span>
-            {#if onDevice(cfg)?.tap || onDevice(cfg)?.hold}
+            {#if onDevice(cfg)}
               <span class="ondev mono" title="Configured on the device (live read)">●&nbsp;on unit</span>
             {/if}
             <span class="swcat">{catName(cur('tapCategory', cfg))}</span>
@@ -261,7 +269,7 @@
             </div>
             <div class="field">
               <span class="flbl">Custom Label</span>
-              <input maxlength={model!.labelLen} placeholder="≤{model!.labelLen} chars" onchange={(e) => writeLabel(side + 'Label', e.currentTarget.value)} />
+              <input maxlength={model!.labelLen} placeholder="≤{model!.labelLen} chars" value={labelText[ek(side + 'Label')] ?? ''} onchange={(e) => writeLabel(side + 'Label', e.currentTarget.value)} />
             </div>
           </div>
         {/snippet}
