@@ -4,10 +4,16 @@
   const pnum = $derived(editor.preset && editor.preset.number >= 0 ? String(editor.preset.number).padStart(3, '0') : '—');
   const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? '—' : 'offline'));
 
-  // link latency readout (replaces the un-obtainable CPU%)
+  // link latency readout (fallback when no live CPU is available, e.g. AM4)
   const ms = $derived(editor.linkMs);
   const linkColor = $derived(ms == null ? '#56565e' : ms < 40 ? '#33c46b' : ms < 120 ? '#f5a623' : '#d6543f');
   const linkPct = $derived(ms == null ? 0 : Math.max(10, Math.min(100, 100 - ms / 2)));
+
+  // live CPU% (decoded from the device meters frame) + audio level meters
+  const cpu = $derived(editor.cpu);
+  const cpuColor = $derived(cpu == null ? '#56565e' : cpu >= 80 ? '#d6543f' : cpu >= 62 ? '#f5a623' : '#33c46b');
+  const lv = $derived(editor.levels);
+  const pk = (x: number) => Math.max(0, Math.min(100, Math.round(x * 100)));
 </script>
 
 <header class="topbar" class:mob={editor.isMobile}>
@@ -97,11 +103,27 @@
           <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
         </div>
         <div class="div"></div>
-        <div class="st cpu" title="Device link round-trip latency">
-          <span class="mono st-lbl">LINK</span>
-          <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
-          <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
-        </div>
+        {#if cpu != null}
+          <div class="st cpu" title="Live CPU load (decoded from the device meters frame)">
+            <span class="mono st-lbl">CPU</span>
+            <div class="bar"><div class="fill" style="width:{pk(cpu / 100)}%; background:{cpuColor}"></div></div>
+            <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
+          </div>
+        {:else}
+          <div class="st cpu" title="Device link round-trip latency">
+            <span class="mono st-lbl">LINK</span>
+            <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
+            <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
+          </div>
+        {/if}
+        {#if lv}
+          <div class="div"></div>
+          <div class="st meters" title="Live audio meters — In · Out L · Out R (labels provisional)">
+            {#each [{ l: 'IN', v: lv.input }, { l: 'L', v: lv.outL }, { l: 'R', v: lv.outR }] as m}
+              <div class="mtr"><span class="mono mtr-l">{m.l}</span><div class="mbar"><div class="mfill" style="height:{pk(m.v)}%; background:{pk(m.v) >= 92 ? '#d6543f' : pk(m.v) >= 70 ? '#f5a623' : '#35c9d6'}"></div></div></div>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -485,6 +507,35 @@
   }
   .cpu {
     cursor: default;
+  }
+  .meters {
+    cursor: default;
+    gap: 5px;
+  }
+  .mtr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .mtr-l {
+    font-size: 7px;
+    color: #56565e;
+    line-height: 1;
+  }
+  .mbar {
+    width: 6px;
+    height: 22px;
+    background: #16161b;
+    border: 1px solid var(--surface-3);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+  }
+  .mfill {
+    width: 100%;
+    transition: height 0.08s linear;
   }
   .bar {
     width: 40px;
