@@ -3,6 +3,7 @@
 
   const RAIL = [
     { id: 'build', label: 'Build', short: 'Grid', icon: '▦' },
+    { id: 'library', label: 'Preset Browser', short: 'Lib', icon: '≣' },
     { id: 'controllers', label: 'Controllers', short: 'Ctrl', icon: '⊜' },
     { id: 'fc', label: 'Footswitches', short: 'FC', icon: '⬚' },
     { id: 'scenes', label: 'Scene Mgr', short: 'Scn', icon: '❏' },
@@ -21,6 +22,10 @@
   function pick(id: string, label: string) {
     if (id === 'build') {
       editor.openBuild();
+      return;
+    }
+    if (id === 'library') {
+      editor.openLibrary();
       return;
     }
     const v = VIRTUAL[id];
