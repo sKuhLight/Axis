@@ -1,9 +1,25 @@
 // Preset Library store — scan the device's presets (by number, non-disruptive) or import .syx files,
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
+import { z } from 'zod';
 import { forgefx } from './forgefx';
 import { idb } from './idb';
 import type { PresetSummary, DecodedBlock } from './types';
+
+// Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
+// letting a malformed cache break the library). Permissive: only the fields the UI relies on.
+const summarySchema = z.object({
+  number: z.number(),
+  name: z.string(),
+  model: z.string(),
+  crcValid: z.boolean(),
+  crc: z.number().optional(),
+  scenes: z.array(z.string()),
+  blocks: z.array(z.object({ effectId: z.number(), slug: z.string().nullable(), name: z.string(), instance: z.number().nullable() })),
+  models: z.record(z.string(), z.array(z.string())),
+  amps: z.array(z.string()),
+  params: z.array(z.any()).optional()
+});
 
 /** A deep param-search clause: "<family> <param> <op> <value>". Numeric ops compare the display value;
  *  `has` matches an enum/type/model label (or any param label) by substring. */
@@ -79,7 +95,7 @@ class LibraryStore {
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
     const favs = new Set(load<string[]>(LS.favs, []));
-    const cached = load<PresetSummary[]>(LS.cache, []);
+    const cached = load<unknown[]>(LS.cache, []).filter((s) => summarySchema.safeParse(s).success) as PresetSummary[];
     this.entries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
