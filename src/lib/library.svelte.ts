@@ -108,10 +108,14 @@ class LibraryStore {
     if (idb.available()) idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
     // one-time: mirror existing local config into the ForgeFX store so it's present before the first edit
     if (typeof localStorage !== 'undefined' && !localStorage.getItem('axs.cfg.migrated')) {
+      const raw = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
       Promise.allSettled([
         forgefx.putDoc('config', 'tags', this.tags),
         forgefx.putDoc('config', 'collections', this.collections),
-        forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, []))
+        forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, [])),
+        forgefx.putDoc('config', 'savedFilters', raw('axs.pb.saved') ?? []),
+        forgefx.putDoc('config', 'layouts', raw('axis.layouts.v1') ?? {}),
+        forgefx.putDoc('config', 'swipe', raw('axis.swipe.v1') ?? {})
       ]).then((r) => { if (r.some((x) => x.status === 'fulfilled')) localStorage.setItem('axs.cfg.migrated', '1'); });
     }
   }

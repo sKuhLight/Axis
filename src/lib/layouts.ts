@@ -7,6 +7,7 @@
 // — plus any number of user-created custom tabs, persisted client-side and keyed by
 // block-family slug + device-true paramId (so a custom Amp view applies to all amps).
 import type { NamedParam, EnumParam, TabDef, ResolvedTab } from './types';
+import { forgefx } from './forgefx';
 
 const STORE_KEY = 'axis.layouts.v1';
 const IDEAL_MAX = 8;
@@ -88,6 +89,7 @@ export function saveLayouts(layouts: Record<string, TabDef[]>): void {
   } catch {
     /* quota / private mode — keep in-memory only */
   }
+  forgefx.putDoc('config', 'layouts', layouts).catch(() => {}); // mirror to the unified store (sync-ready)
 }
 
 let counter = 0;
@@ -110,6 +112,7 @@ export function loadSwipe(): Record<string, SwipeCtrl[]> {
 }
 export function saveSwipe(m: Record<string, SwipeCtrl[]>): void {
   if (typeof localStorage === 'undefined') return;
+  forgefx.putDoc('config', 'swipe', m).catch(() => {}); // mirror to the unified store (sync-ready)
   try {
     localStorage.setItem(SWIPE_KEY, JSON.stringify(m));
   } catch {
