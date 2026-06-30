@@ -44,7 +44,8 @@ class LibraryStore {
   // filter state the UI binds to
   query = $state('');
   blockFilter = $state<string | null>(null); // block slug
-  ampFilter = $state<string | null>(null); // amp model name
+  ampFilter = $state<string | null>(null); // amp model name (back-compat; amp-specific)
+  modelFilter = $state<string | null>(null); // ANY block-family model name (amp/drive/cab/reverb/…)
   tagFilter = $state<string | null>(null);
   collectionFilter = $state<string | null>(null);
   favOnly = $state(false);
@@ -56,6 +57,13 @@ class LibraryStore {
     this.entries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
   }
 
+  /** All model names across every block family of a preset (amp/drive/cab/reverb/…), flattened. */
+  #allModelNames = (s: PresetSummary): string[] => {
+    const m = s.models;
+    if (m && typeof m === 'object') return Object.values(m).flat();
+    return s.amps ?? []; // pre-`models` cached summaries → amp names only
+  };
+
   // ── derived views (memoized) ──
   filtered = $derived.by(() => {
     const q = this.query.trim().toLowerCase();
@@ -63,10 +71,11 @@ class LibraryStore {
       if (this.favOnly && !e.fav) return false;
       if (this.blockFilter && !e.summary.blocks.some((b) => b.slug === this.blockFilter)) return false;
       if (this.ampFilter && !(e.summary.amps ?? []).includes(this.ampFilter)) return false;
+      if (this.modelFilter && !this.#allModelNames(e.summary).includes(this.modelFilter)) return false;
       if (this.tagFilter && !(this.tags[e.id] ?? []).includes(this.tagFilter)) return false;
       if (this.collectionFilter && !(this.collections[this.collectionFilter] ?? []).includes(e.id)) return false;
       if (q) {
-        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${(e.summary.amps ?? []).join(' ')}`.toLowerCase();
+        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${this.#allModelNames(e.summary).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -83,6 +92,20 @@ class LibraryStore {
     const s = new Set<string>();
     for (const e of this.entries) for (const a of e.summary.amps ?? []) s.add(a);
     return [...s].sort();
+  });
+  /** unique model names across ALL block families — for the model filter / autocomplete. */
+  allModels = $derived.by(() => {
+    const s = new Set<string>();
+    for (const e of this.entries) for (const m of this.#allModelNames(e.summary)) s.add(m);
+    return [...s].sort();
+  });
+  /** model names grouped by family slug — for a per-family model filter UI (e.g. "Reverb → …"). */
+  modelsByFamily = $derived.by(() => {
+    const out: Record<string, Set<string>> = {};
+    for (const e of this.entries)
+      for (const [slug, names] of Object.entries(e.summary.models ?? {}))
+        for (const n of names) (out[slug] ??= new Set()).add(n);
+    return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, [...v].sort()]));
   });
   allTags = $derived.by(() => {
     const s = new Set<string>();
