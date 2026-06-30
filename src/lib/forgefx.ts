@@ -17,7 +17,8 @@ import type {
   FcModel,
   ModModel,
   PresetSummary,
-  DecodedBlock
+  DecodedBlock,
+  VersionInfo
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -93,6 +94,10 @@ export const forgefx = {
       method: 'PUT',
       body: JSON.stringify({ value, continuous })
     }),
+  // ── preset versions / backups ──
+  versions: (location?: number) => req<{ versions: VersionInfo[] }>(`/versions${location != null ? `?location=${location}` : ''}`),
+  snapshotPreset: (n: number) => req<{ version: VersionInfo }>(`/backup/preset/${n}`, { method: 'POST' }),
+  loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
   // ── cloud sync (gated server-side by AXIS_CLOUD) ──
   cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null }>('/cloud/status'),
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
