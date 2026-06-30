@@ -93,6 +93,10 @@ export const forgefx = {
       method: 'PUT',
       body: JSON.stringify({ value, continuous })
     }),
+  // ── persistent store (Axis config / metadata) ──
+  getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
+  putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data }) }),
+  listDocs: <T>(c: string) => req<{ docs: { id: string; data: T; updatedAt: number }[] }>(`/store/${c}`),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
   presetSummary: (n: number, full = false) => req<PresetSummary>(`/presets/${n}/summary${full ? '?full=1' : ''}`),
   /** Full per-block decoded params for a device preset (every family/param) — deep search + detail. */
