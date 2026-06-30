@@ -2,7 +2,7 @@
 // (so the native `serialport` runs under Electron's Node) and loads the Axis UI *served by that
 // same server over http* — which sidesteps SvelteKit's absolute /_app/ asset paths under file://.
 // No separate install — ForgeFX + the built UI are shipped inside the app.
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
 const { setupUpdater } = require('./updater.cjs');
 const path = require('node:path');
 const net = require('node:net');
@@ -185,6 +185,11 @@ app.whenReady().then(async () => {
   await logDiagnostics();
   createWindow();
   setupUpdater(logLine); // auto-update from GitHub releases (packaged builds only)
+  // Let the renderer read this session's debug log (it can't touch the FS directly) — for the
+  // "Upload Debug Log" diagnostics report. Returns the current contents, or '' if unavailable.
+  ipcMain.handle('axis:read-debug-log', () => {
+    try { return logFilePath ? fs.readFileSync(logFilePath, 'utf8') : ''; } catch { return ''; }
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

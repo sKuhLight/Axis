@@ -10,7 +10,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, DeviceLayout } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, DeviceLayout, DebugReport } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -23,6 +23,24 @@ function loadScopes(): CloudScopes {
 const saveScopes = (s: CloudScopes) => { try { localStorage.setItem(SCOPES_KEY, JSON.stringify(s)); } catch { /* */ } };
 const AUTOSYNC_KEY = 'axs.cloud.autosync';
 const loadAutoSync = (): boolean => { try { return localStorage.getItem(AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
+// Telemetry consent defaults OFF (inverse of auto-sync). Anonymous instance id is a random uuid — never PII.
+const TELEMETRY_KEY = 'axs.telemetry.consent';
+const INSTANCE_KEY = 'axs.telemetry.instanceId';
+const loadTelemetryConsent = (): boolean => { try { return localStorage.getItem(TELEMETRY_KEY) === '1'; } catch { return false; } };
+function loadInstanceId(): string {
+  try {
+    let id = localStorage.getItem(INSTANCE_KEY);
+    if (!id) { id = (globalThis.crypto?.randomUUID?.() ?? `anon-${Date.now().toString(36)}`); localStorage.setItem(INSTANCE_KEY, id); }
+    return id;
+  } catch { return 'anon'; }
+}
+/** Strip the obvious PII from a string before it leaves the machine: emails + usernames in home paths. */
+function scrubPII(s: string): string {
+  return s
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
+    .replace(/([Cc]:\\Users\\)[^\\\/\r\n"]+/g, '$1<user>')
+    .replace(/(\/(?:home|Users)\/)[^\/\r\n"]+/g, '$1<user>');
+}
 const EMPTY: Layout = { cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true };
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
@@ -135,6 +153,14 @@ class EditorStore {
     pendingEmail: string | null;
   }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
   cloudOpen = $state(false);
+  // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
+  // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
+  // upload is per-incident consent and works even when `consent` is false.
+  telemetry = $state<{ enabled: boolean; uploadEnabled: boolean; consent: boolean; instanceId: string; sending: boolean }>(
+    { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), sending: false }
+  );
+  telemetryOpen = $state(false);
+  #recentEvents: { t: number; kind: string; text: string }[] = []; // recent-events ring for the debug report
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
   ports = $state<ConnInfo[]>([]);
@@ -300,6 +326,7 @@ class EditorStore {
     this.swipeControls = loadSwipe();
     this.#initUpdater();
     this.#initCloud();
+    this.#initTelemetry();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
@@ -400,6 +427,55 @@ class EditorStore {
     this.cloud = { ...this.cloud, autoSync: on };
     try { localStorage.setItem(AUTOSYNC_KEY, on ? '1' : '0'); } catch { /* */ }
     if (on) this.scheduleAutoSync();
+  };
+
+  // ── telemetry / diagnostics ──
+  #initTelemetry = async () => {
+    try {
+      const s = await forgefx.telemetryStatus();
+      this.telemetry = { ...this.telemetry, enabled: s.enabled, uploadEnabled: s.uploadEnabled };
+      // Live Faro RUM init lands here in a later phase — gated by (s.enabled && this.telemetry.consent),
+      // dynamic-imported so it stays out of builds where the operator didn't enable telemetry.
+    } catch { /* telemetry disabled / engine not ready */ }
+  };
+  setTelemetryConsent = (on: boolean) => {
+    this.telemetry = { ...this.telemetry, consent: on };
+    try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); } catch { /* */ }
+  };
+  /** Record a recent app event for the debug-report trail (small ring; scrubbed on upload). */
+  recordEvent = (kind: string, text: string) => {
+    this.#recentEvents.push({ t: Date.now(), kind, text: text.slice(0, 300) });
+    if (this.#recentEvents.length > 60) this.#recentEvents.shift();
+  };
+  /** Assemble → scrub → upload a debug report (the "Upload Debug Log" action). Independent of live
+   *  telemetry consent — an explicit per-incident send. The log is read via the Electron bridge (the
+   *  renderer can't touch the FS); in a browser dev build it's empty and we still send diag + events. */
+  uploadDebugReport = async (trigger?: DebugReport['trigger']): Promise<boolean> => {
+    if (this.telemetry.sending) return false;
+    this.telemetry = { ...this.telemetry, sending: true };
+    try {
+      let log = '';
+      try { log = (await (globalThis as { axisDesktop?: { readDebugLog?: () => Promise<string> } }).axisDesktop?.readDebugLog?.()) ?? ''; } catch { /* */ }
+      let diag: unknown;
+      try { diag = await forgefx.diag(); } catch { /* */ }
+      const report: DebugReport = {
+        instanceId: this.telemetry.instanceId,
+        capturedAt: Date.now(),
+        app: { version: (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev', platform: navigator.platform },
+        trigger,
+        diag,
+        log: scrubPII(log),
+        events: this.#recentEvents.slice(-60).map((e) => ({ ...e, text: scrubPII(e.text) }))
+      };
+      const r = await forgefx.uploadDebugReport(report);
+      this.showToast(`Debug report sent (${Math.max(1, Math.round((r.stored ?? 0) / 1024))} KB) — thank you`, '#33c46b');
+      return true;
+    } catch {
+      this.showToast("Couldn't reach the server — your log is still saved locally (Help → Open Debug Log)", '#d6543f');
+      return false;
+    } finally {
+      this.telemetry = { ...this.telemetry, sending: false };
+    }
   };
   cloudLogin = async (email: string, password: string) => {
     this.cloud.note = null;

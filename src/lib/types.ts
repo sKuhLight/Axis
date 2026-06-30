@@ -133,6 +133,25 @@ export interface FcReadState {
   holdLabel: string;
 }
 
+/** GET /telemetry/status — telemetry gate state. `enabled` = live RUM (AXIS_TELEMETRY=1); `uploadEnabled`
+ *  = the on-demand debug-report upload is available (Supabase configured), independent of live telemetry. */
+export interface TelemetryStatus {
+  enabled: boolean;
+  faroUrl: string;
+  key: string;
+  uploadEnabled: boolean;
+}
+/** Debug-report bundle uploaded by POST /telemetry/report. Scrubbed of PII before sending. */
+export interface DebugReport {
+  instanceId: string;
+  capturedAt: number;
+  app: { version: string; platform: string };
+  trigger?: { kind: string; route?: string; status?: number; message?: string };
+  diag?: unknown;
+  log?: string;
+  events?: { t: number; kind: string; text: string }[];
+}
+
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
   pid: number;

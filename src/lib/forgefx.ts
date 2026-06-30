@@ -16,6 +16,8 @@ import type {
   PresetRef,
   FcModel,
   FcReadState,
+  TelemetryStatus,
+  DebugReport,
   ModModel,
   PresetSummary,
   DecodedBlock,
@@ -149,6 +151,11 @@ export const forgefx = {
    *  response body. config/side are device-confirmed; interior field bytes are not yet decoded. */
   fcState: (layout: number, view: number, sw: number) =>
     req<FcReadState>(`/fc/state?layout=${layout}&view=${view}&switch=${sw}`),
+  // ── telemetry / diagnostics ──
+  diag: () => req<unknown>('/diag'),
+  telemetryStatus: () => req<TelemetryStatus>('/telemetry/status'),
+  uploadDebugReport: (report: DebugReport) =>
+    req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
   /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */
   modBind: (slot: number, targetEffectId: number, targetParam: number, source: number) =>
     req<{ ok: boolean; slotEid?: number; error?: string }>(`/mod/bind`, {
