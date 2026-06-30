@@ -118,6 +118,35 @@ export interface ModModel {
   sources?: ModSource[];
 }
 
+/** One decoded parameter of a placed block (GET /presets/:n/params, or embedded in a file summary). */
+export interface DecodedParam {
+  paramId: number;
+  /** Catalog symbol, e.g. DISTORT_TYPE. */
+  name: string;
+  /** Human label, e.g. "Gain", "Type". */
+  label: string;
+  /** 'enum' | 'float' | … (undefined if the param has no range row). */
+  kind?: string;
+  /** Raw stored value (0..65534 model). */
+  raw: number;
+  /** Display value for numeric params; null for enums. */
+  value: number | null;
+  unit?: string;
+  /** Resolved label for enum/type/model params. */
+  enumLabel?: string;
+}
+/** One placed block with its full decoded params — the deep-search + browser-detail unit. */
+export interface DecodedBlock {
+  effectId: number;
+  family: string;
+  slug: string;
+  instance: number;
+  /** Amp only: channel index 0-3 (A-D). */
+  channel?: number;
+  typeName: string | null;
+  params: DecodedParam[];
+}
+
 /** A unique effect block in a preset (for the library/browser). */
 export interface PresetSummaryBlock {
   effectId: number;
@@ -139,6 +168,9 @@ export interface PresetSummary {
   /** Distinct amp-model names used (across the amp's channels) — for "presets using amp X".
    *  Back-compat alias of `models.amp`. */
   amps: string[];
+  /** Full per-block decoded params (every family/param) — for deep search. Present on file imports
+   *  and after a device preset's params are hydrated (GET /presets/:n/params); absent on bulk scan. */
+  params?: DecodedBlock[];
 }
 
 /** Result of the device auto-detect handshake (GET /device/detect). */
