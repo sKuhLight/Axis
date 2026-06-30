@@ -60,6 +60,13 @@ const persist = (key: string, v: unknown) => {
     /* quota / unavailable — metadata is best-effort */
   }
 };
+// User config (tags/collections/favorites): persist to localStorage (instant/offline source of truth)
+// AND mirror to the ForgeFX store under the `config` collection, so it lives in the unified backend and
+// is ready for cloud sync. localStorage stays authoritative for reads → zero data-loss risk.
+const persistCfg = (cfgId: 'tags' | 'collections' | 'favs', lsKey: string, v: unknown) => {
+  persist(lsKey, v);
+  forgefx.putDoc('config', cfgId, v).catch(() => {});
+};
 
 class LibraryStore {
   entries = $state<LibEntry[]>([]);
@@ -99,6 +106,14 @@ class LibraryStore {
     this.entries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+    // one-time: mirror existing local config into the ForgeFX store so it's present before the first edit
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('axs.cfg.migrated')) {
+      Promise.allSettled([
+        forgefx.putDoc('config', 'tags', this.tags),
+        forgefx.putDoc('config', 'collections', this.collections),
+        forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, []))
+      ]).then((r) => { if (r.some((x) => x.status === 'fulfilled')) localStorage.setItem('axs.cfg.migrated', '1'); });
+    }
   }
 
   /** All model names across every block family of a preset (amp/drive/cab/reverb/…), flattened. */
@@ -343,7 +358,7 @@ class LibraryStore {
     const e = this.entries.find((x) => x.id === id);
     if (!e) return;
     e.fav = !e.fav;
-    persist(LS.favs, this.entries.filter((x) => x.fav).map((x) => x.id));
+    persistCfg('favs', LS.favs, this.entries.filter((x) => x.fav).map((x) => x.id));
   }
   addTag(id: string, tag: string): void {
     const t = tag.trim();
@@ -351,30 +366,30 @@ class LibraryStore {
     const cur = this.tags[id] ?? [];
     if (cur.includes(t)) return;
     this.tags[id] = [...cur, t];
-    persist(LS.tags, this.tags);
+    persistCfg('tags', LS.tags, this.tags);
   }
   removeTag(id: string, tag: string): void {
     if (!this.tags[id]) return;
     this.tags[id] = this.tags[id].filter((x) => x !== tag);
     if (!this.tags[id].length) delete this.tags[id];
-    persist(LS.tags, this.tags);
+    persistCfg('tags', LS.tags, this.tags);
   }
   createCollection(name: string): void {
     const n = name.trim();
     if (!n || this.collections[n]) return;
     this.collections[n] = [];
-    persist(LS.collections, this.collections);
+    persistCfg('collections', LS.collections, this.collections);
   }
   toggleInCollection(name: string, id: string): void {
     const list = this.collections[name];
     if (!list) return;
     this.collections[name] = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-    persist(LS.collections, this.collections);
+    persistCfg('collections', LS.collections, this.collections);
   }
   deleteCollection(name: string): void {
     delete this.collections[name];
     if (this.collectionFilter === name) this.collectionFilter = null;
-    persist(LS.collections, this.collections);
+    persistCfg('collections', LS.collections, this.collections);
   }
 
   tagsOf = (id: string): string[] => this.tags[id] ?? [];

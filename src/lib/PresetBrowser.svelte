@@ -563,7 +563,10 @@
   let saving = $state(false);
   let saveName = $state('');
   function loadSaved(): Saved[] { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; } }
-  function persistSaved() { try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* */ } }
+  function persistSaved() {
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* */ }
+    forgefx.putDoc('config', 'savedFilters', saved).catch(() => {}); // mirror to the unified store (sync-ready)
+  }
   function applySaved(f: Saved) { if (!advanced) advanced = true; query = f.query; closeAc(); }
   function delSaved(id: string) { saved = saved.filter((x) => x.id !== id); persistSaved(); }
   function commitSave() {
