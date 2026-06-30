@@ -5,6 +5,7 @@
   // (names/scenes/blocks/models always; full per-block params once hydrated). Ported from the
   // design prototype (design/Preset Browser.dc.html), bound to the `library` store + `editor`.
   import { tick } from 'svelte';
+  import { create, insertMultiple, search } from '@orama/orama';
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
   import { forgefx } from './forgefx';
@@ -174,7 +175,15 @@
       const range = pc.val.match(/^\s*(-?\d+\.?\d*)\s*-\s*(-?\d+\.?\d*)\s*$/);
       if (range) { const a = +range[1], bb = +range[2]; return p.value >= Math.min(a, bb) && p.value <= Math.max(a, bb); }
       const t = parseFloat(pc.val);
-      return !isNaN(t) && cmp(p.value, pc.op, t);
+      if (isNaN(t)) return false;
+      // `=` is tolerant to display rounding: the query value carries N decimals, so compare at that
+      // precision (else a dragged "Threshold = -37" never matches a stored -36.98).
+      if (pc.op === '=') {
+        const dec = (pc.val.split('.')[1] ?? '').length;
+        const f = Math.pow(10, Math.min(dec, 2));
+        return Math.round(p.value * f) === Math.round(t * f);
+      }
+      return cmp(p.value, pc.op, t);
     }
     // Type condition with no enum param decoded → fall back to the model-name list
     if (isType) return false;
@@ -240,17 +249,53 @@
   const activeConds = $derived(advanced ? parsedInput.conds : [...conditions, ...parsedInput.conds]);
   const simpleText = $derived(parsedInput.free);
 
+  // ── Orama full-text index: typo-tolerant, ranked free-text (rebuilt when the haystack changes) ──
+  let oramaDb = $state<unknown>(null);
+  $effect(() => {
+    const hs = haystacks;
+    let alive = true;
+    (async () => {
+      const db = await create({ schema: { id: 'string', text: 'string' } });
+      await insertMultiple(db, [...hs].map(([id, text]) => ({ id, text })));
+      if (alive) oramaDb = db;
+    })();
+    return () => { alive = false; };
+  });
+  // free-text → ranked id set (async). null = no free-text / index not ready → fall back to substring.
+  let ftIds = $state<Set<string> | null>(null);
+  let ftRank = $state<Map<string, number>>(new Map());
+  $effect(() => {
+    const q = simpleText.trim();
+    const db = oramaDb;
+    if (!q || !db) { ftIds = null; return; }
+    let alive = true;
+    (async () => {
+      const r = await search(db as Parameters<typeof search>[0], { term: q, tolerance: 1, limit: 2000 });
+      if (!alive) return;
+      const ids = new Set<string>(); const rank = new Map<string, number>();
+      r.hits.forEach((h, i) => { ids.add(String(h.document.id)); rank.set(String(h.document.id), i); });
+      ftIds = ids; ftRank = rank;
+    })();
+    return () => { alive = false; };
+  });
+
   const results = $derived.by(() => {
     const conds = activeConds;
-    const toks = simpleText.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const q = simpleText.trim();
+    const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
     const hs = haystacks;
+    const useOrama = !!q && ftIds !== null; // index ready → ranked; else substring fallback
     const list = library.entries.filter((e) => {
       for (const c of conds) if (!matchCond(e, c)) return false;
-      if (toks.length) { const h = hs.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
+      if (q) {
+        if (useOrama) { if (!ftIds!.has(e.id)) return false; }
+        else { const h = hs.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
+      }
       return true;
     });
     return list.sort((a, b) =>
-      sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
+      useOrama ? (ftRank.get(a.id) ?? 1e9) - (ftRank.get(b.id) ?? 1e9) // free-text → relevance order
+      : sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
       : sort === 'cpu' ? estCpu(b) - estCpu(a)
       : a.summary.number - b.summary.number
     );
@@ -270,6 +315,35 @@
   // tile color from the cell's family (derive slug from "Amp 1" → amp)
   const gridCellColor = (c: GridCell) => catColor(c.name.replace(/\s+\d+$/, '').toLowerCase());
   function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
+
+  // ── drag a param/block from the detail panel into the search (builds a condition) ──
+  let dragOver = $state(false);
+  const DND = 'application/x-axis-query';
+  function startDrag(e: DragEvent, payload: { slug: string; label?: string; op?: string; val?: string }) {
+    e.dataTransfer?.setData(DND, JSON.stringify(payload));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+  }
+  // add a block/param condition from a drag payload or a double-click (shared)
+  function addCondPayload(p: { slug: string; label?: string; op?: string; val?: string }) {
+    if (!p.slug) return;
+    editConds((c) => {
+      let blk = [...c].reverse().find((x) => x.kind === 'block' && x.block === p.slug) as Extract<Cond, { kind: 'block' }> | undefined;
+      if (!blk) { blk = { kind: 'block', block: p.slug, params: [] }; c.push(blk); }
+      if (p.label && p.op && p.val != null && !blk.params.some((q) => q.name === p.label && q.val === p.val)) blk.params.push({ name: p.label, op: p.op, val: p.val });
+    });
+  }
+  function onQueryDrop(e: DragEvent) {
+    e.preventDefault();
+    dragOver = false;
+    const raw = e.dataTransfer?.getData(DND);
+    if (!raw) return;
+    try { addCondPayload(JSON.parse(raw)); } catch { /* bad payload */ }
+  }
+  // payload for a dragged detail param: enum → Type/mode = value; numeric → label = value
+  const paramDragPayload = (slug: string, p: DecodedBlock['params'][number]) =>
+    p.enumLabel != null
+      ? { slug, label: p.label, op: '=', val: p.enumLabel }
+      : { slug, label: p.label, op: '=', val: String(p.value == null ? '' : Math.round(p.value * 10) / 10) };
 
   // ── edit conditions (works in both modes; advanced re-serializes to the query text) ──
   function editConds(fn: (c: Cond[]) => void) {
@@ -532,6 +606,8 @@
   }
 
   const tagColor = (t: string) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360; return `hsl(${h} 55% 60%)`; };
+  // friendlier operator glyphs in chips (the typed language still uses >=,<=,!=)
+  const opGlyph = (op: string): string => ({ '>=': '≥', '<=': '≤', '!=': '≠' })[op] ?? op;
 
   // ── estimated CPU load ──────────────────────────────────────────────────────────────────────
   // The device reports real CPU at runtime (an undocumented SysEx) — it is NOT stored in a preset,
@@ -552,7 +628,7 @@
   const cpuColor = (c: number) => (c >= 80 ? '#e87b6a' : c >= 62 ? '#f5a623' : '#33c46b');
 </script>
 
-<svelte:window onclick={() => { if (picker) picker = null; }} />
+<svelte:window onclick={() => { if (picker) picker = null; }} ondragend={() => (dragOver = false)} />
 
 <div class="pb">
   <!-- HEADER -->
@@ -608,9 +684,10 @@
     <button class="save" onclick={() => (saving = true)} title="Save current filter">☆ Save filter</button>
   </div>
 
-  <!-- BUILDER CHIPS -->
-  <div class="chips">
+  <!-- BUILDER CHIPS (also a drop target for params/blocks dragged from the detail panel) -->
+  <div class="chips" class:dragover={dragOver} role="group" ondragenter={(e) => { e.preventDefault(); dragOver = true; }} ondragover={(e) => { e.preventDefault(); dragOver = true; }} ondragleave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) dragOver = false; }} ondrop={onQueryDrop}>
     <span class="lbl">FILTERS</span>
+    {#if dragOver}<span class="drop-hint">drop to add filter</span>{/if}
     {#each activeConds as c, ci}
       <div class="chip">
         {#if c.kind === 'block'}
@@ -618,13 +695,13 @@
             <span class="cdot" style:background={catColor(c.block)}></span>{catLabel(c.block)}
           </button>
           {#each c.params as p, pi}
-            <span class="param">{p.name}{p.op}{p.val}<button class="px" onclick={() => editConds((cc) => { const t = cc[ci]; if (t.kind === 'block') t.params.splice(pi, 1); })}>×</button></span>
+            <span class="param">{p.name} {opGlyph(p.op)} {p.val}<button class="px" onclick={() => editConds((cc) => { const t = cc[ci]; if (t.kind === 'block') t.params.splice(pi, 1); })}>×</button></span>
           {/each}
           <button class="addp" onclick={(e) => onAddParam(e, ci, c.block)}>+ param</button>
         {:else}
           <span class="chip-head">
             <span class="cdot" style:background={c.kind === 'tag' ? tagColor(c.val) : c.kind === 'scenes' ? '#4f6bed' : c.kind === 'cpu' ? '#f5a623' : '#9a9aa3'}></span>
-            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${c.op} ${c.val}` : `~CPU ${c.op} ${c.val}`}
+            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${opGlyph(c.op)} ${c.val}` : `~CPU ${opGlyph(c.op)} ${c.val}`}
           </span>
         {/if}
         <button class="cx" onclick={() => editConds((cc) => cc.splice(ci, 1))}>×</button>
@@ -760,10 +837,14 @@
           {:else}
             {#each library.paramsOf(selected)!.filter((b) => b.slug !== 'input' && b.slug !== 'output' && detailParams(b).length && (focusEid == null || b.effectId === focusEid)) as b, bi}
               <div class="blk">
-                <div class="blk-h"><span class="cdot" style:background={catColor(b.slug)}></span><span class="blk-n">{catLabel(b.slug)}{b.typeName ? ` · ${b.typeName}` : ''}</span><span class="spacer"></span><span class="blk-i">{b.channel != null ? `Ch ${'ABCD'[b.channel]}` : `#${b.instance}`}</span></div>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="blk-h" draggable="true" ondragstart={(e) => startDrag(e, { slug: b.slug })} ondblclick={() => addCondPayload({ slug: b.slug })} title="Drag or double-click to filter by this block">
+                  <span class="cdot" style:background={catColor(b.slug)}></span><span class="blk-n">{catLabel(b.slug)}{b.typeName ? ` · ${b.typeName}` : ''}</span><span class="spacer"></span><span class="grip">⠿</span><span class="blk-i">{b.channel != null ? `Ch ${'ABCD'[b.channel]}` : `#${b.instance}`}</span>
+                </div>
                 <div class="blk-grid">
                   {#each detailParams(b) as p}
-                    <div class="pr" class:hit={hits.has(bi + ':' + p.paramId)}><span class="pk">{p.label}</span><span class="pv">{fmtVal(p)}</span></div>
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div class="pr" class:hit={hits.has(bi + ':' + p.paramId)} draggable="true" ondragstart={(e) => startDrag(e, paramDragPayload(b.slug, p))} ondblclick={() => addCondPayload(paramDragPayload(b.slug, p))} title="Drag or double-click to filter on this param"><span class="pk">{p.label}</span><span class="pv">{fmtVal(p)}</span></div>
                   {/each}
                 </div>
               </div>
@@ -839,7 +920,9 @@
   .ac-empty { padding: 14px 12px; font: 500 12px/1.4 'JetBrains Mono', monospace; color: #6e6e78; }
   .ac-foot { display: flex; gap: 14px; padding: 8px 11px 5px; margin-top: 4px; border-top: 1px solid #232329; font: 600 9px/1 'JetBrains Mono', monospace; color: #56565e; }
   /* chips */
-  .chips { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #17171c; flex: none; background: #0c0c0e; }
+  .chips { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #17171c; flex: none; background: #0c0c0e; transition: background 0.1s; }
+  .chips.dragover { background: rgba(53, 201, 214, 0.06); outline: 1px dashed var(--accent, #35c9d6); outline-offset: -3px; }
+  .drop-hint { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, #35c9d6); letter-spacing: 0.04em; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px; border-radius: 9px; background: #121216; border: 1px solid #26262c; }
   .chip-head { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12px; font-weight: 600; color: #e9e9ee; background: transparent; border: none; cursor: default; }
   .chip-head.blk { color: #fff; font-weight: 700; cursor: pointer; background: color-mix(in srgb, var(--c) 15%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); }
@@ -931,7 +1014,12 @@
   .d-blocks { padding: 4px 20px 28px; display: flex; flex-direction: column; gap: 11px; }
   .d-blocks .lbl { margin-bottom: 1px; display: block; }
   .blk { border: 1px solid #1f1f25; border-radius: 12px; overflow: hidden; background: #0e0e11; }
-  .blk-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #1a1a1f; }
+  .blk-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #1a1a1f; cursor: grab; }
+  .blk-h:active { cursor: grabbing; }
+  .grip { color: #46464e; font-size: 11px; }
+  .pr { cursor: grab; }
+  .pr:active { cursor: grabbing; }
+  .pr:hover { background: #16161b; }
   .blk-n { font-size: 13px; font-weight: 700; color: #e9e9ee; }
   .blk-i { font: 600 9px/1 'JetBrains Mono', monospace; color: #6e6e78; }
   .blk-grid { display: flex; flex-wrap: wrap; gap: 1px; background: #1a1a1f; }

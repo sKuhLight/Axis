@@ -1,6 +1,6 @@
 {
   "name": "axis",
-  "version": "0.4.15-beta",
+  "version": "0.4.16-beta",
   "description": "Axis — editor for Fractal devices (FM3), bundling the ForgeFX engine",
   "author": {
     "name": "sKuhLight",
@@ -19,7 +19,9 @@
     "desktop:build": "vite build && electron-builder"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "@orama/orama": "^3.1.18",
+    "electron-updater": "^6.3.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
