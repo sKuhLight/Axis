@@ -118,6 +118,23 @@ export interface ModModel {
   sources?: ModSource[];
 }
 
+/** A unique effect block in a preset (for the library/browser). */
+export interface PresetSummaryBlock {
+  effectId: number;
+  slug: string | null;
+  name: string;
+  instance: number | null;
+}
+/** Decoded preset summary for the library: name, scenes, and the blocks it contains. */
+export interface PresetSummary {
+  number: number;
+  name: string;
+  model: string;
+  crcValid: boolean;
+  scenes: string[];
+  blocks: PresetSummaryBlock[];
+}
+
 /** Result of the device auto-detect handshake (GET /device/detect). */
 export interface DetectResult {
   connected: boolean;
