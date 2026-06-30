@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:#0c0c0e; overscroll-behavior:none; }
+  ::selection{ background:#35c9d6; color:#06181a; }
+  .pb-scroll::-webkit-scrollbar{ width:9px; height:9px; }
+  .pb-scroll::-webkit-scrollbar-track{ background:transparent; }
+  .pb-scroll::-webkit-scrollbar-thumb{ background:#2a2a31; border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  .pb-scroll::-webkit-scrollbar-thumb:hover{ background:#3a3a44; }
+  @keyframes pbPop{ from{ opacity:0; transform:translateY(6px) scale(.99); } to{ opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes pbFade{ from{ opacity:0; } to{ opacity:1; } }
+  input{ font-family:inherit; }
+  input::placeholder{ color:#52525b; }
+</style>
+</helmet>
+
+<div style="position:fixed; inset:0; display:flex; flex-direction:row; background:#0c0c0e; color:#e9e9ee; font-family:'Hanken Grotesk',system-ui,sans-serif; overflow:hidden;">
+
+  <!-- ===================== TOOL RAIL ===================== -->
+  <div style="width:66px; flex:none; display:flex; flex-direction:column; align-items:center; gap:5px; padding:13px 0; background:#0f0f12; border-right:1px solid #1d1d22; z-index:10;">
+    <div style="margin-bottom:10px;">
+      <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
+    </div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+      <div title="{{ r.label }}" style="{{ r.style }}" style-hover="background:#1c1c21;">
+        <span style="font-size:18px; line-height:1;">{{ r.icon }}</span>
+        <span style="font-size:8.5px; font-weight:600; letter-spacing:.02em;">{{ r.short }}</span>
+      </div>
+    </sc-for>
+    <div style="flex:1;"></div>
+    <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
+      <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
+      <span style="font:600 8px/1 'JetBrains Mono'; color:#4a4a52;">FW1.4</span>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN COLUMN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+
+    <!-- TOP BAR -->
+    <div data-screen-label="Browser Header" style="display:flex; align-items:center; gap:14px; padding:12px 20px; border-bottom:1px solid #1c1c22; flex:none;">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Preset Browser</span>
+        <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">{{ countLine }}</span>
+      </div>
+      <div style="flex:1;"></div>
+      <!-- sort -->
+      <div style="display:flex; align-items:center; gap:7px;">
+        <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em;">SORT</span>
+        <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid #26262c; border-radius:9px; padding:3px;">
+          <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="3">
+            <div data-sort="{{ s.id }}" onClick="{{ onSort }}" style="{{ s.style }}">{{ s.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <!-- advanced toggle -->
+      <div data-on="adv" onClick="{{ onToggleAdvanced }}" title="Toggle the typed query language with autocomplete" style="{{ advBtnStyle }}">
+        <span style="{{ advDotStyle }}"></span>
+        <span>Advanced search</span>
+      </div>
+    </div>
+
+    <!-- QUERY BAR -->
+    <div style="padding:13px 20px 12px; border-bottom:1px solid #1a1a1f; flex:none; position:relative; z-index:60; background:#0d0d10;">
+      <div style="display:flex; align-items:stretch; gap:9px;">
+        <div style="flex:1; min-width:0; position:relative;">
+          <div style="{{ queryWrapStyle }}">
+            <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="#6e6e78" stroke-width="1.5"></circle><path d="M10.6 10.6 L14 14" stroke="#6e6e78" stroke-width="1.5" stroke-linecap="round"></path></svg>
+            <input ref="{{ queryRef }}" onInput="{{ onQueryInput }}" onKeyDown="{{ onQueryKey }}" onFocus="{{ onQueryFocus }}" onBlur="{{ onQueryBlur }}" onClick="{{ onQuerySelect }}" onKeyUp="{{ onQuerySelect }}" placeholder="{{ queryPlaceholder }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#e9e9ee; font-size:14px; font-family:'JetBrains Mono'; font-weight:500; letter-spacing:.01em;">
+            <sc-if value="{{ showClear }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onClearQuery }}" title="Clear" style="flex:none; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:7px; cursor:pointer; color:#7a7a84; font-size:15px;" style-hover="background:#1c1c22; color:#e9e9ee;">×</div>
+            </sc-if>
+          </div>
+          <!-- AUTOCOMPLETE -->
+          <sc-if value="{{ acOpen }}" hint-placeholder-val="{{ false }}">
+          <div class="pb-scroll" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:320px; overflow-y:auto; background:#141417; border:1px solid #2e2e36; border-radius:13px; box-shadow:0 24px 60px rgba(0,0,0,.6); z-index:200; animation:pbPop .13s ease-out; padding:6px;">
+            <sc-if value="{{ acCtxLabel }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:7px 11px 5px; font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em; text-transform:uppercase;">{{ acCtxLabel }}</div>
+            </sc-if>
+            <sc-for list="{{ acItems }}" as="a" hint-placeholder-count="5">
+              <div data-i="{{ a.i }}" onMouseDown="{{ onAcDown }}" onMouseEnter="{{ onAcHover }}" style="{{ a.style }}">
+                <span style="{{ a.dotStyle }}"></span>
+                <span style="font:600 13px/1.2 'JetBrains Mono'; color:#e9e9ee;">{{ a.label }}</span>
+                <span style="flex:1;"></span>
+                <span style="font:500 10px/1 'JetBrains Mono'; color:#6e6e78;">{{ a.hint }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ acEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:14px 12px; font:500 12px/1.4 'JetBrains Mono'; color:#6e6e78;">No matches — keep typing</div>
+            </sc-if>
+            <div style="display:flex; align-items:center; gap:14px; padding:8px 11px 5px; margin-top:4px; border-top:1px solid #232329; font:600 9px/1 'JetBrains Mono'; color:#56565e;">
+              <span>↑↓ move</span><span>↵ insert</span><span>esc close</span>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        <div onClick="{{ onSaveCurrent }}" title="Save current filter" style="{{ saveBtnStyle }}">
+          <span style="font-size:14px; line-height:1;">☆</span>
+          <span>Save filter</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUILDER CHIPS -->
+    <div class="pb-scroll" style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:12px 20px; border-bottom:1px solid #17171c; flex:none; background:#0c0c0e;">
+      <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em; margin-right:2px;">FILTERS</span>
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="0">
+        <div style="{{ c.wrapStyle }}">
+          <span data-ci="{{ c.ci }}" onClick="{{ c.headClick }}" style="{{ c.headStyle }}" title="{{ c.headTitle }}">
+            <span style="{{ c.dotStyle }}"></span>{{ c.label }}
+          </span>
+          <sc-if value="{{ c.isBlock }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ c.params }}" as="p" hint-placeholder-count="0">
+              <span style="{{ p.style }}">{{ p.label }}<span data-ci="{{ p.ci }}" data-pi="{{ p.pi }}" onClick="{{ onParamRemove }}" style="margin-left:5px; cursor:pointer; color:#8a8a94; font-size:12px;" style-hover="color:#fff;">×</span></span>
+            </sc-for>
+            <span data-ci="{{ c.ci }}" onClick="{{ onAddParam }}" style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:7px; font:600 11px/1 'JetBrains Mono'; color:#7a7a84; cursor:pointer; border:1px dashed #34343c;" style-hover="color:#35c9d6; border-color:#2a5a5e;">+ param</span>
+          </sc-if>
+          <span data-ci="{{ c.ci }}" onClick="{{ onChipRemove }}" style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:24px; cursor:pointer; color:#8a8a94; font-size:14px; border-left:1px solid rgba(255,255,255,.08);" style-hover="color:#fff;">×</span>
+        </div>
+      </sc-for>
+      <div data-anchor="addfilter" onClick="{{ onAddFilter }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 12px; border-radius:9px; background:#16161b; border:1px solid #2e2e36; cursor:pointer; font-size:12px; font-weight:600; color:#cfcfd6;" style-hover="border-color:#3f3f48; color:#fff;">
+        <span style="font-size:14px; line-height:1; color:#35c9d6;">+</span>Add filter
+      </div>
+      <sc-if value="{{ noChips }}" hint-placeholder-val="{{ true }}">
+      <span style="font:500 11.5px/1 'JetBrains Mono'; color:#52525b;">{{ noChipsHint }}</span>
+      </sc-if>
+      <div style="flex:1;"></div>
+      <sc-if value="{{ hasChips }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onClearQuery }}" style="display:inline-flex; align-items:center; height:30px; padding:0 11px; border-radius:9px; cursor:pointer; font-size:11.5px; font-weight:600; color:#8a8a94;" style-hover="color:#e9e9ee; background:#16161b;">Clear all</div>
+      </sc-if>
+    </div>
+
+    <!-- BODY -->
+    <div style="flex:1; min-height:0; display:flex;">
+
+      <!-- SAVED SIDEBAR -->
+      <div class="pb-scroll" style="width:248px; flex:none; border-right:1px solid #17171c; background:#0b0b0d; overflow-y:auto; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 16px 9px;">
+          <span style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">SAVED FILTERS</span>
+          <span style="font:600 10px/1 'JetBrains Mono'; color:#4a4a52;">{{ savedCount }}</span>
+        </div>
+        <sc-if value="{{ saving }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:0 12px 8px;">
+          <input ref="{{ saveNameRef }}" onKeyDown="{{ onSaveNameKey }}" onBlur="{{ onSaveCancel }}" placeholder="Name this filter…" style="width:100%; background:#121216; border:1px solid #35c9d6; border-radius:9px; padding:9px 11px; color:#e9e9ee; font-size:12.5px; font-weight:600; outline:none;">
+        </div>
+        </sc-if>
+        <div style="display:flex; flex-direction:column; gap:3px; padding:0 9px 10px;">
+          <sc-for list="{{ saved }}" as="f" hint-placeholder-count="4">
+            <div data-id="{{ f.id }}" onClick="{{ onApplySaved }}" style="{{ f.style }}" style-hover="background:#15151a;">
+              <span style="{{ f.dotStyle }}"></span>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                <span style="font-size:12.5px; font-weight:700; color:#e9e9ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.name }}</span>
+                <span style="font:500 9.5px/1.2 'JetBrains Mono'; color:#6e6e78; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.sub }}</span>
+              </div>
+              <span data-id="{{ f.id }}" onClick="{{ onDupSaved }}" title="Duplicate" style="flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:#6e6e78; font-size:12px;" style-hover="background:#26262c; color:#e9e9ee;">⧉</span>
+              <span data-id="{{ f.id }}" onClick="{{ onDelSaved }}" title="Delete" style="flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:#6e6e78; font-size:14px;" style-hover="background:#3a1f1f; color:#e87b6a;">×</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noSaved }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 8px; font:500 11px/1.5 'JetBrains Mono'; color:#52525b;">No saved filters yet. Build a query and hit Save filter.</div>
+          </sc-if>
+        </div>
+
+        <div style="height:1px; background:#17171c; margin:4px 14px 12px;"></div>
+        <div style="padding:0 16px 9px; font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">QUICK TAGS</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 18px;">
+          <sc-for list="{{ quickTags }}" as="t" hint-placeholder-count="10">
+            <span data-tag="{{ t.label }}" onClick="{{ onQuickTag }}" style="{{ t.style }}" style-hover="border-color:#3f3f48;">{{ t.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="pb-scroll" style="flex:1; min-width:0; overflow-y:auto; background:#0c0c0e;">
+        <div style="display:flex; flex-direction:column;">
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
+            <div data-n="{{ row.n }}" onClick="{{ onRowClick }}" style="{{ row.style }}" style-hover="{{ row.hoverStyle }}">
+              <span style="{{ row.numStyle }}">{{ row.num }}</span>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="font-size:14.5px; font-weight:700; color:#e9e9ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.name }}</span>
+                  <sc-for list="{{ row.tags }}" as="tg" hint-placeholder-count="2">
+                    <span style="{{ tg.style }}">{{ tg.label }}</span>
+                  </sc-for>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                  <sc-for list="{{ row.blocks }}" as="b" hint-placeholder-count="5">
+                    <span style="{{ b.style }}" title="{{ b.title }}">{{ b.label }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <span style="font:600 9.5px/1 'JetBrains Mono'; color:#6e6e78;">{{ row.author }}</span>
+                <div style="display:flex; align-items:center; gap:7px;">
+                  <span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.06em;">CPU</span>
+                  <div style="width:46px; height:6px; background:#16161b; border:1px solid #26262c; border-radius:4px; overflow:hidden;"><div style="{{ row.cpuBarStyle }}"></div></div>
+                  <span style="{{ row.cpuTextStyle }}">{{ row.cpuText }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 30px; gap:14px; text-align:center;">
+          <svg width="44" height="44" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#34343c" stroke-width="1.3"></circle><path d="M10.6 10.6 L14 14" stroke="#34343c" stroke-width="1.3" stroke-linecap="round"></path></svg>
+          <span style="font-size:15px; font-weight:700; color:#8a8a94;">No presets match this filter</span>
+          <span style="font:500 12px/1.5 'JetBrains Mono'; color:#56565e; max-width:340px;">Loosen a parameter range or remove a block condition.</span>
+        </div>
+        </sc-if>
+      </div>
+
+      <!-- DETAIL -->
+      <div class="pb-scroll" style="width:368px; flex:none; border-left:1px solid #17171c; background:#0b0b0d; overflow-y:auto;">
+        <sc-if value="{{ detail }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column;">
+          <!-- header -->
+          <div style="padding:20px 20px 16px; border-bottom:1px solid #17171c;">
+            <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+              <span style="font:700 13px/1 'JetBrains Mono'; color:#f5a623;">{{ detail.num }}</span>
+              <span style="font-size:19px; font-weight:800; letter-spacing:-.01em;">{{ detail.name }}</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;">
+              <sc-for list="{{ detail.tags }}" as="tg" hint-placeholder-count="2">
+                <span style="{{ tg.style }}">{{ tg.label }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">AUTHOR</span><span style="font-size:11.5px; font-weight:600; color:#cfcfd6;">{{ detail.author }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">SCENES</span><span style="font-size:11.5px; font-weight:600; color:#cfcfd6;">{{ detail.scenes }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">CPU</span><span style="{{ detail.cpuStyle }}">{{ detail.cpuText }}</span></div>
+            </div>
+            <div onClick="{{ onLoad }}" style="display:flex; align-items:center; justify-content:center; gap:8px; height:42px; border-radius:11px; background:#f5a623; color:#1a1206; font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.01em;" style-hover="filter:brightness(1.08);">
+              <span style="font-size:14px;">↓</span> Load preset
+            </div>
+          </div>
+          <!-- signal chain -->
+          <div style="padding:16px 20px;">
+            <div style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em; margin-bottom:11px;">SIGNAL CHAIN</div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:5px;">
+              <sc-for list="{{ detail.chain }}" as="ch" hint-placeholder-count="6">
+                <span style="{{ ch.style }}" title="{{ ch.title }}"><span style="font-size:11px;">{{ ch.glyph }}</span>{{ ch.label }}</span>
+                <sc-if value="{{ ch.arrow }}" hint-placeholder-val="{{ true }}"><span style="color:#3a3a44; font-size:11px;">›</span></sc-if>
+              </sc-for>
+            </div>
+          </div>
+          <!-- block breakdown -->
+          <div style="padding:4px 20px 28px; display:flex; flex-direction:column; gap:11px;">
+            <div style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em; margin-bottom:1px;">BLOCK PARAMETERS</div>
+            <sc-for list="{{ detail.blocks }}" as="blk" hint-placeholder-count="3">
+              <div style="border:1px solid #1f1f25; border-radius:12px; overflow:hidden; background:#0e0e11;">
+                <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #1a1a1f;">
+                  <span style="{{ blk.dotStyle }}"></span>
+                  <span style="font-size:13px; font-weight:700; color:#e9e9ee;">{{ blk.name }}</span>
+                  <span style="flex:1;"></span>
+                  <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78;">{{ blk.inst }}</span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:1px; background:#1a1a1f;">
+                  <sc-for list="{{ blk.params }}" as="pr" hint-placeholder-count="4">
+                    <div style="{{ pr.style }}">
+                      <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">{{ pr.k }}</span>
+                      <span style="{{ pr.valStyle }}">{{ pr.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ noDetail }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:90px 30px; gap:13px; text-align:center; height:100%;">
+          <span style="font-size:30px; opacity:.4;">◧</span>
+          <span style="font-size:14px; font-weight:700; color:#6e6e78;">Select a preset</span>
+          <span style="font:500 11px/1.5 'JetBrains Mono'; color:#46464e; max-width:230px;">Its full block + parameter breakdown and signal chain show up here.</span>
+        </div>
+        </sc-if>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== GENERIC SEARCHABLE PICKER ===================== -->
+  <sc-if value="{{ picker }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ onPickerClose }}" style="position:fixed; inset:0; z-index:300; animation:pbFade .1s;">
+    <div onMouseDown="{{ stop }}" style="{{ picker.style }}">
+      <div style="padding:10px 12px 8px; border-bottom:1px solid #232329;">
+        <div style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em; margin-bottom:9px;">{{ picker.title }}</div>
+        <div style="display:flex; align-items:center; gap:8px; background:#0e0e11; border:1px solid #2e2e36; border-radius:9px; padding:8px 10px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="#6e6e78" stroke-width="1.6"></circle><path d="M10.6 10.6 L14 14" stroke="#6e6e78" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          <input ref="{{ pickerSearchRef }}" onInput="{{ onPickerSearch }}" onKeyDown="{{ onPickerKey }}" placeholder="{{ picker.placeholder }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#e9e9ee; font-size:12.5px; font-weight:600;">
+        </div>
+      </div>
+      <div class="pb-scroll" style="max-height:288px; overflow-y:auto; padding:6px;">
+        <sc-for list="{{ picker.items }}" as="it" hint-placeholder-count="8">
+          <div data-v="{{ it.v }}" onClick="{{ onPickerPick }}" style="{{ it.style }}" style-hover="background:#1c1c22;">
+            <sc-if value="{{ it.dot }}" hint-placeholder-val="{{ false }}"><span style="{{ it.dotStyle }}"></span></sc-if>
+            <span style="font-size:12.5px; font-weight:600; color:#e9e9ee;">{{ it.label }}</span>
+            <span style="flex:1;"></span>
+            <span style="font:500 10px/1 'JetBrains Mono'; color:#6e6e78;">{{ it.sub }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ picker.empty }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:14px 12px; font:500 12px/1.4 'JetBrains Mono'; color:#6e6e78;">No matches</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#35c9d6&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#35c9d6&quot;,&quot;#f5a623&quot;,&quot;#9b8cf0&quot;,&quot;#33c46b&quot;],&quot;section&quot;:&quot;Appearance&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;comfortable&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;advancedDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    // ---------- catalog ----------
+    this.CAT = {
+      in:["In","#4f6bed","→"], out:["Out","#2fa15f","⇥"],
+      amp:["Amp","#d98a2b","◣"], cab:["Cab","#5f6168","▦"], drive:["Drive","#d6543f","◈"],
+      comp:["Comp","#b3a52b","▮"], chorus:["Chorus","#2fb0c9","∿"], flange:["Flange","#c95bc0","≋"],
+      phaser:["Phaser","#8a6fd6","◠"], filter:["Filter","#d65b9e","⌇"], enhance:["Enhance","#9b8cf0","◎"],
+      delay:["Delay","#4a82e0","⟫"], reverb:["Reverb","#3fa890","◜"]
+    };
+    // filterable block tokens (order = picker order)
+    this.FILTERABLE = ["amp","drive","cab","comp","chorus","flange","phaser","filter","enhance","delay","reverb"];
+    this.BLOCK_TOKENS = {}; this.TOKEN_TO_ID = {};
+    Object.keys(this.CAT).forEach(id=>{ const tok=id.toUpperCase(); this.BLOCK_TOKENS[id]=tok; this.TOKEN_TO_ID[tok]=id; });
+
+    // ---------- value lists ----------
+    const AMP=["5F1 Tweed","5153 100W Blue","5153 100W Red","5153 100W Stealth Red","Brit 800 #34","Brit JM45","Brit JVM OD2 Red","1959SLP Treble","Class-A 30W","Dizzy V4 Blue","Citrus A30 Dirty","Deluxe Tweed","Double Verb Normal","Euro Red Modern","USA Lead 1","USA Lead 2","Recto Orange Modern","PVH 6160 Block","Friedman BE","Cameron CCV 2C","Buttery Lead","Solo 100 Lead"];
+    const CABS=["4x12 Brit 65","4x12 Brit 70","4x12 Recto","2x12 USA Deluxe","1x12 Tweed","1x12 Princeton","2x12 Brit Silver","4x12 Mesa OS"];
+    const DRIVES=["TS808 OD","TS9 OD","Klone Chiron","Tube Drive","Esoteric RCB","Esoteric ROD","Face Fuzz","Fat Rat","Plus Distortion","Bit Crusher","Treble Boost","FET Boost"];
+    const REVERBS=["Medium Hall","Large Hall","Small Room","Large Room","Plate 1","Plate 2","Spring 1","Spring 2","Cathedral","Ambience","Shimmer","Cave"];
+    const DELAYS=["Digital Mono","Digital Stereo","Tube Tape","Tape","BBD Mono","BBD Stereo","Reverse","Multitap","Ping-Pong","Diffusion"];
+    const COMPS=["Pedal 1","Pedal 2","Studio","Optical","Tube","Juice 70","Dynamic","Class A"];
+    const FILTERS=["Lowpass","Highpass","Bandpass","Peaking","Auto-Wah","Talk"];
+    const NOTES=["1/4","1/8","1/8 dot","1/16","Free"];
+    this.VALS={AMP,CABS,DRIVES,REVERBS,DELAYS,COMPS,FILTERS,NOTES};
+
+    // ---------- param specs: [name, kind, a, b] ----------
+    this.PSPEC = {
+      amp:[["TYPE","enum",AMP],["GAIN","num",0,10],["MASTER","num",0,10],["LEVEL","num",0,10],["BASS","num",0,10],["MID","num",0,10],["TREBLE","num",0,10],["PRESENCE","num",0,10],["BRIGHT","bool"]],
+      cab:[["TYPE","enum",CABS],["LEVEL","num",-20,6]],
+      drive:[["TYPE","enum",DRIVES],["DRIVE","num",0,10],["TONE","num",0,10],["LEVEL","num",0,10],["MIX","num",0,100]],
+      reverb:[["TYPE","enum",REVERBS],["TIME","num",0,10],["MIX","num",0,100],["WIDTH","num",0,10],["LOWCUT","num",20,2000],["HIGHCUT","num",2000,20000]],
+      delay:[["TYPE","enum",DELAYS],["TIME","num",0,2000],["FEEDBACK","num",0,100],["MIX","num",0,100],["TEMPO","enum",NOTES]],
+      comp:[["TYPE","enum",COMPS],["THRESHOLD","num",-60,0],["RATIO","num",1,20],["LEVEL","num",-12,12]],
+      chorus:[["RATE","num",0,10],["DEPTH","num",0,10],["MIX","num",0,100]],
+      flange:[["RATE","num",0,10],["DEPTH","num",0,10],["FEEDBACK","num",0,100],["MIX","num",0,100]],
+      phaser:[["RATE","num",0,10],["DEPTH","num",0,10],["STAGES","num",2,12]],
+      filter:[["TYPE","enum",FILTERS],["FREQ","num",20,20000],["Q","num",0.1,10]],
+      enhance:[["WIDTH","num",0,10],["MIX","num",0,100]]
+    };
+
+    this.TAGS=["Clean","Crunch","Hi-Gain","Lead","Rhythm","Ambient","Bass","Acoustic","Blues","Metal","Djent","Country","Funk","Jazz","Worship","Hendrix","SRV","Gilmour","80s","Modern","Live","Fuzz"];
+    this.TAGCOL={Clean:"#35c9d6",Crunch:"#f5a623","Hi-Gain":"#d6543f",Lead:"#d65b9e",Rhythm:"#9a9aa3",Ambient:"#9b8cf0",Bass:"#4f6bed",Acoustic:"#7fae4a",Blues:"#4a82e0",Metal:"#d6543f",Djent:"#c95bc0",Country:"#b3a52b",Funk:"#2fb0c9",Jazz:"#3fa890",Worship:"#9b8cf0",Hendrix:"#f5a623",SRV:"#d98a2b",Gilmour:"#35c9d6","80s":"#c95bc0",Modern:"#8a6fd6",Live:"#33c46b",Fuzz:"#d6543f"};
+
+    this.PRESETS = this.buildPresets();
+    this.PBYN={}; this.PRESETS.forEach(p=>this.PBYN[p.n]=p);
+
+    const adv = props && props.advancedDefault===false ? false : true;
+    this.state = {
+      advanced:adv, query:"", simpleQ:"", caret:0,
+      conditions:[], sort:"num", selected:null,
+      acOpen:false, acItems:[], acIndex:0, acCtxLabel:"",
+      picker:null, pickerSearch:"", pickerHi:0,
+      saving:false,
+      saved: this.seedSaved()
+    };
+    this._caret=0;
+  }
+
+  componentDidMount(){ this.loadSaved(); }
+
+  // ===================== DATA GEN =====================
+  rng(seed){ let t=seed>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^(t>>>15),1|t); r^=r+Math.imul(r^(r>>>7),61|r); return ((r^(r>>>14))>>>0)/4294967296; }; }
+  pick(r,a){ return a[Math.floor(r()*a.length)%a.length]; }
+  rn(r,min,max,dec){ const v=min+(max-min)*r(); const m=Math.pow(10,dec||0); return Math.round(v*m)/m; }
+
+  buildPresets(){
+    const V=this.VALS;
+    const seeds=[
+      ["Studio Clean",["Clean","Rhythm"],"Fractal Factory"],
+      ["Glassy Twang",["Clean","Country"],"Cooper Carter"],
+      ["Pristine Chime",["Clean","80s"],"M. Asbury"],
+      ["Crystal Pad",["Clean","Ambient"],"L. Mills"],
+      ["Worship Swell",["Worship","Ambient"],"J. Sklar"],
+      ["Ambient Church",["Worship","Ambient","Clean"],"J. Sklar"],
+      ["Sparkle Clean",["Clean"],"Fractal Factory"],
+      ["Pedal Platform",["Clean","Rhythm"],"You"],
+      ["Texas Flood",["Blues","SRV","Lead"],"R. Marino"],
+      ["Hendrix Wail",["Hendrix","Blues","Fuzz"],"R. Marino"],
+      ["Voodoo Lead",["Hendrix","Lead"],"R. Marino"],
+      ["SRV Strat",["SRV","Blues"],"Cooper Carter"],
+      ["Blues Breaker",["Blues","Crunch"],"M. Asbury"],
+      ["Smooth Blues",["Blues","Lead"],"L. Mills"],
+      ["Foxy Fuzz",["Hendrix","Fuzz","Lead"],"R. Marino"],
+      ["Little Wing",["Hendrix","Clean","Ambient"],"R. Marino"],
+      ["Brit Crunch",["Crunch","Rhythm"],"Fractal Factory"],
+      ["Plexi Roar",["Crunch","Hi-Gain"],"T. Nordvik"],
+      ["AC Vox Chime",["Crunch","Clean","80s"],"M. Asbury"],
+      ["70s Rock",["Crunch","Lead"],"Cooper Carter"],
+      ["Marshall Stack",["Hi-Gain","Crunch"],"T. Nordvik"],
+      ["Classic Rhythm",["Rhythm","Crunch"],"You"],
+      ["Modern Djent",["Djent","Metal","Hi-Gain"],"T. Nordvik"],
+      ["Recto Brutal",["Metal","Hi-Gain"],"T. Nordvik"],
+      ["8-String Chug",["Djent","Metal","Modern"],"T. Nordvik"],
+      ["5153 Lead",["Metal","Lead","Hi-Gain"],"Cooper Carter"],
+      ["Tight Metal",["Metal","Rhythm","Modern"],"T. Nordvik"],
+      ["Doom Sludge",["Metal","Fuzz"],"T. Nordvik"],
+      ["Prog Lead",["Djent","Lead","Ambient"],"Cooper Carter"],
+      ["Thall Tone",["Djent","Metal","Modern"],"T. Nordvik"],
+      ["Chicken Pickin",["Country","Clean"],"L. Mills"],
+      ["Funk Strat",["Funk","Clean"],"L. Mills"],
+      ["Jazz Box",["Jazz","Clean"],"M. Asbury"],
+      ["Nashville Hot",["Country","Lead"],"Cooper Carter"],
+      ["Motown Bass",["Bass","Funk"],"L. Mills"],
+      ["Smooth Jazz",["Jazz","Ambient"],"M. Asbury"],
+      ["Ambient Wash",["Ambient","Clean"],"J. Sklar"],
+      ["Shimmer Lead",["Ambient","Lead","Modern"],"J. Sklar"],
+      ["Soaring Lead",["Lead","Hi-Gain","Ambient"],"Cooper Carter"],
+      ["Gilmour Lead",["Gilmour","Lead","Ambient"],"R. Marino"],
+      ["Big Sky",["Ambient","Worship"],"J. Sklar"],
+      ["Post-Rock Bloom",["Ambient","Modern","Clean"],"J. Sklar"],
+      ["Slap Bass",["Bass","Funk"],"L. Mills"],
+      ["Fingerstyle Bass",["Bass","Rhythm"],"You"],
+      ["Rock Bass DI",["Bass","Rhythm","Live"],"Fractal Factory"],
+      ["Live Worship 2",["Worship","Live","Clean"],"J. Sklar"],
+      ["Practice Tone",["Rhythm","Live"],"You"],
+      ["DEBUG",["Modern"],"You"]
+    ];
+    return seeds.map((s,idx)=>this.genPreset(idx, s[0], s[1], s[2]));
+  }
+
+  has(tags,arr){ return tags.some(t=>arr.indexOf(t)>=0); }
+
+  genPreset(idx,name,tags,author){
+    const n=idx+1; const r=this.rng(n*2654435+101);
+    const V=this.VALS;
+    const metal=this.has(tags,["Metal","Djent"]);
+    const blues=this.has(tags,["Blues","SRV","Hendrix"]);
+    const clean=this.has(tags,["Clean","Worship","Acoustic"]);
+    const ambient=this.has(tags,["Ambient","Worship","Gilmour"]);
+    const lead=this.has(tags,["Lead"]);
+    const funk=this.has(tags,["Funk","Country","Jazz"]);
+    const bass=this.has(tags,["Bass"]);
+    const fuzz=this.has(tags,["Fuzz"]);
+
+    let ampPool, gMin,gMax;
+    if(metal){ ampPool=["5153 100W Red","PVH 6160 Block","Recto Orange Modern","USA Lead 2","Friedman BE","Cameron CCV 2C","Euro Red Modern"]; gMin=7; gMax=9.5; }
+    else if(blues){ ampPool=["Brit JM45","1959SLP Treble","Brit 800 #34","Class-A 30W","Buttery Lead"]; gMin=4.5; gMax=6.8; }
+    else if(clean){ ampPool=["Deluxe Tweed","Class-A 30W","5F1 Tweed","Citrus A30 Dirty","Double Verb Normal","Dizzy V4 Blue"]; gMin=2; gMax=4.2; }
+    else if(funk){ ampPool=["Deluxe Tweed","Double Verb Normal","5F1 Tweed","Dizzy V4 Blue"]; gMin=2.5; gMax=4.5; }
+    else { ampPool=V.AMP; gMin=3; gMax=7; }
+    if(lead){ gMax=Math.min(9.5,gMax+1.5); gMin=Math.min(gMin+1,gMax-0.5); }
+
+    const blocks=[];
+    blocks.push({type:"in",inst:"In 1",params:{}});
+    if(funk || clean){ if(r()>0.45) blocks.push({type:"comp",inst:"Comp 1",params:this.fillComp(r,V)}); }
+    const wantDrive = blues||metal||lead||fuzz || r()>0.42;
+    if(wantDrive) blocks.push({type:"drive",inst:"Drive 1",params:this.fillDrive(r,V,{metal,blues,fuzz})});
+    blocks.push({type:"amp",inst:"Amp 1",params:this.fillAmp(r,ampPool,gMin,gMax)});
+    blocks.push({type:"cab",inst:"Cab 1",params:this.fillCab(r,V,{metal,clean})});
+    if(funk && r()>0.55) blocks.push({type:"filter",inst:"Filter 1",params:this.fillFilter(r,V)});
+    if(this.has(tags,["80s"]) || (clean && r()>0.6)) blocks.push({type:"chorus",inst:"Chorus 1",params:this.fillChorus(r)});
+    if(r()>0.86) blocks.push({type:"flange",inst:"Flange 1",params:this.fillFlange(r)});
+    if(ambient && r()>0.55) blocks.push({type:"enhance",inst:"Enhance 1",params:{WIDTH:this.rn(r,5,10,1),MIX:this.rn(r,20,60,0)}});
+    const wantDelay = lead||ambient||this.has(tags,["Gilmour"]) || r()>0.4;
+    if(wantDelay) blocks.push({type:"delay",inst:"Delay 1",params:this.fillDelay(r,V,{ambient})});
+    const wantVerb = ambient||clean || r()>0.25;
+    if(wantVerb) blocks.push({type:"reverb",inst:"Reverb 1",params:this.fillReverb(r,V,{ambient})});
+    blocks.push({type:"out",inst:"Out 1",params:{}});
+
+    const fxCount=blocks.length-3;
+    let cpu=Math.round(34 + fxCount*5.5 + r()*16); if(metal||ambient) cpu+=6; cpu=Math.max(31,Math.min(95,cpu));
+    const scenes=1+Math.floor(r()*8);
+    return {n,name,tags,author,cpu,scenes,blocks};
+  }
+  fillAmp(r,pool,gMin,gMax){ return {TYPE:this.pick(r,pool),GAIN:this.rn(r,gMin,gMax,1),MASTER:this.rn(r,3.5,8,1),LEVEL:this.rn(r,3,7,1),BASS:this.rn(r,3,8,1),MID:this.rn(r,3,8,1),TREBLE:this.rn(r,4,8,1),PRESENCE:this.rn(r,3,7,1),BRIGHT:r()>0.5?"On":"Off"}; }
+  fillCab(r,V,o){ let pool=V.CABS; if(o.metal) pool=["4x12 Recto","4x12 Mesa OS","4x12 Brit 70"]; else if(o.clean) pool=["1x12 Tweed","1x12 Princeton","2x12 USA Deluxe","2x12 Brit Silver"]; return {TYPE:this.pick(r,pool),LEVEL:this.rn(r,-3,3,1)}; }
+  fillDrive(r,V,o){ let pool=V.DRIVES; if(o.metal) pool=["Esoteric RCB","Fat Rat","Plus Distortion","FET Boost"]; else if(o.fuzz) pool=["Face Fuzz","Fat Rat"]; else if(o.blues) pool=["TS808 OD","TS9 OD","Klone Chiron","Tube Drive"]; return {TYPE:this.pick(r,pool),DRIVE:this.rn(r,3,8.5,1),TONE:this.rn(r,4,7.5,1),LEVEL:this.rn(r,4,7,1),MIX:100}; }
+  fillDelay(r,V,o){ return {TYPE:this.pick(r,V.DELAYS),TIME:this.pick(r,[240,300,375,420,480,500,560]),FEEDBACK:this.rn(r,15,48,0),MIX:this.rn(r,o.ambient?22:12,o.ambient?42:30,0),TEMPO:this.pick(r,V.NOTES)}; }
+  fillReverb(r,V,o){ let pool=o.ambient?["Large Hall","Cathedral","Shimmer","Cave","Large Room"]:["Medium Hall","Small Room","Plate 1","Spring 1","Spring 2","Plate 2"]; return {TYPE:this.pick(r,pool),TIME:this.rn(r,o.ambient?5.5:2,o.ambient?9.5:6,1),MIX:this.rn(r,o.ambient?32:12,o.ambient?60:34,0),WIDTH:this.rn(r,6,10,1),LOWCUT:this.pick(r,[40,60,80,100,120]),HIGHCUT:this.pick(r,[6000,8000,10000,12000])}; }
+  fillComp(r,V){ return {TYPE:this.pick(r,V.COMPS),THRESHOLD:this.rn(r,-32,-10,0),RATIO:this.rn(r,2,6,1),LEVEL:this.rn(r,0,4,1)}; }
+  fillChorus(r){ return {RATE:this.rn(r,1,4,1),DEPTH:this.rn(r,3,7,1),MIX:this.rn(r,20,45,0)}; }
+  fillFlange(r){ return {RATE:this.rn(r,0.5,3,1),DEPTH:this.rn(r,3,8,1),FEEDBACK:this.rn(r,20,60,0),MIX:this.rn(r,30,50,0)}; }
+  fillFilter(r,V){ return {TYPE:this.pick(r,["Auto-Wah","Bandpass","Peaking","Lowpass"]),FREQ:this.pick(r,[400,600,800,1200,2000]),Q:this.rn(r,0.5,4,1)}; }
+
+  // ===================== QUERY PARSE / FORMAT =====================
+  splitOn(str,ch){ const out=[]; let depth=0,start=0; for(let i=0;i<str.length;i++){ const c=str[i]; if(c==="(")depth++; else if(c===")")depth=Math.max(0,depth-1); else if(c===ch&&depth===0){ out.push({text:str.slice(start,i),start,end:i}); start=i+1; } } out.push({text:str.slice(start),start,end:str.length}); return out; }
+  tokId(tok){ return this.TOKEN_TO_ID[(tok||"").trim().toUpperCase()]||null; }
+  specParam(id,name){ const a=this.PSPEC[id]||[]; return a.find(x=>x[0]===name)||null; }
+
+  parseParam(s){ const m=s.match(/^\s*([A-Za-z]+)\s*(>=|<=|!=|=|>|<)\s*(.+?)\s*$/); if(!m) return null; return {name:m[1].toUpperCase(),op:m[2],val:m[3].trim()}; }
+  parseTerm(t){
+    let m;
+    if(m=t.match(/^tag:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"tag",val:v}:null; }
+    if(m=t.match(/^name:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"name",val:v}:null; }
+    if(m=t.match(/^author:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"author",val:v}:null; }
+    if(m=t.match(/^(cpu|scenes)\s*(>=|<=|!=|=|>|<)\s*(\d+\.?\d*)$/i)){ return {kind:m[1].toLowerCase(),op:m[2],val:m[3]}; }
+    const pi=t.indexOf("(");
+    if(pi>=0){ const id=this.tokId(t.slice(0,pi)); if(!id) return null; let inner=t.slice(pi+1); if(inner.endsWith(")")) inner=inner.slice(0,-1); const params=this.splitOn(inner,",").map(s=>this.parseParam(s.text)).filter(Boolean); return {kind:"block",block:id,params}; }
+    const id=this.tokId(t); return id?{kind:"block",block:id,params:[]}:null;
+  }
+  parseQuery(text){ return this.splitOn(text,"+").map(s=>this.parseTerm(s.text.trim())).filter(Boolean); }
+  q(v){ return /[\s,()]/.test(v)?'"'+v+'"':v; }
+  condToText(c){
+    if(c.kind==="block"){ const tok=this.BLOCK_TOKENS[c.block]; if(!c.params||!c.params.length) return tok; return tok+"("+c.params.map(p=>p.name+p.op+p.val).join(", ")+")"; }
+    if(c.kind==="tag") return "tag:"+this.q(c.val);
+    if(c.kind==="name") return "name:"+this.q(c.val);
+    if(c.kind==="author") return "author:"+this.q(c.val);
+    if(c.kind==="cpu") return "cpu"+c.op+c.val;
+    if(c.kind==="scenes") return "scenes"+c.op+c.val;
+    return "";
+  }
+  condsToQuery(conds){ return conds.map(c=>this.condToText(c)).filter(Boolean).join("  +  "); }
+
+  // ===================== MATCH =====================
+  cmp(a,op,b){ switch(op){case ">":return a>b;case "<":return a<b;case ">=":return a>=b;case "<=":return a<=b;case "!=":return Math.abs(a-b)>1e-9;default:return Math.abs(a-b)<1e-9;} }
+  matchParam(b,pc){ const v=b.params[pc.name]; if(v==null||v==="") return false; const spec=this.specParam(b.type,pc.name); const num = spec && spec[1]==="num"; if(!num){ const sv=String(v).toLowerCase(); const q=pc.val.toLowerCase(); if(pc.op==="!=") return !sv.includes(q); return sv.includes(q); } const nv=Number(v); const range=pc.val.match(/^\s*(-?\d+\.?\d*)\s*-\s*(-?\d+\.?\d*)\s*$/); if(range){ const a=parseFloat(range[1]),bb=parseFloat(range[2]); return nv>=Math.min(a,bb)&&nv<=Math.max(a,bb); } const t=parseFloat(pc.val); if(isNaN(t)) return false; return this.cmp(nv,pc.op,t); }
+  matchCond(p,c){
+    if(c.kind==="tag") return p.tags.some(t=>t.toLowerCase().includes(c.val.toLowerCase()));
+    if(c.kind==="name") return p.name.toLowerCase().includes(c.val.toLowerCase());
+    if(c.kind==="author") return p.author.toLowerCase().includes(c.val.toLowerCase());
+    if(c.kind==="cpu") return this.cmp(p.cpu,c.op,parseFloat(c.val));
+    if(c.kind==="scenes") return this.cmp(p.scenes,c.op,parseFloat(c.val));
+    if(c.kind==="block"){ const bs=p.blocks.filter(b=>b.type===c.block); if(!bs.length) return false; if(!c.params||!c.params.length) return true; return bs.some(b=>c.params.every(pc=>this.matchParam(b,pc))); }
+    return true;
+  }
+  matchPreset(p,conds,simpleQ){
+    for(const c of conds){ if(!this.matchCond(p,c)) return false; }
+    if(simpleQ){ const toks=simpleQ.toLowerCase().split(/\s+/).filter(Boolean); const hay=(p.name+" "+p.tags.join(" ")+" "+p.author+" "+p.blocks.map(b=>this.CAT[b.type][0]+" "+(b.params.TYPE||"")).join(" ")).toLowerCase(); if(!toks.every(t=>hay.includes(t))) return false; }
+    return true;
+  }
+
+  // ===================== AUTOCOMPLETE =====================
+  curText(){ return this.qref ? this.qref.value : this.state.query; }
+  activeConds(){ return this.state.advanced ? this.parseQuery(this.curText()) : this.state.conditions; }
+
+  suggest(text,caret){
+    const segs=this.splitOn(text,"+"); let seg=segs[segs.length-1];
+    for(const s of segs){ if(caret>=s.start && caret<=s.end){ seg=s; break; } }
+    const local=text.slice(seg.start, caret);
+    const opens=(local.match(/\(/g)||[]).length, closes=(local.match(/\)/g)||[]).length;
+    if(opens>closes){
+      const pi=local.indexOf("("); const id=this.tokId(local.slice(0,pi));
+      const after=local.slice(pi+1); const parts=this.splitOn(after,","); const frag=parts[parts.length-1].text;
+      const pm=frag.match(/^\s*([A-Za-z]+)\s*(>=|<=|!=|=|>|<)\s*(.*)$/);
+      if(pm){ return {ctx:"value", items:this.sgValue(id,pm[1].toUpperCase(),pm[3]), label:"value · "+pm[1].toUpperCase()}; }
+      const pf=(frag.match(/[A-Za-z]*$/)||[""])[0];
+      return {ctx:"param", items:this.sgParam(id,pf), label:(this.CAT[id]?this.CAT[id][0]:"")+" parameter"};
+    }
+    let m;
+    if(m=local.match(/tag:\s*"?([A-Za-z0-9 ]*)$/i)) return {ctx:"tag", items:this.sgList(this.TAGS,m[1],"tag",true), label:"tag"};
+    if(m=local.match(/author:\s*"?([A-Za-z0-9. ]*)$/i)){ const authors=Array.from(new Set(this.PRESETS.map(p=>p.author))); return {ctx:"author", items:this.sgList(authors,m[1],"author",true), label:"author"}; }
+    const tf=(local.match(/[A-Za-z]*$/)||[""])[0];
+    return {ctx:"block", items:this.sgBlock(tf), label:"block / token"};
+  }
+  mkItem(label,insert,fragLen,hint,color,dot){ return {label,insert,fragLen,hint:hint||"",color:color||"#6e6e78",dot:dot!==false}; }
+  sgBlock(frag){ const f=frag.toLowerCase(); const out=[]; this.FILTERABLE.forEach(id=>{ const lbl=this.BLOCK_TOKENS[id]; if(lbl.toLowerCase().includes(f)||this.CAT[id][0].toLowerCase().includes(f)) out.push(this.mkItem(lbl,lbl+"(",frag.length,"block · "+this.CAT[id][0],this.CAT[id][1])); }); [["tag:","filter by tag"],["author:","filter by author"],["name:","name contains"],["cpu<","cpu below"],["scenes>","scene count"]].forEach(t=>{ if(t[0].toLowerCase().startsWith(f)||f==="") out.push(this.mkItem(t[0],t[0],frag.length,t[1],"#56565e",false)); }); return out; }
+  sgParam(id,frag){ const f=frag.toLowerCase(); return (this.PSPEC[id]||[]).filter(s=>s[0].toLowerCase().includes(f)).map(s=>{ const hint=s[1]==="enum"?"type":(s[1]==="num"?(s[2]+"–"+s[3]):"On/Off"); return this.mkItem(s[0],s[0]+(s[1]==="num"?">":"="),frag.length,hint,"#7a7a84"); }); }
+  sgValue(id,pname,frag){ const spec=this.specParam(id,pname); if(!spec) return []; const f=frag.toLowerCase(); if(spec[1]==="enum"){ return spec[2].filter(v=>v.toLowerCase().includes(f)).slice(0,40).map(v=>this.mkItem(v,this.q(v),frag.length,"",this.CAT[id]?this.CAT[id][1]:"#6e6e78")); } if(spec[1]==="bool"){ return ["On","Off"].filter(v=>v.toLowerCase().includes(f)).map(v=>this.mkItem(v,v,frag.length,"")); } const lo=spec[2],hi=spec[3]; const cand=[lo, Math.round((lo+hi)*0.25*10)/10, Math.round((lo+hi)*0.5*10)/10, Math.round((lo+hi)*0.75*10)/10, hi].map(x=> (Math.abs(x)<10?x:Math.round(x))); return Array.from(new Set(cand)).filter(v=>String(v).startsWith(frag.trim())||frag.trim()==="").map(v=>this.mkItem(String(v),String(v),frag.length,"value")); }
+  sgList(arr,frag,kind,dot){ const f=(frag||"").toLowerCase(); return arr.filter(v=>v.toLowerCase().includes(f)).slice(0,40).map(v=>this.mkItem(v,this.q(v),(frag||"").length,kind,kind==="tag"?(this.TAGCOL[v]||"#6e6e78"):"#6e6e78", kind==="tag")); }
+
+  recomputeAc(){
+    if(!this.state.advanced){ if(this.state.acOpen) this.setState({acOpen:false,acItems:[]}); return; }
+    const v=this.curText(); const c=this._caret;
+    const res=this.suggest(v,c);
+    this.setState({acItems:res.items, acCtxLabel:res.label, acIndex:0, acOpen:true});
+  }
+  onQueryInput=(e)=>{ const v=e.target.value; this._caret=e.target.selectionStart; if(this.state.advanced){ this.setState({query:v},()=>this.recomputeAc()); } else { this.setState({simpleQ:v}); } };
+  onQuerySelect=(e)=>{ this._caret=e.target.selectionStart; if(this.state.advanced && this.state.acOpen) this.recomputeAc(); };
+  onQueryFocus=()=>{ if(this.state.advanced) this.recomputeAc(); };
+  onQueryBlur=()=>{ setTimeout(()=>this.setState({acOpen:false}),130); };
+  onQueryKey=(e)=>{ if(!this.state.advanced) return; if(!this.state.acOpen){ if(e.key==="ArrowDown"){ this.recomputeAc(); } return; } const n=this.state.acItems.length; if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({acIndex:Math.min(n-1,this.state.acIndex+1)}); } else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({acIndex:Math.max(0,this.state.acIndex-1)}); } else if(e.key==="Enter"||e.key==="Tab"){ if(n){ e.preventDefault(); this.acceptAc(this.state.acIndex); } } else if(e.key==="Escape"){ e.preventDefault(); this.setState({acOpen:false}); } };
+  onAcHover=(e)=>{ this.setState({acIndex:+e.currentTarget.dataset.i}); };
+  onAcDown=(e)=>{ e.preventDefault(); this.acceptAc(+e.currentTarget.dataset.i); };
+  acceptAc(i){ const item=this.state.acItems[i]; if(!item||!this.qref) return; const v=this.qref.value; const caret=this._caret; const start=Math.max(0,caret-item.fragLen); const nt=v.slice(0,start)+item.insert+v.slice(caret); const nc=start+item.insert.length; this.qref.value=nt; this.qref.focus(); try{this.qref.setSelectionRange(nc,nc);}catch(e){} this._caret=nc; this.setState({query:nt},()=>this.recomputeAc()); }
+
+  // ===================== TOGGLE / CLEAR =====================
+  onToggleAdvanced=()=>{
+    if(this.state.advanced){ const conds=this.parseQuery(this.curText()); if(this.qref) this.qref.value=""; this.setState({advanced:false, conditions:conds, simpleQ:"", acOpen:false, acItems:[]}); }
+    else { const txt=this.condsToQuery(this.state.conditions); if(this.qref) this.qref.value=txt; this._caret=txt.length; this.setState({advanced:true, query:txt}); }
+  };
+  setQuery(text,focus){ if(this.qref){ this.qref.value=text; if(focus){ this.qref.focus(); try{this.qref.setSelectionRange(text.length,text.length);}catch(e){} this._caret=text.length; } } this.setState({query:text}, ()=>{ if(focus) this.recomputeAc(); }); }
+  onClearQuery=()=>{ if(this.state.advanced){ if(this.qref) this.qref.value=""; this.setState({query:"",acItems:[],acOpen:false}); } else { this.setState({conditions:[],simpleQ:""}); if(this.qref) this.qref.value=""; } };
+
+  // ===================== BUILDER EDITS =====================
+  editConds(fn){
+    if(this.state.advanced){ const c=this.parseQuery(this.curText()); fn(c); this.setQuery(this.condsToQuery(c)); }
+    else { const c=this.state.conditions.map(x=>({...x, params:x.params?x.params.map(p=>({...p})):x.params})); fn(c); this.setState({conditions:c}); }
+  }
+  onChipRemove=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci; this.editConds(c=>c.splice(ci,1)); };
+  onParamRemove=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci, pi=+e.currentTarget.dataset.pi; this.editConds(c=>{ if(c[ci]&&c[ci].params) c[ci].params.splice(pi,1); }); };
+  onQuickTag=(e)=>{ const tag=e.currentTarget.dataset.tag; this.editConds(c=>{ const i=c.findIndex(x=>x.kind==="tag"&&x.val.toLowerCase()===tag.toLowerCase()); if(i>=0) c.splice(i,1); else c.push({kind:"tag",val:tag}); }); };
+
+  // ===================== PICKERS =====================
+  openPicker(kind,ctx,anchorEl){ const rect=anchorEl?anchorEl.getBoundingClientRect():{left:300,bottom:200}; this._pickerOpening=true; this.setState({picker:{kind,ctx,rect}, pickerSearch:"", pickerHi:0}); }
+  componentDidUpdate(){ if(this._pickerOpening && this.pickerSearchEl){ this._pickerOpening=false; try{this.pickerSearchEl.focus();}catch(e){} } if(this._saveOpening && this.saveNameEl){ this._saveOpening=false; try{this.saveNameEl.focus();}catch(e){} } }
+  pickerSearchRef=(el)=>{ this.pickerSearchEl=el; };
+  qrefCb=(el)=>{ this.qref=el; };
+  onPickerSearch=(e)=>{ this.setState({pickerSearch:e.target.value, pickerHi:0}); };
+  onPickerClose=()=>{ this.setState({picker:null}); };
+  stop=(e)=>e.stopPropagation();
+  onPickerKey=(e)=>{ const items=this._pickerItems||[]; if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({pickerHi:Math.min(items.length-1,this.state.pickerHi+1)}); } else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({pickerHi:Math.max(0,this.state.pickerHi-1)}); } else if(e.key==="Enter"){ e.preventDefault(); const it=items[this.state.pickerHi]; if(it) this.pickerPick(it.v); } else if(e.key==="Escape"){ this.setState({picker:null}); } };
+  onPickerPick=(e)=>{ this.pickerPick(e.currentTarget.dataset.v); };
+  pickerPick(v){
+    const pk=this.state.picker; if(!pk) return; const kind=pk.kind, ctx=pk.ctx||{};
+    if(kind==="addfilter"){
+      if(v==="tag"){ this.openPicker("tag",{}, this._lastAnchor); return; }
+      if(v==="cpu"){ this.editConds(c=>c.push({kind:"cpu",op:"<",val:"60"})); this.setState({picker:null}); return; }
+      if(v==="scenes"){ this.editConds(c=>c.push({kind:"scenes",op:">",val:"4"})); this.setState({picker:null}); return; }
+      if(v==="author"){ this.openPicker("author",{}, this._lastAnchor); return; }
+      // block id
+      this.editConds(c=>c.push({kind:"block",block:v,params:[]})); this.setState({picker:null}); return;
+    }
+    if(kind==="tag"){ this.editConds(c=>{ if(!c.some(x=>x.kind==="tag"&&x.val===v)) c.push({kind:"tag",val:v}); }); this.setState({picker:null}); return; }
+    if(kind==="author"){ this.editConds(c=>c.push({kind:"author",val:v})); this.setState({picker:null}); return; }
+    if(kind==="param"){ const id=ctx.block; const spec=this.specParam(id,v); if(spec && (spec[1]==="enum"||spec[1]==="bool"||spec[1]==="num")){ this.openPicker("value",{block:id,param:v,kind:spec[1]}, this._lastAnchor); } return; }
+    if(kind==="value"){ const ci=ctx.ci; const op=ctx.op||"="; this.editConds(c=>{ const target = (ci!=null && c[ci]) ? c[ci] : c.filter(x=>x.kind==="block"&&x.block===ctx.block).slice(-1)[0]; if(target){ if(!target.params) target.params=[]; target.params.push({name:ctx.param, op:op, val:v}); } }); this.setState({picker:null}); return; }
+  }
+  onAddFilter=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("addfilter",{}, e.currentTarget); };
+  onAddParam=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci; const conds=this.activeConds(); const cond=conds[ci]; if(!cond||cond.kind!=="block") return; this._lastAnchor=e.currentTarget; this.openPicker("param",{block:cond.block, ci}, e.currentTarget); };
+
+  // value picker entries (numeric → op+val combos handled by ctx.op)
+  pickerItems(){
+    const pk=this.state.picker; if(!pk) return []; const f=(this.state.pickerSearch||"").toLowerCase(); const ctx=pk.ctx||{};
+    if(pk.kind==="addfilter"){ const items=[]; this.FILTERABLE.forEach(id=>items.push({v:id,label:this.BLOCK_TOKENS[id],sub:"block",dot:true,color:this.CAT[id][1]})); items.push({v:"tag",label:"tag:",sub:"by tag",dot:false}); items.push({v:"author",label:"author:",sub:"by author",dot:false}); items.push({v:"cpu",label:"cpu",sub:"CPU usage",dot:false}); items.push({v:"scenes",label:"scenes",sub:"scene count",dot:false}); return items.filter(i=>i.label.toLowerCase().includes(f)||i.sub.toLowerCase().includes(f)); }
+    if(pk.kind==="tag"){ return this.TAGS.filter(t=>t.toLowerCase().includes(f)).map(t=>({v:t,label:t,sub:"",dot:true,color:this.TAGCOL[t]||"#6e6e78"})); }
+    if(pk.kind==="author"){ return Array.from(new Set(this.PRESETS.map(p=>p.author))).filter(a=>a.toLowerCase().includes(f)).map(a=>({v:a,label:a,sub:"",dot:false})); }
+    if(pk.kind==="param"){ const id=ctx.block; return (this.PSPEC[id]||[]).filter(s=>s[0].toLowerCase().includes(f)).map(s=>({v:s[0],label:s[0],sub:s[1]==="enum"?"type":(s[1]==="num"?s[2]+"–"+s[3]:"On/Off"),dot:false})); }
+    if(pk.kind==="value"){ const spec=this.specParam(ctx.block,ctx.param); if(!spec) return []; if(spec[1]==="enum") return spec[2].filter(v=>v.toLowerCase().includes(f)).map(v=>({v:v,label:v,sub:"",dot:true,color:this.CAT[ctx.block]?this.CAT[ctx.block][1]:"#6e6e78"})); if(spec[1]==="bool") return ["On","Off"].filter(v=>v.toLowerCase().includes(f)).map(v=>({v:v,label:v,sub:"",dot:false})); const lo=spec[2],hi=spec[3]; const mids=[lo,(lo+hi)*0.25,(lo+hi)*0.5,(lo+hi)*0.75,hi].map(x=>Math.abs(x)<10?Math.round(x*10)/10:Math.round(x)); return Array.from(new Set(mids)).filter(v=>String(v).includes(f)).map(v=>({v:String(v),label:String(v),sub:"value",dot:false})); }
+    return [];
+  }
+
+  // ===================== SAVED FILTERS =====================
+  seedSaved(){ return [
+    {id:"s1",name:"Hendrix Tones",query:"tag:Hendrix"},
+    {id:"s2",name:"All 5153 Rigs",query:"AMP(TYPE=5153)"},
+    {id:"s3",name:"Big Ambient Verbs",query:"REVERB(TYPE=Large Hall, MIX>30)"},
+    {id:"s4",name:"High-Gain Leads",query:"AMP(GAIN>7)  +  tag:Lead"},
+    {id:"s5",name:"Low-CPU Live Set",query:"cpu<55  +  tag:Live"},
+    {id:"s6",name:"TS-Boosted Blues",query:"DRIVE(TYPE=TS808)  +  tag:Blues"}
+  ]; }
+  loadSaved(){ try{ const j=JSON.parse(localStorage.getItem("pb.saved")||"null"); if(Array.isArray(j)&&j.length) this.setState({saved:j}); }catch(e){} }
+  persistSaved(saved){ try{ localStorage.setItem("pb.saved", JSON.stringify(saved)); }catch(e){} }
+  onApplySaved=(e)=>{ const id=e.currentTarget.dataset.id; const f=this.state.saved.find(x=>x.id===id); if(!f) return; if(!this.state.advanced){ this.setState({advanced:true},()=>{ if(this.qref) this.qref.value=f.query; this.setQuery(f.query,false); }); } else { if(this.qref) this.qref.value=f.query; this.setQuery(f.query,false); } };
+  onDupSaved=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id; const f=this.state.saved.find(x=>x.id===id); if(!f) return; const copy={id:"s"+Date.now(),name:f.name+" copy",query:f.query}; const saved=this.state.saved.concat([copy]); this.setState({saved}); this.persistSaved(saved); };
+  onDelSaved=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id; const saved=this.state.saved.filter(x=>x.id!==id); this.setState({saved}); this.persistSaved(saved); };
+  onSaveCurrent=()=>{ this._saveOpening=true; this.setState({saving:true}); };
+  saveNameRef=(el)=>{ this.saveNameEl=el; };
+  onSaveCancel=()=>{ setTimeout(()=>this.setState({saving:false}),120); };
+  onSaveNameKey=(e)=>{ if(e.key==="Escape"){ this.setState({saving:false}); return; } if(e.key!=="Enter") return; const name=e.target.value.trim(); if(!name){ this.setState({saving:false}); return; } const query = this.state.advanced ? this.curText() : this.condsToQuery(this.state.conditions); const item={id:"s"+Date.now(), name, query}; const saved=this.state.saved.concat([item]); this.setState({saving:false, saved}); this.persistSaved(saved); };
+
+  // ===================== ROW / SORT / SELECT =====================
+  onSort=(e)=>this.setState({sort:e.currentTarget.dataset.sort});
+  onRowClick=(e)=>this.setState({selected:+e.currentTarget.dataset.n});
+  onLoad=()=>{ /* visual only */ };
+
+  // ===================== HELPERS =====================
+  pad(n){ return String(n).padStart(3,"0"); }
+  fmt(v){ if(typeof v==="number"){ return Number.isInteger(v)?String(v):v.toFixed(1); } return String(v); }
+  cpuColor(c){ return c>=80?"#e87b6a":(c>=62?"#f5a623":"#33c46b"); }
+
+  // matched param keys for a block, given conds
+  matchedKeys(p,conds){ const map={}; conds.forEach(c=>{ if(c.kind!=="block"||!c.params) return; p.blocks.forEach((b,bi)=>{ if(b.type!==c.block) return; c.params.forEach(pc=>{ if(this.matchParam(b,pc)){ map[bi+":"+pc.name]=true; } }); }); }); return map; }
+
+  // ===================== RENDER =====================
+  renderVals(){
+    const S=this.state; const advanced=S.advanced; const accent=this.props.accent||"#35c9d6"; const dense=this.props.density==="compact";
+    const conds=this.activeConds();
+    const simpleQ=advanced?"":S.simpleQ;
+
+    // rail (static)
+    const railDefs=[["▦","Grid","grid",false],["◫","Layout","fc",false],["≣","Presets","preset",true],["◷","Tools","tools",false],["⚙","Setup","set",false]];
+    const rail=railDefs.map(d=>({label:d[1],icon:d[0],short:d[1].slice(0,4),style:{width:52,height:50,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,borderRadius:11,cursor:"pointer",color:d[3]?"#e9e9ee":"#7a7a84",background:d[3]?"#1c1c21":"transparent",border:d[3]?"1px solid #2e2e36":"1px solid transparent"}}));
+
+    // sorts
+    const sortDefs=[["num","#"],["name","A-Z"],["cpu","CPU"]];
+    const sorts=sortDefs.map(d=>{ const act=S.sort===d[0]; return {id:d[0],label:d[1],style:{padding:"6px 11px",borderRadius:7,fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono'",cursor:"pointer",color:act?"#0c0c0e":"#9a9aa3",background:act?accent:"transparent"}}; });
+
+    // results
+    let list=this.PRESETS.filter(p=>this.matchPreset(p,conds,simpleQ));
+    list=list.slice().sort((a,b)=> S.sort==="name"?a.name.localeCompare(b.name): S.sort==="cpu"?b.cpu-a.cpu: a.n-b.n);
+    const rowPad=dense?"9px 16px":"13px 18px";
+    const rows=list.map(p=>{ const sel=p.n===S.selected; const tags=p.tags.slice(0,3).map(t=>({label:t,style:{padding:"2px 7px",borderRadius:5,fontSize:9.5,fontWeight:700,fontFamily:"'JetBrains Mono'",letterSpacing:".02em",color:this.TAGCOL[t]||"#9a9aa3",background:(this.TAGCOL[t]||"#9a9aa3")+"1f"}}));
+      const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map(b=>{ const c=this.CAT[b.type]; const ty=b.params.TYPE; return {label:c[0]+(ty?" · "+ty:""), title:b.inst+(ty?" — "+ty:""), style:{display:"inline-flex",alignItems:"center",padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"'JetBrains Mono'",color:c[1],background:c[1]+"17",border:"1px solid "+c[1]+"33",maxWidth:160,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
+      const cc=this.cpuColor(p.cpu);
+      return { n:p.n, num:this.pad(p.n), name:p.name, author:p.author, tags, blocks,
+        cpuText:p.cpu+"%", cpuBarStyle:{width:p.cpu+"%",height:"100%",background:cc}, cpuTextStyle:{font:"700 10px/1 'JetBrains Mono'",color:cc,minWidth:30,textAlign:"right"},
+        numStyle:{font:"700 13px/1 'JetBrains Mono'",color:sel?"#f5a623":"#56565e",flex:"none",width:34},
+        style:{display:"flex",alignItems:"center",gap:14,padding:rowPad,borderBottom:"1px solid #141418",cursor:"pointer",background:sel?"rgba(53,201,214,.06)":"transparent",borderLeft:sel?"2px solid "+accent:"2px solid transparent"},
+        hoverStyle:{background:sel?"rgba(53,201,214,.08)":"#101014"} };
+    });
+    const empty=rows.length===0;
+
+    // builder chips
+    const chips=conds.map((c,ci)=>{
+      if(c.kind==="block"){ const cat=this.CAT[c.block]; const params=(c.params||[]).map((p,pi)=>({label:p.name+p.op+p.val, ci, pi, style:{display:"inline-flex",alignItems:"center",height:24,padding:"0 6px 0 9px",borderRadius:7,font:"600 11px/1 'JetBrains Mono'",color:"#e9e9ee",background:"#1f1f25"}}));
+        return { ci, isBlock:true, label:cat[0], headTitle:cat[0]+" block", headClick:this.onAddParam, dotStyle:{display:"inline-block",width:7,height:7,borderRadius:2,marginRight:7,background:cat[1]},
+          headStyle:{display:"inline-flex",alignItems:"center",height:26,padding:"0 10px",borderRadius:7,fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",background:cat[1]+"26",border:"1px solid "+cat[1]+"55"}, params };
+      }
+      const map={tag:["Tag",this.TAGCOL[c.val]||"#9a9aa3"],name:["Name","#9a9aa3"],author:["Author","#9a9aa3"],cpu:["CPU","#f5a623"],scenes:["Scenes","#4f6bed"]};
+      const meta=map[c.kind]||["?","#9a9aa3"]; const txt = c.kind==="tag"||c.kind==="name"||c.kind==="author" ? meta[0]+": "+c.val : meta[0]+" "+c.op+" "+c.val;
+      return { ci, isBlock:false, label:txt, headTitle:txt, headClick:this.stop, dotStyle:{display:"inline-block",width:7,height:7,borderRadius:"50%",marginRight:7,background:meta[1]}, headStyle:{display:"inline-flex",alignItems:"center",height:26,padding:"0 10px",borderRadius:7,fontSize:12,fontWeight:600,color:"#e9e9ee"}, params:[] };
+    }).map(c=>({ ...c, wrapStyle:{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 4px 3px 4px",borderRadius:9,background:"#121216",border:"1px solid #26262c"} }));
+    const noChips=conds.length===0; const hasChips=conds.length>0;
+
+    // saved
+    const saved=S.saved.map(f=>{ const cs=this.parseQuery(f.query); const active=this.condsToQuery(conds)===this.condsToQuery(cs) && conds.length>0; const firstBlock=cs.find(x=>x.kind==="block"); const dot=firstBlock?this.CAT[firstBlock.block][1]:(cs[0]&&cs[0].kind==="tag"?(this.TAGCOL[cs[0].val]||"#9a9aa3"):"#6e6e78");
+      return { id:f.id, name:f.name, sub:f.query||"(empty)", dotStyle:{flex:"none",width:8,height:8,borderRadius:"50%",background:dot,marginTop:4}, style:{display:"flex",alignItems:"flex-start",gap:9,padding:"9px 9px",borderRadius:10,cursor:"pointer",background:active?"rgba(53,201,214,.08)":"transparent",border:active?"1px solid "+accent+"55":"1px solid transparent"} }; });
+    const noSaved=S.saved.length===0;
+
+    // quick tags
+    const quickList=["Clean","Crunch","Hi-Gain","Lead","Ambient","Metal","Blues","Hendrix","Worship","Funk","Bass","Modern"];
+    const activeTags=conds.filter(c=>c.kind==="tag").map(c=>c.val.toLowerCase());
+    const quickTags=quickList.map(t=>{ const on=activeTags.indexOf(t.toLowerCase())>=0; const col=this.TAGCOL[t]||"#9a9aa3"; return {label:t,style:{display:"inline-flex",alignItems:"center",padding:"5px 10px",borderRadius:8,fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono'",cursor:"pointer",color:on?"#0c0c0e":col,background:on?col:col+"14",border:"1px solid "+(on?col:col+"33")}}; });
+
+    // detail
+    let detail=null;
+    if(S.selected!=null && this.PBYN[S.selected]){ const p=this.PBYN[S.selected]; const mk=this.matchedKeys(p,conds); const cc=this.cpuColor(p.cpu);
+      const chain=p.blocks.map((b,i)=>{ const c=this.CAT[b.type]; return {label:c[0],glyph:c[1+1]||c[2],title:b.inst, arrow:i<p.blocks.length-1, style:{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:7,font:"600 10.5px/1 'JetBrains Mono'",color:c[1],background:c[1]+"18",border:"1px solid "+c[1]+"33"}}; });
+      const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map((b)=>{ const realIdx=p.blocks.indexOf(b); const c=this.CAT[b.type]; const keys=Object.keys(b.params); const params=keys.map(k=>{ const matched=mk[realIdx+":"+k]; return {k, v:this.fmt(b.params[k]), style:{flex:"1 1 calc(50% - 1px)",minWidth:0,display:"flex",flexDirection:"column",gap:3,padding:"8px 11px",background:matched?"rgba(53,201,214,.10)":"#0e0e11"}, valStyle:{fontSize:12.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:matched?accent:"#e3e3e8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
+        return {name:c[0], inst:b.inst, dotStyle:{width:9,height:9,borderRadius:3,background:c[1]}, params}; });
+      detail={ num:this.pad(p.n), name:p.name, author:p.author, scenes:p.scenes, cpuText:p.cpu+"%", cpuStyle:{fontSize:11.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:cc},
+        tags:p.tags.map(t=>({label:t,style:{padding:"3px 9px",borderRadius:6,fontSize:10.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:this.TAGCOL[t]||"#9a9aa3",background:(this.TAGCOL[t]||"#9a9aa3")+"1f"}})),
+        chain, blocks, onLoad:this.onLoad };
+    }
+
+    // autocomplete styled
+    const acItems=S.acItems.map((a,i)=>({ i, label:a.label, hint:a.hint, dotStyle:{flex:"none",width:8,height:8,borderRadius:a.dot?"2px":"50%",background:a.dot?a.color:"transparent",border:a.dot?"none":"1px solid "+a.color}, style:{display:"flex",alignItems:"center",gap:10,padding:"8px 11px",borderRadius:9,cursor:"pointer",background:i===S.acIndex?"#1f1f27":"transparent"} }));
+
+    // picker
+    let picker=null; if(S.picker){ this._pickerItems=this.pickerItems(); const hi=Math.min(S.pickerHi,Math.max(0,this._pickerItems.length-1));
+      const items=this._pickerItems.map((it,i)=>({ v:it.v, label:it.label, sub:it.sub||"", dot:!!it.dot, dotStyle:{flex:"none",width:8,height:8,borderRadius:3,background:it.color||"#6e6e78"}, style:{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,cursor:"pointer",background:i===hi?"#1c1c22":"transparent"} }));
+      const titleMap={addfilter:"Add a filter",tag:"Pick a tag",author:"Pick an author",param:"Pick a parameter",value:"Pick a value"};
+      const placeMap={addfilter:"Search blocks & tokens…",tag:"Search tags…",author:"Search authors…",param:"Search parameters…",value:"Search values…"};
+      const r=S.picker.rect; const left=Math.min(Math.max(12,r.left), (typeof window!=="undefined"?window.innerWidth:1440)-312); const top=(r.bottom||200)+6;
+      picker={ style:{position:"fixed",left:left+"px",top:top+"px",width:300,maxHeight:360,background:"#141417",border:"1px solid #2e2e36",borderRadius:13,boxShadow:"0 24px 60px rgba(0,0,0,.6)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"pbPop .12s ease-out"}, title:titleMap[S.picker.kind]||"Pick", placeholder:placeMap[S.picker.kind]||"Search…", items, empty:items.length===0 };
+    }
+
+    // header bits
+    const advBtnStyle={display:"inline-flex",alignItems:"center",gap:8,height:34,padding:"0 13px",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:700,color:advanced?"#06181a":"#cfcfd6",background:advanced?accent:"#16161b",border:"1px solid "+(advanced?accent:"#2e2e36")};
+    const advDotStyle={width:8,height:8,borderRadius:"50%",background:advanced?"#06181a":"#56565e"};
+    const queryWrapStyle={display:"flex",alignItems:"center",gap:10,height:46,padding:"0 14px",background:"#101014",border:"1px solid "+(S.acOpen&&advanced?accent:"#2a2a31"),borderRadius:12,transition:"border-color .12s"};
+    const saveBtnStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"0 16px",borderRadius:12,cursor:"pointer",fontSize:12.5,fontWeight:700,color:"#cfcfd6",background:"#16161b",border:"1px solid #2e2e36",whiteSpace:"nowrap"};
+
+    return {
+      rail, sorts, onSort:this.onSort,
+      countLine: (conds.length||simpleQ) ? (list.length+" of "+this.PRESETS.length+" presets") : (this.PRESETS.length+" presets"),
+      advBtnStyle, advDotStyle, onToggleAdvanced:this.onToggleAdvanced,
+      queryRef:this.qrefCb,
+      onQueryInput:this.onQueryInput, onQueryKey:this.onQueryKey, onQueryFocus:this.onQueryFocus, onQueryBlur:this.onQueryBlur, onQuerySelect:this.onQuerySelect,
+      queryPlaceholder: advanced ? "AMP(TYPE=5153, GAIN>7)  +  REVERB(MIX>30)  +  tag:Lead" : "Search presets, tags, amps…",
+      queryWrapStyle, showClear: advanced ? !!S.query : !!S.simpleQ, onClearQuery:this.onClearQuery,
+      saveBtnStyle, onSaveCurrent:this.onSaveCurrent,
+      acOpen:S.acOpen&&advanced, acItems, acCtxLabel:S.acCtxLabel, acEmpty:S.acOpen&&advanced&&acItems.length===0, onAcDown:this.onAcDown, onAcHover:this.onAcHover,
+      chips, noChips, hasChips, noChipsHint: advanced?"Type a query above, or add filters →":"Add block, parameter & tag filters →",
+      onChipRemove:this.onChipRemove, onParamRemove:this.onParamRemove, onAddParam:this.onAddParam, onAddFilter:this.onAddFilter,
+      saved, savedCount:S.saved.length, noSaved, onApplySaved:this.onApplySaved, onDupSaved:this.onDupSaved, onDelSaved:this.onDelSaved,
+      saving:S.saving, saveNameRef:this.saveNameRef, onSaveNameKey:this.onSaveNameKey, onSaveCancel:this.onSaveCancel,
+      quickTags, onQuickTag:this.onQuickTag,
+      rows, empty, onRowClick:this.onRowClick,
+      detail, noDetail:!detail,
+      picker, onPickerClose:this.onPickerClose, onPickerSearch:this.onPickerSearch, onPickerKey:this.onPickerKey, onPickerPick:this.onPickerPick, pickerSearchRef:this.pickerSearchRef, stop:this.stop
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -67,6 +67,8 @@ export const forgefx = {
   currentPreset: () => req<PresetRef>('/preset'),
   preset: (n: number) => req<PresetRef>(`/presets/${n}`),
   grid: () => req<PresetGrid>('/preset/grid'),
+  /** AM4 (model 0x15) — its 4 slots as a 1×4 grid, rendered by the same Signal Grid. */
+  am4Grid: () => req<PresetGrid>('/am4/grid'),
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),

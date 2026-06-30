@@ -263,14 +263,14 @@ class EditorStore {
     this.swipeControls = loadSwipe();
     this.#checkUpdate();
     this.#openEvents();
-    // auto-detect the attached unit and warn if it isn't a model we have a live codec for
-    forgefx
-      .detect()
-      .then((d) => {
-        this.detected = d;
-        if (d.connected && !d.supported) this.showToast(`${d.name} detected — not yet supported (FM3 only for now)`, '#d6543f');
-      })
-      .catch(() => {});
+    // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
+    // warn if it isn't a model we have a live codec for
+    try {
+      this.detected = await forgefx.detect();
+      if (this.detected.connected && !this.detected.supported) this.showToast(`${this.detected.name} detected — not yet supported`, '#d6543f');
+    } catch {
+      /* detect failed — proceed; load() falls back to the gen-3 path */
+    }
     try {
       const n = (await forgefx.currentPreset()).number;
       if (n >= 0) this.lastPreset = n;
@@ -347,10 +347,17 @@ class EditorStore {
     }
   };
 
+  /** AM4 (model 0x15) — flat 4-slot device; render its slots on the same Signal Grid via /am4/grid. */
+  get isAm4(): boolean {
+    return this.detected?.modelId === 0x15;
+  }
+
   load = async () => {
     if (!this.everLoaded) this.status = 'loading';
     try {
-      const [grid, blocks] = await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
+      const [grid, blocks] = this.isAm4
+        ? [await forgefx.am4Grid(), []]
+        : await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
       this.layout = layoutFromGrid(grid, blocks);
       this.everLoaded = true;
       this.status = 'ready';
