@@ -2,7 +2,21 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { forgefx } from './forgefx';
-import type { PresetSummary } from './types';
+import type { PresetSummary, DecodedBlock } from './types';
+
+/** A deep param-search clause: "<family> <param> <op> <value>". Numeric ops compare the display value;
+ *  `has` matches an enum/type/model label (or any param label) by substring. */
+export interface ParamQuery {
+  /** Restrict to a block family slug (amp/reverb/…); null = any block. */
+  slug: string | null;
+  /** Param label or catalog name to match (e.g. "Gain", "Type"); case-insensitive substring. */
+  field: string;
+  op: 'gt' | 'lt' | 'eq' | 'has';
+  /** Numeric threshold for gt/lt/eq. */
+  value?: number;
+  /** Text to match for `has` (enum label / type name). */
+  text?: string;
+}
 
 export interface LibEntry {
   /** stable id: `dev:<n>` for a device preset slot, `file:<name>` for an imported .syx. */
@@ -49,6 +63,14 @@ class LibraryStore {
   tagFilter = $state<string | null>(null);
   collectionFilter = $state<string | null>(null);
   favOnly = $state(false);
+  /** Deep param-search clauses (ANDed). Only match entries whose params are available (files always;
+   *  device entries after `hydrateParams`/`deepScan`). */
+  paramQueries = $state<ParamQuery[]>([]);
+  /** In-memory hydrated device params, keyed by entry id. NOT persisted (full params for 100s of presets
+   *  would blow the localStorage quota) — re-hydrated per session via deepScan/hydrateParams. */
+  #paramsCache = $state<Record<string, DecodedBlock[]>>({});
+  hydrating = $state(false);
+  hydrateDone = $state(0);
 
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
@@ -64,6 +86,32 @@ class LibraryStore {
     return s.amps ?? []; // pre-`models` cached summaries → amp names only
   };
 
+  /** The decoded blocks for an entry, if available (embedded file params or hydrated device params). */
+  paramsOf = (e: LibEntry): DecodedBlock[] | null => e.summary.params ?? this.#paramsCache[e.id] ?? null;
+
+  /** Does an entry satisfy one param clause? Unavailable params → no match (so a param query narrows to
+   *  entries we can actually evaluate). */
+  #matchesParam = (e: LibEntry, q: ParamQuery): boolean => {
+    const blocks = this.paramsOf(e);
+    if (!blocks) return false;
+    const field = q.field.trim().toLowerCase();
+    for (const b of blocks) {
+      if (q.slug && b.slug !== q.slug) continue;
+      for (const p of b.params) {
+        if (field && !(p.label.toLowerCase().includes(field) || p.name.toLowerCase().includes(field))) continue;
+        if (q.op === 'has') {
+          const hay = `${p.enumLabel ?? ''} ${p.label} ${p.name}`.toLowerCase();
+          if (!q.text || hay.includes(q.text.trim().toLowerCase())) return true;
+        } else if (p.value != null && q.value != null) {
+          if (q.op === 'gt' && p.value > q.value) return true;
+          if (q.op === 'lt' && p.value < q.value) return true;
+          if (q.op === 'eq' && Math.abs(p.value - q.value) < 1e-6) return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // ── derived views (memoized) ──
   filtered = $derived.by(() => {
     const q = this.query.trim().toLowerCase();
@@ -74,8 +122,11 @@ class LibraryStore {
       if (this.modelFilter && !this.#allModelNames(e.summary).includes(this.modelFilter)) return false;
       if (this.tagFilter && !(this.tags[e.id] ?? []).includes(this.tagFilter)) return false;
       if (this.collectionFilter && !(this.collections[this.collectionFilter] ?? []).includes(e.id)) return false;
+      for (const pq of this.paramQueries) if (!this.#matchesParam(e, pq)) return false;
       if (q) {
-        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${this.#allModelNames(e.summary).join(' ')}`.toLowerCase();
+        const blocks = this.paramsOf(e);
+        const paramHay = blocks ? blocks.flatMap((b) => b.params.map((p) => `${p.label} ${p.enumLabel ?? ''}`)).join(' ') : '';
+        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${this.#allModelNames(e.summary).join(' ')} ${paramHay}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -162,6 +213,55 @@ class LibraryStore {
     this.entries = [...byId.values()].sort(this.#order);
     return { ok, failed };
   }
+
+  // ── deep param hydration (device presets) ──
+  /** Fetch + cache (in-memory) the full params for one device entry, so param search can evaluate it. */
+  async hydrateParams(id: string): Promise<void> {
+    if (this.#paramsCache[id]) return;
+    const e = this.entries.find((x) => x.id === id);
+    if (!e || e.source !== 'device' || e.summary.params) return;
+    try {
+      const { blocks } = await forgefx.presetParams(e.summary.number);
+      this.#paramsCache = { ...this.#paramsCache, [id]: blocks };
+    } catch {
+      /* unreadable — leave unhydrated (param queries simply won't match it) */
+    }
+  }
+  /** Hydrate every device entry's params (one-time per session) so deep search spans the whole library.
+   *  Kept in memory only — not persisted (full params for 100s of presets exceed the localStorage quota). */
+  async deepScan(): Promise<void> {
+    if (this.hydrating) return;
+    this.hydrating = true;
+    this.hydrateDone = 0;
+    try {
+      const todo = this.entries.filter((e) => e.source === 'device' && !e.summary.params && !this.#paramsCache[e.id]);
+      for (const e of todo) {
+        await this.hydrateParams(e.id);
+        this.hydrateDone++;
+      }
+    } finally {
+      this.hydrating = false;
+    }
+  }
+  /** True once every entry the param filter could apply to has its params available. */
+  paramsReady = $derived.by(() => this.entries.every((e) => e.source === 'file' || e.summary.params || this.#paramsCache[e.id]));
+
+  // ── param-query mutators (the advanced-search UI binds to these) ──
+  addParamQuery(q: ParamQuery): void {
+    this.paramQueries = [...this.paramQueries, q];
+  }
+  removeParamQuery(i: number): void {
+    this.paramQueries = this.paramQueries.filter((_, k) => k !== i);
+  }
+  clearParamQueries(): void {
+    this.paramQueries = [];
+  }
+  /** Distinct param labels across all available params — for the advanced-search field autocomplete. */
+  allParamFields = $derived.by(() => {
+    const s = new Set<string>();
+    for (const e of this.entries) for (const b of this.paramsOf(e) ?? []) for (const p of b.params) s.add(p.label);
+    return [...s].sort();
+  });
 
   #order = (a: LibEntry, b: LibEntry) => {
     if (a.source !== b.source) return a.source === 'device' ? -1 : 1;

@@ -16,7 +16,8 @@ import type {
   PresetRef,
   FcModel,
   ModModel,
-  PresetSummary
+  PresetSummary,
+  DecodedBlock
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -94,6 +95,8 @@ export const forgefx = {
     }),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
   presetSummary: (n: number) => req<PresetSummary>(`/presets/${n}/summary`),
+  /** Full per-block decoded params for a device preset (every family/param) — deep search + detail. */
+  presetParams: (n: number) => req<{ blocks: DecodedBlock[] }>(`/presets/${n}/params`),
   /** Decode a preset .syx file (raw bytes) offline → library summary. */
   decodePresetFile: async (bytes: ArrayBuffer | Uint8Array): Promise<PresetSummary> => {
     const res = await fetch(`${BASE}/preset/decode`, {
