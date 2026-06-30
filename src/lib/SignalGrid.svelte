@@ -4,6 +4,30 @@
   import { catFor, shade } from './catalog';
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
+  import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
+
+  // ── block help on hover (shown in the grid-bottom status line) ──
+  let helpText = $state<string | null>(null);
+  let helpToken = 0;
+  $effect(() => {
+    // clear cached help when the connected device changes (overrides differ)
+    resetHelpCache(editor.detected?.short ?? null);
+  });
+  async function showBlockHelp(cell: Cell) {
+    const slug = helpSlugForPack(cell.pack);
+    if (!slug) {
+      helpText = null;
+      return;
+    }
+    const token = ++helpToken;
+    const h = await blockHelp(slug);
+    if (token !== helpToken) return; // a newer hover won
+    helpText = h ? h.summary : null;
+  }
+  function clearBlockHelp() {
+    helpToken++;
+    helpText = null;
+  }
 
   // ── responsive metrics (mobile = column-density + horizontal paging) ──
   const cols = $derived(editor.layout.rows ? editor.layout.cols : 12);
@@ -416,6 +440,8 @@
                 style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.05)};"
                 onpointerdown={(e) => onBlockDown(cell, e)}
                 onwheel={(e) => onBlockWheel(cell, e)}
+                onmouseenter={() => showBlockHelp(cell)}
+                onmouseleave={clearBlockHelp}
               >
                 {#if meter}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
                 {#if cell.bypassed}<span class="hatch"></span>{/if}
@@ -482,9 +508,13 @@
       </div>
     </div>
 
-    <p class="preview mono">
-      {editor.layout.model} · {editor.layout.name || 'unnamed'} · {rows}×{cols} grid · live decode
-      {#if !editor.layout.crcValid}<span class="edit"> · edit buffer (unsaved)</span>{/if}
+    <p class="preview mono" class:help={!!helpText}>
+      {#if helpText}
+        {helpText}
+      {:else}
+        {editor.layout.model} · {editor.layout.name || 'unnamed'} · {rows}×{cols} grid · live decode
+        {#if !editor.layout.crcValid}<span class="edit"> · edit buffer (unsaved)</span>{/if}
+      {/if}
       <button class="refresh" onclick={() => editor.load()} title="Re-read the grid from the device">↻</button>
     </p>
   {/if}
@@ -912,6 +942,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .preview.help {
+    color: var(--text-dim);
+    font-style: normal;
   }
   .edit {
     color: var(--amber);
