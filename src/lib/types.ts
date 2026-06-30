@@ -100,6 +100,26 @@ export interface FcModel {
   functions: Record<string, FcFunctionDef[]>;
   channels: string[];
 }
+/** One side (tap/hold) of an FC switch from the sub-0x01 structured read. `present` = the device
+ *  returned a record matching the requested config/side; `raw` = the 78-byte response body (per-switch
+ *  record at raw[16..]; interior field offsets not yet decoded). */
+export interface FcSideState {
+  selector: number;
+  present: boolean;
+  /** true when the slot reads as unassigned (primary value region 0,0). Presence hint, not a decode. */
+  empty: boolean;
+  raw: number[];
+}
+export interface FcSwitchState {
+  effectId: number;
+  layout: number;
+  view: number;
+  switch: number;
+  config: number;
+  tap: FcSideState;
+  hold: FcSideState;
+}
+
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
   pid: number;

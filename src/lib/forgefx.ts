@@ -15,6 +15,7 @@ import type {
   PresetGrid,
   PresetRef,
   FcModel,
+  FcSwitchState,
   ModModel,
   PresetSummary,
   DecodedBlock,
@@ -143,6 +144,11 @@ export const forgefx = {
   fcModel: () => req<FcModel | null>(`/fc/model`),
   /** Modifier address model (field → paramId); null if not decoded. */
   modModel: () => req<ModModel | null>(`/mod/model`),
+  /** Current FC switch state via the sub-0x01 structured config-selector read. tap/hold each carry a
+   *  `present` flag (the device returned a record matching the requested config/side) and the raw 78-byte
+   *  response body. config/side are device-confirmed; interior field bytes are not yet decoded. */
+  fcState: (layout: number, view: number, sw: number) =>
+    req<FcSwitchState>(`/fc/state?layout=${layout}&view=${view}&switch=${sw}`),
   /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */
   modBind: (slot: number, targetEffectId: number, targetParam: number, source: number) =>
     req<{ ok: boolean; slotEid?: number; error?: string }>(`/mod/bind`, {

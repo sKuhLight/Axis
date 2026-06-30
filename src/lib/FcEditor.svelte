@@ -16,7 +16,15 @@
   let layout = $state(0);
   let view = $state(0);
   let sw = $state(0);
-  let edits = $state<Record<string, number>>({}); // local echo (FC space not bulk-readable yet)
+  let edits = $state<Record<string, number>>({}); // local echo of values written this session
+  // Device read-back via the sub-0x01 structured config-selector read (GET /fc/state). The device
+  // returns, per (config, side), a record whose config/side echo is byte-confirmed; `present` tells us
+  // the switch slot exists on the unit. The interior field bytes (category/value/label) are not yet
+  // decoded (the format is neither the write path's 5×7bit-f32 nor plain 7-bit ASCII, and could not be
+  // validated live because sub-0x09 param writes don't surface in this read), so we expose presence +
+  // the raw record but don't synthesise category/value into `cur()` — that would risk wrong values.
+  let present = $state<Record<number, { tap: boolean; hold: boolean; raw: { tap: number[]; hold: number[] } }>>({});
+  let reading = $state(false);
 
   onMount(async () => {
     try {
@@ -24,6 +32,38 @@
       if (!model) err = 'This device has no decoded Foot Controller model yet.';
     } catch (e) {
       err = (e as Error).message;
+    }
+  });
+
+  // Read the live device state for the switches of the current layout+view, so each tile can flag
+  // whether the unit actually has that switch configured. Fields stay blank until edited (see note).
+  async function loadState() {
+    if (!model) return;
+    reading = true;
+    try {
+      const n = model.switches;
+      const states = await Promise.all(
+        Array.from({ length: n }, (_, i) => forgefx.fcState(layout, view, i).catch(() => null))
+      );
+      const next = { ...present };
+      states.forEach((s) => {
+        if (!s) return;
+        // a switch is "configured on the unit" when either side reads non-empty
+        next[s.config] = { tap: !s.tap.empty, hold: !s.hold.empty, raw: { tap: s.tap.raw, hold: s.hold.raw } };
+      });
+      present = next;
+    } catch (e) {
+      editor.showToast('FC read failed: ' + (e as Error).message, '#ff6b6b');
+    } finally {
+      reading = false;
+    }
+  }
+  $effect(() => {
+    // re-read whenever the model loads or the layout/view changes
+    if (model) {
+      void layout;
+      void view;
+      loadState();
     }
   });
 
@@ -90,13 +130,14 @@
     await write(side + 'Function', 0);
   }
 
-  // Nav setters. (Live FC state read-back via per-pid GET is wired server-side at
-  // POST /preset/blocks/199/read, but the GET-response value decode still returns a constant in
-  // testing — left disabled here so the editor shows clean defaults rather than wrong values.
-  // The editor is write-only for now; read-back is the documented follow-up.)
+  // Nav setters. Live FC read-back uses the sub-0x01 structured config-selector read (GET /fc/state):
+  // it confirms which switch slots are configured on the unit (the `present` map drives the tile
+  // badge). Field-value read-back (category/value/label) awaits a decode of the structured record's
+  // interior bytes — until then those controls stay blank-until-edited, by design.
   const selLayout = (i: number) => (layout = i);
   const selView = (i: number) => (view = i);
   const selSwitch = (i: number) => (sw = i);
+  const onDevice = (cfg: number) => present[cfg];
 </script>
 
 <section class="fc" style="--c:{ACC}">
@@ -134,6 +175,9 @@
           <button class="swtile" class:on={sw === i} onclick={() => selSwitch(i)}>
             <span class="led" style="background:{col}"></span>
             <span class="swnum mono">{i + 1}</span>
+            {#if onDevice(cfg)?.tap || onDevice(cfg)?.hold}
+              <span class="ondev mono" title="Configured on the device (live read)">●&nbsp;on unit</span>
+            {/if}
             <span class="swcat">{catName(cur('tapCategory', cfg))}</span>
             <span class="swhold mono">HOLD · {catName(cur('holdCategory', cfg))}</span>
           </button>
@@ -230,7 +274,13 @@
           </div>
         </div>
 
-        <p class="note">Edits write to the FM3 immediately. Bank/Preset/Scene/Effect are fully modelled (function + typed value-slots); other categories show raw fields until decoded. State read-back is pending (FC space isn't bulk-readable yet).</p>
+        <p class="note">
+          Edits write to the FM3 immediately. Bank/Preset/Scene/Effect are fully modelled (function +
+          typed value-slots); other categories show raw fields until decoded. A live read of the unit
+          {#if reading}is in progress…{:else}flags which switches are configured on the device (the
+          “on unit” badge){/if}; per-field value read-back (category/value/label) awaits a decode of the
+          structured read's interior bytes.
+        </p>
       </div>
     </div>
   {/if}
@@ -363,6 +413,14 @@
     right: 11px;
     font-size: 10px;
     color: #6e6e78;
+  }
+  .ondev {
+    position: absolute;
+    top: 9px;
+    left: 11px;
+    font-size: 9px;
+    color: #5fb878;
+    letter-spacing: 0.02em;
   }
   .swcat {
     font-size: 13px;
