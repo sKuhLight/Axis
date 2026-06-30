@@ -103,17 +103,17 @@
           <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
         </div>
         <div class="div"></div>
+        <div class="st cpu" title="Device link round-trip latency">
+          <span class="mono st-lbl">LINK</span>
+          <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
+          <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
+        </div>
         {#if cpu != null}
+          <div class="div"></div>
           <div class="st cpu" title="Live CPU load (decoded from the device meters frame)">
             <span class="mono st-lbl">CPU</span>
             <div class="bar"><div class="fill" style="width:{pk(cpu / 100)}%; background:{cpuColor}"></div></div>
             <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
-          </div>
-        {:else}
-          <div class="st cpu" title="Device link round-trip latency">
-            <span class="mono st-lbl">LINK</span>
-            <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
-            <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
           </div>
         {/if}
         {#if lv}
