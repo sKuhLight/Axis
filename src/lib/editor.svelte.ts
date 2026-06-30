@@ -39,6 +39,8 @@ class EditorStore {
   blockLayout = $state<DeviceLayout | null>(null);
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
+  /** True when the full Preset Browser rail screen is open (replaces the grid/editor view). */
+  inLibrary = $state(false);
 
   // ── view + chrome ──
   globalMode = $state<ViewMode>('basic');
@@ -424,13 +426,23 @@ class EditorStore {
   // Return to the Signal Grid (Build) from any rail/virtual screen.
   openBuild = () => {
     this.virtual = null;
+    this.inLibrary = false;
     this.railActive = 'build';
+  };
+
+  // Open the full Preset Browser (its own rail screen — replaces the grid/editor view).
+  openLibrary = () => {
+    this.virtual = null;
+    this.editorOpen = false;
+    this.inLibrary = true;
+    this.railActive = 'library';
   };
 
   // Open a virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) as a rail screen. Same param
   // path as a block — "the block editor pointed at effectId N" — rendered full-view by VirtualScreen.
   openVirtual = async (eid: number, slug: string, name: string) => {
     this.virtual = { eid, slug, name };
+    this.inLibrary = false;
     this.selKey = null;
     this.editorOpen = false;
     this.editingTabs = false;

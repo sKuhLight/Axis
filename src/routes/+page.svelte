@@ -6,6 +6,7 @@
   import SignalGrid from '$lib/SignalGrid.svelte';
   import BlockEditor from '$lib/BlockEditor.svelte';
   import VirtualScreen from '$lib/VirtualScreen.svelte';
+  import PresetBrowser from '$lib/PresetBrowser.svelte';
   import FcEditor from '$lib/FcEditor.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
   import CabPicker from '$lib/CabPicker.svelte';
@@ -51,7 +52,9 @@
   <ToolRail />
   <div class="main">
     <TopBar />
-    {#if editor.virtual?.slug === 'fc'}
+    {#if editor.inLibrary}
+      <PresetBrowser />
+    {:else if editor.virtual?.slug === 'fc'}
       <FcEditor />
     {:else if editor.virtual}
       <VirtualScreen />
