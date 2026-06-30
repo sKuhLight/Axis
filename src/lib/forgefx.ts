@@ -98,7 +98,7 @@ export const forgefx = {
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),
-  cloudSync: () => req<{ pushed: number; pulled: number }>('/cloud/sync', { method: 'POST' }),
+  cloudSync: () => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST' }),
   // ── persistent store (Axis config / metadata) ──
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data }) }),

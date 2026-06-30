@@ -376,7 +376,8 @@ class EditorStore {
     this.cloud.note = null;
     try {
       const r = await forgefx.cloudSync();
-      this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${r.pushed} ↓${r.pulled}` };
+      const up = r.config.pushed + r.versions.pushed, down = r.config.pulled + r.versions.pulled;
+      this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${up} ↓${down}` };
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Sync failed';
     } finally {
