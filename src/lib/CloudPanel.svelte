@@ -127,6 +127,14 @@
             {#if c.note}<p class="note">{c.note}</p>{/if}
           </div>
 
+          <button class="item auto" onclick={() => editor.setAutoSync(!c.autoSync)}>
+            <span class="chk" class:on={c.autoSync}>{#if c.autoSync}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+            <span class="item-body">
+              <span class="item-label">Auto-sync</span>
+              <span class="item-desc">Sync changes to the cloud automatically, shortly after you make them</span>
+            </span>
+          </button>
+
           <div class="items">
             {#each SCOPES as s}
               <button class="item" onclick={() => editor.setCloudScope(s.id, !c.scopes[s.id])}>
@@ -245,6 +253,7 @@
   .item { display: flex; align-items: center; gap: 13px; padding: 11px 2px; cursor: pointer; background: none; border: none; text-align: left; }
   .item:disabled { opacity: 0.55; cursor: default; }
   .item.backup { padding: 13px 2px; margin-top: 4px; border-top: 1px solid #1d1d22; align-items: flex-start; }
+  .item.auto { align-items: flex-start; }
   .chk { width: 20px; height: 20px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #3a3a44; color: transparent; font: 700 12px/1 sans-serif; }
   .chk.on { background: #35c9d6; border-color: #35c9d6; color: #06181a; }
   .chk.action { background: #141417; border-color: #26262c; color: #35c9d6; }

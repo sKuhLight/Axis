@@ -5,6 +5,7 @@
 import { forgefx, ForgeError } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
+import { onMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
@@ -20,6 +21,8 @@ function loadScopes(): CloudScopes {
   catch { return { presets: true, scenes: true, fc: true, settings: true }; }
 }
 const saveScopes = (s: CloudScopes) => { try { localStorage.setItem(SCOPES_KEY, JSON.stringify(s)); } catch { /* */ } };
+const AUTOSYNC_KEY = 'axs.cloud.autosync';
+const loadAutoSync = (): boolean => { try { return localStorage.getItem(AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
 const EMPTY: Layout = { cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true };
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
@@ -128,8 +131,9 @@ class EditorStore {
     plan: string;
     scopes: { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
     fullBackup: boolean;
+    autoSync: boolean;
     pendingEmail: string | null;
-  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', scopes: loadScopes(), fullBackup: false, pendingEmail: null });
+  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
   cloudOpen = $state(false);
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
@@ -359,7 +363,7 @@ class EditorStore {
   // ── preset versions / backup ──
   /** Snapshot the given device preset into the version store. */
   backupPreset = async (n: number) => {
-    try { await forgefx.snapshotPreset(n); this.showToast(`Backed up preset ${n}`, '#33c46b'); library.refreshSlot(n); }
+    try { await forgefx.snapshotPreset(n); this.showToast(`Backed up preset ${n}`, '#33c46b'); library.refreshSlot(n); this.scheduleAutoSync(); }
     catch (e) { this.showToast('Backup failed: ' + (e as Error).message, '#d6543f'); }
   };
   /** Load a stored version straight into the edit buffer (plays it without occupying a slot). */
@@ -374,7 +378,10 @@ class EditorStore {
   };
 
   // ── cloud sync ──
+  #autoSyncT: ReturnType<typeof setTimeout> | null = null;
   #initCloud = async () => {
+    // Any local config/version mutation (tags, collections, layouts, snapshots…) nudges a debounced sync.
+    onMutation(() => this.scheduleAutoSync());
     try {
       const s = await forgefx.cloudStatus();
       this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null };
@@ -382,6 +389,17 @@ class EditorStore {
     } catch {
       /* cloud disabled / engine not ready */
     }
+  };
+  /** Debounced background sync after a local change — batches rapid edits, skips if signed-out/off/in-flight. */
+  scheduleAutoSync = () => {
+    if (!this.cloud.enabled || !this.cloud.user || !this.cloud.autoSync) return;
+    if (this.#autoSyncT) clearTimeout(this.#autoSyncT);
+    this.#autoSyncT = setTimeout(() => { if (!this.cloud.syncing) this.cloudSync(); }, 8000);
+  };
+  setAutoSync = (on: boolean) => {
+    this.cloud = { ...this.cloud, autoSync: on };
+    try { localStorage.setItem(AUTOSYNC_KEY, on ? '1' : '0'); } catch { /* */ }
+    if (on) this.scheduleAutoSync();
   };
   cloudLogin = async (email: string, password: string) => {
     this.cloud.note = null;
