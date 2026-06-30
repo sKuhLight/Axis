@@ -10,6 +10,7 @@
   import { library } from './library.svelte';
   import { forgefx } from './forgefx';
   import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
+  import { notifyMutation } from './syncBus';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
@@ -740,6 +741,7 @@
   function persistSaved() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* */ }
     forgefx.putDoc('config', 'savedFilters', saved).catch(() => {}); // mirror to the unified store (sync-ready)
+    notifyMutation(); // nudge debounced cloud auto-sync
   }
   function applySaved(f: Saved) { if (!advanced) advanced = true; query = f.query; closeAc(); }
   function delSaved(id: string) { saved = saved.filter((x) => x.id !== id); persistSaved(); }

@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { forgefx } from './forgefx';
 import { idb } from './idb';
+import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
@@ -73,6 +74,7 @@ const persist = (key: string, v: unknown) => {
 const persistCfg = (cfgId: 'tags' | 'collections' | 'favs', lsKey: string, v: unknown) => {
   persist(lsKey, v);
   forgefx.putDoc('config', cfgId, v).catch(() => {});
+  notifyMutation(); // nudge debounced cloud auto-sync
 };
 
 class LibraryStore {
