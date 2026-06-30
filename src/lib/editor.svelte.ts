@@ -156,9 +156,10 @@ class EditorStore {
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
   // upload is per-incident consent and works even when `consent` is false.
-  telemetry = $state<{ enabled: boolean; uploadEnabled: boolean; consent: boolean; instanceId: string; sending: boolean }>(
-    { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), sending: false }
+  telemetry = $state<{ enabled: boolean; uploadEnabled: boolean; consent: boolean; instanceId: string; faroUrl: string; sending: boolean }>(
+    { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), faroUrl: '', sending: false }
   );
+  #faroStarted = false;
   telemetryOpen = $state(false);
   // Major-error → "Upload Debug Log" prompt. Set by offerDebugReport (debounced per category); the
   // DiagnosticsPanel renders it as a dismissible card with an explicit Upload button.
@@ -437,14 +438,25 @@ class EditorStore {
   #initTelemetry = async () => {
     try {
       const s = await forgefx.telemetryStatus();
-      this.telemetry = { ...this.telemetry, enabled: s.enabled, uploadEnabled: s.uploadEnabled };
-      // Live Faro RUM init lands here in a later phase — gated by (s.enabled && this.telemetry.consent),
-      // dynamic-imported so it stays out of builds where the operator didn't enable telemetry.
+      this.telemetry = { ...this.telemetry, enabled: s.enabled, uploadEnabled: s.uploadEnabled, faroUrl: s.faroUrl };
+      await this.#startFaro();
     } catch { /* telemetry disabled / engine not ready */ }
+  };
+  /** Start live Faro RUM iff the operator enabled it, the user consented, and we have a collector URL.
+   *  Dynamic-imported so the SDK never loads for users/builds without telemetry. Idempotent. */
+  #startFaro = async () => {
+    const t = this.telemetry;
+    if (this.#faroStarted || !t.enabled || !t.consent || !t.faroUrl) return;
+    this.#faroStarted = true;
+    try {
+      const { initFaro } = await import('./faro');
+      await initFaro({ url: t.faroUrl, version: __APP_VERSION__, instanceId: t.instanceId });
+    } catch { this.#faroStarted = false; /* offline / blocked — never let telemetry break the app */ }
   };
   setTelemetryConsent = (on: boolean) => {
     this.telemetry = { ...this.telemetry, consent: on };
     try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); } catch { /* */ }
+    if (on) this.#startFaro(); // opting in mid-session starts RUM immediately
   };
   /** On a major error (device-comm 5xx, detect failure, render crash), nudge the user to upload a debug
    *  report — debounced to at most once per category per 5 min so it never spams. The actual upload is an
