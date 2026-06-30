@@ -88,17 +88,24 @@
       editor.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
     }
   }
+  // Custom-label display-mode ordinal (capture-confirmed = 2). A switch only renders custom text when
+  // its display mode is "Custom"; FM3-Edit sets that mode alongside the chars, so we do too — otherwise
+  // the characters are stored but never shown.
+  const customMode = $derived(model ? +(Object.entries(model.labelModes).find(([, v]) => v === 'Custom')?.[0] ?? 2) : 2);
   async function writeLabel(field: string, text: string) {
     if (!model) return;
     edits = { ...edits, [ek(field)]: text.length };
     const base = pidOf(field);
     for (let i = 0; i < model.labelLen; i++) {
       try {
+        // each char is its own SET: pid = labelBase + i, value = float32(ASCII code), 0-padded
         await forgefx.setParam(model.effectId, base + i, i < text.length ? text.charCodeAt(i) : 0, false);
       } catch {
         /* */
       }
     }
+    // put the switch into Custom display mode so the text actually shows (the side is the field prefix)
+    if (text.length) await write(field.replace(/Label$/, 'Display'), customMode);
   }
   const layoutLabel = (i: number) => (i === 8 ? 'Master' : String(i + 1));
   const catName = (v: number | undefined) => (v != null ? (model?.categories[String(v)] ?? 'Cat ' + v) : '—');
