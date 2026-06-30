@@ -4,7 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('axisDesktop', {
   isDesktop: true,
-  version: process.env.npm_package_version ?? null
+  version: process.env.npm_package_version ?? null,
+  // read this session's debug log (axis-debug.txt) for the "Upload Debug Log" report; '' if unavailable
+  readDebugLog: () => ipcRenderer.invoke('axis:read-debug-log')
 });
 
 // auto-update bridge: subscribe to status events + trigger check/download/install
