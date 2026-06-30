@@ -133,7 +133,11 @@ export interface PresetSummary {
   crcValid: boolean;
   scenes: string[];
   blocks: PresetSummaryBlock[];
-  /** Distinct amp-model names used (across the amp's channels) — for "presets using amp X". */
+  /** Distinct model names in use per block family (amp/drive/cab/reverb/…) — for "presets using model X".
+   *  Keyed by family slug; only families with a decoded model are present. */
+  models: Record<string, string[]>;
+  /** Distinct amp-model names used (across the amp's channels) — for "presets using amp X".
+   *  Back-compat alias of `models.amp`. */
   amps: string[];
 }
 
