@@ -85,9 +85,14 @@
   {/each}
   <div class="spacer"></div>
   {#if editor.cloud.enabled}
-    <button class="item" class:active={editor.cloudOpen} title={editor.cloud.user ? `Cloud · ${editor.cloud.user.email}` : 'Cloud sync — sign in'} onclick={() => (editor.cloudOpen = true)}>
-      <span class="ic">☁</span>
-      <span class="sh">{editor.cloud.user ? 'Synced' : 'Cloud'}</span>
+    <button class="item acct" class:active={editor.cloudOpen} title={editor.cloud.user ? `Account · ${editor.cloud.user.email}` : 'Cloud sync — sign in'} onclick={() => (editor.cloudOpen = true)}>
+      {#if editor.cloud.user}
+        <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
+        {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
+      {:else}
+        <span class="ic">☁</span>
+      {/if}
+      <span class="sh">{editor.cloud.user ? 'Account' : 'Cloud'}</span>
     </button>
   {/if}
   <button class="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
@@ -160,6 +165,27 @@
     color: var(--accent);
     background: rgba(53, 201, 214, 0.12);
     border-color: rgba(53, 201, 214, 0.3);
+  }
+  .acct { position: relative; }
+  .av {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent, #35c9d6);
+    color: #06181a;
+    font: 800 11px/28px 'JetBrains Mono', monospace;
+    text-align: center;
+  }
+  .syncdot {
+    position: absolute;
+    top: 6px;
+    right: 9px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f5a623;
+    border: 2px solid var(--surface, #0f0f12);
+    box-shadow: 0 0 6px #f5a623;
   }
   .ic {
     font-size: 19px;

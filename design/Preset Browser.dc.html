@@ -56,6 +56,15 @@
         <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.04em;">{{ countLine }}</span>
       </div>
       <div style="flex:1;"></div>
+      <!-- device filter -->
+      <div style="display:flex; align-items:center; gap:7px;">
+        <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em;">DEVICE</span>
+        <div onClick="{{ onDeviceFilter }}" title="Filter by Fractal device model" style="{{ deviceBtnStyle }}" style-hover="border-color:#3f3f48;">
+          <span style="{{ deviceDotStyle }}"></span>
+          <span>{{ deviceLabel }}</span>
+          <span style="font-size:10px; color:#56565e;">▾</span>
+        </div>
+      </div>
       <!-- sort -->
       <div style="display:flex; align-items:center; gap:7px;">
         <span style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em;">SORT</span>
@@ -148,6 +157,20 @@
       <!-- SAVED SIDEBAR -->
       <div class="pb-scroll" style="width:248px; flex:none; border-right:1px solid #17171c; background:#0b0b0d; overflow-y:auto; display:flex; flex-direction:column;">
         <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 16px 9px;">
+          <span style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">LIBRARY</span>
+          <span style="display:inline-flex; align-items:center; gap:5px; font:600 9px/1 'JetBrains Mono'; color:#33c46b;"><span style="width:6px; height:6px; border-radius:50%; background:#33c46b; box-shadow:0 0 6px #33c46b;"></span>{{ cloudSummary }}</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px; padding:0 9px 12px;">
+          <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+            <div data-view="{{ v.id }}" onClick="{{ onView }}" style="{{ v.style }}" style-hover="background:#15151a;">
+              <span style="{{ v.glyphStyle }}">{{ v.glyph }}</span>
+              <span style="flex:1; font-size:12.5px; font-weight:700; color:#e9e9ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ v.label }}</span>
+              <span style="{{ v.countStyle }}">{{ v.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:1px; background:#17171c; margin:0 14px 12px;"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:0 16px 9px;">
           <span style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">SAVED FILTERS</span>
           <span style="font:600 10px/1 'JetBrains Mono'; color:#4a4a52;">{{ savedCount }}</span>
         </div>
@@ -185,12 +208,29 @@
       <!-- RESULTS -->
       <div class="pb-scroll" style="flex:1; min-width:0; overflow-y:auto; background:#0c0c0e;">
         <div style="display:flex; flex-direction:column;">
+          <sc-if value="{{ hasMarked }}" hint-placeholder-val="{{ false }}">
+          <div style="position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:9px; padding:10px 18px; background:#101014; border-bottom:1px solid #23232b; box-shadow:0 6px 16px rgba(0,0,0,.35);">
+            <span style="font:700 11px/1 'JetBrains Mono'; color:#35c9d6;">{{ selCount }} selected</span>
+            <span style="flex:1;"></span>
+            <div data-act="export" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:#cfcfd6; background:#16161b; border:1px solid #2e2e36;" style-hover="border-color:#3f3f48; color:#fff;">⤓ Export</div>
+            <div data-act="upload" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:#cfcfd6; background:#16161b; border:1px solid #2e2e36;" style-hover="border-color:#3f3f48; color:#fff;">☁ Back up</div>
+            <div data-act="removeDevice" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:#cfcfd6; background:#16161b; border:1px solid #2e2e36;" style-hover="border-color:#3f3f48; color:#fff;">Remove</div>
+            <div data-act="delete" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:#e87b6a; background:#1f1315; border:1px solid #3a1f1f;" style-hover="border-color:#5a2d2d; color:#fff;">Delete</div>
+            <div onClick="{{ clearMarks }}" title="Clear selection" style="flex:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; color:#8a8a94; font-size:15px;" style-hover="background:#1c1c22; color:#e9e9ee;">✕</div>
+          </div>
+          </sc-if>
           <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
-            <div data-n="{{ row.n }}" onClick="{{ onRowClick }}" style="{{ row.style }}" style-hover="{{ row.hoverStyle }}">
+            <div data-n="{{ row.n }}" onClick="{{ onRowClick }}" onContextMenu="{{ onRowContext }}" style="{{ row.style }}" style-hover="{{ row.hoverStyle }}">
+              <span data-n="{{ row.n }}" onClick="{{ onCheckClick }}" title="Select" style="{{ row.checkStyle }}">{{ row.checkMark }}</span>
               <span style="{{ row.numStyle }}">{{ row.num }}</span>
               <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; align-items:center; gap:9px;">
+                  <sc-if value="{{ row.renaming }}" hint-placeholder-val="{{ false }}">
+                  <input ref="{{ renameRef }}" onClick="{{ stop }}" onKeyDown="{{ onRenameKey }}" onBlur="{{ onRenameBlur }}" defaultValue="{{ row.name }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:#101014; border:1px solid #35c9d6; border-radius:7px; padding:5px 9px; color:#e9e9ee; font-size:14px; font-weight:700; outline:none;">
+                  </sc-if>
+                  <sc-if value="{{ row.notRenaming }}" hint-placeholder-val="{{ true }}">
                   <span style="font-size:14.5px; font-weight:700; color:#e9e9ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.name }}</span>
+                  </sc-if>
                   <sc-for list="{{ row.tags }}" as="tg" hint-placeholder-count="2">
                     <span style="{{ tg.style }}">{{ tg.label }}</span>
                   </sc-for>
@@ -202,6 +242,10 @@
                 </div>
               </div>
               <div style="flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="{{ row.deviceChipStyle }}">{{ row.device }}</span>
+                  <span style="{{ row.cloudChipStyle }}" title="{{ row.cloudTitle }}">{{ row.cloudChipText }}</span>
+                </div>
                 <span style="font:600 9.5px/1 'JetBrains Mono'; color:#6e6e78;">{{ row.author }}</span>
                 <div style="display:flex; align-items:center; gap:7px;">
                   <span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.06em;">CPU</span>
@@ -240,9 +284,51 @@
               <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">AUTHOR</span><span style="font-size:11.5px; font-weight:600; color:#cfcfd6;">{{ detail.author }}</span></div>
               <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">SCENES</span><span style="font-size:11.5px; font-weight:600; color:#cfcfd6;">{{ detail.scenes }}</span></div>
               <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">CPU</span><span style="{{ detail.cpuStyle }}">{{ detail.cpuText }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">DEVICE</span><span style="{{ detail.deviceStyle }}">{{ detail.device }}</span></div>
             </div>
-            <div onClick="{{ onLoad }}" style="display:flex; align-items:center; justify-content:center; gap:8px; height:42px; border-radius:11px; background:#f5a623; color:#1a1206; font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.01em;" style-hover="filter:brightness(1.08);">
-              <span style="font-size:14px;">↓</span> Load preset
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:13px; padding:10px 12px; background:#0e0e11; border:1px solid #1f1f25; border-radius:11px;">
+              <span style="{{ detail.cloud.chipStyle }}">{{ detail.cloud.chipText }}</span>
+              <span style="flex:1; min-width:0; font:600 10.5px/1.5 'JetBrains Mono'; color:#8a8a94;">{{ detail.cloud.statusLine }}</span>
+            </div>
+            <div style="display:flex; gap:9px;">
+              <div onClick="{{ onLoad }}" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:42px; border-radius:11px; background:#f5a623; color:#1a1206; font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.01em;" style-hover="filter:brightness(1.08);">
+                <span style="font-size:14px;">↓</span> {{ detail.cloud.loadLabel }}
+              </div>
+              <sc-if value="{{ detail.cloud.hasAction }}" hint-placeholder-val="{{ false }}">
+              <div data-pn="{{ detail.n }}" data-kind="{{ detail.cloud.actionKind }}" onClick="{{ onCloudAction }}" title="{{ detail.cloud.actionTitle }}" style="{{ detail.cloud.actionStyle }}" style-hover="filter:brightness(1.08);">{{ detail.cloud.actionLabel }}</div>
+              </sc-if>
+            </div>
+            <div onClick="{{ onConvertOpen }}" title="Convert this preset for another Fractal device" style="display:flex; align-items:center; justify-content:center; gap:7px; margin-top:9px; height:36px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700; color:#9a9aa3; background:transparent; border:1px solid #26262c;" style-hover="border-color:#3f3f48; color:#e9e9ee;">⇄ Convert for another device</div>
+          </div>
+          <!-- version history -->
+          <div style="padding:16px 20px; border-bottom:1px solid #17171c;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+              <span style="font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">VERSION HISTORY</span>
+              <span style="flex:1;"></span>
+              <span style="font:600 9px/1 'JetBrains Mono'; color:#4a4a52;">{{ detail.cloud.versionCount }}</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <sc-for list="{{ detail.cloud.versions }}" as="v" hint-placeholder-count="3">
+                <div style="{{ v.rowStyle }}">
+                  <span style="{{ v.dotStyle }}"></span>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px;">
+                    <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+                      <span style="font:700 11.5px/1 'JetBrains Mono'; color:#e9e9ee;">{{ v.v }}</span>
+                      <sc-for list="{{ v.badges }}" as="bd" hint-placeholder-count="0">
+                        <span style="{{ bd.style }}">{{ bd.label }}</span>
+                      </sc-for>
+                    </div>
+                    <span style="font-size:11.5px; color:#9a9aa3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ v.note }}</span>
+                    <span style="font:500 9.5px/1 'JetBrains Mono'; color:#56565e;">{{ v.meta }}</span>
+                  </div>
+                  <sc-if value="{{ v.canRevert }}" hint-placeholder-val="{{ true }}">
+                  <div data-pn="{{ detail.n }}" data-vi="{{ v.idx }}" onClick="{{ onRevert }}" title="Restore this version to device" style="flex:none; align-self:center; padding:0 11px; height:30px; display:flex; align-items:center; border-radius:8px; cursor:pointer; font-size:11px; font-weight:700; color:#cfcfd6; background:#16161b; border:1px solid #2e2e36;" style-hover="border-color:#3f3f48; color:#fff;">Restore</div>
+                  </sc-if>
+                  <sc-if value="{{ v.isCurrent }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex:none; align-self:center; font:700 8.5px/1 'JetBrains Mono'; color:#33c46b; letter-spacing:.06em;">ON DEVICE</span>
+                  </sc-if>
+                </div>
+              </sc-for>
             </div>
           </div>
           <!-- signal chain -->
@@ -319,6 +405,56 @@
   </div>
   </sc-if>
 
+  <!-- ===================== CONTEXT MENU ===================== -->
+  <sc-if value="{{ ctx }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ closeCtx }}" onContextMenu="{{ ctxPrevent }}" style="position:fixed; inset:0; z-index:380; animation:pbFade .08s;">
+    <div onMouseDown="{{ stop }}" onContextMenu="{{ ctxPrevent }}" style="{{ ctx.style }}">
+      <sc-if value="{{ ctx.title }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:7px 11px 6px; font:700 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.1em;">{{ ctx.title }}</div>
+      </sc-if>
+      <sc-for list="{{ ctx.items }}" as="m" hint-placeholder-count="6">
+        <sc-if value="{{ m.divider }}" hint-placeholder-val="{{ false }}">
+        <div style="height:1px; background:#232329; margin:5px 8px;"></div>
+        </sc-if>
+        <sc-if value="{{ m.isItem }}" hint-placeholder-val="{{ true }}">
+        <div data-act="{{ m.id }}" onClick="{{ onCtxAction }}" style="{{ m.style }}" style-hover="{{ m.hover }}">
+          <span style="{{ m.glyphStyle }}">{{ m.glyph }}</span>
+          <span style="flex:1;">{{ m.label }}</span>
+          <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e;">{{ m.hint }}</span>
+        </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== CONFIRM DIALOG ===================== -->
+  <sc-if value="{{ confirm }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ onConfirmNo }}" style="position:fixed; inset:0; z-index:420; background:rgba(6,6,8,.66); display:flex; align-items:center; justify-content:center; padding:20px; animation:pbFade .1s;">
+    <div onMouseDown="{{ stop }}" style="width:400px; max-width:100%; background:#161619; border:1px solid #2e2e36; border-radius:16px; box-shadow:0 32px 80px rgba(0,0,0,.6); overflow:hidden; animation:pbPop .15s ease-out;">
+      <div style="padding:22px 22px 18px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:13px;">
+          <span style="{{ confirm.iconStyle }}">{{ confirm.icon }}</span>
+          <span style="font-size:17px; font-weight:800; color:#fff;">{{ confirm.title }}</span>
+        </div>
+        <div style="font-size:13px; line-height:1.6; color:#9a9aa3;">{{ confirm.message }}</div>
+      </div>
+      <div style="display:flex; gap:10px; padding:0 22px 22px;">
+        <div onClick="{{ onConfirmNo }}" style="flex:1; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; cursor:pointer; font-size:13px; font-weight:700; color:#cfcfd6; background:#1c1c21; border:1px solid #2e2e36;" style-hover="border-color:#3f3f48; color:#fff;">Cancel</div>
+        <div onClick="{{ onConfirmYes }}" style="{{ confirm.yesStyle }}" style-hover="filter:brightness(1.08);">{{ confirm.confirmLabel }}</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== TOAST ===================== -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:400; display:flex; align-items:center; gap:10px; padding:11px 16px; background:#1c1c21; border:1px solid #2e2e36; border-radius:11px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:pbPop .14s ease-out;">
+    <span style="{{ toast.dot }}"></span>
+    <span style="font-size:12.5px; font-weight:600; color:#e9e9ee;">{{ toast.text }}</span>
+  </div>
+  </sc-if>
+
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#35c9d6&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#35c9d6&quot;,&quot;#f5a623&quot;,&quot;#9b8cf0&quot;,&quot;#33c46b&quot;],&quot;section&quot;:&quot;Appearance&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;comfortable&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;advancedDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
@@ -367,8 +503,12 @@ class Component extends DCLogic {
     this.TAGS=["Clean","Crunch","Hi-Gain","Lead","Rhythm","Ambient","Bass","Acoustic","Blues","Metal","Djent","Country","Funk","Jazz","Worship","Hendrix","SRV","Gilmour","80s","Modern","Live","Fuzz"];
     this.TAGCOL={Clean:"#35c9d6",Crunch:"#f5a623","Hi-Gain":"#d6543f",Lead:"#d65b9e",Rhythm:"#9a9aa3",Ambient:"#9b8cf0",Bass:"#4f6bed",Acoustic:"#7fae4a",Blues:"#4a82e0",Metal:"#d6543f",Djent:"#c95bc0",Country:"#b3a52b",Funk:"#2fb0c9",Jazz:"#3fa890",Worship:"#9b8cf0",Hendrix:"#f5a623",SRV:"#d98a2b",Gilmour:"#35c9d6","80s":"#c95bc0",Modern:"#8a6fd6",Live:"#33c46b",Fuzz:"#d6543f"};
 
+    this.DEVICES=["Axe-Fx III","FM9","FM3"];
+    this.DEVCOL={"Axe-Fx III":"#4f6bed","FM9":"#2fb0c9","FM3":"#d98a2b","all":"#9a9aa3"};
+    this.DEVSHORT={"Axe-Fx III":"Axe-Fx III","FM9":"FM9","FM3":"FM3"};
     this.PRESETS = this.buildPresets();
     this.PBYN={}; this.PRESETS.forEach(p=>this.PBYN[p.n]=p);
+    this.buildCloud();
 
     const adv = props && props.advancedDefault===false ? false : true;
     this.state = {
@@ -377,7 +517,10 @@ class Component extends DCLogic {
       acOpen:false, acItems:[], acIndex:0, acCtxLabel:"",
       picker:null, pickerSearch:"", pickerHi:0,
       saving:false,
-      saved: this.seedSaved()
+      saved: this.seedSaved(),
+      cloudOverride:{}, view:"all", toast:null,
+      marked:{}, anchorN:null, renaming:null, renames:{}, deleted:{}, ctx:null,
+      deviceFilter:"all", confirm:null
     };
     this._caret=0;
   }
@@ -607,8 +750,8 @@ class Component extends DCLogic {
   onQuickTag=(e)=>{ const tag=e.currentTarget.dataset.tag; this.editConds(c=>{ const i=c.findIndex(x=>x.kind==="tag"&&x.val.toLowerCase()===tag.toLowerCase()); if(i>=0) c.splice(i,1); else c.push({kind:"tag",val:tag}); }); };
 
   // ===================== PICKERS =====================
-  openPicker(kind,ctx,anchorEl){ const rect=anchorEl?anchorEl.getBoundingClientRect():{left:300,bottom:200}; this._pickerOpening=true; this.setState({picker:{kind,ctx,rect}, pickerSearch:"", pickerHi:0}); }
-  componentDidUpdate(){ if(this._pickerOpening && this.pickerSearchEl){ this._pickerOpening=false; try{this.pickerSearchEl.focus();}catch(e){} } if(this._saveOpening && this.saveNameEl){ this._saveOpening=false; try{this.saveNameEl.focus();}catch(e){} } }
+  openPicker(kind,ctx,anchorEl,rectOverride){ const rect=rectOverride||(anchorEl?anchorEl.getBoundingClientRect():{left:300,bottom:200}); this._pickerOpening=true; this.setState({picker:{kind,ctx,rect}, pickerSearch:"", pickerHi:0}); }
+  componentDidUpdate(){ if(this._pickerOpening && this.pickerSearchEl){ this._pickerOpening=false; try{this.pickerSearchEl.focus();}catch(e){} } if(this._saveOpening && this.saveNameEl){ this._saveOpening=false; try{this.saveNameEl.focus();}catch(e){} } if(this._renameOpening && this.renameEl){ this._renameOpening=false; try{ this.renameEl.focus(); this.renameEl.select(); }catch(e){} } }
   pickerSearchRef=(el)=>{ this.pickerSearchEl=el; };
   qrefCb=(el)=>{ this.qref=el; };
   onPickerSearch=(e)=>{ this.setState({pickerSearch:e.target.value, pickerHi:0}); };
@@ -618,6 +761,8 @@ class Component extends DCLogic {
   onPickerPick=(e)=>{ this.pickerPick(e.currentTarget.dataset.v); };
   pickerPick(v){
     const pk=this.state.picker; if(!pk) return; const kind=pk.kind, ctx=pk.ctx||{};
+    if(kind==="device"){ this.setState({deviceFilter:v, picker:null}); return; }
+    if(kind==="convert"){ this.setState({picker:null}); this.convertPreset(ctx.n, v); return; }
     if(kind==="addfilter"){
       if(v==="tag"){ this.openPicker("tag",{}, this._lastAnchor); return; }
       if(v==="cpu"){ this.editConds(c=>c.push({kind:"cpu",op:"<",val:"60"})); this.setState({picker:null}); return; }
@@ -637,6 +782,8 @@ class Component extends DCLogic {
   // value picker entries (numeric → op+val combos handled by ctx.op)
   pickerItems(){
     const pk=this.state.picker; if(!pk) return []; const f=(this.state.pickerSearch||"").toLowerCase(); const ctx=pk.ctx||{};
+    if(pk.kind==="device"){ const opts=["all"].concat(this.DEVICES); const cf=d=>this.PRESETS.filter(p=>!this.state.deleted[p.n]&&(d==="all"||p.device===d)).length; return opts.filter(d=>(d==="all"?"all devices":d.toLowerCase()).includes(f)).map(d=>({v:d,label:d==="all"?"All devices":d,sub:cf(d)+" presets",dot:d!=="all",color:this.DEVCOL[d]})); }
+    if(pk.kind==="convert"){ const src=this.PBYN[ctx.n]; if(!src) return []; return this.DEVICES.filter(d=>d!==src.device&&d.toLowerCase().includes(f)).map(d=>({v:d,label:"Convert to "+d,sub:this.convHint(src.device,d),dot:true,color:this.DEVCOL[d]})); }
     if(pk.kind==="addfilter"){ const items=[]; this.FILTERABLE.forEach(id=>items.push({v:id,label:this.BLOCK_TOKENS[id],sub:"block",dot:true,color:this.CAT[id][1]})); items.push({v:"tag",label:"tag:",sub:"by tag",dot:false}); items.push({v:"author",label:"author:",sub:"by author",dot:false}); items.push({v:"cpu",label:"cpu",sub:"CPU usage",dot:false}); items.push({v:"scenes",label:"scenes",sub:"scene count",dot:false}); return items.filter(i=>i.label.toLowerCase().includes(f)||i.sub.toLowerCase().includes(f)); }
     if(pk.kind==="tag"){ return this.TAGS.filter(t=>t.toLowerCase().includes(f)).map(t=>({v:t,label:t,sub:"",dot:true,color:this.TAGCOL[t]||"#6e6e78"})); }
     if(pk.kind==="author"){ return Array.from(new Set(this.PRESETS.map(p=>p.author))).filter(a=>a.toLowerCase().includes(f)).map(a=>({v:a,label:a,sub:"",dot:false})); }
@@ -666,8 +813,116 @@ class Component extends DCLogic {
 
   // ===================== ROW / SORT / SELECT =====================
   onSort=(e)=>this.setState({sort:e.currentTarget.dataset.sort});
-  onRowClick=(e)=>this.setState({selected:+e.currentTarget.dataset.n});
-  onLoad=()=>{ /* visual only */ };
+  onRowClick=(e)=>{ const n=+e.currentTarget.dataset.n; if(e.metaKey||e.ctrlKey){ this.toggleMark(n); return; } if(e.shiftKey && this.state.anchorN!=null){ this.markRange(this.state.anchorN,n); return; } this.setState({selected:n, anchorN:n}); };
+
+  // ===================== SELECTION =====================
+  effName(n){ return this.state.renames[n] || (this.PBYN[n]?this.PBYN[n].name:"Preset"); }
+  markCount(){ return Object.keys(this.state.marked).length; }
+  toggleMark(n){ const m=Object.assign({},this.state.marked); if(m[n]) delete m[n]; else m[n]=true; this.setState({marked:m, anchorN:n}); }
+  clearMarks=()=>this.setState({marked:{}});
+  onCheckClick=(e)=>{ e.stopPropagation(); this.toggleMark(+e.currentTarget.dataset.n); };
+  markRange(a,b){ const order=this._order||[]; const ia=order.indexOf(a), ib=order.indexOf(b); if(ia<0||ib<0){ this.toggleMark(b); return; } const lo=Math.min(ia,ib), hi=Math.max(ia,ib); const m=Object.assign({},this.state.marked); for(let i=lo;i<=hi;i++) m[order[i]]=true; this.setState({marked:m, anchorN:b}); }
+  onSelAction=(e)=>{ const id=e.currentTarget.dataset.act; const ns=Object.keys(this.state.marked).map(Number); if(!ns.length) return; this.runAction(id,ns,ns[0]); };
+
+  // ===================== CONTEXT MENU =====================
+  onRowContext=(e)=>{ e.preventDefault(); const n=+e.currentTarget.dataset.n; const inSel=!!this.state.marked[n]; const target=(inSel && this.markCount()>1)?"sel":"row"; if(target==="row") this.setState({selected:n}); this.setState({ctx:{x:e.clientX,y:e.clientY,target,n}}); };
+  closeCtx=()=>this.setState({ctx:null});
+  ctxPrevent=(e)=>e.preventDefault();
+  onCtxAction=(e)=>{ const id=e.currentTarget.dataset.act; const ctx=this.state.ctx; if(!ctx) return; this.setState({ctx:null}); const ns = ctx.target==="sel" ? Object.keys(this.state.marked).map(Number) : [ctx.n]; this.runAction(id,ns,ctx.n); };
+
+  // ===================== PRESET MANAGEMENT =====================
+  runAction(id,ns,primaryN){
+    if(id==="load"){ const p=this.PBYN[primaryN]; this.setState({selected:primaryN}); const sync=this.deriveSync(this.cloudOf(p)); this.showToast(sync==="cloudOnly"?("Loading "+this.effName(primaryN)+" from cloud…"):("Loaded "+this.effName(primaryN)),"#f5a623"); return; }
+    if(id==="rename"){ this._renameOpening=true; this.setState({renaming:primaryN, selected:primaryN}); return; }
+    if(id==="duplicate"){ this.duplicatePreset(primaryN); return; }
+    if(id==="export"){ this.exportPresets(ns); return; }
+    if(id==="upload"||id==="backup"){ this.cloudBatch(ns,"up"); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+" backed up to cloud","#33c46b"); return; }
+    if(id==="update"||id==="download"){ this.cloudBatch(ns,"down"); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+" synced from cloud","#35c9d6"); return; }
+    if(id==="convert"){ this.openPicker("convert",{n:primaryN}, null, {left:(this.state.ctx?this.state.ctx.x:300), bottom:(this.state.ctx?this.state.ctx.y:200)}); return; }
+    if(id==="removeDevice"){ this.confirmRemove(ns); return; }
+    if(id==="delete"){ this.confirmDelete(ns); return; }
+  }
+  // ----- confirm dialogs (delete / overwrite) -----
+  askConfirm(opts){ this.setState({confirm:opts}); }
+  onConfirmYes=()=>{ const c=this.state.confirm; this.setState({confirm:null}); if(c&&c.run) c.run(); };
+  onConfirmNo=()=>this.setState({confirm:null});
+  confirmDelete(ns){ const label=ns.length>1?(ns.length+" presets"):("“"+this.effName(ns[0])+"”"); this.askConfirm({ title:"Delete "+(ns.length>1?ns.length+" presets":"preset"), message:"This permanently removes "+label+" from this device and the cloud, including every saved version. This can't be undone.", confirmLabel:ns.length>1?("Delete "+ns.length):"Delete", danger:true, run:()=>this.deletePresets(ns) }); }
+  confirmRemove(ns){ const label=ns.length>1?(ns.length+" presets"):("“"+this.effName(ns[0])+"”"); this.askConfirm({ title:"Remove from device", message:"Removes "+label+" from this device. Cloud copies (and their versions) are kept — presets with no cloud backup will be deleted entirely.", confirmLabel:ns.length>1?("Remove "+ns.length):"Remove", danger:true, run:()=>this.removeFromDevice(ns) }); }
+  // ----- converter -----
+  convertPreset(n,target){ const src=this.PBYN[n]; if(!src) return; if(src.device===target){ this.showToast("Already an "+target+" preset","#9a9aa3"); return; }
+    const cap=this.deviceCap(target);
+    let fx=src.blocks.filter(b=>b.type!=="in"&&b.type!=="out");
+    const dropped=Math.max(0, fx.length-cap); if(dropped>0) fx=fx.slice(0,cap);
+    const blocks=[{type:"in",inst:"In 1",params:{}}].concat(JSON.parse(JSON.stringify(fx))).concat([{type:"out",inst:"Out 1",params:{}}]);
+    const nn=this._nextN();
+    const cpu=Math.min(95, Math.round(src.cpu*(target==="FM3"?1.16:(target==="FM9"?1.06:0.9))));
+    const copy={ n:nn, name:this.effName(n)+" ("+target+")", tags:src.tags.slice(), author:"You", cpu, scenes:src.scenes, device:target, converted:true, blocks };
+    const note=dropped>0?("Converted from "+src.device+" — "+dropped+" block"+(dropped>1?"s":"")+" trimmed to fit "+target):("Converted from "+src.device);
+    copy.cl={presence:"deviceOnly", versions:[{v:"v1",date:"just now",note,author:"You"}], localIdx:0, cloudIdx:-1};
+    this.PRESETS.push(copy); this.PBYN[nn]=copy; this.setState({selected:nn, deviceFilter:"all", picker:null});
+    this.showToast(dropped>0?("Converted to "+target+" · "+dropped+" block"+(dropped>1?"s":"")+" trimmed"):("Converted to "+target),"#35c9d6");
+  }
+  onConvertOpen=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("convert",{n:this.state.selected}, e.currentTarget); };
+  onDeviceFilter=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("device",{}, e.currentTarget); };
+  cloudBatch(ns,dir){ const o=Object.assign({},this.state.cloudOverride); ns.forEach(n=>{ const base=this.PBYN[n].cl; const cur=Object.assign({presence:base.presence,localIdx:base.localIdx,cloudIdx:base.cloudIdx}, o[n]||{}); cur.presence="both"; if(dir==="up") cur.cloudIdx=cur.localIdx<0?0:cur.localIdx; else cur.localIdx=cur.cloudIdx<0?0:cur.cloudIdx; o[n]=cur; }); this.setState({cloudOverride:o, marked:{}}); }
+  removeFromDevice(ns){ const o=Object.assign({},this.state.cloudOverride); const del=Object.assign({},this.state.deleted); let gone=0; ns.forEach(n=>{ const base=this.PBYN[n].cl; const cur=Object.assign({presence:base.presence,localIdx:base.localIdx,cloudIdx:base.cloudIdx}, o[n]||{}); if(cur.presence==="deviceOnly"){ del[n]=true; gone++; } else { cur.presence="cloudOnly"; cur.localIdx=-1; o[n]=cur; } }); const sel=ns.indexOf(this.state.selected)>=0&&del[this.state.selected]?null:this.state.selected; this.setState({cloudOverride:o, deleted:del, marked:{}, selected:sel}); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+(gone?" deleted (no cloud copy)":" removed from device — kept in cloud"),"#9a9aa3"); }
+  deletePresets(ns){ const del=Object.assign({},this.state.deleted); ns.forEach(n=>del[n]=true); const sel=ns.indexOf(this.state.selected)>=0?null:this.state.selected; this.setState({deleted:del, marked:{}, selected:sel}); this.showToast("Deleted "+(ns.length>1?ns.length+" presets":this.effName(ns[0])),"#e87b6a"); }
+  duplicatePreset(n){ const src=this.PBYN[n]; if(!src) return; const nn=this._nextN(); const copy={n:nn,name:this.effName(n)+" copy",tags:src.tags.slice(),author:"You",cpu:src.cpu,scenes:src.scenes,blocks:JSON.parse(JSON.stringify(src.blocks))}; copy.cl={presence:"deviceOnly",versions:[{v:"v1",date:"just now",note:"Duplicated from "+this.effName(n),author:"You"}],localIdx:0,cloudIdx:-1}; this.PRESETS.push(copy); this.PBYN[nn]=copy; this.setState({selected:nn}); this.showToast("Duplicated as “"+copy.name+"”","#35c9d6"); }
+  _nextN(){ let mx=0; this.PRESETS.forEach(p=>{ if(p.n>mx) mx=p.n; }); return mx+1; }
+  exportObj(n){ const p=this.PBYN[n]; const m=this.cloudOf(p); return { format:"axis-preset", version:1, name:this.effName(n), tags:p.tags, author:p.author, cpu:p.cpu, scenes:p.scenes, deviceVersion:m.localIdx>=0?m.versions[m.localIdx].v:null, cloudVersion:m.cloudIdx>=0?m.versions[m.cloudIdx].v:null, blocks:p.blocks }; }
+  exportPresets(ns){ try{ const data=ns.map(n=>this.exportObj(n)); const single=data.length===1; const blob=new Blob([JSON.stringify(single?data[0]:data,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=(single?this.effName(ns[0]).replace(/[^\w.-]+/g,"_"):("axis-presets-"+data.length))+".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); this.showToast("Exported "+(single?this.effName(ns[0]):data.length+" presets")+" to disk","#35c9d6"); this.setState({marked:{}}); }catch(err){ this.showToast("Export failed","#e87b6a"); } }
+  renameRef=(el)=>{ this.renameEl=el; };
+  onRenameKey=(e)=>{ if(e.key==="Enter"){ e.preventDefault(); this.commitRename(e.target.value); } else if(e.key==="Escape"){ e.preventDefault(); this.setState({renaming:null}); } };
+  onRenameBlur=(e)=>{ this.commitRename(e.target.value); };
+  commitRename(v){ const n=this.state.renaming; if(n==null) return; const name=(v||"").trim(); const renames=Object.assign({},this.state.renames); const changed = name && name!==this.effName(n); if(name) renames[n]=name; this.setState({renaming:null, renames}); if(changed) this.showToast("Renamed to “"+name+"”","#35c9d6"); }
+  onLoad=()=>{ const p=this.PBYN[this.state.selected]; if(!p) return; const sync=this.deriveSync(this.cloudOf(p)); this.showToast(sync==="cloudOnly"?("Loading "+p.name+" from cloud…"):("Loaded "+p.name),"#f5a623"); };
+
+  // ===================== CLOUD SYNC =====================
+  buildCloud(){
+    const times=["just now","2h ago","yesterday","2 days ago","5 days ago","last week","Mar 14","Feb 28","Jan 9","Dec 2"];
+    const notes=["Tweaked amp gain","Reverb mix +6%","Added delay block","Re-voiced mids","Trimmed CPU load","Cloud backup","Live-set tweak","Renamed scenes","Swapped cab IR","Boost level up","Tightened low end","New lead boost"];
+    const authors=["You","Cooper Carter","T. Nordvik","R. Marino","J. Sklar"];
+    this.PRESETS.forEach(p=>{
+      const r=this.rng(p.n*40503+13);
+      let presence;
+      if(p.n%11===0) presence="cloudOnly";
+      else if(p.n%8===0) presence="deviceOnly";
+      else presence="both";
+      const count=2+Math.floor(r()*4); // 2..5
+      const top=count+1+Math.floor(r()*3);
+      const versions=[];
+      for(let i=0;i<count;i++){ versions.push({ v:"v"+(top-i), date:times[Math.min(i,times.length-1)], note:this.pick(r,notes), author:(i===0&&presence!=="cloudOnly")?"You":this.pick(r,authors) }); }
+      let localIdx, cloudIdx;
+      if(presence==="cloudOnly"){ localIdx=-1; cloudIdx=0; }
+      else if(presence==="deviceOnly"){ localIdx=0; cloudIdx=-1; }
+      else { const roll=p.n%5; if(roll===0){ localIdx=0; cloudIdx=1; } else if(roll===1){ localIdx=1; cloudIdx=0; } else { localIdx=0; cloudIdx=0; } }
+      const dv=p.n%10; p.device = dv<5?"Axe-Fx III":(dv<8?"FM9":"FM3");
+      p.cl={ presence, versions, localIdx, cloudIdx };
+    });
+  }
+  deviceCap(d){ return d==="FM3"?6:(d==="FM9"?10:99); }
+  convHint(src,dst){ const c=this.deviceCap(dst); return c<this.deviceCap(src)?("fewer blocks · may trim"):"full headroom"; }
+  cloudOf(p){ const o=this.state.cloudOverride[p.n]; if(!o) return p.cl; return Object.assign({}, p.cl, o); }
+  deriveSync(m){ if(m.presence==="cloudOnly") return "cloudOnly"; if(m.presence==="deviceOnly") return "deviceOnly"; if(m.localIdx===m.cloudIdx) return "synced"; return m.localIdx<m.cloudIdx ? "modified" : "outdated"; }
+  cloudMeta(sync){ return ({
+    synced:{label:"Synced",short:"Synced",glyph:"☁",col:"#33c46b"},
+    modified:{label:"Local edits",short:"Local edit",glyph:"↑",col:"#f5a623"},
+    outdated:{label:"Cloud newer",short:"Update",glyph:"↓",col:"#4a82e0"},
+    cloudOnly:{label:"Cloud only",short:"Cloud",glyph:"☁",col:"#9b8cf0"},
+    deviceOnly:{label:"Not backed up",short:"Device",glyph:"▪",col:"#6e6e78"}
+  })[sync]; }
+  setCloud(n,patch){ const cur=this.cloudOf(this.PBYN[n]); const o=Object.assign({}, this.state.cloudOverride); o[n]=Object.assign({ presence:cur.presence, localIdx:cur.localIdx, cloudIdx:cur.cloudIdx }, patch); this.setState({cloudOverride:o}); }
+  onView=(e)=>this.setState({view:e.currentTarget.dataset.view});
+  onCloudAction=(e)=>{ e.stopPropagation(); const pn=+e.currentTarget.dataset.pn; const kind=e.currentTarget.dataset.kind; const m=this.cloudOf(this.PBYN[pn]);
+    if(kind==="upload"){ this.setCloud(pn,{presence:"both",cloudIdx:m.localIdx}); this.showToast("Uploaded to cloud","#33c46b"); }
+    else if(kind==="backup"){ this.setCloud(pn,{presence:"both",cloudIdx:m.localIdx}); this.showToast("Backed up to cloud","#33c46b"); }
+    else if(kind==="update"){ this.setCloud(pn,{presence:"both",localIdx:m.cloudIdx}); this.showToast("Updated from cloud","#35c9d6"); }
+    else if(kind==="download"){ this.setCloud(pn,{presence:"both",localIdx:m.cloudIdx}); this.showToast("Downloaded to device","#35c9d6"); }
+  };
+  onRevert=(e)=>{ e.stopPropagation(); const pn=+e.currentTarget.dataset.pn; const idx=+e.currentTarget.dataset.vi; const m=this.cloudOf(this.PBYN[pn]); const vs=this.PBYN[pn].cl.versions; const target=vs[idx]; const curV=m.localIdx>=0?vs[m.localIdx].v:null;
+    this.askConfirm({ title:"Restore "+(target?target.v:"version"), message:"Restores "+(target?target.v:"this version")+" to the device"+(curV?(", replacing the current device version ("+curV+")"):"")+". The replaced version stays in history.", confirmLabel:"Restore", danger:false, run:()=>this.doRevert(pn,idx) }); };
+  doRevert(pn,idx){ const m=this.cloudOf(this.PBYN[pn]); const presence=m.presence==="cloudOnly"?"both":m.presence; this.setCloud(pn,{presence, localIdx:idx}); const v=this.PBYN[pn].cl.versions[idx]; this.showToast("Restored "+(v?v.v:"version")+" to device","#f5a623"); }
+  showToast(text,col){ if(this._tt) clearTimeout(this._tt); this.setState({toast:{text,col:col||"#33c46b"}}); this._tt=setTimeout(()=>this.setState({toast:null}),2100); }
 
   // ===================== HELPERS =====================
   pad(n){ return String(n).padStart(3,"0"); }
@@ -691,18 +946,50 @@ class Component extends DCLogic {
     const sortDefs=[["num","#"],["name","A-Z"],["cpu","CPU"]];
     const sorts=sortDefs.map(d=>{ const act=S.sort===d[0]; return {id:d[0],label:d[1],style:{padding:"6px 11px",borderRadius:7,fontSize:11,fontWeight:700,fontFamily:"'JetBrains Mono'",cursor:"pointer",color:act?"#0c0c0e":"#9a9aa3",background:act?accent:"transparent"}}; });
 
+    // cloud library views
+    const metaOf=p=>{ const m=this.cloudOf(p); return {m, sync:this.deriveSync(m)}; };
+    const devOK=p=>(S.deviceFilter==="all"||p.device===S.deviceFilter);
+    const cnt=fn=>this.PRESETS.filter(p=>!S.deleted[p.n]&&devOK(p)&&fn(metaOf(p))).length;
+    const viewDefs=[
+      ["all","All presets","≣","#9a9aa3",()=>true],
+      ["device","On this device","▣","#6e6e78",x=>x.m.presence!=="cloudOnly"],
+      ["cloud","In cloud","☁","#35c9d6",x=>x.m.presence!=="deviceOnly"],
+      ["cloudOnly","Cloud only","☁","#9b8cf0",x=>x.m.presence==="cloudOnly"],
+      ["deviceOnly","Not backed up","▪","#6e6e78",x=>x.m.presence==="deviceOnly"],
+      ["upload","Needs upload","↑","#f5a623",x=>x.sync==="modified"],
+      ["update","Needs update","↓","#4a82e0",x=>x.sync==="outdated"]
+    ];
+    const curView=viewDefs.find(d=>d[0]===S.view)||viewDefs[0];
+    const viewPred=curView[4];
+    const views=viewDefs.map(d=>{ const act=S.view===d[0]; const c=cnt(d[4]);
+      return { id:d[0], label:d[1], glyph:d[2], count:c,
+        glyphStyle:{flex:"none",width:18,textAlign:"center",fontSize:13,color:d[3]},
+        countStyle:{font:"600 10px/1 'JetBrains Mono'",color:act?d[3]:"#4a4a52",minWidth:16,textAlign:"right"},
+        style:{display:"flex",alignItems:"center",gap:9,padding:"8px 9px",borderRadius:10,cursor:"pointer",background:act?"rgba(53,201,214,.08)":"transparent",border:"1px solid "+(act?accent+"55":"transparent")} }; });
+    const inCloudCount=cnt(x=>x.m.presence!=="deviceOnly");
+    const toSyncCount=cnt(x=>x.sync==="modified"||x.sync==="outdated");
+    const cloudSummary= toSyncCount>0 ? (inCloudCount+" · "+toSyncCount+" to sync") : (inCloudCount+" synced");
+
     // results
-    let list=this.PRESETS.filter(p=>this.matchPreset(p,conds,simpleQ));
-    list=list.slice().sort((a,b)=> S.sort==="name"?a.name.localeCompare(b.name): S.sort==="cpu"?b.cpu-a.cpu: a.n-b.n);
+    let list=this.PRESETS.filter(p=>!S.deleted[p.n] && devOK(p) && viewPred(metaOf(p)) && this.matchPreset(p,conds,simpleQ));
+    list=list.slice().sort((a,b)=> S.sort==="name"?this.effName(a.n).localeCompare(this.effName(b.n)): S.sort==="cpu"?b.cpu-a.cpu: a.n-b.n);
+    this._order=list.map(p=>p.n);
     const rowPad=dense?"9px 16px":"13px 18px";
     const rows=list.map(p=>{ const sel=p.n===S.selected; const tags=p.tags.slice(0,3).map(t=>({label:t,style:{padding:"2px 7px",borderRadius:5,fontSize:9.5,fontWeight:700,fontFamily:"'JetBrains Mono'",letterSpacing:".02em",color:this.TAGCOL[t]||"#9a9aa3",background:(this.TAGCOL[t]||"#9a9aa3")+"1f"}}));
       const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map(b=>{ const c=this.CAT[b.type]; const ty=b.params.TYPE; return {label:c[0]+(ty?" · "+ty:""), title:b.inst+(ty?" — "+ty:""), style:{display:"inline-flex",alignItems:"center",padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"'JetBrains Mono'",color:c[1],background:c[1]+"17",border:"1px solid "+c[1]+"33",maxWidth:160,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
       const cc=this.cpuColor(p.cpu);
-      return { n:p.n, num:this.pad(p.n), name:p.name, author:p.author, tags, blocks,
+      const rcm=this.cloudMeta(this.deriveSync(this.cloudOf(p)));
+      const mk=!!S.marked[p.n];
+      return { n:p.n, num:this.pad(p.n), name:this.effName(p.n), author:p.author, tags, blocks,
+        renaming:S.renaming===p.n, notRenaming:S.renaming!==p.n,
+        checkMark:mk?"✓":"", checkStyle:{flex:"none",width:18,height:18,borderRadius:5,border:"1px solid "+(mk?accent:"#34343c"),background:mk?accent:"transparent",color:"#06181a",display:"flex",alignItems:"center",justifyContent:"center",font:"700 11px/1 'Hanken Grotesk'",cursor:"pointer"},
+        cloudChipText:rcm.glyph+" "+rcm.short, cloudTitle:rcm.label,
+        cloudChipStyle:{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 7px",borderRadius:5,font:"700 9px/1 'JetBrains Mono'",letterSpacing:".02em",color:rcm.col,background:rcm.col+"1f",border:"1px solid "+rcm.col+"40"},
+        device:p.device, deviceChipStyle:{display:"inline-flex",alignItems:"center",padding:"2px 7px",borderRadius:5,font:"700 9px/1 'JetBrains Mono'",letterSpacing:".02em",color:(this.DEVCOL[p.device]||"#9a9aa3"),background:(this.DEVCOL[p.device]||"#9a9aa3")+"1f",border:"1px solid "+(this.DEVCOL[p.device]||"#9a9aa3")+"40"},
         cpuText:p.cpu+"%", cpuBarStyle:{width:p.cpu+"%",height:"100%",background:cc}, cpuTextStyle:{font:"700 10px/1 'JetBrains Mono'",color:cc,minWidth:30,textAlign:"right"},
         numStyle:{font:"700 13px/1 'JetBrains Mono'",color:sel?"#f5a623":"#56565e",flex:"none",width:34},
-        style:{display:"flex",alignItems:"center",gap:14,padding:rowPad,borderBottom:"1px solid #141418",cursor:"pointer",background:sel?"rgba(53,201,214,.06)":"transparent",borderLeft:sel?"2px solid "+accent:"2px solid transparent"},
-        hoverStyle:{background:sel?"rgba(53,201,214,.08)":"#101014"} };
+        style:{display:"flex",alignItems:"center",gap:14,padding:rowPad,borderBottom:"1px solid #141418",cursor:"pointer",background:mk?accent+"14":(sel?"rgba(53,201,214,.06)":"transparent"),borderLeft:(sel||mk)?"2px solid "+accent:"2px solid transparent"},
+        hoverStyle:{background:mk?accent+"1f":(sel?"rgba(53,201,214,.08)":"#101014")} };
     });
     const empty=rows.length===0;
 
@@ -734,7 +1021,29 @@ class Component extends DCLogic {
       const chain=p.blocks.map((b,i)=>{ const c=this.CAT[b.type]; return {label:c[0],glyph:c[1+1]||c[2],title:b.inst, arrow:i<p.blocks.length-1, style:{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:7,font:"600 10.5px/1 'JetBrains Mono'",color:c[1],background:c[1]+"18",border:"1px solid "+c[1]+"33"}}; });
       const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map((b)=>{ const realIdx=p.blocks.indexOf(b); const c=this.CAT[b.type]; const keys=Object.keys(b.params); const params=keys.map(k=>{ const matched=mk[realIdx+":"+k]; return {k, v:this.fmt(b.params[k]), style:{flex:"1 1 calc(50% - 1px)",minWidth:0,display:"flex",flexDirection:"column",gap:3,padding:"8px 11px",background:matched?"rgba(53,201,214,.10)":"#0e0e11"}, valStyle:{fontSize:12.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:matched?accent:"#e3e3e8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
         return {name:c[0], inst:b.inst, dotStyle:{width:9,height:9,borderRadius:3,background:c[1]}, params}; });
-      detail={ num:this.pad(p.n), name:p.name, author:p.author, scenes:p.scenes, cpuText:p.cpu+"%", cpuStyle:{fontSize:11.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:cc},
+      // cloud sync + versions
+      const dm=this.cloudOf(p); const dsync=this.deriveSync(dm); const dcm=this.cloudMeta(dsync);
+      const localV=dm.localIdx>=0?dm.versions[dm.localIdx].v:null;
+      const cloudV=dm.cloudIdx>=0?dm.versions[dm.cloudIdx].v:null;
+      let statusLine, loadLabel="Load preset", action=null;
+      if(dsync==="synced"){ statusLine="Device & cloud both on "+localV+" · synced "+dm.versions[dm.localIdx].date; }
+      else if(dsync==="modified"){ statusLine="Device "+localV+" · cloud "+cloudV+" — local edits not uploaded"; action={kind:"upload",label:"Upload",title:"Upload local changes to cloud"}; }
+      else if(dsync==="outdated"){ statusLine="Device "+localV+" · cloud "+cloudV+" — newer version in cloud"; action={kind:"update",label:"Update",title:"Pull the newer cloud version"}; }
+      else if(dsync==="cloudOnly"){ statusLine="Cloud "+cloudV+" · not on this device"; loadLabel="Load from cloud"; action={kind:"download",label:"Download",title:"Save a copy to this device"}; }
+      else { statusLine="Device "+localV+" · not backed up to cloud"; action={kind:"backup",label:"Back up",title:"Back up to cloud"}; }
+      const dversions=dm.versions.map((vv,idx)=>{ const isLocal=idx===dm.localIdx, isCloud=idx===dm.cloudIdx; const badges=[];
+        if(isLocal) badges.push({label:"On device",col:"#35c9d6"}); if(isCloud) badges.push({label:"In cloud",col:"#9b8cf0"});
+        const dotc=isLocal?"#35c9d6":(isCloud?"#9b8cf0":"#2e2e36");
+        return { idx, v:vv.v, note:vv.note, meta:vv.date+" · "+vv.author, isCurrent:isLocal, canRevert:!isLocal,
+          badges:badges.map(b=>({label:b.label,style:{padding:"2px 6px",borderRadius:4,font:"700 8.5px/1 'JetBrains Mono'",letterSpacing:".03em",color:b.col,background:b.col+"22"}})),
+          dotStyle:{flex:"none",width:9,height:9,borderRadius:"50%",marginTop:4,background:dotc,boxShadow:(isLocal||isCloud)?"0 0 6px "+dotc:"none"},
+          rowStyle:{display:"flex",gap:11,padding:"10px 11px",borderRadius:10,background:isLocal?"rgba(53,201,214,.06)":"transparent"} }; });
+      const dcloud={ chipText:dcm.glyph+" "+dcm.label, chipStyle:{flex:"none",display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,font:"700 10px/1 'JetBrains Mono'",letterSpacing:".02em",color:dcm.col,background:dcm.col+"1f",border:"1px solid "+dcm.col+"40"},
+        statusLine, loadLabel, hasAction:!!action, actionKind:action&&action.kind, actionLabel:action&&action.label, actionTitle:action&&action.title,
+        actionStyle:{flex:"none",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 15px",height:42,borderRadius:11,cursor:"pointer",fontSize:12.5,fontWeight:800,color:"#06181a",background:accent,whiteSpace:"nowrap"},
+        versions:dversions, versionCount:dm.versions.length+" versions" };
+      detail={ n:p.n, cloud:dcloud, num:this.pad(p.n), name:this.effName(p.n), author:p.author, scenes:p.scenes, cpuText:p.cpu+"%", cpuStyle:{fontSize:11.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:cc},
+        device:p.device, deviceStyle:{fontSize:11.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:this.DEVCOL[p.device]||"#cfcfd6"},
         tags:p.tags.map(t=>({label:t,style:{padding:"3px 9px",borderRadius:6,fontSize:10.5,fontWeight:700,fontFamily:"'JetBrains Mono'",color:this.TAGCOL[t]||"#9a9aa3",background:(this.TAGCOL[t]||"#9a9aa3")+"1f"}})),
         chain, blocks, onLoad:this.onLoad };
     }
@@ -745,8 +1054,8 @@ class Component extends DCLogic {
     // picker
     let picker=null; if(S.picker){ this._pickerItems=this.pickerItems(); const hi=Math.min(S.pickerHi,Math.max(0,this._pickerItems.length-1));
       const items=this._pickerItems.map((it,i)=>({ v:it.v, label:it.label, sub:it.sub||"", dot:!!it.dot, dotStyle:{flex:"none",width:8,height:8,borderRadius:3,background:it.color||"#6e6e78"}, style:{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,cursor:"pointer",background:i===hi?"#1c1c22":"transparent"} }));
-      const titleMap={addfilter:"Add a filter",tag:"Pick a tag",author:"Pick an author",param:"Pick a parameter",value:"Pick a value"};
-      const placeMap={addfilter:"Search blocks & tokens…",tag:"Search tags…",author:"Search authors…",param:"Search parameters…",value:"Search values…"};
+      const titleMap={addfilter:"Add a filter",tag:"Pick a tag",author:"Pick an author",param:"Pick a parameter",value:"Pick a value",device:"Filter by device",convert:"Convert preset to…"};
+      const placeMap={addfilter:"Search blocks & tokens…",tag:"Search tags…",author:"Search authors…",param:"Search parameters…",value:"Search values…",device:"Search devices…",convert:"Search devices…"};
       const r=S.picker.rect; const left=Math.min(Math.max(12,r.left), (typeof window!=="undefined"?window.innerWidth:1440)-312); const top=(r.bottom||200)+6;
       picker={ style:{position:"fixed",left:left+"px",top:top+"px",width:300,maxHeight:360,background:"#141417",border:"1px solid #2e2e36",borderRadius:13,boxShadow:"0 24px 60px rgba(0,0,0,.6)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"pbPop .12s ease-out"}, title:titleMap[S.picker.kind]||"Pick", placeholder:placeMap[S.picker.kind]||"Search…", items, empty:items.length===0 };
     }
@@ -757,8 +1066,59 @@ class Component extends DCLogic {
     const queryWrapStyle={display:"flex",alignItems:"center",gap:10,height:46,padding:"0 14px",background:"#101014",border:"1px solid "+(S.acOpen&&advanced?accent:"#2a2a31"),borderRadius:12,transition:"border-color .12s"};
     const saveBtnStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"0 16px",borderRadius:12,cursor:"pointer",fontSize:12.5,fontWeight:700,color:"#cfcfd6",background:"#16161b",border:"1px solid #2e2e36",whiteSpace:"nowrap"};
 
+    // device filter control
+    const devCol=this.DEVCOL[S.deviceFilter]||"#9a9aa3";
+    const deviceLabel=S.deviceFilter==="all"?"All devices":S.deviceFilter;
+    const deviceActive=S.deviceFilter!=="all";
+    const deviceBtnStyle={display:"inline-flex",alignItems:"center",gap:8,height:34,padding:"0 12px",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:700,color:deviceActive?"#e9e9ee":"#cfcfd6",background:"#16161b",border:"1px solid "+(deviceActive?devCol+"66":"#2e2e36")};
+    const deviceDotStyle={width:8,height:8,borderRadius:"50%",background:devCol};
+
+    // confirm dialog (delete / overwrite)
+    let confirm=null;
+    if(S.confirm){ const dg=!!S.confirm.danger; confirm={ title:S.confirm.title, message:S.confirm.message, confirmLabel:S.confirm.confirmLabel||"Confirm",
+      icon: dg?"⚠":"↺", iconStyle:{flex:"none",width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,background:dg?"#2a1416":"rgba(53,201,214,.12)",color:dg?"#e87b6a":"#35c9d6",border:"1px solid "+(dg?"#3a1f1f":"rgba(53,201,214,.3)")},
+      yesStyle:{flex:1,height:44,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:11,cursor:"pointer",fontSize:13,fontWeight:800,color:dg?"#fff":"#06181a",background:dg?"#d6543f":accent} }; }
+
+    // context menu
+    let ctx=null;
+    if(S.ctx && this.PBYN[S.ctx.n]){
+      const multi=S.ctx.target==="sel"; const ns=multi?Object.keys(S.marked).map(Number):[S.ctx.n];
+      const cm=this.cloudOf(this.PBYN[S.ctx.n]); const csync=this.deriveSync(cm);
+      const raw=[];
+      const it=(id,label,glyph,hint,danger)=>raw.push({id,label,glyph,hint:hint||"",danger:!!danger});
+      const div=()=>raw.push({divider:true});
+      if(!multi){ it("load", csync==="cloudOnly"?"Load from cloud":"Load preset","↓","↵"); it("rename","Rename","✎"); it("duplicate","Duplicate","⧉"); it("convert","Convert to device…","⇄"); }
+      it("export", multi?("Export "+ns.length+" to disk"):"Export to disk","⤓");
+      div();
+      if(multi){ it("upload","Back up to cloud","☁"); it("download","Sync from cloud","⟳"); }
+      else if(csync==="modified") it("upload","Upload to cloud","☁");
+      else if(csync==="outdated") it("update","Update from cloud","↓");
+      else if(csync==="cloudOnly") it("download","Download to device","↓");
+      else if(csync==="deviceOnly") it("backup","Back up to cloud","☁");
+      else it("upload","Re-upload to cloud","☁");
+      div();
+      it("removeDevice", multi?("Remove "+ns.length+" from device"):"Remove from device","⊘");
+      it("delete", multi?("Delete "+ns.length+" presets"):"Delete everywhere","✕",true);
+      const W=(typeof window!=="undefined"?window.innerWidth:1440), H=(typeof window!=="undefined"?window.innerHeight:900);
+      const x=Math.min(S.ctx.x, W-244), y=Math.min(S.ctx.y, H-raw.length*36-30);
+      ctx={ title: multi?(ns.length+" presets"):this.effName(S.ctx.n),
+        style:{position:"fixed",left:x+"px",top:y+"px",width:230,background:"#141417",border:"1px solid #2e2e36",borderRadius:11,boxShadow:"0 24px 60px rgba(0,0,0,.6)",padding:6,zIndex:381,animation:"pbPop .1s ease-out"},
+        items: raw.map(m=> m.divider?{divider:true,isItem:false}:{ divider:false, isItem:true, id:m.id, label:m.label, glyph:m.glyph, hint:m.hint,
+          glyphStyle:{flex:"none",width:18,textAlign:"center",fontSize:13,color:m.danger?"#e87b6a":"#8a8a94"},
+          style:{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12.5,fontWeight:600,color:m.danger?"#e87b6a":"#e9e9ee"},
+          hover: m.danger?"background:#2a1416;":"background:#1c1c22;" }) };
+    }
+
     return {
       rail, sorts, onSort:this.onSort,
+      views, onView:this.onView, cloudSummary,
+      hasMarked:this.markCount()>0, selCount:this.markCount(), clearMarks:this.clearMarks, onCheckClick:this.onCheckClick, onSelAction:this.onSelAction,
+      onRowContext:this.onRowContext, ctx, closeCtx:this.closeCtx, ctxPrevent:this.ctxPrevent, onCtxAction:this.onCtxAction,
+      renameRef:this.renameRef, onRenameKey:this.onRenameKey, onRenameBlur:this.onRenameBlur,
+      deviceLabel, deviceBtnStyle, deviceDotStyle, onDeviceFilter:this.onDeviceFilter, onConvertOpen:this.onConvertOpen,
+      confirm, onConfirmYes:this.onConfirmYes, onConfirmNo:this.onConfirmNo,
+      onLoad:this.onLoad, onCloudAction:this.onCloudAction, onRevert:this.onRevert,
+      toast: S.toast?{ text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.col, boxShadow:"0 0 8px "+S.toast.col, display:"inline-block", flex:"none" } }:null,
       countLine: (conds.length||simpleQ) ? (list.length+" of "+this.PRESETS.length+" presets") : (this.PRESETS.length+" presets"),
       advBtnStyle, advDotStyle, onToggleAdvanced:this.onToggleAdvanced,
       queryRef:this.qrefCb,

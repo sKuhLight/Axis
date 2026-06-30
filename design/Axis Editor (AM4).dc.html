@@ -43,21 +43,9 @@
       </div>
     </sc-for>
     <div style="flex:1;"></div>
-    <!-- account / cloud sync -->
-    <div data-rail="account" onClick="{{ openAccount }}" title="{{ acct.railTitle }}" style="{{ acct.railBtnStyle }}" style-hover="border-color:#3f3f48;">
-      <sc-if value="{{ acct.loggedIn }}" hint-placeholder-val="{{ false }}">
-        <span style="{{ acct.avatarStyle }}">{{ acct.initials }}</span>
-      </sc-if>
-      <sc-if value="{{ acct.loggedOut }}" hint-placeholder-val="{{ true }}">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="#8a8a93" stroke-width="1.8"></circle><path d="M5.5 19.2 a6.6 5.6 0 0 1 13 0" stroke="#8a8a93" stroke-width="1.8" stroke-linecap="round"></path></svg>
-      </sc-if>
-      <sc-if value="{{ acct.showSyncDot }}" hint-placeholder-val="{{ false }}">
-        <span style="{{ acct.syncDotStyle }}"></span>
-      </sc-if>
-    </div>
-    <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
+    <div title="Connected · AM4 FW 1.02" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
       <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
-      <span style="font:600 8px/1 'JetBrains Mono'; color:#4a4a52;">FW1.4</span>
+      <span style="font:600 8px/1 'JetBrains Mono'; color:#4a4a52;">AM4</span>
     </div>
   </div>
   </sc-if>
@@ -153,105 +141,68 @@
     </div><!-- /right region -->
   </div>
 
-  <!-- ===================== GRID (Build) ===================== -->
+  <!-- ===================== AM4 SIGNAL CHAIN (Build) ===================== -->
   <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
-  <div class="axs-scroll" data-screen-label="Signal Grid" onPointerDown="{{ onGridDown }}" style="{{ gridScrollStyle }}">
-    <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
-      <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
-        <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
-          <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onMouseEnter="{{ onCableEnter }}" onMouseLeave="{{ onCableLeave }}">
-            <path d="{{ cab.d }}" fill="none" stroke="{{ cab.stroke }}" stroke-width="2"></path>
-            <sc-if value="{{ cab.flow }}" hint-placeholder-val="{{ false }}">
-            <path d="{{ cab.d }}" fill="none" stroke="{{ cab.flowStroke }}" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" style="{{ cab.flowStyle }}"></path>
+  <div class="axs-scroll" data-screen-label="Signal Chain" style="{{ chainScrollStyle }}">
+    <div style="{{ chainInnerStyle }}">
+
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:20px;">
+        <span style="font:700 12px/1 'JetBrains Mono'; letter-spacing:.2em; color:#cfcfd6;">SIGNAL CHAIN</span>
+        <span style="font:600 10px/1 'JetBrains Mono'; letter-spacing:.06em; color:#56565e;">AM4 · INPUT → 4 BLOCKS → OUTPUT</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:0; padding:8px 4px 16px;">
+        <!-- input port glyph -->
+        <svg width="26" height="26" viewBox="0 0 26 26" style="flex:none; margin-right:2px;"><path d="M5 5 L18 13 L5 21 Z" fill="none" stroke="#3a3a44" stroke-width="2" stroke-linejoin="round"></path></svg>
+
+        <sc-for list="{{ chain }}" as="t" hint-placeholder-count="6">
+          <div style="display:flex; align-items:center; flex:none;">
+            <sc-if value="{{ t.showConn }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ t.connStyle }}"></div>
             </sc-if>
-            <path d="{{ cab.d }}" data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" fill="none" stroke="rgba(0,0,0,0.001)" stroke-width="18" style="pointer-events:stroke; cursor:pointer;"></path>
-            <sc-if value="{{ cab.hovered }}" hint-placeholder-val="{{ false }}">
-            <g data-from="{{ cab.from }}" data-to="{{ cab.to }}" onClick="{{ removeRoute }}" style="cursor:pointer;">
-              <circle cx="{{ cab.mx }}" cy="{{ cab.my }}" r="9" fill="#16161b" stroke="#6a6a74" stroke-width="1.5"></circle>
-              <text x="{{ cab.mx }}" y="{{ cab.my }}" text-anchor="middle" dominant-baseline="central" fill="#c7c7cf" font-size="13" font-weight="700" style="pointer-events:none;">×</text>
-            </g>
-            </sc-if>
-          </g>
-        </sc-for>
-        <sc-if value="{{ linkPath }}" hint-placeholder-val="{{ false }}">
-          <path d="{{ linkPath }}" fill="none" stroke="#35c9d6" stroke-width="2.5" stroke-dasharray="6 5"></path>
-        </sc-if>
-      </svg>
-      <div style="{{ gridStyle }}">
-        <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="48">
-          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" onMouseEnter="{{ onCellEnter }}" onMouseLeave="{{ onCellLeave }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
-            <sc-if value="{{ cell.isBlock }}" hint-placeholder-val="{{ false }}">
-              <div style="{{ cell.fillStyle }}"></div>
-              <div style="{{ cell.glyphStyle }}">{{ cell.glyph }}</div>
-              <div style="position:relative; z-index:2; font-weight:700; font-size:14px; color:#fff; letter-spacing:.01em; text-shadow:0 1px 2px rgba(0,0,0,.4); text-align:center; line-height:1.05;">{{ cell.label }}</div>
-              <sc-if value="{{ cell.showType }}" hint-placeholder-val="{{ true }}">
-              <div style="position:relative; z-index:2; font:500 9px/1.1 'JetBrains Mono'; color:rgba(255,255,255,.62); text-align:center; max-width:92%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cell.type }}</div>
+            <div data-cidx="{{ t.idx }}" onClick="{{ onChainTile }}" style="{{ t.boxStyle }}" style-hover="{{ t.hoverStyle }}">
+
+              <sc-if value="{{ t.isFilled }}" hint-placeholder-val="{{ true }}">
+                <div style="{{ t.fillStyle }}"></div>
+                <sc-if value="{{ t.kindBadge }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:8px; left:9px; z-index:3; font:700 8px/1 'JetBrains Mono'; letter-spacing:.1em; color:rgba(255,255,255,.62);">{{ t.kindBadge }}</div>
+                </sc-if>
+                <sc-if value="{{ t.showChan }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:7px; right:8px; z-index:3; font:700 9px/1 'JetBrains Mono'; color:rgba(255,255,255,.9); background:rgba(0,0,0,.3); border-radius:5px; padding:3px 5px;">{{ t.channel }}</div>
+                </sc-if>
+                <div style="{{ t.glyphStyle }}">{{ t.glyph }}</div>
+                <div style="position:relative; z-index:2; font-weight:700; font-size:16px; color:#fff; letter-spacing:.01em; text-shadow:0 1px 2px rgba(0,0,0,.4); text-align:center; line-height:1.05;">{{ t.label }}</div>
+                <div style="position:relative; z-index:2; font:500 9.5px/1.15 'JetBrains Mono'; color:rgba(255,255,255,.66); text-align:center; max-width:90%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.type }}</div>
+                <sc-if value="{{ t.bypassed }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ t.hatchStyle }}"></div>
+                </sc-if>
+                <sc-if value="{{ t.canBypass }}" hint-placeholder-val="{{ false }}">
+                  <div data-cidx="{{ t.idx }}" onClick="{{ onChainToggle }}" title="On / Off" style="{{ t.togStyle }}" style-hover="transform:scale(1.18);">
+                    <span style="{{ t.togDotStyle }}"></span>
+                  </div>
+                </sc-if>
               </sc-if>
-              <sc-if value="{{ cell.showChan }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute; top:6px; right:7px; z-index:3; font:700 9px/1 'JetBrains Mono'; color:rgba(255,255,255,.85); background:rgba(0,0,0,.28); border-radius:4px; padding:3px 4px;">{{ cell.channel }}</div>
+
+              <sc-if value="{{ t.isEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ t.plusStyle }}">+</div>
+                <div style="font:600 10px/1.2 'JetBrains Mono'; color:#566b6e; letter-spacing:.04em; text-align:center;">ADD BLOCK</div>
               </sc-if>
-              <sc-if value="{{ cell.bypassed }}" hint-placeholder-val="{{ false }}">
-                <div style="{{ cell.hatchStyle }}"></div>
-              </sc-if>
-              <sc-if value="{{ cell.canBypass }}" hint-placeholder-val="{{ false }}">
-                <div data-idx="{{ cell.idx }}" onPointerDown="{{ stop }}" onClick="{{ onBlockToggle }}" title="On / Off" style="{{ cell.togStyle }}" style-hover="{{ cell.togHover }}">
-                  <span style="{{ cell.togDotStyle }}"></span>
-                </div>
-              </sc-if>
-              <sc-if value="{{ cell.showDots }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute; bottom:5px; left:0; right:0; z-index:3; display:flex; gap:3px; justify-content:center;">
-                  <sc-for list="{{ cell.dots }}" as="d" hint-placeholder-count="2">
-                    <span style="{{ d.style }}"></span>
-                  </sc-for>
-                </div>
-              </sc-if>
-              <sc-if value="{{ cell.adjusting }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute; inset:0; z-index:7; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(8,8,10,.58);">
-                  <div style="font:700 24px/1 'JetBrains Mono'; color:#fff;">{{ cell.adjustValue }}</div>
-                  <div style="font-size:10px; font-weight:700; color:#35c9d6; margin-top:4px; letter-spacing:.04em; text-transform:uppercase;">{{ cell.adjustLabel }}</div>
-                </div>
-              </sc-if>
-            </sc-if>
-            <sc-if value="{{ cell.isShunt }}" hint-placeholder-val="{{ false }}">
-              <div style="width:62%; height:2px; background:#4a4a55; border-radius:1px;"></div>
-            </sc-if>
-            <sc-if value="{{ cell.isEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="{{ cell.plusStyle }}">{{ cell.plus }}</div>
-            </sc-if>
-            <sc-if value="{{ cell.showOut }}" hint-placeholder-val="{{ false }}">
-              <div data-port="{{ cell.idx }}" onPointerDown="{{ onPortDown }}" style="{{ cell.outStyle }}" style-hover="transform:scale(1.25);"></div>
-            </sc-if>
+
+            </div>
           </div>
         </sc-for>
+
+        <!-- output port glyph -->
+        <svg width="26" height="26" viewBox="0 0 26 26" style="flex:none; margin-left:2px;"><path d="M8 5 L21 13 L8 21 Z" fill="none" stroke="#2fa15f" stroke-width="2" stroke-linejoin="round"></path></svg>
       </div>
+
+      <div style="display:flex; align-items:center; gap:8px; margin-top:10px; color:#4a4a52;">
+        <svg width="15" height="15" viewBox="0 0 16 16" style="flex:none;"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#3a3a44" stroke-width="1.3"></circle><path d="M8 5 V8.4 M8 10.6 h.01" stroke="#56565e" stroke-width="1.4" stroke-linecap="round"></path></svg>
+        <span style="font:500 11px/1.4 'Hanken Grotesk',sans-serif; max-width:560px;">Fixed Input &amp; Output hold device settings. Tap any block to edit · tap a green dot to toggle · cab is bundled in the Amp.</span>
+      </div>
+
     </div>
   </div>
-  <sc-if value="{{ pager.show }}" hint-placeholder-val="{{ false }}">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 14px 13px; background:#0f0f12; border-top:1px solid #1a1a1f; flex:none;">
-    <!-- column density -->
-    <div style="display:flex; align-items:center; gap:6px; background:#141417; border:1px solid #2a2a31; border-radius:12px; padding:4px;">
-      <div onClick="{{ onColsLess }}" title="Bigger blocks" style="{{ pager.lessStyle }}">−</div>
-      <div onClick="{{ onColsFit }}" title="Tap for full overview" style="display:flex; flex-direction:column; align-items:center; line-height:1; min-width:30px; cursor:pointer;">
-        <span style="font:700 14px/1 'JetBrains Mono'; color:#e9e9ee;">{{ pager.cols }}</span>
-        <span style="font:600 7px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.12em; margin-top:3px;">COLS</span>
-      </div>
-      <div onClick="{{ onColsMore }}" title="Fit more columns" style="{{ pager.moreStyle }}">+</div>
-    </div>
-    <!-- page dots -->
-    <sc-if value="{{ pager.multi }}" hint-placeholder-val="{{ false }}">
-    <div style="display:flex; align-items:center; gap:7px;">
-      <sc-for list="{{ pager.dots }}" as="d" hint-placeholder-count="3">
-        <div data-p="{{ d.i }}" onClick="{{ onPageDot }}" style="{{ d.style }}"></div>
-      </sc-for>
-    </div>
-    </sc-if>
-    <!-- gesture hint -->
-    <div style="display:flex; align-items:center; gap:6px; color:#56565e;">
-      <svg width="16" height="16" viewBox="0 0 16 16" style="flex:none;"><path d="M2 8 H7 M5.2 5.6 L7.6 8 L5.2 10.4 M14 8 H9 M10.8 5.6 L8.4 8 L10.8 10.4" fill="none" stroke="#56565e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-      <span style="font:600 8.5px/1.25 'JetBrains Mono'; max-width:96px;">{{ pager.hint }}</span>
-    </div>
-  </div>
-  </sc-if>
   </sc-if><!-- /isBuild -->
 
   <!-- ===================== FC CONTROLLERS ===================== -->
@@ -670,6 +621,176 @@
           </div>
           </sc-if>
 
+          <!-- BUNDLED CAB · DynaCab -->
+          <sc-if value="{{ ed.isCab }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:2px 4px;">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:18px;">
+              <div onClick="{{ onCabCycle }}" data-d="-1" style="width:34px; height:46px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">‹</div>
+              <div style="display:flex; flex-direction:column; gap:3px; justify-content:center; height:46px; min-width:180px; padding:0 14px; background:#0d0d10; border:1px solid #2c2c34; border-radius:10px;">
+                <span style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">CAB</span>
+                <span style="font-size:14px; font-weight:700; color:#ededf2; white-space:nowrap;">{{ dyna.cab }}</span>
+              </div>
+              <div onClick="{{ onCabCycle }}" data-d="1" style="width:34px; height:46px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">›</div>
+
+              <div onClick="{{ onMicCycle }}" data-d="-1" style="width:34px; height:46px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">‹</div>
+              <div style="display:flex; flex-direction:column; gap:3px; justify-content:center; height:46px; min-width:150px; padding:0 14px; background:#0d0d10; border:1px solid #2c2c34; border-radius:10px;">
+                <span style="font:600 8px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em;">MIC</span>
+                <span style="font-size:14px; font-weight:700; color:#ededf2; white-space:nowrap;">{{ dyna.mic }}</span>
+              </div>
+              <div onClick="{{ onMicCycle }}" data-d="1" style="width:34px; height:46px; flex:none; display:flex; align-items:center; justify-content:center; background:#121214; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; color:#9a9aa3; font-size:16px;" style-hover="border-color:#3f3f48; color:#e9e9ee;">›</div>
+
+              <span style="flex:1;"></span>
+              <div style="display:flex; align-items:center; gap:7px; height:46px; padding:0 14px; background:#10201a; border:1px solid #2c4a3a; border-radius:10px; font:700 11px/1 'JetBrains Mono'; letter-spacing:.1em; color:#5fd99a;">
+                <span style="width:7px; height:7px; border-radius:50%; background:#5fd99a; box-shadow:0 0 7px #5fd99a;"></span>{{ dyna.mode }}
+              </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:30px; align-items:center; justify-content:center;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                <div data-micbox="1" style="position:relative; width:236px; height:236px; flex:none; border-radius:18px; background:radial-gradient(circle at 50% 46%, #20201f, #0a0a0c 74%); border:1px solid #242429; overflow:hidden;">
+                  <svg viewBox="0 0 236 236" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
+                    <circle cx="118" cy="108" r="96" fill="none" stroke="#2a2a30" stroke-width="1.5"></circle>
+                    <circle cx="118" cy="108" r="70" fill="none" stroke="#26262c" stroke-width="1.5"></circle>
+                    <circle cx="118" cy="108" r="44" fill="none" stroke="#26262c" stroke-width="1.5"></circle>
+                    <circle cx="118" cy="108" r="16" fill="#16161b" stroke="#33333c" stroke-width="2"></circle>
+                    <line x1="118" y1="12" x2="118" y2="204" stroke="#1c1c22" stroke-width="1" stroke-dasharray="3 5"></line>
+                    <text x="118" y="226" text-anchor="middle" fill="#56565e" font-size="10" font-family="'JetBrains Mono'">CONE CENTER · EDGE</text>
+                  </svg>
+                  <div onPointerDown="{{ onMicDown }}" title="Drag to set mic position &amp; distance" style="{{ dyna.micDotStyle }}"></div>
+                </div>
+                <div style="display:flex; gap:16px;">
+                  <span style="font:600 11px/1 'JetBrains Mono'; color:#f5a623;">POS {{ dyna.posValue }}</span>
+                  <span style="font:600 11px/1 'JetBrains Mono'; color:#7fd8de;">DIST {{ dyna.distValue }}</span>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center;">
+                <sc-for list="{{ dyna.knobs }}" as="k" hint-placeholder-count="4">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:9px; width:86px;">
+                    <div data-dfield="{{ k.field }}" data-dmin="{{ k.min }}" data-dmax="{{ k.max }}" onPointerDown="{{ onDynaKnobDown }}" style="position:relative; width:76px; height:76px; cursor:ns-resize; touch-action:none;">
+                      <svg width="76" height="76" viewBox="0 0 64 64" style="display:block;">
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#9ac24a" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                        <g transform="{{ k.pt }}"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623"></circle></g>
+                      </svg>
+                      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:600 11px/1 'JetBrains Mono'; color:#e9e9ee; pointer-events:none;">{{ k.valueText }}</div>
+                    </div>
+                    <div style="font-weight:600; font-size:11px; color:#c3c3cb; text-align:center;">{{ k.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- OUTPUT · MAIN LEVELS -->
+          <sc-if value="{{ ed.isLevels }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:2px 4px; display:flex; flex-wrap:wrap; gap:34px; align-items:flex-start;">
+            <div>
+              <div style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em; margin-bottom:16px;">PRESET</div>
+              <div style="display:flex; gap:20px;">
+                <sc-for list="{{ lv.presetKnobs }}" as="k" hint-placeholder-count="2">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:9px; width:86px;">
+                    <div data-key="{{ k.key }}" onPointerDown="{{ onKnobDown }}" onDoubleClick="{{ onKnobReset }}" style="position:relative; width:76px; height:76px; cursor:ns-resize; touch-action:none;">
+                      <svg width="76" height="76" viewBox="0 0 64 64" style="display:block;">
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                        <g transform="{{ k.pt }}"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623"></circle></g>
+                      </svg>
+                      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:600 11px/1 'JetBrains Mono'; color:#e9e9ee; pointer-events:none;">{{ k.valueText }}</div>
+                    </div>
+                    <div style="font-weight:600; font-size:11px; color:#c3c3cb; text-align:center;">{{ k.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <div style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em; margin-bottom:16px;">SCENE LEVELS</div>
+              <div style="display:flex; gap:18px; flex-wrap:wrap;">
+                <sc-for list="{{ lv.sceneKnobs }}" as="k" hint-placeholder-count="4">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:9px; width:80px;">
+                    <div data-key="{{ k.key }}" onPointerDown="{{ onKnobDown }}" onDoubleClick="{{ onKnobReset }}" style="position:relative; width:66px; height:66px; cursor:ns-resize; touch-action:none;">
+                      <svg width="66" height="66" viewBox="0 0 64 64" style="display:block;">
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray="{{ k.dash }}" transform="rotate(135 32 32)"></circle>
+                        <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1"></circle>
+                        <g transform="{{ k.pt }}"><circle cx="32" cy="20.5" r="2.6" fill="#f5a623"></circle></g>
+                      </svg>
+                      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:600 10px/1 'JetBrains Mono'; color:#e9e9ee; pointer-events:none;">{{ k.valueText }}</div>
+                    </div>
+                    <div style="font-weight:600; font-size:11px; color:#c3c3cb; text-align:center;">{{ k.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <div style="font:600 9px/1 'JetBrains Mono'; color:#6e6e78; letter-spacing:.14em; margin-bottom:16px;">OUTPUT</div>
+              <div style="display:flex; gap:10px; align-items:flex-end;">
+                <sc-for list="{{ lv.meters }}" as="m" hint-placeholder-count="2">
+                  <div style="position:relative; width:16px; height:150px; border-radius:8px; background:#0d0d10; border:1px solid #26262c; overflow:hidden;">
+                    <div style="{{ m.barStyle }}"></div>
+                  </div>
+                </sc-for>
+                <div style="display:flex; flex-direction:column; justify-content:flex-end; gap:6px; font:600 9px/1 'JetBrains Mono'; color:#56565e; height:150px;"><span>0</span><span style="margin-top:auto;">L&nbsp;&nbsp;R</span></div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- OUTPUT · GRAPHIC EQ (swappable graphic / faders) -->
+          <sc-if value="{{ ed.isGeq }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:2px 4px;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;">
+              <div onClick="{{ onGeqOn }}" style="{{ geq.onStyle }}">{{ geq.onLabel }}</div>
+              <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid #26262c; border-radius:9px; padding:3px;">
+                <sc-for list="{{ geq.viewSeg }}" as="v" hint-placeholder-count="2">
+                  <div data-v="{{ v.id }}" onClick="{{ onEqView }}" style="{{ v.style }}">{{ v.label }}</div>
+                </sc-for>
+              </div>
+              <span style="flex:1;"></span>
+              <div onClick="{{ onGeqZero }}" style="height:38px; padding:0 16px; display:flex; align-items:center; background:#17171a; border:1px solid #2a2a31; border-radius:9px; font-size:12px; font-weight:600; color:#9a9aa3; cursor:pointer;" style-hover="border-color:#3f3f48;">Zero All</div>
+            </div>
+
+            <sc-if value="{{ geq.isGraphic }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ geq.cardStyle }}">
+              <svg viewBox="0 0 1000 300" style="width:100%; height:auto; display:block; touch-action:none;">
+                <line x1="0" y1="150" x2="1000" y2="150" stroke="#2a2a31" stroke-width="1" stroke-dasharray="4 5"></line>
+                <path d="{{ geq.fillPath }}" fill="rgba(127,174,74,.12)" stroke="none"></path>
+                <path d="{{ geq.curvePath }}" fill="none" stroke="#9ac24a" stroke-width="2.5" stroke-linejoin="round"></path>
+                <sc-for list="{{ geq.nodes }}" as="n" hint-placeholder-count="10">
+                  <line x1="{{ n.x }}" y1="150" x2="{{ n.x }}" y2="{{ n.y }}" stroke="#3a4a28" stroke-width="2"></line>
+                  <circle data-eq="gband" data-bi="{{ n.bi }}" onPointerDown="{{ onEqDown }}" cx="{{ n.x }}" cy="{{ n.y }}" r="12" fill="#9ac24a" stroke="#0a0a0c" stroke-width="2.5" style="cursor:ns-resize;"></circle>
+                </sc-for>
+              </svg>
+              <div style="display:flex; padding:2px 0 6px;">
+                <sc-for list="{{ geq.labels }}" as="l" hint-placeholder-count="10">
+                  <div style="flex:1; text-align:center; font:500 9px/1 'JetBrains Mono'; color:#56565e;">{{ l }}</div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ geq.isFaders }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#0a0a0c; border:1px solid #232329; border-radius:12px; padding:16px 12px 12px;">
+              <div style="display:flex; gap:6px; justify-content:space-between;">
+                <sc-for list="{{ geq.faders }}" as="f" hint-placeholder-count="10">
+                  <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:9px; min-width:0;">
+                    <div style="font:600 10px/1 'JetBrains Mono'; color:#9ac24a;">{{ f.value }}</div>
+                    <div data-gfader="{{ f.bi }}" onPointerDown="{{ onGeqFaderDown }}" style="position:relative; width:14px; height:150px; border-radius:8px; background:#16161b; border:1px solid #26262c; cursor:ns-resize; touch-action:none;">
+                      <div style="{{ f.fillStyle }}"></div>
+                      <div style="{{ f.handleStyle }}"></div>
+                    </div>
+                    <div style="font:500 9px/1 'JetBrains Mono'; color:#56565e;">{{ f.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+          </div>
+          </sc-if>
+
           <!-- STUB -->
           <sc-if value="{{ ed.isStub }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#4a4a52; padding:50px 20px;">
@@ -702,8 +823,10 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <div onClick="{{ onMute }}" style="{{ ed.muteStyle }}">{{ ed.muteLabel }}</div>
         <div onClick="{{ onSceneIgnore }}" style="{{ ed.sceneStyle }}">Scene Ignore</div>
+        <sc-if value="{{ ed.canEdit }}" hint-placeholder-val="{{ true }}">
         <div onClick="{{ onBypass }}" style="{{ ed.bypassStyle }}">{{ ed.bypassLabel }}</div>
         <div onClick="{{ onRemove }}" style="{{ ed.removeStyle }}">Remove</div>
+        </sc-if>
       </div>
     </div>
    </div>
@@ -718,10 +841,10 @@
       <div style="display:flex; align-items:center; gap:11px; padding:18px 18px 16px; border-bottom:1px solid #1c1c22; flex:none;">
         <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
         <div style="flex:1; min-width:0;">
-          <div style="font-size:15px; font-weight:700; color:#fff;">AX-3 Editor</div>
+          <div style="font-size:15px; font-weight:700; color:#fff;">AM4 Editor</div>
           <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
             <span style="width:8px; height:8px; border-radius:50%; background:#33c46b; box-shadow:0 0 7px #33c46b;"></span>
-            <span style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83;">Connected · FW 1.4.0</span>
+            <span style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83;">Connected · AM4 FW 1.02</span>
           </div>
         </div>
         <div onClick="{{ closeDrawer }}" style="width:34px; height:34px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:9px; cursor:pointer; font-size:14px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
@@ -771,24 +894,6 @@
             </div>
           </div>
         </div>
-      </div>
-      <!-- account footer -->
-      <div onClick="{{ openAccount }}" style="{{ acct.drawerRowStyle }}" style-hover="border-color:#3f3f48;">
-        <sc-if value="{{ acct.loggedIn }}" hint-placeholder-val="{{ false }}">
-          <span style="{{ acct.drawerAvatarStyle }}">{{ acct.initials }}</span>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:14px; font-weight:700; color:#e9e9ee; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</div>
-            <div style="font:600 10px/1 'JetBrains Mono'; color:#7a7a83; margin-top:3px;">{{ acct.syncShort }}</div>
-          </div>
-          <span style="font-size:15px; color:#56565e;">›</span>
-        </sc-if>
-        <sc-if value="{{ acct.loggedOut }}" hint-placeholder-val="{{ true }}">
-          <span style="width:34px; height:34px; flex:none; border-radius:50%; border:1px solid #2a2a31; display:flex; align-items:center; justify-content:center;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="#8a8a93" stroke-width="1.8"></circle><path d="M5.5 19.2 a6.6 5.6 0 0 1 13 0" stroke="#8a8a93" stroke-width="1.8" stroke-linecap="round"></path></svg>
-          </span>
-          <span style="flex:1; font-size:14px; font-weight:700; color:#cfcfd6;">Sign in / Register</span>
-          <span style="font-size:15px; color:#56565e;">›</span>
-        </sc-if>
       </div>
     </div>
   </div>
@@ -954,257 +1059,6 @@
   </div>
   </sc-if>
 
-  <!-- ===================== ACCOUNT / CLOUD SYNC ===================== -->
-  <sc-if value="{{ accountOpen }}" hint-placeholder-val="{{ false }}">
-  <div onClick="{{ closeAccount }}" data-screen-label="Account" style="{{ acct.overlayStyle }}">
-    <div onClick="{{ stop }}" style="{{ acct.cardStyle }}">
-
-      <!-- preview-state switcher (handoff aid) -->
-      <div style="display:flex; align-items:center; gap:9px; padding:9px 13px; background:#0b0b0d; border-bottom:1px solid #1d1d22; flex:none;">
-        <span style="font:700 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.16em; flex:none;">PREVIEW</span>
-        <div style="display:flex; gap:3px; flex:1; flex-wrap:wrap;">
-          <sc-for list="{{ acct.demoStates }}" as="d" hint-placeholder-count="5">
-            <div data-astate="{{ d.id }}" onClick="{{ acct.onDemoState }}" style="{{ d.style }}">{{ d.label }}</div>
-          </sc-for>
-        </div>
-        <div onClick="{{ closeAccount }}" style="width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:8px; cursor:pointer; font-size:13px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
-      </div>
-
-      <div class="axs-scroll" style="flex:1; min-height:0; overflow-y:auto;">
-
-      <!-- ========== AUTH ========== -->
-      <sc-if value="{{ acct.isAuth }}" hint-placeholder-val="{{ true }}">
-      <div style="padding:28px 26px 26px;">
-        <div style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:13px; margin-bottom:24px;">
-          <svg width="42" height="42" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
-          <div>
-            <div style="font-size:21px; font-weight:800; color:#fff; letter-spacing:-.01em;">{{ acct.authTitle }}</div>
-            <div style="font-size:13px; color:#9a9aa3; margin-top:6px;">Sync presets, scenes &amp; rigs across every device</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:4px; background:#0e0e10; border:1px solid #26262c; border-radius:12px; padding:4px; margin-bottom:22px;">
-          <div data-atab="signin" onClick="{{ acct.onAcctTab }}" style="{{ acct.tabSignin }}">Sign in</div>
-          <div data-atab="register" onClick="{{ acct.onAcctTab }}" style="{{ acct.tabRegister }}">Create account</div>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:16px;">
-          <div>
-            <div style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83; letter-spacing:.1em; margin-bottom:8px;">EMAIL</div>
-            <input value="{{ acct.email }}" onInput="{{ acct.onAuthEmail }}" type="email" placeholder="you@band.com" style="width:100%; height:46px; padding:0 14px; background:#0e0e10; border:1px solid #2a2a31; border-radius:11px; color:#e9e9ee; font:600 14px/46px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-          </div>
-          <sc-if value="{{ acct.isPassword }}" hint-placeholder-val="{{ true }}">
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <span style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83; letter-spacing:.1em;">PASSWORD</span>
-              <sc-if value="{{ acct.isSignin }}" hint-placeholder-val="{{ true }}"><span onClick="{{ acct.onForgot }}" style="font-size:11.5px; font-weight:600; color:#35c9d6; cursor:pointer;">Forgot?</span></sc-if>
-            </div>
-            <input type="password" placeholder="••••••••" style="width:100%; height:46px; padding:0 14px; background:#0e0e10; border:1px solid #2a2a31; border-radius:11px; color:#e9e9ee; font:600 14px/46px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-          </div>
-          </sc-if>
-        </div>
-        <button onClick="{{ acct.onAuthSubmit }}" style="width:100%; height:48px; margin-top:22px; background:#35c9d6; color:#06181a; border:none; border-radius:12px; font:800 14px/1 'Hanken Grotesk'; cursor:pointer;" style-hover="background:#46d6e2;">{{ acct.submitLabel }}</button>
-        <div onClick="{{ acct.onAcctMode }}" style="text-align:center; margin-top:15px; font-size:12.5px; font-weight:600; color:#9a9aa3; cursor:pointer;" style-hover="color:#cfcfd6;">{{ acct.modeToggle }}</div>
-        <div style="display:flex; align-items:center; gap:12px; margin:22px 0;">
-          <div style="flex:1; height:1px; background:#26262c;"></div>
-          <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">OR CONTINUE WITH</span>
-          <div style="flex:1; height:1px; background:#26262c;"></div>
-        </div>
-        <div style="display:flex; gap:11px;">
-          <div data-prov="Google" onClick="{{ acct.onOAuth }}" style="flex:1; height:47px; display:flex; align-items:center; justify-content:center; gap:9px; background:#1c1c21; border:1px solid #2a2a31; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
-            <span style="width:19px; height:19px; flex:none; border-radius:50%; background:#fff; color:#4285f4; font:800 12px/19px 'Hanken Grotesk'; text-align:center;">G</span>
-            <span style="font-size:13.5px; font-weight:700; color:#e9e9ee;">Google</span>
-          </div>
-          <div data-prov="Apple" onClick="{{ acct.onOAuth }}" style="flex:1; height:47px; display:flex; align-items:center; justify-content:center; gap:9px; background:#1c1c21; border:1px solid #2a2a31; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
-            <span style="width:19px; height:19px; flex:none; border-radius:50%; background:#0a0a0a; border:1px solid #3a3a44;"></span>
-            <span style="font-size:13.5px; font-weight:700; color:#e9e9ee;">Apple</span>
-          </div>
-        </div>
-        <sc-if value="{{ acct.isRegister }}" hint-placeholder-val="{{ false }}">
-        <div style="text-align:center; margin-top:20px; font-size:11px; color:#56565e; line-height:1.55;">By creating an account you agree to the Axis<br>Terms of Service &amp; Privacy Policy.</div>
-        </sc-if>
-      </div>
-      </sc-if>
-
-      <!-- ========== VERIFY ========== -->
-      <sc-if value="{{ acct.isVerify }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:36px 28px 30px; display:flex; flex-direction:column; align-items:center; text-align:center;">
-        <div style="width:66px; height:66px; border-radius:50%; background:rgba(53,201,214,.1); border:1px solid rgba(53,201,214,.3); display:flex; align-items:center; justify-content:center; margin-bottom:20px;">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="5.5" width="18" height="13" rx="2.4" stroke="#35c9d6" stroke-width="1.8"></rect><path d="M4 7 L12 13 L20 7" stroke="#35c9d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-        </div>
-        <div style="font-size:21px; font-weight:800; color:#fff;">{{ acct.verifyTitle }}</div>
-        <div style="font-size:13.5px; color:#9a9aa3; line-height:1.6; margin-top:11px; max-width:300px;">{{ acct.verifyBody }}</div>
-        <div style="margin-top:14px; padding:10px 16px; background:#0e0e10; border:1px solid #26262c; border-radius:10px; font:600 13px/1 'JetBrains Mono'; color:#35c9d6;">{{ acct.verifyEmail }}</div>
-        <button onClick="{{ acct.onVerified }}" style="width:100%; height:48px; margin-top:24px; background:#35c9d6; color:#06181a; border:none; border-radius:12px; font:800 14px/1 'Hanken Grotesk'; cursor:pointer;" style-hover="background:#46d6e2;">I've confirmed — continue</button>
-        <div style="display:flex; align-items:center; gap:18px; margin-top:18px;">
-          <span onClick="{{ acct.onResend }}" style="font-size:12.5px; font-weight:700; color:#cfcfd6; cursor:pointer;" style-hover="color:#fff;">Resend email</span>
-          <span style="width:3px; height:3px; border-radius:50%; background:#3a3a44;"></span>
-          <span onClick="{{ acct.onVerifyBack }}" style="font-size:12.5px; font-weight:700; color:#9a9aa3; cursor:pointer;" style-hover="color:#cfcfd6;">Use a different email</span>
-        </div>
-      </div>
-      </sc-if>
-
-      <!-- ========== ACCOUNT ========== -->
-      <sc-if value="{{ acct.isAccount }}" hint-placeholder-val="{{ false }}">
-      <div>
-        <!-- profile header -->
-        <div style="display:flex; align-items:center; gap:15px; padding:24px 24px 20px; border-bottom:1px solid #1d1d22;">
-          <div style="position:relative; flex:none;">
-            <div style="width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#35c9d6; color:#06181a; font:800 21px/1 'JetBrains Mono';">{{ acct.initials }}</div>
-            <div onClick="{{ acct.onAvatarEdit }}" title="Change photo" style="position:absolute; right:-3px; bottom:-3px; width:25px; height:25px; border-radius:50%; background:#1c1c21; border:1px solid #3a3a44; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:#cfcfd6;" style-hover="border-color:#35c9d6; color:#35c9d6;">✎</div>
-          </div>
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:center; gap:9px;">
-              <span style="font-size:18px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</span>
-              <span style="flex:none; font:700 9px/1 'JetBrains Mono'; letter-spacing:.06em; color:#06181a; background:#f5a623; border-radius:5px; padding:4px 7px;">{{ acct.plan }}</span>
-            </div>
-            <div style="font-size:13px; color:#9a9aa3; margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.email }}</div>
-          </div>
-        </div>
-
-        <!-- cloud sync -->
-        <div style="padding:20px 24px 4px;">
-          <div style="font:700 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.14em; margin-bottom:12px;">CLOUD SYNC</div>
-          <div style="background:#0e0e10; border:1px solid #26262c; border-radius:14px; padding:16px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <span style="{{ acct.statusDot }}"></span>
-              <div style="flex:1; min-width:0;">
-                <div style="font-size:14px; font-weight:700; color:#e9e9ee;">{{ acct.syncText }}</div>
-                <div style="font-size:12px; color:#7a7a83; margin-top:3px;">{{ acct.syncSub }}</div>
-              </div>
-            </div>
-            <sc-if value="{{ acct.isSyncing }}" hint-placeholder-val="{{ false }}">
-              <div style="height:6px; background:#1c1c21; border-radius:3px; overflow:hidden; margin-top:15px;"><div style="{{ acct.progressStyle }}"></div></div>
-            </sc-if>
-            <sc-if value="{{ acct.isSynced }}" hint-placeholder-val="{{ true }}">
-              <div onClick="{{ acct.onSyncNow }}" style="margin-top:15px; height:42px; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1px solid #2e6f74; border-radius:11px; cursor:pointer; color:#35c9d6; font:700 13px/1 'Hanken Grotesk';" style-hover="background:#0d1516; border-color:#35c9d6;">↻ Sync now</div>
-            </sc-if>
-            <sc-if value="{{ acct.isConflict }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:15px; display:flex; gap:9px;">
-                <div data-resolve="cloud" onClick="{{ acct.onResolveConflict }}" style="flex:1; height:42px; display:flex; align-items:center; justify-content:center; background:#35c9d6; color:#06181a; border-radius:11px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Keep cloud</div>
-                <div data-resolve="local" onClick="{{ acct.onResolveConflict }}" style="flex:1; height:42px; display:flex; align-items:center; justify-content:center; background:transparent; border:1px solid #3a3a44; color:#cfcfd6; border-radius:11px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';" style-hover="border-color:#3f3f48;">Keep this device</div>
-              </div>
-              <div style="margin-top:11px; font-size:11.5px; color:#7a7a83; text-align:center;">Or review each conflicting change individually.</div>
-            </sc-if>
-          </div>
-
-          <div style="margin-top:16px; display:flex; flex-direction:column;">
-            <sc-for list="{{ acct.syncItems }}" as="s" hint-placeholder-count="4">
-              <div data-sync="{{ s.id }}" onClick="{{ acct.onSyncItem }}" style="display:flex; align-items:center; gap:13px; padding:11px 2px; cursor:pointer;">
-                <span style="{{ s.boxStyle }}">{{ s.check }}</span>
-                <span style="flex:1; font-size:13.5px; font-weight:600; color:#e3e3e8;">{{ s.label }}</span>
-                <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">{{ s.meta }}</span>
-              </div>
-            </sc-for>
-            <div onClick="{{ acct.onFullBackup }}" style="display:flex; align-items:center; gap:13px; padding:13px 2px; margin-top:4px; border-top:1px solid #1d1d22; cursor:pointer;">
-              <span style="{{ acct.backupBoxStyle }}">{{ acct.backupCheck }}</span>
-              <div style="flex:1;">
-                <div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Full device backup</div>
-                <div style="font-size:11px; color:#7a7a83; margin-top:2px;">Daily snapshot of everything on AX-3</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- manage account -->
-        <div style="padding:14px 24px 4px;">
-          <div style="font:700 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.14em;">ACCOUNT</div>
-        </div>
-        <div style="padding:0 16px 6px;">
-          <!-- display name -->
-          <div>
-            <div data-mkey="name" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
-              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 12px/1 'Hanken Grotesk'; color:#9a9aa3;">Aa</span>
-              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Display name</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</div></div>
-              <span style="{{ acct.chevName }}">›</span>
-            </div>
-            <sc-if value="{{ acct.openName }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
-              <input value="{{ acct.user.name }}" onInput="{{ acct.onAcctName }}" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-              <div onClick="{{ acct.onSaveName }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Save</div>
-            </div>
-            </sc-if>
-          </div>
-          <!-- change email -->
-          <div>
-            <div data-mkey="email" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
-              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 14px/1 'Hanken Grotesk'; color:#9a9aa3;">@</span>
-              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Change email</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.email }}</div></div>
-              <span style="{{ acct.chevEmail }}">›</span>
-            </div>
-            <sc-if value="{{ acct.openEmail }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
-              <input type="email" placeholder="new@email.com" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-              <input type="password" placeholder="Current password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-              <div style="font-size:11px; color:#7a7a83;">We'll send a confirmation link to the new address.</div>
-              <div onClick="{{ acct.onSaveEmail }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Update email</div>
-            </div>
-            </sc-if>
-          </div>
-          <!-- change password -->
-          <div>
-            <div data-mkey="password" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
-              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono'; color:#9a9aa3;">••</span>
-              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Change password</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">Last changed 3 months ago</div></div>
-              <span style="{{ acct.chevPassword }}">›</span>
-            </div>
-            <sc-if value="{{ acct.openPassword }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
-              <input type="password" placeholder="Current password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-              <input type="password" placeholder="New password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
-              <div onClick="{{ acct.onSavePassword }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Update password</div>
-            </div>
-            </sc-if>
-          </div>
-          <!-- subscription -->
-          <div>
-            <div data-mkey="plan" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
-              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font-size:14px; color:#f5a623;">★</span>
-              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Subscription &amp; plan</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">Axis Pro · renews Jul 30, 2026</div></div>
-              <span style="{{ acct.chevPlan }}">›</span>
-            </div>
-            <sc-if value="{{ acct.openPlan }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:12px;">
-              <div style="display:flex; flex-direction:column; gap:8px;">
-                <sc-for list="{{ acct.planPerks }}" as="p" hint-placeholder-count="3">
-                  <div style="display:flex; align-items:center; gap:9px;"><span style="color:#35c9d6; font-size:12px;">✓</span><span style="font-size:12.5px; color:#cfcfd6;">{{ p }}</span></div>
-                </sc-for>
-              </div>
-              <div onClick="{{ acct.onManageBilling }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:transparent; border:1px solid #3a3a44; color:#cfcfd6; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';" style-hover="border-color:#3f3f48;">Manage billing</div>
-            </div>
-            </sc-if>
-          </div>
-          <!-- devices -->
-          <div>
-            <div data-mkey="devices" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
-              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font-size:13px; color:#9a9aa3;">⊞</span>
-              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Connected devices</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">{{ acct.deviceCount }}</div></div>
-              <span style="{{ acct.chevDevices }}">›</span>
-            </div>
-            <sc-if value="{{ acct.openDevices }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:9px;">
-              <sc-for list="{{ acct.devices }}" as="d" hint-placeholder-count="3">
-                <div style="display:flex; align-items:center; gap:11px;">
-                  <span style="{{ d.dot }}"></span>
-                  <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600; color:#e3e3e8;">{{ d.name }}</div><div style="font-size:11px; color:#7a7a83; margin-top:2px;">{{ d.meta }}</div></div>
-                  <sc-if value="{{ d.removable }}" hint-placeholder-val="{{ false }}"><span onClick="{{ acct.onSignOutDevice }}" data-dev="{{ d.name }}" style="font-size:11.5px; font-weight:700; color:#9a9aa3; cursor:pointer;" style-hover="color:#e07a6a;">Remove</span></sc-if>
-                </div>
-              </sc-for>
-            </div>
-            </sc-if>
-          </div>
-        </div>
-
-        <!-- sign out -->
-        <div style="padding:10px 24px 26px;">
-          <div onClick="{{ acct.onSignOut }}" style="height:46px; display:flex; align-items:center; justify-content:center; gap:9px; background:transparent; border:1px solid #3a2526; border-radius:12px; cursor:pointer; color:#e07a6a; font:700 13px/1 'Hanken Grotesk';" style-hover="background:#1a1012; border-color:#5a3030;">Sign out</div>
-        </div>
-      </div>
-      </sc-if>
-
-      </div>
-    </div>
-  </div>
-  </sc-if>
-
   <!-- ===================== TOAST ===================== -->
   <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
   <div style="position:absolute; bottom:24px; left:50%; z-index:300; display:flex; align-items:center; gap:11px; padding:12px 17px; background:#1c1c21; border:1px solid #2e2e36; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:axsToast 2.2s ease forwards;">
@@ -1302,32 +1156,21 @@ class Component extends DCLogic {
       ringmod:["Stereo"], synth:["Glide"], cab:["Stereo"], chorus:["Stereo"], flange:["Stereo"], phaser:["Stereo"]
     };
 
-    // grid is 12 cols x 4 rows; idx = row*12 + col
-    const g = new Array(48).fill(null);
-    const put = (i, catId, type, label, extra) => { g[i] = Object.assign({ catId, type: type || this.byId[catId].types[0], label: label || this.byId[catId].short, channel:"A", bypassed:false }, extra||{}); };
-    // showcase preset: series chain with a 3-way parallel section, on row 1
-    put(12,"in","Input 1","In 1");
-    put(13,"pitch","Detune","Pitch",{bypassed:true});
-    put(14,"gate","Gate","Gate");
-    put(15,"wah","Clyde Wah","Wah");
-    put(4,"drive","TS808 OD","Drive"); put(16,"comp","Studio","Comp"); put(28,"ringmod","Ring Modulator","RngMod");
-    put(5,"eq","Parametric 5-Band","PEQ"); g[17]={shunt:true}; put(29,"synth","Mono Synth","Synth",{bypassed:true});
-    put(18,"amp","5153 100W Stealth Red","Amp");
-    put(19,"cab","4x12 Recto","Cab");
-    put(20,"eq","Parametric 5-Band","PEQ");
-    g[21]={shunt:true};
-    put(22,"reverb","Large Hall","Reverb");
-    put(23,"out","Output 1","Out 1"); put(35,"out","Output 2","Out 2");
-
-    const routes = {
-      12:[13], 13:[14], 14:[15], 15:[4,16,28],
-      4:[5], 16:[17], 28:[29],
-      5:[18], 17:[18], 29:[18],
-      18:[19], 19:[20], 20:[21], 21:[22], 22:[23,35]
-    };
+    // AM4 = fixed linear chain: Input · 4 effect slots · Output (no Cab block — cab is bundled in the Amp)
+    const mk = (catId, type, label) => ({ catId, type, label:label||this.byId[catId].short, channel:"A", bypassed:false });
+    const g = [
+      mk("in","Input","In"),                          // 0 — fixed
+      mk("drive","TS808 OD","Drive"),                 // 1
+      mk("amp","5153 100W Stealth Red","Amp"),        // 2  (carries the bundled cab)
+      mk("delay","Tube Tape","Delay"),                // 3
+      mk("reverb","Large Hall","Reverb"),             // 4
+      mk("out","Output","Out")                        // 5 — fixed (EQ + main levels)
+    ];
+    this.SLOT0=1; this.SLOTN=4; // placeable effect slot range (inclusive)
+    const routes = {};
 
     this.state = {
-      grid:g, routes, rects:{}, selected:18, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Ideal", railActive:"build", scene:1, page:0, mobCols:4, drawerOpen:false,
+      grid:g, routes, rects:{}, selected:2, editorOpen:false, globalMode:"basic", blockModes:{}, editorH:380, vh:(typeof window!=="undefined"?window.innerHeight:800), activePage:"Amp", railActive:"build", scene:1, page:0, mobCols:4, drawerOpen:false,
       fcDevice:"FM3", fcLayout:0, fcView:0, fcSwitch:0, fcInspOpen:false, fcLayouts:this.fcSeed(),
       paletteOpen:false, query:"", hi:0, paletteCat:null, placeTarget:null, paletteMode:"place",
       currentPreset:430, presetOpen:false, presetQuery:"", presetHi:0, presetFilter:"all", favPresets:[7,14,18,25], recentPresets:[430,18,7,2],
@@ -1336,13 +1179,17 @@ class Component extends DCLogic {
       knobs:{}, toggles:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, hoverCell:null, moveMode:false, moveIdx:null, moveOver:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
       oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] },
-      acctOpen:false, acctView:"auth", acctTab:"signin", acctMode:"password", authEmail:"", verifyKind:"magic",
-      loggedIn:false, acctSync:"idle", acctSyncedAt:"2 minutes ago", acctExpand:null, fullBackup:false,
-      syncSel:{ presets:true, scenes:true, fc:true, settings:true },
-      acctName:"Jordan Vale", acctUserEmail:"jordan@fairparken.com"
+      // ---- AM4-specific ----
+      dyna:{ cab:"4x12 1960TV", mic:"Dynamic 1", pos:-3.98, dist:1.48, lowCut:60, highCut:18000, mode:"DYNA-CAB" }, // bundled cab (DynaCab style)
+      geq:{ on:true, bands:[0,0,0,0,0,0,0,0,0,0] },  // 10-band output graphic EQ
+      eqView:"graphic"                               // output EQ display: "graphic" | "faders"
     };
     this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.connectDrag=null; this._toastT=null;
     this.OF=[62,125,250,500,1000,2000,4000,8000];
+    this.GEQ_F=[31,63,125,250,500,1000,2000,4000,8000,16000];           // AM4 10-band output GEQ
+    this.GEQ_LABELS=["31","63","125","250","500","1k","2k","4k","8k","16k"];
+    this.DYNA_CABS=["1x12 Tweed Deluxe","2x12 Brit Silver","4x12 1960TV","4x12 Recto OS","4x12 USA V30","1x12 Princeton","2x12 USA Deluxe","4x12 Greenback","1x8 Champ","UltraRes Mix 1"];
+    this.DYNA_MICS=["Dynamic 1 (57)","Dynamic 2 (421)","Ribbon (121)","Condenser (414)","Large Cond (U87)","Bundle Blend"];
     this.L0=Math.log10(20); this.L1=Math.log10(20000);
   }
 
@@ -1353,6 +1200,9 @@ class Component extends DCLogic {
       if (e.key==="Escape" && this.state.presetOpen) this.closePresetPicker();
     };
     this._move = (e) => {
+      if (this.dynaDrag){ const d=this.dynaDrag; const v=this.clamp(d.startVal+(d.startY-e.clientY)*(d.max-d.min)/170, d.min, d.max); this.setNested("dyna."+d.field, Math.round(v*100)/100); return; }
+      if (this.micDrag){ this.micMove(e); return; }
+      if (this.geqDrag){ this.geqFaderMove(e); return; }
       if (this.gridSwipe){
         const s=this.gridSwipe; const dx=e.clientX-s.startX, dy=e.clientY-s.startY;
         if(!s.axis){ if(Math.abs(dx)>8||Math.abs(dy)>8){ s.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; if(s.axis==="v"){ this.gridSwipe=null; } else { s.moved=true; } } }
@@ -1400,7 +1250,7 @@ class Component extends DCLogic {
         this.setState({ adjust:null, moveMode:false, moveIdx:null, moveOver:null }); return;
       }
       if (this.connectDrag){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
-      this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
+      this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; this.dynaDrag=null; this.micDrag=null; this.geqDrag=null; document.body.style.cursor="";
     };
     this._resize = () => this.setState({ vw: window.innerWidth, vh: window.innerHeight });
     this._touchStart = (e) => { if(!this.isMobile()) return; if(e.touches && e.touches.length===2){ const t=e.touches, dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; this._pinch={ startDist:Math.hypot(dx,dy)||1, startCols:this.clamp(this.state.mobCols||4,3,12) }; clearTimeout(this._lpTimer); this.gesture=null; this.gridSwipe=null; this.moveModeActive=false; this.connectDrag=null; this.setState({ moveMode:false, moveIdx:null, adjust:null, linkTo:null }); } };
@@ -1486,13 +1336,21 @@ class Component extends DCLogic {
     for(let i=0;i<7;i++){ if(f>=F[i]&&f<=F[i+1]){ const t=(lf-Math.log10(F[i]))/(Math.log10(F[i+1])-Math.log10(F[i])); const s=0.5-0.5*Math.cos(t*Math.PI); return b.bands[i]*(1-s)+b.bands[i+1]*s; } }
     return 0;
   }
+  geqMag(f){
+    const b=this.state.geq; if(!b.on) return 0;
+    const F=this.GEQ_F, n=F.length, lf=Math.log10(f);
+    if(f<=F[0]) return b.bands[0];
+    if(f>=F[n-1]) return b.bands[n-1];
+    for(let i=0;i<n-1;i++){ if(f>=F[i]&&f<=F[i+1]){ const t=(lf-Math.log10(F[i]))/(Math.log10(F[i+1])-Math.log10(F[i])); const s=0.5-0.5*Math.cos(t*Math.PI); return b.bands[i]*(1-s)+b.bands[i+1]*s; } }
+    return 0;
+  }
   buildPath(fn,r){ let cur=""; const N=170; for(let i=0;i<=N;i++){ const x=i/N*1000, y=this.dbToY(fn(this.xToF(x)),r); cur+=(i?" L":"M")+x.toFixed(1)+" "+y.toFixed(1); } const fill=cur+" L1000 150 L0 150 Z"; return { cur, fill }; }
 
   fmtF(f){ return f>=1000 ? (f/1000).toFixed(f<9950?2:1).replace(/\.?0+$/,"")+"k" : Math.round(f)+""; }
   fmtG(g){ return (g>=0?"+":"")+g.toFixed(1); }
 
   showToast(text,accent){ if(this._toastT) clearTimeout(this._toastT); this.setState({ toast:{show:true,text,accent:accent||"#33c46b"} }); this._toastT=setTimeout(()=>this.setState({toast:null}),2150); }
-  firstEmpty(){ const g=this.state.grid; for(let i=0;i<g.length;i++) if(!g[i]) return i; return null; }
+  firstEmpty(){ const g=this.state.grid; for(let i=this.SLOT0;i<=this.SLOTN;i++) if(!g[i]) return i; return null; }
   isMobile(){ return this.state.vw < 760; }
 
   // ---- palette ----
@@ -1513,7 +1371,7 @@ class Component extends DCLogic {
   onResult = (e) => { const r=(this._lastResults||[])[+e.currentTarget.dataset.i]; if(r) this.place(r.catId,r.typeName); };
   onRecent = (e) => { const r=this.state.recents[+e.currentTarget.dataset.ri]; if(r) this.place(r.catId,r.type); };
 
-  defaultPage(catId, mode){ if(catId==="amp") return mode==="basic"?"Ideal":"Tone"; return "Controls"; }
+  defaultPage(catId, mode){ if(catId==="amp") return mode==="basic"?"Amp":"Tone"; if(catId==="in") return "Input"; if(catId==="out") return "Main Levels"; return "Controls"; }
   place(catId,type){
     const cat=this.byId[catId];
     if(this.state.paletteMode==="retype"){
@@ -1523,7 +1381,7 @@ class Component extends DCLogic {
     }
     let idx=this.state.placeTarget!=null?this.state.placeTarget:(this.state.grid[this.state.selected]?this.firstEmpty():this.state.selected);
     if(idx==null) idx=this.firstEmpty();
-    if(idx==null){ this.showToast("Grid is full","#d6543f"); this.setState({paletteOpen:false}); return; }
+    if(idx==null){ this.showToast("All 4 effect blocks are in use","#d6543f"); this.setState({paletteOpen:false}); return; }
     const grid=this.state.grid.slice();
     grid[idx]={catId,type,label:cat.short,channel:"A",bypassed:false};
     const wasOpen=this.state.editorOpen;
@@ -1535,8 +1393,9 @@ class Component extends DCLogic {
 
   buildResults(){
     const q=this.state.query.trim().toLowerCase(), catF=this.state.paletteCat;
+    const SKIP={in:1,out:1,cab:1,eq:1,send:1,return:1,looper:1}; // AM4: I/O fixed, cab bundled in amp, EQ on output
     let entries=[];
-    this.CATS.forEach(c=>{ if(catF&&c.id!==catF) return;
+    this.CATS.forEach(c=>{ if(SKIP[c.id]) return; if(catF&&c.id!==catF) return;
       entries.push({kind:"block",catId:c.id,typeName:c.types[0],name:c.name+" block",sub:"Default · "+c.types[0],tag:c.short,kindLabel:"Block"});
       c.types.forEach(t=>entries.push({kind:"type",catId:c.id,typeName:t,name:t,sub:c.name,tag:c.short,kindLabel:c.name+" type"}));
     });
@@ -1649,7 +1508,7 @@ class Component extends DCLogic {
   tabsRef = (el) => { this.tabsEl=el; };
   onContentDown = (e) => { if(e.target&&e.target.closest&&e.target.closest("[data-key],[data-eq],[data-path],[data-t],[data-q],[data-page],[data-ch],[data-toggle],[data-sel],[data-pick]")) return; this.contentSwipe={ startX:e.clientX, startY:e.clientY }; };
   swipePage(dir){ const list=this._pageNames||[]; if(list.length<2) return; let i=list.indexOf(this.state.activePage); if(i<0) i=0; const ni=this.clamp(i+dir,0,list.length-1); if(ni!==i){ this.setState({ activePage:list[ni] }); this.showToast(list[ni],"#35c9d6"); } }
-  onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
+  onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; if(c.catId==="in"||c.catId==="out"){ this.showToast("Input / Output are fixed blocks","#9a9aa3"); return; } this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
   onBypass = () => { const grid=this.state.grid.slice(); const c=grid[this.state.selected]; grid[this.state.selected]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); };
   onBlockToggle = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out") return; const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); this.showToast((c.bypassed?"On · ":"Off · ")+this.byId[c.catId].name, c.bypassed?"#46d17f":"#9a9aa3"); };
   onToggleSwitch = (e) => { const key=e.currentTarget.dataset.tkey; this.setState({ toggles:Object.assign({},this.state.toggles,{[key]:!this.togVal(key)}) }); };
@@ -1657,44 +1516,6 @@ class Component extends DCLogic {
   onSceneIgnore = () => {};
   onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
   onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id, drawerOpen:false }); const m={controllers:"Controllers",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build & FC","#35c9d6"); };
-  // ---- account / cloud sync ----
-  openAccount = () => this.setState({ acctOpen:true });
-  closeAccount = () => this.setState({ acctOpen:false });
-  onAcctTab = (e) => this.setState({ acctTab:e.currentTarget.dataset.atab, acctMode:"password" });
-  onAcctMode = () => this.setState({ acctMode: this.state.acctMode==="password"?"magic":"password" });
-  onAuthEmail = (e) => this.setState({ authEmail:e.target.value });
-  onForgot = () => this.showToast("Password reset link sent","#35c9d6");
-  onAuthSubmit = () => {
-    const S=this.state;
-    if(S.acctMode==="magic"){ this.setState({ acctView:"verify", verifyKind:"magic" }); return; }
-    if(S.acctTab==="register"){ this.setState({ acctView:"verify", verifyKind:"confirm" }); return; }
-    this.setState({ loggedIn:true, acctView:"account", acctUserEmail:S.authEmail||S.acctUserEmail }); this.showToast("Signed in","#33c46b");
-  };
-  onOAuth = (e) => { const p=e.currentTarget.dataset.prov; this.setState({ loggedIn:true, acctView:"account" }); this.showToast("Signed in with "+p,"#33c46b"); };
-  onResend = () => this.showToast("Email sent again","#35c9d6");
-  onVerified = () => { const S=this.state; this.setState({ loggedIn:true, acctView:"account", acctUserEmail:S.authEmail||S.acctUserEmail }); this.showToast("Email confirmed","#33c46b"); };
-  onVerifyBack = () => this.setState({ acctView:"auth" });
-  onSyncNow = () => { this.setState({ acctSync:"syncing" }); if(this._syncT) clearTimeout(this._syncT); this._syncT=setTimeout(()=>{ this.setState({ acctSync:"idle", acctSyncedAt:"just now" }); this.showToast("All changes synced","#33c46b"); },2200); };
-  onResolveConflict = (e) => { const k=e.currentTarget.dataset.resolve; this.setState({ acctSync:"idle", acctSyncedAt:"just now" }); this.showToast(k==="cloud"?"Restored from cloud":"Pushed this device to cloud","#35c9d6"); };
-  onAcctExpand = (e) => { const k=e.currentTarget.dataset.mkey; this.setState({ acctExpand: this.state.acctExpand===k?null:k }); };
-  onSyncItem = (e) => { const k=e.currentTarget.dataset.sync; this.setState({ syncSel:Object.assign({},this.state.syncSel,{[k]:!(this.state.syncSel[k]!==false)}) }); };
-  onFullBackup = () => this.setState({ fullBackup:!this.state.fullBackup });
-  onSignOut = () => { this.setState({ loggedIn:false, acctView:"auth", acctExpand:null, acctSync:"idle" }); this.showToast("Signed out","#9a9aa3"); };
-  onSignOutDevice = (e) => { e.stopPropagation(); this.showToast("Removed "+e.currentTarget.dataset.dev,"#9a9aa3"); };
-  onAcctName = (e) => this.setState({ acctName:e.target.value });
-  onSaveName = () => { this.setState({ acctExpand:null }); this.showToast("Display name updated","#33c46b"); };
-  onSaveEmail = () => { this.setState({ acctExpand:null }); this.showToast("Confirmation sent to new email","#35c9d6"); };
-  onSavePassword = () => { this.setState({ acctExpand:null }); this.showToast("Password changed","#33c46b"); };
-  onManageBilling = () => this.showToast("Opening billing portal…","#35c9d6");
-  onAvatarEdit = () => this.showToast("Choose a profile photo","#35c9d6");
-  onDemoState = (e) => { const d=e.currentTarget.dataset.astate;
-    if(d==="out") this.setState({ loggedIn:false, acctView:"auth", acctExpand:null });
-    else if(d==="verify") this.setState({ loggedIn:false, acctView:"verify", verifyKind:"magic", authEmail:this.state.authEmail||"you@band.com" });
-    else if(d==="account") this.setState({ loggedIn:true, acctView:"account", acctSync:"idle", acctExpand:null });
-    else if(d==="syncing") this.setState({ loggedIn:true, acctView:"account", acctSync:"syncing", acctExpand:null });
-    else if(d==="conflict") this.setState({ loggedIn:true, acctView:"account", acctSync:"conflict", acctExpand:null });
-  };
-
   // ---- preset picker ----
   pad(n){ return String(n).padStart(3,"0"); }
   presetByN(n){ return this.PBYN[n]; }
@@ -1744,12 +1565,30 @@ class Component extends DCLogic {
     else if(d.kind==="ilow"){ const eq=Object.assign({},this.state.ieq); eq.lowCut=this.clamp(this.xToF(vx),20,2000); this.setState({ieq:eq}); }
     else if(d.kind==="ihigh"){ const eq=Object.assign({},this.state.ieq); eq.highCut=this.clamp(this.xToF(vx),2000,20000); this.setState({ieq:eq}); }
     else if(d.kind==="oband"){ const eq=Object.assign({},this.state.oeq); const b=eq.bands.slice(); b[d.bi]=this.clamp(this.yToDb(vy,12),-12,12); eq.bands=b; this.setState({oeq:eq}); }
+    else if(d.kind==="gband"){ const eq=Object.assign({},this.state.geq); const b=eq.bands.slice(); b[d.bi]=Math.round(this.clamp(this.yToDb(vy,12),-12,12)*10)/10; eq.bands=b; this.setState({geq:eq}); }
   }
   onSliderDown = (e) => { e.preventDefault(); this.sliderDrag={ path:e.currentTarget.dataset.path, min:+e.currentTarget.dataset.min, max:+e.currentTarget.dataset.max, rect:e.currentTarget.getBoundingClientRect() }; const s=this.sliderDrag, frac=this.clamp((e.clientX-s.rect.left)/s.rect.width,0,1); this.setNested(s.path, s.min+frac*(s.max-s.min)); };
   onIeqType = (e) => this.setNested("ieq.type", e.currentTarget.dataset.t);
   onOeqType = (e) => this.setNested("oeq.type", e.currentTarget.dataset.t);
   onOnOff = () => this.setNested("oeq.on", !this.state.oeq.on);
   onZeroAll = () => this.setNested("oeq.bands", [0,0,0,0,0,0,0,0]);
+
+  // ---- AM4 chain ----
+  onChainTile = (e) => { const idx=+e.currentTarget.dataset.cidx; const c=this.state.grid[idx]; if(!c){ this.openPaletteFor(idx); return; } this.openBlock(idx); };
+  onChainToggle = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.cidx; const c=this.state.grid[idx]; if(!c||c.catId==="in"||c.catId==="out") return; const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); this.showToast((c.bypassed?"On · ":"Off · ")+this.byId[c.catId].name, c.bypassed?"#46d17f":"#9a9aa3"); };
+  // ---- AM4 bundled cab (DynaCab) ----
+  cycleArr(arr,cur,d){ let i=arr.indexOf(cur); if(i<0) i=0; return arr[(i+d+arr.length)%arr.length]; }
+  onCabCycle = (e) => { this.setNested("dyna.cab", this.cycleArr(this.DYNA_CABS, this.state.dyna.cab, +e.currentTarget.dataset.d)); };
+  onMicCycle = (e) => { this.setNested("dyna.mic", this.cycleArr(this.DYNA_MICS, this.state.dyna.mic, +e.currentTarget.dataset.d)); };
+  onDynaKnobDown = (e) => { e.preventDefault(); const t=e.currentTarget, f=t.dataset.dfield, min=+t.dataset.dmin, max=+t.dataset.dmax; this.dynaDrag={ field:f, min, max, startY:e.clientY, startVal:this.clamp(this.state.dyna[f],min,max) }; document.body.style.cursor="ns-resize"; };
+  onMicDown = (e) => { e.preventDefault(); const box=e.currentTarget.closest("[data-micbox]"); if(!box) return; this.micDrag={ rect:box.getBoundingClientRect() }; this.micMove(e); document.body.style.cursor="grabbing"; };
+  micMove(e){ const m=this.micDrag; if(!m) return; const r=m.rect; const px=this.clamp((e.clientX-r.left)/r.width,0,1), py=this.clamp((e.clientY-r.top)/r.height,0,1); const dyn=Object.assign({},this.state.dyna); dyn.pos=Math.round((px*2-1)*10*100)/100; dyn.dist=Math.round(this.clamp(0.1+py*5.9,0.1,6)*100)/100; this.setState({dyna:dyn}); }
+  // ---- AM4 output graphic EQ ----
+  onEqView = (e) => this.setState({ eqView: e.currentTarget.dataset.v });
+  onGeqOn = () => this.setNested("geq.on", !this.state.geq.on);
+  onGeqZero = () => this.setNested("geq.bands", [0,0,0,0,0,0,0,0,0,0]);
+  onGeqFaderDown = (e) => { e.preventDefault(); const t=e.currentTarget; this.geqDrag={ bi:+t.dataset.gfader, rect:t.getBoundingClientRect() }; this.geqFaderMove(e); document.body.style.cursor="ns-resize"; };
+  geqFaderMove(e){ const g=this.geqDrag; if(!g) return; const r=g.rect, frac=this.clamp(1-(e.clientY-r.top)/r.height,0,1); const eq=Object.assign({},this.state.geq); const b=eq.bands.slice(); b[g.bi]=Math.round((frac*24-12)*10)/10; eq.bands=b; this.setState({geq:eq}); }
 
   // ---- knob render ----
   mkKnob(label, group, suffix, size){
@@ -1811,7 +1650,12 @@ class Component extends DCLogic {
     let labels = isAmp ? knobPages[eff] : (cat.knobs.length?cat.knobs:["Mix","Level","Tone","Depth","Rate","Feedback"]).slice(0,6);
     let ctrls = labels.map(l=>({ label:l, kind:this.controlKind(l) }));
     if(!isAmp){ (this.CAT_SELECTS[sel.catId]||[]).forEach(d=>{ if(!ctrls.find(c=>c.label===d.label)) ctrls.push({ label:d.label, kind:"dropdown", optsKey:d.opts }); }); }
-    const togs=this.CAT_TOGGLES[sel.catId]||[]; if(isAmp ? (eff==="Ideal") : true){ togs.forEach(l=>{ if(!ctrls.find(c=>c.label===l)) ctrls.push({ label:l, kind:"toggle" }); }); }
+    const togs=this.CAT_TOGGLES[sel.catId]||[]; if(isAmp ? (eff==="Amp") : true){ togs.forEach(l=>{ if(!ctrls.find(c=>c.label===l)) ctrls.push({ label:l, kind:"toggle" }); }); }
+    const built=ctrls.map(c=>this.mkControl(c, eff, kSize));
+    return { grid:built.filter(c=>!c.isDropdown), selects:built.filter(c=>c.isDropdown) };
+  }
+  buildControlsFrom(eff, labels, kSize){
+    const ctrls = labels.map(l=>({ label:l, kind:this.controlKind(l) }));
     const built=ctrls.map(c=>this.mkControl(c, eff, kSize));
     return { grid:built.filter(c=>!c.isDropdown), selects:built.filter(c=>c.isDropdown) };
   }
@@ -2107,11 +1951,47 @@ class Component extends DCLogic {
     let crumbTitle="—", crumbType="";
     if(sel){ const cat=this.byId[sel.catId]; crumbTitle=cat.name+" · Ch "+sel.channel; crumbType=sel.type; }
 
+    // ===================== AM4 LINEAR CHAIN =====================
+    const chainScrollStyle = { flex:1, minHeight:0, overflow:"auto", display:"flex", flexDirection:"column", justifyContent:"center", alignItems:mob?"flex-start":"safe center", padding:mob?"18px 16px":"34px 40px", background:"radial-gradient(120% 120% at 50% 0%,#131316,#0c0c0e 70%)", WebkitOverflowScrolling:"touch" };
+    const chainInnerStyle = { display:"flex", flexDirection:"column", minWidth:"min-content" };
+    const tileW = mob?120:150, tileH = mob?116:134;
+    const chain = S.grid.map((c,idx)=>{
+      const selected = idx===S.selected;
+      const fixed = !!(c && (c.catId==="in"||c.catId==="out"));
+      const base = { position:"relative", flex:"none", width:tileW, height:tileH, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4, borderRadius:14, userSelect:"none", cursor:"pointer", overflow:"hidden", transition:"box-shadow .12s, transform .12s" };
+      const connStyle = { width:mob?20:34, height:2, flex:"none", background:"#33333c", borderRadius:2 };
+      const showConn = idx>0;
+      if(!c){
+        return { idx, showConn, connStyle, isFilled:false, isEmpty:true, fillStyle:{display:"none"}, glyphStyle:{}, glyph:"", label:"", type:"", kindBadge:"", showChan:false, channel:"", canBypass:false, bypassed:false, togStyle:{}, togDotStyle:{}, hatchStyle:{},
+          boxStyle:Object.assign({},base,{ background:"rgba(120,180,190,.03)", border:"1.5px dashed "+(selected?"#35c9d6":"#33333c"), boxShadow:selected?"inset 0 0 0 1px rgba(53,201,214,.4)":"none" }),
+          hoverStyle:"border-color:#35c9d6; background:rgba(53,201,214,.07);",
+          plusStyle:{ fontSize:"26px", fontWeight:300, lineHeight:1, color:"#566b6e" } };
+      }
+      const cat=this.byId[c.catId], a=cat.accent;
+      const accentBg = fixed ? "linear-gradient(180deg,#1a1a20,#131318)" : "linear-gradient(180deg,"+this.shade(a,-0.40)+","+this.shade(a,-0.62)+")";
+      const border = fixed ? "1px solid #2e2e3a" : "1px solid "+this.shade(a,-0.05);
+      const box=Object.assign({},base,{ background:accentBg, border,
+        boxShadow:selected?"inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 2px #f5a623, 0 0 24px rgba(245,166,35,.32)":"inset 0 1px 0 rgba(255,255,255,.08), 0 3px 8px rgba(0,0,0,.4)",
+        opacity:c.bypassed?0.5:1, filter:c.bypassed?"grayscale(.55)":"none" });
+      const on=!c.bypassed, canBypass=!fixed;
+      return { idx, showConn, connStyle, isFilled:true, isEmpty:false, plusStyle:{}, boxStyle:box,
+        hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 0 0 1px rgba(255,255,255,.2),0 5px 12px rgba(0,0,0,.4);",
+        fillStyle:{ display:"none" },
+        glyph:cat.glyph, glyphStyle:{ fontSize:fixed?"21px":"19px", lineHeight:1, color:fixed?this.shade(a,0.42):"rgba(255,255,255,.86)", position:"relative", zIndex:2 },
+        label:c.label, type:c.type,
+        kindBadge: c.catId==="in"?"INPUT":(c.catId==="out"?"OUTPUT":""),
+        showChan:(c.catId==="amp"), channel:c.channel, canBypass,
+        togStyle:{ position:"absolute", top:7, left:8, zIndex:5, width:18, height:18, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:"50%", cursor:"pointer", background:on?"rgba(70,209,127,.16)":"rgba(0,0,0,.34)", border:"1px solid "+(on?"rgba(70,209,127,.6)":"rgba(160,160,170,.45)") },
+        togDotStyle:{ width:8, height:8, borderRadius:"50%", background:on?"#46d17f":"#80808a", boxShadow:on?"0 0 6px rgba(70,209,127,.85)":"none" },
+        bypassed:c.bypassed,
+        hatchStyle:{ position:"absolute", inset:0, zIndex:1, borderRadius:13, background:"repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 5px, rgba(0,0,0,0) 5px 11px)", pointerEvents:"none" } };
+    });
+
     // ---- editor ----
     const segItem=(active)=>({ flex:1, height:36, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:700, transition:"all .1s",
       background:active?"#35c9d6":"transparent", color:active?"#06181a":"#9a9aa3" });
 
-    let ed={ isAmp:false, isKnobs:false, isIeq:false, isOeq:false, isStub:false, pages:[], knobs:[], controls:[], selects:[], hasSelects:false, commonKnobs:[], channels:[], modes:[], quickChips:[], title:"—", category:"", type:"", icon:"", iconStyle:{}, activePage:S.activePage, bypassLabel:"Bypass", bypassStyle:{}, muteLabel:"Mute", muteStyle:{}, sceneStyle:{}, removeStyle:{},
+    let ed={ isAmp:false, isKnobs:false, isIeq:false, isOeq:false, isCab:false, isGeq:false, isLevels:false, isIn:false, isOut:false, fixed:false, canEdit:true, isStub:false, pages:[], knobs:[], controls:[], selects:[], hasSelects:false, commonKnobs:[], channels:[], modes:[], quickChips:[], title:"—", category:"", type:"", icon:"", iconStyle:{}, activePage:S.activePage, bypassLabel:"Bypass", bypassStyle:{}, muteLabel:"Mute", muteStyle:{}, sceneStyle:{}, removeStyle:{},
       overlayStyle:{}, cardStyle:{}, metaStyle:{}, footerStyle:{} };
 
     // editor layout — docked bottom pane on desktop, full-screen sheet on mobile
@@ -2138,21 +2018,40 @@ class Component extends DCLogic {
 
       ed.modes=[{id:"basic",label:"Basic"},{id:"advanced",label:"Advanced"}].map(m=>({ id:m.id, label:m.label, style:{ flex:"none", height:34, padding:"0 16px", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700, background:emode===m.id?"#35c9d6":"transparent", color:emode===m.id?"#06181a":"#8a8a93" }}));
 
-      const pageList = ed.isAmp
-        ? (emode==="basic" ? ["Ideal","Input EQ","Output EQ"] : ["Tone","Ideal","Preamp","Power Amp","Pwr Tubes + CF","Power Supply","Speaker","Input EQ","Output EQ","Dynamics"])
-        : (emode==="basic" ? ["Controls"] : ["Controls","Tone","Mix","Modifiers"]);
+      const isIn=sel.catId==="in", isOut=sel.catId==="out";
+      ed.isIn=isIn; ed.isOut=isOut; ed.fixed=isIn||isOut; ed.canEdit=!(isIn||isOut);
+      let pageList;
+      if(ed.isAmp) pageList = (emode==="basic" ? ["Amp","Cab"] : ["Tone","Amp","Cab","Preamp","Power Amp","Speaker","Dynamics"]);
+      else if(isIn) pageList = (emode==="basic" ? ["Input","Input EQ"] : ["Input","Input EQ","Noise Gate"]);
+      else if(isOut) pageList = ["Main Levels","Graphic EQ"];
+      else pageList = (emode==="basic" ? ["Controls"] : ["Controls","Tone","Mix","Modifiers"]);
       const eff = pageList.includes(S.activePage) ? S.activePage : pageList[0];
       ed.activePage=eff; this._effGroup=eff; this._pageNames=pageList;
       ed.pages=pageList.map(name=>({ name, style:{ flex:"none", padding:"9px 15px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:name===eff?"rgba(245,166,35,.12)":"#15151a", border:"1px solid "+(name===eff?"#5a3f1f":"#26262c"), color:name===eff?"#f5a623":"#8a8a93" }}));
 
-      ed.isIeq = ed.isAmp && eff==="Input EQ";
-      ed.isOeq = ed.isAmp && eff==="Output EQ";
-      const knobPages = ed.isAmp ? {Ideal:["Gain","Master","Bass","Mid","Treble","Presence"], Tone:["Bright Gain","Normal Gain","Bass","Mid","Treble","Presence","Input Trim"]} : null;
-      ed.isKnobs = ed.isAmp ? (eff==="Ideal"||eff==="Tone") : (eff==="Controls");
-      ed.isStub = !ed.isIeq && !ed.isOeq && !ed.isKnobs;
+      ed.isCab = ed.isAmp && eff==="Cab";
+      ed.isIeq = isIn && eff==="Input EQ";
+      ed.isOeq = false;
+      ed.isGeq = isOut && eff==="Graphic EQ";
+      ed.isLevels = isOut && eff==="Main Levels";
+      const knobPages = { Amp:["Gain","Master","Bass","Mid","Treble","Presence"], Tone:["Bright Gain","Normal Gain","Bass","Mid","Treble","Presence"] };
+      ed.isKnobs = ed.isAmp ? (eff==="Amp"||eff==="Tone")
+                 : isIn ? (eff==="Input"||eff==="Noise Gate")
+                 : isOut ? false
+                 : (eff==="Controls");
+      ed.isStub = !ed.isIeq && !ed.isOeq && !ed.isCab && !ed.isGeq && !ed.isLevels && !ed.isKnobs;
       if(ed.isKnobs){
-        const bc = this.buildControls(sel, cat, eff, ed.isAmp, knobPages, kSize);
-        ed.controls = bc.grid; ed.selects = bc.selects; ed.hasSelects = bc.selects.length>0;
+        if(ed.isAmp){
+          const bc = this.buildControls(sel, cat, eff, true, knobPages, kSize);
+          ed.controls = bc.grid; ed.selects = bc.selects; ed.hasSelects = bc.selects.length>0;
+        } else if(isIn){
+          const labels = eff==="Noise Gate" ? ["Threshold","Attack","Release","Hold"] : ["Input Level","Trim","Gain","Balance"];
+          const bc = this.buildControlsFrom(eff, labels, kSize);
+          ed.controls = bc.grid; ed.selects = bc.selects; ed.hasSelects = bc.selects.length>0;
+        } else {
+          const bc = this.buildControls(sel, cat, eff, false, null, kSize);
+          ed.controls = bc.grid; ed.selects = bc.selects; ed.hasSelects = bc.selects.length>0;
+        }
       }
 
       ed.channels=["A","B","C","D"].map(id=>({ id, style:{ width:34, height:34, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:"pointer", fontWeight:700, fontSize:13, background:id===sel.channel?"#1d2a2c":"#0d0d10", border:"1px solid "+(id===sel.channel?"#35c9d6":"#26262c"), color:id===sel.channel?"#f5a623":"#56565e" }}));
@@ -2202,6 +2101,42 @@ class Component extends DCLogic {
       onStyle:{ height:38, padding:"0 16px", display:"flex", alignItems:"center", gap:8, borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, background:oe.on?"#142417":"#1a1113", border:"1px solid "+(oe.on?"#2c4a31":"#4a2226"), color:oe.on?"#5fc46b":"#d6543f" }
     };
 
+    // ---- AM4: bundled cab (DynaCab) render ----
+    const dy=S.dyna;
+    const micX=((this.clamp(dy.pos,-10,10)+10)/20)*100, micY=(this.clamp(dy.dist,0.1,6)/6)*100;
+    const dynaKnob=(label,field,min,max,fmt)=>{ const v=this.clamp(dy[field],min,max), frac=(v-min)/(max-min);
+      return { label, field, min, max, valueText:fmt(v), dash:(frac*113.1).toFixed(1)+" 300", pt:"rotate("+(-135+270*frac).toFixed(1)+" 32 32)" }; };
+    const dyna={
+      cab:dy.cab, mic:dy.mic, mode:dy.mode,
+      micDotStyle:{ position:"absolute", left:micX+"%", top:micY+"%", transform:"translate(-50%,-50%)", width:26, height:26, borderRadius:"50%", background:"#f5a623", border:"3px solid #0a0a0c", boxShadow:"0 2px 8px rgba(0,0,0,.6)", cursor:"grab", zIndex:4, touchAction:"none" },
+      posValue:(dy.pos>=0?"+":"")+dy.pos.toFixed(2), distValue:dy.dist.toFixed(2)+" cm",
+      knobs:[ dynaKnob("Position","pos",-10,10,(v)=>(v>=0?"+":"")+v.toFixed(1)), dynaKnob("Distance","dist",0.1,6,(v)=>v.toFixed(2)), dynaKnob("Low Cut","lowCut",20,300,(v)=>Math.round(v)+""), dynaKnob("High Cut","highCut",2000,20000,(v)=>this.fmtF(v)) ]
+    };
+
+    // ---- AM4: output 10-band graphic EQ (swappable graphic / faders) ----
+    const gq0=S.geq, gp=this.buildPath((f)=>this.geqMag(f),12), gv=S.eqView;
+    const geq={
+      on:gq0.on, isGraphic:gv==="graphic", isFaders:gv==="faders",
+      cardStyle:{ background:"#0a0a0c", border:"1px solid #232329", borderRadius:12, padding:"10px 12px 4px", maxWidth:gCardMaxW+"px", margin:"0 auto" },
+      curvePath:gp.cur, fillPath:gp.fill,
+      nodes:this.GEQ_F.map((f,bi)=>({ bi, x:this.fToX(f).toFixed(1), y:this.dbToY(gq0.on?gq0.bands[bi]:0,12).toFixed(1) })),
+      labels:this.GEQ_LABELS,
+      faders:this.GEQ_F.map((f,bi)=>{ const v=gq0.bands[bi], frac=this.clamp((v+12)/24,0,1);
+        return { bi, label:this.GEQ_LABELS[bi], value:(v>=0?"+":"")+v.toFixed(1),
+          fillStyle:{ position:"absolute", left:0, right:0, bottom:0, height:(frac*100)+"%", background:"linear-gradient(180deg,#b4d96a,#7fae4a)", borderRadius:6 },
+          handleStyle:{ position:"absolute", left:"50%", bottom:"calc("+(frac*100)+"% - 7px)", transform:"translateX(-50%)", width:30, height:14, borderRadius:5, background:"#f5a623", border:"3px solid #0a0a0c", boxShadow:"0 2px 5px rgba(0,0,0,.5)" } }; }),
+      onLabel:gq0.on?"On":"Off",
+      onStyle:{ height:38, padding:"0 16px", display:"flex", alignItems:"center", gap:8, borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, background:gq0.on?"#142417":"#1a1113", border:"1px solid "+(gq0.on?"#2c4a31":"#4a2226"), color:gq0.on?"#5fc46b":"#d6543f" },
+      viewSeg:[{id:"graphic",label:"Graphic"},{id:"faders",label:"Faders"}].map(o=>({ id:o.id, label:o.label, style:Object.assign(segItem(gv===o.id),{flex:"none",padding:"0 16px",height:38}) }))
+    };
+
+    // ---- AM4: output main levels render ----
+    const lv={
+      presetKnobs:[ this.mkKnob("Preset Level","lvl","",76), this.mkKnob("Balance","lvl","",76) ],
+      sceneKnobs:[1,2,3,4].map(n=>this.mkKnob("Scene "+n,"lvl","",66)),
+      meters:[ {h:64}, {h:58} ].map(m=>({ barStyle:{ position:"absolute", left:0, right:0, bottom:0, height:m.h+"%", background:"linear-gradient(180deg,#d6543f 0%,#f5a623 28%,#5fc46b 60%)", borderRadius:7 } }))
+    };
+
     // ---- palette ----
     const results=this.buildResults(); this._lastResults=results;
     const hi=Math.min(S.hi,Math.max(0,results.length-1));
@@ -2211,7 +2146,8 @@ class Component extends DCLogic {
         chipStyle:{ flex:"none", width:52, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff", background:"linear-gradient(180deg,"+this.shade(cat.accent,0.16)+","+this.shade(cat.accent,-0.18)+")", border:"1px solid "+this.shade(cat.accent,-0.3) },
         kindStyle:{ flex:"none", fontSize:11, fontWeight:600, color:"#6e6e78", padding:"4px 9px", background:"#1a1a1f", border:"1px solid #2a2a31", borderRadius:6, whiteSpace:"nowrap" } };
     });
-    const chips=this.CATS.map(c=>({ id:c.id, name:c.name, style:{ flex:"none", padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:S.paletteCat===c.id?this.shade(c.accent,-0.2):"#17171a", border:"1px solid "+(S.paletteCat===c.id?c.accent:"#26262c"), color:S.paletteCat===c.id?"#fff":"#9a9aa3" }}));
+    const palSkip={in:1,out:1,cab:1,eq:1,send:1,return:1,looper:1};
+    const chips=this.CATS.filter(c=>!palSkip[c.id]).map(c=>({ id:c.id, name:c.name, style:{ flex:"none", padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap", background:S.paletteCat===c.id?this.shade(c.accent,-0.2):"#17171a", border:"1px solid "+(S.paletteCat===c.id?c.accent:"#26262c"), color:S.paletteCat===c.id?"#fff":"#9a9aa3" }}));
     let targetLabel;
     if(S.paletteMode==="retype") targetLabel="↻ Change type · "+(sel?this.byId[sel.catId].name:"");
     else { const t=S.placeTarget!=null?S.placeTarget:(S.grid[S.selected]?this.firstEmpty():S.selected); targetLabel=t==null?"Grid full":("✛ Place in cell "+(t+1)); }
@@ -2258,78 +2194,7 @@ class Component extends DCLogic {
           style:{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"10px 11px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:i===oi?700:500, color:i===oi?"#fff":"#c3c3cb", background:i===oi?"rgba(53,201,214,.12)":"transparent" } })) };
     }
 
-    // ---- account / cloud sync model ----
-    const initials = (S.acctName||"Axis User").trim().split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase()||"A";
-    const aSync = S.acctSync||"idle";
-    const isSyncing = aSync==="syncing", isConflict = aSync==="conflict", isSynced = !isSyncing && !isConflict;
-    const statusColor = isSyncing?"#f5a623":(isConflict?"#d6543f":"#33c46b");
-    let syncText, syncSub, syncShort;
-    if(isSyncing){ syncText="Syncing changes…"; syncSub="3 of 5 items uploaded"; syncShort="Syncing…"; }
-    else if(isConflict){ syncText="Sync conflict"; syncSub="2 presets changed on another device"; syncShort="Sync conflict"; }
-    else { syncText="All changes synced"; syncSub="Last synced "+(S.acctSyncedAt||"just now"); syncShort="Synced "+(S.acctSyncedAt||"just now"); }
-    const showSyncDot = S.loggedIn && (isSyncing||isConflict);
-    const syncDotCol = isConflict?"#d6543f":"#f5a623";
-    const SI=[ {id:"presets",label:"Presets",meta:"128 presets"}, {id:"scenes",label:"Scenes & setlists",meta:"24 setlists"}, {id:"fc",label:"Footswitch & controllers",meta:"6 layouts"}, {id:"settings",label:"Global settings",meta:"Device config"} ];
-    const chkBox=(on)=>({ width:20, height:20, flex:"none", borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", background:on?"#35c9d6":"transparent", border:"1px solid "+(on?"#35c9d6":"#3a3a44"), color:"#06181a", font:"700 12px/1 'Hanken Grotesk'" });
-    const syncItems=SI.map(s=>{ const on=S.syncSel[s.id]!==false; return { id:s.id, label:s.label, meta:s.meta, check:on?"✓":"", boxStyle:chkBox(on) }; });
-    const chev=(open)=>({ flex:"none", fontSize:16, color:"#56565e", display:"inline-block", transition:"transform .15s ease", transform: open?"rotate(90deg)":"none" });
-    const devList=[ {name:"AX-3 · Studio",meta:"This device · active now",cur:true}, {name:"FM3 · Pedalboard",meta:"Last synced 2 days ago",cur:false}, {name:"Axis Mobile (iOS)",meta:"Last active Apr 2",cur:false} ];
-    const devices=devList.map(d=>({ name:d.name, meta:d.meta, removable:!d.cur, dot:{ width:9, height:9, flex:"none", borderRadius:"50%", background:d.cur?"#33c46b":"#3a3a44", boxShadow:d.cur?"0 0 7px #33c46b":"none" } }));
-    const dstates=[ {id:"out",label:"Logged out"}, {id:"verify",label:"Verify"}, {id:"account",label:"Account"}, {id:"syncing",label:"Syncing"}, {id:"conflict",label:"Conflict"} ];
-    const curD = S.loggedIn ? (isSyncing?"syncing":(isConflict?"conflict":"account")) : (S.acctView==="verify"?"verify":"out");
-    const demoStates=dstates.map(d=>({ id:d.id, label:d.label, style:{ padding:"5px 9px", borderRadius:6, cursor:"pointer", font:"700 9px/1 'JetBrains Mono'", letterSpacing:".03em", background: curD===d.id?"#35c9d6":"#141417", color: curD===d.id?"#06181a":"#8a8a93", border:"1px solid "+(curD===d.id?"#35c9d6":"#26262c") } }));
-    const isMagic = (S.acctMode||"password")==="magic", isRegister=(S.acctTab||"signin")==="register", isSignin=!isRegister;
-    const tabStyle=(active)=>({ flex:1, height:38, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, background:active?"#35c9d6":"transparent", color:active?"#06181a":"#8a8a93" });
-    const verifyEmail = S.authEmail || "your inbox";
-    const verifyBody = S.verifyKind==="magic"
-      ? "We emailed a one-time sign-in link to the address below. Open it on this device to finish."
-      : "We sent a confirmation link to the address below. Confirm it to activate cloud sync.";
-    const acct = {
-      loggedIn:!!S.loggedIn, loggedOut:!S.loggedIn, initials,
-      railTitle: S.loggedIn ? (S.acctName+" · "+syncShort) : "Sign in to Axis Cloud",
-      railBtnStyle:{ position:"relative", width:46, height:46, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", border:"1px solid "+(S.loggedIn?"transparent":"#26262c"), background:S.loggedIn?"transparent":"#121214", marginBottom:6 },
-      avatarStyle:{ width:36, height:36, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:"#35c9d6", color:"#06181a", font:"700 13px/1 'JetBrains Mono'" },
-      showSyncDot, syncDotStyle:{ position:"absolute", top:-1, right:-1, width:13, height:13, borderRadius:"50%", background:syncDotCol, border:"2.5px solid #0f0f12", boxShadow:"0 0 6px "+syncDotCol },
-      drawerRowStyle:{ display:"flex", alignItems:"center", gap:11, padding:"11px 13px", margin:"6px 13px 14px", background:"#141417", border:"1px solid #26262c", borderRadius:13, cursor:"pointer", flex:"none" },
-      drawerAvatarStyle:{ width:34, height:34, flex:"none", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:"#35c9d6", color:"#06181a", font:"700 12px/1 'JetBrains Mono'" },
-      syncShort,
-      overlayStyle: mob
-        ? { position:"absolute", inset:0, zIndex:260, background:"rgba(6,6,8,.62)", backdropFilter:"blur(3px)", display:"flex", alignItems:"stretch", justifyContent:"center", animation:"axsOverlay .14s ease" }
-        : { position:"absolute", inset:0, zIndex:260, background:"rgba(6,6,8,.66)", backdropFilter:"blur(3px)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"6vh 12px 12px", animation:"axsOverlay .12s ease" },
-      cardStyle: mob
-        ? { width:"100%", height:"100%", background:"linear-gradient(180deg,#15151a,#0f0f12)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
-        : { width:440, maxWidth:"100%", maxHeight:"86vh", background:"#161619", border:"1px solid #2e2e36", borderRadius:16, boxShadow:"0 32px 80px rgba(0,0,0,.6)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsPalette .15s cubic-bezier(.2,.8,.3,1)" },
-      demoStates, onDemoState:this.onDemoState,
-      isAuth: !S.loggedIn && S.acctView==="auth",
-      isVerify: !S.loggedIn && S.acctView==="verify",
-      isAccount: S.loggedIn && S.acctView==="account",
-      authTitle: isRegister?"Create your account":"Welcome back",
-      tabSignin: tabStyle(isSignin), tabRegister: tabStyle(isRegister),
-      isPassword:!isMagic, isSignin, isRegister, email:S.authEmail,
-      submitLabel: isMagic ? "Email me a link" : (isRegister?"Create account":"Sign in"),
-      modeToggle: isMagic ? "Use a password instead" : "Email me a magic link instead",
-      onAcctTab:this.onAcctTab, onAcctMode:this.onAcctMode, onAuthEmail:this.onAuthEmail, onForgot:this.onForgot, onAuthSubmit:this.onAuthSubmit, onOAuth:this.onOAuth,
-      verifyTitle: S.verifyKind==="magic"?"Check your email":"Confirm your email", verifyBody, verifyEmail,
-      onResend:this.onResend, onVerified:this.onVerified, onVerifyBack:this.onVerifyBack,
-      user:{ name:S.acctName, email:S.acctUserEmail }, plan:"PRO",
-      onAvatarEdit:this.onAvatarEdit,
-      statusDot:{ width:10, height:10, flex:"none", borderRadius:"50%", background:statusColor, boxShadow:"0 0 8px "+statusColor },
-      syncText, syncSub, isSyncing, isConflict, isSynced,
-      progressStyle:{ width:"60%", height:"100%", background:"#f5a623", borderRadius:3 },
-      onSyncNow:this.onSyncNow, onResolveConflict:this.onResolveConflict,
-      syncItems, onSyncItem:this.onSyncItem,
-      backupCheck: S.fullBackup?"✓":"", backupBoxStyle: chkBox(!!S.fullBackup), onFullBackup:this.onFullBackup,
-      onAcctExpand:this.onAcctExpand,
-      openName:S.acctExpand==="name", openEmail:S.acctExpand==="email", openPassword:S.acctExpand==="password", openPlan:S.acctExpand==="plan", openDevices:S.acctExpand==="devices",
-      chevName:chev(S.acctExpand==="name"), chevEmail:chev(S.acctExpand==="email"), chevPassword:chev(S.acctExpand==="password"), chevPlan:chev(S.acctExpand==="plan"), chevDevices:chev(S.acctExpand==="devices"),
-      onAcctName:this.onAcctName, onSaveName:this.onSaveName, onSaveEmail:this.onSaveEmail, onSavePassword:this.onSavePassword,
-      planPerks:["Unlimited cloud presets & setlists","Full device backups & version history","Priority sync across all devices"], onManageBilling:this.onManageBilling,
-      devices, deviceCount: devList.length+" devices", onSignOutDevice:this.onSignOutDevice,
-      onSignOut:this.onSignOut
-    };
-
     return {
-      acct, accountOpen:S.acctOpen, openAccount:this.openAccount, closeAccount:this.closeAccount,
       showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
       isBuild, isFc, fc,
       drawerOpen:S.drawerOpen, toggleDrawer:this.toggleDrawer, closeDrawer:this.closeDrawer, drawerNav, drawerScenes, drawerModes,
@@ -2342,11 +2207,14 @@ class Component extends DCLogic {
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
       onCellClick:this.onCellClick, onCellEnter:this.onCellEnter, onCellLeave:this.onCellLeave, onBlockToggle:this.onBlockToggle, onToggleSwitch:this.onToggleSwitch,
-      editorOpen:S.editorOpen, ed, ieq, oeq,
+      editorOpen:S.editorOpen, ed, ieq, oeq, geq, lv, dyna,
+      chain, chainScrollStyle, chainInnerStyle, onChainTile:this.onChainTile, onChainToggle:this.onChainToggle,
       onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onContentDown:this.onContentDown, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
       onKnobDown:this.onKnobDown, onKnobReset:this.onKnobReset,
       onBlockDown:this.onBlockDown, onBlockWheel:this.onBlockWheel, moveMode:S.moveMode, moveGhost, binStyle,
       onEqDown:this.onEqDown, onSliderDown:this.onSliderDown, onIeqType:this.onIeqType, onOeqType:this.onOeqType, onOnOff:this.onOnOff, onZeroAll:this.onZeroAll,
+      onCabCycle:this.onCabCycle, onMicCycle:this.onMicCycle, onMicDown:this.onMicDown, onDynaKnobDown:this.onDynaKnobDown,
+      onEqView:this.onEqView, onGeqOn:this.onGeqOn, onGeqZero:this.onGeqZero, onGeqFaderDown:this.onGeqFaderDown,
       paletteOpen:S.paletteOpen, query:S.query, onQuery:this.onQuery, onPaletteKey:this.onPaletteKey, closePalette:this.closePalette, stop:this.stop, paletteRef:this.paletteRef,
       placeholder:S.paletteMode==="retype"?"Search types…":"Search amps, drives, delays, reverbs…",
       resultCount:results.length+" result"+(results.length===1?"":"s"),
