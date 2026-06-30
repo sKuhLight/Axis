@@ -61,6 +61,10 @@ class EditorStore {
   railActive = $state('build');
   bpm = $state(120);
   presetCount = $state(512); // FM3 preset slots
+  /** Live CPU% (decoded from the device meters frame), null until first reading. FM3-family only. */
+  cpu = $state<number | null>(null);
+  /** Live audio level meters (0..1). Labels provisional (input/outL/outR) pending live verification. */
+  levels = $state<{ input: number; outL: number; outR: number } | null>(null);
 
   // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
   mobCols = $state(4);
@@ -318,6 +322,8 @@ class EditorStore {
         if (e.type === 'tempo') this.bpm = e.bpm;
         else if (e.type === 'scene') this.scene = e.index + 1;
         else if (e.type === 'tuner') this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave };
+        else if (e.type === 'cpu') this.cpu = e.percent;
+        else if (e.type === 'meters') this.levels = { input: e.input, outL: e.outL, outR: e.outR };
       });
     } catch {
       /* SSE unsupported / offline — telemetry stays at last-known */

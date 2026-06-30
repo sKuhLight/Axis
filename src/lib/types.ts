@@ -230,7 +230,8 @@ export type DeviceEvent =
   | { type: 'tuner'; freq: number; note?: string; cents?: number; octave?: number }
   | { type: 'tempo'; bpm: number }
   | { type: 'scene'; index: number }
-  | { type: 'cpu'; percent: number };
+  | { type: 'cpu'; percent: number }
+  | { type: 'meters'; input: number; outL: number; outR: number };
 
 /** A user-defined parameter tab within a block family (persisted client-side). */
 export interface TabDef {
