@@ -8,6 +8,7 @@
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
   import { idealIds } from './layouts';
+  import { paramHelp, helpSlugForPack, type ParamHelp } from './help';
   import type { NamedParam, EnumParam } from './types';
 
   let {
@@ -82,6 +83,20 @@
   let renamingPage = $state<string | null>(null);
   // value bubble: a single fixed-position tooltip (escapes the editor's scroll clipping + stays on top)
   let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
+
+  // ── parameter help on hover (shown in the surface's bottom status strip) ──
+  let pHelp = $state<{ label: string; help: ParamHelp } | null>(null);
+  let pHelpToken = 0;
+  async function showParamHelp(id: number, label: string) {
+    const token = ++pHelpToken;
+    const h = await paramHelp(helpSlugForPack(slug), id);
+    if (token !== pHelpToken) return; // a newer hover won
+    pHelp = h ? { label, help: h } : null;
+  }
+  function clearParamHelp() {
+    pHelpToken++;
+    pHelp = null;
+  }
   let dragging = $state(false);
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
   let q = $state(''); // live control-search query
@@ -974,6 +989,8 @@
               class:nobg={w.view === 'action' || w.view === 'eq'}
               class:dragging={drag?.id === w.id}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
+              onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0) showParamHelp(c.id, c.label); }}
+              onmouseleave={clearParamHelp}
             >
               {#if !editMode && c.kind === 'cont'}
                 <!-- MODIFIER BADGE — opens the modifier editor (active modifier; per-control binding pending decode) -->
@@ -1128,6 +1145,15 @@
     {:else}
       {fullVal(tip.id)}
     {/if}
+  </div>
+{/if}
+
+<!-- parameter help strip: docked at the bottom of the block editor while hovering a control -->
+{#if pHelp}
+  <div class="phelp">
+    <span class="ph-name">{pHelp.label}</span>
+    <span class="ph-blurb">{pHelp.help.blurb}</span>
+    {#if pHelp.help.tip}<span class="ph-tip">Tip: {pHelp.help.tip}</span>{/if}
   </div>
 {/if}
 
@@ -1533,6 +1559,37 @@
     transform: translateX(-50%);
     border: 6px solid transparent;
     border-top-color: #0a0a0c;
+  }
+  .phelp {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 9998;
+    max-width: min(680px, 92vw);
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: #0a0a0c;
+    border: 1px solid var(--border-2, #2a2a31);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .ph-name {
+    font-weight: 700;
+    color: #f2f2f5;
+  }
+  .ph-blurb {
+    color: var(--text-dim, #c2c2c8);
+  }
+  .ph-tip {
+    color: var(--text-faint, #8a8a92);
+    font-style: italic;
   }
   .tipinput {
     width: 90px;
