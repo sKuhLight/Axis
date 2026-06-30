@@ -242,6 +242,7 @@ class EditorStore {
    * after every optimistic edit, so coalesce the N bulk reads). */
   #metersTimer: ReturnType<typeof setTimeout> | null = null;
   fetchMeters = () => {
+    if (this.isAm4) return; // AM4 has no gen-3 meters; firing them sends FM3 frames the AM4 ignores (timeouts)
     if (this.#metersTimer) clearTimeout(this.#metersTimer);
     this.#metersTimer = setTimeout(async () => {
       const wants: Record<string, number[]> = {};
@@ -271,11 +272,13 @@ class EditorStore {
     } catch {
       /* detect failed — proceed; load() falls back to the gen-3 path */
     }
-    try {
-      const n = (await forgefx.currentPreset()).number;
-      if (n >= 0) this.lastPreset = n;
-    } catch {
-      /* */
+    if (!this.isAm4) {
+      try {
+        const n = (await forgefx.currentPreset()).number;
+        if (n >= 0) this.lastPreset = n;
+      } catch {
+        /* */
+      }
     }
     await this.load();
     this.#syncTelemetry();
@@ -320,6 +323,7 @@ class EditorStore {
   };
   // pull current scene + tempo once at load (device → UI)
   #syncTelemetry = async () => {
+    if (this.isAm4) return; // gen-3 scene/tempo frames; the AM4 ignores them → 5s timeouts that clog the queue
     try {
       this.scene = (await forgefx.getScene()).index + 1;
       this.bpm = (await forgefx.getTempo()).bpm;
@@ -336,10 +340,12 @@ class EditorStore {
       const h = await forgefx.health();
       const dev = await forgefx.device().catch(() => null);
       this.conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
-      const t0 = performance.now();
-      const p = await forgefx.currentPreset().catch(() => null);
-      this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
-      if (p && p.number >= 0) this.preset = p;
+      if (!this.isAm4) {
+        const t0 = performance.now();
+        const p = await forgefx.currentPreset().catch(() => null);
+        this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
+        if (p && p.number >= 0) this.preset = p;
+      }
     } catch {
       this.conn = { state: 'offline' };
     } finally {
