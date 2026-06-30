@@ -253,9 +253,13 @@
   const simpleText = $derived(parsedInput.free);
 
   // ── Orama full-text index: typo-tolerant, ranked free-text (rebuilt when the haystack changes) ──
+  // Built LAZILY — only when there's actually free-text to search. Opening the browser to browse/filter
+  // doesn't touch it (building the index + haystacks over every preset was the ~2s open lag). The guard
+  // is read BEFORE haystacks so haystacks itself stays uncomputed until the first free-text search.
   let oramaDb = $state<unknown>(null);
   $effect(() => {
-    const hs = haystacks;
+    if (!simpleText.trim()) return; // no free-text → don't build the index (or the haystack)
+    const hs = haystacks; // tracked only while searching → rebuilds on data change, but never on open
     let alive = true;
     (async () => {
       const db = await create({ schema: { id: 'string', text: 'string' } });
@@ -322,8 +326,8 @@
     const conds = activeConds;
     const q = simpleText.trim();
     const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const hs = haystacks;
     const useOrama = !!q && ftIds !== null; // index ready → ranked; else substring fallback
+    const hs = q && !useOrama ? haystacks : null; // only build the haystack for the substring fallback
     const list = baseEntries.filter((e) => {
       if (folderFilter && e.folder !== folderFilter) return false;
       if (cloudOn && !matchView(e)) return false;
@@ -332,7 +336,7 @@
       if (q) {
         if (cloudEntry) { if (!toks.every((t) => e.summary.name.toLowerCase().includes(t))) return false; }
         else if (useOrama) { if (!ftIds!.has(e.id)) return false; }
-        else { const h = hs.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
+        else { const h = hs!.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
       }
       return true;
     });
