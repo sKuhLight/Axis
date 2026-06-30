@@ -12,7 +12,6 @@
   // live CPU% (decoded from the device meters frame) + audio level meters
   const cpu = $derived(editor.cpu);
   const cpuColor = $derived(cpu == null ? '#56565e' : cpu >= 80 ? '#d6543f' : cpu >= 62 ? '#f5a623' : '#33c46b');
-  const lv = $derived(editor.levels);
   const pk = (x: number) => Math.max(0, Math.min(100, Math.round(x * 100)));
 </script>
 
@@ -55,7 +54,20 @@
   </div>
 
   <!-- center: new-version notification (desktop) -->
-  {#if !editor.isMobile && editor.update}
+  {#if !editor.isMobile && editor.autoUpdate.state !== 'idle'}
+    <div class="update">
+      <span class="up-dot"></span>
+      {#if editor.autoUpdate.state === 'available'}
+        <span class="up-txt">Update <b>v{editor.autoUpdate.version}</b> available</span>
+        <button class="up-go" onclick={() => editor.downloadUpdate()}>Download &amp; install</button>
+      {:else if editor.autoUpdate.state === 'downloading'}
+        <span class="up-txt">Downloading update… <b>{editor.autoUpdate.percent ?? 0}%</b></span>
+      {:else if editor.autoUpdate.state === 'downloaded'}
+        <span class="up-txt">Update <b>v{editor.autoUpdate.version}</b> ready</span>
+        <button class="up-go" onclick={() => editor.installUpdate()}>Restart &amp; install</button>
+      {/if}
+    </div>
+  {:else if !editor.isMobile && editor.update}
     <div class="update">
       <span class="up-dot"></span>
       <span class="up-txt">New version <b>v{editor.update.version}</b> available</span>
@@ -116,14 +128,8 @@
             <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
           </div>
         {/if}
-        {#if lv}
-          <div class="div"></div>
-          <div class="st meters" title="Live audio meters — In · Out L · Out R (labels provisional)">
-            {#each [{ l: 'IN', v: lv.input }, { l: 'L', v: lv.outL }, { l: 'R', v: lv.outR }] as m}
-              <div class="mtr"><span class="mono mtr-l">{m.l}</span><div class="mbar"><div class="mfill" style="height:{pk(m.v)}%; background:{pk(m.v) >= 92 ? '#d6543f' : pk(m.v) >= 70 ? '#f5a623' : '#35c9d6'}"></div></div></div>
-            {/each}
-          </div>
-        {/if}
+        <!-- audio meters pulled: bytes 35/36/588 fluctuate even with no signal → not level meters.
+             Needs a clean silence-vs-signal capture to find the real (peak/RMS) field. -->
       </div>
     {/if}
 
@@ -193,6 +199,12 @@
     padding: 6px 10px;
     border-radius: 7px;
     text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .up-go:hover {
+    filter: brightness(1.08);
   }
   .up-x {
     flex: none;
@@ -507,35 +519,6 @@
   }
   .cpu {
     cursor: default;
-  }
-  .meters {
-    cursor: default;
-    gap: 5px;
-  }
-  .mtr {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-  .mtr-l {
-    font-size: 7px;
-    color: #56565e;
-    line-height: 1;
-  }
-  .mbar {
-    width: 6px;
-    height: 22px;
-    background: #16161b;
-    border: 1px solid var(--surface-3);
-    border-radius: 3px;
-    overflow: hidden;
-    display: flex;
-    align-items: flex-end;
-  }
-  .mfill {
-    width: 100%;
-    transition: height 0.08s linear;
   }
   .bar {
     width: 40px;

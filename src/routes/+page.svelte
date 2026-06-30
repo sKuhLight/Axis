@@ -13,6 +13,7 @@
   import PresetPicker from '$lib/PresetPicker.svelte';
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
+  import CachePrompt from '$lib/CachePrompt.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -68,6 +69,7 @@
   <PresetPicker />
   <SaveDialog />
   <TunerOverlay />
+  <CachePrompt />
   <Toast />
 </div>
 

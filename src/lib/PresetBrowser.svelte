@@ -7,8 +7,10 @@
   import { tick } from 'svelte';
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
+  import { forgefx } from './forgefx';
+  import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
-  import type { DecodedBlock } from './types';
+  import type { DecodedBlock, GridCell, PresetGrid } from './types';
 
   const ACCENT = '#35c9d6';
   // block family slug → [label, color]. Colors carried from the design; unknown slugs get a fallback.
@@ -81,12 +83,28 @@
         }
       }
     }
+    // Type is ALWAYS available from the summary models (no deep scan needed) — seed it for every family
+    // so "AMP(Type=…)" autocompletes amp model names straight after a device scan.
+    for (const e of library.entries) {
+      for (const [slug, names] of Object.entries(e.summary.models)) {
+        if (!names.length) continue;
+        const m = (out[slug] ??= new Map());
+        const sp = m.get('Type') ?? { label: 'Type', kind: 'enum' as const, enums: new Set<string>(), min: Infinity, max: -Infinity };
+        for (const n of names) sp.enums.add(n);
+        m.set('Type', sp);
+      }
+    }
     return out;
   });
   const specFor = (slug: string, name: string): Spec | null => {
     for (const [k, v] of specsBySlug[slug] ?? []) if (k.toLowerCase() === name.toLowerCase()) return v;
     return null;
   };
+  // A param is worth listing only if you can actually filter on it: an enum with options, or a numeric
+  // param that VARIES across the library (min<max). Params that are constant everywhere (e.g. an EQ band
+  // at 0 dB in every preset) are dead ends — drop them from the suggestions.
+  const specUsable = (s: Spec): boolean => (s.kind === 'enum' ? s.enums.size > 0 : isFinite(s.min) && isFinite(s.max) && s.max > s.min);
+  const usableSpecs = (slug: string): Spec[] => [...(specsBySlug[slug]?.values() ?? [])].filter(specUsable).sort((a, b) => Number(b.label === 'Type') - Number(a.label === 'Type') || a.label.localeCompare(b.label));
 
   // ===================== query parse / format =====================
   function splitOn(str: string, ch: string) {
@@ -105,9 +123,10 @@
     const t = (tok || '').trim().toLowerCase();
     return filterableSlugs.includes(t) ? t : null;
   };
+  const unquote = (s: string) => s.trim().replace(/^"(.*)"$/, '$1');
   function parseParam(s: string): ParamCond | null {
     const m = s.match(/^\s*([A-Za-z][\w ]*?)\s*(>=|<=|!=|=|>|<)\s*(.+?)\s*$/);
-    return m ? { name: m[1].trim(), op: m[2], val: m[3].trim() } : null;
+    return m ? { name: m[1].trim(), op: m[2], val: unquote(m[3]) } : null; // strip the quotes the autocomplete adds
   }
   function parseTerm(t: string): Cond | null {
     let m;
@@ -180,17 +199,17 @@
     }
     return true;
   }
-  function matchEntry(e: LibEntry, conds: Cond[], simpleText: string): boolean {
-    for (const c of conds) if (!matchCond(e, c)) return false;
-    if (simpleText) {
-      const toks = simpleText.toLowerCase().split(/\s+/).filter(Boolean);
+  // Free-text search haystack per entry, memoized — rebuilt only when the cache/params/tags change, NOT
+  // per keystroke (rebuilding name+blocks+models+every-param-label for 500 presets each keystroke was the lag).
+  const haystacks = $derived.by(() => {
+    const m = new Map<string, string>();
+    for (const e of library.entries) {
       const blocks = library.paramsOf(e);
       const paramHay = blocks ? blocks.flatMap((b) => b.params.map((p) => `${p.label} ${p.enumLabel ?? ''}`)).join(' ') : '';
-      const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${Object.values(e.summary.models).flat().join(' ')} ${library.tagsOf(e.id).join(' ')} ${paramHay}`.toLowerCase();
-      if (!toks.every((t) => hay.includes(t))) return false;
+      m.set(e.id, `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${Object.values(e.summary.models).flat().join(' ')} ${library.tagsOf(e.id).join(' ')} ${paramHay}`.toLowerCase());
     }
-    return true;
-  }
+    return m;
+  });
 
   // ===================== state =====================
   let advanced = $state(true);
@@ -202,11 +221,34 @@
   let queryEl: HTMLInputElement | undefined = $state();
   let caret = $state(0);
 
-  const activeConds = $derived(advanced ? parseQuery(query) : conditions);
-  const simpleText = $derived(advanced ? '' : simpleQ);
+  // Parse the text box in BOTH modes: '+'-separated terms that parse as conditions become filters,
+  // anything that doesn't is free-text. So typing/pasting `AMP(Type=5153)` filters whether Advanced is
+  // on or off (Advanced just adds autocomplete + the chip builder).
+  function parseInput(text: string): { conds: Cond[]; free: string } {
+    const conds: Cond[] = [];
+    const free: string[] = [];
+    for (const seg of splitOn(text, '+')) {
+      const t = seg.text.trim();
+      if (!t) continue;
+      const c = parseTerm(t);
+      if (c) conds.push(c);
+      else free.push(t);
+    }
+    return { conds, free: free.join(' ') };
+  }
+  const parsedInput = $derived(parseInput(advanced ? query : simpleQ));
+  const activeConds = $derived(advanced ? parsedInput.conds : [...conditions, ...parsedInput.conds]);
+  const simpleText = $derived(parsedInput.free);
 
   const results = $derived.by(() => {
-    const list = library.entries.filter((e) => matchEntry(e, activeConds, simpleText));
+    const conds = activeConds;
+    const toks = simpleText.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const hs = haystacks;
+    const list = library.entries.filter((e) => {
+      for (const c of conds) if (!matchCond(e, c)) return false;
+      if (toks.length) { const h = hs.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
+      return true;
+    });
     return list.sort((a, b) =>
       sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
       : sort === 'cpu' ? estCpu(b) - estCpu(a)
@@ -214,6 +256,20 @@
     );
   });
   const selected = $derived(selectedId ? (library.entries.find((e) => e.id === selectedId) ?? null) : null);
+
+  // ── grid preview (bottom panel) + click-to-focus-block ──
+  let focusEid = $state<number | null>(null); // block selected in the grid preview → detail shows only it
+  let gridCache = $state<Record<string, PresetGrid>>({});
+  const selectedGrid = $derived(selected ? (gridCache[selected.id] ?? null) : null);
+  $effect(() => {
+    const e = selected;
+    if (e && e.source === 'device' && e.summary.number >= 0 && !gridCache[e.id]) {
+      forgefx.presetGrid(e.summary.number).then((g) => { gridCache = { ...gridCache, [e.id]: g }; }).catch(() => {});
+    }
+  });
+  // tile color from the cell's family (derive slug from "Amp 1" → amp)
+  const gridCellColor = (c: GridCell) => catColor(c.name.replace(/\s+\d+$/, '').toLowerCase());
+  function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
 
   // ── edit conditions (works in both modes; advanced re-serializes to the query text) ──
   function editConds(fn: (c: Cond[]) => void) {
@@ -235,7 +291,7 @@
   }
 
   // ===================== autocomplete =====================
-  type AcItem = { label: string; insert: string; fragLen: number; hint: string; color: string; dot: boolean };
+  type AcItem = { label: string; insert: string; fragLen: number; hint: string; color: string; dot: boolean; kind?: 'value' | 'close' | 'done' };
   let acOpen = $state(false);
   let acItems = $state<AcItem[]>([]);
   let acIndex = $state(0);
@@ -257,12 +313,20 @@
       const pm = frag.match(/^\s*([A-Za-z][\w ]*?)\s*(>=|<=|!=|=|>|<)\s*(.*)$/);
       if (pm) return { items: sgValue(id, pm[1].trim(), pm[3]), label: 'value · ' + pm[1].trim() };
       const pf = (frag.match(/[\w ]*$/) || [''])[0].trimStart();
-      return { items: sgParam(id, pf), label: catLabel(id) + ' parameter' };
+      const params = sgParam(id, pf);
+      // a synthetic "close block" action: ) then continue to the next block. Default (first) once at
+      // least one param is set, so "Enter without picking a param" finishes the block, as requested.
+      const close: AcItem = { label: `) — close ${catLabel(id)} · add block`, insert: ')', fragLen: pf.length, hint: 'or pick a param', color: catColor(id), dot: false, kind: 'close' };
+      const hasParams = parts.length > 1; // we're after a comma → ≥1 param already
+      return { items: hasParams ? [close, ...params] : [...params, close], label: catLabel(id) + ' parameter' };
     }
     let m;
     if ((m = local.match(/tag:\s*"?([\w .-]*)$/i))) return { items: sgList(library.allTags, m[1], 'tag'), label: 'tag' };
     const tf = (local.match(/[\w]*$/) || [''])[0];
-    return { items: sgBlock(tf), label: 'block / token' };
+    const blocks = sgBlock(tf);
+    // after a completed block (cursor in a fresh "+ …" segment) Enter on "done" finishes the filter
+    if (seg.start > 0) return { items: [{ label: '✓ done', insert: '', fragLen: tf.length, hint: 'finish filter', color: '#33c46b', dot: false, kind: 'done' }, ...blocks], label: 'block / token' };
+    return { items: blocks, label: 'block / token' };
   }
   function sgBlock(frag: string): AcItem[] {
     const f = frag.toLowerCase();
@@ -274,8 +338,8 @@
   }
   function sgParam(id: string, frag: string): AcItem[] {
     const f = frag.toLowerCase();
-    const specs = [...(specsBySlug[id]?.values() ?? [])];
-    return specs.filter((s) => s.label.toLowerCase().includes(f)).map((s) => {
+    // usableSpecs: only params you can filter on (enum, or numeric that varies), Type first.
+    return usableSpecs(id).filter((s) => s.label.toLowerCase().includes(f)).map((s) => {
       const hint = s.kind === 'enum' ? 'type' : isFinite(s.min) ? `${fmtNum(s.min)}–${fmtNum(s.max)}` : 'num';
       return mk(s.label, s.label + (s.kind === 'num' ? '>' : '='), frag.length, hint, '#7a7a84', false);
     });
@@ -283,12 +347,13 @@
   function sgValue(id: string, pname: string, frag: string): AcItem[] {
     const spec = specFor(id, pname);
     if (!spec) return [];
-    const f = frag.trim().toLowerCase();
-    if (spec.kind === 'enum') return [...spec.enums].filter((v) => v.toLowerCase().includes(f)).slice(0, 40).map((v) => mk(v, qv(v), frag.length, '', catColor(id)));
+    const f = frag.trim().replace(/^"+/, '').replace(/"+$/, '').toLowerCase(); // ignore the wrapping quotes
+    const asValue = (it: AcItem): AcItem => ({ ...it, kind: 'value' });
+    if (spec.kind === 'enum') return [...spec.enums].filter((v) => v.toLowerCase().includes(f)).slice(0, 40).map((v) => asValue(mk(v, qv(v), frag.length, '', catColor(id))));
     if (!isFinite(spec.min)) return [];
     const lo = spec.min, hi = spec.max;
     const cand = [lo, (lo + hi) / 4 + lo / 2, (lo + hi) / 2, lo / 2 + (3 * hi) / 4, hi].map((x) => Math.round(x * 10) / 10);
-    return [...new Set(cand)].map((v) => mk(String(v), String(v), frag.trim().length, 'value', '#7a7a84', false));
+    return [...new Set(cand)].map((v) => asValue(mk(String(v), String(v), frag.trim().length, 'value', '#7a7a84', false)));
   }
   const sgList = (arr: string[], frag: string, kind: string): AcItem[] => {
     const f = (frag || '').toLowerCase();
@@ -296,12 +361,21 @@
   };
   function recomputeAc() {
     if (!advanced) { acOpen = false; return; }
-    const r = suggest(query, caret);
+    // read the LIVE cursor position (after an insert the DOM caret is the source of truth) so the
+    // context (param → value → next param) advances reliably instead of using a stale index
+    const c = queryEl?.selectionStart ?? caret;
+    const r = suggest(queryEl?.value ?? query, c);
     acItems = r.items; acLabel = r.label; acIndex = 0; acOpen = true;
   }
   const closeAc = () => { acOpen = false; };
   function onQueryInput(e: Event) { const el = e.target as HTMLInputElement; query = el.value; caret = el.selectionStart ?? query.length; recomputeAc(); }
-  function onQuerySelect(e: Event) { const el = e.target as HTMLInputElement; caret = el.selectionStart ?? 0; if (advanced && acOpen) recomputeAc(); }
+  function onQuerySelect(e: Event) {
+    const el = e.target as HTMLInputElement;
+    caret = el.selectionStart ?? 0;
+    // don't recompute on autocomplete-navigation keys — that would reset the highlighted index to 0
+    if ('key' in e && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes((e as KeyboardEvent).key)) return;
+    if (advanced && acOpen) recomputeAc();
+  }
   function onQueryKey(e: KeyboardEvent) {
     if (!advanced) return;
     if (!acOpen) { if (e.key === 'ArrowDown') recomputeAc(); return; }
@@ -313,13 +387,33 @@
   }
   async function acceptAc(i: number) {
     const item = acItems[i]; if (!item || !queryEl) return;
-    const v = queryEl.value, c = caret, start = Math.max(0, c - item.fragLen);
-    const nt = v.slice(0, start) + item.insert + v.slice(c), nc = start + item.insert.length;
+    if (item.kind === 'done') { closeAc(); return; }
+    const v = queryEl.value, c = caret;
+    let nt: string, nc: number;
+    if (item.kind === 'close') {
+      // drop the trailing ", " (auto-added after a value) + any partial param, close the block, start next
+      const pre = v.slice(0, c - item.fragLen).replace(/[\s,]+$/, '');
+      const ins = ') + ';
+      nt = pre + ins + v.slice(c);
+      nc = pre.length + ins.length;
+    } else {
+      const start = Math.max(0, c - item.fragLen);
+      const ins = item.insert + (item.kind === 'value' ? ', ' : ''); // value → auto-advance to the next param
+      nt = v.slice(0, start) + ins + v.slice(c);
+      nc = start + ins.length;
+    }
     query = nt; caret = nc;
     await tick(); // let the controlled value update before moving the caret
     queryEl.focus();
     try { queryEl.setSelectionRange(nc, nc); } catch { /* */ }
     recomputeAc();
+  }
+  // tidy dangling separators when leaving the box, so the saved/typed query is clean
+  function onQueryBlur() {
+    setTimeout(() => {
+      closeAc();
+      query = query.replace(/\s*\+\s*$/, '').replace(/,\s*$/, '');
+    }, 130);
   }
 
   // ===================== add-filter / param picker =====================
@@ -344,7 +438,7 @@
       return items.filter((i) => i.label.toLowerCase().includes(f) || i.sub.includes(f));
     }
     if (picker.kind === 'tag') return library.allTags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: '#6e6e78' }));
-    if (picker.kind === 'param') { const id = picker.ctx.block!; return [...(specsBySlug[id]?.values() ?? [])].filter((s) => s.label.toLowerCase().includes(f)).map((s) => ({ v: s.label, label: s.label, sub: s.kind === 'enum' ? 'type' : 'num', dot: false, color: '#6e6e78' })); }
+    if (picker.kind === 'param') { const id = picker.ctx.block!; return usableSpecs(id).filter((s) => s.label.toLowerCase().includes(f)).map((s) => ({ v: s.label, label: s.label, sub: s.kind === 'enum' ? 'type' : 'num', dot: false, color: '#6e6e78' })); }
     if (picker.kind === 'value') {
       const spec = specFor(picker.ctx.block!, picker.ctx.param!);
       if (!spec) return [];
@@ -468,14 +562,9 @@
       <span class="t2">{activeConds.length || simpleText ? `${results.length} of ${library.entries.length}` : `${library.entries.length} presets`}{library.paramsReady ? '' : ' · params not fully loaded'}</span>
     </div>
     <div class="spacer"></div>
-    <button class="ghost" onclick={() => library.scanDevice()} disabled={library.scanning} title="Read every preset on the connected device into the library">
-      {library.scanning ? `Scanning ${library.scanDone}/${library.scanTotal}…` : '⟳ Scan device'}
+    <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title="Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)">
+      {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
     </button>
-    {#if library.entries.length && !library.paramsReady}
-      <button class="ghost" onclick={() => library.deepScan()} disabled={library.hydrating} title="Load every preset's full params so param search works library-wide">
-        {library.hydrating ? `Loading params ${library.hydrateDone}…` : '⤓ Deep scan params'}
-      </button>
-    {/if}
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
@@ -494,7 +583,7 @@
     <div class="qwrap" class:focus={acOpen && advanced}>
       <svg width="17" height="17" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#6e6e78" stroke-width="1.5" /><path d="M10.6 10.6 L14 14" stroke="#6e6e78" stroke-width="1.5" stroke-linecap="round" /></svg>
       {#if advanced}
-        <input bind:this={queryEl} value={query} oninput={onQueryInput} onkeydown={onQueryKey} onfocus={recomputeAc} onblur={() => setTimeout(closeAc, 130)} onclick={onQuerySelect} onkeyup={onQuerySelect}
+        <input bind:this={queryEl} value={query} oninput={onQueryInput} onkeydown={onQueryKey} onfocus={recomputeAc} onblur={onQueryBlur} onclick={onQuerySelect} onkeyup={onQuerySelect}
           placeholder="AMP(Type=5153, Gain>7)  +  REVERB(Mix>30)  +  tag:Lead" spellcheck="false" autocomplete="off" />
       {:else}
         <input bind:value={simpleQ} placeholder="Search presets, tags, amps, params…" spellcheck="false" autocomplete="off" />
@@ -581,11 +670,12 @@
     </div>
 
     <!-- RESULTS -->
+    <div class="center">
     <div class="results">
       {#each results as e (e.id)}
         {@const sel = e.id === selectedId}
         {@const cpu = estCpu(e)}
-        <button class="row" class:sel onclick={() => (selectedId = e.id)}>
+        <button class="row" class:sel onclick={() => { selectedId = e.id; focusEid = null; }}>
           <span class="num" class:sel>{e.source === 'file' ? 'FILE' : pad(e.summary.number)}</span>
           <div class="row-mid">
             <div class="row-top">
@@ -614,12 +704,28 @@
           <span class="e1">{library.entries.length ? 'No presets match this filter' : 'Library is empty'}</span>
           <span class="e2">{library.entries.length ? 'Loosen a parameter range or remove a condition.' : 'Scan the connected device or import .syx files to populate the library.'}</span>
           {#if !library.entries.length}
-            <button class="load" style="width:auto; padding:0 18px; background:var(--accent,#35c9d6); color:#06181a;" onclick={() => library.scanDevice()} disabled={library.scanning}>
-              {library.scanning ? `Scanning ${library.scanDone}/${library.scanTotal}…` : '⟳ Scan device'}
+            <button class="load" style="width:auto; padding:0 18px; background:var(--accent,#35c9d6); color:#06181a;" onclick={() => library.buildCache()} disabled={library.scanning}>
+              {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : '⤓ Build cache'}
             </button>
           {/if}
         </div>
       {/if}
+    </div>
+    {#if selected}
+      <div class="gridpanel">
+        <div class="gp-head">
+          <span class="lbl">GRID — {selected.summary.name}</span>
+          {#if focusEid != null}<button class="gp-clear" onclick={() => (focusEid = null)}>show all params</button>{:else}<span class="gp-hint">click a block to focus its params →</span>{/if}
+        </div>
+        {#if selectedGrid}
+          <MiniGrid grid={selectedGrid} selectedEid={focusEid} color={gridCellColor} onpick={pickBlock} />
+        {:else if selected.source === 'file'}
+          <div class="gp-empty">Grid preview is available for device presets.</div>
+        {:else}
+          <div class="gp-empty">Loading grid…</div>
+        {/if}
+      </div>
+    {/if}
     </div>
 
     <!-- DETAIL -->
@@ -652,7 +758,7 @@
           {#if !library.paramsOf(selected)}
             <div class="empty-s">Full params not loaded for this preset. <button class="link" onclick={() => library.hydrateParams(selected!.id)}>Load params</button> (or Deep scan).</div>
           {:else}
-            {#each library.paramsOf(selected)!.filter((b) => b.slug !== 'input' && b.slug !== 'output' && detailParams(b).length) as b, bi}
+            {#each library.paramsOf(selected)!.filter((b) => b.slug !== 'input' && b.slug !== 'output' && detailParams(b).length && (focusEid == null || b.effectId === focusEid)) as b, bi}
               <div class="blk">
                 <div class="blk-h"><span class="cdot" style:background={catColor(b.slug)}></span><span class="blk-n">{catLabel(b.slug)}{b.typeName ? ` · ${b.typeName}` : ''}</span><span class="spacer"></span><span class="blk-i">{b.channel != null ? `Ch ${'ABCD'[b.channel]}` : `#${b.instance}`}</span></div>
                 <div class="blk-grid">
@@ -774,7 +880,13 @@
   .qt { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 8px; font: 700 11px/1 'JetBrains Mono', monospace; cursor: pointer; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); }
   .qt.on { color: #0c0c0e; background: var(--c); }
   /* results */
-  .results { flex: 1; min-width: 0; overflow-y: auto; background: #0c0c0e; }
+  .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .results { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: #0c0c0e; }
+  .gridpanel { flex: none; height: 210px; border-top: 1px solid #1c1c22; background: #09090b; display: flex; flex-direction: column; }
+  .gp-head { display: flex; align-items: center; gap: 12px; padding: 9px 16px 4px; flex: none; }
+  .gp-hint { font: 500 10px/1 'JetBrains Mono', monospace; color: #56565e; }
+  .gp-clear { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, #35c9d6); background: none; border: none; cursor: pointer; }
+  .gp-empty { padding: 24px 16px; font: 500 12px/1.4 'JetBrains Mono', monospace; color: #56565e; }
   .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #141418; cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
   .row:hover { background: #101014; }
   .row.sel { background: rgba(53, 201, 214, 0.06); border-left-color: var(--accent, #35c9d6); }

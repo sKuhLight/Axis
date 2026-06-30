@@ -78,6 +78,8 @@ jobs:
             Axis/dist-desktop/*.dmg
             Axis/dist-desktop/*.zip
             Axis/dist-desktop/*.exe
+            Axis/dist-desktop/*.blockmap
+            Axis/dist-desktop/latest*.yml
           body: |
             Axis ${{ github.ref_name }} — community beta. A standalone editor for Fractal devices
             (FM3) that bundles the ForgeFX engine — one install, no setup.

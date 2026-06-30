@@ -3,6 +3,7 @@
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
 import { forgefx, ForgeError } from './forgefx';
+import { library } from './library.svelte';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
@@ -104,7 +105,9 @@ class EditorStore {
   vh = $state(800);
 
   // ── overlays ──
-  update = $state<{ version: string; url: string } | null>(null); // newer release available (top-bar pill)
+  update = $state<{ version: string; url: string } | null>(null); // newer release (web fallback / non-desktop)
+  /** Desktop auto-update status (Electron). idle until the updater reports something. */
+  autoUpdate = $state<{ state: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; percent?: number }>({ state: 'idle' });
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
   ports = $state<ConnInfo[]>([]);
@@ -268,7 +271,7 @@ class EditorStore {
   init = async () => {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
-    this.#checkUpdate();
+    this.#initUpdater();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
@@ -313,6 +316,21 @@ class EditorStore {
     return false;
   };
   dismissUpdate = () => (this.update = null);
+
+  // ── desktop auto-update (Electron) ──
+  #initUpdater = () => {
+    const u = typeof window !== 'undefined' ? window.axisUpdate : undefined;
+    if (!u) { this.#checkUpdate(); return; } // not desktop → web pill fallback
+    u.on((e) => {
+      if (e.channel === 'available') this.autoUpdate = { state: 'available', version: e.version };
+      else if (e.channel === 'progress') this.autoUpdate = { state: 'downloading', percent: e.percent };
+      else if (e.channel === 'downloaded') this.autoUpdate = { state: 'downloaded', version: e.version };
+      else if (e.channel === 'error') { this.autoUpdate = { state: 'idle' }; this.#checkUpdate(); } // fall back to the manual link
+    });
+    u.check();
+  };
+  downloadUpdate = () => window.axisUpdate?.download();
+  installUpdate = () => window.axisUpdate?.install();
 
   // live tuner/tempo/scene/cpu pushes from the device
   #openEvents = () => {
@@ -393,6 +411,7 @@ class EditorStore {
         this.lastPreset = n;
         await this.load();
         if (this.selKey) await this.#loadParams();
+        if (library.cacheBuilt) library.refreshSlot(n); // CRC-gated sync of the navigated-to slot (catches external edits)
       } else if (this.status === 'offline') {
         await this.load();
       }
@@ -808,6 +827,7 @@ class EditorStore {
       if (r.ok) {
         this.showToast(`Saved to preset ${n}`, '#f5a623');
         await this.poll();
+        library.refreshSlot(n); // keep the library cache in sync with the just-saved slot
       } else {
         this.showToast('Save rejected by device', '#d6543f');
       }

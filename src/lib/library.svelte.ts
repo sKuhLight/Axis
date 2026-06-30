@@ -2,6 +2,7 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { forgefx } from './forgefx';
+import { idb } from './idb';
 import type { PresetSummary, DecodedBlock } from './types';
 
 /** A deep param-search clause: "<family> <param> <op> <value>". Numeric ops compare the display value;
@@ -26,7 +27,8 @@ export interface LibEntry {
   fav: boolean;
 }
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache' };
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built' };
+const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -66,17 +68,21 @@ class LibraryStore {
   /** Deep param-search clauses (ANDed). Only match entries whose params are available (files always;
    *  device entries after `hydrateParams`/`deepScan`). */
   paramQueries = $state<ParamQuery[]>([]);
-  /** In-memory hydrated device params, keyed by entry id. NOT persisted (full params for 100s of presets
-   *  would blow the localStorage quota) — re-hydrated per session via deepScan/hydrateParams. */
+  /** Hydrated device params, keyed by entry id. Persisted in IndexedDB (too big for localStorage) and
+   *  loaded into memory on launch, so the param index survives reloads. */
   #paramsCache = $state<Record<string, DecodedBlock[]>>({});
   hydrating = $state(false);
   hydrateDone = $state(0);
+  /** True once a full cache build has completed (persisted) — drives the startup prompt. */
+  cacheBuilt = $state(load<boolean>(LS.built, false));
 
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
     const favs = new Set(load<string[]>(LS.favs, []));
     const cached = load<PresetSummary[]>(LS.cache, []);
     this.entries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
+    // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
+    if (idb.available()) idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
   }
 
   /** All model names across every block family of a preset (amp/drive/cab/reverb/…), flattened. */
@@ -166,34 +172,46 @@ class LibraryStore {
   collectionNames = $derived.by(() => Object.keys(this.collections).sort());
 
   // ── device scan (non-disruptive; skips empty/invalid slots) ──
-  async scanDevice(from = 0, to = 511): Promise<void> {
+  /** Build the full library cache in one pass: every preset's name + blocks + models + ALL params,
+   *  persisted (summaries → localStorage, heavy params → IndexedDB) so every feature works offline after.
+   *  This is the single "index everything" action — no separate light-scan vs deep-scan. */
+  async buildCache(from = 0, to = 511): Promise<void> {
     if (this.scanning) return;
     this.scanning = true;
     this.scanError = null;
     this.scanDone = 0;
     this.scanTotal = to - from + 1;
     const byId = new Map(this.entries.map((e) => [e.id, e] as const));
+    const params = { ...this.#paramsCache };
     try {
       for (let n = from; n <= to; n++) {
         try {
-          const s = await forgefx.presetSummary(n);
+          const s = await forgefx.presetSummary(n, true); // full=1 → summary + params in one dump
           if (s.crcValid && s.name.trim()) {
             const id = `dev:${n}`;
+            if (s.params) { params[id] = s.params; delete s.params; } // params → idb; keep summary light
             byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
           }
         } catch {
           /* unreadable / empty slot — skip */
         }
         this.scanDone = n - from + 1;
-        this.entries = [...byId.values()].sort(this.#order); // progressive: UI updates as it scans
+        if (n % 8 === 0 || n === to) this.entries = [...byId.values()].sort(this.#order); // progressive UI
       }
+      this.entries = [...byId.values()].sort(this.#order);
+      this.#paramsCache = params;
       this.#cacheDevice();
+      if (idb.available()) await idb.set(IDB_PARAMS, params);
+      this.cacheBuilt = true;
+      persist(LS.built, true);
     } catch (e) {
       this.scanError = (e as Error).message;
     } finally {
       this.scanning = false;
     }
   }
+  /** Back-compat alias — the unified build replaces the old light scan. */
+  scanDevice = (from = 0, to = 511) => this.buildCache(from, to);
 
   // ── import .syx preset files (offline) ──
   async importFiles(files: Iterable<File>): Promise<{ ok: number; failed: number }> {
@@ -223,12 +241,15 @@ class LibraryStore {
     try {
       const { blocks } = await forgefx.presetParams(e.summary.number);
       this.#paramsCache = { ...this.#paramsCache, [id]: blocks };
+      this.#persistParams();
     } catch {
       /* unreadable — leave unhydrated (param queries simply won't match it) */
     }
   }
-  /** Hydrate every device entry's params (one-time per session) so deep search spans the whole library.
-   *  Kept in memory only — not persisted (full params for 100s of presets exceed the localStorage quota). */
+  #persistParams() {
+    if (idb.available()) idb.set(IDB_PARAMS, { ...this.#paramsCache });
+  }
+  /** Hydrate every device entry's params so deep search spans the whole library; persisted to IndexedDB. */
   async deepScan(): Promise<void> {
     if (this.hydrating) return;
     this.hydrating = true;
@@ -236,9 +257,12 @@ class LibraryStore {
     try {
       const todo = this.entries.filter((e) => e.source === 'device' && !e.summary.params && !this.#paramsCache[e.id]);
       for (const e of todo) {
-        await this.hydrateParams(e.id);
+        const { blocks } = await forgefx.presetParams(e.summary.number).catch(() => ({ blocks: null }));
+        if (blocks) this.#paramsCache[e.id] = blocks;
         this.hydrateDone++;
       }
+      this.#paramsCache = { ...this.#paramsCache };
+      this.#persistParams();
     } finally {
       this.hydrating = false;
     }
@@ -269,7 +293,33 @@ class LibraryStore {
     return a.summary.name.localeCompare(b.summary.name);
   };
   #cacheDevice() {
-    persist(LS.cache, this.entries.filter((e) => e.source === 'device').map((e) => e.summary));
+    // summaries stay light in localStorage; the heavy `params` live in IndexedDB (IDB_PARAMS)
+    persist(LS.cache, this.entries.filter((e) => e.source === 'device').map((e) => ({ ...e.summary, params: undefined })));
+  }
+  /** Preset name for a device slot from the cache (for the quick picker). '' if not cached. */
+  nameOfSlot = (n: number): string => this.entries.find((e) => e.source === 'device' && e.summary.number === n)?.summary.name ?? '';
+
+  /** Re-read one device slot into the cache, keeping the index in sync with saves + external edits.
+   *  CRC-gated: if the slot's content fingerprint matches the cached one, it's a no-op (no re-write). */
+  async refreshSlot(n: number): Promise<void> {
+    const id = `dev:${n}`;
+    try {
+      const s = await forgefx.presetSummary(n, true);
+      const cached = this.entries.find((e) => e.id === id);
+      // unchanged + already fully cached → nothing to do (skip the IndexedDB write + reactivity churn)
+      if (cached && cached.summary.crc != null && cached.summary.crc === s.crc && this.#paramsCache[id]) return;
+      const byId = new Map(this.entries.map((e) => [e.id, e] as const));
+      if (s.crcValid && s.name.trim()) {
+        if (s.params) { this.#paramsCache = { ...this.#paramsCache, [id]: s.params }; delete s.params; this.#persistParams(); }
+        byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
+      } else {
+        byId.delete(id); // slot was cleared/emptied
+      }
+      this.entries = [...byId.values()].sort(this.#order);
+      this.#cacheDevice();
+    } catch {
+      /* leave the cached copy as-is if the re-read fails */
+    }
   }
 
   // ── metadata: tags / collections / favorites ──

@@ -3,6 +3,7 @@
 // same server over http* — which sidesteps SvelteKit's absolute /_app/ asset paths under file://.
 // No separate install — ForgeFX + the built UI are shipped inside the app.
 const { app, BrowserWindow, shell, Menu } = require('electron');
+const { setupUpdater } = require('./updater.cjs');
 const path = require('node:path');
 const net = require('node:net');
 const fs = require('node:fs');
@@ -91,6 +92,7 @@ async function startForgeFX() {
   process.env.PORT = PORT;
   process.env.FORGEFX_DEFINITIONS = path.join(forgefxRoot, 'definitions');
   process.env.FORGEFX_STATIC = staticDir; // serve the Axis SPA from the engine
+  process.env.FORGEFX_DATA_DIR = process.env.FORGEFX_DATA_DIR || path.join(app.getPath('userData'), 'store'); // Axis config + backups
   try {
     // ForgeFX is ESM — load it with dynamic import (require() can't load ES modules).
     // It runs the Fastify server in this (Node) process; native serial works under Electron's ABI.
@@ -182,6 +184,7 @@ app.whenReady().then(async () => {
   if (!DEV) await waitForServer();
   await logDiagnostics();
   createWindow();
+  setupUpdater(logLine); // auto-update from GitHub releases (packaged builds only)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
