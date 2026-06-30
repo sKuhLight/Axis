@@ -31,7 +31,8 @@
     | { kind: 'block'; block: string; params: ParamCond[] }
     | { kind: 'tag'; val: string }
     | { kind: 'name'; val: string }
-    | { kind: 'scenes'; op: string; val: string };
+    | { kind: 'scenes'; op: string; val: string }
+    | { kind: 'cpu'; op: string; val: string };
 
   // ── per-entry block view: prefer hydrated params, else summary blocks (+ model names) ──
   function blocksOf(e: LibEntry): DecodedBlock[] {
@@ -113,6 +114,7 @@
     if ((m = t.match(/^tag:\s*"?([^"]*)"?$/i))) { const v = m[1].trim(); return v ? { kind: 'tag', val: v } : null; }
     if ((m = t.match(/^name:\s*"?([^"]*)"?$/i))) { const v = m[1].trim(); return v ? { kind: 'name', val: v } : null; }
     if ((m = t.match(/^scenes\s*(>=|<=|!=|=|>|<)\s*(\d+)$/i))) return { kind: 'scenes', op: m[1], val: m[2] };
+    if ((m = t.match(/^cpu\s*(>=|<=|!=|=|>|<)\s*(\d+)$/i))) return { kind: 'cpu', op: m[1], val: m[2] };
     const pi = t.indexOf('(');
     if (pi >= 0) {
       const id = tokId(t.slice(0, pi));
@@ -132,6 +134,7 @@
     if (c.kind === 'tag') return 'tag:' + qv(c.val);
     if (c.kind === 'name') return 'name:' + qv(c.val);
     if (c.kind === 'scenes') return 'scenes' + c.op + c.val;
+    if (c.kind === 'cpu') return 'cpu' + c.op + c.val;
     return '';
   }
   const condsToQuery = (conds: Cond[]) => conds.map(condToText).filter(Boolean).join('  +  ');
@@ -162,6 +165,7 @@
     if (c.kind === 'tag') return library.tagsOf(e.id).some((t) => t.toLowerCase().includes(c.val.toLowerCase()));
     if (c.kind === 'name') return e.summary.name.toLowerCase().includes(c.val.toLowerCase());
     if (c.kind === 'scenes') return cmp(e.summary.scenes.length, c.op, parseFloat(c.val));
+    if (c.kind === 'cpu') return cmp(estCpu(e), c.op, parseFloat(c.val));
     if (c.kind === 'block') {
       const bs = blocksOf(e).filter((b) => b.slug === c.block);
       if (!bs.length) return false;
@@ -193,7 +197,7 @@
   let query = $state(''); // advanced typed query
   let simpleQ = $state(''); // simple free text
   let conditions = $state<Cond[]>([]); // simple-mode chips
-  let sort = $state<'num' | 'name' | 'blocks'>('num');
+  let sort = $state<'num' | 'name' | 'cpu'>('num');
   let selectedId = $state<string | null>(null);
   let queryEl: HTMLInputElement | undefined = $state();
   let caret = $state(0);
@@ -205,7 +209,7 @@
     const list = library.entries.filter((e) => matchEntry(e, activeConds, simpleText));
     return list.sort((a, b) =>
       sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
-      : sort === 'blocks' ? b.summary.blocks.length - a.summary.blocks.length
+      : sort === 'cpu' ? estCpu(b) - estCpu(a)
       : a.summary.number - b.summary.number
     );
   });
@@ -264,7 +268,7 @@
     const f = frag.toLowerCase();
     const out: AcItem[] = [];
     for (const id of filterableSlugs) { const lbl = id.toUpperCase(); if (lbl.toLowerCase().includes(f) || catLabel(id).toLowerCase().includes(f)) out.push(mk(lbl, lbl + '(', frag.length, 'block · ' + catLabel(id), catColor(id))); }
-    for (const [tok, hint] of [['tag:', 'filter by tag'], ['name:', 'name contains'], ['scenes>', 'scene count']] as const)
+    for (const [tok, hint] of [['tag:', 'filter by tag'], ['name:', 'name contains'], ['scenes>', 'scene count'], ['cpu<', 'est. CPU load']] as const)
       if (tok.toLowerCase().startsWith(f) || f === '') out.push(mk(tok, tok, frag.length, hint, '#56565e', false));
     return out;
   }
@@ -336,6 +340,7 @@
       items.push({ v: 'tag', label: 'tag:', sub: 'by tag', dot: false, color: '#6e6e78' });
       items.push({ v: 'name', label: 'name:', sub: 'name contains', dot: false, color: '#6e6e78' });
       items.push({ v: 'scenes', label: 'scenes', sub: 'scene count', dot: false, color: '#6e6e78' });
+      items.push({ v: 'cpu', label: 'cpu', sub: 'est. CPU load', dot: false, color: '#6e6e78' });
       return items.filter((i) => i.label.toLowerCase().includes(f) || i.sub.includes(f));
     }
     if (picker.kind === 'tag') return library.allTags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: '#6e6e78' }));
@@ -356,6 +361,7 @@
       if (v === 'tag') { openPickerKind('tag', {}); return; }
       if (v === 'name') { editConds((c) => c.push({ kind: 'name', val: '' })); picker = null; return; }
       if (v === 'scenes') { editConds((c) => c.push({ kind: 'scenes', op: '>', val: '4' })); picker = null; return; }
+      if (v === 'cpu') { editConds((c) => c.push({ kind: 'cpu', op: '<', val: '60' })); picker = null; return; }
       editConds((c) => c.push({ kind: 'block', block: v, params: [] })); picker = null; return;
     }
     if (kind === 'tag') { editConds((c) => { if (!c.some((x) => x.kind === 'tag' && x.val === v)) c.push({ kind: 'tag', val: v }); }); picker = null; return; }
@@ -432,6 +438,24 @@
   }
 
   const tagColor = (t: string) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360; return `hsl(${h} 55% 60%)`; };
+
+  // ── estimated CPU load ──────────────────────────────────────────────────────────────────────
+  // The device reports real CPU at runtime (an undocumented SysEx) — it is NOT stored in a preset,
+  // so we can't read it offline. This is a per-block HEURISTIC: relative DSP weight per family
+  // (amp/cab/reverb/pitch dominate; EQ/drive/utility are cheap), summed over placed blocks + a fixed
+  // overhead, capped. It's a complexity indicator, not the device's meter — always shown with a ~.
+  const CPU_WEIGHT: Record<string, number> = {
+    amp: 28, cab: 12, reverb: 12, pitch: 14, multitap: 10, megatap: 10, synth: 9, delay: 8,
+    flanger: 5, phaser: 5, chorus: 5, rotary: 5, formant: 5, tremolo: 4, filter: 4, drive: 4,
+    enhancer: 3, comp: 3, wah: 3, ringmod: 3, geq: 2, peq: 2, gate: 2, volume: 1, input: 0, output: 0
+  };
+  const CPU_BASE = 8;
+  function estCpu(e: LibEntry): number {
+    let sum = CPU_BASE;
+    for (const b of e.summary.blocks) sum += CPU_WEIGHT[b.slug ?? ''] ?? 4;
+    return Math.max(20, Math.min(99, Math.round(sum)));
+  }
+  const cpuColor = (c: number) => (c >= 80 ? '#e87b6a' : c >= 62 ? '#f5a623' : '#33c46b');
 </script>
 
 <svelte:window onclick={() => { if (picker) picker = null; }} />
@@ -455,7 +479,7 @@
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
-        {#each [['num', '#'], ['name', 'A-Z'], ['blocks', 'FX']] as [id, label]}
+        {#each [['num', '#'], ['name', 'A-Z'], ['cpu', 'CPU']] as [id, label]}
           <button class="segb" class:on={sort === id} onclick={() => (sort = id as typeof sort)}>{label}</button>
         {/each}
       </div>
@@ -510,8 +534,8 @@
           <button class="addp" onclick={(e) => onAddParam(e, ci, c.block)}>+ param</button>
         {:else}
           <span class="chip-head">
-            <span class="cdot" style:background={c.kind === 'tag' ? tagColor(c.val) : c.kind === 'scenes' ? '#4f6bed' : '#9a9aa3'}></span>
-            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : `Scenes ${c.op} ${c.val}`}
+            <span class="cdot" style:background={c.kind === 'tag' ? tagColor(c.val) : c.kind === 'scenes' ? '#4f6bed' : c.kind === 'cpu' ? '#f5a623' : '#9a9aa3'}></span>
+            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${c.op} ${c.val}` : `~CPU ${c.op} ${c.val}`}
           </span>
         {/if}
         <button class="cx" onclick={() => editConds((cc) => cc.splice(ci, 1))}>×</button>
@@ -560,6 +584,7 @@
     <div class="results">
       {#each results as e (e.id)}
         {@const sel = e.id === selectedId}
+        {@const cpu = estCpu(e)}
         <button class="row" class:sel onclick={() => (selectedId = e.id)}>
           <span class="num" class:sel>{e.source === 'file' ? 'FILE' : pad(e.summary.number)}</span>
           <div class="row-mid">
@@ -573,7 +598,14 @@
               {/each}
             </div>
           </div>
-          <div class="row-r"><span class="r-model">{e.summary.model}</span><span class="r-sub">{e.summary.scenes.length} sc · {e.summary.blocks.length} fx</span></div>
+          <div class="row-r">
+            <span class="r-sub">{e.summary.model} · {e.summary.scenes.length} sc</span>
+            <div class="cpu" title="Estimated DSP load from block makeup — not the device's live CPU reading">
+              <span class="cpu-l">~CPU</span>
+              <div class="cpu-bar"><div class="cpu-fill" style:width={cpu + '%'} style:background={cpuColor(cpu)}></div></div>
+              <span class="cpu-t" style:color={cpuColor(cpu)}>{cpu}%</span>
+            </div>
+          </div>
         </button>
       {/each}
       {#if !results.length}
@@ -594,6 +626,7 @@
     <div class="detail">
       {#if selected}
         {@const hits = matchedKeys(selected)}
+        {@const cpu = estCpu(selected)}
         <div class="d-head">
           <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span></div>
           <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}</div>
@@ -601,6 +634,7 @@
             <div class="st"><span class="sk">SOURCE</span><span class="sv2">{selected.source === 'file' ? 'Imported file' : selected.summary.model}</span></div>
             <div class="st"><span class="sk">SCENES</span><span class="sv2">{selected.summary.scenes.length}</span></div>
             <div class="st"><span class="sk">BLOCKS</span><span class="sv2">{selected.summary.blocks.length}</span></div>
+            <div class="st"><span class="sk" title="Estimated DSP load — not the device reading">~CPU</span><span class="sv2" style:color={cpuColor(cpu)}>{cpu}%</span></div>
           </div>
           <button class="load" onclick={() => loadPreset(selected!)}>↓ Load preset</button>
         </div>
@@ -753,8 +787,12 @@
   .row-blocks { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .bk { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font: 600 10px/1 'JetBrains Mono', monospace; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row-r { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
-  .r-model { font: 600 9.5px/1 'JetBrains Mono', monospace; color: #6e6e78; }
   .r-sub { font: 600 9px/1 'JetBrains Mono', monospace; color: #56565e; }
+  .cpu { display: flex; align-items: center; gap: 7px; }
+  .cpu-l { font: 600 8px/1 'JetBrains Mono', monospace; color: #56565e; letter-spacing: 0.06em; }
+  .cpu-bar { width: 46px; height: 6px; background: #16161b; border: 1px solid #26262c; border-radius: 4px; overflow: hidden; }
+  .cpu-fill { height: 100%; }
+  .cpu-t { font: 700 10px/1 'JetBrains Mono', monospace; min-width: 30px; text-align: right; }
   .empty, .no-detail { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 30px; gap: 13px; text-align: center; }
   .no-detail { height: 100%; }
   .big { font-size: 30px; opacity: 0.4; }
