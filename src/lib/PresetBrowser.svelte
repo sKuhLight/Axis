@@ -11,7 +11,7 @@
   import { forgefx } from './forgefx';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
-  import type { DecodedBlock, GridCell, PresetGrid } from './types';
+  import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from './types';
 
   const ACCENT = '#35c9d6';
   // block family slug → [label, color]. Colors carried from the design; unknown slugs get a fallback.
@@ -314,6 +314,18 @@
   });
   // tile color from the cell's family (derive slug from "Amp 1" → amp)
   const gridCellColor = (c: GridCell) => catColor(c.name.replace(/\s+\d+$/, '').toLowerCase());
+
+  // ── version history for the selected device preset ──
+  let versions = $state<VersionInfo[]>([]);
+  $effect(() => {
+    const e = selected;
+    versions = [];
+    if (e && e.source === 'device' && e.summary.number >= 0) {
+      forgefx.versions(e.summary.number).then((r) => { if (selected?.summary.number === e.summary.number) versions = r.versions; }).catch(() => {});
+    }
+  });
+  const reloadVersions = (n: number) => forgefx.versions(n).then((r) => { versions = r.versions; }).catch(() => {});
+  const fmtTime = (ms: number) => { const d = Math.round((Date.now() - ms) / 1000); return d < 60 ? `${d}s ago` : d < 3600 ? `${Math.round(d / 60)}m ago` : d < 86400 ? `${Math.round(d / 3600)}h ago` : `${Math.round(d / 86400)}d ago`; };
   function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
 
   // ── drag a param/block from the detail panel into the search (builds a condition) ──
@@ -824,6 +836,27 @@
           </div>
           <button class="load" onclick={() => loadPreset(selected!)}>↓ Load preset</button>
         </div>
+        {#if selected.source === 'device'}
+          <div class="d-sec">
+            <div class="vh-head">
+              <span class="lbl">VERSION HISTORY</span>
+              <button class="vh-snap" onclick={() => editor.backupPreset(selected!.summary.number).then(() => reloadVersions(selected!.summary.number))}>＋ Snapshot</button>
+            </div>
+            {#if versions.length}
+              <div class="vh-list">
+                {#each versions as v}
+                  <div class="vh">
+                    <div class="vh-info"><span class="vh-when">{fmtTime(v.capturedAt)}</span><span class="vh-meta">{v.source} · {(v.stored / 1024).toFixed(1)}KB</span></div>
+                    <button class="vh-btn" title="Load into the edit buffer (doesn't touch a slot)" onclick={() => editor.loadVersion(v.id)}>Load</button>
+                    <a class="vh-btn dl" href={`/api/version/${v.id}/syx`} download={`${v.name || 'preset'}.syx`} title="Download .syx">↓</a>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="vh-empty">No snapshots yet — hit Snapshot, or it captures on save.</p>
+            {/if}
+          </div>
+        {/if}
         <div class="d-sec">
           <div class="lbl">SIGNAL CHAIN</div>
           <div class="chain">
@@ -1011,6 +1044,19 @@
   .load:hover { filter: brightness(1.08); }
   .d-sec { padding: 16px 20px; }
   .d-sec .lbl { margin-bottom: 11px; display: block; }
+  .vh-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .vh-head .lbl { margin-bottom: 0; }
+  .vh-snap { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, #35c9d6); background: none; border: 1px solid #2a5a5e; border-radius: 7px; padding: 5px 9px; cursor: pointer; }
+  .vh-snap:hover { background: rgba(53, 201, 214, 0.1); }
+  .vh-list { display: flex; flex-direction: column; gap: 5px; }
+  .vh { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: #0e0e11; border: 1px solid #1f1f25; border-radius: 9px; }
+  .vh-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .vh-when { font-size: 12px; font-weight: 600; color: #e9e9ee; }
+  .vh-meta { font: 500 9.5px/1 'JetBrains Mono', monospace; color: #6e6e78; }
+  .vh-btn { flex: none; font: 700 11px/1 'JetBrains Mono', monospace; color: #f5a623; background: none; border: 1px solid #3a2f1a; border-radius: 7px; padding: 6px 10px; cursor: pointer; text-decoration: none; }
+  .vh-btn:hover { background: rgba(245, 166, 35, 0.12); }
+  .vh-btn.dl { color: #8a8a94; border-color: #2e2e36; padding: 6px 8px; }
+  .vh-empty { font: 500 11px/1.5 'JetBrains Mono', monospace; color: #52525b; }
   .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
   .ch { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 7px; font: 600 10.5px/1 'JetBrains Mono', monospace; color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); }
   .arr { color: #3a3a44; font-size: 11px; }

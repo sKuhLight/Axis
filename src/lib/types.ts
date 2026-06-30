@@ -147,6 +147,20 @@ export interface DecodedBlock {
   params: DecodedParam[];
 }
 
+/** A stored preset version snapshot (GET /versions). */
+export interface VersionInfo {
+  id: string;
+  location: number;
+  crc: number;
+  name: string;
+  model: string;
+  capturedAt: number;
+  source: 'manual' | 'auto' | 'backup';
+  backupId?: string;
+  bytes: number;
+  stored: number;
+}
+
 /** A unique effect block in a preset (for the library/browser). */
 export interface PresetSummaryBlock {
   effectId: number;

@@ -336,6 +336,23 @@ class EditorStore {
   downloadUpdate = () => window.axisUpdate?.download();
   installUpdate = () => window.axisUpdate?.install();
 
+  // ── preset versions / backup ──
+  /** Snapshot the given device preset into the version store. */
+  backupPreset = async (n: number) => {
+    try { await forgefx.snapshotPreset(n); this.showToast(`Backed up preset ${n}`, '#33c46b'); library.refreshSlot(n); }
+    catch (e) { this.showToast('Backup failed: ' + (e as Error).message, '#d6543f'); }
+  };
+  /** Load a stored version straight into the edit buffer (plays it without occupying a slot). */
+  loadVersion = async (id: string) => {
+    try {
+      await forgefx.loadVersion(id);
+      await this.load();
+      this.showToast('Loaded into edit buffer — Save to keep it on a slot', '#f5a623');
+    } catch (e) {
+      this.showToast('Load failed: ' + (e as Error).message, '#d6543f');
+    }
+  };
+
   // ── cloud sync ──
   #initCloud = async () => {
     try {
