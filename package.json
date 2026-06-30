@@ -1,6 +1,6 @@
 {
   "name": "axis",
-  "version": "0.4.18-beta",
+  "version": "0.4.19-beta",
   "description": "Axis — editor for Fractal devices (FM3), bundling the ForgeFX engine",
   "author": {
     "name": "sKuhLight",
@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "electron:dev": "ELECTRON_DEV=1 electron .",
-    "desktop:build": "vite build && electron-builder"
+    "desktop:build": "VITE_FORGEFX_BASE= vite build && electron-builder"
   },
   "dependencies": {
     "@orama/orama": "^3.1.18",
