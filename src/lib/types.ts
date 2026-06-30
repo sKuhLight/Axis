@@ -160,6 +160,8 @@ export interface PresetSummary {
   name: string;
   model: string;
   crcValid: boolean;
+  /** Content fingerprint (stored CRC16) — changes when the preset changes; used to detect a stale cache entry. */
+  crc?: number;
   scenes: string[];
   blocks: PresetSummaryBlock[];
   /** Distinct model names in use per block family (amp/drive/cab/reverb/…) — for "presets using model X".

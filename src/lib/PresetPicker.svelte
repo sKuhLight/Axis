@@ -1,5 +1,6 @@
 <script lang="ts">
   import { editor } from './editor.svelte';
+  import { library } from './library.svelte';
 
   type Recent = { n: number; name: string };
   let recents = $state<Recent[]>([]);
@@ -50,7 +51,7 @@
   });
   function nameOf(n: number): string {
     if (editor.preset?.number === n && editor.preset.name) return editor.preset.name;
-    return recents.find((r) => r.n === n)?.name ?? '';
+    return library.nameOfSlot(n) || recents.find((r) => r.n === n)?.name || '';
   }
   // full slot list, filtered by number or known name
   const rows = $derived.by(() => {

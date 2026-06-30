@@ -94,7 +94,7 @@ export const forgefx = {
       body: JSON.stringify({ value, continuous })
     }),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
-  presetSummary: (n: number) => req<PresetSummary>(`/presets/${n}/summary`),
+  presetSummary: (n: number, full = false) => req<PresetSummary>(`/presets/${n}/summary${full ? '?full=1' : ''}`),
   /** Full per-block decoded params for a device preset (every family/param) — deep search + detail. */
   presetParams: (n: number) => req<{ blocks: DecodedBlock[] }>(`/presets/${n}/params`),
   /** Decode a preset .syx file (raw bytes) offline → library summary. */

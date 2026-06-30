@@ -7,6 +7,11 @@
 appId: dev.skuhlight.axis
 productName: Axis
 copyright: Axis — independent, not affiliated with Fractal Audio Systems
+# auto-update feed: electron-updater reads the latest*.yml published with each GitHub release.
+publish:
+  provider: github
+  owner: sKuhLight
+  repo: Axis
 directories:
   output: dist-desktop
 files:
