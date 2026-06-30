@@ -15,7 +15,8 @@ import type {
   PresetGrid,
   PresetRef,
   FcModel,
-  ModModel
+  ModModel,
+  PresetSummary
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -89,6 +90,19 @@ export const forgefx = {
       method: 'PUT',
       body: JSON.stringify({ value, continuous })
     }),
+  /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
+  presetSummary: (n: number) => req<PresetSummary>(`/presets/${n}/summary`),
+  /** Decode a preset .syx file (raw bytes) offline → library summary. */
+  decodePresetFile: async (bytes: ArrayBuffer | Uint8Array): Promise<PresetSummary> => {
+    const res = await fetch(`${BASE}/preset/decode`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: bytes as BodyInit,
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!res.ok) throw new ForgeError(res.status, (await res.json().catch(() => ({})))?.error ?? res.statusText);
+    return res.json();
+  },
   /** Foot Controller address model (field bases + config formula + enums); null if not decoded. */
   fcModel: () => req<FcModel | null>(`/fc/model`),
   /** Modifier address model (field → paramId); null if not decoded. */
