@@ -2,6 +2,23 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.21-beta — 2026-06-30
+
+### Fixed
+- **Signal Grid: connecting blocks across a gap.** Drawing a cable between two
+  blocks with empty columns between them now places a routing shunt in *every*
+  gap cell, not just the first — so the connection actually reaches the target.
+  (Each shunt now gets a unique instance id, which the device requires.)
+- **Foot Controller: custom switch labels now show.** Typing a custom label also
+  switches that side to "Custom" display mode, so the text is actually displayed
+  on the switch (previously the characters were stored but never shown).
+
+### Added
+- **Foot Controller: live read-back.** The FC editor now reads the current state
+  from the connected unit — each switch's category, function, display mode,
+  colour and custom label — so the controls reflect what is actually on the
+  device instead of starting blank. The FC editor is now full read/write.
+
 ## 0.4.20-beta — 2026-06-30
 
 ### Fixed
