@@ -44,6 +44,7 @@ class LibraryStore {
   // filter state the UI binds to
   query = $state('');
   blockFilter = $state<string | null>(null); // block slug
+  ampFilter = $state<string | null>(null); // amp model name
   tagFilter = $state<string | null>(null);
   collectionFilter = $state<string | null>(null);
   favOnly = $state(false);
@@ -61,10 +62,11 @@ class LibraryStore {
     return this.entries.filter((e) => {
       if (this.favOnly && !e.fav) return false;
       if (this.blockFilter && !e.summary.blocks.some((b) => b.slug === this.blockFilter)) return false;
+      if (this.ampFilter && !(e.summary.amps ?? []).includes(this.ampFilter)) return false;
       if (this.tagFilter && !(this.tags[e.id] ?? []).includes(this.tagFilter)) return false;
       if (this.collectionFilter && !(this.collections[this.collectionFilter] ?? []).includes(e.id)) return false;
       if (q) {
-        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')}`.toLowerCase();
+        const hay = `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${(e.summary.amps ?? []).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -74,6 +76,12 @@ class LibraryStore {
   allBlocks = $derived.by(() => {
     const s = new Set<string>();
     for (const e of this.entries) for (const b of e.summary.blocks) if (b.slug) s.add(b.slug);
+    return [...s].sort();
+  });
+  /** unique amp-model names across the library — for the amp filter / autocomplete. */
+  allAmps = $derived.by(() => {
+    const s = new Set<string>();
+    for (const e of this.entries) for (const a of e.summary.amps ?? []) s.add(a);
     return [...s].sort();
   });
   allTags = $derived.by(() => {

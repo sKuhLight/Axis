@@ -133,6 +133,8 @@ export interface PresetSummary {
   crcValid: boolean;
   scenes: string[];
   blocks: PresetSummaryBlock[];
+  /** Distinct amp-model names used (across the amp's channels) — for "presets using amp X". */
+  amps: string[];
 }
 
 /** Result of the device auto-detect handshake (GET /device/detect). */
