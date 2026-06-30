@@ -241,6 +241,14 @@ class LibraryStore {
     const byId = new Map(this.entries.map((e) => [e.id, e] as const));
     const params = { ...this.#paramsCache };
     try {
+      // AM4 (model 0x15) is a flat 4-slot device with no gen-3 preset dumps. Running the 512-slot
+      // summary scan against it makes every request hang ~6.6s and saturates the single MIDI link,
+      // starving the live grid/preset reads (= empty grid, no name, "forever"). Bail cleanly.
+      const dev = await forgefx.device().catch(() => null);
+      if (dev?.modelByte === '0x15') {
+        this.scanError = "Library indexing isn't available for the AM4 — it's a 4-slot device. Use the live grid view.";
+        return; // `finally` resets `scanning`
+      }
       for (let n = from; n <= to; n++) {
         try {
           const s = await forgefx.presetSummary(n, true); // full=1 → summary + params in one dump
