@@ -41,10 +41,17 @@ export interface LibEntry {
   source: 'device' | 'file';
   summary: PresetSummary;
   fav: boolean;
+  /** imported presets only: the folder they came from (for grouping/browsing). */
+  folder?: string;
 }
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built' };
+/** The FM3 names an uninitialized slot `<EMPTY>` — a valid CRC'd preset, so it must be filtered
+ *  explicitly or it pollutes the library/search as a ghost entry. */
+const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
+
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
 const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
+const IDB_FILEBYTES = 'lib.fileBytes'; // raw .syx bytes for imported file/folder presets (id → number[]) — for live load
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -94,6 +101,11 @@ class LibraryStore {
   /** Hydrated device params, keyed by entry id. Persisted in IndexedDB (too big for localStorage) and
    *  loaded into memory on launch, so the param index survives reloads. */
   #paramsCache = $state<Record<string, DecodedBlock[]>>({});
+  /** Raw .syx bytes for imported file/folder presets (id → byte array), so they load live to the edit
+   *  buffer. Persisted in IndexedDB. */
+  #fileBytes = $state<Record<string, number[]>>({});
+  /** Folder paths the user has imported presets from (for the sidebar folder list). */
+  folders = $state<string[]>([]);
   hydrating = $state(false);
   hydrateDone = $state(0);
   /** True once a full cache build has completed (persisted) — drives the startup prompt. */
@@ -102,10 +114,20 @@ class LibraryStore {
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
     const favs = new Set(load<string[]>(LS.favs, []));
-    const cached = load<unknown[]>(LS.cache, []).filter((s) => summarySchema.safeParse(s).success) as PresetSummary[];
-    this.entries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
+    const cached = (load<unknown[]>(LS.cache, []).filter((s) => summarySchema.safeParse(s).success) as PresetSummary[])
+      .filter((s) => !isEmptyName(s.name)); // self-heal: drop ghost <EMPTY> entries from older caches
+    const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
+    // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
+    const files = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
+      .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary }[];
+    const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
+    this.entries = [...deviceEntries, ...fileEntries].sort(this.#order);
+    this.folders = load<string[]>(LS.folders, []);
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
-    if (idb.available()) idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+    if (idb.available()) {
+      idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = b; });
+    }
     // one-time: mirror existing local config into the ForgeFX store so it's present before the first edit
     if (typeof localStorage !== 'undefined' && !localStorage.getItem('axs.cfg.migrated')) {
       const raw = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
@@ -222,7 +244,7 @@ class LibraryStore {
       for (let n = from; n <= to; n++) {
         try {
           const s = await forgefx.presetSummary(n, true); // full=1 → summary + params in one dump
-          if (s.crcValid && s.name.trim()) {
+          if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
             const id = `dev:${n}`;
             if (s.params) { params[id] = s.params; delete s.params; } // params → idb; keep summary light
             byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
@@ -248,23 +270,75 @@ class LibraryStore {
   /** Back-compat alias — the unified build replaces the old light scan. */
   scanDevice = (from = 0, to = 511) => this.buildCache(from, to);
 
-  // ── import .syx preset files (offline) ──
-  async importFiles(files: Iterable<File>): Promise<{ ok: number; failed: number }> {
+  // ── import .syx preset files / folders (offline) ──
+  /** Import .syx files. `folder` groups them (set when importing a directory) and the raw bytes are kept
+   *  so each preset can be loaded live into the edit buffer later — no device slot needed. */
+  async importFiles(files: Iterable<File>, folder?: string): Promise<{ ok: number; failed: number }> {
     const byId = new Map(this.entries.map((e) => [e.id, e] as const));
     let ok = 0;
     let failed = 0;
     for (const f of files) {
+      if (!/\.syx$/i.test(f.name)) continue; // folder imports include non-preset files — skip them
       try {
-        const summary = await forgefx.decodePresetFile(await f.arrayBuffer());
-        const id = `file:${f.name}`;
-        byId.set(id, { id, source: 'file', summary: { ...summary, name: summary.name || f.name }, fav: byId.get(id)?.fav ?? false });
+        const buf = await f.arrayBuffer();
+        const summary = await forgefx.decodePresetFile(buf);
+        const id = `file:${folder ? folder + '/' : ''}${f.name}`;
+        byId.set(id, { id, source: 'file', summary: { ...summary, name: summary.name || f.name.replace(/\.syx$/i, '') }, fav: byId.get(id)?.fav ?? false, folder });
+        this.#fileBytes[id] = Array.from(new Uint8Array(buf));
         ok++;
       } catch {
         failed++;
       }
     }
+    if (folder && ok && !this.folders.includes(folder)) { this.folders = [...this.folders, folder]; persist(LS.folders, this.folders); }
     this.entries = [...byId.values()].sort(this.#order);
+    this.#persistFiles();
     return { ok, failed };
+  }
+
+  /** Open a directory picker and import every .syx within (one level). Returns count, or null if the
+   *  picker is unsupported / cancelled. Uses the directory <input> so it works in Electron + Chromium. */
+  async importFolder(): Promise<{ ok: number; failed: number } | null> {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.syx';
+      (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
+      input.multiple = true;
+      input.onchange = async () => {
+        const list = Array.from(input.files ?? []);
+        if (!list.length) return resolve(null);
+        // derive a short folder name from the common top directory of the selection
+        const folder = (list[0].webkitRelativePath?.split('/')[0]) || 'Folder';
+        resolve(await this.importFiles(list, folder));
+      };
+      input.click();
+    });
+  }
+
+  /** Raw .syx bytes for an imported preset (for live load), or null. */
+  fileBytes(id: string): Uint8Array | null {
+    const b = this.#fileBytes[id];
+    return b ? new Uint8Array(b) : null;
+  }
+  /** Remove an imported preset (and its cached bytes). */
+  removeFile(id: string): void {
+    this.entries = this.entries.filter((e) => e.id !== id);
+    delete this.#fileBytes[id];
+    this.#persistFiles();
+  }
+  /** Remove every preset imported from a folder. */
+  removeFolder(folder: string): void {
+    for (const e of this.entries) if (e.folder === folder) delete this.#fileBytes[e.id];
+    this.entries = this.entries.filter((e) => e.folder !== folder);
+    this.folders = this.folders.filter((f) => f !== folder);
+    persist(LS.folders, this.folders);
+    this.#persistFiles();
+  }
+  #persistFiles(): void {
+    const files = this.entries.filter((e) => e.source === 'file').map((e) => ({ id: e.id, folder: e.folder, summary: e.summary }));
+    persist(LS.files, files);
+    if (idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
   }
 
   // ── deep param hydration (device presets) ──
@@ -344,11 +418,11 @@ class LibraryStore {
       // unchanged + already fully cached → nothing to do (skip the IndexedDB write + reactivity churn)
       if (cached && cached.summary.crc != null && cached.summary.crc === s.crc && this.#paramsCache[id]) return;
       const byId = new Map(this.entries.map((e) => [e.id, e] as const));
-      if (s.crcValid && s.name.trim()) {
+      if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
         if (s.params) { this.#paramsCache = { ...this.#paramsCache, [id]: s.params }; delete s.params; this.#persistParams(); }
         byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
       } else {
-        byId.delete(id); // slot was cleared/emptied
+        byId.delete(id); // slot was cleared/emptied (or holds the FM3 <EMPTY> sentinel)
       }
       this.entries = [...byId.values()].sort(this.#order);
       this.#cacheDevice();

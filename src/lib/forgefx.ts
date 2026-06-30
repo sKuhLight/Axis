@@ -18,7 +18,8 @@ import type {
   ModModel,
   PresetSummary,
   DecodedBlock,
-  VersionInfo
+  VersionInfo,
+  CloudVersion
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -97,14 +98,24 @@ export const forgefx = {
   // ── preset versions / backups ──
   versions: (location?: number) => req<{ versions: VersionInfo[] }>(`/versions${location != null ? `?location=${location}` : ''}`),
   snapshotPreset: (n: number) => req<{ version: VersionInfo }>(`/backup/preset/${n}`, { method: 'POST' }),
+  /** Full device backup — snapshots every populated slot into the version store as one backup set. */
+  backupDevice: (label = 'Full device backup') => req<{ id: string; count: number }>(`/backup/device`, { method: 'POST', body: JSON.stringify({ label }) }),
   versionSyx: (id: string) => fetch(`${BASE}/version/${id}/syx`).then((r) => r.blob()),
   loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
+  /** Restore a snapshot to its origin slot (load + commit to that slot — destructive for the slot). */
+  restoreVersion: (id: string) => req<{ ok: boolean; location: number }>(`/version/${id}/restore`, { method: 'POST' }),
+  /** Load arbitrary raw .syx bytes (an imported file/folder preset) straight into the edit buffer. */
+  loadBytes: (bytes: ArrayBuffer | Uint8Array) =>
+    fetch(`${BASE}/preset/load`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes as BodyInit, signal: AbortSignal.timeout(12000) })
+      .then((r) => { if (!r.ok) throw new ForgeError(r.status, `load → ${r.status}`); return r.json() as Promise<{ ok: boolean }>; }),
   // ── cloud sync (gated server-side by AXIS_CLOUD) ──
   cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null }>('/cloud/status'),
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),
-  cloudSync: () => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST' }),
+  cloudSync: (scopes?: { config?: boolean; presets?: boolean }) => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST', body: JSON.stringify(scopes ? { scopes } : {}) }),
+  /** The cloud's view of every backed-up preset version (metadata only) — for computing per-preset sync state. */
+  cloudIndex: () => req<{ versions: CloudVersion[] }>('/cloud/index'),
   // ── persistent store (Axis config / metadata) ──
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data }) }),

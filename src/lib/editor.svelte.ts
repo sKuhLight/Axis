@@ -4,6 +4,7 @@
 // cables, params, bypass, channel, retype).
 import { forgefx, ForgeError } from './forgefx';
 import { library } from './library.svelte';
+import { cloud } from './cloud.svelte';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
@@ -12,6 +13,13 @@ import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
+type CloudScopes = { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
+const SCOPES_KEY = 'axs.cloud.scopes';
+function loadScopes(): CloudScopes {
+  try { return { presets: true, scenes: true, fc: true, settings: true, ...(JSON.parse(localStorage.getItem(SCOPES_KEY) || '{}')) }; }
+  catch { return { presets: true, scenes: true, fc: true, settings: true }; }
+}
+const saveScopes = (s: CloudScopes) => { try { localStorage.setItem(SCOPES_KEY, JSON.stringify(s)); } catch { /* */ } };
 const EMPTY: Layout = { cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true };
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
@@ -108,8 +116,20 @@ class EditorStore {
   update = $state<{ version: string; url: string } | null>(null); // newer release (web fallback / non-desktop)
   /** Desktop auto-update status (Electron). idle until the updater reports something. */
   autoUpdate = $state<{ state: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; percent?: number }>({ state: 'idle' });
-  /** Cloud sync (Supabase). enabled only when the engine has AXIS_CLOUD set; user null until logged in. */
-  cloud = $state<{ enabled: boolean; user: { email: string } | null; syncing: boolean; lastSync: number | null; note: string | null }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null });
+  /** Cloud sync (Supabase). enabled only when the engine has AXIS_CLOUD set; user null until logged in.
+   *  `scopes` mirror the account panel's per-item toggles; `plan` is the billing tier (Free until billing
+   *  lands); `pendingEmail` drives the email-confirmation screen after register. */
+  cloud = $state<{
+    enabled: boolean;
+    user: { email: string } | null;
+    syncing: boolean;
+    lastSync: number | null;
+    note: string | null;
+    plan: string;
+    scopes: { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
+    fullBackup: boolean;
+    pendingEmail: string | null;
+  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', scopes: loadScopes(), fullBackup: false, pendingEmail: null });
   cloudOpen = $state(false);
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
@@ -358,7 +378,7 @@ class EditorStore {
     try {
       const s = await forgefx.cloudStatus();
       this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null };
-      if (s.user) this.cloudSync(); // pull latest on launch when already signed in
+      if (s.user) { await this.cloudSync(); cloud.refresh(); } // pull latest + sync-state index on launch
     } catch {
       /* cloud disabled / engine not ready */
     }
@@ -367,8 +387,9 @@ class EditorStore {
     this.cloud.note = null;
     try {
       const r = await forgefx.cloudLogin(email, password);
-      this.cloud = { ...this.cloud, user: { email: r.user.email } };
+      this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null };
       await this.cloudSync();
+      cloud.refresh();
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Login failed';
     }
@@ -377,28 +398,50 @@ class EditorStore {
     this.cloud.note = null;
     try {
       const r = await forgefx.cloudRegister(email, password);
-      if (r.needsConfirmation) this.cloud.note = 'Account created — check your email to confirm, then sign in.';
-      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email } }; await this.cloudSync(); }
+      if (r.needsConfirmation) this.cloud = { ...this.cloud, pendingEmail: email, note: null };
+      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null }; await this.cloudSync(); cloud.refresh(); }
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Sign-up failed';
     }
   };
   cloudLogout = async () => {
     try { await forgefx.cloudLogout(); } catch { /* */ }
-    this.cloud = { ...this.cloud, user: null, lastSync: null };
+    this.cloud = { ...this.cloud, user: null, lastSync: null, pendingEmail: null };
+    cloud.clear();
+  };
+  /** Toggle a sync scope (presets/scenes/fc/settings) and persist the choice. */
+  setCloudScope = (key: keyof CloudScopes, on: boolean) => {
+    this.cloud = { ...this.cloud, scopes: { ...this.cloud.scopes, [key]: on } };
+    saveScopes(this.cloud.scopes);
   };
   cloudSync = async () => {
     if (!this.cloud.user) return;
     this.cloud.syncing = true;
     this.cloud.note = null;
     try {
-      const r = await forgefx.cloudSync();
+      const s = this.cloud.scopes;
+      // server scopes are coarser than the UI: presets→version blobs; everything else lives in `config`.
+      const r = await forgefx.cloudSync({ presets: s.presets, config: s.settings || s.fc || s.scenes });
       const up = r.config.pushed + r.versions.pushed, down = r.config.pulled + r.versions.pulled;
       this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${up} ↓${down}` };
+      cloud.refresh();
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Sync failed';
     } finally {
       this.cloud.syncing = false;
+    }
+  };
+  /** Full device backup → version store, then sync it up. Drives the account panel's "Full device backup". */
+  cloudFullBackup = async () => {
+    this.cloud = { ...this.cloud, fullBackup: true, syncing: true, note: null };
+    try {
+      const r = await forgefx.backupDevice();
+      this.showToast(`Backed up ${r.count} presets`, '#33c46b');
+      await this.cloudSync();
+    } catch (e) {
+      this.cloud.note = (e as Error).message || 'Backup failed';
+    } finally {
+      this.cloud = { ...this.cloud, syncing: false };
     }
   };
 
@@ -470,6 +513,7 @@ class EditorStore {
   };
 
   #watching = false;
+  #contentCheckAt = 0; // last time the current slot's stored content was re-decoded (external-edit catch)
   watchPreset = async () => {
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
     this.#watching = true;
@@ -482,8 +526,16 @@ class EditorStore {
         await this.load();
         if (this.selKey) await this.#loadParams();
         if (library.cacheBuilt) library.refreshSlot(n); // CRC-gated sync of the navigated-to slot (catches external edits)
+        this.#contentCheckAt = Date.now();
       } else if (this.status === 'offline') {
         await this.load();
+      } else if (n >= 0 && library.cacheBuilt && Date.now() - this.#contentCheckAt > 11000) {
+        // Same slot number, but its stored content can change under us (e.g. FM3-Edit overwrote
+        // this slot while the unit stayed on it). Number-gated detection misses that, so re-decode
+        // the current slot periodically. refreshSlot is CRC-gated — an unchanged preset is a cheap
+        // no-op (no cache write, no UI churn).
+        this.#contentCheckAt = Date.now();
+        library.refreshSlot(n);
       }
     } catch {
       /* keep showing the last good grid */

@@ -161,6 +161,23 @@ export interface VersionInfo {
   stored: number;
 }
 
+/** A version as the cloud sees it (GET /cloud/index) — metadata only, used to compute per-preset sync state.
+ *  Version ids are deterministic (location+crc+ts), so a local VersionInfo is "in cloud" iff its id is here. */
+export interface CloudVersion {
+  id: string;
+  location: number;
+  crc: number;
+  name: string;
+  model: string;
+  capturedAt: number;
+  source: string;
+  bytes: number;
+  stored: number;
+}
+
+/** Per-preset cloud sync state, computed from device CRC + local versions + the cloud index. */
+export type SyncState = 'synced' | 'modified' | 'outdated' | 'cloudOnly' | 'deviceOnly' | 'none';
+
 /** A unique effect block in a preset (for the library/browser). */
 export interface PresetSummaryBlock {
   effectId: number;

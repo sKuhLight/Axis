@@ -43,6 +43,18 @@
       </div>
     </sc-for>
     <div style="flex:1;"></div>
+    <!-- account / cloud sync -->
+    <div data-rail="account" onClick="{{ openAccount }}" title="{{ acct.railTitle }}" style="{{ acct.railBtnStyle }}" style-hover="border-color:#3f3f48;">
+      <sc-if value="{{ acct.loggedIn }}" hint-placeholder-val="{{ false }}">
+        <span style="{{ acct.avatarStyle }}">{{ acct.initials }}</span>
+      </sc-if>
+      <sc-if value="{{ acct.loggedOut }}" hint-placeholder-val="{{ true }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="#8a8a93" stroke-width="1.8"></circle><path d="M5.5 19.2 a6.6 5.6 0 0 1 13 0" stroke="#8a8a93" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      </sc-if>
+      <sc-if value="{{ acct.showSyncDot }}" hint-placeholder-val="{{ false }}">
+        <span style="{{ acct.syncDotStyle }}"></span>
+      </sc-if>
+    </div>
     <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
       <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
       <span style="font:600 8px/1 'JetBrains Mono'; color:#4a4a52;">FW1.4</span>
@@ -760,6 +772,24 @@
           </div>
         </div>
       </div>
+      <!-- account footer -->
+      <div onClick="{{ openAccount }}" style="{{ acct.drawerRowStyle }}" style-hover="border-color:#3f3f48;">
+        <sc-if value="{{ acct.loggedIn }}" hint-placeholder-val="{{ false }}">
+          <span style="{{ acct.drawerAvatarStyle }}">{{ acct.initials }}</span>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:14px; font-weight:700; color:#e9e9ee; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</div>
+            <div style="font:600 10px/1 'JetBrains Mono'; color:#7a7a83; margin-top:3px;">{{ acct.syncShort }}</div>
+          </div>
+          <span style="font-size:15px; color:#56565e;">›</span>
+        </sc-if>
+        <sc-if value="{{ acct.loggedOut }}" hint-placeholder-val="{{ true }}">
+          <span style="width:34px; height:34px; flex:none; border-radius:50%; border:1px solid #2a2a31; display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="#8a8a93" stroke-width="1.8"></circle><path d="M5.5 19.2 a6.6 5.6 0 0 1 13 0" stroke="#8a8a93" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          </span>
+          <span style="flex:1; font-size:14px; font-weight:700; color:#cfcfd6;">Sign in / Register</span>
+          <span style="font-size:15px; color:#56565e;">›</span>
+        </sc-if>
+      </div>
     </div>
   </div>
   </sc-if>
@@ -924,6 +954,257 @@
   </div>
   </sc-if>
 
+  <!-- ===================== ACCOUNT / CLOUD SYNC ===================== -->
+  <sc-if value="{{ accountOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeAccount }}" data-screen-label="Account" style="{{ acct.overlayStyle }}">
+    <div onClick="{{ stop }}" style="{{ acct.cardStyle }}">
+
+      <!-- preview-state switcher (handoff aid) -->
+      <div style="display:flex; align-items:center; gap:9px; padding:9px 13px; background:#0b0b0d; border-bottom:1px solid #1d1d22; flex:none;">
+        <span style="font:700 8px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.16em; flex:none;">PREVIEW</span>
+        <div style="display:flex; gap:3px; flex:1; flex-wrap:wrap;">
+          <sc-for list="{{ acct.demoStates }}" as="d" hint-placeholder-count="5">
+            <div data-astate="{{ d.id }}" onClick="{{ acct.onDemoState }}" style="{{ d.style }}">{{ d.label }}</div>
+          </sc-for>
+        </div>
+        <div onClick="{{ closeAccount }}" style="width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; background:#1c1c21; border:1px solid #2a2a31; border-radius:8px; cursor:pointer; font-size:13px; color:#9a9aa3;" style-hover="border-color:#3f3f48; color:#e9e9ee;">✕</div>
+      </div>
+
+      <div class="axs-scroll" style="flex:1; min-height:0; overflow-y:auto;">
+
+      <!-- ========== AUTH ========== -->
+      <sc-if value="{{ acct.isAuth }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:28px 26px 26px;">
+        <div style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:13px; margin-bottom:24px;">
+          <svg width="42" height="42" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="#35c9d6"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6"></path></svg>
+          <div>
+            <div style="font-size:21px; font-weight:800; color:#fff; letter-spacing:-.01em;">{{ acct.authTitle }}</div>
+            <div style="font-size:13px; color:#9a9aa3; margin-top:6px;">Sync presets, scenes &amp; rigs across every device</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:4px; background:#0e0e10; border:1px solid #26262c; border-radius:12px; padding:4px; margin-bottom:22px;">
+          <div data-atab="signin" onClick="{{ acct.onAcctTab }}" style="{{ acct.tabSignin }}">Sign in</div>
+          <div data-atab="register" onClick="{{ acct.onAcctTab }}" style="{{ acct.tabRegister }}">Create account</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <div style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83; letter-spacing:.1em; margin-bottom:8px;">EMAIL</div>
+            <input value="{{ acct.email }}" onInput="{{ acct.onAuthEmail }}" type="email" placeholder="you@band.com" style="width:100%; height:46px; padding:0 14px; background:#0e0e10; border:1px solid #2a2a31; border-radius:11px; color:#e9e9ee; font:600 14px/46px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+          </div>
+          <sc-if value="{{ acct.isPassword }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font:600 9px/1 'JetBrains Mono'; color:#7a7a83; letter-spacing:.1em;">PASSWORD</span>
+              <sc-if value="{{ acct.isSignin }}" hint-placeholder-val="{{ true }}"><span onClick="{{ acct.onForgot }}" style="font-size:11.5px; font-weight:600; color:#35c9d6; cursor:pointer;">Forgot?</span></sc-if>
+            </div>
+            <input type="password" placeholder="••••••••" style="width:100%; height:46px; padding:0 14px; background:#0e0e10; border:1px solid #2a2a31; border-radius:11px; color:#e9e9ee; font:600 14px/46px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+          </div>
+          </sc-if>
+        </div>
+        <button onClick="{{ acct.onAuthSubmit }}" style="width:100%; height:48px; margin-top:22px; background:#35c9d6; color:#06181a; border:none; border-radius:12px; font:800 14px/1 'Hanken Grotesk'; cursor:pointer;" style-hover="background:#46d6e2;">{{ acct.submitLabel }}</button>
+        <div onClick="{{ acct.onAcctMode }}" style="text-align:center; margin-top:15px; font-size:12.5px; font-weight:600; color:#9a9aa3; cursor:pointer;" style-hover="color:#cfcfd6;">{{ acct.modeToggle }}</div>
+        <div style="display:flex; align-items:center; gap:12px; margin:22px 0;">
+          <div style="flex:1; height:1px; background:#26262c;"></div>
+          <span style="font:600 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.1em;">OR CONTINUE WITH</span>
+          <div style="flex:1; height:1px; background:#26262c;"></div>
+        </div>
+        <div style="display:flex; gap:11px;">
+          <div data-prov="Google" onClick="{{ acct.onOAuth }}" style="flex:1; height:47px; display:flex; align-items:center; justify-content:center; gap:9px; background:#1c1c21; border:1px solid #2a2a31; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+            <span style="width:19px; height:19px; flex:none; border-radius:50%; background:#fff; color:#4285f4; font:800 12px/19px 'Hanken Grotesk'; text-align:center;">G</span>
+            <span style="font-size:13.5px; font-weight:700; color:#e9e9ee;">Google</span>
+          </div>
+          <div data-prov="Apple" onClick="{{ acct.onOAuth }}" style="flex:1; height:47px; display:flex; align-items:center; justify-content:center; gap:9px; background:#1c1c21; border:1px solid #2a2a31; border-radius:11px; cursor:pointer;" style-hover="border-color:#3f3f48;">
+            <span style="width:19px; height:19px; flex:none; border-radius:50%; background:#0a0a0a; border:1px solid #3a3a44;"></span>
+            <span style="font-size:13.5px; font-weight:700; color:#e9e9ee;">Apple</span>
+          </div>
+        </div>
+        <sc-if value="{{ acct.isRegister }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center; margin-top:20px; font-size:11px; color:#56565e; line-height:1.55;">By creating an account you agree to the Axis<br>Terms of Service &amp; Privacy Policy.</div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- ========== VERIFY ========== -->
+      <sc-if value="{{ acct.isVerify }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:36px 28px 30px; display:flex; flex-direction:column; align-items:center; text-align:center;">
+        <div style="width:66px; height:66px; border-radius:50%; background:rgba(53,201,214,.1); border:1px solid rgba(53,201,214,.3); display:flex; align-items:center; justify-content:center; margin-bottom:20px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="5.5" width="18" height="13" rx="2.4" stroke="#35c9d6" stroke-width="1.8"></rect><path d="M4 7 L12 13 L20 7" stroke="#35c9d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </div>
+        <div style="font-size:21px; font-weight:800; color:#fff;">{{ acct.verifyTitle }}</div>
+        <div style="font-size:13.5px; color:#9a9aa3; line-height:1.6; margin-top:11px; max-width:300px;">{{ acct.verifyBody }}</div>
+        <div style="margin-top:14px; padding:10px 16px; background:#0e0e10; border:1px solid #26262c; border-radius:10px; font:600 13px/1 'JetBrains Mono'; color:#35c9d6;">{{ acct.verifyEmail }}</div>
+        <button onClick="{{ acct.onVerified }}" style="width:100%; height:48px; margin-top:24px; background:#35c9d6; color:#06181a; border:none; border-radius:12px; font:800 14px/1 'Hanken Grotesk'; cursor:pointer;" style-hover="background:#46d6e2;">I've confirmed — continue</button>
+        <div style="display:flex; align-items:center; gap:18px; margin-top:18px;">
+          <span onClick="{{ acct.onResend }}" style="font-size:12.5px; font-weight:700; color:#cfcfd6; cursor:pointer;" style-hover="color:#fff;">Resend email</span>
+          <span style="width:3px; height:3px; border-radius:50%; background:#3a3a44;"></span>
+          <span onClick="{{ acct.onVerifyBack }}" style="font-size:12.5px; font-weight:700; color:#9a9aa3; cursor:pointer;" style-hover="color:#cfcfd6;">Use a different email</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ========== ACCOUNT ========== -->
+      <sc-if value="{{ acct.isAccount }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <!-- profile header -->
+        <div style="display:flex; align-items:center; gap:15px; padding:24px 24px 20px; border-bottom:1px solid #1d1d22;">
+          <div style="position:relative; flex:none;">
+            <div style="width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#35c9d6; color:#06181a; font:800 21px/1 'JetBrains Mono';">{{ acct.initials }}</div>
+            <div onClick="{{ acct.onAvatarEdit }}" title="Change photo" style="position:absolute; right:-3px; bottom:-3px; width:25px; height:25px; border-radius:50%; background:#1c1c21; border:1px solid #3a3a44; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:#cfcfd6;" style-hover="border-color:#35c9d6; color:#35c9d6;">✎</div>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="font-size:18px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</span>
+              <span style="flex:none; font:700 9px/1 'JetBrains Mono'; letter-spacing:.06em; color:#06181a; background:#f5a623; border-radius:5px; padding:4px 7px;">{{ acct.plan }}</span>
+            </div>
+            <div style="font-size:13px; color:#9a9aa3; margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.email }}</div>
+          </div>
+        </div>
+
+        <!-- cloud sync -->
+        <div style="padding:20px 24px 4px;">
+          <div style="font:700 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.14em; margin-bottom:12px;">CLOUD SYNC</div>
+          <div style="background:#0e0e10; border:1px solid #26262c; border-radius:14px; padding:16px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="{{ acct.statusDot }}"></span>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:14px; font-weight:700; color:#e9e9ee;">{{ acct.syncText }}</div>
+                <div style="font-size:12px; color:#7a7a83; margin-top:3px;">{{ acct.syncSub }}</div>
+              </div>
+            </div>
+            <sc-if value="{{ acct.isSyncing }}" hint-placeholder-val="{{ false }}">
+              <div style="height:6px; background:#1c1c21; border-radius:3px; overflow:hidden; margin-top:15px;"><div style="{{ acct.progressStyle }}"></div></div>
+            </sc-if>
+            <sc-if value="{{ acct.isSynced }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ acct.onSyncNow }}" style="margin-top:15px; height:42px; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1px solid #2e6f74; border-radius:11px; cursor:pointer; color:#35c9d6; font:700 13px/1 'Hanken Grotesk';" style-hover="background:#0d1516; border-color:#35c9d6;">↻ Sync now</div>
+            </sc-if>
+            <sc-if value="{{ acct.isConflict }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:15px; display:flex; gap:9px;">
+                <div data-resolve="cloud" onClick="{{ acct.onResolveConflict }}" style="flex:1; height:42px; display:flex; align-items:center; justify-content:center; background:#35c9d6; color:#06181a; border-radius:11px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Keep cloud</div>
+                <div data-resolve="local" onClick="{{ acct.onResolveConflict }}" style="flex:1; height:42px; display:flex; align-items:center; justify-content:center; background:transparent; border:1px solid #3a3a44; color:#cfcfd6; border-radius:11px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';" style-hover="border-color:#3f3f48;">Keep this device</div>
+              </div>
+              <div style="margin-top:11px; font-size:11.5px; color:#7a7a83; text-align:center;">Or review each conflicting change individually.</div>
+            </sc-if>
+          </div>
+
+          <div style="margin-top:16px; display:flex; flex-direction:column;">
+            <sc-for list="{{ acct.syncItems }}" as="s" hint-placeholder-count="4">
+              <div data-sync="{{ s.id }}" onClick="{{ acct.onSyncItem }}" style="display:flex; align-items:center; gap:13px; padding:11px 2px; cursor:pointer;">
+                <span style="{{ s.boxStyle }}">{{ s.check }}</span>
+                <span style="flex:1; font-size:13.5px; font-weight:600; color:#e3e3e8;">{{ s.label }}</span>
+                <span style="font:600 10px/1 'JetBrains Mono'; color:#6e6e78;">{{ s.meta }}</span>
+              </div>
+            </sc-for>
+            <div onClick="{{ acct.onFullBackup }}" style="display:flex; align-items:center; gap:13px; padding:13px 2px; margin-top:4px; border-top:1px solid #1d1d22; cursor:pointer;">
+              <span style="{{ acct.backupBoxStyle }}">{{ acct.backupCheck }}</span>
+              <div style="flex:1;">
+                <div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Full device backup</div>
+                <div style="font-size:11px; color:#7a7a83; margin-top:2px;">Daily snapshot of everything on AX-3</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- manage account -->
+        <div style="padding:14px 24px 4px;">
+          <div style="font:700 9px/1 'JetBrains Mono'; color:#56565e; letter-spacing:.14em;">ACCOUNT</div>
+        </div>
+        <div style="padding:0 16px 6px;">
+          <!-- display name -->
+          <div>
+            <div data-mkey="name" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
+              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 12px/1 'Hanken Grotesk'; color:#9a9aa3;">Aa</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Display name</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.name }}</div></div>
+              <span style="{{ acct.chevName }}">›</span>
+            </div>
+            <sc-if value="{{ acct.openName }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
+              <input value="{{ acct.user.name }}" onInput="{{ acct.onAcctName }}" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+              <div onClick="{{ acct.onSaveName }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Save</div>
+            </div>
+            </sc-if>
+          </div>
+          <!-- change email -->
+          <div>
+            <div data-mkey="email" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
+              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 14px/1 'Hanken Grotesk'; color:#9a9aa3;">@</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Change email</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ acct.user.email }}</div></div>
+              <span style="{{ acct.chevEmail }}">›</span>
+            </div>
+            <sc-if value="{{ acct.openEmail }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
+              <input type="email" placeholder="new@email.com" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+              <input type="password" placeholder="Current password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+              <div style="font-size:11px; color:#7a7a83;">We'll send a confirmation link to the new address.</div>
+              <div onClick="{{ acct.onSaveEmail }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Update email</div>
+            </div>
+            </sc-if>
+          </div>
+          <!-- change password -->
+          <div>
+            <div data-mkey="password" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
+              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font:700 13px/1 'JetBrains Mono'; color:#9a9aa3;">••</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Change password</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">Last changed 3 months ago</div></div>
+              <span style="{{ acct.chevPassword }}">›</span>
+            </div>
+            <sc-if value="{{ acct.openPassword }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:11px;">
+              <input type="password" placeholder="Current password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+              <input type="password" placeholder="New password" style="width:100%; height:42px; padding:0 13px; background:#0e0e10; border:1px solid #2a2a31; border-radius:10px; color:#e9e9ee; font:600 13.5px/42px 'Hanken Grotesk'; outline:none;" style-focus="border-color:#35c9d6;">
+              <div onClick="{{ acct.onSavePassword }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:#35c9d6; color:#06181a; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';">Update password</div>
+            </div>
+            </sc-if>
+          </div>
+          <!-- subscription -->
+          <div>
+            <div data-mkey="plan" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
+              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font-size:14px; color:#f5a623;">★</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Subscription &amp; plan</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">Axis Pro · renews Jul 30, 2026</div></div>
+              <span style="{{ acct.chevPlan }}">›</span>
+            </div>
+            <sc-if value="{{ acct.openPlan }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:12px;">
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <sc-for list="{{ acct.planPerks }}" as="p" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:center; gap:9px;"><span style="color:#35c9d6; font-size:12px;">✓</span><span style="font-size:12.5px; color:#cfcfd6;">{{ p }}</span></div>
+                </sc-for>
+              </div>
+              <div onClick="{{ acct.onManageBilling }}" style="align-self:flex-start; padding:0 18px; height:40px; display:flex; align-items:center; background:transparent; border:1px solid #3a3a44; color:#cfcfd6; border-radius:10px; cursor:pointer; font:700 13px/1 'Hanken Grotesk';" style-hover="border-color:#3f3f48;">Manage billing</div>
+            </div>
+            </sc-if>
+          </div>
+          <!-- devices -->
+          <div>
+            <div data-mkey="devices" onClick="{{ acct.onAcctExpand }}" style="display:flex; align-items:center; gap:13px; padding:13px; border-radius:12px; cursor:pointer;" style-hover="background:#1a1a1f;">
+              <span style="width:30px; height:30px; flex:none; border-radius:9px; background:#141417; border:1px solid #26262c; display:flex; align-items:center; justify-content:center; font-size:13px; color:#9a9aa3;">⊞</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700; color:#e3e3e8;">Connected devices</div><div style="font-size:11.5px; color:#7a7a83; margin-top:2px;">{{ acct.deviceCount }}</div></div>
+              <span style="{{ acct.chevDevices }}">›</span>
+            </div>
+            <sc-if value="{{ acct.openDevices }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:4px 13px 16px 56px; display:flex; flex-direction:column; gap:9px;">
+              <sc-for list="{{ acct.devices }}" as="d" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:11px;">
+                  <span style="{{ d.dot }}"></span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600; color:#e3e3e8;">{{ d.name }}</div><div style="font-size:11px; color:#7a7a83; margin-top:2px;">{{ d.meta }}</div></div>
+                  <sc-if value="{{ d.removable }}" hint-placeholder-val="{{ false }}"><span onClick="{{ acct.onSignOutDevice }}" data-dev="{{ d.name }}" style="font-size:11.5px; font-weight:700; color:#9a9aa3; cursor:pointer;" style-hover="color:#e07a6a;">Remove</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- sign out -->
+        <div style="padding:10px 24px 26px;">
+          <div onClick="{{ acct.onSignOut }}" style="height:46px; display:flex; align-items:center; justify-content:center; gap:9px; background:transparent; border:1px solid #3a2526; border-radius:12px; cursor:pointer; color:#e07a6a; font:700 13px/1 'Hanken Grotesk';" style-hover="background:#1a1012; border-color:#5a3030;">Sign out</div>
+        </div>
+      </div>
+      </sc-if>
+
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
   <!-- ===================== TOAST ===================== -->
   <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
   <div style="position:absolute; bottom:24px; left:50%; z-index:300; display:flex; align-items:center; gap:11px; padding:12px 17px; background:#1c1c21; border:1px solid #2e2e36; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:axsToast 2.2s ease forwards;">
@@ -1054,7 +1335,11 @@ class Component extends DCLogic {
       recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
       knobs:{}, toggles:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, hoverCell:null, moveMode:false, moveIdx:null, moveOver:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
-      oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] }
+      oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] },
+      acctOpen:false, acctView:"auth", acctTab:"signin", acctMode:"password", authEmail:"", verifyKind:"magic",
+      loggedIn:false, acctSync:"idle", acctSyncedAt:"2 minutes ago", acctExpand:null, fullBackup:false,
+      syncSel:{ presets:true, scenes:true, fc:true, settings:true },
+      acctName:"Jordan Vale", acctUserEmail:"jordan@fairparken.com"
     };
     this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.connectDrag=null; this._toastT=null;
     this.OF=[62,125,250,500,1000,2000,4000,8000];
@@ -1372,6 +1657,44 @@ class Component extends DCLogic {
   onSceneIgnore = () => {};
   onScene = (e) => { this.setState({ scene:+e.currentTarget.dataset.scene }); };
   onRail = (e) => { const id=e.currentTarget.dataset.rail; this.setState({ railActive:id, drawerOpen:false }); const m={controllers:"Controllers",scenes:"Scene Manager",perform:"Perform view",sets:"Sets & Songs",settings:"Settings"}; if(m[id]) this.showToast(m[id]+" — prototype focuses on Build & FC","#35c9d6"); };
+  // ---- account / cloud sync ----
+  openAccount = () => this.setState({ acctOpen:true });
+  closeAccount = () => this.setState({ acctOpen:false });
+  onAcctTab = (e) => this.setState({ acctTab:e.currentTarget.dataset.atab, acctMode:"password" });
+  onAcctMode = () => this.setState({ acctMode: this.state.acctMode==="password"?"magic":"password" });
+  onAuthEmail = (e) => this.setState({ authEmail:e.target.value });
+  onForgot = () => this.showToast("Password reset link sent","#35c9d6");
+  onAuthSubmit = () => {
+    const S=this.state;
+    if(S.acctMode==="magic"){ this.setState({ acctView:"verify", verifyKind:"magic" }); return; }
+    if(S.acctTab==="register"){ this.setState({ acctView:"verify", verifyKind:"confirm" }); return; }
+    this.setState({ loggedIn:true, acctView:"account", acctUserEmail:S.authEmail||S.acctUserEmail }); this.showToast("Signed in","#33c46b");
+  };
+  onOAuth = (e) => { const p=e.currentTarget.dataset.prov; this.setState({ loggedIn:true, acctView:"account" }); this.showToast("Signed in with "+p,"#33c46b"); };
+  onResend = () => this.showToast("Email sent again","#35c9d6");
+  onVerified = () => { const S=this.state; this.setState({ loggedIn:true, acctView:"account", acctUserEmail:S.authEmail||S.acctUserEmail }); this.showToast("Email confirmed","#33c46b"); };
+  onVerifyBack = () => this.setState({ acctView:"auth" });
+  onSyncNow = () => { this.setState({ acctSync:"syncing" }); if(this._syncT) clearTimeout(this._syncT); this._syncT=setTimeout(()=>{ this.setState({ acctSync:"idle", acctSyncedAt:"just now" }); this.showToast("All changes synced","#33c46b"); },2200); };
+  onResolveConflict = (e) => { const k=e.currentTarget.dataset.resolve; this.setState({ acctSync:"idle", acctSyncedAt:"just now" }); this.showToast(k==="cloud"?"Restored from cloud":"Pushed this device to cloud","#35c9d6"); };
+  onAcctExpand = (e) => { const k=e.currentTarget.dataset.mkey; this.setState({ acctExpand: this.state.acctExpand===k?null:k }); };
+  onSyncItem = (e) => { const k=e.currentTarget.dataset.sync; this.setState({ syncSel:Object.assign({},this.state.syncSel,{[k]:!(this.state.syncSel[k]!==false)}) }); };
+  onFullBackup = () => this.setState({ fullBackup:!this.state.fullBackup });
+  onSignOut = () => { this.setState({ loggedIn:false, acctView:"auth", acctExpand:null, acctSync:"idle" }); this.showToast("Signed out","#9a9aa3"); };
+  onSignOutDevice = (e) => { e.stopPropagation(); this.showToast("Removed "+e.currentTarget.dataset.dev,"#9a9aa3"); };
+  onAcctName = (e) => this.setState({ acctName:e.target.value });
+  onSaveName = () => { this.setState({ acctExpand:null }); this.showToast("Display name updated","#33c46b"); };
+  onSaveEmail = () => { this.setState({ acctExpand:null }); this.showToast("Confirmation sent to new email","#35c9d6"); };
+  onSavePassword = () => { this.setState({ acctExpand:null }); this.showToast("Password changed","#33c46b"); };
+  onManageBilling = () => this.showToast("Opening billing portal…","#35c9d6");
+  onAvatarEdit = () => this.showToast("Choose a profile photo","#35c9d6");
+  onDemoState = (e) => { const d=e.currentTarget.dataset.astate;
+    if(d==="out") this.setState({ loggedIn:false, acctView:"auth", acctExpand:null });
+    else if(d==="verify") this.setState({ loggedIn:false, acctView:"verify", verifyKind:"magic", authEmail:this.state.authEmail||"you@band.com" });
+    else if(d==="account") this.setState({ loggedIn:true, acctView:"account", acctSync:"idle", acctExpand:null });
+    else if(d==="syncing") this.setState({ loggedIn:true, acctView:"account", acctSync:"syncing", acctExpand:null });
+    else if(d==="conflict") this.setState({ loggedIn:true, acctView:"account", acctSync:"conflict", acctExpand:null });
+  };
+
   // ---- preset picker ----
   pad(n){ return String(n).padStart(3,"0"); }
   presetByN(n){ return this.PBYN[n]; }
@@ -1935,7 +2258,78 @@ class Component extends DCLogic {
           style:{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"10px 11px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:i===oi?700:500, color:i===oi?"#fff":"#c3c3cb", background:i===oi?"rgba(53,201,214,.12)":"transparent" } })) };
     }
 
+    // ---- account / cloud sync model ----
+    const initials = (S.acctName||"Axis User").trim().split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase()||"A";
+    const aSync = S.acctSync||"idle";
+    const isSyncing = aSync==="syncing", isConflict = aSync==="conflict", isSynced = !isSyncing && !isConflict;
+    const statusColor = isSyncing?"#f5a623":(isConflict?"#d6543f":"#33c46b");
+    let syncText, syncSub, syncShort;
+    if(isSyncing){ syncText="Syncing changes…"; syncSub="3 of 5 items uploaded"; syncShort="Syncing…"; }
+    else if(isConflict){ syncText="Sync conflict"; syncSub="2 presets changed on another device"; syncShort="Sync conflict"; }
+    else { syncText="All changes synced"; syncSub="Last synced "+(S.acctSyncedAt||"just now"); syncShort="Synced "+(S.acctSyncedAt||"just now"); }
+    const showSyncDot = S.loggedIn && (isSyncing||isConflict);
+    const syncDotCol = isConflict?"#d6543f":"#f5a623";
+    const SI=[ {id:"presets",label:"Presets",meta:"128 presets"}, {id:"scenes",label:"Scenes & setlists",meta:"24 setlists"}, {id:"fc",label:"Footswitch & controllers",meta:"6 layouts"}, {id:"settings",label:"Global settings",meta:"Device config"} ];
+    const chkBox=(on)=>({ width:20, height:20, flex:"none", borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", background:on?"#35c9d6":"transparent", border:"1px solid "+(on?"#35c9d6":"#3a3a44"), color:"#06181a", font:"700 12px/1 'Hanken Grotesk'" });
+    const syncItems=SI.map(s=>{ const on=S.syncSel[s.id]!==false; return { id:s.id, label:s.label, meta:s.meta, check:on?"✓":"", boxStyle:chkBox(on) }; });
+    const chev=(open)=>({ flex:"none", fontSize:16, color:"#56565e", display:"inline-block", transition:"transform .15s ease", transform: open?"rotate(90deg)":"none" });
+    const devList=[ {name:"AX-3 · Studio",meta:"This device · active now",cur:true}, {name:"FM3 · Pedalboard",meta:"Last synced 2 days ago",cur:false}, {name:"Axis Mobile (iOS)",meta:"Last active Apr 2",cur:false} ];
+    const devices=devList.map(d=>({ name:d.name, meta:d.meta, removable:!d.cur, dot:{ width:9, height:9, flex:"none", borderRadius:"50%", background:d.cur?"#33c46b":"#3a3a44", boxShadow:d.cur?"0 0 7px #33c46b":"none" } }));
+    const dstates=[ {id:"out",label:"Logged out"}, {id:"verify",label:"Verify"}, {id:"account",label:"Account"}, {id:"syncing",label:"Syncing"}, {id:"conflict",label:"Conflict"} ];
+    const curD = S.loggedIn ? (isSyncing?"syncing":(isConflict?"conflict":"account")) : (S.acctView==="verify"?"verify":"out");
+    const demoStates=dstates.map(d=>({ id:d.id, label:d.label, style:{ padding:"5px 9px", borderRadius:6, cursor:"pointer", font:"700 9px/1 'JetBrains Mono'", letterSpacing:".03em", background: curD===d.id?"#35c9d6":"#141417", color: curD===d.id?"#06181a":"#8a8a93", border:"1px solid "+(curD===d.id?"#35c9d6":"#26262c") } }));
+    const isMagic = (S.acctMode||"password")==="magic", isRegister=(S.acctTab||"signin")==="register", isSignin=!isRegister;
+    const tabStyle=(active)=>({ flex:1, height:38, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, background:active?"#35c9d6":"transparent", color:active?"#06181a":"#8a8a93" });
+    const verifyEmail = S.authEmail || "your inbox";
+    const verifyBody = S.verifyKind==="magic"
+      ? "We emailed a one-time sign-in link to the address below. Open it on this device to finish."
+      : "We sent a confirmation link to the address below. Confirm it to activate cloud sync.";
+    const acct = {
+      loggedIn:!!S.loggedIn, loggedOut:!S.loggedIn, initials,
+      railTitle: S.loggedIn ? (S.acctName+" · "+syncShort) : "Sign in to Axis Cloud",
+      railBtnStyle:{ position:"relative", width:46, height:46, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", border:"1px solid "+(S.loggedIn?"transparent":"#26262c"), background:S.loggedIn?"transparent":"#121214", marginBottom:6 },
+      avatarStyle:{ width:36, height:36, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:"#35c9d6", color:"#06181a", font:"700 13px/1 'JetBrains Mono'" },
+      showSyncDot, syncDotStyle:{ position:"absolute", top:-1, right:-1, width:13, height:13, borderRadius:"50%", background:syncDotCol, border:"2.5px solid #0f0f12", boxShadow:"0 0 6px "+syncDotCol },
+      drawerRowStyle:{ display:"flex", alignItems:"center", gap:11, padding:"11px 13px", margin:"6px 13px 14px", background:"#141417", border:"1px solid #26262c", borderRadius:13, cursor:"pointer", flex:"none" },
+      drawerAvatarStyle:{ width:34, height:34, flex:"none", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background:"#35c9d6", color:"#06181a", font:"700 12px/1 'JetBrains Mono'" },
+      syncShort,
+      overlayStyle: mob
+        ? { position:"absolute", inset:0, zIndex:260, background:"rgba(6,6,8,.62)", backdropFilter:"blur(3px)", display:"flex", alignItems:"stretch", justifyContent:"center", animation:"axsOverlay .14s ease" }
+        : { position:"absolute", inset:0, zIndex:260, background:"rgba(6,6,8,.66)", backdropFilter:"blur(3px)", display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"6vh 12px 12px", animation:"axsOverlay .12s ease" },
+      cardStyle: mob
+        ? { width:"100%", height:"100%", background:"linear-gradient(180deg,#15151a,#0f0f12)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
+        : { width:440, maxWidth:"100%", maxHeight:"86vh", background:"#161619", border:"1px solid #2e2e36", borderRadius:16, boxShadow:"0 32px 80px rgba(0,0,0,.6)", display:"flex", flexDirection:"column", overflow:"hidden", animation:"axsPalette .15s cubic-bezier(.2,.8,.3,1)" },
+      demoStates, onDemoState:this.onDemoState,
+      isAuth: !S.loggedIn && S.acctView==="auth",
+      isVerify: !S.loggedIn && S.acctView==="verify",
+      isAccount: S.loggedIn && S.acctView==="account",
+      authTitle: isRegister?"Create your account":"Welcome back",
+      tabSignin: tabStyle(isSignin), tabRegister: tabStyle(isRegister),
+      isPassword:!isMagic, isSignin, isRegister, email:S.authEmail,
+      submitLabel: isMagic ? "Email me a link" : (isRegister?"Create account":"Sign in"),
+      modeToggle: isMagic ? "Use a password instead" : "Email me a magic link instead",
+      onAcctTab:this.onAcctTab, onAcctMode:this.onAcctMode, onAuthEmail:this.onAuthEmail, onForgot:this.onForgot, onAuthSubmit:this.onAuthSubmit, onOAuth:this.onOAuth,
+      verifyTitle: S.verifyKind==="magic"?"Check your email":"Confirm your email", verifyBody, verifyEmail,
+      onResend:this.onResend, onVerified:this.onVerified, onVerifyBack:this.onVerifyBack,
+      user:{ name:S.acctName, email:S.acctUserEmail }, plan:"PRO",
+      onAvatarEdit:this.onAvatarEdit,
+      statusDot:{ width:10, height:10, flex:"none", borderRadius:"50%", background:statusColor, boxShadow:"0 0 8px "+statusColor },
+      syncText, syncSub, isSyncing, isConflict, isSynced,
+      progressStyle:{ width:"60%", height:"100%", background:"#f5a623", borderRadius:3 },
+      onSyncNow:this.onSyncNow, onResolveConflict:this.onResolveConflict,
+      syncItems, onSyncItem:this.onSyncItem,
+      backupCheck: S.fullBackup?"✓":"", backupBoxStyle: chkBox(!!S.fullBackup), onFullBackup:this.onFullBackup,
+      onAcctExpand:this.onAcctExpand,
+      openName:S.acctExpand==="name", openEmail:S.acctExpand==="email", openPassword:S.acctExpand==="password", openPlan:S.acctExpand==="plan", openDevices:S.acctExpand==="devices",
+      chevName:chev(S.acctExpand==="name"), chevEmail:chev(S.acctExpand==="email"), chevPassword:chev(S.acctExpand==="password"), chevPlan:chev(S.acctExpand==="plan"), chevDevices:chev(S.acctExpand==="devices"),
+      onAcctName:this.onAcctName, onSaveName:this.onSaveName, onSaveEmail:this.onSaveEmail, onSavePassword:this.onSavePassword,
+      planPerks:["Unlimited cloud presets & setlists","Full device backups & version history","Priority sync across all devices"], onManageBilling:this.onManageBilling,
+      devices, deviceCount: devList.length+" devices", onSignOutDevice:this.onSignOutDevice,
+      onSignOut:this.onSignOut
+    };
+
     return {
+      acct, accountOpen:S.acctOpen, openAccount:this.openAccount, closeAccount:this.closeAccount,
       showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
       isBuild, isFc, fc,
       drawerOpen:S.drawerOpen, toggleDrawer:this.toggleDrawer, closeDrawer:this.closeDrawer, drawerNav, drawerScenes, drawerModes,

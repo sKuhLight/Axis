@@ -9,9 +9,11 @@
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
   import { forgefx } from './forgefx';
+  import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
+  import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
-  import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from './types';
+  import type { DecodedBlock, GridCell, PresetGrid, VersionInfo, SyncState } from './types';
 
   const ACCENT = '#35c9d6';
   // block family slug → [label, color]. Colors carried from the design; unknown slugs get a fallback.
@@ -279,16 +281,56 @@
     return () => { alive = false; };
   });
 
+  // ── cloud sync state (only meaningful when signed in) ──
+  const cloudOn = $derived(editor.cloud.enabled && !!editor.cloud.user);
+  // device library + cloud-only presets, so cloud-only rigs are browseable + loadable
+  const baseEntries = $derived(cloudOn ? browseEntries() : library.entries);
+  function syncStateOf(e: LibEntry): SyncState {
+    if (!cloudOn) return 'none';
+    if (e.id.startsWith('cloud:')) return 'cloudOnly';
+    return cloud.stateOf(e.summary.number, e.summary.crc);
+  }
+  type SyncView = 'all' | 'device' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
+  const SYNC_VIEWS: { id: SyncView; label: string; icon: IconName }[] = [
+    { id: 'all', label: 'All presets', icon: 'list' },
+    { id: 'device', label: 'On this device', icon: 'device' },
+    { id: 'cloud', label: 'In cloud', icon: 'cloud' },
+    { id: 'cloudOnly', label: 'Cloud only', icon: 'cloudCheck' },
+    { id: 'notBackedUp', label: 'Not backed up', icon: 'cloudOff' },
+    { id: 'needsUpload', label: 'Needs upload', icon: 'cloudUp' },
+    { id: 'needsUpdate', label: 'Needs update', icon: 'cloudDown' }
+  ];
+  let syncView = $state<SyncView>('all');
+  function inView(e: LibEntry, view: SyncView): boolean {
+    if (view === 'all') return true;
+    const cloudEntry = e.id.startsWith('cloud:');
+    const s = syncStateOf(e);
+    switch (view) {
+      case 'device': return !cloudEntry;
+      case 'cloud': return cloudEntry || s === 'synced' || s === 'modified' || s === 'outdated';
+      case 'cloudOnly': return s === 'cloudOnly';
+      case 'notBackedUp': return s === 'deviceOnly';
+      case 'needsUpload': return s === 'modified';
+      case 'needsUpdate': return s === 'outdated';
+    }
+  }
+  const matchView = (e: LibEntry) => inView(e, syncView);
+  const viewCount = (view: SyncView) => baseEntries.filter((e) => inView(e, view)).length;
+
   const results = $derived.by(() => {
     const conds = activeConds;
     const q = simpleText.trim();
     const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
     const hs = haystacks;
     const useOrama = !!q && ftIds !== null; // index ready → ranked; else substring fallback
-    const list = library.entries.filter((e) => {
-      for (const c of conds) if (!matchCond(e, c)) return false;
+    const list = baseEntries.filter((e) => {
+      if (folderFilter && e.folder !== folderFilter) return false;
+      if (cloudOn && !matchView(e)) return false;
+      const cloudEntry = e.id.startsWith('cloud:');
+      for (const c of conds) if (!cloudEntry && !matchCond(e, c)) return false; // param conds need decoded blocks
       if (q) {
-        if (useOrama) { if (!ftIds!.has(e.id)) return false; }
+        if (cloudEntry) { if (!toks.every((t) => e.summary.name.toLowerCase().includes(t))) return false; }
+        else if (useOrama) { if (!ftIds!.has(e.id)) return false; }
         else { const h = hs.get(e.id) ?? ''; if (!toks.every((t) => h.includes(t))) return false; }
       }
       return true;
@@ -300,7 +342,112 @@
       : a.summary.number - b.summary.number
     );
   });
-  const selected = $derived(selectedId ? (library.entries.find((e) => e.id === selectedId) ?? null) : null);
+  const selected = $derived(selectedId ? (baseEntries.find((e) => e.id === selectedId) ?? null) : null);
+
+  // ── per-preset sync state for the detail panel cloud box ──
+  const selSync = $derived<SyncState>(selected ? syncStateOf(selected) : 'none');
+  const selCloudLine = $derived.by(() => {
+    if (!selected) return '';
+    const cv = cloud.latestCloud(selected.summary.number);
+    switch (selSync) {
+      case 'synced': return 'Device & cloud in sync';
+      case 'modified': return 'Local edits not uploaded';
+      case 'outdated': return 'A newer version is in the cloud';
+      case 'cloudOnly': return 'Cloud only · not on this device';
+      case 'deviceOnly': return 'Not backed up to the cloud';
+      default: return cv ? 'In cloud' : '';
+    }
+  });
+  // the contextual cloud action for the selected preset: {kind,label} or null
+  const selCloudAction = $derived.by<{ kind: string; label: string } | null>(() => {
+    switch (selSync) {
+      case 'modified': return { kind: 'upload', label: '↑ Upload' };
+      case 'outdated': return { kind: 'download', label: '↓ Update' };
+      case 'cloudOnly': return { kind: 'load', label: '↓ Load' };
+      case 'deviceOnly': return { kind: 'upload', label: '☁ Back up' };
+      case 'synced': return { kind: 'upload', label: '☁ Re-upload' };
+      default: return null;
+    }
+  });
+  async function cloudAction(kind: string, e: LibEntry) {
+    const n = e.summary.number;
+    try {
+      if (kind === 'upload') { await editor.backupPreset(n); await editor.cloudSync(); editor.showToast('Backed up to cloud', '#33c46b'); }
+      else if (kind === 'download') { const cv = cloud.latestCloud(n); if (cv) { await forgefx.loadVersion(cv.id); editor.showToast('Loaded cloud version into edit buffer', '#35c9d6'); } }
+      else if (kind === 'load') { await loadPreset(e); }
+    } catch (err) { editor.showToast((err as Error).message || 'Action failed', '#d6543f'); }
+  }
+  async function exportEntry(e: LibEntry) {
+    try {
+      const buf: ArrayBuffer = e.source === 'file'
+        ? (library.fileBytes(e.id)?.buffer as ArrayBuffer ?? (() => { throw new Error('no bytes'); })())
+        : e.id.startsWith('cloud:')
+          ? await forgefx.versionSyx(cloud.latestCloud(e.summary.number)!.id).then((b) => b.arrayBuffer())
+          : await forgefx.backupPreset(e.summary.number);
+      const blob = new Blob([buf], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(e.summary.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch { editor.showToast('Export failed', '#d6543f'); }
+  }
+
+  // ── local folders (browse + live-load .syx presets from disk) ──
+  let folderFilter = $state<string | null>(null);
+  async function addFolder() {
+    const r = await library.importFolder();
+    if (r) editor.showToast(`Imported ${r.ok} preset${r.ok === 1 ? '' : 's'}${r.failed ? ` · ${r.failed} skipped` : ''}`, r.ok ? '#33c46b' : '#f5a623');
+    else editor.showToast('No .syx files found in that folder', '#f5a623');
+  }
+
+  // ── right-click context menu ──
+  let ctx = $state<{ x: number; y: number; entry: LibEntry } | null>(null);
+  function onRowContext(ev: MouseEvent, e: LibEntry) {
+    ev.preventDefault();
+    selectedId = e.id; focusEid = null;
+    ctx = { x: Math.min(ev.clientX, window.innerWidth - 244), y: Math.min(ev.clientY, window.innerHeight - 360), entry: e };
+  }
+  const SOON = new Set(['rename', 'duplicate', 'removeDevice', 'delete']);
+  async function ctxAction(act: string) {
+    const e = ctx?.entry; ctx = null;
+    if (!e) return;
+    if (act === 'load') return void loadPreset(e);
+    if (act === 'export') return void exportEntry(e);
+    if (act === 'upload' || act === 'download') return void cloudAction(act, e);
+    if (act === 'convert') return void convertToDevice(e);
+    if (act === 'delete' && e.source === 'file') { library.removeFile(e.id); editor.showToast('Removed from library', '#33c46b'); return; }
+    if (SOON.has(act)) editor.showToast('Coming soon', '#9b8cf0');
+  }
+  // Cloud-only → device: restore the latest cloud version to its origin slot, making it a real preset.
+  async function convertToDevice(e: LibEntry) {
+    const cv = cloud.latestCloud(e.summary.number);
+    if (!cv) { editor.showToast('No cloud version to convert', '#d6543f'); return; }
+    if (!confirm(`Write "${e.summary.name}" to device slot ${e.summary.number}?`)) return;
+    try { await forgefx.restoreVersion(cv.id); editor.showToast(`Saved to slot ${e.summary.number}`, '#33c46b'); library.refreshSlot(e.summary.number); }
+    catch (err) { editor.showToast((err as Error).message || 'Convert failed', '#d6543f'); }
+  }
+  type CtxItem = { id: string; icon: IconName; label: string; danger?: boolean };
+  function ctxItems(e: LibEntry): (CtxItem | 'div')[] {
+    const cloudOnly = e.id.startsWith('cloud:');
+    const s = syncStateOf(e);
+    const cloudItem: CtxItem =
+      s === 'modified' ? { id: 'upload', icon: 'cloudUp', label: 'Upload changes' }
+      : s === 'outdated' ? { id: 'download', icon: 'cloudDown', label: 'Update from cloud' }
+      : s === 'cloudOnly' ? { id: 'download', icon: 'cloudDown', label: 'Load from cloud' }
+      : s === 'deviceOnly' ? { id: 'upload', icon: 'cloudUp', label: 'Back up to cloud' }
+      : { id: 'upload', icon: 'cloud', label: 'Re-upload to cloud' };
+    return [
+      { id: 'load', icon: 'load', label: cloudOnly ? 'Load from cloud' : 'Load preset' },
+      ...(cloudOnly ? [{ id: 'convert', icon: 'convert', label: 'Convert to device…' } as CtxItem]
+                    : [{ id: 'rename', icon: 'rename', label: 'Rename' } as CtxItem, { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem]),
+      'div',
+      { id: 'export', icon: 'export', label: 'Export to disk' },
+      ...(cloudOn ? ['div' as const, cloudItem] : []),
+      'div',
+      { id: 'delete', icon: 'trash', label: 'Delete everywhere', danger: true }
+    ];
+  }
 
   // ── grid preview (bottom panel) + click-to-focus-block ──
   let focusEid = $state<number | null>(null); // block selected in the grid preview → detail shows only it
@@ -335,6 +482,11 @@
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(a.href);
     } catch { editor.showToast('Download failed', '#d6543f'); }
+  }
+  async function restoreVersionAt(v: VersionInfo) {
+    if (!confirm(`Restore this version to slot ${v.location}? This overwrites what's on the device there.`)) return;
+    try { await forgefx.restoreVersion(v.id); editor.showToast(`Restored to slot ${v.location}`, '#33c46b'); reloadVersions(v.location); library.refreshSlot(v.location); }
+    catch (e) { editor.showToast((e as Error).message || 'Restore failed', '#d6543f'); }
   }
   function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
 
@@ -601,7 +753,25 @@
 
   // ===================== load preset =====================
   async function loadPreset(e: LibEntry) {
-    if (e.source !== 'device' || e.summary.number < 0) { editor.showToast('Imported file — open it on the device to load', '#f5a623'); return; }
+    // Cloud-only preset (no device slot): load the latest cloud version straight into the edit buffer.
+    if (e.id.startsWith('cloud:')) {
+      const cv = cloud.latestCloud(e.summary.number);
+      if (!cv) { editor.showToast('No cloud version found', '#d6543f'); return; }
+      editor.openBuild();
+      try { await forgefx.loadVersion(cv.id); editor.showToast(`Loaded ${e.summary.name} from cloud`, '#9b8cf0'); }
+      catch { editor.showToast('Load failed', '#d6543f'); }
+      return;
+    }
+    // Imported file/folder preset: load its raw .syx straight into the edit buffer (no slot needed).
+    if (e.source === 'file') {
+      const bytes = library.fileBytes(e.id);
+      if (!bytes) { editor.showToast('File bytes unavailable — re-import the folder', '#f5a623'); return; }
+      editor.openBuild();
+      try { await forgefx.loadBytes(bytes); editor.showToast(`Loaded ${e.summary.name}`, '#f5a623'); }
+      catch { editor.showToast('Load failed', '#d6543f'); }
+      return;
+    }
+    if (e.summary.number < 0) { editor.showToast('Open it on the device to load', '#f5a623'); return; }
     editor.openBuild();
     await editor.selectPreset(e.summary.number);
   }
@@ -653,7 +823,7 @@
   const cpuColor = (c: number) => (c >= 80 ? '#e87b6a' : c >= 62 ? '#f5a623' : '#33c46b');
 </script>
 
-<svelte:window onclick={() => { if (picker) picker = null; }} ondragend={() => (dragOver = false)} />
+<svelte:window onclick={() => { if (picker) picker = null; if (ctx) ctx = null; }} ondragend={() => (dragOver = false)} />
 
 <div class="pb">
   <!-- HEADER -->
@@ -666,6 +836,7 @@
     <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title="Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)">
       {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
     </button>
+    <button class="ghost ic-btn" onclick={addFolder} title="Browse a local folder of .syx presets — load any of them live into the edit buffer"><Icon name="folder" size={14} /> Folder</button>
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
@@ -742,6 +913,32 @@
   <div class="body">
     <!-- SAVED SIDEBAR -->
     <div class="side">
+      {#if cloudOn}
+        <div class="side-h"><span class="lbl">LIBRARY</span></div>
+        <div class="views">
+          {#each SYNC_VIEWS as v}
+            <button class="view" class:on={syncView === v.id} onclick={() => (syncView = v.id)}>
+              <span class="view-l"><Icon name={v.icon} size={14} /> {v.label}</span><span class="view-n">{viewCount(v.id)}</span>
+            </button>
+          {/each}
+        </div>
+        <div class="div"></div>
+      {/if}
+      {#if library.folders.length}
+        <div class="side-h"><span class="lbl">FOLDERS</span><span class="ct">{library.folders.length}</span></div>
+        <div class="views">
+          {#each library.folders as f}
+            {@const n = baseEntries.filter((e) => e.folder === f).length}
+            <div class="folder-row" class:on={folderFilter === f}>
+              <button class="view folder" onclick={() => (folderFilter = folderFilter === f ? null : f)} title={f}>
+                <span class="view-l"><Icon name="folder" size={13} /> {f}</span><span class="view-n">{n}</span>
+              </button>
+              <button class="folder-x" title="Remove this folder" onclick={() => { if (folderFilter === f) folderFilter = null; library.removeFolder(f); }}>×</button>
+            </div>
+          {/each}
+        </div>
+        <div class="div"></div>
+      {/if}
       <div class="side-h"><span class="lbl">SAVED FILTERS</span><span class="ct">{saved.length}</span></div>
       {#if saving}
         <div class="save-in"><input bind:value={saveName} onkeydown={(e) => { if (e.key === 'Enter') commitSave(); else if (e.key === 'Escape') saving = false; }} onblur={() => setTimeout(() => (saving = false), 120)} placeholder="Name this filter…" />
@@ -777,7 +974,8 @@
       {#each results as e (e.id)}
         {@const sel = e.id === selectedId}
         {@const cpu = estCpu(e)}
-        <button class="row" class:sel onclick={() => { selectedId = e.id; focusEid = null; }}>
+        {@const ss = syncStateOf(e)}
+        <button class="row" class:sel onclick={() => { selectedId = e.id; focusEid = null; }} oncontextmenu={(ev) => onRowContext(ev, e)}>
           <span class="num" class:sel>{e.source === 'file' ? 'FILE' : pad(e.summary.number)}</span>
           <div class="row-mid">
             <div class="row-top">
@@ -791,6 +989,9 @@
             </div>
           </div>
           <div class="row-r">
+            {#if cloudOn && ss !== 'none'}
+              <span class="cloud-chip" style:color={SYNC_META[ss].col} style:background="{SYNC_META[ss].col}1f" style:border="1px solid {SYNC_META[ss].col}40" title={SYNC_META[ss].label}><Icon name={SYNC_META[ss].icon} size={11} stroke={2} /> {SYNC_META[ss].short}</span>
+            {/if}
             <span class="r-sub">{e.summary.model} · {e.summary.scenes.length} sc</span>
             <div class="cpu" title="Estimated DSP load from block makeup — not the device's live CPU reading">
               <span class="cpu-l">~CPU</span>
@@ -844,7 +1045,14 @@
             <div class="st"><span class="sk">BLOCKS</span><span class="sv2">{selected.summary.blocks.length}</span></div>
             <div class="st"><span class="sk" title="Estimated DSP load — not the device reading">~CPU</span><span class="sv2" style:color={cpuColor(cpu)}>{cpu}%</span></div>
           </div>
-          <button class="load" onclick={() => loadPreset(selected!)}>↓ Load preset</button>
+          <button class="load" onclick={() => loadPreset(selected!)}>↓ {selSync === 'cloudOnly' ? 'Load from cloud' : 'Load preset'}</button>
+          {#if cloudOn && selSync !== 'none'}
+            <div class="cloud-box">
+              <span class="cb-chip" style:color={SYNC_META[selSync].col} style:background="{SYNC_META[selSync].col}1f" style:border="1px solid {SYNC_META[selSync].col}40"><Icon name={SYNC_META[selSync].icon} size={12} stroke={2} /> {SYNC_META[selSync].short}</span>
+              <span class="cb-line">{selCloudLine}</span>
+              {#if selCloudAction}<button class="cb-act" onclick={() => cloudAction(selCloudAction!.kind, selected!)}>{selCloudAction.label}</button>{/if}
+            </div>
+          {/if}
         </div>
         {#if selected.source === 'device'}
           <div class="d-sec">
@@ -855,9 +1063,15 @@
             {#if versions.length}
               <div class="vh-list">
                 {#each versions as v}
+                  {@const vb = cloud.versionBadges(v, selected?.summary.crc)}
                   <div class="vh">
-                    <div class="vh-info"><span class="vh-when">{fmtTime(v.capturedAt)}</span><span class="vh-meta">{v.source} · {(v.stored / 1024).toFixed(1)}KB</span></div>
+                    <span class="vh-dot" style:background={vb.onDevice ? '#35c9d6' : vb.inCloud ? '#9b8cf0' : '#2e2e36'}></span>
+                    <div class="vh-info">
+                      <div class="vh-row1"><span class="vh-when">{fmtTime(v.capturedAt)}</span>{#if vb.onDevice}<span class="vh-bd" style="color:#33c46b;background:#33c46b22">On device</span>{/if}{#if cloudOn && vb.inCloud}<span class="vh-bd" style="color:#9b8cf0;background:#9b8cf022">In cloud</span>{/if}</div>
+                      <span class="vh-meta">{v.source} · {(v.stored / 1024).toFixed(1)}KB</span>
+                    </div>
                     <button class="vh-btn" title="Load into the edit buffer (doesn't touch a slot)" onclick={() => editor.loadVersion(v.id)}>Load</button>
+                    {#if !vb.onDevice}<button class="vh-btn" title="Restore this version to its device slot (overwrites the slot)" onclick={() => restoreVersionAt(v)}>Restore</button>{/if}
                     <button class="vh-btn dl" onclick={() => downloadVersion(v)} title="Download .syx">↓</button>
                   </div>
                 {/each}
@@ -922,6 +1136,24 @@
       {/each}
       {#if !pickerItems.length}<div class="ac-empty">No matches</div>{/if}
     </div>
+  </div>
+{/if}
+
+<!-- CONTEXT MENU -->
+{#if ctx}
+  <div class="ctx-bg" role="presentation" oncontextmenu={(e) => e.preventDefault()} onmousedown={() => (ctx = null)}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="ctx" style:left={ctx.x + 'px'} style:top={ctx.y + 'px'} onmousedown={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}>
+    <div class="ctx-title">{ctx.entry.summary.name}</div>
+    {#each ctxItems(ctx.entry) as m}
+      {#if m === 'div'}
+        <div class="ctx-div"></div>
+      {:else}
+        <button class="ctx-item" class:danger={m.danger} onclick={() => ctxAction(m.id)}>
+          <span class="ctx-g"><Icon name={m.icon} size={15} /></span><span class="ctx-l">{m.label}</span>
+        </button>
+      {/if}
+    {/each}
   </div>
 {/if}
 
@@ -1016,7 +1248,7 @@
   .gp-hint { font: 500 10px/1 'JetBrains Mono', monospace; color: #56565e; }
   .gp-clear { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, #35c9d6); background: none; border: none; cursor: pointer; }
   .gp-empty { padding: 24px 16px; font: 500 12px/1.4 'JetBrains Mono', monospace; color: #56565e; }
-  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #141418; cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
+  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #22222b; cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
   .row:hover { background: #101014; }
   .row.sel { background: rgba(53, 201, 214, 0.06); border-left-color: var(--accent, #35c9d6); }
   .num { font: 700 13px/1 'JetBrains Mono', monospace; color: #56565e; flex: none; width: 38px; }
@@ -1098,4 +1330,53 @@
   .pk-item.hi { background: #1c1c22; }
   .pk-l { font-size: 12.5px; font-weight: 600; color: #e9e9ee; }
   .pk-s { font: 500 10px/1 'JetBrains Mono', monospace; color: #6e6e78; }
+
+  /* ── styled scrollbars (match the design) ── */
+  .results::-webkit-scrollbar, .detail::-webkit-scrollbar, .side::-webkit-scrollbar, .pk-list::-webkit-scrollbar, .ac::-webkit-scrollbar { width: 9px; height: 9px; }
+  .results::-webkit-scrollbar-track, .detail::-webkit-scrollbar-track, .side::-webkit-scrollbar-track, .pk-list::-webkit-scrollbar-track, .ac::-webkit-scrollbar-track { background: transparent; }
+  .results::-webkit-scrollbar-thumb, .detail::-webkit-scrollbar-thumb, .side::-webkit-scrollbar-thumb, .pk-list::-webkit-scrollbar-thumb, .ac::-webkit-scrollbar-thumb { background: #2a2a31; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  .results::-webkit-scrollbar-thumb:hover, .detail::-webkit-scrollbar-thumb:hover, .side::-webkit-scrollbar-thumb:hover, .pk-list::-webkit-scrollbar-thumb:hover, .ac::-webkit-scrollbar-thumb:hover { background: #3a3a44; }
+
+  /* ── cloud: row badge (top-right sync indicator) ── */
+  .cloud-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 5px; font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.02em; white-space: nowrap; }
+
+  /* ── cloud: sidebar library views ── */
+  .views { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
+  .view { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; border: none; background: transparent; border-radius: 8px; cursor: pointer; color: #9a9aa3; font-size: 12.5px; font-weight: 600; }
+  .view:hover { background: #15151a; color: #cfcfd6; }
+  .view.on { background: rgba(53, 201, 214, 0.1); color: #35c9d6; }
+  .view-l { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .view-n { font: 600 10px/1 'JetBrains Mono', monospace; color: #56565e; flex: none; }
+  .view.on .view-n { color: #35c9d6; }
+  .folder-row { display: flex; align-items: center; }
+  .folder-row .view.folder { flex: 1; min-width: 0; }
+  .folder-row.on { background: rgba(53, 201, 214, 0.1); border-radius: 8px; }
+  .folder-x { flex: none; width: 22px; height: 22px; border: none; background: transparent; color: #56565e; font-size: 15px; cursor: pointer; border-radius: 6px; }
+  .folder-x:hover { background: #2a1416; color: #e87b6a; }
+  .ic-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ── cloud: detail status box ── */
+  .cloud-box { display: flex; align-items: center; gap: 9px; margin-top: 11px; padding: 10px 12px; background: #0e0e11; border: 1px solid #1f1f25; border-radius: 11px; }
+  .cb-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font: 700 9.5px/1 'JetBrains Mono', monospace; }
+  .cb-line { flex: 1; min-width: 0; font: 600 10.5px/1.4 'JetBrains Mono', monospace; color: #8a8a94; }
+  .cb-act { flex: none; padding: 0 13px; height: 32px; border: none; border-radius: 9px; background: var(--accent, #35c9d6); color: #06181a; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+  .cb-act:hover { filter: brightness(1.08); }
+
+  /* ── cloud: version-history dots + badges ── */
+  .vh-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; align-self: center; }
+  .vh-row1 { display: flex; align-items: center; gap: 6px; }
+  .vh-bd { padding: 1px 5px; border-radius: 4px; font: 700 8px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.03em; }
+
+  /* ── cloud: right-click context menu ── */
+  .ctx-bg { position: fixed; inset: 0; z-index: 380; }
+  .ctx { position: fixed; width: 224px; z-index: 381; background: #141417; border: 1px solid #2e2e36; border-radius: 11px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); padding: 6px; }
+  .ctx-title { padding: 6px 10px 7px; font: 700 9px/1.3 'JetBrains Mono', monospace; color: #6e6e78; letter-spacing: 0.06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-div { height: 1px; background: #232329; margin: 5px 8px; }
+  .ctx-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none; background: transparent; border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: #e9e9ee; text-align: left; }
+  .ctx-item:hover { background: #1c1c22; }
+  .ctx-item.danger { color: #e87b6a; }
+  .ctx-item.danger:hover { background: #2a1416; }
+  .ctx-g { flex: none; width: 18px; text-align: center; font-size: 13px; color: #8a8a94; }
+  .ctx-item.danger .ctx-g { color: #e87b6a; }
+  .ctx-l { flex: 1; }
 </style>
