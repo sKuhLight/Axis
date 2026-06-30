@@ -14,3 +14,6 @@ dist-desktop/
 # local decompile/installer working dirs — never publish (RE source material)
 axe3/
 fm9/
+
+# Local-only Claude Code context (documents RE/capture methods — never commit)
+CLAUDE.md
