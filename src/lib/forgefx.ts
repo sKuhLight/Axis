@@ -99,7 +99,9 @@ export const forgefx = {
   versions: (location?: number) => req<{ versions: VersionInfo[] }>(`/versions${location != null ? `?location=${location}` : ''}`),
   snapshotPreset: (n: number) => req<{ version: VersionInfo }>(`/backup/preset/${n}`, { method: 'POST' }),
   /** Full device backup — snapshots every populated slot into the version store as one backup set. */
-  backupDevice: (label = 'Full device backup') => req<{ id: string; count: number }>(`/backup/device`, { method: 'POST', body: JSON.stringify({ label }) }),
+  // Full device backup dumps every populated slot — minutes on a full unit. Override the default 12s
+  // ceiling with a generous one so the client doesn't abort a backup that's still running.
+  backupDevice: (label = 'Full device backup') => req<{ id: string; count: number }>(`/backup/device`, { method: 'POST', body: JSON.stringify({ label }), signal: AbortSignal.timeout(600000) }),
   versionSyx: (id: string) => fetch(`${BASE}/version/${id}/syx`).then((r) => r.blob()),
   loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
   /** Restore a snapshot to its origin slot (load + commit to that slot — destructive for the slot). */
