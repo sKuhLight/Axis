@@ -2,6 +2,21 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.22-beta — 2026-06-30
+
+### Fixed
+- **Axe-Fx III / FM9: empty Signal Grid.** Their preset dumps arrive as ~3 KB
+  SysEx chunks, but the MIDI receive buffer defaulted to 2 KB and silently
+  truncated each chunk — so the preset body was incomplete and the grid/blocks
+  couldn't be decoded (the editor showed device-connected but an empty grid).
+  The buffer is now large enough for any gen-3 dump. (The FM3 was never affected
+  — its chunks are smaller than 2 KB.)
+
+### Changed
+- Grid and block decode failures now record the underlying error in the debug
+  log instead of a bare 503, so device-specific decode issues are faster to
+  diagnose from a user's report.
+
 ## 0.4.21-beta — 2026-06-30
 
 ### Fixed
