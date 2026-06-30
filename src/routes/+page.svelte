@@ -14,6 +14,7 @@
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
+  import CloudPanel from '$lib/CloudPanel.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -70,6 +71,7 @@
   <SaveDialog />
   <TunerOverlay />
   <CachePrompt />
+  <CloudPanel />
   <Toast />
 </div>
 

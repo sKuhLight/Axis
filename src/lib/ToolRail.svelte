@@ -84,6 +84,12 @@
     </button>
   {/each}
   <div class="spacer"></div>
+  {#if editor.cloud.enabled}
+    <button class="item" class:active={editor.cloudOpen} title={editor.cloud.user ? `Cloud · ${editor.cloud.user.email}` : 'Cloud sync — sign in'} onclick={() => (editor.cloudOpen = true)}>
+      <span class="ic">☁</span>
+      <span class="sh">{editor.cloud.user ? 'Synced' : 'Cloud'}</span>
+    </button>
+  {/if}
   <button class="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
     <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
     <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>

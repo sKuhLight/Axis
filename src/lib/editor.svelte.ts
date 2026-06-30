@@ -108,6 +108,9 @@ class EditorStore {
   update = $state<{ version: string; url: string } | null>(null); // newer release (web fallback / non-desktop)
   /** Desktop auto-update status (Electron). idle until the updater reports something. */
   autoUpdate = $state<{ state: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; percent?: number }>({ state: 'idle' });
+  /** Cloud sync (Supabase). enabled only when the engine has AXIS_CLOUD set; user null until logged in. */
+  cloud = $state<{ enabled: boolean; user: { email: string } | null; syncing: boolean; lastSync: number | null; note: string | null }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null });
+  cloudOpen = $state(false);
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
   ports = $state<ConnInfo[]>([]);
@@ -272,6 +275,7 @@ class EditorStore {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
     this.#initUpdater();
+    this.#initCloud();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
@@ -331,6 +335,54 @@ class EditorStore {
   };
   downloadUpdate = () => window.axisUpdate?.download();
   installUpdate = () => window.axisUpdate?.install();
+
+  // ── cloud sync ──
+  #initCloud = async () => {
+    try {
+      const s = await forgefx.cloudStatus();
+      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null };
+      if (s.user) this.cloudSync(); // pull latest on launch when already signed in
+    } catch {
+      /* cloud disabled / engine not ready */
+    }
+  };
+  cloudLogin = async (email: string, password: string) => {
+    this.cloud.note = null;
+    try {
+      const r = await forgefx.cloudLogin(email, password);
+      this.cloud = { ...this.cloud, user: { email: r.user.email } };
+      await this.cloudSync();
+    } catch (e) {
+      this.cloud.note = (e as Error).message || 'Login failed';
+    }
+  };
+  cloudRegister = async (email: string, password: string) => {
+    this.cloud.note = null;
+    try {
+      const r = await forgefx.cloudRegister(email, password);
+      if (r.needsConfirmation) this.cloud.note = 'Account created — check your email to confirm, then sign in.';
+      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email } }; await this.cloudSync(); }
+    } catch (e) {
+      this.cloud.note = (e as Error).message || 'Sign-up failed';
+    }
+  };
+  cloudLogout = async () => {
+    try { await forgefx.cloudLogout(); } catch { /* */ }
+    this.cloud = { ...this.cloud, user: null, lastSync: null };
+  };
+  cloudSync = async () => {
+    if (!this.cloud.user) return;
+    this.cloud.syncing = true;
+    this.cloud.note = null;
+    try {
+      const r = await forgefx.cloudSync();
+      this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${r.pushed} ↓${r.pulled}` };
+    } catch (e) {
+      this.cloud.note = (e as Error).message || 'Sync failed';
+    } finally {
+      this.cloud.syncing = false;
+    }
+  };
 
   // live tuner/tempo/scene/cpu pushes from the device
   #openEvents = () => {
