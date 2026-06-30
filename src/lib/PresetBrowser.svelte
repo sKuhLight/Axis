@@ -326,6 +326,16 @@
   });
   const reloadVersions = (n: number) => forgefx.versions(n).then((r) => { versions = r.versions; }).catch(() => {});
   const fmtTime = (ms: number) => { const d = Math.round((Date.now() - ms) / 1000); return d < 60 ? `${d}s ago` : d < 3600 ? `${Math.round(d / 60)}m ago` : d < 86400 ? `${Math.round(d / 3600)}h ago` : `${Math.round(d / 86400)}d ago`; };
+  async function downloadVersion(v: VersionInfo) {
+    try {
+      const blob = await forgefx.versionSyx(v.id);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(v.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch { editor.showToast('Download failed', '#d6543f'); }
+  }
   function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
 
   // ── drag a param/block from the detail panel into the search (builds a condition) ──
@@ -848,7 +858,7 @@
                   <div class="vh">
                     <div class="vh-info"><span class="vh-when">{fmtTime(v.capturedAt)}</span><span class="vh-meta">{v.source} · {(v.stored / 1024).toFixed(1)}KB</span></div>
                     <button class="vh-btn" title="Load into the edit buffer (doesn't touch a slot)" onclick={() => editor.loadVersion(v.id)}>Load</button>
-                    <a class="vh-btn dl" href={`/api/version/${v.id}/syx`} download={`${v.name || 'preset'}.syx`} title="Download .syx">↓</a>
+                    <button class="vh-btn dl" onclick={() => downloadVersion(v)} title="Download .syx">↓</button>
                   </div>
                 {/each}
               </div>

@@ -97,6 +97,7 @@ export const forgefx = {
   // ── preset versions / backups ──
   versions: (location?: number) => req<{ versions: VersionInfo[] }>(`/versions${location != null ? `?location=${location}` : ''}`),
   snapshotPreset: (n: number) => req<{ version: VersionInfo }>(`/backup/preset/${n}`, { method: 'POST' }),
+  versionSyx: (id: string) => fetch(`${BASE}/version/${id}/syx`).then((r) => r.blob()),
   loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
   // ── cloud sync (gated server-side by AXIS_CLOUD) ──
   cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null }>('/cloud/status'),
