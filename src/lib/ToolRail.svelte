@@ -95,6 +95,10 @@
       <span class="sh">{editor.cloud.user ? 'Account' : 'Cloud'}</span>
     </button>
   {/if}
+  <button class="item" class:active={editor.telemetryOpen} title="Privacy & Diagnostics" onclick={() => (editor.telemetryOpen = true)}>
+    <span class="ic">🛡</span>
+    <span class="sh">Privacy</span>
+  </button>
   <button class="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
     <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
     <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>

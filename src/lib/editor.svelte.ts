@@ -160,6 +160,10 @@ class EditorStore {
     { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), sending: false }
   );
   telemetryOpen = $state(false);
+  // Major-error → "Upload Debug Log" prompt. Set by offerDebugReport (debounced per category); the
+  // DiagnosticsPanel renders it as a dismissible card with an explicit Upload button.
+  reportPrompt = $state<{ kind: string; route?: string; status?: number; message?: string } | null>(null);
+  #lastOffer: Record<string, number> = {}; // per-category debounce for offerDebugReport
   #recentEvents: { t: number; kind: string; text: string }[] = []; // recent-events ring for the debug report
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
@@ -442,6 +446,18 @@ class EditorStore {
     this.telemetry = { ...this.telemetry, consent: on };
     try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); } catch { /* */ }
   };
+  /** On a major error (device-comm 5xx, detect failure, render crash), nudge the user to upload a debug
+   *  report — debounced to at most once per category per 5 min so it never spams. The actual upload is an
+   *  explicit click in the prompt (per-incident consent). Always records the event for the trail. */
+  offerDebugReport = (trigger: NonNullable<typeof this.reportPrompt>) => {
+    this.recordEvent('error', `${trigger.kind} ${trigger.route ?? ''} ${trigger.status ?? ''} ${trigger.message ?? ''}`.trim());
+    if (!this.telemetry.uploadEnabled) return; // nothing to upload to
+    const now = Date.now();
+    if (now - (this.#lastOffer[trigger.kind] ?? 0) < 5 * 60_000) return;
+    this.#lastOffer[trigger.kind] = now;
+    this.reportPrompt = trigger;
+  };
+  dismissReportPrompt = () => { this.reportPrompt = null; };
   /** Record a recent app event for the debug-report trail (small ring; scrubbed on upload). */
   recordEvent = (kind: string, text: string) => {
     this.#recentEvents.push({ t: Date.now(), kind, text: text.slice(0, 300) });
@@ -602,8 +618,11 @@ class EditorStore {
       this.everLoaded = true;
       this.status = 'ready';
       this.fetchMeters(); // background: fill every block's level meter
-    } catch {
+    } catch (e) {
       if (!this.everLoaded) this.status = 'offline';
+      // We were connected and a (re)load failed — a real device-comm error worth a debug report. Debounced
+      // + dismissible + only if upload is configured, so it never spams (see offerDebugReport).
+      else this.offerDebugReport({ kind: 'device-comm', route: this.isAm4 ? '/am4/grid' : '/preset/grid', message: (e as Error)?.message?.slice(0, 200) });
     }
   };
 

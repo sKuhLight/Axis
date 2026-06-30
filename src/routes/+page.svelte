@@ -15,6 +15,7 @@
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
   import CloudPanel from '$lib/CloudPanel.svelte';
+  import DiagnosticsPanel from '$lib/DiagnosticsPanel.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -72,6 +73,7 @@
   <TunerOverlay />
   <CachePrompt />
   <CloudPanel />
+  <DiagnosticsPanel />
   <Toast />
 </div>
 
