@@ -434,6 +434,7 @@ class EditorStore {
   /** Full device backup → version store, then sync it up. Drives the account panel's "Full device backup". */
   cloudFullBackup = async () => {
     this.cloud = { ...this.cloud, fullBackup: true, syncing: true, note: null };
+    this.showToast('Backing up the whole device — this can take a few minutes…', '#f5a623');
     try {
       const r = await forgefx.backupDevice();
       this.showToast(`Backed up ${r.count} presets`, '#33c46b');
