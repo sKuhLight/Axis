@@ -252,21 +252,27 @@
   const activeConds = $derived(advanced ? parsedInput.conds : [...conditions, ...parsedInput.conds]);
   const simpleText = $derived(parsedInput.free);
 
-  // ── Orama full-text index: typo-tolerant, ranked free-text (rebuilt when the haystack changes) ──
-  // Built LAZILY — only when there's actually free-text to search. Opening the browser to browse/filter
-  // doesn't touch it (building the index + haystacks over every preset was the ~2s open lag). The guard
-  // is read BEFORE haystacks so haystacks itself stays uncomputed until the first free-text search.
+  // ── Orama full-text index: typo-tolerant, ranked free-text ──
+  // Built in the BACKGROUND once the panel is idle — never on the open path (the eager build over every
+  // preset's params was the ~2s open lag). Deferred via requestIdleCallback so the open paints first;
+  // batched insert so the tokenize doesn't hitch the main thread. Rebuilds when entries are added/removed.
+  // Until it's ready, free-text search falls back to substring matching, so search works immediately.
   let oramaDb = $state<unknown>(null);
+  let indexedCount = -1;
   $effect(() => {
-    if (!simpleText.trim()) return; // no free-text → don't build the index (or the haystack)
-    const hs = haystacks; // tracked only while searching → rebuilds on data change, but never on open
+    const n = baseEntries.length; // track the library set → rebuild on add/remove (e.g. scan, import)
+    if (n === indexedCount && oramaDb) return;
     let alive = true;
-    (async () => {
+    const build = async () => {
+      const hs = haystacks; // expensive build happens here, in idle time — not on open
       const db = await create({ schema: { id: 'string', text: 'string' } });
-      await insertMultiple(db, [...hs].map(([id, text]) => ({ id, text })));
-      if (alive) oramaDb = db;
-    })();
-    return () => { alive = false; };
+      await insertMultiple(db, [...hs].map(([id, text]) => ({ id, text })), 100); // batched → yields, no jank
+      if (alive) { oramaDb = db; indexedCount = n; }
+    };
+    const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const cic = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    const id = ric ? ric(() => void build(), { timeout: 1500 }) : (setTimeout(() => void build(), 250) as unknown as number);
+    return () => { alive = false; if (ric && cic) cic(id); else clearTimeout(id); };
   });
   // free-text → ranked id set (async). null = no free-text / index not ready → fall back to substring.
   let ftIds = $state<Set<string> | null>(null);
