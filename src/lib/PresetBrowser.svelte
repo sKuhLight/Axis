@@ -1182,7 +1182,7 @@
   .t1 { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
   .t2 { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.04em; }
   .ghost { height: 32px; padding: 0 12px; border-radius: 9px; background: var(--track); border: 1px solid var(--border2); color: var(--text2); font-size: 11.5px; font-weight: 700; cursor: pointer; }
-  .ghost:hover:not(:disabled) { border-color: var(--border3); color: #fff; }
+  .ghost:hover:not(:disabled) { border-color: var(--border3); color: var(--text); }
   .ghost:disabled { opacity: 0.6; cursor: default; }
   .sort { display: flex; align-items: center; gap: 7px; }
   .seg { display: flex; gap: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
@@ -1200,7 +1200,7 @@
   .clr { width: 24px; height: 24px; border: none; background: transparent; border-radius: 7px; cursor: pointer; color: #7a7a84; font-size: 15px; }
   .clr:hover { background: var(--surface2); color: var(--text); }
   .save { padding: 0 16px; border-radius: 12px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); white-space: nowrap; }
-  .save:hover { border-color: var(--border3); color: #fff; }
+  .save:hover { border-color: var(--border3); color: var(--text); }
   /* autocomplete */
   .ac { position: absolute; top: calc(100% + 2px); left: 20px; right: 130px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); z-index: 200; padding: 6px; }
   .ac-ctx { padding: 7px 11px 5px; font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; text-transform: uppercase; }
@@ -1217,16 +1217,16 @@
   .drop-hint { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, var(--accent)); letter-spacing: 0.04em; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px; border-radius: 9px; background: #121216; border: 1px solid var(--border); }
   .chip-head { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--text); background: transparent; border: none; cursor: default; }
-  .chip-head.blk { color: #fff; font-weight: 700; cursor: pointer; background: color-mix(in srgb, var(--c) 15%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); }
+  .chip-head.blk { color: var(--text); font-weight: 700; cursor: pointer; background: color-mix(in srgb, var(--c) 15%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); }
   .cdot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 7px; }
   .param { display: inline-flex; align-items: center; height: 24px; padding: 0 6px 0 9px; border-radius: 7px; font: 600 11px/1 'JetBrains Mono', monospace; color: var(--text); background: #1f1f25; }
   .px, .cx, .px { margin-left: 5px; cursor: pointer; color: #8a8a94; font-size: 12px; background: none; border: none; }
   .cx { width: 22px; height: 24px; border-left: 1px solid rgba(255, 255, 255, 0.08); font-size: 14px; }
-  .px:hover, .cx:hover { color: #fff; }
+  .px:hover, .cx:hover { color: var(--text); }
   .addp { height: 24px; padding: 0 8px; border-radius: 7px; font: 600 11px/1 'JetBrains Mono', monospace; color: #7a7a84; cursor: pointer; border: 1px dashed #34343c; background: none; }
   .addp:hover { color: var(--accent); border-color: #2a5a5e; }
   .addf { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; background: var(--track); border: 1px solid var(--border2); cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); }
-  .addf:hover { border-color: var(--border3); color: #fff; }
+  .addf:hover { border-color: var(--border3); color: var(--text); }
   .addf .plus { font-size: 14px; color: var(--accent); }
   .hint { font: 500 11.5px/1 'JetBrains Mono', monospace; color: #52525b; }
   .clrall { height: 30px; padding: 0 11px; border-radius: 9px; cursor: pointer; font-size: 11.5px; font-weight: 600; color: #8a8a94; background: none; border: none; }

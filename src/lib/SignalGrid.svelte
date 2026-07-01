@@ -731,7 +731,7 @@
     z-index: 2;
     font-weight: 700;
     font-size: 14px;
-    color: #fff;
+    color: var(--text);
     letter-spacing: 0.01em;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     text-align: center;
@@ -786,7 +786,7 @@
   }
   .sh-val {
     font: 800 28px/1 var(--font-mono);
-    color: #fff;
+    color: var(--text);
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
   }
   .sh-unit {
@@ -1000,7 +1000,7 @@
     padding: 12px 18px;
     border-radius: 12px;
     border: 1px solid;
-    color: #fff;
+    color: var(--text);
     font-weight: 700;
     font-size: 14px;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);

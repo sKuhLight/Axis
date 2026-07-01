@@ -496,7 +496,7 @@
     align-items: center;
     justify-content: center;
     font-size: 15px;
-    color: #fff;
+    color: var(--text);
     border: 1px solid;
   }
   .rtext {

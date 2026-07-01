@@ -357,7 +357,7 @@
   .card::-webkit-scrollbar-track { background: transparent; }
   .card::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
   .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: var(--surface2); border: 1px solid var(--border2); color: #8a8a94; font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
-  .x:hover { color: #fff; border-color: var(--border3); }
+  .x:hover { color: var(--text); border-color: var(--border3); }
 
   .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; }
   .tb { flex: 1; height: 34px; border: none; background: transparent; color: #8a8a93; font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
@@ -372,7 +372,7 @@
   .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin: 8px 0 22px; }
   .logo { width: 46px; height: 46px; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); }
   .logo.sm { flex: none; }
-  .h1 { font-size: 20px; font-weight: 800; color: #fff; }
+  .h1 { font-size: 20px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   .tabs { display: flex; gap: 4px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
   .tab { flex: 1; height: 38px; border-radius: 9px; border: none; background: transparent; color: #8a8a93; font-size: 13px; font-weight: 700; cursor: pointer; }
@@ -413,7 +413,7 @@
   .avatar { width: 52px; height: 52px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accentink); font: 800 19px/1 'JetBrains Mono', monospace; }
   .who { flex: 1; min-width: 0; }
   .name-row { display: flex; align-items: center; gap: 9px; }
-  .name { font-size: 15px; font-weight: 800; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name { font-size: 15px; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .plan { flex: none; font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: var(--accentink); background: var(--ok); border-radius: 5px; padding: 4px 7px; }
   .plan.pro { background: var(--amber); }
   .email { font-size: 12.5px; color: var(--textdim); margin-top: 4px; }
@@ -444,12 +444,12 @@
   .soon { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: var(--accentink); background: var(--textfaint); border-radius: 4px; padding: 3px 5px; margin-left: 6px; vertical-align: middle; }
   .soon.on { background: var(--amber); }
   .signout { width: 100%; margin-top: 22px; height: 44px; background: transparent; border: 1px solid var(--border2); color: var(--text2); border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
-  .signout:hover { border-color: var(--border3); color: #fff; }
+  .signout:hover { border-color: var(--border3); color: var(--text); }
   .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: #8a5a52; font-size: 12px; font-weight: 600; cursor: pointer; }
   .dellink:hover { color: var(--danger); }
   .danger { margin-top: 12px; padding: 14px; background: rgba(214, 84, 63, 0.06); border: 1px solid rgba(214, 84, 63, 0.35); border-radius: 11px; }
   .drow { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-  .del { flex: 1; height: 40px; background: var(--danger); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .del { flex: 1; height: 40px; background: var(--danger); color: var(--text); border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
   .del:hover { background: #e2634e; }
 
   /* diagnostics disclosure */

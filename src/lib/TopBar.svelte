@@ -188,7 +188,7 @@
     text-overflow: ellipsis;
   }
   .up-txt b {
-    color: #fff;
+    color: var(--text);
   }
   .up-go {
     flex: none;
@@ -218,7 +218,7 @@
     font-size: 12px;
   }
   .up-x:hover {
-    color: #fff;
+    color: var(--text);
     background: rgba(255, 255, 255, 0.06);
   }
   .topbar.mob {

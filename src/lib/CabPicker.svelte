@@ -410,7 +410,7 @@
     align-items: center;
     justify-content: center;
     font-size: 14px;
-    color: #fff;
+    color: var(--text);
     border: 1px solid;
   }
   .rtext {

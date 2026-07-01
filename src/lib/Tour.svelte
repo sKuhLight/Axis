@@ -121,7 +121,7 @@
   .dim { position: fixed; inset: 0; pointer-events: auto; }
   .ring { position: fixed; border: 2px solid var(--accent, var(--accent)); border-radius: 12px; box-shadow: 0 0 0 2px rgba(53, 201, 214, 0.25), 0 0 22px rgba(53, 201, 214, 0.4); pointer-events: none; }
   .card { position: fixed; max-width: calc(100vw - 24px); background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); padding: 16px 18px 14px; color: var(--text); }
-  .h1 { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 7px; }
+  .h1 { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 7px; }
   .body { font-size: 13px; line-height: 1.5; color: #b9b9c2; }
   .foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
   .count { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--textmuted); }
@@ -129,7 +129,7 @@
   .skip { background: none; border: none; color: #8a8a94; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
   .skip:hover { color: var(--text2); }
   .back { background: transparent; border: 1px solid var(--border2); color: var(--text2); border-radius: 8px; height: 32px; padding: 0 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
-  .back:hover { border-color: var(--border3); color: #fff; }
+  .back:hover { border-color: var(--border3); color: var(--text); }
   .next { background: var(--accent); color: var(--accentink); border: none; border-radius: 8px; height: 32px; padding: 0 16px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
   .next:hover { background: var(--accentbright); }
 </style>

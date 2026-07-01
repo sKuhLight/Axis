@@ -1547,7 +1547,7 @@
     background: transparent;
     border: 0;
     outline: none;
-    color: #fff;
+    color: var(--text);
     font: 700 17px/1 var(--font-mono);
     pointer-events: auto;
   }
@@ -1584,7 +1584,7 @@
     background: var(--input);
     border: 1px solid var(--accent);
     border-radius: 6px;
-    color: #fff;
+    color: var(--text);
     font: 600 15px/1 var(--font-mono);
     outline: none;
     padding: 3px 0;

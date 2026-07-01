@@ -466,7 +466,7 @@
     min-width: 0;
     font-weight: 700;
     font-size: 14px;
-    color: #fff;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -487,7 +487,7 @@
   }
   .close:hover {
     border-color: var(--border3);
-    color: #fff;
+    color: var(--text);
   }
   .banner {
     flex: none;
