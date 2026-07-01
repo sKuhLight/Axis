@@ -5,6 +5,13 @@
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
+  import { theme } from './theme.svelte';
+
+  // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
+  // dark mode, softly lightened (dark family-tint ink) in light mode.
+  const light = $derived(theme.cfg.base === 'light');
+  const tileInk = (accent: string) => (light ? shade(accent, -0.52) : 'rgba(255,255,255,0.94)');
+  const tileInkDim = (accent: string) => (light ? shade(accent, -0.3) : 'rgba(255,255,255,0.6)');
 
   // ── block help on hover (shown in the grid-bottom status line) ──
   let helpText = $state<string | null>(null);
@@ -308,7 +315,9 @@
 
   // tile visual helpers
   function tileBg(accent: string) {
-    return `linear-gradient(180deg, ${shade(accent, -0.42)}, ${shade(accent, -0.62)})`;
+    return light
+      ? `linear-gradient(180deg, ${shade(accent, 0.66)}, ${shade(accent, 0.5)})`
+      : `linear-gradient(180deg, ${shade(accent, -0.42)}, ${shade(accent, -0.62)})`;
   }
 
   // ── mobile: pinch to change column density, swipe the background to page ──
@@ -442,7 +451,7 @@
                 data-idx="{r},{c}"
                 role="button"
                 tabindex="0"
-                style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.05)};"
+                style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, light ? 0.3 : -0.05)}; --tile-ink:{tileInk(cat.accent)}; --tile-ink-dim:{tileInkDim(cat.accent)}; --tile-shadow:{light ? '0 1px 1px rgba(255,255,255,0.4)' : '0 1px 2px rgba(0,0,0,0.4)'};"
                 onpointerdown={(e) => onBlockDown(cell, e)}
                 onwheel={(e) => onBlockWheel(cell, e)}
                 onmouseenter={() => showBlockHelp(cell)}
@@ -551,7 +560,7 @@
   {@const cat = catFor(moveCell.pack, baseName(moveCell.display))}
   <div
     class="ghost"
-    style="left:{movePos.x}px; top:{movePos.y}px; background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.3)};"
+    style="left:{movePos.x}px; top:{movePos.y}px; background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, light ? 0.2 : -0.3)}; color:{tileInk(cat.accent)};"
   >
     {moveCell.kind === 'shunt' ? 'Shunt' : cat.short}
   </div>
@@ -722,7 +731,8 @@
   .glyph {
     font-size: 15px;
     line-height: 1;
-    color: rgba(255, 255, 255, 0.82);
+    /* on-tile ink adapts to the theme (set per-block from the family color); see tileInk/tileBg */
+    color: var(--tile-ink-dim, rgba(255, 255, 255, 0.82));
     position: relative;
     z-index: 2;
   }
@@ -731,10 +741,9 @@
     z-index: 2;
     font-weight: 700;
     font-size: 14px;
-    /* tiles are always a darkened family color (see tileBg), so the label is fixed-light in every theme */
-    color: rgba(255, 255, 255, 0.94);
+    color: var(--tile-ink, rgba(255, 255, 255, 0.94));
     letter-spacing: 0.01em;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    text-shadow: var(--tile-shadow, 0 1px 2px rgba(0, 0, 0, 0.4));
     text-align: center;
     line-height: 1.05;
   }
@@ -742,7 +751,7 @@
     position: relative;
     z-index: 2;
     font: 500 9px/1.1 var(--font-mono);
-    color: rgba(255, 255, 255, 0.62);
+    color: var(--tile-ink-dim, rgba(255, 255, 255, 0.62));
     text-align: center;
     max-width: 92%;
     white-space: nowrap;
