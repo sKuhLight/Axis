@@ -429,7 +429,12 @@ class EditorStore {
     const u = typeof window !== 'undefined' ? window.axisUpdate : undefined;
     if (!u) { this.#checkUpdate(); return; } // not desktop → web pill fallback
     u.on((e) => {
-      if (e.channel === 'available') this.autoUpdate = { state: 'available', version: e.version };
+      if (e.channel === 'available') {
+        // Linux distro packages (pacman/deb/rpm) can't be auto-installed — show the GitHub link instead of
+        // the (no-op) download/restart flow.
+        if (e.canInstall === false) this.update = { version: e.version ?? '', url: e.url ?? 'https://github.com/sKuhLight/Axis/releases/latest' };
+        else this.autoUpdate = { state: 'available', version: e.version };
+      }
       else if (e.channel === 'progress') this.autoUpdate = { state: 'downloading', percent: e.percent };
       else if (e.channel === 'downloaded') this.autoUpdate = { state: 'downloaded', version: e.version };
       else if (e.channel === 'error') { this.autoUpdate = { state: 'idle' }; this.#checkUpdate(); } // fall back to the manual link

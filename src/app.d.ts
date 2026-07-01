@@ -5,6 +5,10 @@ export interface AxisUpdateEvent {
   version?: string;
   percent?: number;
   message?: string;
+  /** False for Linux distro packages (pacman/deb/rpm) that can't be auto-installed — use `url` instead. */
+  canInstall?: boolean;
+  /** Releases page to send the user to when auto-install isn't possible. */
+  url?: string;
 }
 declare global {
   /** App version, injected at build time from package.json (see vite.config). */
