@@ -39,6 +39,20 @@ jobs:
           npm run build
           npm prune --omit=dev
 
+      # Inject the production env (Supabase + telemetry) into the bundled server. index.ts loads
+      # server/.env relative to itself; electron-builder bundles it (see extraResources filter).
+      # Keys are publishable (client-safe); they live in CI secrets, never in source.
+      - name: Inject ForgeFX production env
+        working-directory: ForgeFX/server
+        run: |
+          {
+            echo "AXIS_CLOUD=1"
+            echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}"
+            echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}"
+            echo "AXIS_TELEMETRY=1"
+            echo "AXIS_FARO_URL=${{ secrets.AXIS_FARO_URL }}"
+          } > .env
+
       # Install Axis (incl. Electron) and build the static UI pointed at the local engine.
       - name: Install Axis
         working-directory: Axis
