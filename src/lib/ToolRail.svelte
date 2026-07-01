@@ -78,13 +78,13 @@
     </svg>
   </div>
   {#each RAIL as r}
-    <button class="item" class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
+    <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
       <span class="ic">{r.icon}</span>
       <span class="sh">{r.short}</span>
     </button>
   {/each}
   <div class="spacer"></div>
-  <button class="item acct" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
+  <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
     {#if editor.cloud.user}
       <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
       {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
@@ -93,7 +93,7 @@
     {/if}
     <span class="sh">Axis</span>
   </button>
-  <button class="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
+  <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
     <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
     <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>
   </button>

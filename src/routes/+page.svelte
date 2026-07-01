@@ -17,6 +17,7 @@
   import AxisPanel from '$lib/AxisPanel.svelte';
   import Notices from '$lib/Notices.svelte';
   import StatusBar from '$lib/StatusBar.svelte';
+  import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -34,6 +35,7 @@
         editor.placeTarget = null;
         editor.paletteOpen = true;
       } else if (e.key === 'Escape') {
+        if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
         else if (editor.paletteOpen) editor.paletteOpen = false;
@@ -76,6 +78,7 @@
   <CachePrompt />
   <AxisPanel />
   <Notices />
+  <Tour />
   <Toast />
 </div>
 

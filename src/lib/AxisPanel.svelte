@@ -258,6 +258,8 @@
           <p class="muted">Axis is a free, open-source editor for Fractal devices. If it's useful to you, you can support ongoing development on Ko-fi — entirely optional, and it keeps the project going.</p>
           <button class="kofi" onclick={() => openExternal(KOFI_URL)}>☕ Support development on Ko-fi</button>
           <div class="links">
+            <button class="link" onclick={() => { close(); editor.startTour(); }}>Replay app tour</button>
+            <span class="dotsep"></span>
             <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>
             <span class="dotsep"></span>
             <button class="link" onclick={() => openExternal(LEGAL.terms)}>Terms</button>

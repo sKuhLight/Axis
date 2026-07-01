@@ -44,6 +44,11 @@ const loadDecided = (): boolean => { try { return localStorage.getItem(DECIDED_K
 // One-time "support development on Ko-fi" nudge.
 const KOFI_SEEN_KEY = 'axs.kofi.seen';
 const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
+// First-run guided tour: shown once (after consent + Ko-fi). TOUR_LAST = index of the last step; must
+// match the STEPS array length in Tour.svelte (9 steps → 0..8).
+const TOUR_KEY = 'axs.tour.done';
+const TOUR_LAST = 8;
+const loadTourDone = (): boolean => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
 /** Strip the obvious PII from a string before it leaves the machine: emails + usernames in home paths. */
 function scrubPII(s: string): string {
   return s
@@ -176,6 +181,9 @@ class EditorStore {
    *  build and the user hasn't decided yet); `kofiNotice` = a one-time "support development" nudge. */
   consentPromptOpen = $state(false);
   kofiNoticeOpen = $state(false);
+  /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
+  tourActive = $state(false);
+  tourStep = $state(0);
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
   // upload is per-incident consent and works even when `consent` is false.
@@ -471,15 +479,29 @@ class EditorStore {
     } catch { /* telemetry disabled / engine not ready */ }
   };
   /** Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
-   *  consent prompt is currently up (never stack two first-run popups). */
+   *  consent prompt is currently up (never stack two first-run popups). If Ko-fi won't show, hand off to
+   *  the tour so the first-run sequence continues (consent → Ko-fi → tour). */
   #maybeShowKofi = () => {
-    if (loadKofiSeen() || this.consentPromptOpen) return;
+    if (this.consentPromptOpen) return;
+    if (loadKofiSeen()) { this.#maybeStartTour(); return; }
     this.kofiNoticeOpen = true;
   };
   dismissKofiNotice = () => {
     this.kofiNoticeOpen = false;
     try { localStorage.setItem(KOFI_SEEN_KEY, '1'); } catch { /* */ }
+    this.#maybeStartTour(); // continue the first-run sequence
   };
+  /** First-run guided tour. Auto-starts once, only after the consent + Ko-fi notices are resolved so
+   *  nothing stacks; persists `axs.tour.done` on finish/skip. Replayable via startTour() from the hub. */
+  #maybeStartTour = () => {
+    if (loadTourDone() || this.consentPromptOpen || this.kofiNoticeOpen) return;
+    this.tourStep = 0;
+    this.tourActive = true;
+  };
+  startTour = () => { this.tourStep = 0; this.tourActive = true; };
+  tourNext = () => { if (this.tourStep >= TOUR_LAST) this.endTour(); else this.tourStep++; };
+  tourPrev = () => { if (this.tourStep > 0) this.tourStep--; };
+  endTour = () => { this.tourActive = false; try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* */ } };
   /** Start live Faro RUM iff the operator enabled it, the user consented, and we have a collector URL.
    *  Dynamic-imported so the SDK never loads for users/builds without telemetry. Idempotent. */
   #startFaro = async () => {
