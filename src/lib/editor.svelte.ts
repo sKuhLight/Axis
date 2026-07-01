@@ -340,9 +340,15 @@ class EditorStore {
   /** Read every placed block's meter + swipe-control values (background, debounced — load() runs
    * after every optimistic edit, so coalesce the N bulk reads). */
   #metersTimer: ReturnType<typeof setTimeout> | null = null;
-  /** A slow link (5-pin MIDI ≈ 31.25 kbaud) can't carry high-rate meter reads without saturating and
-   *  inflating every edit's latency to seconds — so meter polling is disabled over MIDI. */
-  get slowLink(): boolean { return this.portChosen?.transport === 'midi'; }
+  /** A slow link — a generic MIDI interface into 5-pin DIN (≈31.25 kbaud) — can't carry high-rate meter
+   *  reads without saturating and inflating every edit to seconds, so meter/watch polling backs off there.
+   *  A device's OWN USB-MIDI port (Axe-Fx III / FM9, Fractal-named) is full USB speed → NOT slow. */
+  get slowLink(): boolean {
+    const c = this.portChosen;
+    if (c?.transport !== 'midi') return false;
+    const info = this.ports.find((p) => p.transport === 'midi' && p.id === (c.inId ?? c.id));
+    return info ? !info.fractal : false; // Fractal USB-MIDI = fast; generic adapter = slow; unknown → don't throttle
+  }
   fetchMeters = () => {
     if (this.isAm4 || this.slowLink) return; // no meter polling on AM4 or a slow MIDI link (keeps editing snappy)
     if (this.#metersTimer) clearTimeout(this.#metersTimer);
