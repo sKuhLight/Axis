@@ -2,6 +2,28 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.27-beta — 2026-07-01
+
+### Added
+- **Guided app tour.** A first-run walkthrough of the essentials (grid, preset browser,
+  block editing, footswitches, connection, the Axis hub). Replayable any time from
+  **Axis → About → Replay app tour**.
+- **Connection & Device settings** (Axis hub → **Connection**). Auto-detect still runs,
+  but you can now **override the device profile** (force FM3 / FM9 / Axe-Fx III / AM4) and
+  **pick the transport + ports manually** (serial or MIDI, with independent MIDI In/Out).
+  This makes it possible to use a device over a **MIDI→USB adapter** — e.g. an FM3 with a
+  dead USB port, via its 5-pin MIDI — where auto-detect can't identify it.
+
+### Changed
+- **MIDI (5-pin) links are now usable.** Live-meter polling and background queries are
+  throttled on a slow MIDI link so preset loads + edits actually complete (they were
+  saturating the ~31 kbaud cable). Expect it to be slower than USB — MIDI is a fallback,
+  USB is the fast path. A manual MIDI connection now also survives device reboots/replugs.
+
+### Notes
+- Reading/writing over a 5-pin MIDI adapter is verified working but slow (~9s for a preset
+  load); a quality USB-MIDI interface behaves best. USB remains the recommended connection.
+
 ## 0.4.26-beta — 2026-07-01
 
 ### Changed
