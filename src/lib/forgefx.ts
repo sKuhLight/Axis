@@ -80,7 +80,8 @@ export const forgefx = {
   /** List all serial + MIDI connections (Fractal flagged) + the chosen one / manual override. */
   listPorts: () => req<PortList>('/ports'),
   /** Manually pick a connection, or null to clear back to auto-detect. */
-  selectPort: (conn: ConnPick | null) => req<{ ok: boolean }>('/ports/select', { method: 'POST', body: JSON.stringify(conn ?? { id: null }) }),
+  // `model` forces a device profile ('auto' clears it); omit to leave the profile override untouched.
+  selectPort: (conn: ConnPick | null, model?: string) => req<{ ok: boolean }>('/ports/select', { method: 'POST', body: JSON.stringify({ ...(conn ?? { id: null }), ...(model !== undefined ? { model } : {}) }) }),
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),

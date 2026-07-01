@@ -29,6 +29,29 @@
 
   const version = (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev';
 
+  // ── Connection & Device tab ──
+  const PROFILES: { key: import('./types').ProfileKey; label: string }[] = [
+    { key: 'auto', label: 'Auto-detect' }, { key: 'fm3', label: 'FM3' }, { key: 'fm9', label: 'FM9' }, { key: 'axe3', label: 'Axe-Fx III' }, { key: 'am4', label: 'AM4' }
+  ];
+  const serialPorts = $derived(editor.ports.filter((p) => p.transport === 'serial'));
+  const midiIns = $derived(editor.ports.filter((p) => p.transport === 'midi' && p.dir === 'input'));
+  const midiOuts = $derived(editor.ports.filter((p) => p.transport === 'midi' && p.dir === 'output'));
+  let mode = $state<'serial' | 'midi'>('serial');
+  let inSel = $state('');
+  let outSel = $state('');
+  let serSel = $state('');
+  // sync the local selectors from the engine's chosen connection whenever the tab is shown
+  $effect(() => {
+    if (editor.axisTab !== 'device') return;
+    const cc = editor.portChosen;
+    mode = cc?.transport === 'midi' ? 'midi' : 'serial';
+    inSel = cc?.inId ?? (cc?.transport === 'midi' ? cc.id : '') ?? '';
+    outSel = cc?.outId ?? '';
+    serSel = cc?.transport === 'serial' ? cc.id : '';
+  });
+  const applyMidi = () => { if (inSel && outSel) editor.pickPort({ transport: 'midi', id: inSel, inId: inSel, outId: outSel }); };
+  const detName = $derived(editor.detected?.connected ? `${editor.detected.name}` : 'No device detected');
+
   function submit() {
     if (!email.trim() || !password) return;
     if (tab === 'signin') editor.cloudLogin(email.trim(), password);
@@ -70,6 +93,7 @@
 
       <div class="tabbar">
         <button class="tb" class:on={editor.axisTab === 'account'} onclick={() => (editor.axisTab = 'account')}>Account</button>
+        <button class="tb" class:on={editor.axisTab === 'device'} onclick={() => editor.openAxis('device')}>Connection</button>
         <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
         <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
       </div>
@@ -248,6 +272,63 @@
           <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
         </div>
 
+      {:else if editor.axisTab === 'device'}
+        <!-- Connection & Device -->
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">🔌</div>
+            <div><div class="h1">Connection &amp; Device</div><div class="sub">Auto-detected — override if needed</div></div>
+          </div>
+
+          <div class="sec">DEVICE PROFILE</div>
+          <p class="muted">Axis auto-detects your unit. Override this if you're reaching an FM3 over a MIDI→USB adapter (auto-detect can't identify it), or to force a specific model.</p>
+          <select class="sel" value={editor.profileOverride ?? 'auto'} onchange={(e) => editor.pickProfile((e.currentTarget as HTMLSelectElement).value as import('./types').ProfileKey)}>
+            {#each PROFILES as p}<option value={p.key}>{p.label}</option>{/each}
+          </select>
+          <p class="statline">
+            {#if editor.profileOverride}<span class="badge warn">FORCED</span> {editor.profileOverride.toUpperCase()}
+            {:else}<span class="badge ok">AUTO</span> {detName}{/if}
+          </p>
+
+          <div class="sec mt">CONNECTION</div>
+          <div class="modes">
+            <button class="mbtn" class:on={mode === 'serial'} onclick={() => (mode = 'serial')}>Serial (USB)</button>
+            <button class="mbtn" class:on={mode === 'midi'} onclick={() => (mode = 'midi')}>MIDI</button>
+          </div>
+
+          {#if mode === 'serial'}
+            <label class="fld" for="ser-port"><span class="flbl">SERIAL PORT</span>
+              <select id="ser-port" class="sel" value={serSel} onchange={(e) => { serSel = (e.currentTarget as HTMLSelectElement).value; if (serSel) editor.pickPort({ transport: 'serial', id: serSel }); }}>
+                <option value="">Auto-detect</option>
+                {#each serialPorts as p}<option value={p.id}>{p.label}{p.fractal ? ' ★' : ''}</option>{/each}
+              </select>
+            </label>
+          {:else}
+            <p class="muted">Pick the two endpoints of your MIDI interface. For an FM3 adapter: <strong>In</strong> = the interface input carrying the FM3's MIDI Out, <strong>Out</strong> = the interface output to the FM3's MIDI In. If nothing responds, swap them.</p>
+            <label class="fld" for="midi-in"><span class="flbl">MIDI IN</span>
+              <select id="midi-in" class="sel" value={inSel} onchange={(e) => { inSel = (e.currentTarget as HTMLSelectElement).value; applyMidi(); }}>
+                <option value="">— select —</option>
+                {#each midiIns as p}<option value={p.id}>{p.label}{p.fractal ? ' ★' : ''}</option>{/each}
+              </select>
+            </label>
+            <label class="fld" for="midi-out"><span class="flbl">MIDI OUT</span>
+              <select id="midi-out" class="sel" value={outSel} onchange={(e) => { outSel = (e.currentTarget as HTMLSelectElement).value; applyMidi(); }}>
+                <option value="">— select —</option>
+                {#each midiOuts as p}<option value={p.id}>{p.label}{p.fractal ? ' ★' : ''}</option>{/each}
+              </select>
+            </label>
+          {/if}
+
+          <p class="statline">
+            {#if editor.portOverride}<span class="badge warn">MANUAL</span> {editor.portChosen?.transport === 'midi' ? 'MIDI' : 'Serial'}
+            {:else}<span class="badge ok">AUTO</span> {editor.portChosen ? (editor.portChosen.transport === 'midi' ? 'MIDI (auto)' : 'Serial (auto)') : 'searching…'}{/if}
+          </p>
+
+          {#if editor.profileOverride || editor.portOverride}
+            <button class="signout" onclick={() => { editor.pickProfile('auto'); editor.pickPort(null); }}>Reset to auto-detect</button>
+          {/if}
+        </div>
+
       {:else}
         <!-- About -->
         <div class="pad">
@@ -389,4 +470,17 @@
   .kofi { width: 100%; height: 46px; margin-top: 6px; background: #13c3ff; color: #06181a; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
   .kofi:hover { filter: brightness(1.08); }
   .links { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; }
+
+  /* connection & device tab */
+  .sel { width: 100%; height: 42px; padding: 0 12px; background: #0e0e10; border: 1px solid #2a2a31; border-radius: 10px; color: #e9e9ee; font-size: 13.5px; outline: none; cursor: pointer; }
+  .sel:focus { border-color: #35c9d6; }
+  .fld { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+  .flbl { font: 600 9px/1 'JetBrains Mono', monospace; color: #7a7a83; letter-spacing: 0.1em; }
+  .statline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: #9a9aa3; }
+  .badge { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; border-radius: 4px; padding: 3px 5px; color: #06181a; }
+  .badge.ok { background: #33c46b; }
+  .badge.warn { background: #f5a623; }
+  .modes { display: flex; gap: 4px; background: #0e0e10; border: 1px solid #26262c; border-radius: 11px; padding: 4px; }
+  .mbtn { flex: 1; height: 36px; border-radius: 8px; border: none; background: transparent; color: #8a8a93; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .mbtn.on { background: #35c9d6; color: #06181a; }
 </style>
