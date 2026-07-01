@@ -4,6 +4,7 @@
   // design. OAuth + "forgot" are rendered but deferred (toast); billing is a supporter link (Patreon).
   import { editor } from './editor.svelte';
   import Icon from './Icon.svelte';
+  import { LEGAL, openExternal } from './legal';
 
   // Real Patreon campaign URL goes here once the page is live. Supporter tier drives `cloud.plan`.
   const SUPPORTER_URL = 'https://www.patreon.com';
@@ -81,7 +82,7 @@
             <button class="prov" onclick={() => soon('Google sign-in')}><span class="g">G</span>Google</button>
             <button class="prov" onclick={() => soon('Apple sign-in')}><span class="a"></span>Apple</button>
           </div>
-          {#if tab === 'register'}<p class="legal">By creating an account you agree to the Axis Terms of Service & Privacy Policy.</p>{/if}
+          {#if tab === 'register'}<p class="legal">By creating an account you agree to the <button type="button" class="link" onclick={() => openExternal(LEGAL.terms)}>Terms of Service</button> &amp; <button type="button" class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>{/if}
         </div>
 
       {:else if view === 'verify'}

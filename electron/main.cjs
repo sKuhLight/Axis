@@ -190,6 +190,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('axis:read-debug-log', () => {
     try { return logFilePath ? fs.readFileSync(logFilePath, 'utf8') : ''; } catch { return ''; }
   });
+  // Open an external https URL (legal pages etc.) in the OS browser. Restricted to https to avoid
+  // being used to launch arbitrary local handlers.
+  ipcMain.handle('axis:open-external', (_e, url) => {
+    if (typeof url === 'string' && /^https:\/\//i.test(url)) shell.openExternal(url);
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
