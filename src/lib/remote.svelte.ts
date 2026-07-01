@@ -44,6 +44,10 @@ class RemoteBoot {
     this.note = null;
     try {
       const sb = await browserSupabase();
+      // Private Realtime channels authorize via RLS against the JWT — make sure the socket carries the
+      // user's access token before joining (a restored session may not have set it automatically).
+      const { data: s } = await sb.auth.getSession();
+      if (s.session?.access_token) { try { await sb.realtime.setAuth(s.session.access_token); } catch { /* */ } }
       const { transport, close } = await connectRemote(sb, userId);
       setRemoteTransport(transport);
       this.#close = close;
