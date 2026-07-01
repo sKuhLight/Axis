@@ -88,11 +88,31 @@ function pickPort(preferred) {
   });
 }
 
+// Load the bundled ForgeFX .env (SUPABASE_URL/ANON_KEY + AXIS_CLOUD/AXIS_TELEMETRY/AXIS_FARO_URL) into
+// process.env HERE — from the CJS main process, which is guaranteed to run before we import the server.
+// The server also calls process.loadEnvFile() itself, but that doesn't reliably fire in the packaged
+// Electron ESM context, which left cloud/telemetry dark in release builds. Existing env vars win, so a
+// user/dev override is respected; a missing .env (fresh local build) just no-ops.
+function loadForgeFxEnv() {
+  try {
+    const envPath = path.join(forgefxRoot, 'server', '.env');
+    if (!fs.existsSync(envPath)) return;
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+      if (!m) continue;
+      let v = m[2];
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+    }
+  } catch { /* fall back to the server's own loader / ambient env */ }
+}
+
 async function startForgeFX() {
   process.env.PORT = PORT;
   process.env.FORGEFX_DEFINITIONS = path.join(forgefxRoot, 'definitions');
   process.env.FORGEFX_STATIC = staticDir; // serve the Axis SPA from the engine
   process.env.FORGEFX_DATA_DIR = process.env.FORGEFX_DATA_DIR || path.join(app.getPath('userData'), 'store'); // Axis config + backups
+  loadForgeFxEnv(); // populate Supabase/cloud/telemetry env before the server module reads it
   try {
     // ForgeFX is ESM — load it with dynamic import (require() can't load ES modules).
     // It runs the Fastify server in this (Node) process; native serial works under Electron's ABI.

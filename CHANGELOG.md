@@ -2,6 +2,17 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.24-beta — 2026-07-01
+
+### Fixed
+- **Cloud & diagnostics were disabled in packaged builds.** The bundled Supabase / cloud
+  configuration wasn't being loaded in the packaged desktop app, so sign-in and sync
+  reported "not enabled on this engine." The desktop shell now loads it before starting
+  the engine — cloud sync and diagnostics work in all release builds.
+- **Axe-Fx III: empty block-type lists.** Choosing a block's type (amp, drive, reverb,
+  comp, delay…) showed an empty list on the Axe-Fx III. The type rosters now populate
+  correctly (amp/drive/reverb/comp/delay/etc.).
+
 ## 0.4.23-beta — 2026-07-01
 
 ### Added
