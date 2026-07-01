@@ -1299,6 +1299,13 @@
   .pb.mob .qbar { padding: 11px 14px; }
   .pb.mob .chips { padding: 10px 14px; }
   .pb.mob .side { display: none; }
+  /* compact list rows: block chips stay one fading line instead of wrapping into tall rows */
+  .pb.mob .row-blocks {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    -webkit-mask: linear-gradient(90deg, #000 82%, transparent);
+    mask: linear-gradient(90deg, #000 82%, transparent);
+  }
   .pb.mob .detail {
     position: fixed;
     inset: 0;

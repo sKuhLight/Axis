@@ -238,8 +238,8 @@
 </script>
 
 {#if editor.paletteOpen}
-  <div class="bg" role="presentation" onclick={() => (editor.paletteOpen = false)}>
-    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
+    <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <div class="search">
         <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
         <input
@@ -337,6 +337,20 @@
     flex-direction: column;
     overflow: hidden;
     animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  /* mobile: dock the palette to the bottom as a slide-up sheet */
+  .bg.mob {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .card.mob {
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .search {
     display: flex;
