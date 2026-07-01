@@ -30,6 +30,12 @@
   --danger: #d6543f; /* bypass / destructive */
   --ok: #33c46b; /* connected / success */
 
+  /* ── accent/ok tinted surfaces (follow the accent + base; used by chips, active states, toggles) ── */
+  --accent-tint: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --accent-border: color-mix(in srgb, var(--accent) 45%, var(--border2));
+  --ok-tint: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --ok-border: color-mix(in srgb, var(--ok) 45%, var(--border2));
+
   /* ── type ── */
   --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;

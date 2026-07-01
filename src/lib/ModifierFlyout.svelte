@@ -434,7 +434,7 @@
     width: min(420px, 94vw);
     z-index: 200;
     background: linear-gradient(180deg, var(--bg2), var(--bg2));
-    border-left: 1px solid #222229;
+    border-left: 1px solid var(--border);
     box-shadow: -26px 0 60px rgba(0, 0, 0, 0.55);
     transform: translateX(112%);
     transition: transform 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
@@ -522,7 +522,7 @@
   .divider span {
     flex: 1;
     height: 1px;
-    background: #222229;
+    background: var(--border);
   }
   .divider b {
     font: 700 10px/1 'JetBrains Mono', monospace;
@@ -545,9 +545,9 @@
     color: var(--text2);
   }
   .srcbox.on {
-    background: #102023;
+    background: var(--surface2);
     border: 1px solid #2c5d63;
-    color: #7fd8de;
+    color: var(--accentbright);
   }
   .srctxt {
     overflow: hidden;
@@ -628,7 +628,7 @@
     width: 100%;
     aspect-ratio: 1/1;
     max-height: 230px;
-    background: #08080a;
+    background: var(--bg);
     border: 1px solid var(--surface2);
     border-radius: 10px;
     overflow: hidden;
@@ -643,7 +643,7 @@
   .axis {
     position: absolute;
     font: 600 8px/1 'JetBrains Mono', monospace;
-    color: #3c3c44;
+    color: var(--border3);
     letter-spacing: 0.06em;
   }
   .axis.x {
@@ -681,7 +681,7 @@
     height: 17px;
     border-radius: 5px;
     background: var(--bg);
-    border: 1px solid #202027;
+    border: 1px solid var(--surface2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -734,7 +734,7 @@
     color: var(--textdim);
   }
   .srcopt.sel {
-    color: #7fd8de;
+    color: var(--accentbright);
     background: rgba(53, 201, 214, 0.12);
   }
   .srcopt:hover {

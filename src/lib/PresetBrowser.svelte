@@ -1194,10 +1194,10 @@
   .adv .dot.on { background: var(--accentink); }
   /* query bar */
   .qbar { padding: 13px 20px 12px; border-bottom: 1px solid var(--surface2); flex: none; position: relative; z-index: 60; background: var(--bg2); display: flex; gap: 9px; align-items: stretch; }
-  .qwrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; background: #101014; border: 1px solid var(--border2); border-radius: 12px; transition: border-color 0.12s; }
+  .qwrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; transition: border-color 0.12s; }
   .qwrap.focus { border-color: var(--accent, var(--accent)); }
   .qwrap input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text); font: 500 14px/1 'JetBrains Mono', monospace; }
-  .clr { width: 24px; height: 24px; border: none; background: transparent; border-radius: 7px; cursor: pointer; color: #7a7a84; font-size: 15px; }
+  .clr { width: 24px; height: 24px; border: none; background: transparent; border-radius: 7px; cursor: pointer; color: var(--textfaint); font-size: 15px; }
   .clr:hover { background: var(--surface2); color: var(--text); }
   .save { padding: 0 16px; border-radius: 12px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); white-space: nowrap; }
   .save:hover { border-color: var(--border3); color: var(--text); }
@@ -1205,7 +1205,7 @@
   .ac { position: absolute; top: calc(100% + 2px); left: 20px; right: 130px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); z-index: 200; padding: 6px; }
   .ac-ctx { padding: 7px 11px 5px; font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; text-transform: uppercase; }
   .ac-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 9px; cursor: pointer; background: transparent; border: none; text-align: left; }
-  .ac-item.hi { background: #1f1f27; }
+  .ac-item.hi { background: var(--surface2); }
   .ac-dot { flex: none; width: 8px; height: 8px; border-radius: 2px; }
   .ac-l { font: 600 13px/1.2 'JetBrains Mono', monospace; color: var(--text); }
   .ac-h { font: 500 10px/1 'JetBrains Mono', monospace; color: var(--textfaint); }
@@ -1223,7 +1223,7 @@
   .px, .cx, .px { margin-left: 5px; cursor: pointer; color: var(--textdim); font-size: 12px; background: none; border: none; }
   .cx { width: 22px; height: 24px; border-left: 1px solid rgba(255, 255, 255, 0.08); font-size: 14px; }
   .px:hover, .cx:hover { color: var(--text); }
-  .addp { height: 24px; padding: 0 8px; border-radius: 7px; font: 600 11px/1 'JetBrains Mono', monospace; color: #7a7a84; cursor: pointer; border: 1px dashed #34343c; background: none; }
+  .addp { height: 24px; padding: 0 8px; border-radius: 7px; font: 600 11px/1 'JetBrains Mono', monospace; color: var(--textfaint); cursor: pointer; border: 1px dashed var(--border3); background: none; }
   .addp:hover { color: var(--accent); border-color: #2a5a5e; }
   .addf { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; background: var(--track); border: 1px solid var(--border2); cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); }
   .addf:hover { border-color: var(--border3); color: var(--text); }
@@ -1247,7 +1247,7 @@
   .sv-n { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sv-q { font: 500 9.5px/1.2 'JetBrains Mono', monospace; color: var(--textfaint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sv-x { flex: none; width: 22px; border: none; background: none; color: var(--textfaint); font-size: 14px; cursor: pointer; border-radius: 6px; }
-  .sv-x:hover { background: #3a1f1f; color: #e87b6a; }
+  .sv-x:hover { background: var(--border); color: #e87b6a; }
   .empty-s { padding: 8px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: var(--textmuted); }
   .link { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
   .div { height: 1px; background: var(--surface); margin: 4px 14px 12px; }
@@ -1257,13 +1257,13 @@
   /* results */
   .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .results { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: var(--bg); }
-  .gridpanel { flex: none; height: 210px; border-top: 1px solid var(--surface2); background: #09090b; display: flex; flex-direction: column; }
+  .gridpanel { flex: none; height: 210px; border-top: 1px solid var(--surface2); background: var(--bg); display: flex; flex-direction: column; }
   .gp-head { display: flex; align-items: center; gap: 12px; padding: 9px 16px 4px; flex: none; }
   .gp-hint { font: 500 10px/1 'JetBrains Mono', monospace; color: var(--textmuted); }
   .gp-clear { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, var(--accent)); background: none; border: none; cursor: pointer; }
   .gp-empty { padding: 24px 16px; font: 500 12px/1.4 'JetBrains Mono', monospace; color: var(--textmuted); }
-  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid #22222b; cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
-  .row:hover { background: #101014; }
+  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--border); cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
+  .row:hover { background: var(--bg2); }
   .row.sel { background: rgba(53, 201, 214, 0.06); border-left-color: var(--accent, var(--accent)); }
   .num { font: 700 13px/1 'JetBrains Mono', monospace; color: var(--textmuted); flex: none; width: 38px; }
   .num.sel { color: var(--amber); }
@@ -1296,7 +1296,7 @@
   .st { display: flex; flex-direction: column; gap: 3px; }
   .sk { font: 600 8px/1 'JetBrains Mono', monospace; color: var(--textmuted); letter-spacing: 0.1em; }
   .sv2 { font-size: 11.5px; font-weight: 600; color: var(--text2); }
-  .load { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; height: 42px; border-radius: 11px; background: var(--amber); color: #1a1206; font-size: 13px; font-weight: 800; cursor: pointer; border: none; }
+  .load { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; height: 42px; border-radius: 11px; background: var(--amber); color: var(--bg2); font-size: 13px; font-weight: 800; cursor: pointer; border: none; }
   .load:hover { filter: brightness(1.08); }
   .d-sec { padding: 16px 20px; }
   .d-sec .lbl { margin-bottom: 11px; display: block; }
@@ -1321,7 +1321,7 @@
   .blk { border: 1px solid var(--surface2); border-radius: 12px; overflow: hidden; background: var(--bg2); }
   .blk-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--surface2); cursor: grab; }
   .blk-h:active { cursor: grabbing; }
-  .grip { color: #46464e; font-size: 11px; }
+  .grip { color: var(--border3); font-size: 11px; }
   .pr { cursor: grab; }
   .pr:active { cursor: grabbing; }
   .pr:hover { background: var(--track); }
@@ -1366,7 +1366,7 @@
   .folder-row .view.folder { flex: 1; min-width: 0; }
   .folder-row.on { background: rgba(53, 201, 214, 0.1); border-radius: 8px; }
   .folder-x { flex: none; width: 22px; height: 22px; border: none; background: transparent; color: var(--textmuted); font-size: 15px; cursor: pointer; border-radius: 6px; }
-  .folder-x:hover { background: #2a1416; color: #e87b6a; }
+  .folder-x:hover { background: var(--surface2); color: #e87b6a; }
   .ic-btn { display: inline-flex; align-items: center; gap: 6px; }
 
   /* ── cloud: detail status box ── */
@@ -1389,7 +1389,7 @@
   .ctx-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none; background: transparent; border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text); text-align: left; }
   .ctx-item:hover { background: var(--surface2); }
   .ctx-item.danger { color: #e87b6a; }
-  .ctx-item.danger:hover { background: #2a1416; }
+  .ctx-item.danger:hover { background: var(--surface2); }
   .ctx-g { flex: none; width: 18px; text-align: center; font-size: 13px; color: var(--textdim); }
   .ctx-item.danger .ctx-g { color: #e87b6a; }
   .ctx-l { flex: 1; }

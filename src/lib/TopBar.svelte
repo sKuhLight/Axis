@@ -167,8 +167,8 @@
     padding: 0 6px 0 13px;
     max-width: 46%;
     border-radius: 10px;
-    background: linear-gradient(180deg, #1d2a2c, #16201f);
-    border: 1px solid #2c4a4b;
+    background: linear-gradient(180deg, var(--accent-tint), var(--accent-tint));
+    border: 1px solid var(--accent-border);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
   .up-dot {
@@ -182,7 +182,7 @@
   .up-txt {
     font-size: 12.5px;
     font-weight: 600;
-    color: #bfeef2;
+    color: var(--accentbright);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -257,7 +257,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #121214;
+    background: var(--surface);
     border: 1px solid var(--border-2);
     color: var(--text-dim);
     font-size: 15px;
@@ -364,7 +364,7 @@
   }
   .mbtn.on {
     background: rgba(53, 201, 214, 0.16);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
 
@@ -412,10 +412,10 @@
     gap: 9px;
     height: 38px;
     padding: 0 14px 0 13px;
-    background: linear-gradient(180deg, #1d2a2c, #16201f);
-    border: 1px solid #2c4a4b;
+    background: linear-gradient(180deg, var(--accent-tint), var(--accent-tint));
+    border: 1px solid var(--accent-border);
     border-radius: 10px;
-    color: #bfeef2;
+    color: var(--accentbright);
     font-family: inherit;
     font-size: 14px;
     font-weight: 600;
@@ -427,7 +427,7 @@
     font-size: 10px;
     font-weight: 600;
     color: #5e8a8c;
-    background: #0d1516;
+    background: var(--accent-tint);
     border: 1px solid #234142;
     border-radius: 5px;
     padding: 4px 6px;
@@ -469,7 +469,7 @@
     letter-spacing: 0.08em;
   }
   button.st.on {
-    background: #16252a;
+    background: var(--surface2);
   }
   button.st.on .note,
   button.st.on .st-lbl {
@@ -546,7 +546,7 @@
     gap: 8px;
     height: 38px;
     padding: 0 15px;
-    background: #241a12;
+    background: var(--surface2);
     border: 1px solid #5a3f1f;
     border-radius: 9px;
     color: #f5c878;

@@ -203,7 +203,7 @@
   .cur {
     font: 700 10px/1 var(--font-mono);
     color: #f5c878;
-    background: #241a12;
+    background: var(--surface2);
     border: 1px solid #5a3f1f;
     border-radius: 6px;
     padding: 5px 8px;
@@ -275,7 +275,7 @@
   }
   .tab.on {
     background: rgba(53, 201, 214, 0.14);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
   .list {
@@ -316,7 +316,7 @@
   .cname {
     font-size: 12px;
     font-weight: 600;
-    color: #d6d6dc;
+    color: var(--text2);
   }
   .foot {
     display: flex;
@@ -404,7 +404,7 @@
     flex: none;
     font: 700 9px/1 var(--font-mono);
     color: #f5c878;
-    background: #241a12;
+    background: var(--surface2);
     border: 1px solid #5a3f1f;
     border-radius: 5px;
     padding: 4px 7px;

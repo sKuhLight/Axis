@@ -370,12 +370,12 @@
   }
   .target {
     padding: 6px 11px;
-    background: #11201f;
-    border: 1px solid #244040;
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 7px;
     font-size: 11px;
     font-weight: 600;
-    color: #7fd8de;
+    color: var(--accentbright);
     white-space: nowrap;
   }
   .rn {
@@ -412,7 +412,7 @@
   }
   .cat.on {
     background: rgba(53, 201, 214, 0.14);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
   .list {
@@ -545,8 +545,8 @@
     font-size: 10px;
     font-weight: 600;
     color: var(--accent);
-    background: #11201f;
-    border: 1px solid #244040;
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
   }

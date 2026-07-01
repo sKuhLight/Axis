@@ -409,7 +409,7 @@
   .dotsep { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); display: inline-block; }
 
   /* account */
-  .profile { display: flex; align-items: center; gap: 15px; padding: 18px 24px 18px; border-bottom: 1px solid #1d1d22; }
+  .profile { display: flex; align-items: center; gap: 15px; padding: 18px 24px 18px; border-bottom: 1px solid var(--surface2); }
   .avatar { width: 52px; height: 52px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accentink); font: 800 19px/1 'JetBrains Mono', monospace; }
   .who { flex: 1; min-width: 0; }
   .name-row { display: flex; align-items: center; gap: 9px; }
@@ -429,7 +429,7 @@
   .fill { height: 100%; width: 40%; background: var(--amber); border-radius: 3px; animation: slide 1.1s ease-in-out infinite; }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
   .sync-now { width: 100%; margin-top: 15px; height: 42px; background: transparent; border: 1px solid #2e6f74; border-radius: 11px; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; }
-  .sync-now:hover { background: #0d1516; border-color: var(--accent); }
+  .sync-now:hover { background: var(--accent-tint); border-color: var(--accent); }
   .items { margin-top: 16px; display: flex; flex-direction: column; }
   .item { display: flex; align-items: center; gap: 13px; padding: 11px 2px; cursor: pointer; background: none; border: none; text-align: left; width: 100%; }
   .item.box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; align-items: flex-start; }

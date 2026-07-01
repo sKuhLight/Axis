@@ -325,9 +325,9 @@
     margin-left: auto;
     font-size: 11px;
     font-weight: 600;
-    color: #7fd8de;
-    background: #11201f;
-    border: 1px solid #244040;
+    color: var(--accentbright);
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 7px;
     padding: 6px 11px;
     max-width: 46%;
@@ -357,7 +357,7 @@
   }
   .cat.on {
     background: rgba(53, 201, 214, 0.14);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
   .list {
@@ -373,7 +373,7 @@
     padding: 13px 10px 8px;
   }
   .more {
-    color: #45454e;
+    color: var(--border3);
     letter-spacing: 0;
   }
   .rowwrap {
@@ -436,15 +436,15 @@
     flex: none;
     font-size: 10px;
     font-weight: 600;
-    color: var(--ok, #5fc46b);
+    color: var(--ok, var(--ok));
   }
   .ret {
     flex: none;
     font-size: 10px;
     font-weight: 600;
     color: var(--accent);
-    background: #11201f;
-    border: 1px solid #244040;
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
   }

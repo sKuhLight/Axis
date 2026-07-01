@@ -151,7 +151,7 @@
     border-color: var(--border-strong);
   }
   .save {
-    background: #241a12;
+    background: var(--surface2);
     border: 1px solid #5a3f1f;
     color: #f5c878;
   }
