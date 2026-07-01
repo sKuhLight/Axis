@@ -2,7 +2,7 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { z } from 'zod';
-import { forgefx } from './forgefx';
+import { forgefx, isRemote } from './forgefx';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
@@ -236,6 +236,9 @@ class LibraryStore {
    *  This is the single "index everything" action — no separate light-scan vs deep-scan. */
   async buildCache(from = 0, to = 511): Promise<void> {
     if (this.scanning) return;
+    // Remote mode: scanning 512 full preset dumps over the relay (+ the host's slow link) is unusable —
+    // that's the host's job. The remote browses via live queries; the library cache stays a local/host thing.
+    if (isRemote()) { this.scanError = 'Library scan runs on your PC, not remotely.'; return; }
     this.scanning = true;
     this.scanError = null;
     this.scanDone = 0;
