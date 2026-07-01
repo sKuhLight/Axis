@@ -2,7 +2,8 @@
   // Full-screen gate for the remote web app (axisapp.live): sign in, then connect to the user's PC over
   // the relay. Shown until the remote session is live; once ready, +page renders the normal Axis UI.
   import { remoteBoot } from './remote.svelte';
-  import { LEGAL, openExternal } from './legal';
+  import { LEGAL } from './legal';
+  import { COPYRIGHT } from './support';
 
   let email = $state('');
   let password = $state('');
@@ -33,10 +34,19 @@
         <div class="field"><div class="lbl">PASSWORD</div><input class="in" type="password" placeholder="••••••••" bind:value={password} autocomplete="current-password" /></div>
         <button class="cta" type="submit">Sign in &amp; connect</button>
         {#if b.note}<p class="note">{b.note}</p>{/if}
-        <p class="legal">Connects to the Axis running on your own PC. See our <button type="button" class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>
+        <p class="legal">Connects to the Axis running on your own PC — we never touch your presets.</p>
       </form>
     {/if}
   </div>
+
+  <footer class="foot">
+    <a href={LEGAL.privacy} target="_blank" rel="noreferrer">Privacy</a>
+    <span class="dot"></span>
+    <a href={LEGAL.terms} target="_blank" rel="noreferrer">Terms</a>
+    <span class="dot"></span>
+    <a href={LEGAL.imprint} target="_blank" rel="noreferrer">Imprint</a>
+    <span class="cr">{COPYRIGHT} · Not affiliated with Fractal Audio Systems</span>
+  </footer>
 </div>
 
 <style>
@@ -54,7 +64,11 @@
   .cta:hover { background: #46d6e2; }
   .note { font: 600 11.5px/1.4 'JetBrains Mono', monospace; color: #f5a623; margin: 4px 0 0; text-align: center; }
   .legal { text-align: center; margin-top: 14px; font-size: 11px; color: #56565e; line-height: 1.55; }
-  .link { background: none; border: none; color: #35c9d6; font-size: 11px; font-weight: 600; cursor: pointer; padding: 0; }
+  .foot { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; font-size: 11px; color: #6e6e78; }
+  .foot a { color: #9a9aa3; text-decoration: none; }
+  .foot a:hover { color: #cfcfd6; }
+  .foot .dot { width: 3px; height: 3px; border-radius: 50%; background: #3a3a44; }
+  .foot .cr { flex-basis: 100%; text-align: center; color: #56565e; margin-top: 2px; }
   .state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 0 6px; }
   .st { font-size: 16px; font-weight: 800; color: #fff; }
   .st.ok { color: #33c46b; }
