@@ -324,6 +324,10 @@
             {:else}<span class="badge ok">AUTO</span> {editor.portChosen ? (editor.portChosen.transport === 'midi' ? 'MIDI (auto)' : 'Serial (auto)') : 'searching…'}{/if}
           </p>
 
+          {#if editor.slowLink}
+            <p class="slownote"><span class="badge warn">SLOW LINK</span> 5-pin MIDI (~31 kbaud). Live meters &amp; CPU are paused and background polling is throttled to keep editing responsive — automatically. Switch to USB for the full-speed experience.</p>
+          {/if}
+
           {#if editor.profileOverride || editor.portOverride}
             <button class="signout" onclick={() => { editor.pickProfile('auto'); editor.pickPort(null); }}>Reset to auto-detect</button>
           {/if}
@@ -483,4 +487,5 @@
   .modes { display: flex; gap: 4px; background: #0e0e10; border: 1px solid #26262c; border-radius: 11px; padding: 4px; }
   .mbtn { flex: 1; height: 36px; border-radius: 8px; border: none; background: transparent; color: #8a8a93; font-size: 12.5px; font-weight: 700; cursor: pointer; }
   .mbtn.on { background: #35c9d6; color: #06181a; }
+  .slownote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 14px; padding: 10px 12px; background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 10px; font-size: 11.5px; line-height: 1.5; color: #b9b9c2; }
 </style>
