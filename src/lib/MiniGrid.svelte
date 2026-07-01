@@ -86,7 +86,7 @@
     transition: background 0.1s;
   }
   .tile:hover { background: color-mix(in srgb, var(--c) 26%, #0e0e11); }
-  .tile.sel { background: color-mix(in srgb, var(--c) 36%, #0e0e11); border-color: var(--c); box-shadow: 0 0 0 1px var(--c); color: #fff; }
+  .tile.sel { background: color-mix(in srgb, var(--c) 36%, #0e0e11); border-color: var(--c); box-shadow: 0 0 0 1px var(--c); color: var(--text); }
   .shunt { position: absolute; display: flex; align-items: center; justify-content: center; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); border: 1px solid var(--border3); }
 </style>

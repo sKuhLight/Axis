@@ -53,7 +53,7 @@
   .bg { position: fixed; inset: 0; background: var(--bg, #0b0b0d); display: flex; align-items: center; justify-content: center; padding: 24px; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .card { width: 380px; max-width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); padding: 26px 24px 22px; color: var(--text); }
   .brand { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
-  .h1 { font-size: 20px; font-weight: 800; color: #fff; }
+  .h1 { font-size: 20px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   form { display: flex; flex-direction: column; gap: 15px; }
   .field { display: flex; flex-direction: column; gap: 8px; }
@@ -70,7 +70,7 @@
   .foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); }
   .foot .cr { flex-basis: 100%; text-align: center; color: var(--textmuted); margin-top: 2px; }
   .state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 0 6px; }
-  .st { font-size: 16px; font-weight: 800; color: #fff; }
+  .st { font-size: 16px; font-weight: 800; color: var(--text); }
   .st.ok { color: var(--ok); }
   .st.warn { color: var(--amber); }
   .ss { font-size: 12.5px; color: var(--textdim); }

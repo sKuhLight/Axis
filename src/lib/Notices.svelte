@@ -87,7 +87,7 @@
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
   .logo { width: 46px; height: 46px; flex: none; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); }
   .logo.warn { background: rgba(245, 166, 35, 0.12); border-color: rgba(245, 166, 35, 0.4); color: var(--amber); }
-  .h1 { font-size: 19px; font-weight: 800; color: #fff; }
+  .h1 { font-size: 19px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   .muted { font-size: 12.5px; color: var(--textdim); line-height: 1.5; margin: 6px 0 14px; }
   .incl { margin: 4px 0 16px; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: #b9b9c2; line-height: 1.7; display: flex; flex-direction: column; gap: 4px; }
@@ -104,7 +104,7 @@
   .cta:hover { background: var(--accentbright); }
   .cta:disabled { opacity: 0.5; cursor: default; }
   .cta.ghost { background: transparent; border: 1px solid var(--border2); color: var(--text2); }
-  .cta.ghost:hover { border-color: var(--border3); color: #fff; background: transparent; }
+  .cta.ghost:hover { border-color: var(--border3); color: var(--text); background: transparent; }
   .link { background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
   .link.dim { color: var(--textdim); }
   .link.center { display: block; width: 100%; text-align: center; margin-top: 12px; }
@@ -115,10 +115,10 @@
   @keyframes axsPop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .ki { font-size: 22px; flex: none; }
   .tbody { flex: 1; min-width: 0; }
-  .tt { font-size: 13.5px; font-weight: 800; color: #fff; }
+  .tt { font-size: 13.5px; font-weight: 800; color: var(--text); }
   .td { font-size: 11.5px; color: var(--textdim); margin-top: 2px; line-height: 1.4; }
   .tgo { flex: none; height: 34px; padding: 0 14px; background: #13c3ff; color: var(--accentink); border: none; border-radius: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
   .tgo:hover { filter: brightness(1.08); }
   .tx { flex: none; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--textfaint); cursor: pointer; }
-  .tx:hover { background: var(--surface2); color: #fff; }
+  .tx:hover { background: var(--surface2); color: var(--text); }
 </style>

@@ -440,7 +440,7 @@
   .swcat {
     font-size: 13px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .swhold {
     font-size: 10px;
@@ -538,7 +538,7 @@
     cursor: pointer;
   }
   .csw.on {
-    border-color: #fff;
+    border-color: var(--text);
     box-shadow: 0 0 0 2px var(--c);
   }
   .note {

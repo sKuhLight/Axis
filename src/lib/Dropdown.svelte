@@ -147,7 +147,7 @@
   }
   .opt.active {
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
     background: rgba(53, 201, 214, 0.12);
   }
   .ol {

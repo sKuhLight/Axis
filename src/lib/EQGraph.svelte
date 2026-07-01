@@ -181,7 +181,7 @@
     pointer-events: none;
   }
   .rd b {
-    color: #fff;
+    color: var(--text);
     font-weight: 700;
   }
 </style>

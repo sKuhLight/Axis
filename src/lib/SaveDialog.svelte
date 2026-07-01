@@ -79,7 +79,7 @@
   .title {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .body {
     font-size: 13px;

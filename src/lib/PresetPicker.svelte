@@ -198,7 +198,7 @@
   .title {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .cur {
     font: 700 10px/1 var(--font-mono);

@@ -222,7 +222,7 @@
     align-items: center;
     justify-content: center;
     font-size: 19px;
-    color: #fff;
+    color: var(--text);
     border: 1px solid;
   }
   /* the type button doubles as the model search — grows to fill the header so the full name shows */
@@ -269,7 +269,7 @@
   .t-type {
     font-weight: 700;
     font-size: 15px;
-    color: #fff;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -361,7 +361,7 @@
     justify-content: center;
     border-radius: 9px;
     font-size: 18px;
-    color: #fff;
+    color: var(--text);
     background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 80%, #000), color-mix(in srgb, var(--ac) 45%, #000));
   }
   .cp-txt {
