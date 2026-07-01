@@ -8,7 +8,7 @@
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
   import { idealIds } from './layouts';
-  import { paramHelp, helpSlugForPack, type ParamHelp } from './help';
+  import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
 
   let {
@@ -84,18 +84,18 @@
   // value bubble: a single fixed-position tooltip (escapes the editor's scroll clipping + stays on top)
   let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
 
-  // ── parameter help on hover (shown in the surface's bottom status strip) ──
-  let pHelp = $state<{ label: string; help: ParamHelp } | null>(null);
+  // ── parameter help on hover (shown in the app's bottom status bar, left slot) ──
   let pHelpToken = 0;
   async function showParamHelp(id: number, label: string) {
     const token = ++pHelpToken;
+    editor.setHint(label); // show the name immediately while the blurb loads
     const h = await paramHelp(helpSlugForPack(slug), id);
     if (token !== pHelpToken) return; // a newer hover won
-    pHelp = h ? { label, help: h } : null;
+    editor.setHint(h ? `${label} — ${h.blurb}${h.tip ? '  ·  Tip: ' + h.tip : ''}` : label);
   }
   function clearParamHelp() {
     pHelpToken++;
-    pHelp = null;
+    editor.clearHint();
   }
   let dragging = $state(false);
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
@@ -602,18 +602,6 @@
     return u ? `${num} ${u}` : num;
   };
 
-  // Mirror the hovered/adjusted control into the bottom status-bar hint (left slot). Keys off `tip`, so it
-  // covers every showTip() call site (knob hover + drag) with one injection; clears when nothing's active.
-  $effect(() => {
-    const tp = tip;
-    if (tp && !tp.edit) {
-      const p = knob(tp.id);
-      editor.setHint(p ? `${p.name} · ${fullVal(tp.id)}` : '');
-    } else {
-      editor.clearHint();
-    }
-    return () => editor.clearHint();
-  });
 
   // move a widget to an adjacent page (drag to the left/right edge of the board)
   function migrateWidget(id: string, dir: number) {
@@ -1161,15 +1149,6 @@
   </div>
 {/if}
 
-<!-- parameter help strip: docked at the bottom of the block editor while hovering a control -->
-{#if pHelp}
-  <div class="phelp">
-    <span class="ph-name">{pHelp.label}</span>
-    <span class="ph-blurb">{pHelp.help.blurb}</span>
-    {#if pHelp.help.tip}<span class="ph-tip">Tip: {pHelp.help.tip}</span>{/if}
-  </div>
-{/if}
-
 <!-- results select popover: fixed-position, anchored to the field (escapes the scroll container) -->
 {#if resSel}
   {@const re = enm(resSel.id)}
@@ -1572,37 +1551,6 @@
     transform: translateX(-50%);
     border: 6px solid transparent;
     border-top-color: #0a0a0c;
-  }
-  .phelp {
-    position: fixed;
-    left: 50%;
-    bottom: 14px;
-    transform: translateX(-50%);
-    z-index: 9998;
-    max-width: min(680px, 92vw);
-    padding: 8px 14px;
-    border-radius: 10px;
-    background: #0a0a0c;
-    border: 1px solid var(--border-2, #2a2a31);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-    pointer-events: none;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 10px;
-    font-size: 12px;
-    line-height: 1.35;
-  }
-  .ph-name {
-    font-weight: 700;
-    color: #f2f2f5;
-  }
-  .ph-blurb {
-    color: var(--text-dim, #c2c2c8);
-  }
-  .ph-tip {
-    color: var(--text-faint, #8a8a92);
-    font-style: italic;
   }
   .tipinput {
     width: 90px;

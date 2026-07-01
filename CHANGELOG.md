@@ -2,6 +2,16 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.25-beta — 2026-07-01
+
+### Fixed
+- **Cloud & diagnostics really work in packaged builds now.** The desktop app's bundled
+  Node has no global WebSocket, which made the Supabase client throw on creation — so
+  sign-in, sync, and diagnostics stayed disabled even though the configuration loaded.
+  Fixed by shipping a WebSocket implementation with the engine.
+- **Parameter descriptions restored.** Hovering a control shows its explanation
+  (name — description · tip) in the bottom status bar again, not just its name/value.
+
 ## 0.4.24-beta — 2026-07-01
 
 ### Fixed
