@@ -19,11 +19,9 @@
   <!-- left region (scrolls if cramped) -->
   <div class="left scroll">
     {#if editor.isMobile}
-      <svg class="mlogo" width="26" height="26" viewBox="0 0 30 30">
-        <circle cx="9" cy="9" r="3.4" fill="#35c9d6" />
-        <circle cx="21" cy="9" r="3.4" fill="#4f6bed" />
-        <circle cx="15" cy="21" r="3.4" fill="#f5a623" />
-      </svg>
+      <button class="burger" aria-label="Menu" onclick={() => (editor.drawerOpen = true)}>
+        <span></span><span></span><span></span>
+      </button>
     {/if}
 
     <div class="preset">
@@ -37,19 +35,15 @@
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
     </div>
 
-    <div class="scenes">
-      <span class="mono scn-lbl">SCN</span>
-      <div class="scn-group">
-        {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
-          <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
-        {/each}
+    {#if !editor.isMobile}
+      <div class="scenes">
+        <span class="mono scn-lbl">SCN</span>
+        <div class="scn-group">
+          {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
+            <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+          {/each}
+        </div>
       </div>
-    </div>
-
-    {#if editor.isMobile}
-      <!-- tuner + tap-tempo live here on mobile (the desktop status strip is hidden) -->
-      <button class="mbtn" class:on={editor.tuner.active} onclick={() => editor.toggleTuner()} title="Tuner">♪ {editor.tuner.active ? (editor.tuner.note ?? '…') : 'Tune'}</button>
-      <button class="mbtn" onclick={() => editor.tapTempo()} title="Tap tempo">{editor.bpm}<span class="mono"> BPM</span></button>
     {/if}
   </div>
 
@@ -88,13 +82,12 @@
       </div>
     {/if}
 
-    <button class="addblk" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
+    <button class="addblk" class:icon={editor.isMobile} title="Add block" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
       <svg width="16" height="16" viewBox="0 0 16 16">
-        <circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.6" />
-        <path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.6" stroke-linecap="round" />
+        <circle cx="7" cy="7" r="5" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+        <path d="M10.6 10.6 L14 14" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" />
       </svg>
-      Add block
-      {#if !editor.isMobile}<span class="mono kbd">⌘K</span>{/if}
+      {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
     {#if !editor.isMobile}
@@ -234,8 +227,28 @@
     overflow-x: auto;
     overflow-y: hidden;
   }
-  .mlogo {
+  .burger {
     flex: none;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 11px;
+    cursor: pointer;
+  }
+  .burger span {
+    width: 17px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--text2);
+  }
+  .burger:active {
+    background: var(--surface2);
   }
   .right {
     flex: none;
@@ -348,26 +361,6 @@
     color: var(--accent-ink);
   }
 
-  /* mobile tuner / tempo buttons (desktop status strip is hidden on phones) */
-  .mbtn {
-    flex: none;
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 8px;
-    border: 1px solid var(--surface-3);
-    background: var(--panel-2);
-    color: var(--text2);
-    font-size: 12px;
-    font-weight: 700;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .mbtn.on {
-    background: rgba(53, 201, 214, 0.16);
-    border-color: var(--accent-border);
-    color: var(--accent);
-  }
-
   /* view switch */
   .view {
     display: flex;
@@ -422,6 +415,12 @@
     cursor: pointer;
     flex: none;
     white-space: nowrap;
+  }
+  .addblk.icon {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    justify-content: center;
   }
   .kbd {
     font-size: 10px;

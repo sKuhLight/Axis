@@ -19,7 +19,10 @@
     fc: { eid: 199, slug: 'fc', name: 'Footswitches' }
   };
 
+  const closeDrawer = () => (editor.drawerOpen = false);
+
   function pick(id: string, label: string) {
+    closeDrawer(); // mobile: dismiss the drawer on any nav pick
     if (id === 'build') {
       editor.openBuild();
       return;
@@ -60,48 +63,109 @@
   };
 
   const dot = $derived(
-    editor.conn.state === 'online'
-      ? 'var(--ok)'
-      : editor.conn.state === 'offline'
-        ? 'var(--danger)'
-        : 'var(--amber)'
+    editor.conn.state === 'online' ? 'var(--ok)' : editor.conn.state === 'offline' ? 'var(--danger)' : 'var(--amber)'
+  );
+  const connText = $derived(
+    editor.conn.state === 'online' ? `Connected${editor.conn.fw ? ` · FW ${editor.conn.fw}` : ''}` : editor.conn.state === 'offline' ? 'Offline' : 'Connecting…'
   );
 </script>
 
-<nav class="rail">
-  <div class="logo" aria-label="Axis">
-    <svg width="30" height="30" viewBox="0 0 30 30">
-      <circle cx="9" cy="9" r="3.4" fill="#35c9d6" />
-      <circle cx="21" cy="9" r="3.4" fill="#4f6bed" />
-      <circle cx="15" cy="21" r="3.4" fill="#f5a623" />
-      <path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="#3a3a44" stroke-width="1.6" />
-    </svg>
-  </div>
-  {#each RAIL as r}
-    <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
-      <span class="ic">{r.icon}</span>
-      <span class="sh">{r.short}</span>
+{#if !editor.isMobile}
+  <!-- ── desktop tool rail ── -->
+  <nav class="rail">
+    <div class="logo" aria-label="Axis">
+      <svg width="30" height="30" viewBox="0 0 30 30">
+        <circle cx="9" cy="9" r="3.4" fill="#35c9d6" />
+        <circle cx="21" cy="9" r="3.4" fill="#4f6bed" />
+        <circle cx="15" cy="21" r="3.4" fill="#f5a623" />
+        <path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="var(--border3)" stroke-width="1.6" />
+      </svg>
+    </div>
+    {#each RAIL as r}
+      <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
+        <span class="ic">{r.icon}</span>
+        <span class="sh">{r.short}</span>
+      </button>
+    {/each}
+    <div class="spacer"></div>
+    <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
+      <span class="ic">◐</span>
+      <span class="sh">Theme</span>
     </button>
-  {/each}
-  <div class="spacer"></div>
-  <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
-    <span class="ic">◐</span>
-    <span class="sh">Theme</span>
-  </button>
-  <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
-    {#if editor.cloud.user}
-      <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
-      {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
-    {:else}
-      <span class="ic">◈</span>
-    {/if}
-    <span class="sh">Axis</span>
-  </button>
-  <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
-    <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
-    <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>
-  </button>
-</nav>
+    <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
+      {#if editor.cloud.user}
+        <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
+        {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
+      {:else}
+        <span class="ic">◈</span>
+      {/if}
+      <span class="sh">Axis</span>
+    </button>
+    <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
+      <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
+      <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>
+    </button>
+  </nav>
+{:else if editor.drawerOpen}
+  <!-- ── mobile nav drawer (replaces the rail) ── -->
+  <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+  <div class="scrim" onclick={closeDrawer} role="presentation"></div>
+  <aside class="drawer">
+    <div class="d-head">
+      <svg width="26" height="26" viewBox="0 0 30 30" class="d-logo">
+        <circle cx="9" cy="9" r="3.4" fill="#35c9d6" />
+        <circle cx="21" cy="9" r="3.4" fill="#4f6bed" />
+        <circle cx="15" cy="21" r="3.4" fill="#f5a623" />
+      </svg>
+      <div class="d-title">
+        Axis
+        <div class="d-sub"><span class="d-led" style="background:{dot}"></span>{connText}</div>
+      </div>
+      <button class="d-x" aria-label="Close menu" onclick={closeDrawer}>✕</button>
+    </div>
+
+    <div class="d-body scroll">
+      <div class="d-nav">
+        {#each RAIL as r}
+          <button class="d-item" class:active={editor.railActive === r.id} onclick={() => pick(r.id, r.label)}>
+            <span class="d-ic">{r.icon}</span><span class="d-lbl">{r.label}</span>
+          </button>
+        {/each}
+      </div>
+
+      <div class="d-sec">SCENE</div>
+      <div class="d-scenes">
+        {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
+          <button class="d-scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+        {/each}
+      </div>
+
+      <div class="d-sec">DEFAULT VIEW</div>
+      <div class="d-seg">
+        <button class:on={editor.globalMode === 'basic'} onclick={() => editor.setGlobalMode('basic')}>Basic</button>
+        <button class:on={editor.globalMode === 'advanced'} onclick={() => editor.setGlobalMode('advanced')}>Advanced</button>
+      </div>
+
+      <div class="d-sec">STATUS</div>
+      <div class="d-status">
+        <button class="d-stat" class:on={editor.tuner.active} onclick={() => { editor.toggleTuner(); closeDrawer(); }}>
+          <span class="d-stat-ic">♪</span><span>Tuner</span><span class="d-stat-v mono">{editor.tuner.active ? (editor.tuner.note ?? '…') : ''}</span>
+        </button>
+        <button class="d-stat" onclick={() => editor.tapTempo()}>
+          <span class="d-stat-ic">◷</span><span>Tap tempo</span><span class="d-stat-v mono">{editor.bpm} BPM</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="d-foot">
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.themeOpen = true; }}><span class="d-ic">◐</span>Theme</button>
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openAxis('account'); }}>
+        <span class="d-ic">◈</span>{editor.cloud.user ? 'Account' : 'Sign in'}
+      </button>
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openPorts(); }}><span class="d-led" style="background:{dot}"></span>Connection</button>
+    </div>
+  </aside>
+{/if}
 
 {#if editor.portsOpen}
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
@@ -166,15 +230,15 @@
   }
   .item.active {
     color: var(--accent);
-    background: rgba(53, 201, 214, 0.12);
-    border-color: rgba(53, 201, 214, 0.3);
+    background: var(--accent-tint);
+    border-color: var(--accent-border);
   }
   .acct { position: relative; }
   .av {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent, var(--accent));
+    background: var(--accent);
     color: var(--accentink);
     font: 800 11px/28px 'JetBrains Mono', monospace;
     text-align: center;
@@ -218,6 +282,225 @@
     background: var(--surface-2);
     border-color: var(--surface-3);
   }
+  .led {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  }
+  .fw {
+    font-size: 8px;
+    color: var(--border3);
+  }
+
+  /* ── mobile drawer ── */
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(6, 6, 8, 0.6);
+    backdrop-filter: blur(3px);
+    animation: axsOverlay 0.14s ease;
+  }
+  .drawer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 151;
+    width: 286px;
+    max-width: 84vw;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
+    border-right: 1px solid var(--border2);
+    box-shadow: 8px 0 44px rgba(0, 0, 0, 0.55);
+    animation: axsDrawer 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+    padding-top: env(safe-area-inset-top);
+  }
+  .d-head {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 16px 15px;
+    border-bottom: 1px solid var(--border);
+    flex: none;
+  }
+  .d-logo { flex: none; }
+  .d-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text);
+  }
+  .d-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--textdim);
+    margin-top: 2px;
+  }
+  .d-led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .d-x {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--bg2);
+    color: var(--textdim);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .d-x:active { background: var(--surface2); }
+  .d-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 12px 8px;
+  }
+  .d-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .d-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 13px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--text2);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .d-item:active { background: var(--surface2); }
+  .d-item.active {
+    color: var(--accent);
+    background: var(--accent-tint);
+    border-color: var(--accent-border);
+  }
+  .d-ic {
+    font-size: 18px;
+    width: 22px;
+    text-align: center;
+    flex: none;
+  }
+  .d-sec {
+    font: 700 9px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    color: var(--textfaint);
+    margin: 16px 4px 9px;
+  }
+  .d-scenes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+  }
+  .d-scn {
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--textdim);
+    font: 700 13px/1 var(--font-mono);
+    cursor: pointer;
+  }
+  .d-scn.on {
+    background: var(--accent);
+    color: var(--accentink);
+    border-color: var(--accent);
+  }
+  .d-seg {
+    display: flex;
+    gap: 6px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 4px;
+  }
+  .d-seg button {
+    flex: 1;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--textdim);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .d-seg button.on {
+    background: var(--accent);
+    color: var(--accentink);
+  }
+  .d-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .d-stat {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: 44px;
+    padding: 0 13px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface);
+    color: var(--text2);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .d-stat.on {
+    color: var(--accent);
+    background: var(--accent-tint);
+    border-color: var(--accent-border);
+  }
+  .d-stat-ic { font-size: 16px; width: 20px; text-align: center; flex: none; }
+  .d-stat-v {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--textdim);
+  }
+  .d-foot {
+    flex: none;
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+  }
+  .d-foot-b {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 9px 4px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface);
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .d-foot-b:active { background: var(--surface2); }
 
   /* connection picker popover */
   .ppbg {
@@ -231,6 +514,7 @@
     bottom: 12px;
     z-index: 301;
     width: 340px;
+    max-width: calc(100vw - 24px);
     max-height: 70vh;
     display: flex;
     flex-direction: column;
@@ -288,7 +572,7 @@
   .pp-auto.on {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(53, 201, 214, 0.1);
+    background: var(--accent-tint);
   }
   .pp-list {
     display: flex;
@@ -314,7 +598,7 @@
   }
   .pp-row.on {
     border-color: var(--accent);
-    background: rgba(53, 201, 214, 0.1);
+    background: var(--accent-tint);
   }
   .pp-row.fr {
     color: var(--text);
@@ -364,7 +648,7 @@
     background: none;
     border: none;
     border-top: 1px solid var(--border-2, var(--border2));
-    color: var(--accent, var(--accent));
+    color: var(--accent);
     font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
@@ -373,22 +657,12 @@
   .pp-adv:hover {
     filter: brightness(1.15);
   }
-  .led {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-  }
-  .fw {
-    font-size: 8px;
-    color: var(--border3);
-  }
-  /* phones: slim icon-only rail to reclaim width */
+  /* on phones the connection popover is centered near the bottom, not anchored to the (hidden) rail */
   @media (max-width: 760px) {
-    .rail {
-      width: 46px;
-    }
-    .item .sh {
-      display: none;
+    .pp {
+      left: 12px;
+      right: 12px;
+      width: auto;
     }
   }
 </style>
