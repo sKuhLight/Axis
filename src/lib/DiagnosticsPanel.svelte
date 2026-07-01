@@ -4,6 +4,7 @@
   //  • the major-error popup (editor.reportPrompt): per-incident "Upload Debug Log" nudge
   import { editor } from '$lib/editor.svelte';
   import Icon from '$lib/Icon.svelte';
+  import { LEGAL, openExternal } from '$lib/legal';
 
   const t = $derived(editor.telemetry);
   let showDetail = $state(false); // "View what's sent" disclosure
@@ -57,7 +58,7 @@
         </button>
         {#if !t.uploadEnabled}<p class="note dim">Report upload isn't configured in this build.</p>{/if}
 
-        <p class="legal">Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
+        <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
       </div>
     </div>
   </div>
