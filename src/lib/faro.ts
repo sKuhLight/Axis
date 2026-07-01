@@ -42,12 +42,14 @@ export async function initFaro(opts: { url: string; version: string; instanceId:
 export function pauseFaro(): void { faro?.pause(); }
 export function resumeFaro(): void { faro?.unpause(); }
 
-/** Push a device-comm failure as a Faro error with device context. This is the signal that actually
- *  finds device bugs — the real failures (grid/blocks decode 503s, detect/transport failures) are
- *  handled server-side and never surface as uncaught JS errors, so we report them explicitly. */
+/** Push a server-side failure as a Faro error with device context. This is the fleet signal that actually
+ *  finds bugs — the real failures (device decode 5xx, cloud/telemetry 5xx, transport/network errors) are
+ *  handled server-side and never surface as uncaught JS errors, so we report them explicitly. `kind`
+ *  (device-comm | cloud | telemetry | engine) groups them; route/status/model/firmware drive the dashboard. */
 export function faroDeviceError(info: { kind: string; route?: string; status?: number; message?: string; model?: string; firmware?: string }): void {
   if (!faro) return;
-  const err = new Error(`device-comm: ${info.kind}${info.route ? ' ' + info.route : ''}${info.status ? ' ' + info.status : ''}`);
+  const err = new Error(`${info.kind}:${info.route ? ' ' + info.route : ''}${info.status ? ' ' + info.status : ''}`);
+  err.name = `axis-${info.kind}`; // stable error name → groupable in Faro/Loki
   faro.api.pushError(err, {
     context: {
       kind: info.kind,

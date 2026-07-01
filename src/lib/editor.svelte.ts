@@ -2,7 +2,7 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError } from './forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { onMutation, notifyMutation } from './syncBus';
@@ -351,6 +351,7 @@ class EditorStore {
   init = async () => {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
+    setRequestFailureReporter(this.#onReqFailure); // auto-report every 5xx/network failure to Faro
     this.#initUpdater();
     this.#initCloud();
     this.#initTelemetry();
@@ -548,16 +549,29 @@ class EditorStore {
       }
     } catch { /* no profile yet / engine not ready */ }
   };
-  /** On a major error (device-comm 5xx, detect failure, render crash), nudge the user to upload a debug
-   *  report — debounced to at most once per category per 5 min so it never spams. The actual upload is an
-   *  explicit click in the prompt (per-incident consent). Always records the event for the trail. */
-  offerDebugReport = (trigger: NonNullable<typeof this.reportPrompt>) => {
+  /** Silently report a failure to Faro with device context (model/firmware/route/status) + record it for
+   *  the debug-report trail. This is the FLEET signal — the real device/cloud bugs are server-side 5xx, not
+   *  JS crashes, so we report every one. No UI; opt-in gated (only sends when the user enabled telemetry). */
+  reportFailure = (trigger: NonNullable<typeof this.reportPrompt>) => {
     this.recordEvent('error', `${trigger.kind} ${trigger.route ?? ''} ${trigger.status ?? ''} ${trigger.message ?? ''}`.trim());
-    // Live telemetry: report the failure WITH device context (model/firmware/route/status) — this is the
-    // signal that finds device bugs, since the real failures are server-side 503s, not JS crashes.
     if (this.#faroStarted) {
       import('./faro').then((m) => m.faroDeviceError({ ...trigger, model: this.conn.device, firmware: this.conn.fw })).catch(() => {});
     }
+  };
+  /** Every ForgeFX request failure (5xx or network) auto-reports here — registered on the client so we
+   *  don't have to remember to instrument each call site. Classifies the route into a coarse `kind` so the
+   *  Grafana dashboard can group (device-comm / cloud / telemetry / engine). */
+  #onReqFailure = (info: { route: string; method: string; status: number; message: string }) => {
+    const kind = info.route.startsWith('/cloud') ? 'cloud'
+      : info.route.startsWith('/telemetry') ? 'telemetry'
+      : info.status === 0 ? 'engine' : 'device-comm';
+    this.reportFailure({ kind, route: info.route, status: info.status, message: info.message });
+  };
+  /** On a MAJOR error (grid decode fail, detect failure), also nudge the user to upload a full debug
+   *  report — debounced per category so it never spams. Reporting to Faro already happened via the req
+   *  hook / reportFailure; this just adds the explicit-upload prompt on top for the big ones. */
+  offerDebugReport = (trigger: NonNullable<typeof this.reportPrompt>) => {
+    this.reportFailure(trigger);
     if (!this.telemetry.uploadEnabled) return; // nothing to upload to
     const now = Date.now();
     if (now - (this.#lastOffer[trigger.kind] ?? 0) < 5 * 60_000) return;
