@@ -20,11 +20,14 @@ function b64ToArrayBuffer(b64: string): ArrayBuffer {
 export async function connectRemote(
   supabase: SupabaseClient,
   userId: string,
-  opts: { requestTimeoutMs?: number } = {}
+  opts: { requestTimeoutMs?: number; onEvent?: (e: unknown) => void } = {}
 ): Promise<{ transport: RemoteTransport; channel: RealtimeChannel; close: () => void }> {
   const reqTimeout = opts.requestTimeoutMs ?? 30000;
   const channel = supabase.channel(`remote:${userId}`, { config: { private: true, broadcast: { ack: false } } });
   const pending = new Map<string, (r: RemoteResponse) => void>();
+
+  // Live change events pushed by the host (param edits, grid/preset/scene changes) → keep the remote UI in sync.
+  if (opts.onEvent) channel.on('broadcast', { event: 'evt' }, (msg: { payload?: unknown }) => opts.onEvent!(msg.payload));
 
   channel.on('broadcast', { event: 'res' }, (msg: { payload?: unknown }) => {
     const r = msg.payload as ResPayload | undefined;
