@@ -42,7 +42,10 @@ const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KE
 // value: unset → show the first-run prompt once; set → respect the stored consent silently.
 const DECIDED_KEY = 'axs.telemetry.decided';
 const loadDecided = (): boolean => { try { return localStorage.getItem(DECIDED_KEY) === '1'; } catch { return false; } };
-// First-run guided tour: shown once (after consent). TOUR_LAST = index of the last step; must
+// One-time "support development on Ko-fi" nudge (voluntary donation — allowed in-app).
+const KOFI_SEEN_KEY = 'axs.kofi.seen';
+const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
+// First-run guided tour: shown once (after consent + Ko-fi). TOUR_LAST = index of the last step; must
 // match the STEPS array length in Tour.svelte (9 steps → 0..8).
 const TOUR_KEY = 'axs.tour.done';
 const TOUR_LAST = 8;
@@ -506,14 +509,18 @@ class EditorStore {
       else this.#maybeShowKofi();
     } catch { /* telemetry disabled / engine not ready */ }
   };
-  /** First-run sequence hand-off. (The funding nudge was removed — first-run is now consent → tour.) */
+  /** Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
+   *  consent prompt is currently up (never stack two first-run popups). If Ko-fi won't show, hand off to
+   *  the tour so the first-run sequence continues (consent → Ko-fi → tour). */
   #maybeShowKofi = () => {
     if (this.consentPromptOpen) return;
-    this.#maybeStartTour();
+    if (loadKofiSeen()) { this.#maybeStartTour(); return; }
+    this.kofiNoticeOpen = true;
   };
   dismissKofiNotice = () => {
     this.kofiNoticeOpen = false;
-    this.#maybeStartTour();
+    try { localStorage.setItem(KOFI_SEEN_KEY, '1'); } catch { /* */ }
+    this.#maybeStartTour(); // continue the first-run sequence
   };
   /** First-run guided tour. Auto-starts once, only after the consent + Ko-fi notices are resolved so
    *  nothing stacks; persists `axs.tour.done` on finish/skip. Replayable via startTour() from the hub. */
