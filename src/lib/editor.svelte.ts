@@ -10,6 +10,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { surfApplyRemote } from './surfaceStore.svelte';
+import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent } from './types';
 
@@ -376,9 +377,14 @@ class EditorStore {
     this.swipeControls = loadSwipe();
     setRequestFailureReporter(this.#onReqFailure); // auto-report every 5xx/network failure to Faro
     this.loadPorts(); // know the transport early (drives slowLink → meter throttling over MIDI)
-    this.#initUpdater();
+    // Desktop-only first-run + update flows: the remote web app has no desktop to update, and the tour /
+    // telemetry-consent / Ko-fi first-run popups belong to the PC install (the host handles telemetry), so
+    // skip them in the remote build — otherwise every browser session nags with banners it can't act on.
+    if (!isRemoteBuild()) {
+      this.#initUpdater();
+      this.#initTelemetry();
+    }
     this.#initCloud();
-    this.#initTelemetry();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
