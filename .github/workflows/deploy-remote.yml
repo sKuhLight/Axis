@@ -1,0 +1,69 @@
+name: deploy-remote
+
+# Builds the Axis remote web app (VITE_AXIS_REMOTE=1) and publishes it into the axis-website repo, whose
+# Cloudflare Worker (Static Assets) auto-deploys on push → serves it at axisapp.live. The SPA lands at the
+# site root (index.html + _app/**); the landing (welcome.html) and legal pages stay untouched.
+#
+# One-time setup in the Axis repo (Settings → Secrets and variables → Actions):
+#   • Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  (publishable anon key — safe to expose)
+#   • Secret:    AXIS_WEBSITE_TOKEN  (a token with contents:write on sKuhLight/axis-website)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**', 'static/**', 'svelte.config.js', 'vite.config.ts', 'package.json', 'package-lock.json']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-remote
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skip (don't fail) until the deploy is configured: repo variables VITE_SUPABASE_URL/ANON_KEY +
+    # secret AXIS_WEBSITE_TOKEN. Until then, axisapp.live is updated by a manual build+push.
+    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build remote SPA
+        run: npm run build
+        env:
+          VITE_AXIS_REMOTE: '1'
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Checkout axis-website
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/axis-website
+          token: ${{ secrets.AXIS_WEBSITE_TOKEN }}
+          path: axis-website
+
+      - name: Sync SPA into axis-website/public (preserve landing + legal pages)
+        run: |
+          rm -rf axis-website/public/_app
+          cp -r build/_app axis-website/public/_app
+          cp build/index.html axis-website/public/index.html
+
+      - name: Commit & push (triggers Cloudflare auto-deploy)
+        run: |
+          cd axis-website
+          git config user.name "axis-deploy"
+          git config user.email "deploy@axisapp.live"
+          git add -A public
+          if git diff --cached --quiet; then echo "no changes to deploy"; exit 0; fi
+          git commit -m "deploy: axis remote web app"
+          git push

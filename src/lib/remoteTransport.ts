@@ -6,13 +6,25 @@
 import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import type { RemoteResponse, RemoteTransport } from './forgefx';
 
-type ResPayload = { id?: string; status: number; contentType: string; body: string; encoding: 'utf8' | 'base64' };
+type ResPayload = { id?: string; status: number; contentType: string; body: string; encoding: 'utf8' | 'base64' | 'gzip' };
 
-function b64ToArrayBuffer(b64: string): ArrayBuffer {
+function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
+  const buf = new ArrayBuffer(bin.length);
+  const bytes = new Uint8Array(buf);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
+  return bytes;
+}
+
+/** Decode one relay response body into what req() expects: a string for text/JSON, an ArrayBuffer for binary.
+ *  Handles the host's three framings — utf8 (small text), base64 (small binary), gzip (anything > 2KB). */
+async function decodeBody(r: ResPayload): Promise<string | ArrayBuffer> {
+  const texty = /json|text|javascript|xml|svg/i.test(r.contentType);
+  if (r.encoding === 'utf8') return r.body;
+  if (r.encoding === 'base64') return b64ToBytes(r.body).buffer;
+  // gzip: inflate the base64'd gzip stream, then hand back a string (text) or ArrayBuffer (binary)
+  const inflated = await new Response(new Blob([b64ToBytes(r.body)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  return texty ? new TextDecoder().decode(inflated) : inflated;
 }
 
 /** Join the authenticated user's private channel and return a RemoteTransport + teardown. `supabase` must
@@ -35,14 +47,21 @@ export async function connectRemote(
     const resolve = pending.get(r.id);
     if (!resolve) return;
     pending.delete(r.id);
-    resolve({ status: r.status, contentType: r.contentType, body: r.encoding === 'base64' ? b64ToArrayBuffer(r.body) : r.body });
+    decodeBody(r)
+      .then((body) => resolve({ status: r.status, contentType: r.contentType, body }))
+      .catch(() => resolve({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'decode failed' }) }));
   });
 
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('realtime subscribe timed out — is your PC online + remote enabled?')), 12000);
     channel.subscribe((st: string) => {
-      if (st === 'SUBSCRIBED') { clearTimeout(t); resolve(); }
-      else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') { clearTimeout(t); reject(new Error(`realtime ${st}`)); }
+      if (st === 'SUBSCRIBED') {
+        clearTimeout(t);
+        // Announce presence so the host only broadcasts live device events while a remote is actually
+        // watching (otherwise local editing would spam the channel for no one).
+        channel.track({ role: 'remote' }).catch(() => {});
+        resolve();
+      } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') { clearTimeout(t); reject(new Error(`realtime ${st}`)); }
     });
   });
 

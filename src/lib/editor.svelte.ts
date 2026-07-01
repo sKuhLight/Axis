@@ -2,13 +2,14 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter, isRemote } from './forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter, isRemote, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
+import { surfApplyRemote } from './surfaceStore.svelte';
 import { paramValue } from './format';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent } from './types';
 
@@ -41,10 +42,7 @@ const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KE
 // value: unset → show the first-run prompt once; set → respect the stored consent silently.
 const DECIDED_KEY = 'axs.telemetry.decided';
 const loadDecided = (): boolean => { try { return localStorage.getItem(DECIDED_KEY) === '1'; } catch { return false; } };
-// One-time "support development on Ko-fi" nudge.
-const KOFI_SEEN_KEY = 'axs.kofi.seen';
-const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
-// First-run guided tour: shown once (after consent + Ko-fi). TOUR_LAST = index of the last step; must
+// First-run guided tour: shown once (after consent). TOUR_LAST = index of the last step; must
 // match the STEPS array length in Tour.svelte (9 steps → 0..8).
 const TOUR_KEY = 'axs.tour.done';
 const TOUR_LAST = 8;
@@ -508,18 +506,14 @@ class EditorStore {
       else this.#maybeShowKofi();
     } catch { /* telemetry disabled / engine not ready */ }
   };
-  /** Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
-   *  consent prompt is currently up (never stack two first-run popups). If Ko-fi won't show, hand off to
-   *  the tour so the first-run sequence continues (consent → Ko-fi → tour). */
+  /** First-run sequence hand-off. (The funding nudge was removed — first-run is now consent → tour.) */
   #maybeShowKofi = () => {
     if (this.consentPromptOpen) return;
-    if (loadKofiSeen()) { this.#maybeStartTour(); return; }
-    this.kofiNoticeOpen = true;
+    this.#maybeStartTour();
   };
   dismissKofiNotice = () => {
     this.kofiNoticeOpen = false;
-    try { localStorage.setItem(KOFI_SEEN_KEY, '1'); } catch { /* */ }
-    this.#maybeStartTour(); // continue the first-run sequence
+    this.#maybeStartTour();
   };
   /** First-run guided tour. Auto-starts once, only after the consent + Ko-fi notices are resolved so
    *  nothing stacks; persists `axs.tour.done` on finish/skip. Replayable via startTour() from the hub. */
@@ -771,6 +765,15 @@ class EditorStore {
           const p = this.params.find((x) => x.id === e.paramId);
           if (p && p.norm !== e.norm) { p.norm = e.norm; this.params = [...this.params]; }
         }
+        // keep the on-grid block level indicator (meter fill) in sync too — it reads from `meters`, which the
+        // open-block knob update above doesn't touch, so without this the tile wouldn't move either direction.
+        const m = this.meters[e.effectId];
+        if (m) {
+          const prev = m.vals[e.paramId];
+          const value = prev ? paramValue({ norm: e.norm, min: prev.min, max: prev.max, unit: prev.unit, log: prev.log }) : 0;
+          m.vals = { ...m.vals, [e.paramId]: { ...(prev ?? { value: 0 }), norm: e.norm, value } };
+          this.meters = { ...this.meters, [e.effectId]: { ...m } };
+        }
         break;
       }
       case 'changed': {
@@ -780,7 +783,18 @@ class EditorStore {
         this.#eventReload = setTimeout(() => { this.load(); }, 250);
         break;
       }
+      case 'config': if (e.origin !== CLIENT_ID) this.#applyConfig(e.id, e.data); break; // ignore our own echo
     }
+  };
+  /** Apply a shared config doc pushed by another UI (host↔remote). Sets local state + the localStorage cache
+   *  directly — never re-saves (which would re-broadcast and loop). */
+  #applyConfig = (id: string, data: unknown) => {
+    const cache = (k: string) => { try { localStorage.setItem(k, JSON.stringify(data)); } catch { /* */ } };
+    if (id === 'swipe' && data && typeof data === 'object') { this.swipeControls = data as Record<string, SwipeCtrl[]>; cache('axis.swipe.v1'); }
+    else if (id === 'layouts' && data && typeof data === 'object') { this.customLayouts = data as Record<string, TabDef[]>; cache('axis.layouts.v1'); }
+    else if (id === 'surface') surfApplyRemote(data);
+    else if (id === 'savedFilters') cache('axs.pb.saved');
+    else if (id === 'tags' || id === 'collections' || id === 'favs') library.applyRemoteConfig(id, data);
   };
   // pull current scene + tempo once at load (device → UI)
   #syncTelemetry = async () => {

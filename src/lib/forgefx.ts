@@ -27,6 +27,10 @@ import type {
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
+// Per-tab client id, stamped onto config writes (putDoc) so the live cross-UI sync can tell a UI's own echo
+// from a genuine change made elsewhere (host↔remote). See editor.applyDeviceEvent('config').
+export const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 class ForgeError extends Error {
   constructor(
     public status: number,
@@ -55,25 +59,58 @@ const reportFailure = (route: string, method: string, status: number, message: s
 export type RemoteResponse = { status: number; contentType: string; body: string | ArrayBuffer };
 export type RemoteTransport = (rq: { method: string; path: string; body?: string }) => Promise<RemoteResponse>;
 let remote: RemoteTransport | null = null;
-export function setRemoteTransport(fn: RemoteTransport | null): void { remote = fn; }
+// Latency layer for remote mode: coalesce identical in-flight GETs into one relay round-trip, and keep a
+// session cache for device-static endpoints (catalogs/help/address models) so opening blocks + dropdowns
+// doesn't re-hit the relay every time. Cleared whenever the transport changes (connect / reconnect).
+const remoteInflight = new Map<string, Promise<unknown>>();
+/** GET endpoints whose result is fixed for the connected device — safe to cache for the whole session. */
+function remoteCacheable(path: string): boolean {
+  const p = path.split('?')[0] ?? path;
+  return (
+    p === '/blocks' ||
+    p === '/cab/irs' ||
+    p === '/mod/model' ||
+    p === '/fc/model' ||
+    /^\/blocks\/[^/]+\/(types|params|help)$/.test(p) ||
+    /^\/help\//.test(p)
+  );
+}
+export function setRemoteTransport(fn: RemoteTransport | null): void {
+  remote = fn;
+  remoteInflight.clear();
+}
 export const isRemote = (): boolean => remote !== null;
+
+/** One relay round-trip with identical parsing + failure reporting as local mode. */
+async function relayReq<T>(path: string, method: string, init?: RequestInit): Promise<T> {
+  let r: RemoteResponse;
+  try {
+    r = await remote!({ method, path, body: typeof init?.body === 'string' ? init.body : undefined });
+  } catch (e) {
+    reportFailure(path, method, 0, (e as Error)?.message ?? 'relay error');
+    throw e;
+  }
+  if (r.status < 200 || r.status >= 300) {
+    reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`); // self-filters to 5xx/0
+    throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
+  }
+  return (r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : r.body) as T;
+}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET';
-  // ── remote mode: route the request through the relay transport ──
+  // ── remote mode: route the request through the relay transport (with cache + in-flight dedup) ──
   if (remote) {
-    let r: RemoteResponse;
-    try {
-      r = await remote({ method, path, body: typeof init?.body === 'string' ? init.body : undefined });
-    } catch (e) {
-      reportFailure(path, method, 0, (e as Error)?.message ?? 'relay error');
-      throw e;
+    if (method === 'GET') {
+      const hit = remoteInflight.get(path);
+      if (hit) return hit as Promise<T>;
+      const p = relayReq<T>(path, method, init);
+      const keep = remoteCacheable(path); // session-cache static endpoints; otherwise just dedup in-flight
+      remoteInflight.set(path, p);
+      p.then(() => { if (!keep) remoteInflight.delete(path); }, () => remoteInflight.delete(path));
+      return p;
     }
-    if (r.status < 200 || r.status >= 300) {
-      reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`); // self-filters to 5xx/0
-      throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
-    }
-    return (r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : r.body) as T;
+    return relayReq<T>(path, method, init);
   }
   // ── local mode: HTTP to ForgeFX (default) ──
   // Serial-backed requests are serialized on the server; under load a few can queue.
@@ -178,7 +215,7 @@ export const forgefx = {
   remoteEnable: (on: boolean) => req<{ enabled: boolean; connected: boolean; userId: string | null; error?: string }>('/remote/enable', { method: 'POST', body: JSON.stringify({ on }) }),
   // ── persistent store (Axis config / metadata) ──
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
-  putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data }) }),
+  putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data, origin: CLIENT_ID }) }),
   listDocs: <T>(c: string) => req<{ docs: { id: string; data: T; updatedAt: number }[] }>(`/store/${c}`),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
   presetSummary: (n: number, full = false) => req<PresetSummary>(`/presets/${n}/summary${full ? '?full=1' : ''}`),

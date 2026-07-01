@@ -4,11 +4,35 @@
 // unchanged — every /api call is routed to the user's PC. In the desktop build this is inert (active=false).
 import { browserSupabase, isRemoteBuild, remoteConfigured } from './cloudBrowser';
 import { connectRemote } from './remoteTransport';
-import { setRemoteTransport } from './forgefx';
+import { setRemoteTransport, forgefx } from './forgefx';
 import { editor } from './editor.svelte';
+import { library } from './library.svelte';
+import { surfInit } from './surfaceStore.svelte';
 import type { DeviceEvent } from './types';
 
 type Phase = 'signin' | 'connecting' | 'ready' | 'error';
+
+/** Pull the user's Axis config from their PC (over the freshly-installed relay transport) so the remote UI
+ *  mirrors the host exactly — same tags, collections, favorites, layouts, quick-actions (swipe) and preset
+ *  library. These docs already sync to the cloud + live in the host's ForgeFX store; the remote just reads
+ *  them. Layout/swipe/filter keys are written to localStorage BEFORE editor.init() so its loaders pick them
+ *  up; tags/collections/favs + the preset index go straight into the library store. */
+async function hydrateRemoteConfig(): Promise<void> {
+  const get = async (id: string): Promise<unknown> => {
+    try { return (await forgefx.getDoc<unknown>('config', id))?.data ?? null; } catch { return null; }
+  };
+  const [tags, collections, favs, savedFilters, layouts, swipe, index] = await Promise.all(
+    ['tags', 'collections', 'favs', 'savedFilters', 'layouts', 'swipe', 'library'].map(get)
+  );
+  const put = (k: string, v: unknown) => { if (v != null) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* */ } } };
+  put('axis.layouts.v1', layouts);   // editor.init() → loadLayouts() reads this (block editor tab layouts)
+  put('axis.swipe.v1', swipe);       // → loadSwipe() (the block quick-actions / swipe controls)
+  put('axs.pb.saved', savedFilters); // Preset Browser saved filters
+  await Promise.all([
+    library.hydrate({ tags, collections, favs, index: index as { gz?: string } | null }),
+    surfInit() // pull the control-surface boards/arrange/quick-actions (config/surface) from the host
+  ]);
+}
 
 class RemoteBoot {
   /** True when this is the remote web app (VITE_AXIS_REMOTE=1), not the desktop build. */
@@ -53,6 +77,9 @@ class RemoteBoot {
       const { transport, close } = await connectRemote(sb, userId, { onEvent: (e) => editor.applyDeviceEvent(e as DeviceEvent) });
       setRemoteTransport(transport);
       this.#close = close;
+      // Now that the relay is live, pull the host's Axis config (tags/layouts/quick-actions/library) so the
+      // remote matches the PC before the app starts. Best-effort — a failure here shouldn't block control.
+      try { await hydrateRemoteConfig(); } catch { /* config pull failed — proceed with an empty local config */ }
       this.phase = 'ready';
     } catch (e) {
       this.phase = 'error';

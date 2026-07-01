@@ -8,6 +8,7 @@
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
   import { idealIds } from './layouts';
+  import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
 
@@ -150,7 +151,7 @@
   const GKEY = 'axs.surface2.grid';
   function loadGrid() {
     try {
-      const j = JSON.parse(localStorage.getItem(GKEY) || 'null');
+      const j = JSON.parse(surfGet(GKEY) || 'null');
       if (j) {
         cols = clamp(j.cols ?? cols, 4, 24);
         rows = clamp(j.rows ?? rows, 4, 8);
@@ -163,11 +164,7 @@
     }
   }
   function saveGrid() {
-    try {
-      localStorage.setItem(GKEY, JSON.stringify({ cols, rows, compact }));
-    } catch {
-      /* */
-    }
+    surfSet(GKEY, JSON.stringify({ cols, rows, compact }));
   }
   // ── Axis-Layouts: named layout profiles per context (slug). "Default" = device-authentic (seeded
   // from the served layout), "Blank" = empty canvas, plus user-created copies. The ACTIVE profile's
@@ -186,10 +183,10 @@
   }
   function loadProfileBoard(s: string, prof: string): Board {
     try {
-      const raw = localStorage.getItem(bKey(s, prof));
+      const raw = surfGet(bKey(s, prof));
       if (raw) return reconcile(JSON.parse(raw));
       if (prof === 'Default') {
-        const legacy = localStorage.getItem(LEGACY_KEY(s)); // carry a pre-profile board into Default
+        const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem(LEGACY_KEY(s)) : null; // carry a pre-profile board into Default
         if (legacy) return reconcile(JSON.parse(legacy));
       }
     } catch {
@@ -198,19 +195,11 @@
     return seedFor(prof);
   }
   function saveMeta(s: string) {
-    try {
-      if (profileMeta[s]) localStorage.setItem(PMKEY(s), JSON.stringify(profileMeta[s]));
-    } catch {
-      /* */
-    }
+    if (profileMeta[s]) surfSet(PMKEY(s), JSON.stringify(profileMeta[s]));
   }
   function saveBoard(s: string) {
     if (!s || !bySlug[s]) return;
-    try {
-      localStorage.setItem(bKey(s, profileMeta[s]?.active ?? 'Default'), JSON.stringify(bySlug[s]));
-    } catch {
-      /* */
-    }
+    surfSet(bKey(s, profileMeta[s]?.active ?? 'Default'), JSON.stringify(bySlug[s]));
   }
   // switch the active profile (saving the current one first); reseeds Default/Blank or loads a custom copy
   function setProfile(name: string) {
@@ -236,11 +225,7 @@
     const copy: Board = JSON.parse(JSON.stringify(bySlug[slug] ?? defaultBoard()));
     profileMeta = { ...profileMeta, [slug]: { active: name, names: [...meta.names, name] } };
     saveMeta(slug);
-    try {
-      localStorage.setItem(bKey(slug, name), JSON.stringify(copy));
-    } catch {
-      /* */
-    }
+    surfSet(bKey(slug, name), JSON.stringify(copy));
     bySlug = { ...bySlug, [slug]: copy };
   }
   // remove a custom profile (built-ins stay); fall back to Default
@@ -252,11 +237,7 @@
     const active = meta.active === name ? 'Default' : meta.active;
     profileMeta = { ...profileMeta, [slug]: { active, names } };
     saveMeta(slug);
-    try {
-      localStorage.removeItem(bKey(slug, name));
-    } catch {
-      /* */
-    }
+    surfRemove(bKey(slug, name));
     bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, active) };
   }
   function toggleProfMenu(e: MouseEvent) {
@@ -353,17 +334,20 @@
     return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards };
   }
 
-  // load a slug's board (storage → reconcile, else default) when it first appears or the catalog changes
+  // load a slug's board (storage → reconcile, else default) when it first appears, the catalog changes, OR a
+  // live config push from another UI bumps surfRev() (host↔remote arrange sync).
   let loadedSig = '';
   $effect(() => {
-    const sig = slug + '|' + catalog.map((c) => c.key).join(',');
+    const sig = slug + '|' + catalog.map((c) => c.key).join(',') + '|' + surfRev();
     if (!slug || catalog.length <= 1 || sig === loadedSig) return;
+    const revChanged = loadedSig.split('|').pop() !== String(surfRev());
     loadedSig = sig;
-    // restore (or initialise) this context's profile set, then load the active profile's board
+    // restore (or initialise) this context's profile set, then load the active profile's board. Re-read the
+    // meta from the store when a remote push lands (revChanged) so page renames/profiles sync too.
     let meta = profileMeta[slug];
-    if (!meta) {
+    if (!meta || revChanged) {
       try {
-        const raw = localStorage.getItem(PMKEY(slug));
+        const raw = surfGet(PMKEY(slug));
         if (raw) meta = JSON.parse(raw);
       } catch {
         /* */
@@ -1426,6 +1410,11 @@
     position: relative;
     overflow-x: hidden; /* board is a zoom grid — it wraps to new rows, never scrolls sideways */
     overflow-y: auto;
+    /* Reserve the scrollbar gutter so clientWidth stays constant whether or not the vertical scrollbar is
+       showing. Without this, the board's cell size (derived from clientWidth) and its height (rows × cell)
+       form a feedback loop: the scrollbar appears → width drops → height drops → scrollbar hides → repeat,
+       which shows up as the whole board jittering left/right a few px in arrange mode. */
+    scrollbar-gutter: stable;
     padding: 16px;
     display: flex;
     justify-content: center;

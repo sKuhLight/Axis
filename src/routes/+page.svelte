@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { editor } from '$lib/editor.svelte';
+  import { surfInit } from '$lib/surfaceStore.svelte';
   import ToolRail from '$lib/ToolRail.svelte';
   import TopBar from '$lib/TopBar.svelte';
   import SignalGrid from '$lib/SignalGrid.svelte';
@@ -30,10 +31,16 @@
   function startApp() {
     if (started) return;
     started = true;
+    void surfInit(); // load control-surface layouts from the config store (host: cache is already seeded)
     editor.init();
     editor.poll();
-    tp = setInterval(() => editor.poll(), 5000);
-    tw = setInterval(() => editor.watchPreset(), 4000);
+    // Remote mode is event-driven — the host pushes live param/grid/scene/tempo/config changes over the
+    // relay, so we don't poll aggressively (each poll is a metered Realtime round-trip). A slow heartbeat is
+    // enough to track connection status + catch device-initiated preset changes. Local mode stays snappy.
+    const pollMs = remoteBoot.active ? 20000 : 5000;
+    const watchMs = remoteBoot.active ? 25000 : 4000;
+    tp = setInterval(() => editor.poll(), pollMs);
+    tw = setInterval(() => editor.watchPreset(), watchMs);
   }
   // Remote build: start the app the moment the relay session goes live.
   $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
