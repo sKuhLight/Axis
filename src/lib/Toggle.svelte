@@ -44,7 +44,7 @@
     text-overflow: ellipsis;
   }
   .val.on {
-    color: #5fd98f;
+    color: var(--ok);
   }
   .switch {
     position: relative;

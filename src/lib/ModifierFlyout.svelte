@@ -546,7 +546,7 @@
   }
   .srcbox.on {
     background: var(--surface2);
-    border: 1px solid #2c5d63;
+    border: 1px solid var(--accent-border);
     color: var(--accentbright);
   }
   .srctxt {

@@ -428,7 +428,7 @@
   .bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 15px; }
   .fill { height: 100%; width: 40%; background: var(--amber); border-radius: 3px; animation: slide 1.1s ease-in-out infinite; }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-  .sync-now { width: 100%; margin-top: 15px; height: 42px; background: transparent; border: 1px solid #2e6f74; border-radius: 11px; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; }
+  .sync-now { width: 100%; margin-top: 15px; height: 42px; background: transparent; border: 1px solid var(--accent-border); border-radius: 11px; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; }
   .sync-now:hover { background: var(--accent-tint); border-color: var(--accent); }
   .items { margin-top: 16px; display: flex; flex-direction: column; }
   .item { display: flex; align-items: center; gap: 13px; padding: 11px 2px; cursor: pointer; background: none; border: none; text-align: left; width: 100%; }
@@ -445,12 +445,12 @@
   .soon.on { background: var(--amber); }
   .signout { width: 100%; margin-top: 22px; height: 44px; background: transparent; border: 1px solid var(--border2); color: var(--text2); border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
   .signout:hover { border-color: var(--border3); color: var(--text); }
-  .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: #8a5a52; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: var(--danger-border); font-size: 12px; font-weight: 600; cursor: pointer; }
   .dellink:hover { color: var(--danger); }
   .danger { margin-top: 12px; padding: 14px; background: rgba(214, 84, 63, 0.06); border: 1px solid rgba(214, 84, 63, 0.35); border-radius: 11px; }
   .drow { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
   .del { flex: 1; height: 40px; background: var(--danger); color: var(--text); border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
-  .del:hover { background: #e2634e; }
+  .del:hover { background: var(--danger); }
 
   /* diagnostics disclosure */
   .incl { list-style: none; margin: 10px 0 0; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text2); line-height: 1.7; }

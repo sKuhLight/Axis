@@ -1027,8 +1027,8 @@
   }
   .bin.over {
     transform: translateX(-50%) scale(1.08);
-    background: #3a1518;
+    background: var(--danger-tint);
     border-color: var(--danger);
-    color: #ff7a68;
+    color: var(--danger);
   }
 </style>
