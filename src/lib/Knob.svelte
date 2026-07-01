@@ -67,9 +67,9 @@
     tabindex="0"
   >
     <svg width={size} height={size} viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
+      <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
       <circle cx="32" cy="32" r="24" fill="none" stroke={color} stroke-width="5" stroke-linecap="round" stroke-dasharray={dash} transform="rotate(135 32 32)" />
-      <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1" />
+      <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
       <g transform="rotate({angle} 32 32)"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623" /></g>
     </svg>
     <div class="val mono">{valueText}</div>

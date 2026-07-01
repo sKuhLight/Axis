@@ -860,9 +860,9 @@
               onmouseleave={() => { if (!dragging && !tip?.edit) tip = null; }}
               ondblclick={(e) => showTip(e.currentTarget, c.id, true)}>
               <svg width="60" height="60" viewBox="0 0 64 64" style="display:block">
-                <circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
+                <circle cx="32" cy="32" r="25" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
                 <circle cx="32" cy="32" r="25" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray="{((pct(c.id) / 100) * 117.8).toFixed(1)} 300" transform="rotate(135 32 32)" />
-                <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1" />
+                <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
                 <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
               </svg>
             </div>
@@ -993,9 +993,9 @@
                   ondblclick={(e) => { if (!editMode) showTip(e.currentTarget, c.id, true); }}
                 >
                   <svg width={d} height={d} viewBox="0 0 64 64" style="display:block">
-                    <circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
+                    <circle cx="32" cy="32" r="25" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
                     <circle cx="32" cy="32" r="25" fill="none" stroke={accent} stroke-width="5" stroke-linecap="round" stroke-dasharray="{((pct(c.id) / 100) * 117.8).toFixed(1)} 300" transform="rotate(135 32 32)" />
-                    <circle cx="32" cy="32" r="15" fill="#141417" stroke="#000" stroke-width="1" />
+                    <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
                     <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
                   </svg>
                 </div>
