@@ -224,8 +224,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden; /* the top bar never scrolls/swipes — content fits, the preset name truncates */
   }
   .burger {
     flex: none;
@@ -262,6 +261,14 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0; /* allow the name to truncate rather than overflow the bar */
+  }
+  /* on mobile the preset cluster fills the row so the name ellipsis-truncates cleanly (no scroll) */
+  .topbar.mob .preset {
+    flex: 1;
+  }
+  .topbar.mob .pset {
+    flex: 1;
   }
   .pbtn {
     width: 34px;
