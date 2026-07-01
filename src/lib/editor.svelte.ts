@@ -10,7 +10,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, DeviceLayout, DebugReport } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -171,7 +171,7 @@ class EditorStore {
   }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', paid: false, scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
-  axisTab = $state<'account' | 'privacy' | 'about'>('account');
+  axisTab = $state<'account' | 'privacy' | 'about' | 'device'>('account');
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
   contact = $state<string>(loadContact());
@@ -201,6 +201,8 @@ class EditorStore {
   ports = $state<ConnInfo[]>([]);
   portChosen = $state<ConnPick | null>(null);
   portOverride = $state<ConnPick | null>(null);
+  /** Forced device-profile key ('fm3'|'fm9'|'axe3'|'am4'), or null when auto-detecting. */
+  profileOverride = $state<string | null>(null);
   paletteOpen = $state(false);
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
@@ -529,7 +531,7 @@ class EditorStore {
   };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'account' | 'privacy' | 'about' = 'account') => { this.axisTab = tab; this.axisOpen = true; };
+  openAxis = (tab: 'account' | 'privacy' | 'about' | 'device' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };
@@ -1180,11 +1182,13 @@ class EditorStore {
       this.ports = [...r.ports].sort((a, b) => Number(b.fractal) - Number(a.fractal)); // Fractal first
       this.portChosen = r.chosen;
       this.portOverride = r.override;
+      this.profileOverride = r.profileOverride ?? null;
     } catch {
       /* offline */
     }
   };
-  // pick a port (or null to clear back to auto-detect); reconnect + re-detect + reload
+  // pick a port (or null to clear back to auto-detect); reconnect + re-detect + reload. Sends no `model`,
+  // so any forced device profile is preserved across a port change.
   pickPort = async (conn: ConnPick | null) => {
     this.portsOpen = false;
     try {
@@ -1194,9 +1198,28 @@ class EditorStore {
       const d = await forgefx.detect().catch(() => null);
       if (d) this.detected = d;
       await this.load();
+      await this.loadPorts();
       this.showToast(conn ? 'Connection changed' : 'Back to auto-detect', '#35c9d6');
     } catch {
       this.showToast('Could not switch connection', '#d6543f');
+    }
+  };
+  /** Force (or clear with 'auto') the device profile. Preserves any manual PORT override — passing the
+   *  current portOverride (not the resolved auto conn) so forcing a profile never pins an auto-detected
+   *  port. This is what makes an FM3 reachable over a generic MIDI→USB adapter (force FM3 + MIDI ports). */
+  pickProfile = async (model: ProfileKey) => {
+    try {
+      await forgefx.selectPort(this.portOverride, model);
+      this.profileOverride = model === 'auto' ? null : model;
+      this.conn = { state: 'connecting' };
+      await this.poll();
+      const d = await forgefx.detect().catch(() => null);
+      if (d) this.detected = d;
+      await this.load();
+      await this.loadPorts();
+      this.showToast(model === 'auto' ? 'Device profile: auto-detect' : `Device profile forced: ${model.toUpperCase()}`, '#35c9d6');
+    } catch {
+      this.showToast('Could not set device profile', '#d6543f');
     }
   };
 

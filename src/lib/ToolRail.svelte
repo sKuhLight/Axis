@@ -121,6 +121,7 @@
       {/each}
       {#if editor.ports.length === 0}<div class="pp-empty">No ports found — connect the unit.</div>{/if}
     </div>
+    <button class="pp-adv" onclick={() => { editor.portsOpen = false; editor.openAxis('device'); }}>Advanced — force device profile &amp; MIDI in/out →</button>
   </div>
 {/if}
 
@@ -351,6 +352,22 @@
     text-align: center;
     color: var(--text-faint);
     font-size: 12px;
+  }
+  .pp-adv {
+    margin-top: 8px;
+    width: 100%;
+    padding: 8px;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-2, #2a2a31);
+    color: var(--accent, #35c9d6);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+  }
+  .pp-adv:hover {
+    filter: brightness(1.15);
   }
   .led {
     width: 9px;
