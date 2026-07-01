@@ -175,6 +175,7 @@ class EditorStore {
   axisOpen = $state(false);
   axisTab = $state<'account' | 'privacy' | 'about' | 'device'>('account');
   themeOpen = $state(false); // Appearance / theme picker modal
+  drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
   contact = $state<string>(loadContact());
