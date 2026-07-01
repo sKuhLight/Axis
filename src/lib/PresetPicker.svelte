@@ -204,7 +204,7 @@
     font: 700 10px/1 var(--font-mono);
     color: #f5c878;
     background: var(--surface2);
-    border: 1px solid #5a3f1f;
+    border: 1px solid var(--amber-border);
     border-radius: 6px;
     padding: 5px 8px;
     letter-spacing: 0.04em;
@@ -306,7 +306,7 @@
     border-color: var(--border-strong);
   }
   .chip.active {
-    border-color: #5a3f1f;
+    border-color: var(--amber-border);
     background: rgba(245, 166, 35, 0.08);
   }
   .cnum {
@@ -405,7 +405,7 @@
     font: 700 9px/1 var(--font-mono);
     color: #f5c878;
     background: var(--surface2);
-    border: 1px solid #5a3f1f;
+    border: 1px solid var(--amber-border);
     border-radius: 5px;
     padding: 4px 7px;
     letter-spacing: 0.06em;

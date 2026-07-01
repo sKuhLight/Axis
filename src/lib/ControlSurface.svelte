@@ -1198,7 +1198,7 @@
   }
   .tab.on {
     background: rgba(245, 166, 35, 0.12);
-    border-color: #5a3f1f;
+    border-color: var(--amber-border);
     color: var(--amber);
   }
   .tab.addp {
@@ -1305,7 +1305,7 @@
     border-radius: 6px;
   }
   .pi-del:hover {
-    color: #ff6b6b;
+    color: var(--danger);
     background: rgba(255, 107, 107, 0.12);
   }
   .profsep {
@@ -1844,7 +1844,7 @@
   }
   .action.byp {
     background: var(--surface2);
-    border-color: #5a2f33;
+    border-color: var(--danger-border);
     color: var(--danger);
   }
   .chrome {
@@ -1881,7 +1881,7 @@
     justify-content: center;
     background: rgba(214, 84, 63, 0.16);
     border: 1px solid rgba(214, 84, 63, 0.5);
-    color: #ff7a68;
+    color: var(--danger);
     cursor: pointer;
     font-size: 12px;
   }
@@ -1920,7 +1920,7 @@
     border-radius: 7px;
     background: rgba(53, 201, 214, 0.14);
     border: 1px solid rgba(53, 201, 214, 0.5);
-    color: #9fe9ef;
+    color: var(--accentbright);
     cursor: pointer;
     font: 700 9px/1 var(--font-mono);
   }
@@ -2035,7 +2035,7 @@
     font-size: 14px;
     color: var(--accentbright);
     background: var(--surface);
-    border: 1px solid #234142;
+    border: 1px solid var(--accent-border);
   }
   .tc-txt {
     display: flex;

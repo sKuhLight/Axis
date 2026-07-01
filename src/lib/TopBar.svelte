@@ -213,7 +213,7 @@
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: #7fb3b6;
+    color: var(--accentbright);
     cursor: pointer;
     font-size: 12px;
   }
@@ -426,9 +426,9 @@
   .kbd {
     font-size: 10px;
     font-weight: 600;
-    color: #5e8a8c;
+    color: var(--accent-border);
     background: var(--accent-tint);
-    border: 1px solid #234142;
+    border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
   }
@@ -547,7 +547,7 @@
     height: 38px;
     padding: 0 15px;
     background: var(--surface2);
-    border: 1px solid #5a3f1f;
+    border: 1px solid var(--amber-border);
     border-radius: 9px;
     color: #f5c878;
     font-family: inherit;

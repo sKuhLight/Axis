@@ -434,7 +434,7 @@
     top: 9px;
     left: 11px;
     font-size: 9px;
-    color: #5fb878;
+    color: var(--ok);
     letter-spacing: 0.02em;
   }
   .swcat {
@@ -538,7 +538,7 @@
     cursor: pointer;
   }
   .csw.on {
-    border-color: var(--text);
+    border-color: var(--border3);
     box-shadow: 0 0 0 2px var(--c);
   }
   .note {

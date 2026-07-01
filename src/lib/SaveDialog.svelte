@@ -152,10 +152,10 @@
   }
   .save {
     background: var(--surface2);
-    border: 1px solid #5a3f1f;
+    border: 1px solid var(--amber-border);
     color: #f5c878;
   }
   .save:hover {
-    border-color: #6a542b;
+    border-color: var(--amber-border);
   }
 </style>

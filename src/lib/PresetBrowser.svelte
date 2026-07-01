@@ -1224,7 +1224,7 @@
   .cx { width: 22px; height: 24px; border-left: 1px solid rgba(255, 255, 255, 0.08); font-size: 14px; }
   .px:hover, .cx:hover { color: var(--text); }
   .addp { height: 24px; padding: 0 8px; border-radius: 7px; font: 600 11px/1 'JetBrains Mono', monospace; color: var(--textfaint); cursor: pointer; border: 1px dashed var(--border3); background: none; }
-  .addp:hover { color: var(--accent); border-color: #2a5a5e; }
+  .addp:hover { color: var(--accent); border-color: var(--accent-border); }
   .addf { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; background: var(--track); border: 1px solid var(--border2); cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text2); }
   .addf:hover { border-color: var(--border3); color: var(--text); }
   .addf .plus { font-size: 14px; color: var(--accent); }
@@ -1247,7 +1247,7 @@
   .sv-n { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sv-q { font: 500 9.5px/1.2 'JetBrains Mono', monospace; color: var(--textfaint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sv-x { flex: none; width: 22px; border: none; background: none; color: var(--textfaint); font-size: 14px; cursor: pointer; border-radius: 6px; }
-  .sv-x:hover { background: var(--border); color: #e87b6a; }
+  .sv-x:hover { background: var(--border); color: var(--danger); }
   .empty-s { padding: 8px; font: 500 11px/1.5 'JetBrains Mono', monospace; color: var(--textmuted); }
   .link { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
   .div { height: 1px; background: var(--surface); margin: 4px 14px 12px; }
@@ -1302,14 +1302,14 @@
   .d-sec .lbl { margin-bottom: 11px; display: block; }
   .vh-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .vh-head .lbl { margin-bottom: 0; }
-  .vh-snap { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, var(--accent)); background: none; border: 1px solid #2a5a5e; border-radius: 7px; padding: 5px 9px; cursor: pointer; }
+  .vh-snap { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, var(--accent)); background: none; border: 1px solid var(--accent-border); border-radius: 7px; padding: 5px 9px; cursor: pointer; }
   .vh-snap:hover { background: rgba(53, 201, 214, 0.1); }
   .vh-list { display: flex; flex-direction: column; gap: 5px; }
   .vh { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--bg2); border: 1px solid var(--surface2); border-radius: 9px; }
   .vh-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .vh-when { font-size: 12px; font-weight: 600; color: var(--text); }
   .vh-meta { font: 500 9.5px/1 'JetBrains Mono', monospace; color: var(--textfaint); }
-  .vh-btn { flex: none; font: 700 11px/1 'JetBrains Mono', monospace; color: var(--amber); background: none; border: 1px solid #3a2f1a; border-radius: 7px; padding: 6px 10px; cursor: pointer; text-decoration: none; }
+  .vh-btn { flex: none; font: 700 11px/1 'JetBrains Mono', monospace; color: var(--amber); background: none; border: 1px solid var(--amber-border); border-radius: 7px; padding: 6px 10px; cursor: pointer; text-decoration: none; }
   .vh-btn:hover { background: rgba(245, 166, 35, 0.12); }
   .vh-btn.dl { color: var(--textdim); border-color: var(--border2); padding: 6px 8px; }
   .vh-empty { font: 500 11px/1.5 'JetBrains Mono', monospace; color: var(--textmuted); }
@@ -1366,7 +1366,7 @@
   .folder-row .view.folder { flex: 1; min-width: 0; }
   .folder-row.on { background: rgba(53, 201, 214, 0.1); border-radius: 8px; }
   .folder-x { flex: none; width: 22px; height: 22px; border: none; background: transparent; color: var(--textmuted); font-size: 15px; cursor: pointer; border-radius: 6px; }
-  .folder-x:hover { background: var(--surface2); color: #e87b6a; }
+  .folder-x:hover { background: var(--surface2); color: var(--danger); }
   .ic-btn { display: inline-flex; align-items: center; gap: 6px; }
 
   /* ── cloud: detail status box ── */
@@ -1388,9 +1388,9 @@
   .ctx-div { height: 1px; background: var(--surface2); margin: 5px 8px; }
   .ctx-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none; background: transparent; border-radius: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text); text-align: left; }
   .ctx-item:hover { background: var(--surface2); }
-  .ctx-item.danger { color: #e87b6a; }
+  .ctx-item.danger { color: var(--danger); }
   .ctx-item.danger:hover { background: var(--surface2); }
   .ctx-g { flex: none; width: 18px; text-align: center; font-size: 13px; color: var(--textdim); }
-  .ctx-item.danger .ctx-g { color: #e87b6a; }
+  .ctx-item.danger .ctx-g { color: var(--danger); }
   .ctx-l { flex: 1; }
 </style>

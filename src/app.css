@@ -35,6 +35,10 @@
   --accent-border: color-mix(in srgb, var(--accent) 45%, var(--border2));
   --ok-tint: color-mix(in srgb, var(--ok) 14%, var(--surface));
   --ok-border: color-mix(in srgb, var(--ok) 45%, var(--border2));
+  --amber-tint: color-mix(in srgb, var(--amber) 14%, var(--surface));
+  --amber-border: color-mix(in srgb, var(--amber) 45%, var(--border2));
+  --danger-tint: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--danger) 45%, var(--border2));
 
   /* ── type ── */
   --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;

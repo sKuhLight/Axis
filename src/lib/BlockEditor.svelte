@@ -424,12 +424,12 @@
   }
   .act.byp.on {
     background: var(--surface2);
-    border-color: #5a2f33;
+    border-color: var(--danger-border);
     color: var(--danger);
   }
   .act.rem {
     background: var(--surface);
-    border-color: #4a2226;
+    border-color: var(--danger-tint);
     color: var(--danger);
   }
 </style>
