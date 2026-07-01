@@ -339,7 +339,7 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: #7a7a83;
+    color: var(--textfaint);
     font: 700 11px/1 var(--font-mono);
     cursor: pointer;
   }
@@ -356,7 +356,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #cfcfd6;
+    color: var(--text2);
     font-size: 12px;
     font-weight: 700;
     white-space: nowrap;
@@ -455,7 +455,7 @@
     color: inherit;
   }
   button.st:hover {
-    background: #16161b;
+    background: var(--track);
   }
   .note {
     font-size: 15px;
@@ -502,7 +502,7 @@
     color: var(--accent);
   }
   .taplbl {
-    background: #16161b;
+    background: var(--track);
     border: 1px solid var(--surface-3);
     border-radius: 5px;
     padding: 3px 5px;
@@ -523,7 +523,7 @@
   .bar {
     width: 40px;
     height: 6px;
-    background: #16161b;
+    background: var(--track);
     border: 1px solid var(--surface-3);
     border-radius: 4px;
     overflow: hidden;

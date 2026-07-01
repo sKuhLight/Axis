@@ -245,8 +245,8 @@
     width: 760px;
     max-width: 100%;
     max-height: 84vh;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -284,7 +284,7 @@
     border-radius: 8px;
     border: 1px solid var(--border-2);
     background: #1a1a1f;
-    color: #9a9aa3;
+    color: var(--textdim);
     cursor: pointer;
     font-size: 13px;
   }
@@ -306,7 +306,7 @@
   .seg button {
     border: 0;
     background: transparent;
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     padding: 6px 13px;
@@ -348,7 +348,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -430,7 +430,7 @@
   }
   .rsub {
     font-size: 11px;
-    color: #7a7a83;
+    color: var(--textfaint);
   }
   .now {
     flex: none;

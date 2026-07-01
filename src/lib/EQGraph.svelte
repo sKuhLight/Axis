@@ -174,7 +174,7 @@
     gap: 12px;
     padding: 5px 10px;
     background: rgba(10, 10, 12, 0.82);
-    border: 1px solid #2a2a31;
+    border: 1px solid var(--border2);
     border-radius: 8px;
     font-size: 11px;
     color: var(--text-mut);

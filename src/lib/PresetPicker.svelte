@@ -168,8 +168,8 @@
     width: 680px;
     max-width: 100%;
     max-height: 84vh;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -263,7 +263,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;

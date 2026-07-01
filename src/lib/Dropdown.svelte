@@ -84,8 +84,8 @@
     justify-content: space-between;
     height: 40px;
     padding: 0 12px;
-    background: #0d0d10;
-    border: 1px solid #2c2c34;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
     border-radius: 9px;
     cursor: pointer;
     font-size: 13px;
@@ -104,7 +104,7 @@
   }
   .caret {
     font-size: 10px;
-    color: #6e6e78;
+    color: var(--textfaint);
     flex: none;
     margin-left: 8px;
   }
@@ -122,7 +122,7 @@
     max-height: 248px;
     overflow-y: auto;
     background: #1a1a1f;
-    border: 1px solid #2e2e36;
+    border: 1px solid var(--border2);
     border-radius: 11px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
     padding: 6px;
