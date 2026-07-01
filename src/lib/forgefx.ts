@@ -46,11 +46,39 @@ const reportFailure = (route: string, method: string, status: number, message: s
   try { if (status >= 500 || status === 0) onReqFailure?.({ route, method, status, message }); } catch { /* never let reporting break a request */ }
 };
 
+// ── Pluggable transport (Axis Cloud Remote) ────────────────────────────────────────────────────────
+// The same client can run over HTTP (local ForgeFX) or a relay (a remote browser controlling the user's
+// PC via the Supabase Realtime channel). A remote transport takes a request and returns a response
+// envelope; req() applies identical parsing + failure reporting either way. null = local HTTP (default,
+// unchanged). NOTE: only req()-based calls route through this; the SSE `events()` stream and the few
+// direct-fetch helpers (binary upload/restore) get their own relay handling in a later increment.
+export type RemoteResponse = { status: number; contentType: string; body: string | ArrayBuffer };
+export type RemoteTransport = (rq: { method: string; path: string; body?: string }) => Promise<RemoteResponse>;
+let remote: RemoteTransport | null = null;
+export function setRemoteTransport(fn: RemoteTransport | null): void { remote = fn; }
+export const isRemote = (): boolean => remote !== null;
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? 'GET';
+  // ── remote mode: route the request through the relay transport ──
+  if (remote) {
+    let r: RemoteResponse;
+    try {
+      r = await remote({ method, path, body: typeof init?.body === 'string' ? init.body : undefined });
+    } catch (e) {
+      reportFailure(path, method, 0, (e as Error)?.message ?? 'relay error');
+      throw e;
+    }
+    if (r.status < 200 || r.status >= 300) {
+      reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`); // self-filters to 5xx/0
+      throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
+    }
+    return (r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : r.body) as T;
+  }
+  // ── local mode: HTTP to ForgeFX (default) ──
   // Serial-backed requests are serialized on the server; under load a few can queue.
   // A 12s ceiling means a genuinely hung request surfaces as an error instead of an
   // endless 'loading' spinner. Well above any healthy round-trip (~0.6s worst case).
-  const method = init?.method ?? 'GET';
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
