@@ -340,8 +340,11 @@ class EditorStore {
   /** Read every placed block's meter + swipe-control values (background, debounced — load() runs
    * after every optimistic edit, so coalesce the N bulk reads). */
   #metersTimer: ReturnType<typeof setTimeout> | null = null;
+  /** A slow link (5-pin MIDI ≈ 31.25 kbaud) can't carry high-rate meter reads without saturating and
+   *  inflating every edit's latency to seconds — so meter polling is disabled over MIDI. */
+  get slowLink(): boolean { return this.portChosen?.transport === 'midi'; }
   fetchMeters = () => {
-    if (this.isAm4) return; // AM4 has no gen-3 meters; firing them sends FM3 frames the AM4 ignores (timeouts)
+    if (this.isAm4 || this.slowLink) return; // no meter polling on AM4 or a slow MIDI link (keeps editing snappy)
     if (this.#metersTimer) clearTimeout(this.#metersTimer);
     this.#metersTimer = setTimeout(async () => {
       const wants: Record<string, number[]> = {};
@@ -362,6 +365,7 @@ class EditorStore {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
     setRequestFailureReporter(this.#onReqFailure); // auto-report every 5xx/network failure to Faro
+    this.loadPorts(); // know the transport early (drives slowLink → meter throttling over MIDI)
     this.#initUpdater();
     this.#initCloud();
     this.#initTelemetry();
@@ -788,8 +792,12 @@ class EditorStore {
 
   #watching = false;
   #contentCheckAt = 0; // last time the current slot's stored content was re-decoded (external-edit catch)
+  #watchTick = 0;
   watchPreset = async () => {
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
+    // On a slow MIDI link, background preset-watch polling competes with edits and inflates latency —
+    // run it only every 4th tick (~16s instead of ~4s) so the link stays free for what the user is doing.
+    if (this.slowLink && this.#watchTick++ % 4 !== 0) return;
     this.#watching = true;
     try {
       const n = (await forgefx.currentPreset()).number;
