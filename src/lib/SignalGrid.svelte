@@ -100,6 +100,7 @@
   type Cable = { key: string; srcRow: number; srcCol: number; destRow: number; d: string; mx: number; my: number; stroke: string; flow: boolean; flowStroke: string };
   const cables = $derived.by(() => {
     const list: Cable[] = [];
+    const seen = new Set<string>(); // guard: a duplicate edge (dup row in fromRows, or a cell+shunt overlap)
     for (const c of [...editor.layout.cells, ...editor.layout.shunts]) {
       if (c.col === 0 || c.fromRows.length === 0) continue;
       const dst = rects[`${c.row},${c.col}`];
@@ -107,9 +108,12 @@
       for (const fr of c.fromRows) {
         const src = rects[`${fr},${c.col - 1}`];
         if (!src) continue;
+        const key = `${fr},${c.col - 1}->${c.row},${c.col}`;
+        if (seen.has(key)) continue; // never emit the same keyed cable twice → avoids each_key_duplicate
+        seen.add(key);
         const srcByp = !!cellAt.get(`${fr},${c.col - 1}`)?.bypassed;
         list.push({
-          key: `${fr},${c.col - 1}->${c.row},${c.col}`,
+          key,
           srcRow: fr,
           srcCol: c.col - 1,
           destRow: c.row,
