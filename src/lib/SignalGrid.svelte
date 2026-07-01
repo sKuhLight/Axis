@@ -731,7 +731,8 @@
     z-index: 2;
     font-weight: 700;
     font-size: 14px;
-    color: var(--text);
+    /* tiles are always a darkened family color (see tileBg), so the label is fixed-light in every theme */
+    color: rgba(255, 255, 255, 0.94);
     letter-spacing: 0.01em;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     text-align: center;

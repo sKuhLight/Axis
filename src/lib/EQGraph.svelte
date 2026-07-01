@@ -124,7 +124,7 @@
     onpointerleave={up}
   >
     <rect x="0.5" y="0.5" width={cw - 1} height={H - 1} rx="11" fill="#0d0d10" stroke="#1f1f25" stroke-width="1" />
-    <line x1="0" y1={H / 2} x2={cw} y2={H / 2} stroke="#2a2a31" stroke-width="1" />
+    <line x1="0" y1={H / 2} x2={cw} y2={H / 2} style="stroke:var(--border2)" stroke-width="1" />
     {#each GRID_F as f (f)}
       <line x1={xOf(f)} y1="0" x2={xOf(f)} y2={H} stroke="#16161b" stroke-width="1" />
       <text x={xOf(f) + 3} y={H - 5} fill="#4a4a52" font-size="9" font-family="var(--font-mono)">{flbl(f)}</text>
