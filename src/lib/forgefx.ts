@@ -114,7 +114,7 @@ export const forgefx = {
     fetch(`${BASE}/preset/load`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes as BodyInit, signal: AbortSignal.timeout(12000) })
       .then((r) => { if (!r.ok) throw new ForgeError(r.status, `load → ${r.status}`); return r.json() as Promise<{ ok: boolean }>; }),
   // ── cloud sync (gated server-side by AXIS_CLOUD) ──
-  cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null }>('/cloud/status'),
+  cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null; subscription?: { active: boolean; plan: string | null } }>('/cloud/status'),
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),

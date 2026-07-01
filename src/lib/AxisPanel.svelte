@@ -1,0 +1,390 @@
+<script lang="ts">
+  // The single "Axis" hub — one rail button opens this, replacing the separate Cloud + Privacy panels.
+  // Three tabs: Account (sign-in / register / sync / contact / delete), Privacy (diagnostics consent +
+  // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
+  import { editor } from './editor.svelte';
+  import Icon from './Icon.svelte';
+  import { LEGAL, openExternal } from './legal';
+  import { KOFI_URL, COPYRIGHT } from './support';
+
+  const c = $derived(editor.cloud);
+  const t = $derived(editor.telemetry);
+
+  let tab = $state<'signin' | 'register'>('signin');
+  let email = $state('');
+  let password = $state('');
+  let confirmDelete = $state(false);
+  let showDetail = $state(false); // Privacy: "View what's sent" disclosure
+
+  const view = $derived<'auth' | 'verify' | 'account'>(c.user ? 'account' : c.pendingEmail ? 'verify' : 'auth');
+  const initials = $derived((c.user?.email ?? c.pendingEmail ?? '?').replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?');
+  const ago = $derived(c.lastSync ? `${Math.round((Date.now() - c.lastSync) / 1000)}s ago` : '');
+
+  // Free tier: everything synced lives in the `config` bundle (no preset blobs / device backups).
+  const SCOPES: { id: 'scenes' | 'fc' | 'settings'; label: string; meta: string }[] = [
+    { id: 'settings', label: 'Library & settings', meta: 'tags · filters · favorites' },
+    { id: 'fc', label: 'Footswitch & controllers', meta: 'layouts' },
+    { id: 'scenes', label: 'Scenes & setlists', meta: 'setlists' }
+  ];
+
+  const version = (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev';
+
+  function submit() {
+    if (!email.trim() || !password) return;
+    if (tab === 'signin') editor.cloudLogin(email.trim(), password);
+    else editor.cloudRegister(email.trim(), password);
+  }
+  function confirmed() {
+    if (c.pendingEmail) email = c.pendingEmail;
+    tab = 'signin';
+    editor.cloud = { ...editor.cloud, pendingEmail: null };
+  }
+  const close = () => (editor.axisOpen = false);
+  const soon = (what: string) => editor.showToast(`${what} — coming soon`, '#9b8cf0');
+  async function sendReport() { await editor.uploadDebugReport({ kind: 'manual' }); }
+</script>
+
+{#snippet disclosure()}
+  <ul class="incl">
+    <li><span class="ok">included</span> the diagnostic log for this session (console + device diagnostics)</li>
+    <li><span class="ok">included</span> recent app events and any error that triggered this</li>
+    <li><span class="ok">included</span> your device / OS / app versions and an anonymous ID</li>
+    <li><span class="ok">included</span> the contact you optionally enter below (if any)</li>
+    <li><span class="no">never</span> your presets, preset names, email, file contents, or anything else identifying you</li>
+  </ul>
+{/snippet}
+
+{#snippet contactField(id: string)}
+  <label class="cfield" for={id}>
+    <span class="clbl">CONTACT <span class="opt">optional</span></span>
+    <input {id} class="in sm" type="text" maxlength="100" placeholder="Fractal forum / Reddit / email — so we can follow up"
+           value={editor.contact} oninput={(e) => editor.setContact((e.currentTarget as HTMLInputElement).value)} />
+  </label>
+{/snippet}
+
+{#if editor.axisOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="bg" role="presentation" onclick={close}>
+    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
+
+      <div class="tabbar">
+        <button class="tb" class:on={editor.axisTab === 'account'} onclick={() => (editor.axisTab = 'account')}>Account</button>
+        <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
+        <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
+      </div>
+
+      {#if editor.axisTab === 'account'}
+        {#if !c.enabled}
+          <div class="pad"><p class="muted">Cloud sync isn't enabled on this engine. The editor and local backups work fully offline.</p></div>
+
+        {:else if view === 'auth'}
+          <div class="pad">
+            <div class="hero">
+              <div class="logo"><Icon name="cloud" size={24} /></div>
+              <div class="h1">{tab === 'signin' ? 'Welcome back' : 'Create your account'}</div>
+              <div class="sub">Sync your Axis config across every device — free</div>
+            </div>
+            <div class="tabs">
+              <button class="tab" class:on={tab === 'signin'} onclick={() => (tab = 'signin')}>Sign in</button>
+              <button class="tab" class:on={tab === 'register'} onclick={() => (tab = 'register')}>Create account</button>
+            </div>
+            <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
+              <div class="field">
+                <div class="lbl">EMAIL</div>
+                <input class="in" type="email" placeholder="you@band.com" bind:value={email} autocomplete="email" />
+              </div>
+              <div class="field">
+                <div class="lbl-row"><span class="lbl">PASSWORD</span>{#if tab === 'signin'}<button type="button" class="link" onclick={() => soon('Password reset')}>Forgot?</button>{/if}</div>
+                <input class="in" type="password" placeholder="••••••••" bind:value={password} autocomplete={tab === 'signin' ? 'current-password' : 'new-password'} />
+              </div>
+              <button class="cta" type="submit">{tab === 'signin' ? 'Sign in' : 'Create account'}</button>
+            </form>
+            {#if c.note}<p class="note">{c.note}</p>{/if}
+            {#if tab === 'register'}<p class="legal">By creating an account you agree to the <button type="button" class="link" onclick={() => openExternal(LEGAL.terms)}>Terms of Service</button> &amp; <button type="button" class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>{/if}
+          </div>
+
+        {:else if view === 'verify'}
+          <div class="pad verify">
+            <div class="mailbox"><Icon name="mail" size={28} /></div>
+            <div class="h1">Check your email</div>
+            <div class="sub">We sent a confirmation link to</div>
+            <div class="email-chip">{c.pendingEmail}</div>
+            <button class="cta" onclick={confirmed}>I've confirmed — continue</button>
+            <div class="verify-actions">
+              <button class="link" onclick={() => editor.cloudRegister(c.pendingEmail ?? '', password)}>Resend email</button>
+              <span class="dotsep"></span>
+              <button class="link dim" onclick={() => (editor.cloud = { ...editor.cloud, pendingEmail: null })}>Use a different email</button>
+            </div>
+          </div>
+
+        {:else}
+          <div class="profile">
+            <div class="avatar">{initials}</div>
+            <div class="who">
+              <div class="name-row"><span class="name">{c.user?.email}</span><span class="plan" class:pro={c.paid}>{(c.plan || 'Free').toUpperCase()}</span></div>
+              <div class="email">{c.user?.email}</div>
+            </div>
+          </div>
+
+          <div class="pad">
+            <div class="sec">CLOUD SYNC</div>
+            <div class="sync-card">
+              <div class="sync-head">
+                <span class="dot" style="background:{c.syncing ? '#f5a623' : '#33c46b'}; box-shadow:0 0 8px {c.syncing ? '#f5a623' : '#33c46b'}"></span>
+                <div class="sync-txt">
+                  <div class="st">{c.syncing ? 'Syncing…' : c.lastSync ? 'All synced' : 'Not synced yet'}</div>
+                  <div class="ss">{c.syncing ? 'Pushing & pulling your config' : c.lastSync ? `Last synced ${ago}` : 'Sync to back up your Axis config'}</div>
+                </div>
+              </div>
+              {#if c.syncing}
+                <div class="bar"><div class="fill"></div></div>
+              {:else}
+                <button class="sync-now" onclick={() => editor.cloudSync()}><Icon name="refresh" size={15} /> Sync now</button>
+              {/if}
+              {#if c.note}<p class="note">{c.note}</p>{/if}
+            </div>
+
+            <button class="item auto" onclick={() => editor.setAutoSync(!c.autoSync)}>
+              <span class="chk" class:on={c.autoSync}>{#if c.autoSync}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+              <span class="item-body">
+                <span class="item-label">Auto-sync</span>
+                <span class="item-desc">Sync config changes to the cloud automatically, shortly after you make them</span>
+              </span>
+            </button>
+
+            <div class="items">
+              {#each SCOPES as s}
+                <button class="item" onclick={() => editor.setCloudScope(s.id, !c.scopes[s.id])}>
+                  <span class="chk" class:on={c.scopes[s.id]}>{#if c.scopes[s.id]}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+                  <span class="item-label">{s.label}</span>
+                  <span class="item-meta">{s.meta}</span>
+                </button>
+              {/each}
+              {#if c.paid}
+                <button class="item" onclick={() => editor.setCloudScope('presets', !c.scopes.presets)}>
+                  <span class="chk" class:on={c.scopes.presets}>{#if c.scopes.presets}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+                  <span class="item-label">Presets</span>
+                  <span class="item-meta">preset versions</span>
+                </button>
+                <button class="item backup" onclick={() => editor.cloudFullBackup()} disabled={c.syncing}>
+                  <span class="chk action"><Icon name="cloud" size={13} /></span>
+                  <span class="item-body">
+                    <span class="item-label">Full device backup</span>
+                    <span class="item-desc">Snapshot every preset on the device, then sync</span>
+                  </span>
+                </button>
+              {/if}
+            </div>
+            {#if !c.paid}<p class="muted sm-left">Preset backups &amp; full device snapshots are a supporter-tier feature — your presets stay on your machine on the free tier.</p>{/if}
+
+            <div class="sec mt">CONTACT</div>
+            <p class="muted">Optional — leave a way to reach you if we need to follow up on a bug report. Stored with your synced config; never used for marketing.</p>
+            {@render contactField('acct-contact')}
+
+            <div class="sec mt">SUPPORTER TIER</div>
+            {#if c.paid}
+              <div class="patreon active">
+                <span class="row-ic on"><Icon name="star" size={14} /></span>
+                <span class="item-body">
+                  <span class="item-label">Supporter active <span class="soon on">{(c.plan || 'Supporter').toUpperCase()}</span></span>
+                  <span class="item-desc">Thank you! Preset &amp; full-device cloud backup are unlocked above.</span>
+                </span>
+              </div>
+            {:else}
+              <button class="patreon" disabled title="A paid supporter tier is planned — not available yet">
+                <span class="row-ic"><Icon name="star" size={14} /></span>
+                <span class="item-body">
+                  <span class="item-label">Become a supporter <span class="soon">soon</span></span>
+                  <span class="item-desc">A paid tier (preset &amp; full-device cloud backup) is planned. For now Axis is free — you can chip in on Ko-fi from the About tab.</span>
+                </span>
+              </button>
+            {/if}
+
+            <button class="signout" onclick={() => editor.cloudLogout()}>Sign out</button>
+            {#if confirmDelete}
+              <div class="danger">
+                <p class="muted sm">Permanently delete your account and <strong>all</strong> cloud data (synced config, contact). This cannot be undone.</p>
+                <div class="drow">
+                  <button class="del" onclick={() => { editor.cloudDeleteAccount(); confirmDelete = false; }}>Delete permanently</button>
+                  <button class="link" onclick={() => (confirmDelete = false)}>Cancel</button>
+                </div>
+              </div>
+            {:else}
+              <button class="dellink" onclick={() => (confirmDelete = true)}>Delete account &amp; data</button>
+            {/if}
+          </div>
+        {/if}
+
+      {:else if editor.axisTab === 'privacy'}
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">🛡</div>
+            <div><div class="h1">Privacy &amp; Diagnostics</div><div class="sub">Help fix bugs faster — anonymously</div></div>
+          </div>
+
+          <div class="sec">ANONYMOUS DIAGNOSTICS</div>
+          {#if t.enabled}
+            <button class="item box" onclick={() => editor.setTelemetryConsent(!t.consent)}>
+              <span class="chk" class:on={t.consent}>{#if t.consent}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+              <span class="item-body">
+                <span class="item-label">Send error &amp; performance data</span>
+                <span class="item-desc">Anonymous diagnostics when something goes wrong. No personal data, no presets. Off by default; turn off any time.</span>
+              </span>
+            </button>
+          {:else}
+            <p class="muted">Live diagnostics aren't enabled in this build. You can still send a one-off debug report below when something breaks.</p>
+          {/if}
+
+          <div class="sec mt">SEND A DEBUG REPORT</div>
+          <p class="muted">Hit a bug? Send a one-off report so we can fix it. This is a separate, explicit action — it works even with diagnostics off.</p>
+          {@render contactField('diag-contact')}
+          {#if showDetail}{@render disclosure()}{:else}<button class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
+          <button class="cta" disabled={!t.uploadEnabled || t.sending} onclick={sendReport}>
+            {t.sending ? 'Sending…' : 'Send debug report'}
+          </button>
+          {#if !t.uploadEnabled}<p class="note dim">Report upload isn't configured in this build.</p>{/if}
+
+          <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
+        </div>
+
+      {:else}
+        <!-- About -->
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">◈</div>
+            <div><div class="h1">Axis</div><div class="sub">v{version} · beta</div></div>
+          </div>
+          <p class="muted">Axis is a free, open-source editor for Fractal devices. If it's useful to you, you can support ongoing development on Ko-fi — entirely optional, and it keeps the project going.</p>
+          <button class="kofi" onclick={() => openExternal(KOFI_URL)}>☕ Support development on Ko-fi</button>
+          <div class="links">
+            <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>
+            <span class="dotsep"></span>
+            <button class="link" onclick={() => openExternal(LEGAL.terms)}>Terms</button>
+            <span class="dotsep"></span>
+            <button class="link" onclick={() => openExternal(LEGAL.imprint)}>Imprint</button>
+          </div>
+          <p class="legal">{COPYRIGHT} · Open-source · Not affiliated with Fractal Audio Systems</p>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<style>
+  .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 350; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 12px 12px; }
+  .card { position: relative; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: #161619; border: 1px solid #2e2e36; border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: #e9e9ee; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .card::-webkit-scrollbar { width: 9px; }
+  .card::-webkit-scrollbar-track { background: transparent; }
+  .card::-webkit-scrollbar-thumb { background: #2a2a31; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: #1c1c21; border: 1px solid #2a2a31; color: #8a8a94; font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
+  .x:hover { color: #fff; border-color: #3f3f48; }
+
+  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; }
+  .tb { flex: 1; height: 34px; border: none; background: transparent; color: #8a8a93; font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tb:hover { color: #cfcfd6; }
+  .tb.on { color: #35c9d6; border-bottom-color: #35c9d6; }
+
+  .pad { padding: 18px 24px 24px; }
+  .muted { font-size: 12px; color: #8a8a94; line-height: 1.5; margin: 6px 0 12px; }
+  .muted.sm { font-size: 11px; margin-top: 4px; }
+  .muted.sm-left { font-size: 11px; margin: 10px 0 0; }
+
+  .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin: 8px 0 22px; }
+  .logo { width: 46px; height: 46px; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: #35c9d6; }
+  .logo.sm { flex: none; }
+  .h1 { font-size: 20px; font-weight: 800; color: #fff; }
+  .sub { font-size: 12.5px; color: #9a9aa3; margin-top: 2px; }
+  .tabs { display: flex; gap: 4px; background: #0e0e10; border: 1px solid #26262c; border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+  .tab { flex: 1; height: 38px; border-radius: 9px; border: none; background: transparent; color: #8a8a93; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .tab.on { background: #35c9d6; color: #06181a; }
+  form { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .lbl { font: 600 9px/1 'JetBrains Mono', monospace; color: #7a7a83; letter-spacing: 0.1em; }
+  .lbl-row { display: flex; justify-content: space-between; align-items: center; }
+  .in { width: 100%; height: 46px; padding: 0 14px; background: #0e0e10; border: 1px solid #2a2a31; border-radius: 11px; color: #e9e9ee; font-size: 14px; outline: none; }
+  .in.sm { height: 40px; font-size: 13px; }
+  .in:focus { border-color: #35c9d6; }
+  .cta { width: 100%; height: 48px; margin-top: 12px; background: #35c9d6; color: #06181a; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
+  .cta:hover { background: #46d6e2; }
+  .cta:disabled { opacity: 0.5; cursor: default; }
+  .link { background: none; border: none; color: #35c9d6; font-size: 11.5px; font-weight: 600; cursor: pointer; padding: 0; }
+  .link.dim { color: #9a9aa3; }
+  .link:hover { filter: brightness(1.15); }
+  .legal { text-align: center; margin-top: 18px; font-size: 11px; color: #56565e; line-height: 1.55; }
+  .note { font: 600 11.5px/1.4 'JetBrains Mono', monospace; color: #35c9d6; margin-top: 12px; text-align: center; }
+  .note.dim { color: #7a7a83; }
+  .mono { font-family: 'JetBrains Mono', monospace; color: #9a9aa3; }
+
+  .cfield { display: flex; flex-direction: column; gap: 7px; margin: 4px 0 6px; }
+  .clbl { font: 600 9px/1 'JetBrains Mono', monospace; color: #7a7a83; letter-spacing: 0.1em; }
+  .opt { color: #56565e; margin-left: 4px; }
+
+  /* verify */
+  .verify { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 26px; }
+  .mailbox { width: 66px; height: 66px; border-radius: 50%; background: rgba(53, 201, 214, 0.1); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 28px; color: #35c9d6; margin-bottom: 20px; }
+  .verify .h1 { margin-bottom: 10px; }
+  .email-chip { margin-top: 14px; padding: 10px 16px; background: #0e0e10; border: 1px solid #26262c; border-radius: 10px; font: 600 13px/1 'JetBrains Mono', monospace; color: #35c9d6; }
+  .verify .cta { margin-top: 24px; }
+  .verify-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+  .dotsep { width: 3px; height: 3px; border-radius: 50%; background: #3a3a44; display: inline-block; }
+
+  /* account */
+  .profile { display: flex; align-items: center; gap: 15px; padding: 18px 24px 18px; border-bottom: 1px solid #1d1d22; }
+  .avatar { width: 52px; height: 52px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #35c9d6; color: #06181a; font: 800 19px/1 'JetBrains Mono', monospace; }
+  .who { flex: 1; min-width: 0; }
+  .name-row { display: flex; align-items: center; gap: 9px; }
+  .name { font-size: 15px; font-weight: 800; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plan { flex: none; font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: #06181a; background: #33c46b; border-radius: 5px; padding: 4px 7px; }
+  .plan.pro { background: #f5a623; }
+  .email { font-size: 12.5px; color: #9a9aa3; margin-top: 4px; }
+  .sec { font: 700 9px/1 'JetBrains Mono', monospace; color: #56565e; letter-spacing: 0.14em; margin-bottom: 12px; }
+  .sec.mt { margin-top: 22px; }
+  .sync-card { background: #0e0e10; border: 1px solid #26262c; border-radius: 14px; padding: 16px; }
+  .sync-head { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 10px; height: 10px; flex: none; border-radius: 50%; }
+  .sync-txt { flex: 1; min-width: 0; }
+  .st { font-size: 14px; font-weight: 700; }
+  .ss { font-size: 12px; color: #7a7a83; margin-top: 3px; }
+  .bar { height: 6px; background: #1c1c21; border-radius: 3px; overflow: hidden; margin-top: 15px; }
+  .fill { height: 100%; width: 40%; background: #f5a623; border-radius: 3px; animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .sync-now { width: 100%; margin-top: 15px; height: 42px; background: transparent; border: 1px solid #2e6f74; border-radius: 11px; cursor: pointer; color: #35c9d6; font-size: 13px; font-weight: 700; }
+  .sync-now:hover { background: #0d1516; border-color: #35c9d6; }
+  .items { margin-top: 16px; display: flex; flex-direction: column; }
+  .item { display: flex; align-items: center; gap: 13px; padding: 11px 2px; cursor: pointer; background: none; border: none; text-align: left; width: 100%; }
+  .item.box { background: #0e0e10; border: 1px solid #26262c; border-radius: 12px; padding: 14px; align-items: flex-start; }
+  .item.box:hover { border-color: #3a3a44; }
+  .item.auto { align-items: flex-start; }
+  .chk { width: 20px; height: 20px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid #3a3a44; color: transparent; }
+  .chk.on { background: #35c9d6; border-color: #35c9d6; color: #06181a; }
+  .item-label { flex: 1; font-size: 13.5px; font-weight: 600; color: #e3e3e8; }
+  .item-meta { font: 600 10px/1 'JetBrains Mono', monospace; color: #6e6e78; }
+  .item-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .item-desc { font-size: 11px; color: #7a7a83; line-height: 1.45; }
+  .patreon { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; padding: 13px; border-radius: 12px; background: #0e0e10; border: 1px solid #26262c; opacity: 0.55; cursor: not-allowed; filter: grayscale(1); }
+  .patreon.active { opacity: 1; filter: none; cursor: default; border-color: rgba(245, 166, 35, 0.35); background: rgba(245, 166, 35, 0.06); }
+  .patreon .row-ic { width: 30px; height: 30px; flex: none; border-radius: 9px; background: #141417; border: 1px solid #26262c; display: flex; align-items: center; justify-content: center; color: #9a9aa3; }
+  .patreon .row-ic.on { color: #f5a623; }
+  .soon { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: #06181a; background: #7a7a83; border-radius: 4px; padding: 3px 5px; margin-left: 6px; vertical-align: middle; }
+  .soon.on { background: #f5a623; }
+  .signout { width: 100%; margin-top: 22px; height: 44px; background: transparent; border: 1px solid #2e2e36; color: #cfcfd6; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
+  .signout:hover { border-color: #3f3f48; color: #fff; }
+  .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: #8a5a52; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .dellink:hover { color: #d6543f; }
+  .danger { margin-top: 12px; padding: 14px; background: rgba(214, 84, 63, 0.06); border: 1px solid rgba(214, 84, 63, 0.35); border-radius: 11px; }
+  .drow { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+  .del { flex: 1; height: 40px; background: #d6543f; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .del:hover { background: #e2634e; }
+
+  /* diagnostics disclosure */
+  .incl { list-style: none; margin: 10px 0 0; padding: 12px; background: #0e0e10; border: 1px solid #26262c; border-radius: 10px; font-size: 12px; color: #b9b9c2; line-height: 1.7; }
+  .incl .ok { color: #35c9d6; font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
+  .incl .no { color: #d6543f; font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
+
+  /* about */
+  .kofi { width: 100%; height: 46px; margin-top: 6px; background: #13c3ff; color: #06181a; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
+  .kofi:hover { filter: brightness(1.08); }
+  .links { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; }
+</style>

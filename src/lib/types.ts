@@ -146,6 +146,8 @@ export interface DebugReport {
   instanceId: string;
   capturedAt: number;
   app: { version: string; platform: string };
+  /** Optional contact the user chose to leave (Fractal forum / Reddit / email), ≤100 chars. Opt-in. */
+  contact?: string;
   trigger?: { kind: string; route?: string; status?: number; message?: string };
   diag?: unknown;
   log?: string;
