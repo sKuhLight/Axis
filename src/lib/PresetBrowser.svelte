@@ -837,7 +837,7 @@
 
 <svelte:window onclick={() => { if (picker) picker = null; if (ctx) ctx = null; }} ondragend={() => (dragOver = false)} />
 
-<div class="pb">
+<div class="pb" class:mob={editor.isMobile}>
   <!-- HEADER -->
   <div class="hdr">
     <div class="title">
@@ -1046,10 +1046,11 @@
     </div>
 
     <!-- DETAIL -->
-    <div class="detail">
+    <div class="detail" class:open={!!selected}>
       {#if selected}
         {@const hits = matchedKeys(selected)}
         {@const cpu = estCpu(selected)}
+        {#if editor.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
         <div class="d-head">
           <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span></div>
           <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}</div>
@@ -1287,7 +1288,47 @@
   .e2 { font: 500 11.5px/1.5 'JetBrains Mono', monospace; color: var(--textmuted); max-width: 300px; }
   /* detail */
   .detail { width: 368px; flex: none; border-left: 1px solid var(--surface); background: var(--bg); overflow-y: auto; }
+  .d-back { display: none; }
   .d-head { padding: 20px 20px 16px; border-bottom: 1px solid var(--surface); }
+
+  /* ── mobile (driven by editor.isMobile, consistent with the rest of the app) ── */
+  /* header wraps instead of scrolling; the secondary library/filters sidebar is hidden; the detail
+     column becomes a full-screen overlay shown only when a preset is selected. */
+  .pb.mob .hdr { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+  .pb.mob .hdr .title { flex: 1; min-width: 0; }
+  .pb.mob .qbar { padding: 11px 14px; }
+  .pb.mob .chips { padding: 10px 14px; }
+  .pb.mob .side { display: none; }
+  .pb.mob .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    width: auto;
+    border-left: 0;
+    background: var(--bg);
+    display: none;
+    animation: axsSheet 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  .pb.mob .detail.open { display: block; }
+  .pb.mob .d-back {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    width: 100%;
+    height: 46px;
+    padding: 0 16px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+  }
   .d-title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
   .d-num { font: 700 13px/1 'JetBrains Mono', monospace; color: var(--amber); }
   .d-name { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
