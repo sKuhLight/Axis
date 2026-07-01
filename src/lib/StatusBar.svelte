@@ -1,9 +1,9 @@
 <script lang="ts">
   // Persistent bottom bar. Left: the hover-hint for the parameter/control under the cursor (falls back to
-  // the current selection / connection state). Right: Ko-fi support link · copyright · imprint.
+  // the current selection / connection state). Right: copyright · imprint.
   import { editor } from './editor.svelte';
   import { LEGAL, openExternal } from './legal';
-  import { KOFI_URL, COPYRIGHT } from './support';
+  import { COPYRIGHT } from './support';
 
   const left = $derived(
     editor.hint ??
@@ -14,8 +14,6 @@
 <footer class="sb">
   <div class="left" data-tour="statushint" title={left}>{left}</div>
   <div class="right">
-    <button class="kofi" onclick={() => openExternal(KOFI_URL)} title="Support Axis development on Ko-fi">☕ Support on Ko-fi</button>
-    <span class="sep"></span>
     <span class="cr">{COPYRIGHT}</span>
     <span class="sep"></span>
     <button class="lnk" onclick={() => openExternal(LEGAL.imprint)}>Imprint</button>
@@ -47,8 +45,6 @@
     color: #9a9aa3;
   }
   .right { flex: none; display: flex; align-items: center; gap: 10px; }
-  .kofi { background: none; border: none; color: #13c3ff; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
-  .kofi:hover { filter: brightness(1.12); }
   .lnk { background: none; border: none; color: var(--text-mut, #8a8a94); font-size: 11px; cursor: pointer; padding: 0; }
   .lnk:hover { color: #cfcfd6; }
   .cr { color: #56565e; }

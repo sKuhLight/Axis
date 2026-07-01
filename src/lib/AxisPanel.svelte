@@ -5,7 +5,10 @@
   import { editor } from './editor.svelte';
   import Icon from './Icon.svelte';
   import { LEGAL, openExternal } from './legal';
-  import { KOFI_URL, COPYRIGHT } from './support';
+  import { COPYRIGHT } from './support';
+
+  // Badge label for a granted account. Shown only when the account has an active plan.
+  const planLabel = (p: string | null | undefined): string => (p === 'early_supporter' ? 'Early Supporter' : p || 'Supporter');
 
   const c = $derived(editor.cloud);
   const t = $derived(editor.telemetry);
@@ -146,7 +149,7 @@
           <div class="profile">
             <div class="avatar">{initials}</div>
             <div class="who">
-              <div class="name-row"><span class="name">{c.user?.email}</span><span class="plan" class:pro={c.paid}>{(c.plan || 'Free').toUpperCase()}</span></div>
+              <div class="name-row"><span class="name">{c.user?.email}</span>{#if c.paid}<span class="plan pro">{planLabel(c.plan)}</span>{/if}</div>
               <div class="email">{c.user?.email}</div>
             </div>
           </div>
@@ -200,7 +203,6 @@
                 </button>
               {/if}
             </div>
-            {#if !c.paid}<p class="muted sm-left">Preset backups &amp; full device snapshots are a supporter-tier feature — your presets stay on your machine on the free tier.</p>{/if}
 
             <div class="sec mt">CONTACT</div>
             <p class="muted">Optional — leave a way to reach you if we need to follow up on a bug report. Stored with your synced config; never used for marketing.</p>
@@ -214,25 +216,6 @@
                 <span class="item-desc">Control this device from any browser at axisapp.live while signed into the same account. Off by default; only you can connect. Turn off any time.</span>
               </span>
             </button>
-
-            <div class="sec mt">SUPPORTER TIER</div>
-            {#if c.paid}
-              <div class="patreon active">
-                <span class="row-ic on"><Icon name="star" size={14} /></span>
-                <span class="item-body">
-                  <span class="item-label">Supporter active <span class="soon on">{(c.plan || 'Supporter').toUpperCase()}</span></span>
-                  <span class="item-desc">Thank you! Preset &amp; full-device cloud backup are unlocked above.</span>
-                </span>
-              </div>
-            {:else}
-              <button class="patreon" disabled title="A paid supporter tier is planned — not available yet">
-                <span class="row-ic"><Icon name="star" size={14} /></span>
-                <span class="item-body">
-                  <span class="item-label">Become a supporter <span class="soon">soon</span></span>
-                  <span class="item-desc">A paid tier (preset &amp; full-device cloud backup) is planned. For now Axis is free — you can chip in on Ko-fi from the About tab.</span>
-                </span>
-              </button>
-            {/if}
 
             <button class="signout" onclick={() => editor.cloudLogout()}>Sign out</button>
             {#if confirmDelete}
@@ -349,8 +332,7 @@
             <div class="logo sm">◈</div>
             <div><div class="h1">Axis</div><div class="sub">v{version} · beta</div></div>
           </div>
-          <p class="muted">Axis is a free, open-source editor for Fractal devices. If it's useful to you, you can support ongoing development on Ko-fi — entirely optional, and it keeps the project going.</p>
-          <button class="kofi" onclick={() => openExternal(KOFI_URL)}>☕ Support development on Ko-fi</button>
+          <p class="muted">Axis is an open-source editor for Fractal devices.</p>
           <div class="links">
             <button class="link" onclick={() => { close(); editor.startTour(); }}>Replay app tour</button>
             <span class="dotsep"></span>
@@ -384,7 +366,6 @@
   .pad { padding: 18px 24px 24px; }
   .muted { font-size: 12px; color: #8a8a94; line-height: 1.5; margin: 6px 0 12px; }
   .muted.sm { font-size: 11px; margin-top: 4px; }
-  .muted.sm-left { font-size: 11px; margin: 10px 0 0; }
 
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
   .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin: 8px 0 22px; }
@@ -459,10 +440,6 @@
   .item-meta { font: 600 10px/1 'JetBrains Mono', monospace; color: #6e6e78; }
   .item-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   .item-desc { font-size: 11px; color: #7a7a83; line-height: 1.45; }
-  .patreon { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; padding: 13px; border-radius: 12px; background: #0e0e10; border: 1px solid #26262c; opacity: 0.55; cursor: not-allowed; filter: grayscale(1); }
-  .patreon.active { opacity: 1; filter: none; cursor: default; border-color: rgba(245, 166, 35, 0.35); background: rgba(245, 166, 35, 0.06); }
-  .patreon .row-ic { width: 30px; height: 30px; flex: none; border-radius: 9px; background: #141417; border: 1px solid #26262c; display: flex; align-items: center; justify-content: center; color: #9a9aa3; }
-  .patreon .row-ic.on { color: #f5a623; }
   .soon { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: #06181a; background: #7a7a83; border-radius: 4px; padding: 3px 5px; margin-left: 6px; vertical-align: middle; }
   .soon.on { background: #f5a623; }
   .signout { width: 100%; margin-top: 22px; height: 44px; background: transparent; border: 1px solid #2e2e36; color: #cfcfd6; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
@@ -480,8 +457,6 @@
   .incl .no { color: #d6543f; font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
 
   /* about */
-  .kofi { width: 100%; height: 46px; margin-top: 6px; background: #13c3ff; color: #06181a; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
-  .kofi:hover { filter: brightness(1.08); }
   .links { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; }
 
   /* connection & device tab */
