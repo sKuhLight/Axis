@@ -206,6 +206,15 @@
             <p class="muted">Optional — leave a way to reach you if we need to follow up on a bug report. Stored with your synced config; never used for marketing.</p>
             {@render contactField('acct-contact')}
 
+            <div class="sec mt">REMOTE CONTROL <span class="soon">beta</span></div>
+            <button class="item box" onclick={() => editor.setRemoteAccess(!editor.remote.enabled)}>
+              <span class="chk" class:on={editor.remote.enabled}>{#if editor.remote.enabled}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+              <span class="item-body">
+                <span class="item-label">Allow remote control {#if editor.remote.enabled && editor.remote.connected}<span class="soon on">LIVE</span>{/if}</span>
+                <span class="item-desc">Control this device from any browser at axisapp.live while signed into the same account. Off by default; only you can connect. Turn off any time.</span>
+              </span>
+            </button>
+
             <div class="sec mt">SUPPORTER TIER</div>
             {#if c.paid}
               <div class="patreon active">

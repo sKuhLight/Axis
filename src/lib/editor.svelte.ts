@@ -184,6 +184,9 @@ class EditorStore {
   /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
   tourActive = $state(false);
   tourStep = $state(0);
+  /** Axis Cloud Remote (host side): is this PC exposing remote control, and is a remote session live?
+   *  Off by default — the user opts in per device. Only meaningful when signed in. */
+  remote = $state<{ enabled: boolean; connected: boolean }>({ enabled: false, connected: false });
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
   // upload is per-incident consent and works even when `consent` is false.
@@ -461,9 +464,24 @@ class EditorStore {
       const s = await forgefx.cloudStatus();
       const paid = !!s.subscription?.active;
       this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free' };
-      if (s.user) { await this.cloudSync(); await this.#loadProfile(); cloud.refresh(); } // pull latest + profile + sync-state index on launch
+      if (s.user) { await this.cloudSync(); await this.#loadProfile(); await this.refreshRemote(); cloud.refresh(); } // pull latest + profile + remote state + sync-state index on launch
     } catch {
       /* cloud disabled / engine not ready */
+    }
+  };
+  /** Axis Cloud Remote (host side): reflect + toggle whether this PC exposes remote control. Off by
+   *  default; only works when signed in (the private channel is keyed to the user). */
+  refreshRemote = async () => {
+    try { const s = await forgefx.remoteStatus(); this.remote = { enabled: s.enabled, connected: s.connected }; } catch { /* remote unavailable */ }
+  };
+  setRemoteAccess = async (on: boolean) => {
+    try {
+      const s = await forgefx.remoteEnable(on);
+      this.remote = { enabled: s.enabled, connected: s.connected };
+      if (s.error) this.showToast(`Remote: ${s.error}`, '#f5a623');
+      else this.showToast(on ? 'Remote control enabled — reachable from axisapp.live when signed in' : 'Remote control turned off', on ? '#33c46b' : '#9a9aa3');
+    } catch {
+      this.showToast('Could not change remote access', '#d6543f');
     }
   };
   /** Debounced background sync after a local change — batches rapid edits, skips if signed-out/off/in-flight. */
