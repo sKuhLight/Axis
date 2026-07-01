@@ -10,7 +10,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -744,20 +744,42 @@ class EditorStore {
     }
   };
 
-  // live tuner/tempo/scene/cpu pushes from the device
+  // live tuner/tempo/scene/cpu pushes from the device (local: SSE). Remote mode gets the same CHANGE events
+  // over the relay channel (see remote.svelte.ts → applyDeviceEvent), so SSE is skipped there.
   #openEvents = () => {
     if (this.#events) return;
-    if (isRemote()) return; // remote mode: SSE can't ride the relay channel yet (live meters/tuner deferred to Phase 1.5)
+    if (isRemote()) return; // remote mode: SSE can't ride the relay; change events arrive via the channel
     try {
-      this.#events = forgefx.events((e) => {
-        if (e.type === 'tempo') this.bpm = e.bpm;
-        else if (e.type === 'scene') this.scene = e.index + 1;
-        else if (e.type === 'tuner') this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave };
-        else if (e.type === 'cpu') this.cpu = e.percent;
-        else if (e.type === 'meters') this.levels = { input: e.input, outL: e.outL, outR: e.outR };
-      });
+      this.#events = forgefx.events((e) => this.applyDeviceEvent(e));
     } catch {
       /* SSE unsupported / offline — telemetry stays at last-known */
+    }
+  };
+  #eventReload: ReturnType<typeof setTimeout> | null = null;
+  /** Apply one live device event — from SSE (local) or the remote relay channel. Drives cross-UI sync:
+   *  another window / the remote / the device itself changed something, so this UI follows. */
+  applyDeviceEvent = (e: DeviceEvent) => {
+    switch (e.type) {
+      case 'tempo': this.bpm = e.bpm; break;
+      case 'scene': this.scene = e.index + 1; break;
+      case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
+      case 'cpu': this.cpu = e.percent; break;
+      case 'meters': this.levels = { input: e.input, outL: e.outL, outR: e.outR }; break;
+      case 'param': {
+        // another UI moved a knob — reflect it live if that block is open (cheap: update the arc)
+        if (this.selected?.effectId === e.effectId) {
+          const p = this.params.find((x) => x.id === e.paramId);
+          if (p && p.norm !== e.norm) { p.norm = e.norm; this.params = [...this.params]; }
+        }
+        break;
+      }
+      case 'changed': {
+        // structural change elsewhere (block placed/removed, preset switched) — reload, debounced so a
+        // burst coalesces into one refresh.
+        if (this.#eventReload) clearTimeout(this.#eventReload);
+        this.#eventReload = setTimeout(() => { this.load(); }, 250);
+        break;
+      }
     }
   };
   // pull current scene + tempo once at load (device → UI)

@@ -5,6 +5,8 @@
 import { browserSupabase, isRemoteBuild, remoteConfigured } from './cloudBrowser';
 import { connectRemote } from './remoteTransport';
 import { setRemoteTransport } from './forgefx';
+import { editor } from './editor.svelte';
+import type { DeviceEvent } from './types';
 
 type Phase = 'signin' | 'connecting' | 'ready' | 'error';
 
@@ -48,7 +50,7 @@ class RemoteBoot {
       // user's access token before joining (a restored session may not have set it automatically).
       const { data: s } = await sb.auth.getSession();
       if (s.session?.access_token) { try { await sb.realtime.setAuth(s.session.access_token); } catch { /* */ } }
-      const { transport, close } = await connectRemote(sb, userId);
+      const { transport, close } = await connectRemote(sb, userId, { onEvent: (e) => editor.applyDeviceEvent(e as DeviceEvent) });
       setRemoteTransport(transport);
       this.#close = close;
       this.phase = 'ready';

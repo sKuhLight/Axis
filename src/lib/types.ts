@@ -318,7 +318,11 @@ export type DeviceEvent =
   | { type: 'tempo'; bpm: number }
   | { type: 'scene'; index: number }
   | { type: 'cpu'; percent: number }
-  | { type: 'meters'; input: number; outL: number; outR: number };
+  | { type: 'meters'; input: number; outL: number; outR: number }
+  // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
+  // `changed` = a structural change (grid/preset) → reload.
+  | { type: 'param'; effectId: number; paramId: number; norm: number }
+  | { type: 'changed'; scope: 'grid' | 'preset' };
 
 /** A user-defined parameter tab within a block family (persisted client-side). */
 export interface TabDef {
