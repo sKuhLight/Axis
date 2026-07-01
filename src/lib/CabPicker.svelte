@@ -259,7 +259,7 @@
     align-items: center;
     gap: 13px;
     padding: 18px 20px;
-    border-bottom: 1px solid #232329;
+    border-bottom: 1px solid var(--surface2);
   }
   .search input {
     flex: 1;
@@ -267,14 +267,14 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #f2f2f5;
+    color: var(--text);
     font-family: inherit;
     font-size: 17px;
     font-weight: 500;
   }
   .count {
     font-size: 12px;
-    color: #5d5d66;
+    color: var(--textmuted);
     white-space: nowrap;
   }
   .x {
@@ -283,7 +283,7 @@
     height: 30px;
     border-radius: 8px;
     border: 1px solid var(--border-2);
-    background: #1a1a1f;
+    background: var(--surface2);
     color: var(--textdim);
     cursor: pointer;
     font-size: 13px;
@@ -293,7 +293,7 @@
     align-items: center;
     gap: 10px;
     padding: 11px 16px;
-    border-bottom: 1px solid #1f1f25;
+    border-bottom: 1px solid var(--surface2);
   }
   .seg {
     display: flex;
@@ -340,7 +340,7 @@
     gap: 6px;
     padding: 10px 16px;
     overflow-x: auto;
-    border-bottom: 1px solid #1f1f25;
+    border-bottom: 1px solid var(--surface2);
   }
   .cat {
     flex: none;
@@ -368,7 +368,7 @@
   }
   .section {
     font: 600 10px/1 var(--font-mono);
-    color: #5d5d66;
+    color: var(--textmuted);
     letter-spacing: 0.1em;
     padding: 13px 10px 8px;
   }
@@ -423,7 +423,7 @@
   .rname {
     font-size: 14px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -455,7 +455,7 @@
     margin-right: 6px;
     border: 0;
     background: transparent;
-    color: #44444d;
+    color: var(--border3);
     font-size: 16px;
     cursor: pointer;
     border-radius: 9px;
@@ -475,7 +475,7 @@
     display: flex;
     gap: 16px;
     padding: 10px 16px;
-    border-top: 1px solid #232329;
+    border-top: 1px solid var(--surface2);
     font-size: 10px;
     color: var(--text-faint);
     flex: none;

@@ -87,7 +87,7 @@
   }
   .sub {
     font-size: 11px;
-    color: #8a8a94;
+    color: var(--textdim);
     line-height: 1.35;
   }
   .go {

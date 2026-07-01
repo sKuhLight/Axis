@@ -1194,7 +1194,7 @@
     white-space: nowrap;
     background: var(--surface);
     border: 1px solid var(--border);
-    color: #8a8a93;
+    color: var(--textdim);
   }
   .tab.on {
     background: rgba(245, 166, 35, 0.12);
@@ -1279,7 +1279,7 @@
     cursor: pointer;
   }
   .profitem:hover {
-    background: #1e1e25;
+    background: var(--surface2);
   }
   .profitem.on {
     color: #cdd6ff;
@@ -1294,12 +1294,12 @@
   }
   .pi-hint {
     font-size: 10px;
-    color: #6f6f78;
+    color: var(--textfaint);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .pi-del {
-    color: #6f6f78;
+    color: var(--textfaint);
     font-size: 11px;
     padding: 2px 5px;
     border-radius: 6px;
@@ -1383,7 +1383,7 @@
   }
   .ab-note {
     font: 500 10px/1 var(--font-mono);
-    color: #5b5b64;
+    color: var(--textmuted);
   }
   .ab-sp {
     flex: 1;
@@ -1428,7 +1428,7 @@
   }
   .content::-webkit-scrollbar-thumb,
   .tray-row::-webkit-scrollbar-thumb {
-    background: #34343d;
+    background: var(--border2);
     border: 2px solid transparent;
     background-clip: content-box;
     border-radius: 8px;
@@ -1445,7 +1445,7 @@
   .content,
   .tray-row {
     scrollbar-width: thin;
-    scrollbar-color: #34343d transparent;
+    scrollbar-color: var(--border2) transparent;
   }
   .boardwrap {
     position: relative;
@@ -1478,7 +1478,7 @@
     height: 100%;
     border-radius: 11px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #17171c, #101015);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border: 1px solid #212129;
     display: flex;
     flex-direction: column;
@@ -1526,7 +1526,7 @@
     border-radius: 10px;
     background: var(--input);
     border: 1px solid color-mix(in srgb, var(--accent, var(--accent)) 55%, var(--border2));
-    color: #f2f2f5;
+    color: var(--text);
     font: 700 17px/1 var(--font-mono);
     white-space: nowrap;
     pointer-events: none;
@@ -1798,7 +1798,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
   }
   .selfield.open {
     border-color: var(--accent);
@@ -1821,7 +1821,7 @@
     z-index: 2;
     font-weight: 700;
     font-size: 12px;
-    color: #c3c3cb;
+    color: var(--text2);
   }
   .eqbox {
     width: 100%;
@@ -1862,7 +1862,7 @@
     right: 5px;
     z-index: 8;
     font: 700 8px/1 var(--font-mono);
-    color: #5b5b64;
+    color: var(--textmuted);
     background: rgba(0, 0, 0, 0.4);
     border-radius: 5px;
     padding: 3px 4px;
@@ -1984,7 +1984,7 @@
     flex: none;
     padding: 11px 14px 13px;
     border-top: 1px solid var(--surface2);
-    background: linear-gradient(180deg, #101013, var(--bg));
+    background: linear-gradient(180deg, var(--bg2), var(--bg));
   }
   .tray-h {
     display: flex;
@@ -2047,7 +2047,7 @@
   .tc-name {
     font-size: 13px;
     font-weight: 600;
-    color: #e3e3e8;
+    color: var(--text);
     white-space: nowrap;
   }
   .tc-meta {
@@ -2092,7 +2092,7 @@
     background: transparent;
     border: 0;
     outline: none;
-    color: #ededf2;
+    color: var(--text);
     font-family: inherit;
     font-size: 13px;
     font-weight: 500;
@@ -2128,7 +2128,7 @@
     gap: 6px;
     padding: 10px;
     border-radius: 11px;
-    background: linear-gradient(180deg, #17171c, #101015);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border: 1px solid #212129;
     overflow: visible;
   }

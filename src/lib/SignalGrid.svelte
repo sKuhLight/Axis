@@ -569,7 +569,7 @@
     min-height: 0;
     overflow: auto;
     padding: 26px 22px;
-    background: radial-gradient(120% 120% at 50% 0%, #131316, var(--bg) 70%);
+    background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg) 70%);
     -webkit-overflow-scrolling: touch;
   }
   .gridwrap.mob {
@@ -610,8 +610,8 @@
     justify-content: space-between;
     gap: 12px;
     padding: 9px 14px 13px;
-    background: #0f0f12;
-    border-top: 1px solid #1a1a1f;
+    background: var(--bg2);
+    border-top: 1px solid var(--surface2);
     flex: none;
   }
   .density {
@@ -926,7 +926,7 @@
   }
   .shunt {
     background: var(--panel-2);
-    border: 1px solid #20202a;
+    border: 1px solid var(--surface2);
     cursor: grab;
     z-index: 1;
   }

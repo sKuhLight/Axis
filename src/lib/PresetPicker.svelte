@@ -186,7 +186,7 @@
   }
   .head {
     padding: 16px 18px 13px;
-    border-bottom: 1px solid #232329;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
   }
   .title-row {
@@ -246,7 +246,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #f2f2f5;
+    color: var(--text);
     font-family: inherit;
     font-size: 15px;
     font-weight: 500;
@@ -322,14 +322,14 @@
     display: flex;
     gap: 16px;
     padding: 10px 16px;
-    border-top: 1px solid #232329;
+    border-top: 1px solid var(--surface2);
     font-size: 10px;
     color: var(--text-faint);
     flex: none;
   }
   .section {
     font: 600 10px/1 var(--font-mono);
-    color: #5d5d66;
+    color: var(--textmuted);
     letter-spacing: 0.1em;
     padding: 13px 8px 9px;
   }
@@ -364,7 +364,7 @@
     margin-right: 6px;
     border: 0;
     background: transparent;
-    color: #44444d;
+    color: var(--border3);
     font-size: 17px;
     cursor: pointer;
     border-radius: 9px;
@@ -395,7 +395,7 @@
   .rname {
     font-size: 14px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

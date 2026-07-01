@@ -34,7 +34,7 @@
     background: var(--bg-rail, var(--bg2));
     border-top: 1px solid var(--border, var(--border));
     font-size: 11px;
-    color: var(--text-mut, #8a8a94);
+    color: var(--text-mut, var(--textdim));
     user-select: none;
   }
   .left {
@@ -49,7 +49,7 @@
   .right { flex: none; display: flex; align-items: center; gap: 10px; }
   .kofi { background: none; border: none; color: #13c3ff; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; }
   .kofi:hover { filter: brightness(1.12); }
-  .lnk { background: none; border: none; color: var(--text-mut, #8a8a94); font-size: 11px; cursor: pointer; padding: 0; }
+  .lnk { background: none; border: none; color: var(--text-mut, var(--textdim)); font-size: 11px; cursor: pointer; padding: 0; }
   .lnk:hover { color: var(--text2); }
   .cr { color: var(--textmuted); }
   .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); }

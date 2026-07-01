@@ -83,7 +83,7 @@
   .label {
     font-weight: 600;
     font-size: 12px;
-    color: #c3c3cb;
+    color: var(--text2);
     text-align: center;
     line-height: 1.2;
     max-width: 100%;

@@ -187,7 +187,7 @@
     height: 9px;
     border-radius: 50%;
     background: var(--amber);
-    border: 2px solid var(--surface, #0f0f12);
+    border: 2px solid var(--surface, var(--bg2));
     box-shadow: 0 0 6px var(--amber);
   }
   .ic {
@@ -247,7 +247,7 @@
     justify-content: space-between;
     font-size: 14px;
     font-weight: 700;
-    color: #ededf2;
+    color: var(--text);
     margin-bottom: 6px;
   }
   .pp-x {
@@ -317,14 +317,14 @@
     background: rgba(53, 201, 214, 0.1);
   }
   .pp-row.fr {
-    color: #ededf2;
+    color: var(--text);
   }
   .pp-kind {
     flex: none;
     font: 700 8px/1 var(--font-mono);
     letter-spacing: 0.06em;
     color: var(--textfaint);
-    background: #1a1a1f;
+    background: var(--surface2);
     border: 1px solid var(--border-2);
     border-radius: 5px;
     padding: 4px 5px;
@@ -380,7 +380,7 @@
   }
   .fw {
     font-size: 8px;
-    color: #4a4a52;
+    color: var(--border3);
   }
   /* phones: slim icon-only rail to reclaim width */
   @media (max-width: 760px) {
