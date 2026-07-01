@@ -5,7 +5,7 @@
 import { forgefx, ForgeError } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
-import { onMutation } from './syncBus';
+import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
@@ -34,6 +34,16 @@ function loadInstanceId(): string {
     return id;
   } catch { return 'anon'; }
 }
+// Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
+const CONTACT_KEY = 'axs.profile.contact';
+const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KEY) ?? ''; } catch { return ''; } };
+// Whether the user has made a first-run telemetry choice (accept OR decline). Distinct from the consent
+// value: unset → show the first-run prompt once; set → respect the stored consent silently.
+const DECIDED_KEY = 'axs.telemetry.decided';
+const loadDecided = (): boolean => { try { return localStorage.getItem(DECIDED_KEY) === '1'; } catch { return false; } };
+// One-time "support development on Ko-fi" nudge.
+const KOFI_SEEN_KEY = 'axs.kofi.seen';
+const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
 /** Strip the obvious PII from a string before it leaves the machine: emails + usernames in home paths. */
 function scrubPII(s: string): string {
   return s
@@ -147,12 +157,25 @@ class EditorStore {
     lastSync: number | null;
     note: string | null;
     plan: string;
+    /** Active paid subscription (authoritative flag from the server; drives preset-sync + backup UI). */
+    paid: boolean;
     scopes: { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
     fullBackup: boolean;
     autoSync: boolean;
     pendingEmail: string | null;
-  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
-  cloudOpen = $state(false);
+  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', paid: false, scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
+  // ── Axis hub (single rail entry point: Account · Privacy · About) ──
+  axisOpen = $state(false);
+  axisTab = $state<'account' | 'privacy' | 'about'>('account');
+  /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
+   *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
+  contact = $state<string>(loadContact());
+  /** Bottom-bar hover hint (left slot) — describes the parameter/control under the cursor. */
+  hint = $state<string | null>(null);
+  /** First-run popups: `consentPrompt` = telemetry accept/decline (only when telemetry is enabled in the
+   *  build and the user hasn't decided yet); `kofiNotice` = a one-time "support development" nudge. */
+  consentPromptOpen = $state(false);
+  kofiNoticeOpen = $state(false);
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
   // upload is per-incident consent and works even when `consent` is false.
@@ -160,7 +183,6 @@ class EditorStore {
     { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), faroUrl: '', sending: false }
   );
   #faroStarted = false;
-  telemetryOpen = $state(false);
   // Major-error → "Upload Debug Log" prompt. Set by offerDebugReport (debounced per category); the
   // DiagnosticsPanel renders it as a dismissible card with an explicit Upload button.
   reportPrompt = $state<{ kind: string; route?: string; status?: number; message?: string } | null>(null);
@@ -416,8 +438,9 @@ class EditorStore {
     onMutation(() => this.scheduleAutoSync());
     try {
       const s = await forgefx.cloudStatus();
-      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null };
-      if (s.user) { await this.cloudSync(); cloud.refresh(); } // pull latest + sync-state index on launch
+      const paid = !!s.subscription?.active;
+      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free' };
+      if (s.user) { await this.cloudSync(); await this.#loadProfile(); cloud.refresh(); } // pull latest + profile + sync-state index on launch
     } catch {
       /* cloud disabled / engine not ready */
     }
@@ -440,7 +463,21 @@ class EditorStore {
       const s = await forgefx.telemetryStatus();
       this.telemetry = { ...this.telemetry, enabled: s.enabled, uploadEnabled: s.uploadEnabled, faroUrl: s.faroUrl };
       await this.#startFaro();
+      // First run: if the build ships live diagnostics and the user hasn't chosen yet, ask once. If they
+      // already chose (or telemetry is off in this build), fall through to the one-time Ko-fi nudge.
+      if (s.enabled && !loadDecided()) this.consentPromptOpen = true;
+      else this.#maybeShowKofi();
     } catch { /* telemetry disabled / engine not ready */ }
+  };
+  /** Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
+   *  consent prompt is currently up (never stack two first-run popups). */
+  #maybeShowKofi = () => {
+    if (loadKofiSeen() || this.consentPromptOpen) return;
+    this.kofiNoticeOpen = true;
+  };
+  dismissKofiNotice = () => {
+    this.kofiNoticeOpen = false;
+    try { localStorage.setItem(KOFI_SEEN_KEY, '1'); } catch { /* */ }
   };
   /** Start live Faro RUM iff the operator enabled it, the user consented, and we have a collector URL.
    *  Dynamic-imported so the SDK never loads for users/builds without telemetry. Idempotent. */
@@ -456,9 +493,60 @@ class EditorStore {
   };
   setTelemetryConsent = (on: boolean) => {
     this.telemetry = { ...this.telemetry, consent: on };
-    try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); } catch { /* */ }
+    try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); localStorage.setItem(DECIDED_KEY, '1'); } catch { /* */ }
     if (on) this.#startFaro(); // opting in mid-session starts (or resumes) RUM immediately
     else import('./faro').then((m) => m.pauseFaro()).catch(() => {}); // opting out stops sending at once
+    this.#persistProfile(); // mirror the choice to the synced profile when logged in
+  };
+  /** First-run consent choice (accept/decline). Records it, closes the prompt, then shows the Ko-fi nudge. */
+  decideTelemetry = (on: boolean) => {
+    this.consentPromptOpen = false;
+    this.setTelemetryConsent(on);
+    this.#maybeShowKofi();
+  };
+
+  // ── Axis hub + profile (contact / synced prefs) ──
+  openAxis = (tab: 'account' | 'privacy' | 'about' = 'account') => { this.axisTab = tab; this.axisOpen = true; };
+  /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
+  setHint = (text: string) => { this.hint = text; };
+  clearHint = () => { this.hint = null; };
+  /** Set the optional contact string (capped at 100 chars), mirror locally, and persist to the profile. */
+  setContact = (v: string) => {
+    this.contact = v.slice(0, 100);
+    try { localStorage.setItem(CONTACT_KEY, this.contact); } catch { /* */ }
+    this.#persistProfile();
+  };
+  /** The profile is a single `config/profile` doc: it rides the normal config sync (LWW across devices
+   *  when logged in) and is wiped by account deletion. Kept as a plain doc so no bespoke table/endpoint is
+   *  needed. Local mirrors (localStorage) keep contact + consent available synchronously and offline. */
+  #persistProfile = () => {
+    forgefx.putDoc('config', 'profile', { contact: this.contact, telemetryConsent: this.telemetry.consent, updatedAt: Date.now() })
+      .then(() => notifyMutation())
+      .catch(() => { /* store unavailable (engine not ready) — the local mirror still holds the value */ });
+  };
+  /** Pull the synced profile after login and reconcile: adopt a cloud-set contact, and if the cloud has a
+   *  telemetry choice, honour it (updating the local mirror + Faro state to match). */
+  /** Re-read the subscription (paid flag + plan) from the server after auth changes. */
+  #refreshSubscription = async () => {
+    try {
+      const s = await forgefx.cloudStatus();
+      const paid = !!s.subscription?.active;
+      this.cloud = { ...this.cloud, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free' };
+    } catch { /* engine not ready */ }
+  };
+  #loadProfile = async () => {
+    try {
+      const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean }>('config', 'profile');
+      const p = doc?.data;
+      if (!p) return;
+      if (typeof p.contact === 'string' && p.contact !== this.contact) {
+        this.contact = p.contact.slice(0, 100);
+        try { localStorage.setItem(CONTACT_KEY, this.contact); } catch { /* */ }
+      }
+      if (typeof p.telemetryConsent === 'boolean' && p.telemetryConsent !== this.telemetry.consent) {
+        this.setTelemetryConsent(p.telemetryConsent);
+      }
+    } catch { /* no profile yet / engine not ready */ }
   };
   /** On a major error (device-comm 5xx, detect failure, render crash), nudge the user to upload a debug
    *  report — debounced to at most once per category per 5 min so it never spams. The actual upload is an
@@ -498,6 +586,7 @@ class EditorStore {
         capturedAt: Date.now(),
         app: { version: (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev', platform: navigator.platform },
         trigger,
+        contact: this.contact.trim() ? this.contact.trim().slice(0, 100) : undefined, // user-supplied, opt-in — not scrubbed
         diag,
         log: scrubPII(log),
         events: this.#recentEvents.slice(-60).map((e) => ({ ...e, text: scrubPII(e.text) }))
@@ -517,7 +606,9 @@ class EditorStore {
     try {
       const r = await forgefx.cloudLogin(email, password);
       this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null };
+      await this.#refreshSubscription();
       await this.cloudSync();
+      await this.#loadProfile();
       cloud.refresh();
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Login failed';
@@ -528,7 +619,7 @@ class EditorStore {
     try {
       const r = await forgefx.cloudRegister(email, password);
       if (r.needsConfirmation) this.cloud = { ...this.cloud, pendingEmail: email, note: null };
-      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null }; await this.cloudSync(); cloud.refresh(); }
+      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null }; await this.#refreshSubscription(); await this.cloudSync(); await this.#loadProfile(); this.#persistProfile(); cloud.refresh(); }
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Sign-up failed';
     }
@@ -559,9 +650,10 @@ class EditorStore {
     this.cloud.syncing = true;
     this.cloud.note = null;
     try {
-      const s = this.cloud.scopes;
-      // server scopes are coarser than the UI: presets→version blobs; everything else lives in `config`.
-      const r = await forgefx.cloudSync({ presets: s.presets, config: s.settings || s.fc || s.scenes });
+      // Free tier: Axis config only (tags/collections/favorites/filters/layouts/FC/scenes + profile).
+      // Paid tier (active subscription): also sync preset-version blobs. The server re-checks the
+      // subscription and ignores `presets:true` from a free account, so this is cosmetic-only gating.
+      const r = await forgefx.cloudSync({ presets: this.cloud.paid ? this.cloud.scopes.presets : false, config: true });
       const up = r.config.pushed + r.versions.pushed, down = r.config.pulled + r.versions.pulled;
       this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${up} ↓${down}` };
       cloud.refresh();

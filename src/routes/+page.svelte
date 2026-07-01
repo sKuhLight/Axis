@@ -14,8 +14,9 @@
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
-  import CloudPanel from '$lib/CloudPanel.svelte';
-  import DiagnosticsPanel from '$lib/DiagnosticsPanel.svelte';
+  import AxisPanel from '$lib/AxisPanel.svelte';
+  import Notices from '$lib/Notices.svelte';
+  import StatusBar from '$lib/StatusBar.svelte';
   import Toast from '$lib/Toast.svelte';
 
   onMount(() => {
@@ -65,6 +66,7 @@
       <SignalGrid />
       <BlockEditor />
     {/if}
+    <StatusBar />
   </div>
   <CommandPalette />
   <CabPicker />
@@ -72,8 +74,8 @@
   <SaveDialog />
   <TunerOverlay />
   <CachePrompt />
-  <CloudPanel />
-  <DiagnosticsPanel />
+  <AxisPanel />
+  <Notices />
   <Toast />
 </div>
 

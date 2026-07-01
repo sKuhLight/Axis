@@ -602,6 +602,19 @@
     return u ? `${num} ${u}` : num;
   };
 
+  // Mirror the hovered/adjusted control into the bottom status-bar hint (left slot). Keys off `tip`, so it
+  // covers every showTip() call site (knob hover + drag) with one injection; clears when nothing's active.
+  $effect(() => {
+    const tp = tip;
+    if (tp && !tp.edit) {
+      const p = knob(tp.id);
+      editor.setHint(p ? `${p.name} · ${fullVal(tp.id)}` : '');
+    } else {
+      editor.clearHint();
+    }
+    return () => editor.clearHint();
+  });
+
   // move a widget to an adjacent page (drag to the left/right edge of the board)
   function migrateWidget(id: string, dir: number) {
     if (!board) return false;

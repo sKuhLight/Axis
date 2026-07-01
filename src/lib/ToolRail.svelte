@@ -84,20 +84,14 @@
     </button>
   {/each}
   <div class="spacer"></div>
-  {#if editor.cloud.enabled}
-    <button class="item acct" class:active={editor.cloudOpen} title={editor.cloud.user ? `Account · ${editor.cloud.user.email}` : 'Cloud sync — sign in'} onclick={() => (editor.cloudOpen = true)}>
-      {#if editor.cloud.user}
-        <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
-        {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
-      {:else}
-        <span class="ic">☁</span>
-      {/if}
-      <span class="sh">{editor.cloud.user ? 'Account' : 'Cloud'}</span>
-    </button>
-  {/if}
-  <button class="item" class:active={editor.telemetryOpen} title="Privacy & Diagnostics" onclick={() => (editor.telemetryOpen = true)}>
-    <span class="ic">🛡</span>
-    <span class="sh">Privacy</span>
+  <button class="item acct" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
+    {#if editor.cloud.user}
+      <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
+      {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
+    {:else}
+      <span class="ic">◈</span>
+    {/if}
+    <span class="sh">Axis</span>
   </button>
   <button class="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
     <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>

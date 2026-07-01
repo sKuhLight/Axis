@@ -5,14 +5,25 @@ Notable changes per release, for Axis and its bundled ForgeFX engine. Newest fir
 ## 0.4.23-beta — 2026-07-01
 
 ### Added
-- **Privacy & Diagnostics.** New panel (🛡 in the tool rail) with **opt-in** anonymous
-  diagnostics (off by default) that help fix bugs faster — no personal data, no
-  presets. Plus an on-demand **"Send debug report"** and an automatic prompt after a
-  device error, so you can share a scrubbed diagnostic bundle in one click.
-- **Delete account & data.** The account panel can now permanently erase your account
-  and all cloud data (GDPR).
-- **Legal links.** Registration shows the Terms & Privacy agreement, and the app links
-  to the Privacy Policy / Terms / Imprint at axisapp.live.
+- **One "Axis" hub.** The Cloud and Privacy rail buttons are now a single **Axis**
+  button opening a tabbed panel — **Account** (sign-in / register / sync / contact /
+  delete), **Privacy** (diagnostics + debug report), and **About** (version, support,
+  legal).
+- **Free cloud tier — open for registration.** Create an account and sync your **Axis
+  config** (tags, filters, favorites, layouts, footswitch & scene setups) across every
+  device. Preset & full-device cloud backup are a **supporter-tier** feature; on the
+  free tier your presets stay on your machine.
+- **Privacy & Diagnostics.** **Opt-in** anonymous diagnostics (off by default; a
+  first-run prompt lets you choose) that help fix bugs faster — no personal data, no
+  presets. Plus an on-demand **"Send debug report"** with an optional contact field so
+  we can follow up, and an automatic prompt after a device error.
+- **Delete account & data.** Permanently erase your account and all cloud data (GDPR).
+- **Support the project.** A Ko-fi link (About tab + status bar) — Axis is free &
+  open-source; contributions are entirely optional.
+- **Status bar.** A new bottom bar shows the parameter under your cursor on the left,
+  and support / imprint links on the right.
+- **Legal links.** Registration shows the Terms & Privacy agreement; the app links to
+  the Privacy Policy / Terms / Imprint at axisapp.live.
 
 ### Notes
 - Diagnostics and cloud sync remain **optional and off until you opt in**; the editor
