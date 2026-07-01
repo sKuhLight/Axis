@@ -118,6 +118,7 @@ export const forgefx = {
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),
+  cloudDeleteAccount: () => req<{ ok: boolean }>('/cloud/delete-account', { method: 'POST' }),
   // The first sync after a full-device backup uploads 100+ blobs — minutes of work. Long timeout so
   // the client doesn't abort a sync that's still making progress.
   cloudSync: (scopes?: { config?: boolean; presets?: boolean }) => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST', body: JSON.stringify(scopes ? { scopes } : {}), signal: AbortSignal.timeout(600000) }),

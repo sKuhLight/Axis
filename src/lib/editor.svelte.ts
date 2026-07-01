@@ -531,6 +531,17 @@ class EditorStore {
     this.cloud = { ...this.cloud, user: null, lastSync: null, pendingEmail: null };
     cloud.clear();
   };
+  /** GDPR erasure: permanently delete the account + all cloud data, then sign out locally. */
+  cloudDeleteAccount = async () => {
+    try {
+      await forgefx.cloudDeleteAccount();
+      this.cloud = { ...this.cloud, user: null, lastSync: null, pendingEmail: null, note: null };
+      cloud.clear();
+      this.showToast('Account and cloud data deleted', '#9a9aa3');
+    } catch (e) {
+      this.showToast('Delete failed: ' + (e as Error).message, '#d6543f');
+    }
+  };
   /** Toggle a sync scope (presets/scenes/fc/settings) and persist the choice. */
   setCloudScope = (key: keyof CloudScopes, on: boolean) => {
     this.cloud = { ...this.cloud, scopes: { ...this.cloud.scopes, [key]: on } };

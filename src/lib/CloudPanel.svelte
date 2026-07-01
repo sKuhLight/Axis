@@ -13,6 +13,7 @@
   let email = $state('');
   let password = $state('');
   let planOpen = $state(false);
+  let confirmDelete = $state(false);
 
   const c = $derived(editor.cloud);
   const view = $derived<'auth' | 'verify' | 'account'>(c.user ? 'account' : c.pendingEmail ? 'verify' : 'auth');
@@ -170,6 +171,17 @@
           {/if}
 
           <button class="signout" onclick={() => editor.cloudLogout()}>Sign out</button>
+          {#if confirmDelete}
+            <div class="danger">
+              <p class="muted sm">Permanently delete your account and <strong>all</strong> cloud data (synced presets, config, backups). This cannot be undone.</p>
+              <div class="drow">
+                <button class="del" onclick={() => { editor.cloudDeleteAccount(); confirmDelete = false; }}>Delete permanently</button>
+                <button class="link" onclick={() => (confirmDelete = false)}>Cancel</button>
+              </div>
+            </div>
+          {:else}
+            <button class="dellink" onclick={() => (confirmDelete = true)}>Delete account &amp; data</button>
+          {/if}
           <p class="muted sm">Open-source — self-host your own cloud backend, or support the project for hosted sync.</p>
         </div>
       {/if}
@@ -277,4 +289,10 @@
   .supporter:hover { filter: brightness(1.08); }
   .signout { width: 100%; margin-top: 20px; height: 44px; background: transparent; border: 1px solid #2e2e36; color: #cfcfd6; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
   .signout:hover { border-color: #3f3f48; color: #fff; }
+  .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: #8a5a52; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .dellink:hover { color: #d6543f; }
+  .danger { margin-top: 12px; padding: 14px; background: rgba(214, 84, 63, 0.06); border: 1px solid rgba(214, 84, 63, 0.35); border-radius: 11px; }
+  .drow { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+  .del { flex: 1; height: 40px; background: #d6543f; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .del:hover { background: #e2634e; }
 </style>
