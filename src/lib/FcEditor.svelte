@@ -314,7 +314,7 @@
     align-items: center;
     gap: 10px;
     padding: 12px 18px;
-    border-bottom: 1px solid var(--line, #2a2a32);
+    border-bottom: 1px solid var(--line, var(--border2));
   }
   .fhead h2 {
     margin: 0;
@@ -329,7 +329,7 @@
   }
   .sub {
     font-size: 11px;
-    color: #8a8a93;
+    color: var(--textdim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -338,7 +338,7 @@
   }
   .back {
     background: transparent;
-    border: 1px solid var(--line, #2a2a32);
+    border: 1px solid var(--line, var(--border2));
     color: var(--text);
     border-radius: 8px;
     padding: 6px 12px;
@@ -500,7 +500,7 @@
 
   .flbl {
     font-size: 12px;
-    color: #8a8a93;
+    color: var(--textdim);
   }
   .todo {
     font-size: 9px;
@@ -552,7 +552,7 @@
     flex: 1;
     display: grid;
     place-items: center;
-    color: #8a8a93;
+    color: var(--textdim);
     font-size: 14px;
     padding: 24px;
     text-align: center;

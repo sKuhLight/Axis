@@ -90,8 +90,8 @@
   .h1 { font-size: 19px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   .muted { font-size: 12.5px; color: var(--textdim); line-height: 1.5; margin: 6px 0 14px; }
-  .incl { margin: 4px 0 16px; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: #b9b9c2; line-height: 1.7; display: flex; flex-direction: column; gap: 4px; }
-  .incl2 { list-style: none; margin: 10px 0 0; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: #b9b9c2; line-height: 1.6; }
+  .incl { margin: 4px 0 16px; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text2); line-height: 1.7; display: flex; flex-direction: column; gap: 4px; }
+  .incl2 { list-style: none; margin: 10px 0 0; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text2); line-height: 1.6; }
   .ok { color: var(--accent); font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
   .no { color: var(--danger); font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
   .cfield { display: flex; flex-direction: column; gap: 7px; margin: 4px 0 12px; }

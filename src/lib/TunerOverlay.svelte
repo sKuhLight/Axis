@@ -70,7 +70,7 @@
     position: relative;
     width: min(440px, 92vw);
     padding: 18px 22px 24px;
-    background: linear-gradient(180deg, var(--surface), #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border: 1px solid var(--surface-3);
     border-radius: 16px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -147,7 +147,7 @@
   }
   .tick.center {
     height: 22px;
-    background: #4a4a52;
+    background: var(--border3);
   }
   .needle {
     position: absolute;

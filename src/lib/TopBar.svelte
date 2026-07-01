@@ -148,7 +148,7 @@
     align-items: center;
     gap: 12px;
     padding: 0 16px;
-    background: linear-gradient(180deg, #141416, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border-bottom: 1px solid var(--border);
     overflow: hidden;
   }
@@ -302,7 +302,7 @@
   .pname {
     font-size: 13px;
     font-weight: 600;
-    color: #e3e3e8;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -395,7 +395,7 @@
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: #8a8a93;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
@@ -514,7 +514,7 @@
   }
   .div {
     width: 1px;
-    background: #20202a;
+    background: var(--surface2);
     flex: none;
   }
   .cpu {

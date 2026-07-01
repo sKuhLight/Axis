@@ -150,7 +150,7 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid #20202a;
+    border-top: 1px solid var(--surface2);
     background: var(--bg2);
     position: relative;
     z-index: 40;
@@ -172,7 +172,7 @@
   .card {
     width: 100%;
     height: 100%;
-    background: linear-gradient(180deg, #141418, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -180,7 +180,7 @@
   .card.sheet {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, var(--surface), #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
@@ -192,11 +192,11 @@
     justify-content: center;
     cursor: ns-resize;
     background: var(--bg2);
-    border-bottom: 1px solid #1a1a1f;
+    border-bottom: 1px solid var(--surface2);
     touch-action: none;
   }
   .resize:hover {
-    background: #141418;
+    background: var(--surface);
   }
   .grip {
     width: 48px;
@@ -234,8 +234,8 @@
     min-width: 0;
     height: 46px;
     padding: 0 12px 0 13px;
-    background: linear-gradient(180deg, #101015, #0c0c0f);
-    border: 1px solid #34343d;
+    background: linear-gradient(180deg, var(--bg2), #0c0c0f);
+    border: 1px solid var(--border2);
     border-radius: 11px;
     cursor: pointer;
     color: var(--accent);
@@ -343,14 +343,14 @@
     margin: 2px 0 14px;
     padding: 14px 16px;
     border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--ac) 35%, #2a2a30);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, #16161a), #131316);
+    border: 1px solid color-mix(in srgb, var(--ac) 35%, var(--border2));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, #16161a), var(--bg2));
     cursor: pointer;
     text-align: left;
     transition: border-color 0.12s;
   }
   .cabpick:hover {
-    border-color: color-mix(in srgb, var(--ac) 60%, #2a2a30);
+    border-color: color-mix(in srgb, var(--ac) 60%, var(--border2));
   }
   .cp-ic {
     flex: none;
@@ -374,7 +374,7 @@
   .cp-lbl {
     font-size: 13px;
     font-weight: 700;
-    color: #ededf2;
+    color: var(--text);
   }
   .cp-name {
     font-size: 11.5px;
@@ -399,8 +399,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 16px;
-    border-top: 1px solid #1e1e25;
-    background: #101013;
+    border-top: 1px solid var(--surface2);
+    background: var(--bg2);
     flex: none;
   }
   .act {

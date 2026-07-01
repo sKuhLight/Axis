@@ -50,7 +50,7 @@
 </div>
 
 <style>
-  .bg { position: fixed; inset: 0; background: var(--bg, #0b0b0d); display: flex; align-items: center; justify-content: center; padding: 24px; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .bg { position: fixed; inset: 0; background: var(--bg, var(--bg)); display: flex; align-items: center; justify-content: center; padding: 24px; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .card { width: 380px; max-width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); padding: 26px 24px 22px; color: var(--text); }
   .brand { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
   .h1 { font-size: 20px; font-weight: 800; color: var(--text); }
@@ -74,7 +74,7 @@
   .st.ok { color: var(--ok); }
   .st.warn { color: var(--amber); }
   .ss { font-size: 12.5px; color: var(--textdim); }
-  .hint { font-size: 12px; color: #b9b9c2; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; line-height: 1.5; }
+  .hint { font-size: 12px; color: var(--text2); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; line-height: 1.5; }
   .spinner { width: 34px; height: 34px; border: 3px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

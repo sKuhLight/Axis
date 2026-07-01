@@ -73,7 +73,7 @@
   .lbl {
     font-weight: 600;
     font-size: 12px;
-    color: #c3c3cb;
+    color: var(--text2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -90,7 +90,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
     min-width: 0;
   }
   .field.open,
@@ -121,7 +121,7 @@
     z-index: 120;
     max-height: 248px;
     overflow-y: auto;
-    background: #1a1a1f;
+    background: var(--surface2);
     border: 1px solid var(--border2);
     border-radius: 11px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
@@ -139,7 +139,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    color: #c3c3cb;
+    color: var(--text2);
     background: transparent;
   }
   .opt:hover {
