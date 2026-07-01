@@ -2,6 +2,22 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.23-beta — 2026-07-01
+
+### Added
+- **Privacy & Diagnostics.** New panel (🛡 in the tool rail) with **opt-in** anonymous
+  diagnostics (off by default) that help fix bugs faster — no personal data, no
+  presets. Plus an on-demand **"Send debug report"** and an automatic prompt after a
+  device error, so you can share a scrubbed diagnostic bundle in one click.
+- **Delete account & data.** The account panel can now permanently erase your account
+  and all cloud data (GDPR).
+- **Legal links.** Registration shows the Terms & Privacy agreement, and the app links
+  to the Privacy Policy / Terms / Imprint at axisapp.live.
+
+### Notes
+- Diagnostics and cloud sync remain **optional and off until you opt in**; the editor
+  and local backups work fully offline with no account.
+
 ## 0.4.22-beta — 2026-06-30
 
 ### Fixed
