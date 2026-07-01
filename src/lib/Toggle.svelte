@@ -60,8 +60,8 @@
     padding: 0;
   }
   .switch.on {
-    background: #173a26;
-    border-color: #3a7d4f;
+    background: var(--ok-tint);
+    border-color: var(--ok-border);
     box-shadow: inset 0 0 10px rgba(70, 209, 127, 0.25);
   }
   .knob {
@@ -71,13 +71,13 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #5a5a62;
+    background: var(--textmuted);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     transition: left 0.16s cubic-bezier(0.3, 0.8, 0.3, 1), background 0.15s;
   }
   .switch.on .knob {
     left: 29px;
-    background: #46d17f;
+    background: var(--ok);
     box-shadow: 0 0 8px rgba(70, 209, 127, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5);
   }
   .label {

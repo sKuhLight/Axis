@@ -378,7 +378,7 @@
     border-radius: 9px;
     border: 1px solid var(--border2);
     background: var(--track);
-    color: #b8b8c0;
+    color: var(--text2);
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
@@ -390,7 +390,7 @@
   .chip.on {
     background: var(--c);
     border-color: var(--c);
-    color: #1c1206;
+    color: var(--bg2);
   }
   .board {
     display: grid;
@@ -405,8 +405,8 @@
     min-height: 96px;
     padding: 16px 13px 12px;
     border-radius: 14px;
-    border: 1px solid #28282f;
-    background: linear-gradient(180deg, #181820, #121217);
+    border: 1px solid var(--border2);
+    background: linear-gradient(180deg, var(--surface2), var(--surface));
     cursor: pointer;
     text-align: left;
   }
@@ -444,7 +444,7 @@
   }
   .swhold {
     font-size: 10px;
-    color: #7e7e88;
+    color: var(--textfaint);
   }
   .insp {
     border-top: 1px solid var(--surface2);
@@ -485,11 +485,11 @@
     border-radius: 6px;
   }
   .abadge.tap {
-    background: #1d2a2c;
-    color: #7fd8de;
+    background: var(--accent-tint);
+    color: var(--accentbright);
   }
   .abadge.hold {
-    background: #2a2212;
+    background: var(--surface2);
     color: #f5c518;
   }
   .field {
@@ -515,7 +515,7 @@
     background: var(--bg2);
     border: 1px solid var(--border2);
     border-radius: 9px;
-    color: #e7e7ee;
+    color: var(--text);
     padding: 0 11px;
     font-size: 13px;
     font-family: inherit;

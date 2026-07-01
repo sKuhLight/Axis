@@ -234,7 +234,7 @@
     min-width: 0;
     height: 46px;
     padding: 0 12px 0 13px;
-    background: linear-gradient(180deg, var(--bg2), #0c0c0f);
+    background: linear-gradient(180deg, var(--bg2), var(--bg));
     border: 1px solid var(--border2);
     border-radius: 11px;
     cursor: pointer;
@@ -242,7 +242,7 @@
   }
   .typebtn:hover:not(:disabled) {
     border-color: var(--accent);
-    background: #0f1518;
+    background: var(--surface);
   }
   .typebtn:disabled {
     cursor: default;
@@ -308,7 +308,7 @@
     cursor: pointer;
   }
   .ch-btn.on {
-    background: #1d2a2c;
+    background: var(--accent-tint);
     border-color: var(--accent);
     color: var(--amber);
   }
@@ -344,7 +344,7 @@
     padding: 14px 16px;
     border-radius: 12px;
     border: 1px solid color-mix(in srgb, var(--ac) 35%, var(--border2));
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, #16161a), var(--bg2));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, var(--surface)), var(--bg2));
     cursor: pointer;
     text-align: left;
     transition: border-color 0.12s;
@@ -418,17 +418,17 @@
     border-color: var(--border-strong);
   }
   .act.byp {
-    background: #142417;
-    border-color: #2c4a31;
-    color: #5fc46b;
+    background: var(--ok-tint);
+    border-color: var(--ok-border);
+    color: var(--ok);
   }
   .act.byp.on {
-    background: #241516;
+    background: var(--surface2);
     border-color: #5a2f33;
     color: var(--danger);
   }
   .act.rem {
-    background: #1a1113;
+    background: var(--surface);
     border-color: #4a2226;
     color: var(--danger);
   }

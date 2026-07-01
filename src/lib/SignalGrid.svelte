@@ -858,11 +858,11 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #80808a;
+    background: var(--textfaint);
     transition: all 0.12s;
   }
   .bypdot.on .bypdot-i {
-    background: #46d17f;
+    background: var(--ok);
     box-shadow: 0 0 6px rgba(70, 209, 127, 0.85);
   }
   .flow {
@@ -907,7 +907,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #33333d;
+    background: var(--border3);
     transition: opacity 0.15s;
   }
   .empty:hover .restdot {
@@ -936,7 +936,7 @@
   .sh-bar {
     width: 62%;
     height: 2px;
-    background: #4a4a55;
+    background: var(--textmuted);
     border-radius: 1px;
   }
 

@@ -107,7 +107,7 @@
     color: var(--text);
   }
   .note.tuned {
-    color: #5fc46b;
+    color: var(--ok);
     text-shadow: 0 0 26px rgba(95, 196, 107, 0.5);
   }
   .oct {
@@ -161,7 +161,7 @@
     box-shadow: 0 0 12px rgba(245, 166, 35, 0.6);
   }
   .needle.tuned {
-    background: #5fc46b;
+    background: var(--ok);
     box-shadow: 0 0 14px rgba(95, 196, 107, 0.7);
   }
   .strings {
@@ -182,7 +182,7 @@
     font: 700 13px/1 var(--font-mono);
   }
   .str.on {
-    background: #16252a;
+    background: var(--surface2);
     border-color: var(--accent);
     color: var(--accent);
   }
