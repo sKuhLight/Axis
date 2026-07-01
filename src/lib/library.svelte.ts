@@ -3,6 +3,7 @@
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { z } from 'zod';
 import { forgefx, isRemote } from './forgefx';
+import { isRemoteBuild } from './cloudBrowser';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
@@ -77,6 +78,26 @@ const persistCfg = (cfgId: 'tags' | 'collections' | 'favs', lsKey: string, v: un
   notifyMutation(); // nudge debounced cloud auto-sync
 };
 
+// The device library index (512 preset summaries) is far too big for a plain config doc, so we gzip it to
+// base64 before storing it in the `config/library` doc. The host pushes it after every scan; a remote web
+// client pulls + gunzips it (over the relay) instead of re-scanning 512 presets over MIDI. CompressionStream
+// is available in every browser + Electron we ship on.
+async function gzipB64(obj: unknown): Promise<string> {
+  const data = new TextEncoder().encode(JSON.stringify(obj));
+  const buf = await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin);
+}
+async function gunzipB64<T>(b64: string): Promise<T> {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const buf = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  return JSON.parse(new TextDecoder().decode(buf)) as T;
+}
+
 class LibraryStore {
   entries = $state<LibEntry[]>([]);
   scanning = $state(false);
@@ -125,22 +146,26 @@ class LibraryStore {
     const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
     this.entries = [...deviceEntries, ...fileEntries].sort(this.#order);
     this.folders = load<string[]>(LS.folders, []);
+    // Host: publish the existing device index to the cloud so remote clients get it without a re-scan.
+    // (no-op in remote mode; debounced; idempotent.)
+    if (deviceEntries.length) this.#pushIndex(cached.map((s) => ({ ...s, params: undefined })));
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
       idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
       idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = b; });
     }
-    // one-time: mirror existing local config into the ForgeFX store so it's present before the first edit
-    if (typeof localStorage !== 'undefined' && !localStorage.getItem('axs.cfg.migrated')) {
+    // Host: republish the local Axis config into the ONE config store on every launch, so the store always
+    // reflects THIS PC — that's the source of truth the remote (and cloud sync) read. NEVER on the remote web
+    // build: its localStorage is empty and (in dev) shares the host's ForgeFX, so publishing would clobber
+    // the host's real config. The remote PULLS this config in hydrateRemoteConfig() instead.
+    if (!isRemoteBuild() && typeof localStorage !== 'undefined') {
       const raw = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
-      Promise.allSettled([
-        forgefx.putDoc('config', 'tags', this.tags),
-        forgefx.putDoc('config', 'collections', this.collections),
-        forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, [])),
-        forgefx.putDoc('config', 'savedFilters', raw('axs.pb.saved') ?? []),
-        forgefx.putDoc('config', 'layouts', raw('axis.layouts.v1') ?? {}),
-        forgefx.putDoc('config', 'swipe', raw('axis.swipe.v1') ?? {})
-      ]).then((r) => { if (r.some((x) => x.status === 'fulfilled')) localStorage.setItem('axs.cfg.migrated', '1'); });
+      forgefx.putDoc('config', 'tags', this.tags).catch(() => {});
+      forgefx.putDoc('config', 'collections', this.collections).catch(() => {});
+      forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, [])).catch(() => {});
+      forgefx.putDoc('config', 'savedFilters', raw('axs.pb.saved') ?? []).catch(() => {});
+      forgefx.putDoc('config', 'layouts', raw('axis.layouts.v1') ?? {}).catch(() => {});
+      forgefx.putDoc('config', 'swipe', raw('axis.swipe.v1') ?? {}).catch(() => {});
     }
   }
 
@@ -416,7 +441,59 @@ class LibraryStore {
   };
   #cacheDevice() {
     // summaries stay light in localStorage; the heavy `params` live in IndexedDB (IDB_PARAMS)
-    persist(LS.cache, this.entries.filter((e) => e.source === 'device').map((e) => ({ ...e.summary, params: undefined })));
+    const summaries = this.entries.filter((e) => e.source === 'device').map((e) => ({ ...e.summary, params: undefined }));
+    persist(LS.cache, summaries);
+    this.#pushIndex(summaries);
+  }
+
+  #pushIndexTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Mirror the device library index to the cloud (gzipped) so a remote web client gets it without a scan.
+   *  Debounced + skipped in remote mode (the remote pulls this doc; it must never overwrite it). */
+  #pushIndex(summaries: unknown[]): void {
+    if (isRemoteBuild() || isRemote() || typeof CompressionStream === 'undefined') return;
+    if (this.#pushIndexTimer) clearTimeout(this.#pushIndexTimer);
+    this.#pushIndexTimer = setTimeout(() => {
+      gzipB64(summaries)
+        .then((gz) => forgefx.putDoc('config', 'library', { v: 1, n: summaries.length, gz }))
+        .then(() => notifyMutation())
+        .catch(() => {});
+    }, 1500);
+  }
+
+  /** Remote/fresh web client: adopt the host's synced Axis config (pulled over the relay/cloud) so the
+   *  remote shows the SAME tags, collections, favorites and preset library as the PC — instead of scanning
+   *  512 presets over MIDI. Layouts + swipe/quick-actions are hydrated separately (their localStorage keys
+   *  are written before editor.init()). */
+  async hydrate(cfg: { tags?: unknown; collections?: unknown; favs?: unknown; index?: { gz?: string } | null }): Promise<void> {
+    if (cfg.tags && typeof cfg.tags === 'object') { this.tags = cfg.tags as Record<string, string[]>; persist(LS.tags, this.tags); }
+    if (cfg.collections && typeof cfg.collections === 'object') { this.collections = cfg.collections as Record<string, string[]>; persist(LS.collections, this.collections); }
+    const favSet = new Set(Array.isArray(cfg.favs) ? (cfg.favs as string[]) : []);
+    if (cfg.index?.gz && typeof DecompressionStream !== 'undefined') {
+      try {
+        const summaries = (await gunzipB64<unknown[]>(cfg.index.gz))
+          .filter((s) => summarySchema.safeParse(s).success) as PresetSummary[];
+        const device = summaries
+          .filter((s) => !isEmptyName(s.name))
+          .map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favSet.has(`dev:${s.number}`) }));
+        this.entries = [...device, ...this.entries.filter((e) => e.source !== 'device')].sort(this.#order);
+        this.cacheBuilt = true;
+        persist(LS.built, true);
+        this.#cacheDevice(); // keep locally; #pushIndex is a no-op in remote mode
+      } catch { /* bad/absent index — leave the library empty rather than crash */ }
+    }
+    if (favSet.size) this.entries = this.entries.map((e) => ({ ...e, fav: favSet.has(e.id) })).sort(this.#order);
+  }
+
+  /** Apply a live config push from another UI (host↔remote), WITHOUT re-publishing (that would loop).
+   *  Updates the in-memory state + the localStorage cache only. */
+  applyRemoteConfig(id: string, data: unknown): void {
+    if (id === 'tags' && data && typeof data === 'object') { this.tags = data as Record<string, string[]>; persist(LS.tags, this.tags); }
+    else if (id === 'collections' && data && typeof data === 'object') { this.collections = data as Record<string, string[]>; persist(LS.collections, this.collections); }
+    else if (id === 'favs' && Array.isArray(data)) {
+      const s = new Set(data as string[]);
+      this.entries = this.entries.map((e) => ({ ...e, fav: s.has(e.id) })).sort(this.#order);
+      persist(LS.favs, data);
+    }
   }
   /** Preset name for a device slot from the cache (for the quick picker). '' if not cached. */
   nameOfSlot = (n: number): string => this.entries.find((e) => e.source === 'device' && e.summary.number === n)?.summary.name ?? '';
