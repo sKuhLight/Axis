@@ -173,6 +173,9 @@ export const forgefx = {
   cloudSync: (scopes?: { config?: boolean; presets?: boolean }) => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST', body: JSON.stringify(scopes ? { scopes } : {}), signal: AbortSignal.timeout(600000) }),
   /** The cloud's view of every backed-up preset version (metadata only) — for computing per-preset sync state. */
   cloudIndex: () => req<{ versions: CloudVersion[] }>('/cloud/index'),
+  // ── Axis Cloud Remote (host side): let a remote browser control this device (off by default) ──
+  remoteStatus: () => req<{ enabled: boolean; connected: boolean; userId: string | null }>('/remote/status'),
+  remoteEnable: (on: boolean) => req<{ enabled: boolean; connected: boolean; userId: string | null; error?: string }>('/remote/enable', { method: 'POST', body: JSON.stringify({ on }) }),
   // ── persistent store (Axis config / metadata) ──
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data }) }),
