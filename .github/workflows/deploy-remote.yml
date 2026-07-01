@@ -7,6 +7,7 @@ name: deploy-remote
 # One-time setup in the Axis repo (Settings → Secrets and variables → Actions):
 #   • Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  (publishable anon key — safe to expose)
 #   • Secret:    AXIS_WEBSITE_TOKEN  (a token with contents:write on sKuhLight/axis-website)
+# The `gate` job below skips the deploy (never fails) until all three are present.
 
 on:
   workflow_dispatch:
@@ -22,11 +23,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Cheap pre-check: is the deploy fully configured? Skips the real job (no red X) until it is.
+  gate:
     runs-on: ubuntu-latest
-    # Skip (don't fail) until the deploy is configured: repo variables VITE_SUPABASE_URL/ANON_KEY +
-    # secret AXIS_WEBSITE_TOKEN. Until then, axisapp.live is updated by a manual build+push.
-    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.AXIS_WEBSITE_TOKEN }}
+          SB_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SB_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$SB_URL" ] && [ -n "$SB_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "deploy-remote not configured (needs AXIS_WEBSITE_TOKEN + VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY) — skipping."
+          fi
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Axis
         uses: actions/checkout@v4
