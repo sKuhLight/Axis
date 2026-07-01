@@ -342,6 +342,7 @@
 </script>
 
 <div
+  data-tour="grid"
   class="gridwrap scroll"
   class:mob={editor.isMobile}
   data-screen="Signal Grid"

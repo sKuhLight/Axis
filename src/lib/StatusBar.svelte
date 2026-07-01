@@ -12,7 +12,7 @@
 </script>
 
 <footer class="sb">
-  <div class="left" title={left}>{left}</div>
+  <div class="left" data-tour="statushint" title={left}>{left}</div>
   <div class="right">
     <button class="kofi" onclick={() => openExternal(KOFI_URL)} title="Support Axis development on Ko-fi">☕ Support on Ko-fi</button>
     <span class="sep"></span>
