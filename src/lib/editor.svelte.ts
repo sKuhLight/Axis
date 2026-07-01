@@ -753,14 +753,18 @@ class EditorStore {
   };
 
   #polling = false;
+  #pollTick = 0;
   poll = async () => {
     if (this.#polling) return; // never let interval ticks stack serial ops on a slow link
     this.#polling = true;
     try {
       const h = await forgefx.health();
-      const dev = await forgefx.device().catch(() => null);
+      const dev = await forgefx.device().catch(() => null); // both free — no device round-trip
       this.conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
-      if (!this.isAm4) {
+      // The current-preset query is a real device round-trip. On a slow MIDI link it competes with what
+      // the user is doing (opening a block, editing), so run it only every ~4th tick there; connection
+      // state above stays fresh every tick.
+      if (!this.isAm4 && !(this.slowLink && this.#pollTick++ % 4 !== 0)) {
         const t0 = performance.now();
         const p = await forgefx.currentPreset().catch(() => null);
         this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
