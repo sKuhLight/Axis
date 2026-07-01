@@ -84,6 +84,10 @@
     </button>
   {/each}
   <div class="spacer"></div>
+  <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
+    <span class="ic">◐</span>
+    <span class="sh">Theme</span>
+  </button>
   <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
     {#if editor.cloud.user}
       <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
