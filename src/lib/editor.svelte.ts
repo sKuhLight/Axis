@@ -2,7 +2,7 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter } from './forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter, isRemote } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { onMutation, notifyMutation } from './syncBus';
@@ -747,6 +747,7 @@ class EditorStore {
   // live tuner/tempo/scene/cpu pushes from the device
   #openEvents = () => {
     if (this.#events) return;
+    if (isRemote()) return; // remote mode: SSE can't ride the relay channel yet (live meters/tuner deferred to Phase 1.5)
     try {
       this.#events = forgefx.events((e) => {
         if (e.type === 'tempo') this.bpm = e.bpm;

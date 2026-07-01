@@ -19,13 +19,29 @@
   import StatusBar from '$lib/StatusBar.svelte';
   import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
+  import RemoteGate from '$lib/RemoteGate.svelte';
+  import { remoteBoot } from '$lib/remote.svelte';
+
+  // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
+  // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
+  let started = false;
+  let tp: ReturnType<typeof setInterval> | null = null;
+  let tw: ReturnType<typeof setInterval> | null = null;
+  function startApp() {
+    if (started) return;
+    started = true;
+    editor.init();
+    editor.poll();
+    tp = setInterval(() => editor.poll(), 5000);
+    tw = setInterval(() => editor.watchPreset(), 4000);
+  }
+  // Remote build: start the app the moment the relay session goes live.
+  $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
 
   onMount(() => {
     editor.setViewport(window.innerWidth, window.innerHeight);
-    editor.init();
-    editor.poll();
-    const tp = setInterval(() => editor.poll(), 5000);
-    const tw = setInterval(() => editor.watchPreset(), 4000);
+    if (remoteBoot.active) remoteBoot.init(); // resume session / show the gate; startApp() fires when ready
+    else startApp();
 
     const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
     const onKey = (e: KeyboardEvent) => {
@@ -46,14 +62,17 @@
     window.addEventListener('resize', onResize);
     window.addEventListener('keydown', onKey);
     return () => {
-      clearInterval(tp);
-      clearInterval(tw);
+      if (tp) clearInterval(tp);
+      if (tw) clearInterval(tw);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
     };
   });
 </script>
 
+{#if remoteBoot.active && remoteBoot.phase !== 'ready'}
+  <RemoteGate />
+{:else}
 <div class="app">
   <ToolRail />
   <div class="main">
@@ -81,6 +100,7 @@
   <Tour />
   <Toast />
 </div>
+{/if}
 
 <style>
   .app {
