@@ -446,23 +446,30 @@ class EditorStore {
    *  Dynamic-imported so the SDK never loads for users/builds without telemetry. Idempotent. */
   #startFaro = async () => {
     const t = this.telemetry;
-    if (this.#faroStarted || !t.enabled || !t.consent || !t.faroUrl) return;
-    this.#faroStarted = true;
+    if (!t.enabled || !t.consent || !t.faroUrl) return;
     try {
-      const { initFaro } = await import('./faro');
-      await initFaro({ url: t.faroUrl, version: __APP_VERSION__, instanceId: t.instanceId });
+      const m = await import('./faro');
+      if (this.#faroStarted) { m.resumeFaro(); return; } // re-opted-in: resume the paused instance
+      this.#faroStarted = true;
+      await m.initFaro({ url: t.faroUrl, version: __APP_VERSION__, instanceId: t.instanceId });
     } catch { this.#faroStarted = false; /* offline / blocked — never let telemetry break the app */ }
   };
   setTelemetryConsent = (on: boolean) => {
     this.telemetry = { ...this.telemetry, consent: on };
     try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); } catch { /* */ }
-    if (on) this.#startFaro(); // opting in mid-session starts RUM immediately
+    if (on) this.#startFaro(); // opting in mid-session starts (or resumes) RUM immediately
+    else import('./faro').then((m) => m.pauseFaro()).catch(() => {}); // opting out stops sending at once
   };
   /** On a major error (device-comm 5xx, detect failure, render crash), nudge the user to upload a debug
    *  report — debounced to at most once per category per 5 min so it never spams. The actual upload is an
    *  explicit click in the prompt (per-incident consent). Always records the event for the trail. */
   offerDebugReport = (trigger: NonNullable<typeof this.reportPrompt>) => {
     this.recordEvent('error', `${trigger.kind} ${trigger.route ?? ''} ${trigger.status ?? ''} ${trigger.message ?? ''}`.trim());
+    // Live telemetry: report the failure WITH device context (model/firmware/route/status) — this is the
+    // signal that finds device bugs, since the real failures are server-side 503s, not JS crashes.
+    if (this.#faroStarted) {
+      import('./faro').then((m) => m.faroDeviceError({ ...trigger, model: this.conn.device, firmware: this.conn.fw })).catch(() => {});
+    }
     if (!this.telemetry.uploadEnabled) return; // nothing to upload to
     const now = Date.now();
     if (now - (this.#lastOffer[trigger.kind] ?? 0) < 5 * 60_000) return;

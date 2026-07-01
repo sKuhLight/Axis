@@ -37,3 +37,25 @@ export async function initFaro(opts: { url: string; version: string; instanceId:
   });
   faro.api.setUser({ id: opts.instanceId }); // anonymous uuid — the only identifier we attach
 }
+
+/** Stop / resume sending (called when the user toggles consent off/on mid-session). */
+export function pauseFaro(): void { faro?.pause(); }
+export function resumeFaro(): void { faro?.unpause(); }
+
+/** Push a device-comm failure as a Faro error with device context. This is the signal that actually
+ *  finds device bugs — the real failures (grid/blocks decode 503s, detect/transport failures) are
+ *  handled server-side and never surface as uncaught JS errors, so we report them explicitly. */
+export function faroDeviceError(info: { kind: string; route?: string; status?: number; message?: string; model?: string; firmware?: string }): void {
+  if (!faro) return;
+  const err = new Error(`device-comm: ${info.kind}${info.route ? ' ' + info.route : ''}${info.status ? ' ' + info.status : ''}`);
+  faro.api.pushError(err, {
+    context: {
+      kind: info.kind,
+      route: info.route ?? '',
+      status: info.status != null ? String(info.status) : '',
+      model: info.model ?? '',
+      firmware: info.firmware ?? '',
+      message: scrub((info.message ?? '').slice(0, 200))
+    }
+  });
+}
