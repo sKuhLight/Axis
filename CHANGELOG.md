@@ -2,6 +2,15 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.4.26-beta — 2026-07-01
+
+### Changed
+- **Sharper diagnostics (opt-in).** With diagnostics enabled, Axis now automatically
+  reports server-side failures — device communication, cloud, and engine timeouts —
+  with device context (model, firmware, endpoint, status), so bugs surface across the
+  whole beta instead of only when someone files a report. Still no presets or personal
+  data, and still off until you opt in.
+
 ## 0.4.25-beta — 2026-07-01
 
 ### Fixed

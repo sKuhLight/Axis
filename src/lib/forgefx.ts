@@ -37,16 +37,36 @@ class ForgeError extends Error {
   }
 }
 
+/** Fleet-telemetry hook: invoked for every server-side (5xx) or network failure so the store can
+ *  auto-report it to Faro with device context. 4xx (expected client errors like a 401 bad password) are
+ *  deliberately NOT reported — they're not bugs. Registered by the editor; null until then / in tests. */
+let onReqFailure: ((info: { route: string; method: string; status: number; message: string }) => void) | null = null;
+export function setRequestFailureReporter(fn: typeof onReqFailure): void { onReqFailure = fn; }
+const reportFailure = (route: string, method: string, status: number, message: string) => {
+  try { if (status >= 500 || status === 0) onReqFailure?.({ route, method, status, message }); } catch { /* never let reporting break a request */ }
+};
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   // Serial-backed requests are serialized on the server; under load a few can queue.
   // A 12s ceiling means a genuinely hung request surfaces as an error instead of an
   // endless 'loading' spinner. Well above any healthy round-trip (~0.6s worst case).
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'content-type': 'application/json' },
-    signal: AbortSignal.timeout(12000),
-    ...init
-  });
-  if (!res.ok) throw new ForgeError(res.status, `${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  const method = init?.method ?? 'GET';
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(12000),
+      ...init
+    });
+  } catch (e) {
+    // network failure / timeout / engine down — report as status 0 (no HTTP response)
+    reportFailure(path, method, 0, (e as Error)?.message ?? 'network error');
+    throw e;
+  }
+  if (!res.ok) {
+    reportFailure(path, method, res.status, `${method} ${path} → ${res.status}`);
+    throw new ForgeError(res.status, `${method} ${path} → ${res.status}`);
+  }
   const ct = res.headers.get('content-type') ?? '';
   return (ct.includes('json') ? res.json() : (res.arrayBuffer() as unknown)) as Promise<T>;
 }
