@@ -174,6 +174,7 @@ class EditorStore {
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
   axisTab = $state<'account' | 'privacy' | 'about' | 'device'>('account');
+  themeOpen = $state(false); // Appearance / theme picker modal
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
   contact = $state<string>(loadContact());

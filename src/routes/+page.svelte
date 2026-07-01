@@ -16,6 +16,7 @@
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
   import AxisPanel from '$lib/AxisPanel.svelte';
+  import ThemePicker from '$lib/ThemePicker.svelte';
   import Notices from '$lib/Notices.svelte';
   import StatusBar from '$lib/StatusBar.svelte';
   import Tour from '$lib/Tour.svelte';
@@ -103,6 +104,7 @@
   <TunerOverlay />
   <CachePrompt />
   <AxisPanel />
+  {#if editor.themeOpen}<ThemePicker onclose={() => (editor.themeOpen = false)} />{/if}
   <Notices />
   <Tour />
   <Toast />

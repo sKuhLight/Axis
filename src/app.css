@@ -1,44 +1,59 @@
-/* Axis design tokens — extracted from the Claude Design prototype (design/Axis Editor.dc.html) */
+/* Axis design tokens. These :root values are the DARK/Midnight defaults for first paint; the theme engine
+   (src/lib/theme.svelte.ts) overrides them at runtime by writing --tokens onto <html>. Components should
+   reference var(--token) — never hardcode hex — so they follow the active theme. */
 :root {
-  /* base surfaces (layered near-black) */
+  /* ── theme surface / text / border scale (overwritten per theme) ── */
   --bg: #0c0c0e;
-  --bg-rail: #0f0f12;
-  --panel: #0a0a0c;
-  --panel-2: #0e0e10;
-  --surface: #15151a;
-  --surface-2: #1c1c22;
-  --surface-3: #26262c;
-
-  /* borders */
-  --border: #1d1d22;
-  --border-2: #2a2a31;
-  --border-strong: #3f3f48;
-  --hairline: #1c1c21;
-
-  /* text */
+  --bg2: #0e0e10;
+  --surface: #141417;
+  --surface2: #1c1c21;
+  --border: #26262c;
+  --border2: #2a2a31;
+  --border3: #3a3a44;
   --text: #e9e9ee;
-  --text-dim: #9a9aa3;
-  --text-mut: #6e6e78;
-  --text-faint: #56565e;
+  --text2: #cfcfd6;
+  --textdim: #9a9aa3;
+  --textfaint: #6e6e78;
+  --textmuted: #56565e;
+  --input: #0a0a0c; /* form-field background */
+  --track: #16161b; /* fader / slider track background */
 
-  /* accents */
-  --accent: #35c9d6; /* cyan — primary */
-  --accent-ink: #06181a; /* on-accent / selection bg */
-  --amber: #f5a623; /* secondary highlight */
+  /* ── accent (overwritten per theme; derived tokens computed by the engine) ── */
+  --accent: #35c9d6;
+  --accentdim: #2da9b4;
+  --accentbright: #6ed8e1;
+  --accentink: #0a1416; /* readable text/ink on the accent */
+
+  /* ── fixed semantic colors (not theme-driven) ── */
+  --amber: #f5a623; /* knob pointer / secondary highlight */
   --blue: #4f6bed;
   --danger: #d6543f; /* bypass / destructive */
-  --ok: #33c46b; /* connected */
+  --ok: #33c46b; /* connected / success */
 
-  /* type */
+  /* ── type ── */
   --font-ui: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  /* spacing / radii */
+  /* ── spacing / radii / layout ── */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
   --rail-w: 66px;
   --topbar-h: 52px;
+
+  /* ── backwards-compat aliases (older components still reference these; they now follow the theme) ── */
+  --bg-rail: var(--bg2);
+  --panel: var(--bg);
+  --panel-2: var(--bg2);
+  --surface-2: var(--surface2);
+  --surface-3: var(--border);
+  --border-2: var(--border2);
+  --border-strong: var(--border3);
+  --hairline: var(--border);
+  --text-dim: var(--textdim);
+  --text-mut: var(--textfaint);
+  --text-faint: var(--textmuted);
+  --accent-ink: var(--accentink);
 }
 
 * {
@@ -57,7 +72,7 @@ body {
 }
 ::selection {
   background: var(--accent);
-  color: var(--accent-ink);
+  color: var(--accentink);
 }
 
 .mono {
@@ -73,10 +88,13 @@ body {
   background: transparent;
 }
 .scroll::-webkit-scrollbar-thumb {
-  background: var(--border-2);
+  background: var(--border2);
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: padding-box;
+}
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--border3);
 }
 
 /* motion (names mirror the prototype) */
