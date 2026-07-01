@@ -151,7 +151,7 @@
     display: flex;
     flex-direction: column;
     border-top: 1px solid #20202a;
-    background: #0e0e10;
+    background: var(--bg2);
     position: relative;
     z-index: 40;
     box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.4);
@@ -180,7 +180,7 @@
   .card.sheet {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), #0f0f12);
     animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
@@ -191,7 +191,7 @@
     align-items: center;
     justify-content: center;
     cursor: ns-resize;
-    background: #0d0d10;
+    background: var(--bg2);
     border-bottom: 1px solid #1a1a1f;
     touch-action: none;
   }
@@ -202,7 +202,7 @@
     width: 48px;
     height: 4px;
     border-radius: 3px;
-    background: #3a3a44;
+    background: var(--border3);
   }
 
   .head {
@@ -210,7 +210,7 @@
     align-items: center;
     gap: 10px;
     padding: 9px 14px;
-    border-bottom: 1px solid #1c1c22;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
   }
   .icon {
@@ -300,7 +300,7 @@
     height: 34px;
     flex: none;
     border-radius: 9px;
-    background: #0d0d10;
+    background: var(--bg2);
     border: 1px solid var(--surface-3);
     color: var(--text-faint);
     font-weight: 700;
@@ -407,7 +407,7 @@
     height: 44px;
     padding: 0 16px;
     border: 1px solid var(--border-2);
-    background: #15151a;
+    background: var(--surface);
     color: var(--text-dim);
     border-radius: 10px;
     font-size: 13px;

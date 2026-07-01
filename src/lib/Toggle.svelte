@@ -37,7 +37,7 @@
   .val {
     font: 700 11px/1 var(--font-mono);
     letter-spacing: 0.06em;
-    color: #6e6e78;
+    color: var(--textfaint);
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
@@ -52,8 +52,8 @@
     height: 32px;
     border-radius: 16px;
     cursor: pointer;
-    background: #16161b;
-    border: 1px solid #2a2a31;
+    background: var(--track);
+    border: 1px solid var(--border2);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
     transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
     flex: none;

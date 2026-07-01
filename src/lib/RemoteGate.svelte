@@ -51,30 +51,30 @@
 
 <style>
   .bg { position: fixed; inset: 0; background: var(--bg, #0b0b0d); display: flex; align-items: center; justify-content: center; padding: 24px; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
-  .card { width: 380px; max-width: 100%; background: #161619; border: 1px solid #2e2e36; border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); padding: 26px 24px 22px; color: #e9e9ee; }
+  .card { width: 380px; max-width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); padding: 26px 24px 22px; color: var(--text); }
   .brand { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
   .h1 { font-size: 20px; font-weight: 800; color: #fff; }
-  .sub { font-size: 12.5px; color: #9a9aa3; margin-top: 2px; }
+  .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   form { display: flex; flex-direction: column; gap: 15px; }
   .field { display: flex; flex-direction: column; gap: 8px; }
-  .lbl { font: 600 9px/1 'JetBrains Mono', monospace; color: #7a7a83; letter-spacing: 0.1em; }
-  .in { width: 100%; height: 46px; padding: 0 14px; background: #0e0e10; border: 1px solid #2a2a31; border-radius: 11px; color: #e9e9ee; font-size: 14px; outline: none; }
-  .in:focus { border-color: #35c9d6; }
-  .cta { width: 100%; height: 48px; margin-top: 8px; background: #35c9d6; color: #06181a; border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
-  .cta:hover { background: #46d6e2; }
-  .note { font: 600 11.5px/1.4 'JetBrains Mono', monospace; color: #f5a623; margin: 4px 0 0; text-align: center; }
-  .legal { text-align: center; margin-top: 14px; font-size: 11px; color: #56565e; line-height: 1.55; }
-  .foot { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; font-size: 11px; color: #6e6e78; }
-  .foot a { color: #9a9aa3; text-decoration: none; }
-  .foot a:hover { color: #cfcfd6; }
-  .foot .dot { width: 3px; height: 3px; border-radius: 50%; background: #3a3a44; }
-  .foot .cr { flex-basis: 100%; text-align: center; color: #56565e; margin-top: 2px; }
+  .lbl { font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; }
+  .in { width: 100%; height: 46px; padding: 0 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 11px; color: var(--text); font-size: 14px; outline: none; }
+  .in:focus { border-color: var(--accent); }
+  .cta { width: 100%; height: 48px; margin-top: 8px; background: var(--accent); color: var(--accentink); border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
+  .cta:hover { background: var(--accentbright); }
+  .note { font: 600 11.5px/1.4 'JetBrains Mono', monospace; color: var(--amber); margin: 4px 0 0; text-align: center; }
+  .legal { text-align: center; margin-top: 14px; font-size: 11px; color: var(--textmuted); line-height: 1.55; }
+  .foot { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; font-size: 11px; color: var(--textfaint); }
+  .foot a { color: var(--textdim); text-decoration: none; }
+  .foot a:hover { color: var(--text2); }
+  .foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); }
+  .foot .cr { flex-basis: 100%; text-align: center; color: var(--textmuted); margin-top: 2px; }
   .state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 0 6px; }
   .st { font-size: 16px; font-weight: 800; color: #fff; }
-  .st.ok { color: #33c46b; }
-  .st.warn { color: #f5a623; }
-  .ss { font-size: 12.5px; color: #9a9aa3; }
-  .hint { font-size: 12px; color: #b9b9c2; background: #0e0e10; border: 1px solid #26262c; border-radius: 10px; padding: 12px; margin-top: 8px; line-height: 1.5; }
-  .spinner { width: 34px; height: 34px; border: 3px solid #2a2a31; border-top-color: #35c9d6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 4px; }
+  .st.ok { color: var(--ok); }
+  .st.warn { color: var(--amber); }
+  .ss { font-size: 12.5px; color: var(--textdim); }
+  .hint { font-size: 12px; color: #b9b9c2; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; line-height: 1.5; }
+  .spinner { width: 34px; height: 34px; border: 3px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

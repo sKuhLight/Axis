@@ -162,7 +162,7 @@
   }
   .item:hover {
     background: var(--surface-2);
-    color: #cfcfd6;
+    color: var(--text2);
   }
   .item.active {
     color: var(--accent);
@@ -174,8 +174,8 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent, #35c9d6);
-    color: #06181a;
+    background: var(--accent, var(--accent));
+    color: var(--accentink);
     font: 800 11px/28px 'JetBrains Mono', monospace;
     text-align: center;
   }
@@ -186,9 +186,9 @@
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: #f5a623;
+    background: var(--amber);
     border: 2px solid var(--surface, #0f0f12);
-    box-shadow: 0 0 6px #f5a623;
+    box-shadow: 0 0 6px var(--amber);
   }
   .ic {
     font-size: 19px;
@@ -234,8 +234,8 @@
     max-height: 70vh;
     display: flex;
     flex-direction: column;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 14px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
     padding: 12px;
@@ -280,7 +280,7 @@
     border-radius: 9px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #cfcfd6;
+    color: var(--text2);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -305,7 +305,7 @@
     border-radius: 9px;
     border: 1px solid transparent;
     background: transparent;
-    color: #cfcfd6;
+    color: var(--text2);
     cursor: pointer;
     text-align: left;
   }
@@ -323,7 +323,7 @@
     flex: none;
     font: 700 8px/1 var(--font-mono);
     letter-spacing: 0.06em;
-    color: #7a7a83;
+    color: var(--textfaint);
     background: #1a1a1f;
     border: 1px solid var(--border-2);
     border-radius: 5px;
@@ -363,8 +363,8 @@
     padding: 8px;
     background: none;
     border: none;
-    border-top: 1px solid var(--border-2, #2a2a31);
-    color: var(--accent, #35c9d6);
+    border-top: 1px solid var(--border-2, var(--border2));
+    color: var(--accent, var(--accent));
     font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;

@@ -70,7 +70,7 @@
     position: relative;
     width: min(440px, 92vw);
     padding: 18px 22px 24px;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), #0f0f12);
     border: 1px solid var(--surface-3);
     border-radius: 16px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -99,12 +99,12 @@
   .note {
     text-align: center;
     font: 800 86px/1 var(--font-ui);
-    color: #3a3a44;
+    color: var(--border3);
     margin: 14px 0 2px;
     transition: color 0.12s;
   }
   .note.lit {
-    color: #e9e9ee;
+    color: var(--text);
   }
   .note.tuned {
     color: #5fc46b;
@@ -142,7 +142,7 @@
     bottom: 0;
     width: 1px;
     height: 12px;
-    background: #2c2c34;
+    background: var(--border2);
     transform: translateX(-50%);
   }
   .tick.center {

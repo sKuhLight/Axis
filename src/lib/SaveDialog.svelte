@@ -56,8 +56,8 @@
   .card {
     width: 420px;
     max-width: 100%;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     padding: 20px;
@@ -109,7 +109,7 @@
     background: var(--panel-2);
     border: 1px solid var(--surface-3);
     border-radius: 10px;
-    color: #f5a623;
+    color: var(--amber);
     font: 700 16px/1 var(--font-mono);
     outline: none;
   }

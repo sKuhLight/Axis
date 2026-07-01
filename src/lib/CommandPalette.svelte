@@ -329,8 +329,8 @@
     width: 760px;
     max-width: 100%;
     max-height: 84vh;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -400,7 +400,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -516,7 +516,7 @@
   }
   .rsub {
     font-size: 11.5px;
-    color: #7a7a83;
+    color: var(--textfaint);
   }
   .kind {
     flex: none;
@@ -533,7 +533,7 @@
     flex: none;
     font-size: 10px;
     font-weight: 600;
-    color: #f5a623;
+    color: var(--amber);
     padding: 3px 8px;
     background: rgba(245, 166, 35, 0.12);
     border: 1px solid rgba(245, 166, 35, 0.3);

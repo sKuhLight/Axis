@@ -367,7 +367,7 @@
   }
   .rlbl {
     font: 700 10px/1 ui-monospace, monospace;
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.08em;
     width: 54px;
   }
@@ -376,8 +376,8 @@
     height: 32px;
     padding: 0 11px;
     border-radius: 9px;
-    border: 1px solid #2a2a31;
-    background: #16161b;
+    border: 1px solid var(--border2);
+    background: var(--track);
     color: #b8b8c0;
     font-weight: 700;
     font-size: 13px;
@@ -427,7 +427,7 @@
     top: 9px;
     right: 11px;
     font-size: 10px;
-    color: #6e6e78;
+    color: var(--textfaint);
   }
   .ondev {
     position: absolute;
@@ -447,7 +447,7 @@
     color: #7e7e88;
   }
   .insp {
-    border-top: 1px solid #1c1c22;
+    border-top: 1px solid var(--surface2);
     padding-top: 14px;
     display: flex;
     flex-direction: column;
@@ -456,11 +456,11 @@
   }
   .ititle {
     font-size: 11px;
-    color: #cfcfd6;
+    color: var(--text2);
     letter-spacing: 0.04em;
   }
   .cfg {
-    color: #56565e;
+    color: var(--textmuted);
   }
   .cols {
     display: flex;
@@ -504,16 +504,16 @@
   }
   .todo {
     font-size: 9px;
-    color: #6e6e78;
-    border: 1px solid #2a2a31;
+    color: var(--textfaint);
+    border: 1px solid var(--border2);
     border-radius: 4px;
     padding: 1px 4px;
   }
   select,
   input {
     height: 34px;
-    background: #0d0d10;
-    border: 1px solid #2a2a31;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
     border-radius: 9px;
     color: #e7e7ee;
     padding: 0 11px;
@@ -543,7 +543,7 @@
   }
   .note {
     font-size: 11.5px;
-    color: #6e6e78;
+    color: var(--textfaint);
     line-height: 1.5;
     margin: 0;
     max-width: 620px;

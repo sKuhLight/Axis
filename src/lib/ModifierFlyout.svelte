@@ -433,7 +433,7 @@
     right: 0;
     width: min(420px, 94vw);
     z-index: 200;
-    background: linear-gradient(180deg, #121216, #0d0d10);
+    background: linear-gradient(180deg, #121216, var(--bg2));
     border-left: 1px solid #222229;
     box-shadow: -26px 0 60px rgba(0, 0, 0, 0.55);
     transform: translateX(112%);
@@ -450,16 +450,16 @@
     align-items: center;
     gap: 10px;
     padding: 13px 16px;
-    border-bottom: 1px solid #1c1c22;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), #0f0f12);
   }
   .srcdot {
     width: 7px;
     height: 7px;
     border-radius: 50%;
     flex: none;
-    background: #f5a623;
+    background: var(--amber);
     box-shadow: 0 0 8px rgba(245, 166, 35, 0.8);
   }
   .title {
@@ -479,14 +479,14 @@
     align-items: center;
     justify-content: center;
     background: #1a1a1f;
-    border: 1px solid #2a2a31;
+    border: 1px solid var(--border2);
     border-radius: 9px;
     cursor: pointer;
     font-size: 14px;
-    color: #9a9aa3;
+    color: var(--textdim);
   }
   .close:hover {
-    border-color: #3f3f48;
+    border-color: var(--border3);
     color: #fff;
   }
   .banner {
@@ -527,7 +527,7 @@
   .divider b {
     font: 700 10px/1 'JetBrains Mono', monospace;
     letter-spacing: 0.13em;
-    color: #6e6e78;
+    color: var(--textfaint);
   }
   .srcbox {
     display: flex;
@@ -540,9 +540,9 @@
     cursor: pointer;
     font-size: 15px;
     font-weight: 700;
-    background: #0a0a0c;
-    border: 1px dashed #3a3a44;
-    color: #cfcfd6;
+    background: var(--input);
+    border: 1px dashed var(--border3);
+    color: var(--text2);
   }
   .srcbox.on {
     background: #102023;
@@ -556,13 +556,13 @@
   }
   .caret {
     font-size: 10px;
-    color: #6e6e78;
+    color: var(--textfaint);
     flex: none;
     margin-left: 8px;
   }
   .caption {
     font: 600 10px/1 'JetBrains Mono', monospace;
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.04em;
     margin-top: 8px;
   }
@@ -570,7 +570,7 @@
     font-size: 9px;
     letter-spacing: 0.08em;
     text-align: center;
-    color: #56565e;
+    color: var(--textmuted);
   }
   .center {
     text-align: center;
@@ -582,7 +582,7 @@
     margin-top: 4px;
   }
   .pend {
-    color: #d6543f;
+    color: var(--danger);
     font-weight: 700;
   }
   .enum-row {
@@ -613,15 +613,15 @@
     font-size: 13px;
     font-weight: 700;
     white-space: nowrap;
-    background: #16161b;
-    border: 1px solid #2a2a31;
+    background: var(--track);
+    border: 1px solid var(--border2);
     color: #e3e3e8;
   }
   .enumbtn {
     cursor: pointer;
   }
   .enumbtn:hover {
-    border-color: #3f3f48;
+    border-color: var(--border3);
   }
   .graph {
     position: relative;
@@ -629,7 +629,7 @@
     aspect-ratio: 1/1;
     max-height: 230px;
     background: #08080a;
-    border: 1px solid #1c1c22;
+    border: 1px solid var(--surface2);
     border-radius: 10px;
     overflow: hidden;
   }
@@ -680,13 +680,13 @@
     width: 54px;
     height: 17px;
     border-radius: 5px;
-    background: #0c0c0e;
+    background: var(--bg);
     border: 1px solid #202027;
     display: flex;
     align-items: center;
     justify-content: center;
     font: 600 10px/1 'JetBrains Mono', monospace;
-    color: #cfcfd6;
+    color: var(--text2);
   }
   .kbox {
     cursor: ns-resize;
@@ -699,7 +699,7 @@
   .klbl {
     font-weight: 600;
     font-size: 11px;
-    color: #9a9aa3;
+    color: var(--textdim);
   }
   .srcmenu-scrim {
     position: absolute;
@@ -712,8 +712,8 @@
     right: 16px;
     top: 96px;
     z-index: 9;
-    background: #16161b;
-    border: 1px solid #2e2e36;
+    background: var(--track);
+    border: 1px solid var(--border2);
     border-radius: 11px;
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
     padding: 6px;
@@ -728,7 +728,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    color: #cfcfd6;
+    color: var(--text2);
   }
   .srcopt.none {
     color: #8a8a93;

@@ -569,7 +569,7 @@
     min-height: 0;
     overflow: auto;
     padding: 26px 22px;
-    background: radial-gradient(120% 120% at 50% 0%, #131316, #0c0c0e 70%);
+    background: radial-gradient(120% 120% at 50% 0%, #131316, var(--bg) 70%);
     -webkit-overflow-scrolling: touch;
   }
   .gridwrap.mob {
@@ -618,8 +618,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background: #141417;
-    border: 1px solid #2a2a31;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 12px;
     padding: 4px;
   }
@@ -631,15 +631,15 @@
     justify-content: center;
     border-radius: 9px;
     border: 0;
-    background: #1c1c21;
-    color: #cfcfd6;
+    background: var(--surface2);
+    color: var(--text2);
     font-size: 19px;
     font-weight: 600;
     cursor: pointer;
   }
   .step:disabled {
     background: transparent;
-    color: #3a3a44;
+    color: var(--border3);
     cursor: default;
   }
   .dnum {
@@ -654,11 +654,11 @@
   }
   .dn {
     font: 700 14px/1 var(--font-mono);
-    color: #e9e9ee;
+    color: var(--text);
   }
   .dl {
     font: 600 7px/1 var(--font-mono);
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.12em;
     margin-top: 3px;
   }
@@ -671,7 +671,7 @@
     width: 7px;
     height: 7px;
     border-radius: 4px;
-    background: #2e2e36;
+    background: var(--border2);
     border: 0;
     cursor: pointer;
     transition: all 0.2s;
@@ -682,7 +682,7 @@
   }
   .phint {
     font: 600 8.5px/1.25 var(--font-mono);
-    color: #56565e;
+    color: var(--textmuted);
     max-width: 110px;
   }
 
@@ -710,7 +710,7 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.22), 0 4px 10px rgba(0, 0, 0, 0.35);
   }
   .block.sel {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245, 166, 35, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px var(--amber), 0 0 22px rgba(245, 166, 35, 0.34);
   }
   .block.byp {
     opacity: 0.45;
@@ -876,8 +876,8 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #0c0c0e;
-    background: #3a3a44;
+    border: 2px solid var(--bg);
+    background: var(--border3);
     cursor: crosshair;
     z-index: 6;
     padding: 0;
@@ -1017,7 +1017,7 @@
     padding: 14px 22px;
     border-radius: 16px;
     background: rgba(22, 22, 27, 0.96);
-    border: 1px solid #3a3a44;
+    border: 1px solid var(--border3);
     color: var(--text-dim);
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
     transition: all 0.12s;
