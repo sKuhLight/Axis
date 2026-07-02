@@ -115,21 +115,27 @@ class EditorStore {
 
   // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
   mobCols = $state(4);
+  mobColsAuto = $state(true); // auto-fit column count to viewport width until the user pinches/± (then fixed)
   gridPage = $state(0);
+  /** Column count that fits the width at a comfortable ~96px tile pitch (3–12). */
+  fitCols = (w: number) => Math.max(3, Math.min(12, Math.round((w - 24) / 96)));
   get pageCount() {
     return Math.ceil(12 / Math.max(3, Math.min(12, this.mobCols)));
   }
   changeCols = (d: number) => {
     const nc = Math.max(3, Math.min(12, this.mobCols + d));
     if (nc === this.mobCols) return;
+    this.mobColsAuto = false;
     this.mobCols = nc;
     this.gridPage = Math.min(this.gridPage, this.pageCount - 1);
   };
   setCols = (n: number) => {
+    this.mobColsAuto = false;
     this.mobCols = Math.max(3, Math.min(12, n));
     this.gridPage = Math.min(this.gridPage, this.pageCount - 1);
   };
   colsFit = () => {
+    this.mobColsAuto = false;
     this.mobCols = this.mobCols >= 12 ? 4 : 12; // toggle overview ↔ edit density
     this.gridPage = 0;
     this.showToast(this.mobCols >= 12 ? 'Overview' : 'Edit view', '#35c9d6');
@@ -174,6 +180,8 @@ class EditorStore {
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
   axisTab = $state<'account' | 'privacy' | 'about' | 'device'>('account');
+  themeOpen = $state(false); // Appearance / theme picker modal
+  drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
   contact = $state<string>(loadContact());
@@ -219,8 +227,11 @@ class EditorStore {
   #sendTimers: Record<string | number, ReturnType<typeof setTimeout>> = {};
 
   // ── derived ──
+  // Phones AND tablets use the compact layout (burger + slide-in drawer that hides scenes/nav/status);
+  // only real laptops/desktops (≥1366) get the full top bar + rail. Raised from 760 so cramped
+  // "tablet" widths don't squeeze the top bar — they get the clean drawer layout instead.
   get isMobile() {
-    return this.vw < 760;
+    return this.vw < 1366;
   }
   get selected(): Cell | null {
     if (this.virtual) {
@@ -1365,6 +1376,7 @@ class EditorStore {
   setViewport = (w: number, h: number) => {
     this.vw = w;
     this.vh = h;
+    if (this.mobColsAuto) this.mobCols = this.fitCols(w);
   };
 }
 

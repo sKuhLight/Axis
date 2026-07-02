@@ -2,6 +2,9 @@
   import type { NamedParam } from './types';
   import { paramValue, normFromValue, fmtCompact } from './format';
   import type { EQShape } from './eq';
+  import { editor } from './editor.svelte';
+
+  const mob = $derived(editor.isMobile);
 
   export interface EQBand {
     key: string;
@@ -75,20 +78,28 @@
   const nodeY = (m: (typeof model)[number]) => yOf(Math.max(-gainRange, Math.min(gainRange, compAt(m.fv))));
 
   // ── drag + readout ──
-  let drag: { band: EQBand; shape: EQShape } | null = null;
-  let hud = $state<{ f: string; g: string; q: string } | null>(null);
-  function readout(m: (typeof model)[number]) {
-    hud = {
+  // On mobile there's no scroll-wheel, so a tapped node stays "selected": the readout HUD sticks
+  // and exposes Q −/+ steppers. Desktop keeps the transient (drag-only) HUD + wheel-to-Q.
+  let drag = $state<{ band: EQBand; shape: EQShape } | null>(null);
+  let selKey = $state<string | null>(null); // mobile: persistently selected band
+  const activeKey = $derived(drag?.band.key ?? (mob ? selKey : null));
+  const activeM = $derived(activeKey ? model.find((x) => x.band.key === activeKey) : undefined);
+  const hud = $derived.by(() => {
+    const m = activeM;
+    if (!m) return null;
+    return {
       f: fmtCompact(m.band.freq ? m.band.freq : { norm: normFromValue(m.fv, { min: 20, max: 20000, log: true }), value: m.fv, unit: 'Hz', min: 20, max: 20000, log: true }),
       g: isCut(m.shape) ? '—' : fmtCompact(m.band.gain),
-      q: m.band.q ? fmtCompact(m.band.q) : '—'
+      q: m.band.q ? fmtCompact(m.band.q) : '—',
+      hasQ: !!m.band.q,
+      band: m.band
     };
-  }
+  });
   function down(e: PointerEvent, m: (typeof model)[number]) {
     e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     drag = { band: m.band, shape: m.shape };
-    readout(m);
+    if (mob) selKey = m.band.key;
   }
   function move(e: PointerEvent, svg: SVGSVGElement) {
     if (!drag) return;
@@ -98,17 +109,22 @@
     const b = drag.band;
     if (b.freq) onSet(b.freq, normFromValue(hzAt(px), b.freq));
     if (!isCut(drag.shape)) onSet(b.gain, normFromValue(dbAt(py), b.gain));
-    const m = model.find((x) => x.band.key === b.key);
-    if (m) readout(m);
   }
   function up() {
     drag = null;
-    hud = null;
   }
   function wheel(e: WheelEvent, b: EQBand) {
     if (!b.q) return;
     e.preventDefault();
     onSet(b.q, Math.max(0, Math.min(1, (b.q.norm ?? 0) - e.deltaY / 1200)));
+  }
+  function bumpQ(b: EQBand, dir: number) {
+    if (!b.q) return;
+    onSet(b.q, Math.max(0, Math.min(1, (b.q.norm ?? 0) + dir * 0.06)));
+  }
+  // tapping empty graph area clears the mobile selection
+  function bgTap() {
+    if (mob && !drag) selKey = null;
   }
 </script>
 
@@ -122,25 +138,38 @@
     onpointermove={(e) => move(e, e.currentTarget)}
     onpointerup={up}
     onpointerleave={up}
+    onpointerdown={bgTap}
   >
-    <rect x="0.5" y="0.5" width={cw - 1} height={H - 1} rx="11" fill="#0d0d10" stroke="#1f1f25" stroke-width="1" />
-    <line x1="0" y1={H / 2} x2={cw} y2={H / 2} stroke="#2a2a31" stroke-width="1" />
+    <rect x="0.5" y="0.5" width={cw - 1} height={H - 1} rx="11" fill="var(--bg)" stroke="var(--border)" stroke-width="1" />
+    <line x1="0" y1={H / 2} x2={cw} y2={H / 2} style="stroke:var(--border2)" stroke-width="1" />
     {#each GRID_F as f (f)}
-      <line x1={xOf(f)} y1="0" x2={xOf(f)} y2={H} stroke="#16161b" stroke-width="1" />
-      <text x={xOf(f) + 3} y={H - 5} fill="#4a4a52" font-size="9" font-family="var(--font-mono)">{flbl(f)}</text>
+      <line x1={xOf(f)} y1="0" x2={xOf(f)} y2={H} style="stroke:var(--border)" stroke-width="1" />
+      <text x={xOf(f) + 3} y={H - 5} style="fill:var(--textmuted)" font-size="9" font-family="var(--font-mono)">{flbl(f)}</text>
     {/each}
     <path d="{curve} L{cw},{H / 2} L0,{H / 2} Z" fill={accent} opacity="0.12" />
     <path d={curve} fill="none" stroke={accent} stroke-width="2" />
     {#each model as m (m.band.key)}
-      <g class="node" class:fixed={!m.band.freq} onpointerdown={(e) => down(e, m)} onwheel={(e) => wheel(e, m.band)} role="button" tabindex="-1" aria-label="{m.band.gain.name} band">
-        <circle cx={xOf(m.fv)} cy={nodeY(m)} r="13" fill="transparent" />
-        <circle cx={xOf(m.fv)} cy={nodeY(m)} r="6.5" fill={accent} stroke="#0c0c0e" stroke-width="2" />
+      <g class="node" class:fixed={!m.band.freq} class:sel={activeKey === m.band.key} onpointerdown={(e) => down(e, m)} onwheel={(e) => wheel(e, m.band)} role="button" tabindex="-1" aria-label="{m.band.gain.name} band">
+        <circle cx={xOf(m.fv)} cy={nodeY(m)} r={mob ? 22 : 13} fill="transparent" />
+        {#if activeKey === m.band.key}
+          <circle cx={xOf(m.fv)} cy={nodeY(m)} r={mob ? 15 : 12} fill={accent} opacity="0.18" />
+        {/if}
+        <circle cx={xOf(m.fv)} cy={nodeY(m)} r={mob ? 8.5 : 6.5} fill={accent} style="stroke:var(--bg)" stroke-width="2" />
       </g>
     {/each}
   </svg>
   {#if hud}
-    <div class="rd mono">
-      <span><b>{hud.f}</b> Hz</span><span><b>{hud.g}</b> dB</span><span>Q <b>{hud.q}</b></span>
+    <div class="rd mono" class:mob>
+      <span><b>{hud.f}</b> Hz</span><span><b>{hud.g}</b> dB</span>
+      {#if mob && hud.hasQ}
+        <span class="qctl">Q <b>{hud.q}</b>
+          <!-- svelte-ignore a11y_consider_explicit_label -->
+          <button class="qbtn" onpointerdown={(e) => { e.stopPropagation(); bumpQ(hud.band, -1); }}>−</button>
+          <button class="qbtn" onpointerdown={(e) => { e.stopPropagation(); bumpQ(hud.band, 1); }}>+</button>
+        </span>
+      {:else}
+        <span>Q <b>{hud.q}</b></span>
+      {/if}
     </div>
   {/if}
 </div>
@@ -171,17 +200,54 @@
     top: 8px;
     left: 10px;
     display: flex;
+    align-items: center;
     gap: 12px;
     padding: 5px 10px;
-    background: rgba(10, 10, 12, 0.82);
-    border: 1px solid #2a2a31;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border: 1px solid var(--border2);
     border-radius: 8px;
     font-size: 11px;
     color: var(--text-mut);
     pointer-events: none;
   }
+  /* mobile: dock the readout to the TOP so it never covers the frequency-axis labels along the
+     bottom edge, and re-enable pointer events so the Q steppers are tappable */
+  .rd.mob {
+    top: 6px;
+    bottom: auto;
+    left: 6px;
+    right: 6px;
+    justify-content: space-around;
+    padding: 7px 10px;
+    font-size: 12px;
+    pointer-events: auto;
+  }
   .rd b {
-    color: #fff;
+    color: var(--text);
     font-weight: 700;
+  }
+  .qctl {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .qbtn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .qbtn:active {
+    background: var(--accent);
+    color: var(--accentink, #04242a);
   }
 </style>

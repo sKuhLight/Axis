@@ -10,7 +10,7 @@
   import { forgefx } from './forgefx';
   import type { FcModel } from './types';
 
-  const ACC = '#f5a623';
+  const ACC = 'var(--amber)'; // FC accent follows the theme's amber token
   let model = $state<FcModel | null>(null);
   let err = $state<string | null>(null);
   let layout = $state(0);
@@ -75,6 +75,8 @@
   });
 
   const switches = $derived(model?.switches ?? 3);
+  // on mobile the fixed N-column board gets cramped; wrap into readable min-width tiles instead
+  const boardCols = $derived(editor.isMobile ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
   const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
   const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
   const colorList = $derived(model ? Object.entries(model.colors).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
@@ -183,7 +185,7 @@
         {/each}
       </div>
 
-      <div class="board" style="grid-template-columns:repeat({switches},1fr)">
+      <div class="board" style="grid-template-columns:{boardCols}">
         {#each Array(switches) as _, i (i)}
           {@const cfg = layout * model.configsPerLayout + view * model.switches + i}
           {@const col = colorList.find((x) => x.v === cur('color', cfg))?.hex ?? ACC}
@@ -314,7 +316,7 @@
     align-items: center;
     gap: 10px;
     padding: 12px 18px;
-    border-bottom: 1px solid var(--line, #2a2a32);
+    border-bottom: 1px solid var(--line, var(--border2));
   }
   .fhead h2 {
     margin: 0;
@@ -329,7 +331,7 @@
   }
   .sub {
     font-size: 11px;
-    color: #8a8a93;
+    color: var(--textdim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -338,7 +340,7 @@
   }
   .back {
     background: transparent;
-    border: 1px solid var(--line, #2a2a32);
+    border: 1px solid var(--line, var(--border2));
     color: var(--text);
     border-radius: 8px;
     padding: 6px 12px;
@@ -367,7 +369,7 @@
   }
   .rlbl {
     font: 700 10px/1 ui-monospace, monospace;
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.08em;
     width: 54px;
   }
@@ -376,9 +378,9 @@
     height: 32px;
     padding: 0 11px;
     border-radius: 9px;
-    border: 1px solid #2a2a31;
-    background: #16161b;
-    color: #b8b8c0;
+    border: 1px solid var(--border2);
+    background: var(--track);
+    color: var(--text2);
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
@@ -390,7 +392,7 @@
   .chip.on {
     background: var(--c);
     border-color: var(--c);
-    color: #1c1206;
+    color: var(--bg2);
   }
   .board {
     display: grid;
@@ -405,8 +407,8 @@
     min-height: 96px;
     padding: 16px 13px 12px;
     border-radius: 14px;
-    border: 1px solid #28282f;
-    background: linear-gradient(180deg, #181820, #121217);
+    border: 1px solid var(--border2);
+    background: linear-gradient(180deg, var(--surface2), var(--surface));
     cursor: pointer;
     text-align: left;
   }
@@ -427,27 +429,27 @@
     top: 9px;
     right: 11px;
     font-size: 10px;
-    color: #6e6e78;
+    color: var(--textfaint);
   }
   .ondev {
     position: absolute;
     top: 9px;
     left: 11px;
     font-size: 9px;
-    color: #5fb878;
+    color: var(--ok);
     letter-spacing: 0.02em;
   }
   .swcat {
     font-size: 13px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .swhold {
     font-size: 10px;
-    color: #7e7e88;
+    color: var(--textfaint);
   }
   .insp {
-    border-top: 1px solid #1c1c22;
+    border-top: 1px solid var(--surface2);
     padding-top: 14px;
     display: flex;
     flex-direction: column;
@@ -456,11 +458,11 @@
   }
   .ititle {
     font-size: 11px;
-    color: #cfcfd6;
+    color: var(--text2);
     letter-spacing: 0.04em;
   }
   .cfg {
-    color: #56565e;
+    color: var(--textmuted);
   }
   .cols {
     display: flex;
@@ -485,12 +487,12 @@
     border-radius: 6px;
   }
   .abadge.tap {
-    background: #1d2a2c;
-    color: #7fd8de;
+    background: var(--accent-tint);
+    color: var(--accentbright);
   }
   .abadge.hold {
-    background: #2a2212;
-    color: #f5c518;
+    background: var(--surface2);
+    color: var(--amber);
   }
   .field {
     display: flex;
@@ -500,22 +502,22 @@
 
   .flbl {
     font-size: 12px;
-    color: #8a8a93;
+    color: var(--textdim);
   }
   .todo {
     font-size: 9px;
-    color: #6e6e78;
-    border: 1px solid #2a2a31;
+    color: var(--textfaint);
+    border: 1px solid var(--border2);
     border-radius: 4px;
     padding: 1px 4px;
   }
   select,
   input {
     height: 34px;
-    background: #0d0d10;
-    border: 1px solid #2a2a31;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
     border-radius: 9px;
-    color: #e7e7ee;
+    color: var(--text);
     padding: 0 11px;
     font-size: 13px;
     font-family: inherit;
@@ -538,12 +540,12 @@
     cursor: pointer;
   }
   .csw.on {
-    border-color: #fff;
+    border-color: var(--border3);
     box-shadow: 0 0 0 2px var(--c);
   }
   .note {
     font-size: 11.5px;
-    color: #6e6e78;
+    color: var(--textfaint);
     line-height: 1.5;
     margin: 0;
     max-width: 620px;
@@ -552,7 +554,7 @@
     flex: 1;
     display: grid;
     place-items: center;
-    color: #8a8a93;
+    color: var(--textdim);
     font-size: 14px;
     padding: 24px;
     text-align: center;

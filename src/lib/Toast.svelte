@@ -22,7 +22,7 @@
     gap: 11px;
     padding: 12px 17px;
     background: var(--surface-2);
-    border: 1px solid #2e2e36;
+    border: 1px solid var(--border2);
     border-radius: 12px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     animation: axsToast 2.2s ease forwards;

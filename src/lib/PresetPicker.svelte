@@ -168,8 +168,8 @@
     width: 680px;
     max-width: 100%;
     max-height: 84vh;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -186,7 +186,7 @@
   }
   .head {
     padding: 16px 18px 13px;
-    border-bottom: 1px solid #232329;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
   }
   .title-row {
@@ -198,13 +198,13 @@
   .title {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .cur {
     font: 700 10px/1 var(--font-mono);
     color: #f5c878;
-    background: #241a12;
-    border: 1px solid #5a3f1f;
+    background: var(--surface2);
+    border: 1px solid var(--amber-border);
     border-radius: 6px;
     padding: 5px 8px;
     letter-spacing: 0.04em;
@@ -246,7 +246,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #f2f2f5;
+    color: var(--text);
     font-family: inherit;
     font-size: 15px;
     font-weight: 500;
@@ -263,7 +263,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -275,7 +275,7 @@
   }
   .tab.on {
     background: rgba(53, 201, 214, 0.14);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
   .list {
@@ -306,7 +306,7 @@
     border-color: var(--border-strong);
   }
   .chip.active {
-    border-color: #5a3f1f;
+    border-color: var(--amber-border);
     background: rgba(245, 166, 35, 0.08);
   }
   .cnum {
@@ -316,20 +316,20 @@
   .cname {
     font-size: 12px;
     font-weight: 600;
-    color: #d6d6dc;
+    color: var(--text2);
   }
   .foot {
     display: flex;
     gap: 16px;
     padding: 10px 16px;
-    border-top: 1px solid #232329;
+    border-top: 1px solid var(--surface2);
     font-size: 10px;
     color: var(--text-faint);
     flex: none;
   }
   .section {
     font: 600 10px/1 var(--font-mono);
-    color: #5d5d66;
+    color: var(--textmuted);
     letter-spacing: 0.1em;
     padding: 13px 8px 9px;
   }
@@ -364,7 +364,7 @@
     margin-right: 6px;
     border: 0;
     background: transparent;
-    color: #44444d;
+    color: var(--border3);
     font-size: 17px;
     cursor: pointer;
     border-radius: 9px;
@@ -395,7 +395,7 @@
   .rname {
     font-size: 14px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -404,8 +404,8 @@
     flex: none;
     font: 700 9px/1 var(--font-mono);
     color: #f5c878;
-    background: #241a12;
-    border: 1px solid #5a3f1f;
+    background: var(--surface2);
+    border: 1px solid var(--amber-border);
     border-radius: 5px;
     padding: 4px 7px;
     letter-spacing: 0.06em;

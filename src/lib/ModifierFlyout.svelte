@@ -11,7 +11,10 @@
   // Disabled (pids not decoded): Channel, PC Reset, Update Rate, Attack, Release, Damping,
   //   Auto Engage, Off Value — rendered but flagged "pending decode", no writes.
   import { forgefx } from './forgefx';
+  import { editor } from './editor.svelte';
   import type { ModModel } from './types';
+
+  const mob = $derived(editor.isMobile);
 
   let {
     open = false,
@@ -269,7 +272,7 @@
 <div class="scrim" class:open onpointerdown={onClose}></div>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-<div class="panel" class:open data-screen-label="Modifier Editor" onpointermove={knobMove} onpointerup={knobUp}>
+<div class="panel" class:open class:mob data-screen-label="Modifier Editor" onpointermove={knobMove} onpointerup={knobUp}>
   <!-- header -->
   <div class="head">
     <span class="srcdot"></span>
@@ -317,12 +320,12 @@
       <div class="divider"><span></span><b>RESPONSE</b><span></span></div>
       <div class="graph">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#16161b" stroke-width="0.5" />
-          <line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#16161b" stroke-width="0.5" />
-          <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#16161b" stroke-width="0.5" />
-          <line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#16161b" stroke-width="0.5" />
-          <path d={curve.fill} fill="rgba(53,201,214,.10)" stroke="none" />
-          <path d={curve.cur} fill="none" stroke="#35c9d6" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+          <line x1="33.33" y1="0" x2="33.33" y2="100" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="66.66" y1="0" x2="66.66" y2="100" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="0" y1="33.33" x2="100" y2="33.33" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="0" y1="66.66" x2="100" y2="66.66" style="stroke:var(--border)" stroke-width="0.5" />
+          <path d={curve.fill} fill="color-mix(in srgb, var(--accent) 10%, transparent)" stroke="none" />
+          <path d={curve.cur} fill="none" style="stroke:var(--accent)" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
         </svg>
         <div class="axis x">SOURCE →</div>
         <div class="axis y">↑ VALUE</div>
@@ -402,10 +405,10 @@
     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
     <div class="kbox" onpointerdown={(e) => knobDown(e, k.key)} title={k.live ? '' : 'pending decode — local preview only'}>
       <svg width="54" height="54" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="24" fill="none" stroke="#2a2a31" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
-        <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray={dashFor(v)} transform="rotate(135 32 32)" />
-        <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1" />
-        <g transform={rotFor(v)}><circle cx="32" cy="20" r="2.6" fill="#dcdce2" /></g>
+        <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
+        <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray={dashFor(v)} transform="rotate(135 32 32)" />
+        <circle cx="32" cy="32" r="15" style="fill:var(--surface2);stroke:var(--bg)" stroke-width="1" />
+        <g transform={rotFor(v)}><circle cx="32" cy="20" r="2.6" style="fill:var(--text)" /></g>
       </svg>
     </div>
     <div class="klbl">{k.label}{#if !k.live}<span class="pend"> ·pending</span>{/if}</div>
@@ -433,8 +436,8 @@
     right: 0;
     width: min(420px, 94vw);
     z-index: 200;
-    background: linear-gradient(180deg, #121216, #0d0d10);
-    border-left: 1px solid #222229;
+    background: linear-gradient(180deg, var(--bg2), var(--bg2));
+    border-left: 1px solid var(--border);
     box-shadow: -26px 0 60px rgba(0, 0, 0, 0.55);
     transform: translateX(112%);
     transition: transform 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
@@ -445,28 +448,33 @@
   .panel.open {
     transform: translateX(0);
   }
+  /* mobile: full-screen sheet from the right (no peek of the grid behind it) */
+  .panel.mob {
+    width: 100vw;
+    border-left: none;
+  }
   .head {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 13px 16px;
-    border-bottom: 1px solid #1c1c22;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
   }
   .srcdot {
     width: 7px;
     height: 7px;
     border-radius: 50%;
     flex: none;
-    background: #f5a623;
+    background: var(--amber);
     box-shadow: 0 0 8px rgba(245, 166, 35, 0.8);
   }
   .title {
     min-width: 0;
     font-weight: 700;
     font-size: 14px;
-    color: #fff;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -478,24 +486,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #1a1a1f;
-    border: 1px solid #2a2a31;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
     border-radius: 9px;
     cursor: pointer;
     font-size: 14px;
-    color: #9a9aa3;
+    color: var(--textdim);
   }
   .close:hover {
-    border-color: #3f3f48;
-    color: #fff;
+    border-color: var(--border3);
+    color: var(--text);
   }
   .banner {
     flex: none;
     padding: 9px 16px;
     font: 600 11px/1.4 'JetBrains Mono', monospace;
-    color: #f5c97a;
-    background: rgba(245, 166, 35, 0.08);
-    border-bottom: 1px solid rgba(245, 166, 35, 0.18);
+    color: var(--amber);
+    background: var(--amber-tint);
+    border-bottom: 1px solid var(--amber-border);
   }
   .body {
     flex: 1;
@@ -522,12 +530,12 @@
   .divider span {
     flex: 1;
     height: 1px;
-    background: #222229;
+    background: var(--border);
   }
   .divider b {
     font: 700 10px/1 'JetBrains Mono', monospace;
     letter-spacing: 0.13em;
-    color: #6e6e78;
+    color: var(--textfaint);
   }
   .srcbox {
     display: flex;
@@ -540,14 +548,14 @@
     cursor: pointer;
     font-size: 15px;
     font-weight: 700;
-    background: #0a0a0c;
-    border: 1px dashed #3a3a44;
-    color: #cfcfd6;
+    background: var(--input);
+    border: 1px dashed var(--border3);
+    color: var(--text2);
   }
   .srcbox.on {
-    background: #102023;
-    border: 1px solid #2c5d63;
-    color: #7fd8de;
+    background: var(--surface2);
+    border: 1px solid var(--accent-border);
+    color: var(--accentbright);
   }
   .srctxt {
     overflow: hidden;
@@ -556,13 +564,13 @@
   }
   .caret {
     font-size: 10px;
-    color: #6e6e78;
+    color: var(--textfaint);
     flex: none;
     margin-left: 8px;
   }
   .caption {
     font: 600 10px/1 'JetBrains Mono', monospace;
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.04em;
     margin-top: 8px;
   }
@@ -570,19 +578,19 @@
     font-size: 9px;
     letter-spacing: 0.08em;
     text-align: center;
-    color: #56565e;
+    color: var(--textmuted);
   }
   .center {
     text-align: center;
   }
   .flag {
     font: 600 8px/1.3 'JetBrains Mono', monospace;
-    color: #d6a23f;
+    color: var(--amber);
     letter-spacing: 0.04em;
     margin-top: 4px;
   }
   .pend {
-    color: #d6543f;
+    color: var(--danger);
     font-weight: 700;
   }
   .enum-row {
@@ -613,23 +621,23 @@
     font-size: 13px;
     font-weight: 700;
     white-space: nowrap;
-    background: #16161b;
-    border: 1px solid #2a2a31;
-    color: #e3e3e8;
+    background: var(--track);
+    border: 1px solid var(--border2);
+    color: var(--text);
   }
   .enumbtn {
     cursor: pointer;
   }
   .enumbtn:hover {
-    border-color: #3f3f48;
+    border-color: var(--border3);
   }
   .graph {
     position: relative;
     width: 100%;
     aspect-ratio: 1/1;
     max-height: 230px;
-    background: #08080a;
-    border: 1px solid #1c1c22;
+    background: var(--bg);
+    border: 1px solid var(--surface2);
     border-radius: 10px;
     overflow: hidden;
   }
@@ -643,7 +651,7 @@
   .axis {
     position: absolute;
     font: 600 8px/1 'JetBrains Mono', monospace;
-    color: #3c3c44;
+    color: var(--border3);
     letter-spacing: 0.06em;
   }
   .axis.x {
@@ -680,13 +688,13 @@
     width: 54px;
     height: 17px;
     border-radius: 5px;
-    background: #0c0c0e;
-    border: 1px solid #202027;
+    background: var(--bg);
+    border: 1px solid var(--surface2);
     display: flex;
     align-items: center;
     justify-content: center;
     font: 600 10px/1 'JetBrains Mono', monospace;
-    color: #cfcfd6;
+    color: var(--text2);
   }
   .kbox {
     cursor: ns-resize;
@@ -699,7 +707,7 @@
   .klbl {
     font-weight: 600;
     font-size: 11px;
-    color: #9a9aa3;
+    color: var(--textdim);
   }
   .srcmenu-scrim {
     position: absolute;
@@ -712,8 +720,8 @@
     right: 16px;
     top: 96px;
     z-index: 9;
-    background: #16161b;
-    border: 1px solid #2e2e36;
+    background: var(--track);
+    border: 1px solid var(--border2);
     border-radius: 11px;
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
     padding: 6px;
@@ -728,16 +736,16 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    color: #cfcfd6;
+    color: var(--text2);
   }
   .srcopt.none {
-    color: #8a8a93;
+    color: var(--textdim);
   }
   .srcopt.sel {
-    color: #7fd8de;
-    background: rgba(53, 201, 214, 0.12);
+    color: var(--accentbright);
+    background: var(--accent-tint);
   }
   .srcopt:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
   }
 </style>

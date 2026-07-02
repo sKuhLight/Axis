@@ -238,10 +238,10 @@
 </script>
 
 {#if editor.paletteOpen}
-  <div class="bg" role="presentation" onclick={() => (editor.paletteOpen = false)}>
-    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
+    <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <div class="search">
-        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
+        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
         <input
           bind:this={inputEl}
           bind:value={query}
@@ -329,8 +329,8 @@
     width: 760px;
     max-width: 100%;
     max-height: 84vh;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     display: flex;
@@ -338,12 +338,26 @@
     overflow: hidden;
     animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
+  /* mobile: dock the palette to the bottom as a slide-up sheet */
+  .bg.mob {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .card.mob {
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
   .search {
     display: flex;
     align-items: center;
     gap: 13px;
     padding: 18px 20px;
-    border-bottom: 1px solid #232329;
+    border-bottom: 1px solid var(--surface2);
   }
   .search input {
     flex: 1;
@@ -351,14 +365,14 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #f2f2f5;
+    color: var(--text);
     font-family: inherit;
     font-size: 17px;
     font-weight: 500;
   }
   .count {
     font-size: 12px;
-    color: #5d5d66;
+    color: var(--textmuted);
     white-space: nowrap;
   }
   .chips {
@@ -366,16 +380,17 @@
     align-items: center;
     gap: 10px;
     padding: 11px 16px;
-    border-bottom: 1px solid #1f1f25;
+    border-bottom: 1px solid var(--surface2);
+    flex: none; /* never let the flex column shrink/clip this row (tall "All" list did) */
   }
   .target {
     padding: 6px 11px;
-    background: #11201f;
-    border: 1px solid #244040;
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 7px;
     font-size: 11px;
     font-weight: 600;
-    color: #7fd8de;
+    color: var(--accentbright);
     white-space: nowrap;
   }
   .rn {
@@ -392,7 +407,13 @@
     gap: 6px;
     padding: 10px 16px;
     overflow-x: auto;
-    border-bottom: 1px solid #1f1f25;
+    border-bottom: 1px solid var(--surface2);
+    flex: none;
+  }
+  /* mobile: wrap categories onto multiple rows instead of a hidden horizontal scrollbar */
+  .card.mob .cats {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
   .cat {
     flex: none;
@@ -400,7 +421,7 @@
     border-radius: 8px;
     border: 1px solid var(--surface-3);
     background: var(--panel-2);
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -412,7 +433,7 @@
   }
   .cat.on {
     background: rgba(53, 201, 214, 0.14);
-    border-color: #2c4a4b;
+    border-color: var(--accent-border);
     color: var(--accent);
   }
   .list {
@@ -425,14 +446,14 @@
     display: flex;
     gap: 16px;
     padding: 10px 16px;
-    border-top: 1px solid #232329;
+    border-top: 1px solid var(--surface2);
     font-size: 10px;
     color: var(--text-faint);
     flex: none;
   }
   .section {
     font: 600 10px/1 var(--font-mono);
-    color: #5d5d66;
+    color: var(--textmuted);
     letter-spacing: 0.1em;
     padding: 13px 10px 8px;
   }
@@ -478,7 +499,7 @@
     margin-right: 6px;
     border: 0;
     background: transparent;
-    color: #44444d;
+    color: var(--border3);
     font-size: 17px;
     cursor: pointer;
     border-radius: 9px;
@@ -496,7 +517,7 @@
     align-items: center;
     justify-content: center;
     font-size: 15px;
-    color: #fff;
+    color: var(--text);
     border: 1px solid;
   }
   .rtext {
@@ -509,14 +530,14 @@
   .rname {
     font-size: 14px;
     font-weight: 600;
-    color: #ededf2;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .rsub {
     font-size: 11.5px;
-    color: #7a7a83;
+    color: var(--textfaint);
   }
   .kind {
     flex: none;
@@ -524,7 +545,7 @@
     font-weight: 600;
     color: var(--text-mut);
     padding: 4px 9px;
-    background: #1a1a1f;
+    background: var(--surface2);
     border: 1px solid var(--border-2);
     border-radius: 6px;
     white-space: nowrap;
@@ -533,7 +554,7 @@
     flex: none;
     font-size: 10px;
     font-weight: 600;
-    color: #f5a623;
+    color: var(--amber);
     padding: 3px 8px;
     background: rgba(245, 166, 35, 0.12);
     border: 1px solid rgba(245, 166, 35, 0.3);
@@ -545,8 +566,8 @@
     font-size: 10px;
     font-weight: 600;
     color: var(--accent);
-    background: #11201f;
-    border: 1px solid #244040;
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
   }

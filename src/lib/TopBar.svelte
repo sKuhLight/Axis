@@ -19,11 +19,9 @@
   <!-- left region (scrolls if cramped) -->
   <div class="left scroll">
     {#if editor.isMobile}
-      <svg class="mlogo" width="26" height="26" viewBox="0 0 30 30">
-        <circle cx="9" cy="9" r="3.4" fill="#35c9d6" />
-        <circle cx="21" cy="9" r="3.4" fill="#4f6bed" />
-        <circle cx="15" cy="21" r="3.4" fill="#f5a623" />
-      </svg>
+      <button class="burger" aria-label="Menu" onclick={() => (editor.drawerOpen = true)}>
+        <span></span><span></span><span></span>
+      </button>
     {/if}
 
     <div class="preset">
@@ -37,19 +35,15 @@
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
     </div>
 
-    <div class="scenes">
-      <span class="mono scn-lbl">SCN</span>
-      <div class="scn-group">
-        {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
-          <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
-        {/each}
+    {#if !editor.isMobile}
+      <div class="scenes">
+        <span class="mono scn-lbl">SCN</span>
+        <div class="scn-group">
+          {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
+            <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+          {/each}
+        </div>
       </div>
-    </div>
-
-    {#if editor.isMobile}
-      <!-- tuner + tap-tempo live here on mobile (the desktop status strip is hidden) -->
-      <button class="mbtn" class:on={editor.tuner.active} onclick={() => editor.toggleTuner()} title="Tuner">♪ {editor.tuner.active ? (editor.tuner.note ?? '…') : 'Tune'}</button>
-      <button class="mbtn" onclick={() => editor.tapTempo()} title="Tap tempo">{editor.bpm}<span class="mono"> BPM</span></button>
     {/if}
   </div>
 
@@ -88,13 +82,12 @@
       </div>
     {/if}
 
-    <button class="addblk" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
+    <button class="addblk" class:icon={editor.isMobile} title="Add block" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
       <svg width="16" height="16" viewBox="0 0 16 16">
-        <circle cx="7" cy="7" r="5" fill="none" stroke="#35c9d6" stroke-width="1.6" />
-        <path d="M10.6 10.6 L14 14" stroke="#35c9d6" stroke-width="1.6" stroke-linecap="round" />
+        <circle cx="7" cy="7" r="5" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+        <path d="M10.6 10.6 L14 14" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" />
       </svg>
-      Add block
-      {#if !editor.isMobile}<span class="mono kbd">⌘K</span>{/if}
+      {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
     {#if !editor.isMobile}
@@ -102,7 +95,6 @@
         <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
           <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
         </button>
-        <div class="div"></div>
         <div class="st tempo" title="Tempo — type to set, TAP to tap">
           <input
             class="mono bpm"
@@ -114,15 +106,13 @@
           />
           <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
         </div>
-        <div class="div"></div>
-        <div class="st cpu" title="Device link round-trip latency">
+        <div class="st cpu link" title="Device link round-trip latency">
           <span class="mono st-lbl">LINK</span>
           <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
           <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
         </div>
         {#if cpu != null}
-          <div class="div"></div>
-          <div class="st cpu" title="Live CPU load (decoded from the device meters frame)">
+          <div class="st cpu load" title="Live CPU load (decoded from the device meters frame)">
             <span class="mono st-lbl">CPU</span>
             <div class="bar"><div class="fill" style="width:{pk(cpu / 100)}%; background:{cpuColor}"></div></div>
             <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
@@ -148,7 +138,7 @@
     align-items: center;
     gap: 12px;
     padding: 0 16px;
-    background: linear-gradient(180deg, #141416, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border-bottom: 1px solid var(--border);
     overflow: hidden;
   }
@@ -167,8 +157,8 @@
     padding: 0 6px 0 13px;
     max-width: 46%;
     border-radius: 10px;
-    background: linear-gradient(180deg, #1d2a2c, #16201f);
-    border: 1px solid #2c4a4b;
+    background: linear-gradient(180deg, var(--accent-tint), var(--accent-tint));
+    border: 1px solid var(--accent-border);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   }
   .up-dot {
@@ -182,13 +172,13 @@
   .up-txt {
     font-size: 12.5px;
     font-weight: 600;
-    color: #bfeef2;
+    color: var(--accentbright);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .up-txt b {
-    color: #fff;
+    color: var(--text);
   }
   .up-go {
     flex: none;
@@ -213,12 +203,12 @@
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: #7fb3b6;
+    color: var(--accentbright);
     cursor: pointer;
     font-size: 12px;
   }
   .up-x:hover {
-    color: #fff;
+    color: var(--text);
     background: rgba(255, 255, 255, 0.06);
   }
   .topbar.mob {
@@ -231,11 +221,30 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden; /* the top bar never scrolls/swipes — content fits, the preset name truncates */
   }
-  .mlogo {
+  .burger {
     flex: none;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 11px;
+    cursor: pointer;
+  }
+  .burger span {
+    width: 17px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--text2);
+  }
+  .burger:active {
+    background: var(--surface2);
   }
   .right {
     flex: none;
@@ -249,6 +258,14 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0; /* allow the name to truncate rather than overflow the bar */
+  }
+  /* on mobile the preset cluster fills the row so the name ellipsis-truncates cleanly (no scroll) */
+  .topbar.mob .preset {
+    flex: 1;
+  }
+  .topbar.mob .pset {
+    flex: 1;
   }
   .pbtn {
     width: 34px;
@@ -257,7 +274,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #121214;
+    background: var(--surface);
     border: 1px solid var(--border-2);
     color: var(--text-dim);
     font-size: 15px;
@@ -302,7 +319,7 @@
   .pname {
     font-size: 13px;
     font-weight: 600;
-    color: #e3e3e8;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -339,33 +356,13 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: #7a7a83;
+    color: var(--textfaint);
     font: 700 11px/1 var(--font-mono);
     cursor: pointer;
   }
   .scn.on {
     background: var(--accent);
     color: var(--accent-ink);
-  }
-
-  /* mobile tuner / tempo buttons (desktop status strip is hidden on phones) */
-  .mbtn {
-    flex: none;
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 8px;
-    border: 1px solid var(--surface-3);
-    background: var(--panel-2);
-    color: #cfcfd6;
-    font-size: 12px;
-    font-weight: 700;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .mbtn.on {
-    background: rgba(53, 201, 214, 0.16);
-    border-color: #2c4a4b;
-    color: var(--accent);
   }
 
   /* view switch */
@@ -395,7 +392,7 @@
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: #8a8a93;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
@@ -412,10 +409,10 @@
     gap: 9px;
     height: 38px;
     padding: 0 14px 0 13px;
-    background: linear-gradient(180deg, #1d2a2c, #16201f);
-    border: 1px solid #2c4a4b;
+    background: linear-gradient(180deg, var(--accent-tint), var(--accent-tint));
+    border: 1px solid var(--accent-border);
     border-radius: 10px;
-    color: #bfeef2;
+    color: var(--accentbright);
     font-family: inherit;
     font-size: 14px;
     font-weight: 600;
@@ -423,12 +420,18 @@
     flex: none;
     white-space: nowrap;
   }
+  .addblk.icon {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    justify-content: center;
+  }
   .kbd {
     font-size: 10px;
     font-weight: 600;
-    color: #5e8a8c;
-    background: #0d1516;
-    border: 1px solid #234142;
+    color: var(--accent-border);
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
   }
@@ -455,7 +458,7 @@
     color: inherit;
   }
   button.st:hover {
-    background: #16161b;
+    background: var(--track);
   }
   .note {
     font-size: 15px;
@@ -469,7 +472,7 @@
     letter-spacing: 0.08em;
   }
   button.st.on {
-    background: #16252a;
+    background: var(--surface2);
   }
   button.st.on .note,
   button.st.on .st-lbl {
@@ -502,7 +505,7 @@
     color: var(--accent);
   }
   .taplbl {
-    background: #16161b;
+    background: var(--track);
     border: 1px solid var(--surface-3);
     border-radius: 5px;
     padding: 3px 5px;
@@ -512,10 +515,10 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .div {
-    width: 1px;
-    background: #20202a;
-    flex: none;
+  /* separators between telemetry items — a border on each non-first item, so items can be hidden
+     from the right at narrow widths without leaving a dangling divider */
+  .status > .st + .st {
+    border-left: 1px solid var(--surface2);
   }
   .cpu {
     cursor: default;
@@ -523,7 +526,7 @@
   .bar {
     width: 40px;
     height: 6px;
-    background: #16161b;
+    background: var(--track);
     border: 1px solid var(--surface-3);
     border-radius: 4px;
     overflow: hidden;
@@ -546,8 +549,8 @@
     gap: 8px;
     height: 38px;
     padding: 0 15px;
-    background: #241a12;
-    border: 1px solid #5a3f1f;
+    background: var(--surface2);
+    border: 1px solid var(--amber-border);
     border-radius: 9px;
     color: #f5c878;
     font-family: inherit;
@@ -563,5 +566,27 @@
     border-radius: 50%;
     background: var(--amber);
     box-shadow: 0 0 7px var(--amber);
+  }
+
+  /* narrower desktop windows: shed telemetry from the right so the preset picker + scenes never get
+     squeezed out of the bar. Order dropped: CPU meter → LINK meter → tempo. Tuner, preset, scenes,
+     add-block and save always stay. */
+  @media (max-width: 1320px) {
+    .status .load {
+      display: none;
+    }
+  }
+  @media (max-width: 1180px) {
+    .status .link {
+      display: none;
+    }
+  }
+  @media (max-width: 1060px) {
+    .status .tempo {
+      display: none;
+    }
+    .view {
+      display: none;
+    }
   }
 </style>

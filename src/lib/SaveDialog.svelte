@@ -7,11 +7,12 @@
   });
   const pad = (n: number) => String(n).padStart(3, '0');
   const overwritingCurrent = $derived(editor.preset?.number === target);
+  const mob = $derived(editor.isMobile);
 </script>
 
 {#if editor.saveOpen}
-  <div class="bg" role="presentation" onclick={() => (editor.saveOpen = false)}>
-    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+  <div class="bg" class:mob role="presentation" onclick={() => (editor.saveOpen = false)}>
+    <div class="card" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <div class="head">
         <span class="dot"></span>
         <span class="title">Save preset</span>
@@ -56,12 +57,23 @@
   .card {
     width: 420px;
     max-width: 100%;
-    background: #161619;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 16px;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
     padding: 20px;
     animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  .bg.mob {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .card.mob {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
   }
   .head {
     display: flex;
@@ -79,7 +91,7 @@
   .title {
     font-size: 16px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
   }
   .body {
     font-size: 13px;
@@ -109,7 +121,7 @@
     background: var(--panel-2);
     border: 1px solid var(--surface-3);
     border-radius: 10px;
-    color: #f5a623;
+    color: var(--amber);
     font: 700 16px/1 var(--font-mono);
     outline: none;
   }
@@ -151,11 +163,11 @@
     border-color: var(--border-strong);
   }
   .save {
-    background: #241a12;
-    border: 1px solid #5a3f1f;
+    background: var(--surface2);
+    border: 1px solid var(--amber-border);
     color: #f5c878;
   }
   .save:hover {
-    border-color: #6a542b;
+    border-color: var(--amber-border);
   }
 </style>
