@@ -336,7 +336,31 @@ export const forgefx = {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: bytes
-    })
+    }),
+
+  // ── per-block monitor (meter) table: paramName → {pid, role, dB range} ──
+  monitors: () => req<import('./types').MonitorParams>('/preset/monitors'),
+  /** Live per-block audio meters: each placed monitored block's normalized level + dB. */
+  monitorsLive: (eid?: number) =>
+    req<import('./types').LiveMonitor[]>(`/preset/monitors/live${eid != null ? `?eid=${eid}` : ''}`),
+
+  // ── AM4 (model 0x15) — flat 4-slot device, its own codec ──
+  am4ModModel: () => req<import('./types').Am4ModifierModel>('/am4/mod/model'),
+  /** Save the AM4 active edit buffer to a stored location (0..103). */
+  am4StorePreset: (location: number) =>
+    req<{ ok: boolean; location: number; code: string }>('/am4/preset/store', { method: 'POST', body: JSON.stringify({ location }) }),
+  /** Back up an AM4 preset as a verbatim .syx (location omitted → active buffer). */
+  am4BackupPreset: (location?: number) =>
+    req<import('./types').Am4Backup>('/am4/preset/backup', { method: 'POST', body: JSON.stringify(location != null ? { location } : {}) }),
+  /** Restore an AM4 preset .syx (byte array of one 12,352-byte dump) — verbatim re-emit. */
+  am4RestorePreset: (bytes: number[]) =>
+    req<{ ok: boolean; location: number | null; code: string | null }>('/am4/preset/restore', { method: 'POST', body: JSON.stringify({ bytes }) }),
+  /** Offline decode of an AM4 .syx (single dump or full bank) → each preset's location + name. */
+  am4DecodeSyx: (bytes: number[]) =>
+    req<import('./types').Am4Decode>('/am4/preset/decode', { method: 'POST', body: JSON.stringify({ bytes }) }),
+  /** Validate an AM4 firmware .syx envelope (integrity check only — NOT a flasher). */
+  am4ValidateFirmware: (bytes: number[]) =>
+    req<import('./types').Am4FirmwareResult>('/am4/firmware/validate', { method: 'POST', body: JSON.stringify({ bytes }) })
 };
 
 export { ForgeError };

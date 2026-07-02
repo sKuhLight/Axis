@@ -104,14 +104,19 @@ class EditorStore {
   activeCtl = $state<Record<number, number>>({});
   /** Current model/type name of a placed block (for the grid tile sub-label). */
   typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
+  /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
+  liveMeters = $state<Record<number, import('./types').LiveMonitor>>({});
+  /** Live audio meter for a block (null if that block has no monitor / not yet read). */
+  monitorFor = (effectId: number): import('./types').LiveMonitor | null => this.liveMeters[effectId] ?? null;
   scene = $state(1);
   railActive = $state('build');
   bpm = $state(120);
   presetCount = $state(512); // FM3 preset slots
   /** Live CPU% (decoded from the device meters frame), null until first reading. FM3-family only. */
   cpu = $state<number | null>(null);
-  /** Live audio level meters (0..1). Labels provisional (input/outL/outR) pending live verification. */
-  levels = $state<{ input: number; outL: number; outR: number } | null>(null);
+  /** Live output level meters in dB (−40…0, floor-clamped) — Output 1 & 2, each L/R — from the FM3's
+   *  Preset Leveling poll (fn 0x19, 5-septet RMS float → 10·log10 dB). Smoothed server-side. */
+  levels = $state<{ out1L: number; out1R: number; out2L: number; out2R: number } | null>(null);
 
   // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
   mobCols = $state(4);
@@ -221,6 +226,7 @@ class EditorStore {
   placeTarget = $state<{ row: number; col: number } | null>(null);
   presetOpen = $state(false);
   cabPickerOpen = $state(false);
+  am4ToolsOpen = $state(false); // AM4 tools modal (preset backup/restore/decode, firmware validate, modifier view)
   toast = $state<{ text: string; accent: string } | null>(null);
 
   #toastT: ReturnType<typeof setTimeout> | null = null;
@@ -380,6 +386,45 @@ class EditorStore {
         /* meters are best-effort */
       }
     }, 350);
+  };
+
+  // ── live audio meters (per-block monitor level, normalized→dB) ──
+  // GENTLE poll: reads ONLY the currently-selected block's monitor (one serial round-trip per tick),
+  // and ONLY while metering is actually enabled + the block editor is open. Polling every placed
+  // block flooded the FM3's serial link and caused audio dropouts — never do a full-preset sweep here.
+  meteringOn = $state(false); // opt-in; off by default so it can't disturb the device unnoticed
+  /** Per-block metering is only offered on a gen-3 device over a fast link (never AM4, never a slow
+   *  5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is always available separately. */
+  get canMeterBlocks(): boolean {
+    return this.status === 'ready' && !this.isAm4 && !this.slowLink && !isRemote();
+  }
+  #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
+  startLiveMeters = () => {
+    if (this.#liveMeterTimer) return; // already running
+    const tick = async () => {
+      this.#liveMeterTimer = null;
+      const eid = this.selected?.effectId;
+      const ok = this.meteringOn && this.status === 'ready' && !this.isAm4 && !this.slowLink && !isRemote()
+        && eid != null && !this.inLibrary && !this.virtual;
+      if (ok) {
+        try {
+          const rows = await forgefx.monitorsLive(eid); // single-block read only
+          const next = { ...this.liveMeters };
+          for (const r of rows) next[r.effectId] = r;
+          this.liveMeters = next;
+        } catch {
+          /* best-effort */
+        }
+      }
+      // 500 ms when active (1 read/tick), 2 s idle heartbeat when metering is off.
+      this.#liveMeterTimer = setTimeout(tick, ok ? 500 : 2000);
+    };
+    tick();
+  };
+  stopLiveMeters = () => {
+    if (this.#liveMeterTimer) clearTimeout(this.#liveMeterTimer);
+    this.#liveMeterTimer = null;
+    this.liveMeters = {};
   };
 
   // ── lifecycle ──
@@ -787,7 +832,7 @@ class EditorStore {
       case 'scene': this.scene = e.index + 1; break;
       case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
       case 'cpu': this.cpu = e.percent; break;
-      case 'meters': this.levels = { input: e.input, outL: e.outL, outR: e.outR }; break;
+      case 'meters': this.levels = { out1L: e.out1L, out1R: e.out1R, out2L: e.out2L, out2R: e.out2R }; break;
       case 'param': {
         // another UI moved a knob — reflect it live if that block is open (cheap: update the arc)
         if (this.selected?.effectId === e.effectId) {
@@ -876,6 +921,7 @@ class EditorStore {
       this.everLoaded = true;
       this.status = 'ready';
       this.fetchMeters(); // background: fill every block's level meter
+      this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
     } catch (e) {
       if (!this.everLoaded) this.status = 'offline';
       // We were connected and a (re)load failed — a real device-comm error worth a debug report. Debounced

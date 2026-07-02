@@ -11,6 +11,7 @@
   import FcEditor from '$lib/FcEditor.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
   import CabPicker from '$lib/CabPicker.svelte';
+  import Am4Tools from '$lib/Am4Tools.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
@@ -99,6 +100,7 @@
   </div>
   <CommandPalette />
   <CabPicker />
+  <Am4Tools />
   <PresetPicker />
   <SaveDialog />
   <TunerOverlay />
