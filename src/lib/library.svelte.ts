@@ -271,12 +271,27 @@ class LibraryStore {
     const byId = new Map(this.entries.map((e) => [e.id, e] as const));
     const params = { ...this.#paramsCache };
     try {
-      // AM4 (model 0x15) is a flat 4-slot device with no gen-3 preset dumps. Running the 512-slot
-      // summary scan against it makes every request hang ~6.6s and saturates the single MIDI link,
-      // starving the live grid/preset reads (= empty grid, no name, "forever"). Bail cleanly.
+      // AM4 (model 0x15) has no gen-3 preset dumps — it scans stored locations by name via its own codec.
+      // Lightweight entries (name + code, no block/param index) so the browser lists + loads them; the
+      // deep param filtering stays a gen-3 feature.
       const dev = await forgefx.device().catch(() => null);
       if (dev?.modelByte === '0x15') {
-        this.scanError = "Library indexing isn't available for the AM4 — it's a 4-slot device. Use the live grid view.";
+        const scan = await forgefx.am4Presets();
+        this.scanTotal = scan.count;
+        for (const p of scan.presets) {
+          if (p.isEmpty || !p.name.trim()) continue;
+          const id = `dev:${p.location}`;
+          byId.set(id, {
+            id,
+            source: 'device',
+            summary: { number: p.location, name: p.name, model: 'AM4', crcValid: true, scenes: [], blocks: [], models: {}, amps: [] },
+            fav: byId.get(id)?.fav ?? false
+          });
+        }
+        this.entries = [...byId.values()].sort(this.#order);
+        this.#cacheDevice();
+        this.cacheBuilt = true;
+        persist(LS.built, true);
         return; // `finally` resets `scanning`
       }
       for (let n = from; n <= to; n++) {

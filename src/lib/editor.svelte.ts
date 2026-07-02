@@ -1035,7 +1035,9 @@ class EditorStore {
     if (!c?.pack) return;
     this.sheetState = 'loading';
     try {
-      const r = await forgefx.blockParams(c.effectId);
+      // AM4 reads params by the slot's pidLow (== the effectId the AM4 grid reports); the server
+      // returns the SAME BlockParams DTO as gen-3, so the rest of this method is model-agnostic.
+      const r = this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
       this.enums = r.enums ?? [];
       this.blockType = r.type ?? null;
@@ -1459,6 +1461,17 @@ class EditorStore {
     const n = Math.max(0, cur + dir);
     return this.selectPreset(n);
   };
+  /** AM4: load a stored location (0..103) into the edit buffer, then re-read the 4-slot grid. */
+  loadAm4Preset = async (location: number) => {
+    try {
+      await forgefx.am4SwitchPreset(location);
+      this.presetOpen = false;
+      await this.load();
+      if (this.selKey) await this.#loadParams();
+    } catch {
+      this.showToast('Load failed', '#d6543f');
+    }
+  };
 
   // ── save (DESTRUCTIVE: overwrites a preset slot) ──
   saveOpen = $state(false);
@@ -1469,12 +1482,13 @@ class EditorStore {
   };
   save = async (n: number) => {
     try {
-      const r = await forgefx.store(n);
+      // AM4 stores to a location (0..103) via its own codec; gen-3 stores the edit buffer to a slot.
+      const r = this.isAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
       this.saveOpen = false;
       if (r.ok) {
         this.showToast(`Saved to preset ${n}`, '#f5a623');
         await this.poll();
-        library.refreshSlot(n); // keep the library cache in sync with the just-saved slot
+        if (!this.isAm4) library.refreshSlot(n); // gen-3 library cache sync (AM4 library scans on open)
       } else {
         this.showToast('Save rejected by device', '#d6543f');
       }
