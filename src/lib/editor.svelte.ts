@@ -1071,7 +1071,7 @@ class EditorStore {
   setParam = (p: NamedParam, v: number) => {
     p.norm = v;
     const c = this.selected;
-    if (!c?.pack) return;
+    if (!c || (!c.pack && !this.isAm4)) return;
     // mirror onto the grid meter so the block tile's level/HUD tracks the knob
     if (p.id != null && c.effectId != null) {
       const m = this.meters[c.effectId];
@@ -1082,14 +1082,19 @@ class EditorStore {
     }
     if (p.id == null) return;
     clearTimeout(this.#sendTimers[p.id]);
-    this.#sendTimers[p.id] = setTimeout(() => forgefx.setParam(c.effectId, p.id as number, v, true).catch(() => {}), 60);
+    // AM4 writes by wire address (effectId=pidLow, paramId=pidHigh) via SET_NORM; gen-3 by eid+paramId.
+    const eid = c.effectId, pid = p.id as number;
+    this.#sendTimers[pid] = setTimeout(
+      () => (this.isAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}),
+      60
+    );
   };
   // enum/discrete write: send the ordinal (continuous=false → device-confirmed)
   setEnum = (e: EnumParam, value: number) => {
     e.value = value; // optimistic
     const c = this.selected;
-    if (!c?.pack) return;
-    forgefx.setParam(c.effectId, e.id, value, false).catch(() => {});
+    if (!c || (!c.pack && !this.isAm4)) return;
+    (this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {
     const c = cell ?? this.selected;

@@ -171,6 +171,12 @@ export const forgefx = {
   /** AM4: switch the active scene (0-based, 0..3). */
   am4SetScene: (index: number) =>
     req<{ ok: boolean }>('/am4/scene', { method: 'POST', body: JSON.stringify({ index }) }),
+  /** AM4: write a continuous param by wire address (pidLow=block eid, pidHigh=paramId), normalized 0..1. */
+  am4SetParamNorm: (pidLow: number, pidHigh: number, norm: number) =>
+    req<{ ok: boolean }>(`/am4/blocks/${pidLow}/params/${pidHigh}`, { method: 'PUT', body: JSON.stringify({ norm }) }),
+  /** AM4: write a discrete/enum param ordinal by wire address. */
+  am4SetParamValue: (pidLow: number, pidHigh: number, value: number) =>
+    req<{ ok: boolean }>(`/am4/blocks/${pidLow}/params/${pidHigh}`, { method: 'PUT', body: JSON.stringify({ value }) }),
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),
