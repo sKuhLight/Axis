@@ -140,17 +140,21 @@
   const onPage = $derived(new Set(widgets.map((w) => w.key)));
   const tray = $derived(catalog.filter((c) => !onPage.has(c.key)));
 
-  // Display grid: on a phone the saved (wide) layout is re-packed into however many columns
-  // actually fit the width — so controls reflow & stay legible instead of overflowing sideways.
-  // Desktop renders the real layout (cols), with the cell sized to fill the width.
-  const fitCols = $derived(Math.max(2, Math.floor((containerW + GAP) / (76 + GAP))));
-  const displayCols = $derived(isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : cols);
-  // cell = exactly the width split across the columns, so the board ALWAYS fills the full horizontal
-  // space (fewer cols = bigger tiles = zoomed in). No upper cap — cols is the zoom control.
+  // Display grid: `cols` is the user's PREFERRED column count (their zoom on a wide monitor, e.g. 18/19
+  // on 32:9). But the board must fit whatever width it's actually in, so in USE mode we cap the shown
+  // columns to what fits legibly (fitCols) and re-pack the layout — ultrawide shows the full cols, a
+  // narrow window or phone scales down to 3–4. Arrange (editMode) keeps the full `cols` you're editing.
+  const fitCols = $derived(Math.max(isMobile ? 2 : 3, Math.floor((containerW + GAP) / ((isMobile ? 84 : 104) + GAP))));
+  const displayCols = $derived(
+    editMode ? cols : isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : Math.min(cols, fitCols)
+  );
+  // cell = exactly the width split across the shown columns, so the board ALWAYS fills the width
+  // (fewer cols = bigger tiles). Min keeps tiles legible; the col count drops before tiles get tiny.
   const cell = $derived(Math.max(isMobile ? 60 : 48, Math.floor((containerW - (displayCols - 1) * GAP) / displayCols)));
-  const viewWidgets = $derived(isMobile ? packInto(widgets, displayCols, 256) : widgets);
-  // board height = content extent, with `rows` as a minimum — grows downward (vertical scroll), never sideways
-  const viewRows = $derived(Math.max(isMobile ? 1 : rows, 1, ...viewWidgets.map((w) => w.y + w.h)));
+  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses
+  const viewWidgets = $derived(!editMode && displayCols < cols ? packInto(widgets, displayCols, 256) : widgets);
+  // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
+  const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   const effCompact = $derived(compact || isMobile);
 
   // persisted global grid prefs
@@ -163,7 +167,7 @@
         rows = clamp(j.rows ?? rows, 4, 8);
         compact = !!j.compact;
       } else {
-        cols = vw < 760 ? clamp(Math.round((vw - 32) / 84), 4, 8) : clamp(Math.round((vw - 32) / 108), 6, 16);
+        cols = vw < 760 ? clamp(Math.round((vw - 32) / 84), 4, 8) : clamp(Math.round((vw - 32) / 150), 6, 20);
       }
     } catch {
       /* */

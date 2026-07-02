@@ -75,7 +75,10 @@ jobs:
         run: |
           rm -rf axis-website/public/_app
           cp -r build/_app axis-website/public/_app
-          cp build/index.html axis-website/public/index.html
+          # copy the SPA shell + ALL top-level build files (index.html, manifest.webmanifest,
+          # service-worker.js, icons, favicon) so the PWA assets reach axisapp.live. The hand-maintained
+          # landing/legal pages live only in axis-website (not in build/), so cp preserves them.
+          find build -maxdepth 1 -type f -exec cp {} axis-website/public/ \;
 
       - name: Commit & push (triggers Cloudflare auto-deploy)
         run: |

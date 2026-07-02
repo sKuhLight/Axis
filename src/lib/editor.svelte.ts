@@ -109,6 +109,13 @@ class EditorStore {
   /** Live audio meter for a block (null if that block has no monitor / not yet read). */
   monitorFor = (effectId: number): import('./types').LiveMonitor | null => this.liveMeters[effectId] ?? null;
   scene = $state(1);
+  /** Scene names of the open preset (index 0 = scene 1), decoded from the grid read. Empty string = unnamed. */
+  sceneNames = $state<string[]>([]);
+  /** Display name for a 1-based scene number — the decoded name, or "Scene N" when blank/unknown. */
+  sceneName = (n: number): string => {
+    const s = this.sceneNames[n - 1]?.trim();
+    return s && s.length ? s : `Scene ${n}`;
+  };
   railActive = $state('build');
   bpm = $state(120);
   presetCount = $state(512); // FM3 preset slots
@@ -918,6 +925,7 @@ class EditorStore {
         ? [await forgefx.am4Grid(), []]
         : await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
       this.layout = layoutFromGrid(grid, blocks);
+      this.sceneNames = grid.scenes ?? [];
       this.everLoaded = true;
       this.status = 'ready';
       this.fetchMeters(); // background: fill every block's level meter
@@ -1295,6 +1303,68 @@ class EditorStore {
       if (this.selKey) await this.#loadParams();
     } catch {
       this.scene = prev;
+    }
+  };
+  /** Rename a scene (1-based) in the working buffer, then re-read to confirm the device took it.
+   *  Optimistic; reverts on failure or if the read-back doesn't match. Not persisted to flash (store is separate). */
+  renameScene = async (ui: number, name: string) => {
+    if (this.isAm4 || ui < 1 || ui > 8) return;
+    const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
+    const prev = this.sceneNames.slice();
+    const next = this.sceneNames.slice();
+    next[ui - 1] = clean;
+    this.sceneNames = next; // optimistic
+    try {
+      const r = await forgefx.setSceneName(ui - 1, clean);
+      if (!r.ok) throw new Error('rejected');
+      await this.load(); // re-read grid → verifies the device stored the name (sceneNames refreshed)
+    } catch {
+      this.sceneNames = prev; // revert
+      this.showToast('Scene rename failed', '#d6543f');
+    }
+  };
+  /** Rename the working-buffer preset, then re-read to confirm the device took it. Optimistic; reverts on
+   *  failure. Not persisted to flash — Save (store) writes it to the slot. */
+  renamePreset = async (name: string) => {
+    if (this.isAm4 || !this.preset) return;
+    const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
+    const prev = this.preset;
+    this.preset = { ...prev, name: clean }; // optimistic
+    try {
+      const r = await forgefx.setPresetName(clean);
+      if (!r.ok) throw new Error('rejected');
+      await this.poll(); // re-read preset ref → verifies the device stored the name
+    } catch {
+      this.preset = prev; // revert
+      this.showToast('Preset rename failed', '#d6543f');
+    }
+  };
+  /** Library rename: rename a STORED device preset by slot and persist it. Loads the slot into the edit
+   *  buffer first if it isn't active (device switches to it), renames the working buffer, then stores it
+   *  back — content-safe (same preset, new name). Returns true on success. */
+  renameStoredPreset = async (slot: number, name: string): Promise<boolean> => {
+    if (this.isAm4 || slot < 0) return false;
+    const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
+    if (!clean) return false;
+    const prevSlot = this.preset?.number ?? -1; // where the user was — we return here afterwards
+    const switched = prevSlot !== slot;
+    try {
+      if (switched) await this.selectPreset(slot); // load into edit buffer (switches device)
+      const r1 = await forgefx.setPresetName(clean);
+      if (!r1.ok) throw new Error('name rejected');
+      if (this.preset) this.preset = { ...this.preset, name: clean };
+      const r2 = await forgefx.store(slot); // persist to the slot
+      if (!r2.ok) throw new Error('store rejected');
+      library.refreshSlot(slot);
+      // return to the preset the user was on before the rename
+      if (switched && prevSlot >= 0) await this.selectPreset(prevSlot);
+      else await this.poll();
+      this.showToast(`Renamed & saved preset ${String(slot).padStart(3, '0')}`, '#33c46b');
+      return true;
+    } catch {
+      if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot); } catch { /* */ } } // restore on failure too
+      this.showToast('Rename failed', '#d6543f');
+      return false;
     }
   };
   setBpm = async (bpm: number) => {

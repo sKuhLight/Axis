@@ -1,6 +1,43 @@
 <script lang="ts">
   import { editor } from './editor.svelte';
 
+  // ── inline scene rename (active scene) ──
+  let editingScene = $state(false);
+  let draftName = $state('');
+  const startRename = () => {
+    draftName = editor.sceneNames[editor.scene - 1]?.trim() ?? '';
+    editingScene = true;
+  };
+  const commitName = () => {
+    if (!editingScene) return; // Escape already cancelled
+    editingScene = false;
+    const v = draftName.trim();
+    if (v !== (editor.sceneNames[editor.scene - 1]?.trim() ?? '')) editor.renameScene(editor.scene, v);
+  };
+  const onNameKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); // blur → commit
+    else if (e.key === 'Escape') editingScene = false; // cancel (blur fires but commit is guarded)
+  };
+  const focusSel = (el: HTMLInputElement) => { el.focus(); el.select(); };
+
+  // ── inline preset rename ──
+  let editingPreset = $state(false);
+  let draftPreset = $state('');
+  const startRenamePreset = () => {
+    draftPreset = editor.preset?.name ?? '';
+    editingPreset = true;
+  };
+  const commitPreset = () => {
+    if (!editingPreset) return;
+    editingPreset = false;
+    const v = draftPreset.trim();
+    if (v && v !== (editor.preset?.name ?? '')) editor.renamePreset(v);
+  };
+  const onPresetKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+    else if (e.key === 'Escape') editingPreset = false;
+  };
+
   const pnum = $derived(editor.preset && editor.preset.number >= 0 ? String(editor.preset.number).padStart(3, '0') : '—');
   const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? '—' : 'offline'));
 
@@ -33,12 +70,23 @@
 
     <div class="preset">
       <button class="pbtn l" title="Previous preset" onclick={() => editor.stepPreset(-1)}>‹</button>
-      <button class="pset" onclick={() => (editor.presetOpen = true)}>
-        <span class="mono tag">PRE</span>
-        <span class="mono num">{pnum}</span>
-        <span class="pname">{pname}</span>
-        <span class="caret">▾</span>
-      </button>
+      {#if editingPreset}
+        <div class="pset editing">
+          <span class="mono tag">PRE</span>
+          <span class="mono num">{pnum}</span>
+          <input class="pname-in mono" bind:value={draftPreset} maxlength="32" placeholder="Preset name" use:focusSel onkeydown={onPresetKey} onblur={commitPreset} />
+        </div>
+      {:else}
+        <button class="pset" onclick={() => (editor.presetOpen = true)}>
+          <span class="mono tag">PRE</span>
+          <span class="mono num">{pnum}</span>
+          <span class="pname">{pname}</span>
+          <span class="caret">▾</span>
+        </button>
+      {/if}
+      {#if !editor.isAm4 && editor.preset && !editingPreset}
+        <button class="prename" title="Rename preset" aria-label="Rename preset" onclick={startRenamePreset}>✎</button>
+      {/if}
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
     </div>
 
@@ -47,9 +95,29 @@
         <span class="mono scn-lbl">SCN</span>
         <div class="scn-group">
           {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
-            <button class="scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+            <button class="scn" class:on={editor.scene === s} title={editor.sceneName(s)} onclick={() => editor.selectScene(s)}>{s}</button>
           {/each}
         </div>
+        {#if !editor.isAm4}
+          {#if editingScene}
+            <input
+              class="scn-name-in mono"
+              bind:value={draftName}
+              maxlength="32"
+              placeholder="Scene {editor.scene} name"
+              use:focusSel
+              onkeydown={onNameKey}
+              onblur={commitName}
+            />
+          {:else}
+            <button
+              class="scn-name"
+              class:empty={!editor.sceneNames[editor.scene - 1]?.trim()}
+              title="Rename scene {editor.scene}"
+              onclick={startRename}
+            >{editor.sceneNames[editor.scene - 1]?.trim() || 'name…'}</button>
+          {/if}
+        {/if}
       </div>
     {/if}
   </div>
@@ -150,7 +218,7 @@
       </div>
     {/if}
 
-    <button class="save" title="Store the edit buffer to a preset (beta)" onclick={() => editor.openSave()}>
+    <button class="save" title="Store the edit buffer to a preset" onclick={() => editor.openSave()}>
       <span class="save-dot"></span>Save
     </button>
   </div>
@@ -332,6 +400,38 @@
   .pset:hover {
     border-color: var(--border-strong);
   }
+  .pset.editing {
+    border-color: var(--accent);
+    cursor: default;
+  }
+  .pname-in {
+    font-size: 13px;
+    font-weight: 600;
+    width: 150px;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+  }
+  .prename {
+    flex: none;
+    width: 30px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-2);
+    border: 1px solid var(--border-2);
+    border-radius: 4px;
+    color: var(--text-mut);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .prename:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
   .tag {
     font-size: 8px;
     font-weight: 600;
@@ -367,6 +467,39 @@
     font-weight: 600;
     color: var(--text-mut);
     letter-spacing: 0.1em;
+  }
+  .scn-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2, var(--text-dim));
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 3px 6px;
+    cursor: text;
+  }
+  .scn-name:hover {
+    border-color: var(--surface-3);
+    color: var(--text);
+  }
+  .scn-name.empty {
+    color: var(--text-mut);
+    font-style: italic;
+  }
+  .scn-name-in {
+    font-size: 12px;
+    font-weight: 600;
+    width: 140px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 3px 6px;
+    outline: none;
   }
   .scn-group {
     display: flex;

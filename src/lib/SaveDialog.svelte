@@ -32,7 +32,7 @@
           Writes to preset <b>{pad(target)}</b> (not the one loaded — verify it's a slot you can overwrite).
         {/if}
       </p>
-      <p class="beta mono">⚠ save is unverified on FM3 — confirm the result on the unit</p>
+      <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
       <div class="actions">
         <button class="btn cancel" onclick={() => (editor.saveOpen = false)}>Cancel</button>
         <button class="btn save" onclick={() => editor.save(target)}>Save to {pad(target)}</button>
