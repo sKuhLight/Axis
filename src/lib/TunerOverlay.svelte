@@ -70,7 +70,7 @@
     position: relative;
     width: min(440px, 92vw);
     padding: 18px 22px 24px;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     border: 1px solid var(--surface-3);
     border-radius: 16px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -99,15 +99,15 @@
   .note {
     text-align: center;
     font: 800 86px/1 var(--font-ui);
-    color: #3a3a44;
+    color: var(--border3);
     margin: 14px 0 2px;
     transition: color 0.12s;
   }
   .note.lit {
-    color: #e9e9ee;
+    color: var(--text);
   }
   .note.tuned {
-    color: #5fc46b;
+    color: var(--ok);
     text-shadow: 0 0 26px rgba(95, 196, 107, 0.5);
   }
   .oct {
@@ -142,12 +142,12 @@
     bottom: 0;
     width: 1px;
     height: 12px;
-    background: #2c2c34;
+    background: var(--border2);
     transform: translateX(-50%);
   }
   .tick.center {
     height: 22px;
-    background: #4a4a52;
+    background: var(--border3);
   }
   .needle {
     position: absolute;
@@ -161,7 +161,7 @@
     box-shadow: 0 0 12px rgba(245, 166, 35, 0.6);
   }
   .needle.tuned {
-    background: #5fc46b;
+    background: var(--ok);
     box-shadow: 0 0 14px rgba(95, 196, 107, 0.7);
   }
   .strings {
@@ -182,7 +182,7 @@
     font: 700 13px/1 var(--font-mono);
   }
   .str.on {
-    background: #16252a;
+    background: var(--surface2);
     border-color: var(--accent);
     color: var(--accent);
   }

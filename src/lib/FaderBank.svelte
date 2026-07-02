@@ -55,20 +55,20 @@
     align-items: center;
     gap: 6px;
     flex: 1;
-    min-width: 38px;
+    min-width: 40px;
   }
   .v {
     font-size: 11px;
     font-weight: 700;
-    color: #e9e9ee;
+    color: var(--text);
   }
   .track {
     position: relative;
-    width: 14px;
+    width: 18px;
     height: 150px;
     border-radius: 8px;
-    background: #16161b;
-    border: 1px solid #26262c;
+    background: var(--track);
+    border: 1px solid var(--border);
     cursor: ns-resize;
     touch-action: none;
   }
@@ -87,13 +87,13 @@
     width: 26px;
     height: 14px;
     border-radius: 5px;
-    background: #f5a623;
-    border: 3px solid #0d0d10;
+    background: var(--amber);
+    border: 3px solid var(--bg2);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
   }
   .lbl {
     font: 600 9px/1.1 var(--font-mono);
-    color: #9a9aa3;
+    color: var(--textdim);
     text-align: center;
     white-space: nowrap;
   }

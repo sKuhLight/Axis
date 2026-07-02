@@ -805,7 +805,7 @@ class Component extends DCLogic {
     const channels=["A","B","C","D"].map(id=>({ id, style:{ width:30, height:30, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:12, background:id===S.channel?"#1d2a2c":"#0d0d10", border:"1px solid "+(id===S.channel?"#35c9d6":"#26262c"), color:id===S.channel?"#f5a623":"#56565e" }}));
     const editBtnStyle={ display:"flex", alignItems:"center", gap:7, height:38, padding:"0 14px", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:700, flex:"none", whiteSpace:"nowrap",
       background:S.editMode?"linear-gradient(180deg,#1d2a2c,#16201f)":"#15151a", border:"1px solid "+(S.editMode?"#35c9d6":"#2a2a31"), color:S.editMode?"#bfeef2":"#9a9aa3" };
-    const stepStyle={ width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:15, fontWeight:600, color:"#cfcfd6", background:"#1c1c21" };
+    const stepStyle={ width:mob?38:26, height:mob?38:26, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:7, cursor:"pointer", fontSize:15, fontWeight:600, color:"#cfcfd6", background:"#1c1c21" };
     const compactStyle={ display:"flex", alignItems:"center", gap:7, height:34, padding:"0 13px", borderRadius:10, cursor:"pointer", fontSize:12, fontWeight:600,
       background:this.effCompact()?"#1d2a2c":"#15151a", border:"1px solid "+(this.effCompact()?"#35c9d6":"#2a2a31"), color:this.effCompact()?"#7fd8de":"#cfcfd6" };
     const compactLabel=this.effCompact()?"⊞ Packed":"⊡ Free";

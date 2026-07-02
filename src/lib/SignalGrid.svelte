@@ -5,28 +5,33 @@
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
+  import { theme } from './theme.svelte';
 
-  // ── block help on hover (shown in the grid-bottom status line) ──
-  let helpText = $state<string | null>(null);
+  // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
+  // dark mode, softly lightened (dark family-tint ink) in light mode.
+  const light = $derived(theme.cfg.base === 'light');
+  const tileInk = (accent: string) => (light ? shade(accent, -0.52) : 'rgba(255,255,255,0.94)');
+  const tileInkDim = (accent: string) => (light ? shade(accent, -0.3) : 'rgba(255,255,255,0.6)');
+
+  // ── block help on hover → shown in the bottom status bar (editor.hint), like control hovers ──
   let helpToken = 0;
   $effect(() => {
     // clear cached help when the connected device changes (overrides differ)
     resetHelpCache(editor.detected?.short ?? null);
   });
   async function showBlockHelp(cell: Cell) {
+    const name = cell.display || (cell.pack ? baseName(cell.pack) : 'Block');
+    editor.setHint(name); // show the block name immediately while the blurb loads
     const slug = helpSlugForPack(cell.pack);
-    if (!slug) {
-      helpText = null;
-      return;
-    }
+    if (!slug) return;
     const token = ++helpToken;
     const h = await blockHelp(slug);
     if (token !== helpToken) return; // a newer hover won
-    helpText = h ? h.summary : null;
+    editor.setHint(h ? `${name} — ${h.summary}` : name);
   }
   function clearBlockHelp() {
     helpToken++;
-    helpText = null;
+    editor.clearHint();
   }
 
   // ── responsive metrics (mobile = column-density + horizontal paging) ──
@@ -35,11 +40,31 @@
   const mob = $derived(editor.isMobile);
   const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
   const gap = $derived(mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : 26);
-  const colW = $derived(mob ? Math.max(20, Math.floor((editor.vw - 24 - (visCols - 1) * gap) / visCols)) : 0);
+  // available grid area = the gridwrap CONTENT box (measured). It's flex-sized + overflow:hidden, so it
+  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
+  let availW = $state(1);
+  let availH = $state(1);
+  const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
+  const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
+  // Tile WIDTH fills the page exactly (hCols across the available width) → no partial column at the edge,
+  // clean paging. Tile HEIGHT is the square height, but capped so all rows fit → no vertical clipping.
+  // (Width and height are decoupled: when height is tight the tile just gets a bit flatter — never cut.)
+  const colW = $derived.by(() => {
+    if (availW <= 1) return mob ? 88 : 96;
+    // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
+    // off-screen — no partial-column sliver at the right edge.
+    return Math.max(24, (availW - (hCols - 1) * gap) / hCols);
+  });
+  const cellH = $derived.by(() => {
+    const sq = colW * ASPECT;
+    if (availH <= 1) return sq;
+    const fitH = (availH - (rows - 1) * gap) / rows;
+    return Math.max(24, Math.min(sq, fitH));
+  });
   const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
   const pageShift = $derived(visCols * (colW + gap));
   const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
-  const showType = $derived(!mob || colW >= 56); // progressive disclosure
+  const showType = $derived(colW >= 56); // progressive disclosure
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -49,6 +74,8 @@
   });
 
   // ── measurement → cables ──
+  let wrapEl = $state<HTMLDivElement | null>(null);
+  let vpEl = $state<HTMLDivElement | null>(null); // the clipping viewport (grid area between the page arrows)
   let innerEl = $state<HTMLDivElement | null>(null);
   let rects = $state<Record<string, { left: number; right: number; cx: number; cy: number }>>({});
   let innerW = $state(1);
@@ -76,10 +103,20 @@
     measure();
     const ro = new ResizeObserver(() => measure());
     if (innerEl) ro.observe(innerEl);
+    // measure the available grid area from the viewport's content box (stable — see availW/availH note)
+    const wro = new ResizeObserver((entries) => {
+      const cr = entries[entries.length - 1]?.contentRect;
+      if (cr) {
+        availW = cr.width;
+        availH = cr.height;
+      }
+    });
+    if (vpEl) wro.observe(vpEl);
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
       ro.disconnect();
+      wro.disconnect();
       window.removeEventListener('resize', onResize);
     };
   });
@@ -308,7 +345,9 @@
 
   // tile visual helpers
   function tileBg(accent: string) {
-    return `linear-gradient(180deg, ${shade(accent, -0.42)}, ${shade(accent, -0.62)})`;
+    return light
+      ? `linear-gradient(180deg, ${shade(accent, 0.66)}, ${shade(accent, 0.5)})`
+      : `linear-gradient(180deg, ${shade(accent, -0.42)}, ${shade(accent, -0.62)})`;
   }
 
   // ── mobile: pinch to change column density, swipe the background to page ──
@@ -332,16 +371,24 @@
   function touchEnd() {
     pinch = null;
   }
+  // true right after a page-swipe, so the empty-cell click that follows pointerup is suppressed
+  let pageSwiped = $state(false);
   function bgDown(e: PointerEvent) {
     if (!mob) return;
-    if ((e.target as HTMLElement).closest('[data-idx]')) return; // started on a block
+    // only a placed block runs its own horizontal gesture (cycle control) — empty cells, shunts and
+    // background all page. (Previously bailed on any [data-idx], i.e. the whole grid matrix, so paging
+    // only worked in the padding around it.)
+    if ((e.target as HTMLElement).closest('.cell.block')) return;
     pageSwipeX = e.clientX;
   }
   function bgUp(e: PointerEvent) {
     if (pageSwipeX == null) return;
     const dx = e.clientX - pageSwipeX;
     pageSwipeX = null;
-    if (Math.abs(dx) > 50) editor.changePage(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) > 50) {
+      pageSwiped = true;
+      editor.changePage(dx < 0 ? 1 : -1);
+    }
   }
 </script>
 
@@ -349,6 +396,7 @@
   data-tour="grid"
   class="gridwrap scroll"
   class:mob={editor.isMobile}
+  bind:this={wrapEl}
   data-screen="Signal Grid"
   role="group"
   aria-label="Signal grid"
@@ -358,6 +406,11 @@
   onpointerdown={bgDown}
   onpointerup={bgUp}
 >
+  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+    <!-- svelte-ignore a11y_consider_explicit_label -->
+    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(-1)}>‹</button>
+  {/if}
+  <div class="viewport" bind:this={vpEl}>
   {#if editor.status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if editor.status === 'offline'}
@@ -372,7 +425,7 @@
       class:mob={editor.isMobile}
       bind:this={innerEl}
       style={mob
-        ? `width:${12 * colW + 11 * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
+        ? `width:${cols * colW + (cols - 1) * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
         : ''}
     >
       <svg class="cables" width={innerW} height={innerH} style="width:{innerW}px;height:{innerH}px;">
@@ -421,7 +474,7 @@
         {/if}
       </svg>
 
-      <div class="grid" style="grid-template-columns:{mob ? `repeat(${cols}, ${colW}px)` : `repeat(${cols}, minmax(72px, 1fr))`}; gap:{gap}px;">
+      <div class="grid" style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
         {#each Array(rows) as _, r}
           {#each Array(cols) as _, c}
             {@const cell = cellAt.get(`${r},${c}`)}
@@ -442,7 +495,7 @@
                 data-idx="{r},{c}"
                 role="button"
                 tabindex="0"
-                style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.05)};"
+                style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, light ? 0.3 : -0.05)}; --tile-ink:{tileInk(cat.accent)}; --tile-ink-dim:{tileInkDim(cat.accent)}; --tile-shadow:{light ? '0 1px 1px rgba(255,255,255,0.4)' : '0 1px 2px rgba(0,0,0,0.4)'};"
                 onpointerdown={(e) => onBlockDown(cell, e)}
                 onwheel={(e) => onBlockWheel(cell, e)}
                 onmouseenter={() => showBlockHelp(cell)}
@@ -503,7 +556,7 @@
                 {/if}
               </div>
             {:else}
-              <button class="cell empty" data-idx="{r},{c}" onclick={() => { editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
+              <button class="cell empty" data-idx="{r},{c}" onclick={() => { if (pageSwiped) { pageSwiped = false; return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
                 <span class="restdot"></span>
                 <span class="plus">+</span>
               </button>
@@ -513,15 +566,12 @@
       </div>
     </div>
 
-    <p class="preview mono" class:help={!!helpText}>
-      {#if helpText}
-        {helpText}
-      {:else}
-        {editor.layout.model} · {editor.layout.name || 'unnamed'} · {rows}×{cols} grid · live decode
-        {#if !editor.layout.crcValid}<span class="edit"> · edit buffer (unsaved)</span>{/if}
-      {/if}
-      <button class="refresh" onclick={() => editor.load()} title="Re-read the grid from the device">↻</button>
-    </p>
+    <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+  {/if}
+  </div>
+  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+    <!-- svelte-ignore a11y_consider_explicit_label -->
+    <button class="pgarrow" aria-label="Next page" disabled={page === editor.pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(1)}>›</button>
   {/if}
 </div>
 
@@ -551,7 +601,7 @@
   {@const cat = catFor(moveCell.pack, baseName(moveCell.display))}
   <div
     class="ghost"
-    style="left:{movePos.x}px; top:{movePos.y}px; background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, -0.3)};"
+    style="left:{movePos.x}px; top:{movePos.y}px; background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, light ? 0.2 : -0.3)}; color:{tileInk(cat.accent)};"
   >
     {moveCell.kind === 'shunt' ? 'Shunt' : cat.short}
   </div>
@@ -567,24 +617,61 @@
   .gridwrap {
     flex: 1;
     min-height: 0;
-    overflow: auto;
-    padding: 26px 22px;
-    background: radial-gradient(120% 120% at 50% 0%, #131316, #0c0c0e 70%);
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
+    position: relative;
+    padding: 22px;
+    background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg) 70%);
+    touch-action: pan-y;
+    display: flex;
+    align-items: stretch;
   }
   .gridwrap.mob {
-    padding: 14px 12px;
-    overflow-x: hidden;
+    /* side gutters come from the page-arrow columns instead of padding, so the grid area clips exactly
+       at the viewport edge (no peeking column) while still leaving room + arrows on each side */
+    padding: 14px 0;
+  }
+  /* the clipping grid area, between the page arrows. Sized by flex → stable regardless of tile size,
+     so measuring it for the tile-fit never feeds back into a resize loop. */
+  .viewport {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gridwrap.mob .viewport {
+    justify-content: flex-start; /* horizontal paging translates the grid from the left */
   }
   .inner {
     position: relative;
-    width: 100%;
-    max-width: 1680px;
-    margin: 0 auto;
+    flex: none;
+    width: fit-content; /* wraps the fixed-size grid so the cable overlay lines up + it can be centered */
+    height: fit-content;
   }
-  .inner.mob {
-    max-width: none;
-    margin: 0;
+  /* page-change arrows framing the grid (mobile paging) */
+  .pgarrow {
+    flex: none;
+    width: 40px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--textdim);
+    font-size: 24px;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+  .pgarrow:disabled {
+    opacity: 0.22;
+    cursor: default;
+  }
+  .pgarrow:not(:disabled):hover {
+    color: var(--text);
   }
   .cables {
     position: absolute;
@@ -610,16 +697,16 @@
     justify-content: space-between;
     gap: 12px;
     padding: 9px 14px 13px;
-    background: #0f0f12;
-    border-top: 1px solid #1a1a1f;
+    background: var(--bg2);
+    border-top: 1px solid var(--surface2);
     flex: none;
   }
   .density {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: #141417;
-    border: 1px solid #2a2a31;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 12px;
     padding: 4px;
   }
@@ -631,15 +718,15 @@
     justify-content: center;
     border-radius: 9px;
     border: 0;
-    background: #1c1c21;
-    color: #cfcfd6;
+    background: var(--surface2);
+    color: var(--text2);
     font-size: 19px;
     font-weight: 600;
     cursor: pointer;
   }
   .step:disabled {
     background: transparent;
-    color: #3a3a44;
+    color: var(--border3);
     cursor: default;
   }
   .dnum {
@@ -654,11 +741,11 @@
   }
   .dn {
     font: 700 14px/1 var(--font-mono);
-    color: #e9e9ee;
+    color: var(--text);
   }
   .dl {
     font: 600 7px/1 var(--font-mono);
-    color: #6e6e78;
+    color: var(--textfaint);
     letter-spacing: 0.12em;
     margin-top: 3px;
   }
@@ -671,7 +758,7 @@
     width: 7px;
     height: 7px;
     border-radius: 4px;
-    background: #2e2e36;
+    background: var(--border2);
     border: 0;
     cursor: pointer;
     transition: all 0.2s;
@@ -682,7 +769,7 @@
   }
   .phint {
     font: 600 8.5px/1.25 var(--font-mono);
-    color: #56565e;
+    color: var(--textmuted);
     max-width: 110px;
   }
 
@@ -693,7 +780,9 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    aspect-ratio: 1 / 0.95;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden; /* tile size is driven by the grid tracks (fit-to-area); clip content if a tile gets small */
     border-radius: 11px;
     user-select: none;
   }
@@ -710,7 +799,7 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.22), 0 4px 10px rgba(0, 0, 0, 0.35);
   }
   .block.sel {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245, 166, 35, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px var(--amber), 0 0 22px rgba(245, 166, 35, 0.34);
   }
   .block.byp {
     opacity: 0.45;
@@ -722,7 +811,8 @@
   .glyph {
     font-size: 15px;
     line-height: 1;
-    color: rgba(255, 255, 255, 0.82);
+    /* on-tile ink adapts to the theme (set per-block from the family color); see tileInk/tileBg */
+    color: var(--tile-ink-dim, rgba(255, 255, 255, 0.82));
     position: relative;
     z-index: 2;
   }
@@ -731,9 +821,9 @@
     z-index: 2;
     font-weight: 700;
     font-size: 14px;
-    color: #fff;
+    color: var(--tile-ink, rgba(255, 255, 255, 0.94));
     letter-spacing: 0.01em;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    text-shadow: var(--tile-shadow, 0 1px 2px rgba(0, 0, 0, 0.4));
     text-align: center;
     line-height: 1.05;
   }
@@ -741,7 +831,7 @@
     position: relative;
     z-index: 2;
     font: 500 9px/1.1 var(--font-mono);
-    color: rgba(255, 255, 255, 0.62);
+    color: var(--tile-ink-dim, rgba(255, 255, 255, 0.62));
     text-align: center;
     max-width: 92%;
     white-space: nowrap;
@@ -786,7 +876,7 @@
   }
   .sh-val {
     font: 800 28px/1 var(--font-mono);
-    color: #fff;
+    color: var(--text);
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
   }
   .sh-unit {
@@ -858,11 +948,11 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #80808a;
+    background: var(--textfaint);
     transition: all 0.12s;
   }
   .bypdot.on .bypdot-i {
-    background: #46d17f;
+    background: var(--ok);
     box-shadow: 0 0 6px rgba(70, 209, 127, 0.85);
   }
   .flow {
@@ -876,8 +966,8 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #0c0c0e;
-    background: #3a3a44;
+    border: 2px solid var(--bg);
+    background: var(--border3);
     cursor: crosshair;
     z-index: 6;
     padding: 0;
@@ -907,7 +997,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #33333d;
+    background: var(--border3);
     transition: opacity 0.15s;
   }
   .empty:hover .restdot {
@@ -926,7 +1016,7 @@
   }
   .shunt {
     background: var(--panel-2);
-    border: 1px solid #20202a;
+    border: 1px solid var(--surface2);
     cursor: grab;
     z-index: 1;
   }
@@ -936,39 +1026,37 @@
   .sh-bar {
     width: 62%;
     height: 2px;
-    background: #4a4a55;
+    background: var(--textmuted);
     border-radius: 1px;
   }
 
-  .preview {
-    margin-top: 16px;
-    font-size: 10px;
-    color: var(--text-faint);
+  /* compact re-read button, floated in the grid corner (replaces the old info line) */
+  .regrid {
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    z-index: 4;
+    border: 1px solid var(--border2);
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    color: var(--textdim);
+    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    backdrop-filter: blur(4px);
   }
-  .preview.help {
-    color: var(--text-dim);
-    font-style: normal;
-  }
-  .edit {
-    color: var(--amber);
-  }
-  .refresh {
-    border: 1px solid var(--border-2);
-    background: var(--surface-2);
-    color: var(--text-dim);
-    border-radius: var(--r-sm);
-    width: 22px;
-    height: 20px;
-    cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
-  }
-  .refresh:hover {
+  .regrid:hover {
     border-color: var(--accent);
     color: var(--text);
+  }
+  .regrid.unsaved {
+    border-color: var(--amber-border);
+    color: var(--amber);
   }
   .hint {
     color: var(--text-dim);
@@ -1000,7 +1088,7 @@
     padding: 12px 18px;
     border-radius: 12px;
     border: 1px solid;
-    color: #fff;
+    color: var(--text);
     font-weight: 700;
     font-size: 14px;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
@@ -1017,7 +1105,7 @@
     padding: 14px 22px;
     border-radius: 16px;
     background: rgba(22, 22, 27, 0.96);
-    border: 1px solid #3a3a44;
+    border: 1px solid var(--border3);
     color: var(--text-dim);
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
     transition: all 0.12s;
@@ -1026,8 +1114,8 @@
   }
   .bin.over {
     transform: translateX(-50%) scale(1.08);
-    background: #3a1518;
+    background: var(--danger-tint);
     border-color: var(--danger);
-    color: #ff7a68;
+    color: var(--danger);
   }
 </style>

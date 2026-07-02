@@ -150,8 +150,8 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid #20202a;
-    background: #0e0e10;
+    border-top: 1px solid var(--surface2);
+    background: var(--bg2);
     position: relative;
     z-index: 40;
     box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.4);
@@ -172,7 +172,7 @@
   .card {
     width: 100%;
     height: 100%;
-    background: linear-gradient(180deg, #141418, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -180,7 +180,7 @@
   .card.sheet {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, #15151a, #0f0f12);
+    background: linear-gradient(180deg, var(--surface), var(--bg2));
     animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
@@ -191,18 +191,18 @@
     align-items: center;
     justify-content: center;
     cursor: ns-resize;
-    background: #0d0d10;
-    border-bottom: 1px solid #1a1a1f;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--surface2);
     touch-action: none;
   }
   .resize:hover {
-    background: #141418;
+    background: var(--surface);
   }
   .grip {
     width: 48px;
     height: 4px;
     border-radius: 3px;
-    background: #3a3a44;
+    background: var(--border3);
   }
 
   .head {
@@ -210,7 +210,7 @@
     align-items: center;
     gap: 10px;
     padding: 9px 14px;
-    border-bottom: 1px solid #1c1c22;
+    border-bottom: 1px solid var(--surface2);
     flex: none;
   }
   .icon {
@@ -222,7 +222,7 @@
     align-items: center;
     justify-content: center;
     font-size: 19px;
-    color: #fff;
+    color: var(--text);
     border: 1px solid;
   }
   /* the type button doubles as the model search — grows to fill the header so the full name shows */
@@ -234,15 +234,15 @@
     min-width: 0;
     height: 46px;
     padding: 0 12px 0 13px;
-    background: linear-gradient(180deg, #101015, #0c0c0f);
-    border: 1px solid #34343d;
+    background: linear-gradient(180deg, var(--bg2), var(--bg));
+    border: 1px solid var(--border2);
     border-radius: 11px;
     cursor: pointer;
     color: var(--accent);
   }
   .typebtn:hover:not(:disabled) {
     border-color: var(--accent);
-    background: #0f1518;
+    background: var(--surface);
   }
   .typebtn:disabled {
     cursor: default;
@@ -269,7 +269,7 @@
   .t-type {
     font-weight: 700;
     font-size: 15px;
-    color: #fff;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -300,7 +300,7 @@
     height: 34px;
     flex: none;
     border-radius: 9px;
-    background: #0d0d10;
+    background: var(--bg2);
     border: 1px solid var(--surface-3);
     color: var(--text-faint);
     font-weight: 700;
@@ -308,7 +308,7 @@
     cursor: pointer;
   }
   .ch-btn.on {
-    background: #1d2a2c;
+    background: var(--accent-tint);
     border-color: var(--accent);
     color: var(--amber);
   }
@@ -343,14 +343,14 @@
     margin: 2px 0 14px;
     padding: 14px 16px;
     border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--ac) 35%, #2a2a30);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, #16161a), #131316);
+    border: 1px solid color-mix(in srgb, var(--ac) 35%, var(--border2));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, var(--surface)), var(--bg2));
     cursor: pointer;
     text-align: left;
     transition: border-color 0.12s;
   }
   .cabpick:hover {
-    border-color: color-mix(in srgb, var(--ac) 60%, #2a2a30);
+    border-color: color-mix(in srgb, var(--ac) 60%, var(--border2));
   }
   .cp-ic {
     flex: none;
@@ -361,7 +361,7 @@
     justify-content: center;
     border-radius: 9px;
     font-size: 18px;
-    color: #fff;
+    color: var(--text);
     background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 80%, #000), color-mix(in srgb, var(--ac) 45%, #000));
   }
   .cp-txt {
@@ -374,7 +374,7 @@
   .cp-lbl {
     font-size: 13px;
     font-weight: 700;
-    color: #ededf2;
+    color: var(--text);
   }
   .cp-name {
     font-size: 11.5px;
@@ -399,15 +399,15 @@
     align-items: center;
     gap: 8px;
     padding: 10px 16px;
-    border-top: 1px solid #1e1e25;
-    background: #101013;
+    border-top: 1px solid var(--surface2);
+    background: var(--bg2);
     flex: none;
   }
   .act {
     height: 44px;
     padding: 0 16px;
     border: 1px solid var(--border-2);
-    background: #15151a;
+    background: var(--surface);
     color: var(--text-dim);
     border-radius: 10px;
     font-size: 13px;
@@ -418,18 +418,18 @@
     border-color: var(--border-strong);
   }
   .act.byp {
-    background: #142417;
-    border-color: #2c4a31;
-    color: #5fc46b;
+    background: var(--ok-tint);
+    border-color: var(--ok-border);
+    color: var(--ok);
   }
   .act.byp.on {
-    background: #241516;
-    border-color: #5a2f33;
+    background: var(--surface2);
+    border-color: var(--danger-border);
     color: var(--danger);
   }
   .act.rem {
-    background: #1a1113;
-    border-color: #4a2226;
+    background: var(--surface);
+    border-color: var(--danger-tint);
     color: var(--danger);
   }
 </style>

@@ -43,8 +43,8 @@
     z-index: 400;
     max-width: 620px;
     width: calc(100% - 40px);
-    background: #141417;
-    border: 1px solid #2e2e36;
+    background: var(--surface);
+    border: 1px solid var(--border2);
     border-radius: 13px;
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
     padding: 12px 14px;
@@ -70,7 +70,7 @@
   }
   .ic {
     font-size: 20px;
-    color: var(--accent, #35c9d6);
+    color: var(--accent, var(--accent));
     flex: none;
   }
   .msg {
@@ -83,11 +83,11 @@
   .msg b {
     font-size: 13px;
     font-weight: 700;
-    color: #e9e9ee;
+    color: var(--text);
   }
   .sub {
     font-size: 11px;
-    color: #8a8a94;
+    color: var(--textdim);
     line-height: 1.35;
   }
   .go {
@@ -96,8 +96,8 @@
     padding: 0 15px;
     border-radius: 9px;
     border: none;
-    background: var(--accent, #35c9d6);
-    color: #06181a;
+    background: var(--accent, var(--accent));
+    color: var(--accentink);
     font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
@@ -110,22 +110,22 @@
     height: 34px;
     padding: 0 11px;
     border-radius: 9px;
-    border: 1px solid #2e2e36;
+    border: 1px solid var(--border2);
     background: transparent;
-    color: #9a9aa3;
+    color: var(--textdim);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
   }
   .later:hover {
-    color: #e9e9ee;
-    border-color: #3f3f48;
+    color: var(--text);
+    border-color: var(--border3);
   }
   .dot {
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: var(--accent, #35c9d6);
+    background: var(--accent, var(--accent));
     flex: none;
     animation: cpPulse 1s ease-in-out infinite;
   }
@@ -136,20 +136,20 @@
   }
   .txt {
     font-size: 12px;
-    color: #cfcfd6;
+    color: var(--text2);
     flex: none;
   }
   .bar {
     flex: 1;
     height: 6px;
-    background: #16161b;
-    border: 1px solid #26262c;
+    background: var(--track);
+    border: 1px solid var(--border);
     border-radius: 4px;
     overflow: hidden;
   }
   .fill {
     height: 100%;
-    background: var(--accent, #35c9d6);
+    background: var(--accent, var(--accent));
     transition: width 0.2s;
   }
 </style>

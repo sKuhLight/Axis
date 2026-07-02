@@ -17,3 +17,6 @@ fm9/
 
 # Local-only Claude Code context (documents RE/capture methods — never commit)
 CLAUDE.md
+
+# Design reference screenshots (large PNGs, not needed in the repo)
+design/screenshots/

@@ -37,14 +37,14 @@
   .val {
     font: 700 11px/1 var(--font-mono);
     letter-spacing: 0.06em;
-    color: #6e6e78;
+    color: var(--textfaint);
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .val.on {
-    color: #5fd98f;
+    color: var(--ok);
   }
   .switch {
     position: relative;
@@ -52,16 +52,16 @@
     height: 32px;
     border-radius: 16px;
     cursor: pointer;
-    background: #16161b;
-    border: 1px solid #2a2a31;
+    background: var(--track);
+    border: 1px solid var(--border2);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
     transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
     flex: none;
     padding: 0;
   }
   .switch.on {
-    background: #173a26;
-    border-color: #3a7d4f;
+    background: var(--ok-tint);
+    border-color: var(--ok-border);
     box-shadow: inset 0 0 10px rgba(70, 209, 127, 0.25);
   }
   .knob {
@@ -71,19 +71,19 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #5a5a62;
+    background: var(--textmuted);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     transition: left 0.16s cubic-bezier(0.3, 0.8, 0.3, 1), background 0.15s;
   }
   .switch.on .knob {
     left: 29px;
-    background: #46d17f;
+    background: var(--ok);
     box-shadow: 0 0 8px rgba(70, 209, 127, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5);
   }
   .label {
     font-weight: 600;
     font-size: 12px;
-    color: #c3c3cb;
+    color: var(--text2);
     text-align: center;
     line-height: 1.2;
     max-width: 100%;
