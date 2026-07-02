@@ -2,6 +2,13 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.6.4-beta — 2026-07-02
+
+### Fixed
+- **AM4 responsiveness (follow-up).** The background preset-watch was still querying the gen-3
+  preset-name function every few seconds on an AM4 — a request it can't answer, so each one timed
+  out (~1.2 s of lag). It's now skipped on the AM4, which tracks its preset through its own read.
+
 ## 0.6.3-beta — 2026-07-02
 
 ### Fixed
