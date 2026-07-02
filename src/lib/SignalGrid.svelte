@@ -13,27 +13,25 @@
   const tileInk = (accent: string) => (light ? shade(accent, -0.52) : 'rgba(255,255,255,0.94)');
   const tileInkDim = (accent: string) => (light ? shade(accent, -0.3) : 'rgba(255,255,255,0.6)');
 
-  // ── block help on hover (shown in the grid-bottom status line) ──
-  let helpText = $state<string | null>(null);
+  // ── block help on hover → shown in the bottom status bar (editor.hint), like control hovers ──
   let helpToken = 0;
   $effect(() => {
     // clear cached help when the connected device changes (overrides differ)
     resetHelpCache(editor.detected?.short ?? null);
   });
   async function showBlockHelp(cell: Cell) {
+    const name = cell.display || (cell.pack ? baseName(cell.pack) : 'Block');
+    editor.setHint(name); // show the block name immediately while the blurb loads
     const slug = helpSlugForPack(cell.pack);
-    if (!slug) {
-      helpText = null;
-      return;
-    }
+    if (!slug) return;
     const token = ++helpToken;
     const h = await blockHelp(slug);
     if (token !== helpToken) return; // a newer hover won
-    helpText = h ? h.summary : null;
+    editor.setHint(h ? `${name} — ${h.summary}` : name);
   }
   function clearBlockHelp() {
     helpToken++;
-    helpText = null;
+    editor.clearHint();
   }
 
   // ── responsive metrics (mobile = column-density + horizontal paging) ──
@@ -42,11 +40,25 @@
   const mob = $derived(editor.isMobile);
   const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
   const gap = $derived(mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : 26);
-  const colW = $derived(mob ? Math.max(20, Math.floor((editor.vw - 24 - (visCols - 1) * gap) / visCols)) : 0);
+  // available grid area = the gridwrap CONTENT box (measured). It's flex-sized + overflow:hidden, so it
+  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
+  let availW = $state(1);
+  let availH = $state(1);
+  const hCols = $derived(mob ? visCols : cols); // columns that must fit across the width
+  const ASPECT = 0.95; // tile height ÷ width
+  // Fit each tile to BOTH the width (hCols across) and the height (rows tall); take the smaller so the
+  // whole grid fits with no scroll and nothing clipped vertically.
+  const colW = $derived.by(() => {
+    if (availW <= 1 || availH <= 1) return mob ? 88 : 96;
+    const fitW = (availW - (hCols - 1) * gap) / hCols;
+    const fitH = (availH - (rows - 1) * gap) / rows / ASPECT;
+    return Math.max(28, Math.floor(Math.min(fitW, fitH)));
+  });
+  const cellH = $derived(Math.round(colW * ASPECT));
   const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
   const pageShift = $derived(visCols * (colW + gap));
   const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
-  const showType = $derived(!mob || colW >= 56); // progressive disclosure
+  const showType = $derived(colW >= 56); // progressive disclosure
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -56,6 +68,7 @@
   });
 
   // ── measurement → cables ──
+  let wrapEl = $state<HTMLDivElement | null>(null);
   let innerEl = $state<HTMLDivElement | null>(null);
   let rects = $state<Record<string, { left: number; right: number; cx: number; cy: number }>>({});
   let innerW = $state(1);
@@ -83,10 +96,20 @@
     measure();
     const ro = new ResizeObserver(() => measure());
     if (innerEl) ro.observe(innerEl);
+    // measure the available grid area from the wrap's content box (stable — see availW/availH note)
+    const wro = new ResizeObserver((entries) => {
+      const cr = entries[entries.length - 1]?.contentRect;
+      if (cr) {
+        availW = cr.width;
+        availH = cr.height;
+      }
+    });
+    if (wrapEl) wro.observe(wrapEl);
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
       ro.disconnect();
+      wro.disconnect();
       window.removeEventListener('resize', onResize);
     };
   });
@@ -366,6 +389,7 @@
   data-tour="grid"
   class="gridwrap scroll"
   class:mob={editor.isMobile}
+  bind:this={wrapEl}
   data-screen="Signal Grid"
   role="group"
   aria-label="Signal grid"
@@ -389,7 +413,7 @@
       class:mob={editor.isMobile}
       bind:this={innerEl}
       style={mob
-        ? `width:${12 * colW + 11 * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
+        ? `width:${cols * colW + (cols - 1) * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
         : ''}
     >
       <svg class="cables" width={innerW} height={innerH} style="width:{innerW}px;height:{innerH}px;">
@@ -438,7 +462,7 @@
         {/if}
       </svg>
 
-      <div class="grid" style="grid-template-columns:{mob ? `repeat(${cols}, ${colW}px)` : `repeat(${cols}, minmax(72px, 1fr))`}; gap:{gap}px;">
+      <div class="grid" style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
         {#each Array(rows) as _, r}
           {#each Array(cols) as _, c}
             {@const cell = cellAt.get(`${r},${c}`)}
@@ -530,15 +554,7 @@
       </div>
     </div>
 
-    <p class="preview mono" class:help={!!helpText}>
-      {#if helpText}
-        {helpText}
-      {:else}
-        {editor.layout.model} · {editor.layout.name || 'unnamed'} · {rows}×{cols} grid · live decode
-        {#if !editor.layout.crcValid}<span class="edit"> · edit buffer (unsaved)</span>{/if}
-      {/if}
-      <button class="refresh" onclick={() => editor.load()} title="Re-read the grid from the device">↻</button>
-    </p>
+    <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
   {/if}
 </div>
 
@@ -584,27 +600,26 @@
   .gridwrap {
     flex: 1;
     min-height: 0;
-    overflow: auto;
-    padding: 26px 22px;
+    /* the grid never scrolls — tiles are sized (in JS) to fit BOTH the width and the height, so the
+       whole grid always fits. The wrap centers it (letterboxed) and clips anything unexpected. */
+    overflow: hidden;
+    position: relative;
+    padding: 22px;
     background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg) 70%);
-    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .gridwrap.mob {
     padding: 14px 12px;
-    overflow-x: hidden;
-    /* vertical scroll stays native; horizontal swipes are delivered to JS (page swipe) instead of
-       being swallowed by the browser's touch scrolling */
-    touch-action: pan-y;
+    justify-content: flex-start; /* horizontal paging translates the grid from the left */
   }
   .inner {
     position: relative;
-    width: 100%;
-    max-width: 1680px;
-    margin: 0 auto;
-  }
-  .inner.mob {
-    max-width: none;
-    margin: 0;
+    flex: none;
+    width: fit-content; /* wraps the fixed-size grid so the cable overlay lines up + it can be centered */
+    height: fit-content;
   }
   .cables {
     position: absolute;
@@ -713,7 +728,9 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    aspect-ratio: 1 / 0.95;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden; /* tile size is driven by the grid tracks (fit-to-area); clip content if a tile gets small */
     border-radius: 11px;
     user-select: none;
   }
@@ -961,35 +978,33 @@
     border-radius: 1px;
   }
 
-  .preview {
-    margin-top: 16px;
-    font-size: 10px;
-    color: var(--text-faint);
+  /* compact re-read button, floated in the grid corner (replaces the old info line) */
+  .regrid {
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    z-index: 4;
+    border: 1px solid var(--border2);
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    color: var(--textdim);
+    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    backdrop-filter: blur(4px);
   }
-  .preview.help {
-    color: var(--text-dim);
-    font-style: normal;
-  }
-  .edit {
-    color: var(--amber);
-  }
-  .refresh {
-    border: 1px solid var(--border-2);
-    background: var(--surface-2);
-    color: var(--text-dim);
-    border-radius: var(--r-sm);
-    width: 22px;
-    height: 20px;
-    cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
-  }
-  .refresh:hover {
+  .regrid:hover {
     border-color: var(--accent);
     color: var(--text);
+  }
+  .regrid.unsaved {
+    border-color: var(--amber-border);
+    color: var(--amber);
   }
   .hint {
     color: var(--text-dim);
