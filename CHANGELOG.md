@@ -2,6 +2,27 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.6.3-beta — 2026-07-02
+
+### Fixed
+- **AM4 no longer stalls.** Gen-3 telemetry polling (audio meters, tuner) was wrongly running
+  against an AM4 and flooding its MIDI link with frames it never answers — making every action
+  lag about a second. Those polls are now gated off for the AM4, which uses its own engine.
+
+### Added
+- **Installable app (PWA)** at **axisapp.live** — add it to your home screen for a standalone,
+  full-screen control surface with free rotation (auto-rotate). Web only; the desktop app is unchanged.
+- **Scene names** in the top bar, with **inline rename**.
+- **Preset rename** — the ✎ next to the preset name, and **Rename & save** in the Library
+  right-click menu (renames a stored preset in place and returns you to the preset you were on).
+
+### Changed
+- **Control surface fits the window.** Your column count is now a *preferred maximum*: an ultrawide
+  monitor shows many columns, a narrow window or phone scales down to a legible few — instead of
+  forcing one fixed count everywhere.
+- **Real output metering.** The top-bar meter shows calibrated dB read from the device; the cable
+  signal-flow animation is smoothed and follows the live output level (silent = still, louder = faster).
+
 ## 0.4.27-beta — 2026-07-01
 
 ### Added
