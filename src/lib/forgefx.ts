@@ -168,6 +168,9 @@ export const forgefx = {
   /** AM4: load a stored location (0..103) into the edit buffer. */
   am4SwitchPreset: (location: number) =>
     req<{ ok: boolean }>('/am4/preset', { method: 'POST', body: JSON.stringify({ location }) }),
+  /** AM4: switch the active scene (0-based, 0..3). */
+  am4SetScene: (index: number) =>
+    req<{ ok: boolean }>('/am4/scene', { method: 'POST', body: JSON.stringify({ index }) }),
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),

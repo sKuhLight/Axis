@@ -65,6 +65,10 @@ const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 
 class EditorStore {
   // ── connection / preset ──
   conn = $state<Conn>({ state: 'connecting' });
+  /** Per-model capabilities from the device descriptor (scenes, channels, slot model, …) — drives UI gating. */
+  caps = $state<import('./types').DeviceCaps | null>(null);
+  /** Number of scenes this device has (0 if none) — drives the topbar SCN selector. */
+  get sceneCount(): number { return this.caps?.hasScenes ? (this.caps.sceneCount || 0) : 0; }
   detected = $state<DetectResult | null>(null); // which Fractal unit is attached (auto-detect)
   preset = $state<{ number: number; name: string } | null>(null);
   lastPreset = $state<number | null>(null);
@@ -897,6 +901,7 @@ class EditorStore {
       const h = await forgefx.health();
       const dev = await forgefx.device().catch(() => null); // both free — no device round-trip
       this.conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
+      if (dev?.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
       // The current-preset query is a real device round-trip. On a slow MIDI link it competes with what
       // the user is doing (opening a block, editing), so run it only every ~4th tick there; connection
       // state above stays fresh every tick.
@@ -1302,7 +1307,7 @@ class EditorStore {
     const prev = this.scene;
     this.scene = ui; // optimistic
     try {
-      await forgefx.setScene(ui - 1);
+      await (this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
       await this.load();
       if (this.selKey) await this.#loadParams();
     } catch {
