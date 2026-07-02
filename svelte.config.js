@@ -10,7 +10,11 @@ const config = {
   kit: {
     // Axis is a pure SPA (adapter-static, index.html fallback).
     adapter: adapter({ fallback: 'index.html', strict: false }),
-    paths: { relative: !remote }
+    paths: { relative: !remote },
+    // Don't auto-register the service worker. The desktop build is served same-origin over
+    // http://localhost, where an SW would intercept the ForgeFX API/SSE — so we register it MANUALLY,
+    // and only in the remote web build (see +layout.svelte). The bundled app stays PWA-free.
+    serviceWorker: { register: false }
   }
 };
 

@@ -307,6 +307,12 @@ export const forgefx = {
   tapTempo: () => req<{ ok: boolean }>('/tempo/tap', { method: 'POST' }),
   getScene: () => req<{ index: number }>('/scene'),
   setScene: (index: number) => req<{ ok: boolean }>('/scene', { method: 'POST', body: JSON.stringify({ index }) }),
+  /** Rename a scene (0-based index) in the working buffer. Visible immediately; not yet persisted to flash. */
+  setSceneName: (index: number, name: string) =>
+    req<{ ok: boolean }>('/scene/name', { method: 'POST', body: JSON.stringify({ index, name }) }),
+  /** Rename the working-buffer preset. Visible immediately; not yet persisted to flash (use store to save). */
+  setPresetName: (name: string) =>
+    req<{ ok: boolean }>('/preset/name', { method: 'POST', body: JSON.stringify({ name }) }),
   /** Per-block meter values (always-on grid level fill + swipe controls). */
   meters: (wants: Record<string, number[]> = {}) =>
     req<import('./types').BlockMeter[]>('/preset/meters', {

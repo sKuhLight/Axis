@@ -414,6 +414,18 @@
 
   // ── context menu (desktop right-click · mobile long-press) ──
   let ctx = $state<{ x: number; y: number; entry: LibEntry } | null>(null);
+  // inline preset rename popover (from the context menu → device rename + store)
+  let renameBox = $state<{ entry: LibEntry; value: string; x: number; y: number } | null>(null);
+  function commitRename() {
+    const b = renameBox;
+    renameBox = null;
+    if (b && b.value.trim() && b.value.trim() !== b.entry.summary.name) editor.renameStoredPreset(b.entry.summary.number, b.value.trim());
+  }
+  function onRenameKey(ev: KeyboardEvent) {
+    if (ev.key === 'Enter') commitRename();
+    else if (ev.key === 'Escape') renameBox = null;
+  }
+  const rnFocus = (el: HTMLInputElement) => { el.focus(); el.select(); };
   function openRowCtx(x: number, y: number, e: LibEntry) {
     selectedId = e.id; focusEid = null;
     ctx = { x: Math.min(x, window.innerWidth - 244), y: Math.min(y, window.innerHeight - 360), entry: e };
@@ -442,11 +454,13 @@
   function rowUp() {
     if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
   }
-  const SOON = new Set(['rename', 'duplicate', 'removeDevice', 'delete']);
+  const SOON = new Set(['duplicate', 'removeDevice', 'delete']);
   async function ctxAction(act: string) {
-    const e = ctx?.entry; ctx = null;
+    const c = ctx; ctx = null;
+    const e = c?.entry;
     if (!e) return;
     if (act === 'load') return void loadPreset(e);
+    if (act === 'rename') { renameBox = { entry: e, value: e.summary.name, x: c!.x, y: c!.y }; return; }
     if (act === 'export') return void exportEntry(e);
     if (act === 'upload' || act === 'download') return void cloudAction(act, e);
     if (act === 'convert') return void convertToDevice(e);
@@ -474,7 +488,12 @@
     return [
       { id: 'load', icon: 'load', label: cloudOnly ? 'Load from cloud' : 'Load preset' },
       ...(cloudOnly ? [{ id: 'convert', icon: 'convert', label: 'Convert to device…' } as CtxItem]
-                    : [{ id: 'rename', icon: 'rename', label: 'Rename' } as CtxItem, { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem]),
+                    : [
+                        ...(e.source === 'device' && e.summary.number >= 0
+                          ? [{ id: 'rename', icon: 'rename', label: 'Rename & save…' } as CtxItem]
+                          : []),
+                        { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem
+                      ]),
       'div',
       { id: 'export', icon: 'export', label: 'Export to disk' },
       ...(cloudOn ? ['div' as const, cloudItem] : []),
@@ -1205,6 +1224,21 @@
   </div>
 {/if}
 
+<!-- INLINE PRESET RENAME (from the context menu) -->
+{#if renameBox}
+  <div class="ctx-bg" role="presentation" oncontextmenu={(e) => e.preventDefault()} onpointerdown={() => (renameBox = null)}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="ctx rename-pop" style:left={renameBox.x + 'px'} style:top={renameBox.y + 'px'} onpointerdown={(e) => e.stopPropagation()}>
+    <div class="ctx-title">Rename & save preset {pad(renameBox.entry.summary.number)}</div>
+    <input class="rename-in mono" bind:value={renameBox.value} maxlength="32" placeholder="Preset name" use:rnFocus onkeydown={onRenameKey} />
+    <div class="rename-actions">
+      <button class="rn-btn" onclick={() => (renameBox = null)}>Cancel</button>
+      <button class="rn-btn save" onclick={commitRename}>Save</button>
+    </div>
+    <p class="rename-note">Loads this slot, renames & stores it (persists to the unit).</p>
+  </div>
+{/if}
+
 <style>
   .pb { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); overflow: hidden; font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .spacer { flex: 1; }
@@ -1499,5 +1533,12 @@
   .ctx-item.danger:hover { background: var(--surface2); }
   .ctx-g { flex: none; width: 18px; text-align: center; font-size: 13px; color: var(--textdim); }
   .ctx-item.danger .ctx-g { color: var(--danger); }
+  .rename-pop { display: flex; flex-direction: column; gap: 8px; }
+  .rename-in { width: 100%; box-sizing: border-box; font: 600 13px/1 'JetBrains Mono', monospace; color: var(--text); background: var(--bg2); border: 1px solid var(--accent); border-radius: 8px; padding: 9px 10px; outline: none; }
+  .rename-actions { display: flex; gap: 6px; }
+  .rn-btn { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border2); background: var(--track); color: var(--text2); font-size: 12px; font-weight: 700; cursor: pointer; }
+  .rn-btn:hover { border-color: var(--border3); color: var(--text); }
+  .rn-btn.save { background: var(--accent); border-color: var(--accent); color: var(--accentink, #0a1416); }
+  .rename-note { margin: 0; padding: 0 2px; font: 500 9.5px/1.35 'JetBrains Mono', monospace; color: var(--textmuted); }
   .ctx-l { flex: 1; }
 </style>
