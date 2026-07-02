@@ -412,12 +412,35 @@
     else editor.showToast('No .syx files found in that folder', '#f5a623');
   }
 
-  // ── right-click context menu ──
+  // ── context menu (desktop right-click · mobile long-press) ──
   let ctx = $state<{ x: number; y: number; entry: LibEntry } | null>(null);
+  function openRowCtx(x: number, y: number, e: LibEntry) {
+    selectedId = e.id; focusEid = null;
+    ctx = { x: Math.min(x, window.innerWidth - 244), y: Math.min(y, window.innerHeight - 360), entry: e };
+  }
   function onRowContext(ev: MouseEvent, e: LibEntry) {
     ev.preventDefault();
-    selectedId = e.id; focusEid = null;
-    ctx = { x: Math.min(ev.clientX, window.innerWidth - 244), y: Math.min(ev.clientY, window.innerHeight - 360), entry: e };
+    openRowCtx(ev.clientX, ev.clientY, e);
+  }
+  // long-press (touch/pen) → open the same context menu. Mouse keeps right-click.
+  let lpTimer: ReturnType<typeof setTimeout> | null = null;
+  let lpX = 0, lpY = 0;
+  let lpFired = false; // guards the click that ends the long-press from also selecting/closing
+  function rowDown(ev: PointerEvent, e: LibEntry) {
+    if (ev.pointerType === 'mouse') return;
+    lpFired = false;
+    lpX = ev.clientX; lpY = ev.clientY;
+    if (lpTimer) clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => { lpTimer = null; lpFired = true; openRowCtx(lpX, lpY, e); }, 450);
+  }
+  function rowMove(ev: PointerEvent) {
+    if (lpTimer && (Math.abs(ev.clientX - lpX) > 8 || Math.abs(ev.clientY - lpY) > 8)) {
+      clearTimeout(lpTimer);
+      lpTimer = null;
+    }
+  }
+  function rowUp() {
+    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
   }
   const SOON = new Set(['rename', 'duplicate', 'removeDevice', 'delete']);
   async function ctxAction(act: string) {
@@ -747,13 +770,14 @@
   let saved = $state<Saved[]>(loadSaved());
   let saving = $state(false);
   let saveName = $state('');
+  let sideOpen = $state(false); // mobile: the LIBRARY/FOLDERS/SAVED-FILTERS sidebar as a slide-in panel
   function loadSaved(): Saved[] { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; } }
   function persistSaved() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* */ }
     forgefx.putDoc('config', 'savedFilters', saved).catch(() => {}); // mirror to the unified store (sync-ready)
     notifyMutation(); // nudge debounced cloud auto-sync
   }
-  function applySaved(f: Saved) { if (!advanced) advanced = true; query = f.query; closeAc(); }
+  function applySaved(f: Saved) { if (!advanced) advanced = true; query = f.query; closeAc(); sideOpen = false; }
   function delSaved(id: string) { saved = saved.filter((x) => x.id !== id); persistSaved(); }
   function commitSave() {
     const name = saveName.trim();
@@ -837,7 +861,7 @@
 
 <svelte:window onclick={() => { if (picker) picker = null; if (ctx) ctx = null; }} ondragend={() => (dragOver = false)} />
 
-<div class="pb" class:mob={editor.isMobile}>
+<div class="pb" class:mob={editor.isMobile} class:sideopen={sideOpen}>
   <!-- HEADER -->
   <div class="hdr">
     <div class="title">
@@ -845,6 +869,9 @@
       <span class="t2">{activeConds.length || simpleText ? `${results.length} of ${library.entries.length}` : `${library.entries.length} presets`}{library.paramsReady ? '' : ' · params not fully loaded'}</span>
     </div>
     <div class="spacer"></div>
+    {#if editor.isMobile}
+      <button class="ghost ic-btn" onclick={() => (sideOpen = true)} title="Library, folders & saved filters"><Icon name="list" size={14} /> Filters</button>
+    {/if}
     {#if !editor.isAm4}
       <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title="Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)">
         {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
@@ -925,13 +952,19 @@
 
   <!-- BODY -->
   <div class="body">
+    {#if editor.isMobile && sideOpen}
+      <div class="side-scrim" role="presentation" onclick={() => (sideOpen = false)}></div>
+    {/if}
     <!-- SAVED SIDEBAR -->
     <div class="side">
+      {#if editor.isMobile}
+        <div class="side-h side-close"><span class="lbl">LIBRARY & FILTERS</span><button class="folder-x" onclick={() => (sideOpen = false)} title="Close">×</button></div>
+      {/if}
       {#if cloudOn}
         <div class="side-h"><span class="lbl">LIBRARY</span></div>
         <div class="views">
           {#each SYNC_VIEWS as v}
-            <button class="view" class:on={syncView === v.id} onclick={() => (syncView = v.id)}>
+            <button class="view" class:on={syncView === v.id} onclick={() => { syncView = v.id; sideOpen = false; }}>
               <span class="view-l"><Icon name={v.icon} size={14} /> {v.label}</span><span class="view-n">{viewCount(v.id)}</span>
             </button>
           {/each}
@@ -944,7 +977,7 @@
           {#each library.folders as f}
             {@const n = baseEntries.filter((e) => e.folder === f).length}
             <div class="folder-row" class:on={folderFilter === f}>
-              <button class="view folder" onclick={() => (folderFilter = folderFilter === f ? null : f)} title={f}>
+              <button class="view folder" onclick={() => { folderFilter = folderFilter === f ? null : f; sideOpen = false; }} title={f}>
                 <span class="view-l"><Icon name="folder" size={13} /> {f}</span><span class="view-n">{n}</span>
               </button>
               <button class="folder-x" title="Remove this folder" onclick={() => { if (folderFilter === f) folderFilter = null; library.removeFolder(f); }}>×</button>
@@ -989,7 +1022,7 @@
         {@const sel = e.id === selectedId}
         {@const cpu = estCpu(e)}
         {@const ss = syncStateOf(e)}
-        <button class="row" class:sel onclick={() => { selectedId = e.id; focusEid = null; }} oncontextmenu={(ev) => onRowContext(ev, e)}>
+        <button class="row" class:sel onclick={() => { if (lpFired) { lpFired = false; return; } selectedId = e.id; focusEid = null; }} oncontextmenu={(ev) => onRowContext(ev, e)} onpointerdown={(ev) => rowDown(ev, e)} onpointermove={rowMove} onpointerup={rowUp} onpointercancel={rowUp}>
           <span class="num" class:sel>{e.source === 'file' ? 'FILE' : pad(e.summary.number)}</span>
           <div class="row-mid">
             <div class="row-top">
@@ -1156,9 +1189,9 @@
 
 <!-- CONTEXT MENU -->
 {#if ctx}
-  <div class="ctx-bg" role="presentation" oncontextmenu={(e) => e.preventDefault()} onmousedown={() => (ctx = null)}></div>
+  <div class="ctx-bg" role="presentation" oncontextmenu={(e) => e.preventDefault()} onpointerdown={() => (ctx = null)}></div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="ctx" style:left={ctx.x + 'px'} style:top={ctx.y + 'px'} onmousedown={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}>
+  <div class="ctx" style:left={ctx.x + 'px'} style:top={ctx.y + 'px'} onpointerdown={(e) => e.stopPropagation()} oncontextmenu={(e) => e.preventDefault()}>
     <div class="ctx-title">{ctx.entry.summary.name}</div>
     {#each ctxItems(ctx.entry) as m}
       {#if m === 'div'}
@@ -1298,13 +1331,37 @@
   .pb.mob .hdr .title { flex: 1; min-width: 0; }
   .pb.mob .qbar { padding: 11px 14px; }
   .pb.mob .chips { padding: 10px 14px; }
-  .pb.mob .side { display: none; }
-  /* compact list rows: block chips stay one fading line instead of wrapping into tall rows */
+  /* mobile: the library/folders/saved-filters sidebar becomes a left slide-in panel (toggled from the
+     header "Filters" button) instead of being hidden */
+  .pb.mob .body { position: relative; }
+  .pb.mob .side {
+    display: flex;
+    position: absolute;
+    z-index: 40;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 86vw);
+    padding: 14px;
+    overflow-y: auto;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    box-shadow: 6px 0 24px rgba(0, 0, 0, 0.4);
+    transform: translateX(-102%);
+    transition: transform 0.26s cubic-bezier(0.2, 0.85, 0.25, 1);
+  }
+  .pb.mob.sideopen .side { transform: translateX(0); }
+  .side-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 39;
+    background: rgba(6, 6, 8, 0.5);
+    animation: axsOverlay 0.16s ease;
+  }
+  .side-close { display: flex; align-items: center; justify-content: space-between; }
+  /* mobile: show every block chip — wrap onto the next line instead of clipping to one fading row */
   .pb.mob .row-blocks {
-    flex-wrap: nowrap;
-    overflow: hidden;
-    -webkit-mask: linear-gradient(90deg, #000 82%, transparent);
-    mask: linear-gradient(90deg, #000 82%, transparent);
+    flex-wrap: wrap;
   }
   .pb.mob .detail {
     position: fixed;
