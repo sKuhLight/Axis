@@ -10,7 +10,7 @@
   import { forgefx } from './forgefx';
   import type { FcModel } from './types';
 
-  const ACC = '#f5a623';
+  const ACC = 'var(--amber)'; // FC accent follows the theme's amber token
   let model = $state<FcModel | null>(null);
   let err = $state<string | null>(null);
   let layout = $state(0);
@@ -75,6 +75,8 @@
   });
 
   const switches = $derived(model?.switches ?? 3);
+  // on mobile the fixed N-column board gets cramped; wrap into readable min-width tiles instead
+  const boardCols = $derived(editor.isMobile ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
   const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
   const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
   const colorList = $derived(model ? Object.entries(model.colors).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
@@ -183,7 +185,7 @@
         {/each}
       </div>
 
-      <div class="board" style="grid-template-columns:repeat({switches},1fr)">
+      <div class="board" style="grid-template-columns:{boardCols}">
         {#each Array(switches) as _, i (i)}
           {@const cfg = layout * model.configsPerLayout + view * model.switches + i}
           {@const col = colorList.find((x) => x.v === cur('color', cfg))?.hex ?? ACC}
@@ -490,7 +492,7 @@
   }
   .abadge.hold {
     background: var(--surface2);
-    color: #f5c518;
+    color: var(--amber);
   }
   .field {
     display: flex;

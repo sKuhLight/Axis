@@ -55,7 +55,7 @@
     align-items: center;
     gap: 6px;
     flex: 1;
-    min-width: 38px;
+    min-width: 40px;
   }
   .v {
     font-size: 11px;
@@ -64,7 +64,7 @@
   }
   .track {
     position: relative;
-    width: 14px;
+    width: 18px;
     height: 150px;
     border-radius: 8px;
     background: var(--track);

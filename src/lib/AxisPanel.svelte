@@ -7,6 +7,8 @@
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
+  const mob = $derived(editor.isMobile);
+
   // Badge label for a granted account. Shown only when the account has an active plan.
   const planLabel = (p: string | null | undefined): string => (p === 'early_supporter' ? 'Early Supporter' : p || 'Supporter');
 
@@ -90,8 +92,8 @@
 
 {#if editor.axisOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="bg" role="presentation" onclick={close}>
-    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+  <div class="bg" class:mob role="presentation" onclick={close}>
+    <div class="card" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar">
@@ -353,6 +355,8 @@
 <style>
   .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 350; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 12px 12px; }
   .card { position: relative; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .bg.mob { align-items: flex-end; padding: 0; }
+  .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
   .card::-webkit-scrollbar { width: 9px; }
   .card::-webkit-scrollbar-track { background: transparent; }
   .card::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }

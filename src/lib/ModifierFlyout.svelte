@@ -11,7 +11,10 @@
   // Disabled (pids not decoded): Channel, PC Reset, Update Rate, Attack, Release, Damping,
   //   Auto Engage, Off Value — rendered but flagged "pending decode", no writes.
   import { forgefx } from './forgefx';
+  import { editor } from './editor.svelte';
   import type { ModModel } from './types';
+
+  const mob = $derived(editor.isMobile);
 
   let {
     open = false,
@@ -269,7 +272,7 @@
 <div class="scrim" class:open onpointerdown={onClose}></div>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-<div class="panel" class:open data-screen-label="Modifier Editor" onpointermove={knobMove} onpointerup={knobUp}>
+<div class="panel" class:open class:mob data-screen-label="Modifier Editor" onpointermove={knobMove} onpointerup={knobUp}>
   <!-- header -->
   <div class="head">
     <span class="srcdot"></span>
@@ -317,12 +320,12 @@
       <div class="divider"><span></span><b>RESPONSE</b><span></span></div>
       <div class="graph">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="#16161b" stroke-width="0.5" />
-          <line x1="66.66" y1="0" x2="66.66" y2="100" stroke="#16161b" stroke-width="0.5" />
-          <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="#16161b" stroke-width="0.5" />
-          <line x1="0" y1="66.66" x2="100" y2="66.66" stroke="#16161b" stroke-width="0.5" />
-          <path d={curve.fill} fill="rgba(53,201,214,.10)" stroke="none" />
-          <path d={curve.cur} fill="none" stroke="#35c9d6" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+          <line x1="33.33" y1="0" x2="33.33" y2="100" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="66.66" y1="0" x2="66.66" y2="100" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="0" y1="33.33" x2="100" y2="33.33" style="stroke:var(--border)" stroke-width="0.5" />
+          <line x1="0" y1="66.66" x2="100" y2="66.66" style="stroke:var(--border)" stroke-width="0.5" />
+          <path d={curve.fill} fill="color-mix(in srgb, var(--accent) 10%, transparent)" stroke="none" />
+          <path d={curve.cur} fill="none" style="stroke:var(--accent)" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
         </svg>
         <div class="axis x">SOURCE →</div>
         <div class="axis y">↑ VALUE</div>
@@ -403,9 +406,9 @@
     <div class="kbox" onpointerdown={(e) => knobDown(e, k.key)} title={k.live ? '' : 'pending decode — local preview only'}>
       <svg width="54" height="54" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
-        <circle cx="32" cy="32" r="24" fill="none" stroke="#35c9d6" stroke-width="5" stroke-linecap="round" stroke-dasharray={dashFor(v)} transform="rotate(135 32 32)" />
-        <circle cx="32" cy="32" r="15" fill="#16161b" stroke="#000" stroke-width="1" />
-        <g transform={rotFor(v)}><circle cx="32" cy="20" r="2.6" fill="#dcdce2" /></g>
+        <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray={dashFor(v)} transform="rotate(135 32 32)" />
+        <circle cx="32" cy="32" r="15" style="fill:var(--surface2);stroke:var(--bg)" stroke-width="1" />
+        <g transform={rotFor(v)}><circle cx="32" cy="20" r="2.6" style="fill:var(--text)" /></g>
       </svg>
     </div>
     <div class="klbl">{k.label}{#if !k.live}<span class="pend"> ·pending</span>{/if}</div>
@@ -444,6 +447,11 @@
   }
   .panel.open {
     transform: translateX(0);
+  }
+  /* mobile: full-screen sheet from the right (no peek of the grid behind it) */
+  .panel.mob {
+    width: 100vw;
+    border-left: none;
   }
   .head {
     display: flex;
@@ -493,9 +501,9 @@
     flex: none;
     padding: 9px 16px;
     font: 600 11px/1.4 'JetBrains Mono', monospace;
-    color: #f5c97a;
-    background: rgba(245, 166, 35, 0.08);
-    border-bottom: 1px solid rgba(245, 166, 35, 0.18);
+    color: var(--amber);
+    background: var(--amber-tint);
+    border-bottom: 1px solid var(--amber-border);
   }
   .body {
     flex: 1;
@@ -577,7 +585,7 @@
   }
   .flag {
     font: 600 8px/1.3 'JetBrains Mono', monospace;
-    color: #d6a23f;
+    color: var(--amber);
     letter-spacing: 0.04em;
     margin-top: 4px;
   }
@@ -735,9 +743,9 @@
   }
   .srcopt.sel {
     color: var(--accentbright);
-    background: rgba(53, 201, 214, 0.12);
+    background: var(--accent-tint);
   }
   .srcopt:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
   }
 </style>

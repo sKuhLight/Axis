@@ -341,16 +341,24 @@
   function touchEnd() {
     pinch = null;
   }
+  // true right after a page-swipe, so the empty-cell click that follows pointerup is suppressed
+  let pageSwiped = $state(false);
   function bgDown(e: PointerEvent) {
     if (!mob) return;
-    if ((e.target as HTMLElement).closest('[data-idx]')) return; // started on a block
+    // only a placed block runs its own horizontal gesture (cycle control) — empty cells, shunts and
+    // background all page. (Previously bailed on any [data-idx], i.e. the whole grid matrix, so paging
+    // only worked in the padding around it.)
+    if ((e.target as HTMLElement).closest('.cell.block')) return;
     pageSwipeX = e.clientX;
   }
   function bgUp(e: PointerEvent) {
     if (pageSwipeX == null) return;
     const dx = e.clientX - pageSwipeX;
     pageSwipeX = null;
-    if (Math.abs(dx) > 50) editor.changePage(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) > 50) {
+      pageSwiped = true;
+      editor.changePage(dx < 0 ? 1 : -1);
+    }
   }
 </script>
 
@@ -512,7 +520,7 @@
                 {/if}
               </div>
             {:else}
-              <button class="cell empty" data-idx="{r},{c}" onclick={() => { editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
+              <button class="cell empty" data-idx="{r},{c}" onclick={() => { if (pageSwiped) { pageSwiped = false; return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
                 <span class="restdot"></span>
                 <span class="plus">+</span>
               </button>
@@ -584,6 +592,9 @@
   .gridwrap.mob {
     padding: 14px 12px;
     overflow-x: hidden;
+    /* vertical scroll stays native; horizontal swipes are delivered to JS (page swipe) instead of
+       being swallowed by the browser's touch scrolling */
+    touch-action: pan-y;
   }
   .inner {
     position: relative;

@@ -2,14 +2,16 @@
   // Theme & appearance picker (the new global theme engine's UI). Presets, accent, light/dark, UI scale,
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
+  import { editor } from './editor.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
   const cfg = $derived(theme.cfg);
+  const mob = $derived(editor.isMobile);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="bg" role="presentation" onclick={onclose}>
-  <div class="card scroll" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+<div class="bg" class:mob role="presentation" onclick={onclose}>
+  <div class="card scroll" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="head">
       <div><div class="h1">Appearance</div><div class="sub">Theme, accent &amp; scale — saved on this device</div></div>
       <button class="x" aria-label="Close" onclick={onclose}>✕</button>
@@ -70,6 +72,8 @@
 <style>
   .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 380; display: flex; align-items: center; justify-content: center; padding: 24px; animation: axsOverlay 0.18s ease-out; }
   .card { width: 420px; max-width: 100%; max-height: 88vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55); color: var(--text); padding: 22px 22px 24px; animation: axsPalette 0.16s ease-out; }
+  .bg.mob { align-items: flex-end; padding: 0; }
+  .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
   .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
   .h1 { font-size: 19px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
