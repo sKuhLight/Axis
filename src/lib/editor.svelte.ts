@@ -995,7 +995,9 @@ class EditorStore {
     this.editorOpen = true;
     this.editingTabs = false;
     this.activePage = this.#defaultPage();
-    if (!c.pack) {
+    // AM4 audio blocks always have params (read by pidLow from the catalog) — their grid names are
+    // lowercase and don't map to a gen-3 pack, so don't gate the editor on `pack` for AM4.
+    if (!c.pack && !this.isAm4) {
       this.sheetState = 'nopack';
       this.params = [];
       this.enums = [];
@@ -1038,7 +1040,7 @@ class EditorStore {
 
   #loadParams = async () => {
     const c = this.selected;
-    if (!c?.pack) return;
+    if (!c || (!c.pack && !this.isAm4)) return; // AM4 blocks have params without a gen-3 pack
     this.sheetState = 'loading';
     try {
       // AM4 reads params by the slot's pidLow (== the effectId the AM4 grid reports); the server
