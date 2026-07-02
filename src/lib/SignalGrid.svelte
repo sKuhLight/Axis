@@ -75,6 +75,7 @@
 
   // ── measurement → cables ──
   let wrapEl = $state<HTMLDivElement | null>(null);
+  let vpEl = $state<HTMLDivElement | null>(null); // the clipping viewport (grid area between the page arrows)
   let innerEl = $state<HTMLDivElement | null>(null);
   let rects = $state<Record<string, { left: number; right: number; cx: number; cy: number }>>({});
   let innerW = $state(1);
@@ -102,7 +103,7 @@
     measure();
     const ro = new ResizeObserver(() => measure());
     if (innerEl) ro.observe(innerEl);
-    // measure the available grid area from the wrap's content box (stable — see availW/availH note)
+    // measure the available grid area from the viewport's content box (stable — see availW/availH note)
     const wro = new ResizeObserver((entries) => {
       const cr = entries[entries.length - 1]?.contentRect;
       if (cr) {
@@ -110,7 +111,7 @@
         availH = cr.height;
       }
     });
-    if (wrapEl) wro.observe(wrapEl);
+    if (vpEl) wro.observe(vpEl);
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
@@ -405,6 +406,11 @@
   onpointerdown={bgDown}
   onpointerup={bgUp}
 >
+  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+    <!-- svelte-ignore a11y_consider_explicit_label -->
+    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(-1)}>‹</button>
+  {/if}
+  <div class="viewport" bind:this={vpEl}>
   {#if editor.status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if editor.status === 'offline'}
@@ -562,6 +568,11 @@
 
     <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
   {/if}
+  </div>
+  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+    <!-- svelte-ignore a11y_consider_explicit_label -->
+    <button class="pgarrow" aria-label="Next page" disabled={page === editor.pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(1)}>›</button>
+  {/if}
 </div>
 
 <!-- mobile column-density pager + page dots -->
@@ -606,21 +617,31 @@
   .gridwrap {
     flex: 1;
     min-height: 0;
-    /* the grid never scrolls — tiles are sized (in JS) to fit BOTH the width and the height, so the
-       whole grid always fits. The wrap centers it (letterboxed) and clips anything unexpected. */
     overflow: hidden;
     position: relative;
     padding: 22px;
     background: radial-gradient(120% 120% at 50% 0%, var(--bg2), var(--bg) 70%);
     touch-action: pan-y;
     display: flex;
+    align-items: stretch;
+  }
+  .gridwrap.mob {
+    /* side gutters come from the page-arrow columns instead of padding, so the grid area clips exactly
+       at the viewport edge (no peeking column) while still leaving room + arrows on each side */
+    padding: 14px 0;
+  }
+  /* the clipping grid area, between the page arrows. Sized by flex → stable regardless of tile size,
+     so measuring it for the tile-fit never feeds back into a resize loop. */
+  .viewport {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
     align-items: center;
     justify-content: center;
   }
-  .gridwrap.mob {
-    /* no horizontal padding: overflow:hidden clips at the padding box, so any side padding would let
-       the next column peek through. Edge-to-edge → a page shows exactly visCols, nothing cut. */
-    padding: 14px 0;
+  .gridwrap.mob .viewport {
     justify-content: flex-start; /* horizontal paging translates the grid from the left */
   }
   .inner {
@@ -628,6 +649,29 @@
     flex: none;
     width: fit-content; /* wraps the fixed-size grid so the cable overlay lines up + it can be centered */
     height: fit-content;
+  }
+  /* page-change arrows framing the grid (mobile paging) */
+  .pgarrow {
+    flex: none;
+    width: 40px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--textdim);
+    font-size: 24px;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+  .pgarrow:disabled {
+    opacity: 0.22;
+    cursor: default;
+  }
+  .pgarrow:not(:disabled):hover {
+    color: var(--text);
   }
   .cables {
     position: absolute;
