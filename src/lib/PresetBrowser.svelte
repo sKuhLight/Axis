@@ -1296,7 +1296,9 @@
   .gp-hint { font: 500 10px/1 'JetBrains Mono', monospace; color: var(--textmuted); }
   .gp-clear { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--accent, var(--accent)); background: none; border: none; cursor: pointer; }
   .gp-empty { padding: 24px 16px; font: 500 12px/1.4 'JetBrains Mono', monospace; color: var(--textmuted); }
-  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--border); cursor: pointer; background: transparent; border-left: 2px solid transparent; text-align: left; }
+  /* border:0 first kills the UA <button> top/right frame (the stray light rectangle). Separator is a
+     recessed groove — DARKER than the row bg, not the lighter --border hairline. No right border. */
+  .row { display: flex; width: 100%; align-items: center; gap: 14px; padding: 13px 18px; border: 0; border-bottom: 1px solid rgba(0, 0, 0, 0.42); border-left: 2px solid transparent; cursor: pointer; background: transparent; text-align: left; }
   .row:hover { background: var(--bg2); }
   .row.sel { background: rgba(53, 201, 214, 0.06); border-left-color: var(--accent, var(--accent)); }
   .num { font: 700 13px/1 'JetBrains Mono', monospace; color: var(--textmuted); flex: none; width: 38px; }

@@ -65,10 +65,13 @@ export interface BlockParams {
 
 /** Foot Controller (eid 199) address model — field bases + config formula + enums. */
 export interface FcFieldDef {
-  base: number;
-  width: number;
-  stride: number;
-  verified: boolean;
+  base?: number;
+  width?: number;
+  stride?: number;
+  verified?: boolean;
+  pid?: number;
+  paramName?: string;
+  evidence?: string;
 }
 export interface FcSlot {
   i: number;
@@ -86,19 +89,25 @@ export interface FcFunctionDef {
 }
 export interface FcModel {
   effectId: number;
-  switches: number;
-  views: number;
-  layouts: number;
-  configsPerLayout: number;
-  labelLen: number;
   paramsWidth: number;
+  /** Total addressable FC configs. */
+  configs: number;
   fields: Record<string, FcFieldDef>;
-  categories: Record<string, string>;
-  colors: Record<string, { name: string; hex: string }>;
-  labelModes: Record<string, string>;
+  categories?: Record<string, string>;
+  labelModes?: Record<string, string>;
+  /** True when the device supports the live per-switch state read (`GET /fc/state`). FM3 only;
+   *  FM9/III expose the address model but not live read (config decomposition / labels not recovered). */
+  liveState: boolean;
+  // ── FM3-only live-read geometry + display metadata (present when liveState) ──
+  switches?: number;
+  views?: number;
+  layouts?: number;
+  configsPerLayout?: number;
+  labelLen?: number;
+  colors?: Record<string, { name: string; hex: string }>;
   /** category ordinal → its function definitions (may be empty for not-yet-modelled categories). */
-  functions: Record<string, FcFunctionDef[]>;
-  channels: string[];
+  functions?: Record<string, FcFunctionDef[]>;
+  channels?: string[];
 }
 /** One side (tap/hold) of an FC switch from the sub-0x01 structured read. `present` = the device
  *  returned a record matching the requested config/side; `raw` = the 78-byte response body (per-switch
@@ -170,7 +179,56 @@ export interface ModModel {
   slotCount?: number;
   fields: Record<string, ModFieldDef>;
   sources?: ModSource[];
+  /** Present when `sources` is empty because the device's source enum is runtime-built / capture-pending. */
+  sourcesNote?: string;
 }
+
+/** Per-block monitor (meter) param table (GET /preset/monitors): paramName → pid + role + dB range. */
+export type MonitorParams = Record<string, {
+  family: string;
+  pid: number;
+  role: string;
+  minDb?: number;
+  maxDb?: number;
+  widgetConfirmed: boolean;
+}>;
+
+/** Live per-block audio meter (GET /preset/monitors/live): normalized 0..1 level + mapped dB. */
+export interface LiveMonitor {
+  effectId: number;
+  family: string;
+  paramName: string;
+  role: string;
+  norm: number;
+  db: number | null;
+  minDb?: number;
+  maxDb?: number;
+}
+
+// ── AM4 (model 0x15) ──
+export interface Am4ModifierModel {
+  effectOrdinal: number;
+  slotCount: number;
+  fields: Record<string, { cacheId: number; kind: string; symbol: string; role: string }>;
+  sources: { ordinal: number; name: string }[];
+  operations: string[];
+  channels: string[];
+  bindingSupported: boolean;
+  note: string;
+}
+export interface Am4Backup {
+  location: number | null;
+  code: string | null;
+  name: string;
+  bytes: number[];
+}
+export interface Am4Decode {
+  count: number;
+  presets: { index: number; location: number | null; code: string | null; name: string }[];
+}
+export type Am4FirmwareResult =
+  | { valid: true; messages: number; blocks: number; headerTag: number[]; finalizeTag: number[] }
+  | { valid: false; error: string };
 
 /** One decoded parameter of a placed block (GET /presets/:n/params, or embedded in a file summary). */
 export interface DecodedParam {
@@ -318,7 +376,7 @@ export type DeviceEvent =
   | { type: 'tempo'; bpm: number }
   | { type: 'scene'; index: number }
   | { type: 'cpu'; percent: number }
-  | { type: 'meters'; input: number; outL: number; outR: number }
+  | { type: 'meters'; out1L: number; out1R: number; out2L: number; out2R: number }
   // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
   // `changed` = a structural change (grid/preset) → reload.
   | { type: 'param'; effectId: number; paramId: number; norm: number }

@@ -24,9 +24,9 @@
   const GAP = 8;
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊' };
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   type Widget = { id: string; key: string; x: number; y: number; w: number; h: number; view: string };
   type Board = { pageOrder: string[]; page: string; boards: Record<string, Widget[]> };
@@ -34,6 +34,9 @@
   // ── live control catalog (rebuilt from the device params; widgets reference these by key) ──
   const knobById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
   const enumById = $derived(new Map(editor.enums.map((e) => [e.id, e])));
+  // live audio meter for the block this surface edits (null if the block reports no monitor level)
+  const mon = $derived(editor.monitorFor(editor.selected?.effectId ?? -1));
+  const meterDbText = $derived(mon?.db != null ? `${mon.db >= 0 ? '+' : ''}${mon.db.toFixed(1)} dB` : mon ? `${Math.round(mon.norm * 100)}%` : '—');
   const catalog = $derived.by<Ctl[]>(() => {
     const hidden = new Set(hideIds);
     const out: Ctl[] = [];
@@ -48,6 +51,9 @@
       out.push({ key: `e${e.id}`, kind: tog ? 'toggle' : 'select', label: e.name, id: e.id, w: tog ? 1 : 2, h: 1, view: tog ? 'button' : 'select', views: tog ? TOG_VIEWS : ['select'] });
     }
     out.push({ key: 'bypass', kind: 'action', label: 'Bypass', id: -2, w: 2, h: 1, view: 'action', views: ['action'] });
+    // Live audio meter — offered only when this block actually reports a monitor level (INPUT/OUTPUT/
+    // COMP/GATE/CAB/DRIVE/FILTER…). Draggable/scalable like any widget; value from editor.monitorFor.
+    if (mon) out.push({ key: 'meter', kind: 'meter', label: mon.role === 'gainReduction' ? 'Gain Reduction' : mon.role === 'vu' ? 'VU' : 'Meter', id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
     return out;
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
@@ -1064,6 +1070,12 @@
               {:else if c.kind === 'action'}
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                 <div class="action" class:byp={editor.selected?.bypassed} onpointerdown={(e) => e.stopPropagation()} onclick={() => !editMode && editor.toggleBypass()}>{editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}</div>
+              {:else if c.kind === 'meter'}
+                <div class="kval rel">{meterDbText}</div>
+                <div class="mtrack" title="Live level ({c.label})">
+                  <div class="mfill" style:height="{Math.round((mon?.norm ?? 0) * 100)}%" style:background={(mon?.norm ?? 0) >= 0.92 ? '#d6543f' : (mon?.norm ?? 0) >= 0.75 ? '#f5a623' : accent}></div>
+                </div>
+                <div class="lbl">{c.label}</div>
               {/if}
 
               {#if editMode}
@@ -1634,6 +1646,26 @@
     bottom: 0;
     background: linear-gradient(180deg, var(--accentbright), var(--accent));
     border-radius: 8px;
+  }
+  /* live audio meter widget — read-only vertical level bar */
+  .mtrack {
+    position: relative;
+    width: 16px;
+    flex: 1;
+    min-height: 24px;
+    margin: 7px 0;
+    border-radius: 8px;
+    background: var(--track);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .mfill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0 0 8px 8px;
+    transition: height 90ms linear;
   }
   .vhandle {
     position: absolute;

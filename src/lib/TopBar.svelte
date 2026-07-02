@@ -13,6 +13,13 @@
   const cpu = $derived(editor.cpu);
   const cpuColor = $derived(cpu == null ? '#56565e' : cpu >= 80 ? '#d6543f' : cpu >= 62 ? '#f5a623' : '#33c46b');
   const pk = (x: number) => Math.max(0, Math.min(100, Math.round(x * 100)));
+  // global output level: the FM3's Preset Leveling meters (fn 0x19, Output 1 & 2 × L/R), pushed over SSE
+  // in real dB (−40…0), server-smoothed. Shows the main output (Output 1 L/R); Output 2 appears only when
+  // it's actually carrying signal (above the −40 floor). Costs no per-block serial reads.
+  const dbFill = (db: number) => Math.max(0, Math.min(100, Math.round(((db + 40) / 40) * 100))); // −40..0 → 0..100%
+  const io = $derived(editor.levels);
+  const out2Active = $derived(!!io && (io.out2L > -39.5 || io.out2R > -39.5));
+  const lvlColor = (db: number) => (db >= -1 ? '#d6543f' : db >= -6 ? '#f5a623' : '#33c46b');
 </script>
 
 <header class="topbar" class:mob={editor.isMobile}>
@@ -118,8 +125,28 @@
             <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
           </div>
         {/if}
-        <!-- audio meters pulled: bytes 35/36/588 fluctuate even with no signal → not level meters.
-             Needs a clean silence-vs-signal capture to find the real (peak/RMS) field. -->
+        {#if io}
+          {@const pkDb = Math.max(io.out1L, io.out1R)}
+          <div class="st io" title="Live output level — FM3 Preset Leveling meters (Output 1{out2Active ? ' + 2' : ''}, L/R), in dB">
+            <span class="mono st-lbl">OUT{out2Active ? '1' : ''}</span>
+            <div class="bar"><div class="fill" style="width:{dbFill(io.out1L)}%; background:{lvlColor(io.out1L)}"></div></div>
+            <div class="bar"><div class="fill" style="width:{dbFill(io.out1R)}%; background:{lvlColor(io.out1R)}"></div></div>
+            {#if out2Active}
+              <span class="mono st-lbl">2</span>
+              <div class="bar"><div class="fill" style="width:{dbFill(io.out2L)}%; background:{lvlColor(io.out2L)}"></div></div>
+              <div class="bar"><div class="fill" style="width:{dbFill(io.out2R)}%; background:{lvlColor(io.out2R)}"></div></div>
+            {/if}
+            <span class="mono cpu-t" style="color:{lvlColor(pkDb)}">{pkDb <= -39.5 ? '−40' : (pkDb > 0 ? '+' : '') + pkDb.toFixed(0)}dB</span>
+          </div>
+        {/if}
+        {#if editor.canMeterBlocks}
+          <button
+            class="st mtr-tgl mono"
+            class:on={editor.meteringOn}
+            title="Per-block audio meters — polls the OPEN block's level once per ~0.5s. Off by default; the global output meter above is always live."
+            onclick={() => (editor.meteringOn = !editor.meteringOn)}
+          >▊ METER {editor.meteringOn ? 'ON' : 'OFF'}</button>
+        {/if}
       </div>
     {/if}
 
@@ -460,6 +487,15 @@
   button.st:hover {
     background: var(--track);
   }
+  .mtr-tgl {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .mtr-tgl.on {
+    color: #33c46b;
+  }
   .note {
     font-size: 15px;
     color: var(--text-dim);
@@ -535,6 +571,7 @@
     width: 0;
     height: 100%;
     background: var(--text-mut);
+    transition: width 80ms linear; /* glide between meter updates so bars read smooth, not steppy */
   }
   .cpu-t {
     font-size: 11px;

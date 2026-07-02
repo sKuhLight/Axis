@@ -37,10 +37,10 @@
   // Read the live device state for the switches of the current layout+view, so each tile can flag
   // whether the unit actually has that switch configured. Fields stay blank until edited (see note).
   async function loadState() {
-    if (!model) return;
+    if (!model || !model.liveState) return; // live per-switch read is FM3-only
     reading = true;
     try {
-      const n = model.switches;
+      const n = model.switches ?? 0;
       const states = await Promise.all(
         Array.from({ length: n }, (_, i) => forgefx.fcState(layout, view, i).catch(() => null))
       );
@@ -77,13 +77,13 @@
   const switches = $derived(model?.switches ?? 3);
   // on mobile the fixed N-column board gets cramped; wrap into readable min-width tiles instead
   const boardCols = $derived(editor.isMobile ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
-  const config = $derived(model ? layout * model.configsPerLayout + view * model.switches + sw : 0);
-  const catList = $derived(model ? Object.entries(model.categories).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
-  const colorList = $derived(model ? Object.entries(model.colors).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
+  const config = $derived(model ? layout * (model.configsPerLayout ?? 0) + view * (model.switches ?? 0) + sw : 0);
+  const catList = $derived(model ? Object.entries(model.categories ?? {}).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
+  const colorList = $derived(model ? Object.entries(model.colors ?? {}).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
 
   function pidOf(field: string, cfg = config, index = 0): number {
     const f = model!.fields[field];
-    return f.base + cfg * f.stride + index;
+    return (f?.base ?? 0) + cfg * (f?.stride ?? 0) + index;
   }
   const ek = (field: string, cfg = config) => `${field}:${cfg}`;
   const cur = (field: string, cfg = config) => edits[ek(field, cfg)];
@@ -100,13 +100,13 @@
   // Custom-label display-mode ordinal (capture-confirmed = 2). A switch only renders custom text when
   // its display mode is "Custom"; FM3-Edit sets that mode alongside the chars, so we do too — otherwise
   // the characters are stored but never shown.
-  const customMode = $derived(model ? +(Object.entries(model.labelModes).find(([, v]) => v === 'Custom')?.[0] ?? 2) : 2);
+  const customMode = $derived(model ? +(Object.entries(model.labelModes ?? {}).find(([, v]) => v === 'Custom')?.[0] ?? 2) : 2);
   async function writeLabel(field: string, text: string) {
     if (!model) return;
     edits = { ...edits, [ek(field)]: text.length };
     labelText = { ...labelText, [ek(field)]: text };
     const base = pidOf(field);
-    for (let i = 0; i < model.labelLen; i++) {
+    for (let i = 0; i < (model.labelLen ?? 0); i++) {
       try {
         // each char is its own SET: pid = labelBase + i, value = float32(ASCII code), 0-padded
         await forgefx.setParam(model.effectId, base + i, i < text.length ? text.charCodeAt(i) : 0, false);
@@ -118,13 +118,13 @@
     if (text.length) await write(field.replace(/Label$/, 'Display'), customMode);
   }
   const layoutLabel = (i: number) => (i === 8 ? 'Master' : String(i + 1));
-  const catName = (v: number | undefined) => (v != null ? (model?.categories[String(v)] ?? 'Cat ' + v) : '—');
+  const catName = (v: number | undefined) => (v != null ? (model?.categories?.[String(v)] ?? 'Cat ' + v) : '—');
 
   // ── function model: the selected function for a side drives its value-slots + label options ──
-  const labelModeFallback = $derived(model ? Object.entries(model.labelModes).map(([, l]) => l) : []);
+  const labelModeFallback = $derived(model ? Object.entries(model.labelModes ?? {}).map(([, l]) => l) : []);
   function funcsFor(side: string) {
     const cat = cur(side + 'Category');
-    return cat != null ? (model?.functions[String(cat)] ?? []) : [];
+    return cat != null ? (model?.functions?.[String(cat)] ?? []) : [];
   }
   function fnDefFor(side: string) {
     const sel = cur(side + 'Function') ?? 0;
@@ -170,6 +170,14 @@
     <div class="msg">{err}</div>
   {:else if !model}
     <div class="msg">Loading Foot Controller model…</div>
+  {:else if !model.liveState}
+    <div class="msg">
+      <p><b>Foot Controller address model available</b> — effect {model.effectId}, {model.configs} configs,
+        {Object.keys(model.fields).length} param-base fields.</p>
+      <p>Live per-switch editing here is <b>FM3-only</b>: this device's (layout, view, switch) decomposition
+        and label/LED-colour bases aren't statically recovered yet. FC parameters can still be written via the
+        normal parameter path using the bases above.</p>
+    </div>
   {:else}
     <div class="body">
       <div class="row">
@@ -187,7 +195,7 @@
 
       <div class="board" style="grid-template-columns:{boardCols}">
         {#each Array(switches) as _, i (i)}
-          {@const cfg = layout * model.configsPerLayout + view * model.switches + i}
+          {@const cfg = layout * (model.configsPerLayout ?? 0) + view * (model.switches ?? 0) + i}
           {@const col = colorList.find((x) => x.v === cur('color', cfg))?.hex ?? ACC}
           <button class="swtile" class:on={sw === i} onclick={() => selSwitch(i)}>
             <span class="led" style="background:{col}"></span>

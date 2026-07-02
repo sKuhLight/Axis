@@ -88,6 +88,12 @@
       </button>
     {/each}
     <div class="spacer"></div>
+    {#if editor.isAm4}
+      <button class="item" class:active={editor.am4ToolsOpen} title="AM4 Tools — preset backup/restore, .syx decode, firmware validate, modifiers" onclick={() => (editor.am4ToolsOpen = true)}>
+        <span class="ic">⛃</span>
+        <span class="sh">AM4</span>
+      </button>
+    {/if}
     <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
       <span class="ic">◐</span>
       <span class="sh">Theme</span>

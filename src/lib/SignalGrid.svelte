@@ -46,14 +46,20 @@
   let availH = $state(1);
   const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
   const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
-  // Tile WIDTH fills the page exactly (hCols across the available width) → no partial column at the edge,
-  // clean paging. Tile HEIGHT is the square height, but capped so all rows fit → no vertical clipping.
-  // (Width and height are decoupled: when height is tight the tile just gets a bit flatter — never cut.)
+  const MAX_TILE = 150; // desktop: never let a tile grow past this — a full-screen 12-col row must not
+  //                       stretch tiles to the whole monitor width (looks bad); center the grid instead.
+  // Mobile fills the page width exactly (clean paging). Desktop fits BOTH axes as a square-ish tile and
+  // caps the size, so on a wide/fullscreen window the grid stays a comfortable size and centers rather
+  // than spanning edge-to-edge.
   const colW = $derived.by(() => {
     if (availW <= 1) return mob ? 88 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
-    return Math.max(24, (availW - (hCols - 1) * gap) / hCols);
+    const fillW = (availW - (hCols - 1) * gap) / hCols;
+    if (mob) return Math.max(24, fillW);
+    // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ MAX_TILE.
+    const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
+    return Math.max(24, Math.min(fillW, fitH / ASPECT, MAX_TILE));
   });
   const cellH = $derived.by(() => {
     const sq = colW * ASPECT;
@@ -120,13 +126,20 @@
       window.removeEventListener('resize', onResize);
     };
   });
-  // re-measure whenever the grid contents or column density change
+  // re-measure whenever the grid contents, density, OR the bottom panel size change. The block editor
+  // opening/closing (and its resize-drag, editorH) shrinks the grid area → tiles re-fit → cable
+  // endpoints move. A single rAF can read mid-relayout, so we take a second pass on the next frame to
+  // catch the settled geometry — otherwise cables render against stale block positions ("shifted").
   $effect(() => {
     void editor.layout;
     void editor.editorOpen;
+    void editor.editorH;
     void editor.vw;
     void editor.mobCols;
-    requestAnimationFrame(measure);
+    requestAnimationFrame(() => {
+      measure();
+      requestAnimationFrame(measure);
+    });
   });
 
   function cableD(x1: number, y1: number, x2: number, y2: number) {
@@ -167,6 +180,34 @@
   });
 
   let hoverCable = $state<string | null>(null);
+
+  // Cable "signal flow": driven by the live output level, but rAF-advanced with a SMOOTHED velocity
+  // (not by swapping CSS animation-duration — that restarts the keyframe every level change and stutters,
+  // and the level itself jitters). We ease a velocity toward the level-derived target each frame and step
+  // stroke-dashoffset by it → continuous, smooth, never frantic. Silent → velocity eases to 0 (freezes).
+  let flowOffset = $state(0);
+  let flowVel = 0; // units/sec, eased (non-reactive)
+  onMount(() => {
+    let raf = 0;
+    let last = 0;
+    const tick = (ts: number) => {
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+      last = ts;
+      const l = editor.levels;
+      let target: number;
+      if (!l) target = 4; // no live meters → gentle steady flow
+      else {
+        const pk = Math.max(l.out1L, l.out1R, l.out2L, l.out2R); // dB, −40…+6
+        const norm = Math.max(0, Math.min(1, (pk + 40) / 46));
+        target = norm < 0.05 ? 0 : 1.2 + norm * 4.3; // u/s: quiet slow → loud ≈5.5 (≈2.2s/cycle, calm)
+      }
+      flowVel += (target - flowVel) * Math.min(1, dt * 3); // ~300ms ease → smooths the jitter
+      if (dt) flowOffset = (flowOffset - flowVel * dt) % 12; // 12 = dash period; wrap keeps it seamless
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  });
 
   // ── pointer gestures: tap / double-tap / long-press move / port connect / swipe ──
   // On a block: horizontal swipe cycles the active control (continuous), vertical adjusts its value.
@@ -437,7 +478,7 @@
           >
             <path d={cab.d} fill="none" stroke={cab.stroke} stroke-width="2" />
             {#if cab.flow}
-              <path class="flow" d={cab.d} fill="none" stroke={cab.flowStroke} stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" />
+              <path class="flow" d={cab.d} fill="none" stroke={cab.flowStroke} stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" stroke-dashoffset={flowOffset} />
             {/if}
             <path
               d={cab.d}
@@ -955,9 +996,7 @@
     background: var(--ok);
     box-shadow: 0 0 6px rgba(70, 209, 127, 0.85);
   }
-  .flow {
-    animation: axsFlow 1.15s linear infinite;
-  }
+  /* .flow motion is driven by rAF via stroke-dashoffset (see the flow tick) — smoothed, level-reactive */
   .port {
     position: absolute;
     right: -8px;
