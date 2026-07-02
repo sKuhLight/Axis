@@ -81,7 +81,7 @@
         <path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="var(--border3)" stroke-width="1.6" />
       </svg>
     </div>
-    {#each RAIL as r}
+    {#each (editor.isAm4 ? RAIL.filter((r) => r.id === 'build' || r.id === 'library') : RAIL) as r}
       <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
         <span class="ic">{r.icon}</span>
         <span class="sh">{r.short}</span>

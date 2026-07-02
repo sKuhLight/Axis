@@ -90,7 +90,7 @@
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
     </div>
 
-    {#if !editor.isMobile}
+    {#if !editor.isMobile && !editor.isAm4}
       <div class="scenes">
         <span class="mono scn-lbl">SCN</span>
         <div class="scn-group">
@@ -165,7 +165,7 @@
       {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
-    {#if !editor.isMobile}
+    {#if !editor.isMobile && !editor.isAm4}
       <div class="status">
         <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
           <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
