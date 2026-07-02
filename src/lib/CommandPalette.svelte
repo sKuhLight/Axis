@@ -241,7 +241,7 @@
   <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
     <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <div class="search">
-        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
+        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
         <input
           bind:this={inputEl}
           bind:value={query}
@@ -381,6 +381,7 @@
     gap: 10px;
     padding: 11px 16px;
     border-bottom: 1px solid var(--surface2);
+    flex: none; /* never let the flex column shrink/clip this row (tall "All" list did) */
   }
   .target {
     padding: 6px 11px;
@@ -407,6 +408,12 @@
     padding: 10px 16px;
     overflow-x: auto;
     border-bottom: 1px solid var(--surface2);
+    flex: none;
+  }
+  /* mobile: wrap categories onto multiple rows instead of a hidden horizontal scrollbar */
+  .card.mob .cats {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
   .cat {
     flex: none;
