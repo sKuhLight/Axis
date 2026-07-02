@@ -942,6 +942,7 @@ class EditorStore {
   #contentCheckAt = 0; // last time the current slot's stored content was re-decoded (external-edit catch)
   #watchTick = 0;
   watchPreset = async () => {
+    if (this.isAm4) return; // AM4 has no gen-3 preset-name query (fn 0x0d) — it'd just time out on the AM4's MIDI link
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
     // On a slow MIDI link, background preset-watch polling competes with edits and inflates latency —
     // run it only every 4th tick (~16s instead of ~4s) so the link stays free for what the user is doing.
