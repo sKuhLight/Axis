@@ -95,7 +95,6 @@
         <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
           <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
         </button>
-        <div class="div"></div>
         <div class="st tempo" title="Tempo — type to set, TAP to tap">
           <input
             class="mono bpm"
@@ -107,15 +106,13 @@
           />
           <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
         </div>
-        <div class="div"></div>
-        <div class="st cpu" title="Device link round-trip latency">
+        <div class="st cpu link" title="Device link round-trip latency">
           <span class="mono st-lbl">LINK</span>
           <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
           <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
         </div>
         {#if cpu != null}
-          <div class="div"></div>
-          <div class="st cpu" title="Live CPU load (decoded from the device meters frame)">
+          <div class="st cpu load" title="Live CPU load (decoded from the device meters frame)">
             <span class="mono st-lbl">CPU</span>
             <div class="bar"><div class="fill" style="width:{pk(cpu / 100)}%; background:{cpuColor}"></div></div>
             <span class="mono cpu-t" style="color:{cpuColor}">{cpu.toFixed(1)}%</span>
@@ -518,10 +515,10 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .div {
-    width: 1px;
-    background: var(--surface2);
-    flex: none;
+  /* separators between telemetry items — a border on each non-first item, so items can be hidden
+     from the right at narrow widths without leaving a dangling divider */
+  .status > .st + .st {
+    border-left: 1px solid var(--surface2);
   }
   .cpu {
     cursor: default;
@@ -569,5 +566,27 @@
     border-radius: 50%;
     background: var(--amber);
     box-shadow: 0 0 7px var(--amber);
+  }
+
+  /* narrower desktop windows: shed telemetry from the right so the preset picker + scenes never get
+     squeezed out of the bar. Order dropped: CPU meter → LINK meter → tempo. Tuner, preset, scenes,
+     add-block and save always stay. */
+  @media (max-width: 1320px) {
+    .status .load {
+      display: none;
+    }
+  }
+  @media (max-width: 1180px) {
+    .status .link {
+      display: none;
+    }
+  }
+  @media (max-width: 1060px) {
+    .status .tempo {
+      display: none;
+    }
+    .view {
+      display: none;
+    }
   }
 </style>
