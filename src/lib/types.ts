@@ -407,10 +407,25 @@ export interface Firmware {
   build: string;
 }
 
-/** GET /device — identity + firmware. */
+/** Per-device capabilities (from the forgefx-midi descriptor) — drives which UI a model gets. */
+export interface DeviceCaps {
+  slotModel: 'linear' | 'grid';
+  slotCount?: number;
+  grid?: { rows: number; cols: number };
+  hasScenes: boolean;
+  sceneCount: number;
+  hasChannels: boolean;
+  channelNames: string[];
+  channelBlocks: string[];
+  supportsSave: boolean;
+}
+
+/** GET /device — identity + firmware + capabilities. */
 export interface DeviceInfo {
   model: string;
   modelByte: string;
+  modelId?: number;
+  capabilities?: DeviceCaps | null;
   firmware: Firmware | null;
   port: string;
 }

@@ -90,11 +90,12 @@
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
     </div>
 
-    {#if !editor.isMobile && !editor.isAm4}
+    {#if !editor.isMobile && editor.sceneCount > 0}
       <div class="scenes">
         <span class="mono scn-lbl">SCN</span>
         <div class="scn-group">
-          {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
+          {#each Array(editor.sceneCount) as _, i}
+            {@const s = i + 1}
             <button class="scn" class:on={editor.scene === s} title={editor.sceneName(s)} onclick={() => editor.selectScene(s)}>{s}</button>
           {/each}
         </div>
