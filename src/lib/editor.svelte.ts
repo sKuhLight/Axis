@@ -978,6 +978,7 @@ class EditorStore {
   // ── selection ──
   // mirror the selection on the FM3 screen (cursor-select) so the unit follows the UI
   selectCellOnDevice = (row: number, col: number) => {
+    if (this.isAm4) return; // AM4 has no gen-3 grid-cell select; opening a slot just reads its params
     forgefx.selectCell(this.#W(row), this.#W(col)).catch(() => {});
   };
 
@@ -1446,6 +1447,7 @@ class EditorStore {
 
   // ── preset nav ──
   selectPreset = async (n: number) => {
+    if (this.isAm4) return this.loadAm4Preset(n); // AM4 loads a stored location via its own codec
     try {
       await forgefx.selectPreset(n);
       this.lastPreset = n;
