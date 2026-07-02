@@ -828,6 +828,7 @@
     }
     if (e.summary.number < 0) { editor.showToast('Open it on the device to load', '#f5a623'); return; }
     editor.openBuild();
+    if (editor.isAm4) { await editor.loadAm4Preset(e.summary.number); return; } // AM4 loads a stored location via its own codec
     await editor.selectPreset(e.summary.number);
   }
 
@@ -891,11 +892,9 @@
     {#if editor.isMobile}
       <button class="ghost ic-btn" onclick={() => (sideOpen = true)} title="Library, folders & saved filters"><Icon name="list" size={14} /> Filters</button>
     {/if}
-    {#if !editor.isAm4}
-      <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title="Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)">
-        {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
-      </button>
-    {/if}
+    <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title={editor.isAm4 ? 'Scan the AM4 stored-preset locations (names) into the local library' : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}>
+      {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
+    </button>
     <button class="ghost ic-btn" onclick={addFolder} title="Browse a local folder of .syx presets — load any of them live into the edit buffer"><Icon name="folder" size={14} /> Folder</button>
     <div class="sort">
       <span class="lbl">SORT</span>
@@ -1070,9 +1069,9 @@
       {#if !results.length}
         <div class="empty">
           <svg width="44" height="44" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#34343c" stroke-width="1.3" /><path d="M10.6 10.6 L14 14" stroke="#34343c" stroke-width="1.3" stroke-linecap="round" /></svg>
-          <span class="e1">{library.entries.length ? 'No presets match this filter' : editor.isAm4 ? 'AM4 — 4-slot device' : 'Library is empty'}</span>
-          <span class="e2">{library.entries.length ? 'Loosen a parameter range or remove a condition.' : editor.isAm4 ? 'Preset-library indexing is FM3-family only. Use the live grid view, or import .syx files / a folder.' : 'Scan the connected device or import .syx files to populate the library.'}</span>
-          {#if !library.entries.length && !editor.isAm4}
+          <span class="e1">{library.entries.length ? 'No presets match this filter' : 'Library is empty'}</span>
+          <span class="e2">{library.entries.length ? 'Loosen a parameter range or remove a condition.' : editor.isAm4 ? 'Scan the AM4 stored-preset locations to list them here (names only — deep param filtering is FM3-family).' : 'Scan the connected device or import .syx files to populate the library.'}</span>
+          {#if !library.entries.length}
             <button class="load" style="width:auto; padding:0 18px; background:var(--accent,#35c9d6); color:#06181a;" onclick={() => library.buildCache()} disabled={library.scanning}>
               {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : '⤓ Build cache'}
             </button>

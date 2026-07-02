@@ -8,7 +8,7 @@
 
   let dismissed = $state(false);
   // Not in remote mode — a full device scan over the relay is unusable; that's the host's job.
-  const show = $derived(!dismissed && !isRemote() && !library.cacheBuilt && !library.scanning && editor.conn.state === 'online' && !editor.isAm4);
+  const show = $derived(!dismissed && !isRemote() && !library.cacheBuilt && !library.scanning && editor.conn.state === 'online');
   const pct = $derived(library.scanTotal ? Math.round((library.scanDone / library.scanTotal) * 100) : 0);
 </script>
 

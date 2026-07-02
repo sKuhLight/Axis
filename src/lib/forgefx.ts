@@ -161,6 +161,13 @@ export const forgefx = {
   grid: () => req<PresetGrid>('/preset/grid'),
   /** AM4 (model 0x15) — its 4 slots as a 1×4 grid, rendered by the same Signal Grid. */
   am4Grid: () => req<PresetGrid>('/am4/grid'),
+  /** AM4 block params by slot pidLow — same BlockParams DTO as gen-3 blockParams(). */
+  am4BlockParams: (pidLow: number) => req<BlockParams>(`/am4/blocks/${pidLow}/params`),
+  /** AM4 preset library: scan of stored locations for the browser. */
+  am4Presets: () => req<{ count: number; presets: { location: number; code: string; name: string; isEmpty: boolean }[] }>('/am4/presets'),
+  /** AM4: load a stored location (0..103) into the edit buffer. */
+  am4SwitchPreset: (location: number) =>
+    req<{ ok: boolean }>('/am4/preset', { method: 'POST', body: JSON.stringify({ location }) }),
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),
