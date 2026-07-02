@@ -44,17 +44,23 @@
   // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
   let availW = $state(1);
   let availH = $state(1);
-  const hCols = $derived(mob ? visCols : cols); // columns that must fit across the width
-  const ASPECT = 0.95; // tile height ÷ width
-  // Fit each tile to BOTH the width (hCols across) and the height (rows tall); take the smaller so the
-  // whole grid fits with no scroll and nothing clipped vertically.
+  const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
+  const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
+  // Tile WIDTH fills the page exactly (hCols across the available width) → no partial column at the edge,
+  // clean paging. Tile HEIGHT is the square height, but capped so all rows fit → no vertical clipping.
+  // (Width and height are decoupled: when height is tight the tile just gets a bit flatter — never cut.)
   const colW = $derived.by(() => {
-    if (availW <= 1 || availH <= 1) return mob ? 88 : 96;
-    const fitW = (availW - (hCols - 1) * gap) / hCols;
-    const fitH = (availH - (rows - 1) * gap) / rows / ASPECT;
-    return Math.max(28, Math.floor(Math.min(fitW, fitH)));
+    if (availW <= 1) return mob ? 88 : 96;
+    // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
+    // off-screen — no partial-column sliver at the right edge.
+    return Math.max(24, (availW - (hCols - 1) * gap) / hCols);
   });
-  const cellH = $derived(Math.round(colW * ASPECT));
+  const cellH = $derived.by(() => {
+    const sq = colW * ASPECT;
+    if (availH <= 1) return sq;
+    const fitH = (availH - (rows - 1) * gap) / rows;
+    return Math.max(24, Math.min(sq, fitH));
+  });
   const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
   const pageShift = $derived(visCols * (colW + gap));
   const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
@@ -612,7 +618,9 @@
     justify-content: center;
   }
   .gridwrap.mob {
-    padding: 14px 12px;
+    /* no horizontal padding: overflow:hidden clips at the padding box, so any side padding would let
+       the next column peek through. Edge-to-edge → a page shows exactly visCols, nothing cut. */
+    padding: 14px 0;
     justify-content: flex-start; /* horizontal paging translates the grid from the left */
   }
   .inner {
