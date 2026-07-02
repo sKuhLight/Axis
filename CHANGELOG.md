@@ -2,6 +2,17 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.6.5-beta — 2026-07-02
+
+### Added
+- **AM4 is now editable.** Opening a block on an AM4 loads its parameters (they were empty before);
+  the preset **Library** lists the AM4's stored presets and loads them; **Save** writes to an AM4
+  location. Previously the AM4 could only show its grid.
+
+### Changed
+- The bundled engine moved to a consolidated codec package (**forgefx-midi**) that adds a full
+  per-device read/write layer. Existing FM3 / FM9 / Axe-Fx III behaviour is unchanged.
+
 ## 0.6.4-beta — 2026-07-02
 
 ### Fixed
