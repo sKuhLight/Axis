@@ -13,11 +13,38 @@
   ];
 
   // Rail items backed by a virtual effect: "the block editor pointed at effectId N".
+  // Static fallback for legacy (v1) servers; on API v2 the device's caps.virtualEffects wins.
   const VIRTUAL: Record<string, { eid: number; slug: string; name: string }> = {
     settings: { eid: 1, slug: 'global', name: 'Setup' },
     controllers: { eid: 2, slug: 'controllers', name: 'Controllers' },
     fc: { eid: 199, slug: 'fc', name: 'Footswitches' }
   };
+  const VIRTUAL_SLUG: Record<string, string> = { settings: 'global', controllers: 'controllers', fc: 'fc' };
+  /** The virtual effect backing a rail item — the device's own caps entry when available. */
+  const virtualFor = (id: string): { eid: number; slug: string; name: string } | undefined =>
+    editor.caps?.virtualEffects?.find((v) => v.slug === VIRTUAL_SLUG[id]) ?? VIRTUAL[id];
+
+  // Rail filtering is capability-driven on API v2 (virtual tools from caps.virtualEffects, FC from
+  // caps.fc.model, routing-flavored screens from caps.gridRouting); legacy v1 keeps the isAm4 branch.
+  const railItems = $derived.by(() => {
+    const caps = editor.caps;
+    if (editor.isV2 && caps) {
+      const ve = new Set((caps.virtualEffects ?? []).map((v) => v.slug));
+      return RAIL.filter((r) =>
+        r.id === 'build' || r.id === 'library' ? true
+        : r.id === 'settings' ? ve.has('global')
+        : r.id === 'controllers' ? ve.has('controllers')
+        : r.id === 'fc' ? !!caps.fc?.model || ve.has('fc')
+        : !!caps.gridRouting); // scenes / perform / sets (coming-soon) ride the grid-routing family
+    }
+    return editor.isAm4 ? RAIL.filter((r) => r.id === 'build' || r.id === 'library') : RAIL;
+  });
+  // Device Tools shows whenever the device has ANY tool capability (legacy v1: AM4 only).
+  const showTools = $derived(
+    editor.isV2 && editor.caps
+      ? !!(editor.caps.backupDump || editor.caps.restoreDump || editor.caps.firmwareValidate || editor.caps.modifiers?.model)
+      : editor.isAm4
+  );
 
   const closeDrawer = () => (editor.drawerOpen = false);
 
@@ -31,7 +58,7 @@
       editor.openLibrary();
       return;
     }
-    const v = VIRTUAL[id];
+    const v = virtualFor(id);
     if (v) {
       editor.railActive = id;
       editor.openVirtual(v.eid, v.slug, v.name);
@@ -81,17 +108,17 @@
         <path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="var(--border3)" stroke-width="1.6" />
       </svg>
     </div>
-    {#each (editor.isAm4 ? RAIL.filter((r) => r.id === 'build' || r.id === 'library') : RAIL) as r}
+    {#each railItems as r}
       <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
         <span class="ic">{r.icon}</span>
         <span class="sh">{r.short}</span>
       </button>
     {/each}
     <div class="spacer"></div>
-    {#if editor.isAm4}
-      <button class="item" class:active={editor.am4ToolsOpen} title="AM4 Tools — preset backup/restore, .syx decode, firmware validate, modifiers" onclick={() => (editor.am4ToolsOpen = true)}>
+    {#if showTools}
+      <button class="item" class:active={editor.deviceToolsOpen} title="Device Tools — preset backup/restore, .syx decode, firmware validate, modifiers" onclick={() => (editor.deviceToolsOpen = true)}>
         <span class="ic">⛃</span>
-        <span class="sh">AM4</span>
+        <span class="sh">Tools</span>
       </button>
     {/if}
     <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
@@ -132,19 +159,22 @@
 
     <div class="d-body scroll">
       <div class="d-nav">
-        {#each RAIL as r}
+        {#each railItems as r}
           <button class="d-item" class:active={editor.railActive === r.id} onclick={() => pick(r.id, r.label)}>
             <span class="d-ic">{r.icon}</span><span class="d-lbl">{r.label}</span>
           </button>
         {/each}
       </div>
 
-      <div class="d-sec">SCENE</div>
-      <div class="d-scenes">
-        {#each [1, 2, 3, 4, 5, 6, 7, 8] as s}
-          <button class="d-scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
-        {/each}
-      </div>
+      {#if editor.sceneCount > 0}
+        <div class="d-sec">SCENE</div>
+        <div class="d-scenes">
+          {#each Array(editor.sceneCount) as _, i}
+            {@const s = i + 1}
+            <button class="d-scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+          {/each}
+        </div>
+      {/if}
 
       <div class="d-sec">DEFAULT VIEW</div>
       <div class="d-seg">
@@ -152,15 +182,21 @@
         <button class:on={editor.globalMode === 'advanced'} onclick={() => editor.setGlobalMode('advanced')}>Advanced</button>
       </div>
 
-      <div class="d-sec">STATUS</div>
-      <div class="d-status">
-        <button class="d-stat" class:on={editor.tuner.active} onclick={() => { editor.toggleTuner(); closeDrawer(); }}>
-          <span class="d-stat-ic">♪</span><span>Tuner</span><span class="d-stat-v mono">{editor.tuner.active ? (editor.tuner.note ?? '…') : ''}</span>
-        </button>
-        <button class="d-stat" onclick={() => editor.tapTempo()}>
-          <span class="d-stat-ic">◷</span><span>Tap tempo</span><span class="d-stat-v mono">{editor.bpm} BPM</span>
-        </button>
-      </div>
+      {#if editor.hasTuner || editor.hasTempo}
+        <div class="d-sec">STATUS</div>
+        <div class="d-status">
+          {#if editor.hasTuner}
+            <button class="d-stat" class:on={editor.tuner.active} onclick={() => { editor.toggleTuner(); closeDrawer(); }}>
+              <span class="d-stat-ic">♪</span><span>Tuner</span><span class="d-stat-v mono">{editor.tuner.active ? (editor.tuner.note ?? '…') : ''}</span>
+            </button>
+          {/if}
+          {#if editor.hasTempo}
+            <button class="d-stat" onclick={() => editor.tapTempo()}>
+              <span class="d-stat-ic">◷</span><span>Tap tempo</span><span class="d-stat-v mono">{editor.bpm} BPM</span>
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="d-foot">

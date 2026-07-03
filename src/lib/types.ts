@@ -181,6 +181,8 @@ export interface ModModel {
   sources?: ModSource[];
   /** Present when `sources` is empty because the device's source enum is runtime-built / capture-pending. */
   sourcesNote?: string;
+  /** ADDITIVE (API v2): whether the wire binding (POST /mod/bind) is supported (gen-3 true, AM4 false). */
+  bindingSupported?: boolean;
 }
 
 /** Per-block monitor (meter) param table (GET /preset/monitors): paramName → pid + role + dB range. */
@@ -229,6 +231,25 @@ export interface Am4Decode {
 export type Am4FirmwareResult =
   | { valid: true; messages: number; blocks: number; headerTag: number[]; finalizeTag: number[] }
   | { valid: false; error: string };
+
+// ── unified device tools (API v2, capability-gated server-side) ──
+/** GET /preset/locations (caps presets.canScanNames) — fast stored-location name scan. */
+export interface PresetLocations {
+  count: number;
+  locations: { location: number; code: string | null; name: string; isEmpty: boolean }[];
+}
+/** POST /preset/backup — verbatim .syx dump of one preset (caps backupDump). */
+export interface PresetBackup {
+  location: number | null;
+  code: string | null;
+  name: string;
+  bytes: number[];
+}
+/** POST /firmware/validate result (caps firmwareValidate) — same shape as the AM4 validator. */
+export type FirmwareValidateResult = Am4FirmwareResult;
+/** POST /preset/decode (JSON bytes) — gen-3 dumps decode to a PresetSummary; AM4 dumps to a
+ *  location/name listing. Discriminate on the presence of `presets`. */
+export type SyxDecodeResult = PresetSummary | ({ model: string } & Am4Decode);
 
 /** One decoded parameter of a placed block (GET /presets/:n/params, or embedded in a file summary). */
 export interface DecodedParam {
@@ -407,7 +428,22 @@ export interface Firmware {
   build: string;
 }
 
-/** Per-device capabilities (from the forgefx-midi descriptor) — drives which UI a model gets. */
+/** Preset-related capabilities (API v2). `addressing` drives how save targets render
+ *  ('numeric' = 000..511; 'bankLetter' = A01..Z04). */
+export interface PresetCaps {
+  count: number;
+  addressing: 'numeric' | 'bankLetter';
+  canRename: boolean;
+  /** Device supports a fast stored-location name scan (GET /preset/locations). */
+  canScanNames: boolean;
+  /** Device supports full preset dumps → deep param index (GET /presets/:n/summary?full=1). */
+  canDeepScan: boolean;
+  /** Device answers the live current-preset query (safe to poll). */
+  liveQuery: boolean;
+}
+
+/** Per-device capabilities (from the forgefx-midi descriptor) — drives which UI a model gets.
+ *  The v2 fields are optional so a pre-v2 (legacy) server payload still typechecks. */
 export interface DeviceCaps {
   slotModel: 'linear' | 'grid';
   slotCount?: number;
@@ -418,6 +454,30 @@ export interface DeviceCaps {
   channelNames: string[];
   channelBlocks: string[];
   supportsSave: boolean;
+  // ── API v2 additions (capabilities-driven unified API) ──
+  presets?: PresetCaps;
+  /** Grid routing (cables/shunts) exists on this device (gen-3 grid; false on the AM4's flat slots). */
+  gridRouting?: boolean;
+  /** Device supports mirroring the UI selection onto its screen (grid cursor-select). */
+  gridCursorSelect?: boolean;
+  /** Routing/shunt cell base effect id (gen-3: 1024). */
+  shuntBase?: number;
+  /** Blocks can expose params without a gen-3 definition pack. */
+  paramsWithoutPack?: boolean;
+  tempo?: boolean;
+  tuner?: boolean;
+  meters?: { blockMeters: boolean; liveMonitors: boolean; outputLevels: boolean; cpu: boolean };
+  sceneNamesWritable?: boolean;
+  fc?: { model: boolean; liveState: boolean };
+  modifiers?: { model: boolean; bind: boolean };
+  cabIrs?: boolean;
+  firmwareValidate?: boolean;
+  backupDump?: boolean;
+  restoreDump?: boolean;
+  versionStore?: boolean;
+  deviceParams?: boolean;
+  /** Rail-screen virtual effects this device exposes (Setup/Controllers/Modifier/FC …). */
+  virtualEffects?: { eid: number; slug: string; name: string }[];
 }
 
 /** GET /device — identity + firmware + capabilities. */
@@ -425,6 +485,8 @@ export interface DeviceInfo {
   model: string;
   modelByte: string;
   modelId?: number;
+  /** Unified-API version the server speaks (2 = capabilities-driven device-agnostic API). */
+  apiVersion?: number;
   capabilities?: DeviceCaps | null;
   firmware: Firmware | null;
   port: string;
@@ -432,6 +494,8 @@ export interface DeviceInfo {
 
 export interface Health {
   ok: boolean;
+  /** API version envelope (v2 servers). Absent on legacy servers. */
+  api?: { version: number };
   device: string;
 }
 
@@ -468,6 +532,8 @@ export interface GridCell {
   col: number;
   effectId: number;
   name: string;
+  /** ADDITIVE (API v2): catalog slug where derivable (AM4 cells carry it; gen-3 cells omit it). */
+  slug?: string | null;
   isShunt: boolean;
   /** Routing input mask: bit r set = fed from row r of the previous column. */
   routeFlag: number;

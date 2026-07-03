@@ -41,7 +41,8 @@ export function layoutFromGrid(grid: PresetGrid, blocks: PresetBlock[] = []): La
       kind: g.isShunt ? 'shunt' : 'block',
       effectId: g.effectId,
       display: g.name,
-      pack: g.isShunt ? null : packFor(g.name),
+      // API v2 cells may carry the catalog slug directly (AM4) — prefer it over the name lookup
+      pack: g.isShunt ? null : (g.slug ?? packFor(g.name)),
       color: g.isShunt ? '#3a3a44' : statusColor(g.name),
       fromRows: g.fromRows ?? [],
       bypassed: st?.bypassed ?? undefined,

@@ -159,22 +159,23 @@ export const forgefx = {
   currentPreset: () => req<PresetRef>('/preset'),
   preset: (n: number) => req<PresetRef>(`/presets/${n}`),
   grid: () => req<PresetGrid>('/preset/grid'),
-  /** AM4 (model 0x15) — its 4 slots as a 1×4 grid, rendered by the same Signal Grid. */
+  // LEGACY /am4/* aliases (deprecated server-side) — kept ONLY for the v1-server fallback paths.
+  /** @deprecated legacy v1 fallback — API v2 serves the AM4 through the unified grid(). */
   am4Grid: () => req<PresetGrid>('/am4/grid'),
-  /** AM4 block params by slot pidLow — same BlockParams DTO as gen-3 blockParams(). */
+  /** @deprecated legacy v1 fallback — API v2 serves AM4 params through blockParams(). */
   am4BlockParams: (pidLow: number) => req<BlockParams>(`/am4/blocks/${pidLow}/params`),
-  /** AM4 preset library: scan of stored locations for the browser. */
+  /** @deprecated legacy v1 fallback — API v2 lists stored locations via presetLocations(). */
   am4Presets: () => req<{ count: number; presets: { location: number; code: string; name: string; isEmpty: boolean }[] }>('/am4/presets'),
-  /** AM4: load a stored location (0..103) into the edit buffer. */
+  /** @deprecated legacy v1 fallback — API v2 loads a location via selectPreset(). */
   am4SwitchPreset: (location: number) =>
     req<{ ok: boolean }>('/am4/preset', { method: 'POST', body: JSON.stringify({ location }) }),
-  /** AM4: switch the active scene (0-based, 0..3). */
+  /** @deprecated legacy v1 fallback — API v2 switches scenes via setScene(). */
   am4SetScene: (index: number) =>
     req<{ ok: boolean }>('/am4/scene', { method: 'POST', body: JSON.stringify({ index }) }),
-  /** AM4: write a continuous param by wire address (pidLow=block eid, pidHigh=paramId), normalized 0..1. */
+  /** @deprecated legacy v1 fallback — API v2 writes continuous params via setParam(…, true). */
   am4SetParamNorm: (pidLow: number, pidHigh: number, norm: number) =>
     req<{ ok: boolean }>(`/am4/blocks/${pidLow}/params/${pidHigh}`, { method: 'PUT', body: JSON.stringify({ norm }) }),
-  /** AM4: write a discrete/enum param ordinal by wire address. */
+  /** @deprecated legacy v1 fallback — API v2 writes discrete params via setParam(…, false). */
   am4SetParamValue: (pidLow: number, pidHigh: number, value: number) =>
     req<{ ok: boolean }>(`/am4/blocks/${pidLow}/params/${pidHigh}`, { method: 'PUT', body: JSON.stringify({ value }) }),
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
@@ -185,9 +186,10 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ number })
     }),
-  /** Store the edit buffer to a preset slot. DESTRUCTIVE — overwrites that location. */
+  /** Store the edit buffer to a preset slot. DESTRUCTIVE — overwrites that location.
+   *  `location`/`code` are ADDITIVE (bank-letter devices report e.g. "C02"). */
   store: (number: number) =>
-    req<{ ok: boolean }>('/preset/store', {
+    req<{ ok: boolean; location?: number; code?: string }>('/preset/store', {
       method: 'POST',
       body: JSON.stringify({ number })
     }),
@@ -366,21 +368,41 @@ export const forgefx = {
   monitorsLive: (eid?: number) =>
     req<import('./types').LiveMonitor[]>(`/preset/monitors/live${eid != null ? `?eid=${eid}` : ''}`),
 
-  // ── AM4 (model 0x15) — flat 4-slot device, its own codec ──
+  // ── unified device tools (API v2, capability-gated server-side → 501 {error:'unsupported'}) ──
+  /** Fast stored-location name scan (caps presets.canScanNames) — the library index for devices
+   *  without full preset dumps. */
+  presetLocations: () => req<import('./types').PresetLocations>('/preset/locations'),
+  /** Verbatim .syx dump of one preset (location omitted → active buffer). Caps backupDump. */
+  presetBackup: (location?: number) =>
+    req<import('./types').PresetBackup>('/preset/backup', { method: 'POST', body: JSON.stringify(location != null ? { location } : {}) }),
+  /** Verbatim re-emit of a preset dump (byte array) to its stored location. Caps restoreDump. */
+  presetRestore: (bytes: number[]) =>
+    req<{ ok: boolean; location: number | null; code: string | null }>('/preset/restore', { method: 'POST', body: JSON.stringify({ bytes }) }),
+  /** Validate a firmware .syx envelope (integrity check only — NOT a flasher). Caps firmwareValidate. */
+  validateFirmware: (bytes: number[]) =>
+    req<import('./types').FirmwareValidateResult>('/firmware/validate', { method: 'POST', body: JSON.stringify({ bytes }) }),
+  /** Offline decode of a preset .syx via JSON bytes — model-sniffed server-side (gen-3 → summary;
+   *  AM4 → location/name listing). Rides the relay transport, unlike the octet-stream decode. */
+  decodeSyxBytes: (bytes: number[]) =>
+    req<import('./types').SyxDecodeResult>('/preset/decode', { method: 'POST', body: JSON.stringify({ bytes }) }),
+
+  // ── AM4 (model 0x15) — LEGACY v1 routes (deprecated aliases server-side). Kept ONLY as the
+  //    fallback path when the backend doesn't speak API v2; do not add new call sites. ──
+  /** @deprecated legacy v1 fallback — API v2 serves the unified model via modModel(). */
   am4ModModel: () => req<import('./types').Am4ModifierModel>('/am4/mod/model'),
-  /** Save the AM4 active edit buffer to a stored location (0..103). */
+  /** @deprecated legacy v1 fallback — API v2 stores via store(). */
   am4StorePreset: (location: number) =>
     req<{ ok: boolean; location: number; code: string }>('/am4/preset/store', { method: 'POST', body: JSON.stringify({ location }) }),
-  /** Back up an AM4 preset as a verbatim .syx (location omitted → active buffer). */
+  /** @deprecated legacy v1 fallback — API v2 backs up via presetBackup(). */
   am4BackupPreset: (location?: number) =>
     req<import('./types').Am4Backup>('/am4/preset/backup', { method: 'POST', body: JSON.stringify(location != null ? { location } : {}) }),
-  /** Restore an AM4 preset .syx (byte array of one 12,352-byte dump) — verbatim re-emit. */
+  /** @deprecated legacy v1 fallback — API v2 restores via presetRestore(). */
   am4RestorePreset: (bytes: number[]) =>
     req<{ ok: boolean; location: number | null; code: string | null }>('/am4/preset/restore', { method: 'POST', body: JSON.stringify({ bytes }) }),
-  /** Offline decode of an AM4 .syx (single dump or full bank) → each preset's location + name. */
+  /** @deprecated legacy v1 fallback — API v2 decodes via decodeSyxBytes(). */
   am4DecodeSyx: (bytes: number[]) =>
     req<import('./types').Am4Decode>('/am4/preset/decode', { method: 'POST', body: JSON.stringify({ bytes }) }),
-  /** Validate an AM4 firmware .syx envelope (integrity check only — NOT a flasher). */
+  /** @deprecated legacy v1 fallback — API v2 validates via validateFirmware(). */
   am4ValidateFirmware: (bytes: number[]) =>
     req<import('./types').Am4FirmwareResult>('/am4/firmware/validate', { method: 'POST', body: JSON.stringify({ bytes }) })
 };

@@ -1,10 +1,16 @@
 <script lang="ts">
-  // Foot Controller editor (effectId 199). Device-authentic layout/view/switch grid from the served
-  // FC address model; writes by computing pid = field.base + config*stride (+index for value/label
-  // blocks), config = layout*12 + view*3 + switch. tapCategory formula is device-verified; the field
-  // structure + enum vocabularies (categories 0-13, colors 1-12, label modes 0-2) are cache/capture
-  // confirmed. Per-category FUNCTION lists + the 6 value-slot meanings are still being mined from the
-  // editor decompile — until then Function/Value are raw numeric fields.
+  // Foot Controller editor (effectId 199). Three render modes, decided PURELY by the served model's
+  // shape (never by device/model id):
+  //  1. liveState:true (FM3) — the full editor with live read-back, colors and custom labels.
+  //  2. liveState:false + layout/switch geometry (FM9) — layout picker (1..8 + Master) × 12-slot
+  //     switch grid, config = layout*configsPerLayout + switchSlot; per-switch category/function/
+  //     display/params editing. Writes are blind (no read-back) but device-true.
+  //  3. liveState:false, no geometry (Axe-Fx III) — flat config picker 0..configs-1 + the same
+  //     per-config field editing.
+  // Writes compute pid = field.base + config*stride (+index for value/label blocks). tapCategory
+  // formula is device-verified; the field structure + enum vocabularies are cache/capture/binary
+  // confirmed. Controls whose metadata is absent from the model (colors, custom labels, function
+  // lists) are hidden rather than gated on the device.
   import { onMount } from 'svelte';
   import { editor } from './editor.svelte';
   import { forgefx } from './forgefx';
@@ -16,6 +22,7 @@
   let layout = $state(0);
   let view = $state(0);
   let sw = $state(0);
+  let flatCfg = $state(0); // mode 3 (no geometry): the flat config index
   let edits = $state<Record<string, number>>({}); // field ordinals (read from unit + written this session)
   let labelText = $state<Record<string, string>>({}); // decoded label text, keyed `${side}Label:${config}`
   // Device read-back via the sub-0x1b value channel (GET /fc/state → Device.fcReadState). It returns the
@@ -76,10 +83,19 @@
 
   const switches = $derived(model?.switches ?? 3);
   // on mobile the fixed N-column board gets cramped; wrap into readable min-width tiles instead
-  const boardCols = $derived(editor.isMobile ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
-  const config = $derived(model ? layout * (model.configsPerLayout ?? 0) + view * (model.switches ?? 0) + sw : 0);
+  const boardCols = $derived(editor.isMobile || switches > 6 ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
+  // Mode selection is model-SHAPE-driven: geometry = the model decomposes configs into
+  // layout × switch-slot (FM3 additionally pages by view; FM9 has no views).
+  const hasGeometry = $derived(!!(model && model.layouts && model.configsPerLayout && model.switches));
+  // FM3 (views): config = layout*configsPerLayout + view*switches + sw. FM9 (no views, view stays 0):
+  // the same formula reduces to layout*configsPerLayout + switchSlot. No geometry: the flat picker.
+  const config = $derived(
+    model ? (hasGeometry || model.liveState ? layout * (model.configsPerLayout ?? 0) + view * (model.switches ?? 0) + sw : flatCfg) : 0
+  );
   const catList = $derived(model ? Object.entries(model.categories ?? {}).map(([v, label]) => ({ v: +v, label })).sort((a, b) => a.v - b.v) : []);
   const colorList = $derived(model ? Object.entries(model.colors ?? {}).map(([v, c]) => ({ v: +v, ...c })).sort((a, b) => a.v - b.v) : []);
+  /** Width of a side's params value block (6 on gen-3) — from the field def, else the model width. */
+  const paramWidth = (side: string) => model?.fields[side + 'Params']?.width ?? model?.paramsWidth ?? 0;
 
   function pidOf(field: string, cfg = config, index = 0): number {
     const f = model!.fields[field];
@@ -171,12 +187,102 @@
   {:else if !model}
     <div class="msg">Loading Foot Controller model…</div>
   {:else if !model.liveState}
-    <div class="msg">
-      <p><b>Foot Controller address model available</b> — effect {model.effectId}, {model.configs} configs,
-        {Object.keys(model.fields).length} param-base fields.</p>
-      <p>Live per-switch editing here is <b>FM3-only</b>: this device's (layout, view, switch) decomposition
-        and label/LED-colour bases aren't statically recovered yet. FC parameters can still be written via the
-        normal parameter path using the bases above.</p>
+    <!-- blind-write editor (no live read-back): FM9 = layout × switch grid; III = flat config picker -->
+    <div class="body">
+      <div class="banner">
+        <b>No read-back on this device</b> — the fields below show what you've written this session
+        (they start blank, not at the unit's current values). Writes are blind but device-true: they
+        take effect on the unit immediately.
+      </div>
+
+      {#if hasGeometry}
+        <div class="row">
+          <span class="rlbl">LAYOUT</span>
+          {#each Array(model.layouts) as _, i (i)}
+            <button class="chip" class:on={layout === i} onclick={() => (layout = i)}>{layoutLabel(i)}</button>
+          {/each}
+        </div>
+
+        <div class="board" style="grid-template-columns:{boardCols}">
+          {#each Array(model.switches) as _, i (i)}
+            {@const cfg = layout * (model.configsPerLayout ?? 0) + i}
+            <button class="swtile" class:on={sw === i} onclick={() => (sw = i)}>
+              <span class="swnum mono">{i + 1}</span>
+              <span class="swcat">{catName(cur('tapCategory', cfg))}</span>
+              <span class="swhold mono">HOLD · {catName(cur('holdCategory', cfg))}</span>
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="row">
+          <span class="rlbl">CONFIG</span>
+          <input
+            class="cfgnum mono"
+            type="number"
+            min="0"
+            max={model.configs - 1}
+            value={flatCfg}
+            onchange={(e) => (flatCfg = Math.max(0, Math.min(model!.configs - 1, +e.currentTarget.value || 0)))}
+          />
+          <span class="cfghint mono">0…{model.configs - 1} — this device's FC config space is flat (no decomposition recovered)</span>
+        </div>
+      {/if}
+
+      <div class="insp">
+        <div class="ititle mono">
+          {#if hasGeometry}SWITCH {sw + 1} · {layoutLabel(layout)}{:else}FC{/if}
+          <span class="cfg">config {config}</span>
+        </div>
+
+        {#snippet blindCol(side: string, badge: string, badgeClass: string)}
+          <div class="actcol">
+            <div class="ahdr"><span class="abadge {badgeClass}">{badge}</span></div>
+            <div class="field">
+              <span class="flbl">Category {#if !catList.length}<span class="todo">raw</span>{/if}</span>
+              {#if catList.length}
+                <select value={cur(side + 'Category') ?? ''} onchange={(e) => setCategory(side, +e.currentTarget.value)}>
+                  <option value="" disabled>—</option>
+                  {#each catList as c (c.v)}<option value={c.v}>{c.label}</option>{/each}
+                </select>
+              {:else}
+                <input type="number" min="0" value={cur(side + 'Category') ?? ''} placeholder="ordinal" onchange={(e) => setCategory(side, +e.currentTarget.value)} />
+              {/if}
+            </div>
+            <div class="field">
+              <span class="flbl">Function <span class="todo">raw</span></span>
+              <input type="number" min="0" value={cur(side + 'Function') ?? ''} placeholder="ordinal" onchange={(e) => write(side + 'Function', +e.currentTarget.value)} />
+            </div>
+            {#if labelModeFallback.length}
+              <div class="field">
+                <span class="flbl">Label</span>
+                <select value={cur(side + 'Display') ?? ''} onchange={(e) => write(side + 'Display', +e.currentTarget.value)}>
+                  <option value="" disabled>—</option>
+                  {#each labelModeFallback as lab, li (li)}<option value={li}>{lab}</option>{/each}
+                </select>
+              </div>
+            {/if}
+            {#each Array(paramWidth(side)) as _, i (i)}
+              <div class="field">
+                <span class="flbl">Value {i + 1} <span class="todo">raw</span></span>
+                <input type="number" value={curSlot(side, i) ?? ''} placeholder="—" onchange={(e) => writeSlot(side, i, +e.currentTarget.value)} />
+              </div>
+            {/each}
+          </div>
+        {/snippet}
+
+        <div class="cols">
+          {@render blindCol('tap', 'TAP', 'tap')}
+          {@render blindCol('hold', 'HOLD', 'hold')}
+        </div>
+
+        <p class="note">
+          Edits write to the unit immediately via the device-true FC parameter bases (effect
+          {model.effectId}, {model.configs} configs). Function ordinals and the {model.paramsWidth}-wide
+          value block are raw numeric fields — this device's per-category function lists aren't
+          decoded yet. LED colors and custom labels are hidden because their bases aren't in this
+          device's model.
+        </p>
+      </div>
     </div>
   {:else}
     <div class="body">
@@ -566,6 +672,28 @@
     font-size: 14px;
     padding: 24px;
     text-align: center;
+  }
+  /* blind-write mode (no read-back) */
+  .banner {
+    border: 1px solid var(--border2);
+    border-left: 3px solid var(--c);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--textdim);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    max-width: 700px;
+  }
+  .banner b {
+    color: var(--text2);
+  }
+  .cfgnum {
+    width: 110px;
+  }
+  .cfghint {
+    font-size: 10px;
+    color: var(--textfaint);
   }
   .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

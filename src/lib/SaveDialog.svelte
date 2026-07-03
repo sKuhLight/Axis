@@ -5,7 +5,10 @@
   $effect(() => {
     if (editor.saveOpen) target = editor.saveTarget;
   });
-  const pad = (n: number) => String(n).padStart(3, '0');
+  const maxSlot = $derived(Math.max(0, editor.presetCount - 1));
+  // Bank-letter devices (caps presets.addressing === 'bankLetter') address locations as A01..Z04.
+  const bankCode = (n: number) => `${String.fromCharCode(65 + Math.floor(n / 4))}${String((n % 4) + 1).padStart(2, '0')}`;
+  const pad = $derived((n: number) => (editor.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
   const overwritingCurrent = $derived(editor.preset?.number === target);
   const mob = $derived(editor.isMobile);
 </script>
@@ -18,12 +21,13 @@
         <span class="title">Save preset</span>
       </div>
       <p class="body">
-        Store the current edit buffer to a preset location on the FM3.
+        Store the current edit buffer to a preset location on the device.
         <strong>This overwrites whatever is in that location.</strong>
       </p>
       <label class="field">
         <span class="lbl mono">SAVE TO</span>
-        <input class="num mono" type="number" min="0" max="511" bind:value={target} />
+        <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
+        {#if editor.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
       </label>
       <p class="hint">
         {#if overwritingCurrent}
@@ -127,6 +131,12 @@
   }
   .num:focus {
     border-color: var(--accent);
+  }
+  .code {
+    flex: none;
+    padding: 0 10px;
+    font: 700 14px/1 var(--font-mono);
+    color: var(--accent);
   }
   .hint {
     font-size: 12px;
