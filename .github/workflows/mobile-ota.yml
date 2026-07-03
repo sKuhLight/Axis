@@ -1,0 +1,94 @@
+name: mobile-ota
+
+# Publish an over-the-air web-bundle update for the iOS shell (Capgo @capgo/capacitor-updater).
+# Builds the mobile web bundle, zips it, and updates a fixed `ota-ios-latest` prerelease with the zip
+# + a latest-ios.json manifest. The installed app polls that manifest on launch (see
+# src/lib/direct/ota.ts) and self-updates its WEB assets. Native/plugin changes still need a new IPA
+# from ios-adhoc.yml — and a matching bump of `minNative` below.
+#
+# The fixed tag (not /releases/latest) keeps OTA decoupled from the desktop `v*` releases.
+# NOTE: the Capgo zip layout + checksum scheme are unverified here — if download rejects the bundle
+# the app simply keeps its current bundle (safe no-op), so iterate without risk of bricking installs.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ota-ios-v*']
+
+permissions:
+  contents: write
+
+env:
+  OTA_TAG: ota-ios-latest
+  MIN_NATIVE: '0.8.0' # must be <= the IPA's MARKETING_VERSION (ios-adhoc.yml)
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Axis
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          path: Axis
+      - name: Checkout ForgeFX (runtime engine)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/ForgeFX
+          path: ForgeFX
+      - name: Checkout forgefx-midi (codec package)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/forgefx-midi
+          path: forgefx-midi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build forgefx-midi (codec)
+        working-directory: forgefx-midi
+        run: |
+          npm ci
+          npm run build
+      - name: Build ForgeFX server (runtime)
+        working-directory: ForgeFX/server
+        run: |
+          npm ci
+          npm run build
+      - name: Install Axis
+        run: npm ci
+
+      - name: Build mobile web bundle
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: npm run build:mobile
+
+      - name: Package OTA bundle + manifest
+        run: |
+          set -euo pipefail
+          VERSION="0.8.0-beta+${{ github.run_number }}"
+          ( cd build && zip -qr ../bundle-ios.zip . )
+          CHECKSUM="$(shasum -a 256 bundle-ios.zip | cut -d' ' -f1)"
+          BASE="https://github.com/sKuhLight/Axis/releases/download/${OTA_TAG}"
+          cat > latest-ios.json <<JSON
+          {
+            "version": "${VERSION}",
+            "url": "${BASE}/bundle-ios.zip",
+            "checksum": "${CHECKSUM}",
+            "minNative": "${MIN_NATIVE}"
+          }
+          JSON
+          echo "Built OTA bundle $VERSION (sha256 $CHECKSUM)"
+          cat latest-ios.json
+
+      - name: Publish to the fixed OTA release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.OTA_TAG }}
+          name: iOS OTA (rolling)
+          prerelease: true
+          files: |
+            Axis/bundle-ios.zip
+            Axis/latest-ios.json

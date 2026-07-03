@@ -18,7 +18,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "electron:dev": "ELECTRON_DEV=1 electron .",
     "desktop:build": "VITE_FORGEFX_BASE= vite build && electron-builder",
-    "build:mobile": "VITE_AXIS_MOBILE=1 VITE_OTA_MANIFEST_URL=https://github.com/sKuhLight/Axis/releases/latest/download/latest-ios.json vite build",
+    "build:mobile": "VITE_AXIS_MOBILE=1 VITE_OTA_MANIFEST_URL=https://github.com/sKuhLight/Axis/releases/download/ota-ios-latest/latest-ios.json vite build",
     "mobile:sync": "npm run build:mobile && cap sync ios",
     "test": "vitest run"
   },
