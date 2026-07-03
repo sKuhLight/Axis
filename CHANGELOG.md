@@ -2,6 +2,38 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.7.0-beta — 2026-07-03
+
+### Added
+- **Grid Map navigator.** A collapsible miniature of the whole signal chain inside the block
+  editor — tap a block to jump the editor to it, tap an empty cell to add a block there, tap a
+  port to route. Fit-to-width with zoom; built for mobile, handy everywhere.
+- **Tap-to-connect routing.** Tap a port to arm it (no more drag needed), then tap ANY block in a
+  later column — on the map or the main grid, even across mobile pages. Shunts are laid
+  automatically across any distance.
+- **Audition presets (Axe-Change style).** Library device presets get an "Audition" action that
+  loads them into the edit buffer without switching slots or saving anything.
+- **Foot Controller editor on FM9 and Axe-Fx III.** FM9 gets the full layout × switch editor via
+  its device-true address model; the Axe-Fx III gets flat per-config editing. Writes are blind
+  (no live read-back yet) but device-true; live read-back stays FM3-only for now.
+- **Device Tools for every model.** Backup/restore a preset as `.syx`, offline-decode `.syx`
+  files, validate firmware files, and view the modifier model — each section appears when the
+  connected device supports it (this also brings the former AM4-only tools to the FM3/FM9/III).
+
+### Changed
+- **The bundled engine was rebuilt on a per-device driver architecture** over the shared
+  `forgefx-midi` codec package, with a unified, capability-driven API. Every FM3 response was
+  byte-for-byte verified unchanged through the migration; the recurring
+  wrong-codec-for-the-device bug class is structurally gone.
+- Cloud badges are honest now: a preset that is on the device can no longer be mislabeled
+  "Cloud only"; entries without a comparable revision show a neutral "sync state unknown".
+
+### Fixed
+- **Axe-Fx III on Windows connects again** — detection previously never switched off the FM3
+  profile for USB-MIDI-only units, so every request timed out ("device offline").
+- **Export to disk works for device presets** — it had been silently broken from the start
+  (the export hit an API route that never existed) and now downloads a real dump.
+
 ## 0.6.5-beta — 2026-07-02
 
 ### Added
