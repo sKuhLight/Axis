@@ -49,12 +49,13 @@
 <style>
   .sb {
     flex: none;
-    height: 26px;
+    /* Extend down into the iOS home-indicator safe area; bg fills it, content stays above. 0 off native. */
+    height: calc(26px + env(safe-area-inset-bottom));
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 0 12px;
+    padding: 0 12px env(safe-area-inset-bottom);
     background: var(--bg-rail, var(--bg2));
     border-top: 1px solid var(--border, var(--border));
     font-size: 11px;

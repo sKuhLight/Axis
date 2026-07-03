@@ -232,12 +232,14 @@
 <style>
   .topbar {
     position: relative;
-    height: 60px;
+    /* Extend up into the iOS status-bar / notch safe area; the bar's own background fills it so the
+       controls sit cleanly below the clock/battery instead of under them. 0 off native (env → 0). */
+    height: calc(60px + env(safe-area-inset-top));
     flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0 16px;
+    padding: env(safe-area-inset-top) 16px 0;
     background: linear-gradient(180deg, var(--surface), var(--bg2));
     border-bottom: 1px solid var(--border);
     overflow: hidden;
