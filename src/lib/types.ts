@@ -308,8 +308,10 @@ export interface CloudVersion {
   stored: number;
 }
 
-/** Per-preset cloud sync state, computed from device CRC + local versions + the cloud index. */
-export type SyncState = 'synced' | 'modified' | 'outdated' | 'cloudOnly' | 'deviceOnly' | 'none';
+/** Per-preset cloud sync state, computed from device CRC + local versions + the cloud index.
+ *  'unknown' = the preset IS on the device and a cloud version exists, but the entry carries no
+ *  CRC to compare (name-scan devices, stale cache rows) — never mislabel that as cloud-only. */
+export type SyncState = 'synced' | 'modified' | 'outdated' | 'cloudOnly' | 'deviceOnly' | 'unknown' | 'none';
 
 /** A unique effect block in a preset (for the library/browser). */
 export interface PresetSummaryBlock {
