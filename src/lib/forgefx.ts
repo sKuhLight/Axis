@@ -353,14 +353,10 @@ export const forgefx = {
   },
 
   // ── backup / restore ──
-  backupPreset: (n: number) => req<ArrayBuffer>(`/presets/${n}/backup`),
-  backupCurrent: () => req<ArrayBuffer>('/preset/backup'),
-  restorePreset: (bytes: ArrayBuffer) =>
-    fetch(`${BASE}/presets/restore`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/octet-stream' },
-      body: bytes
-    }),
+  // (The scaffold-era backupPreset/backupCurrent/restorePreset here pointed at routes that never
+  //  existed on ANY server version — the phantom that silently broke library export-to-disk for
+  //  device entries. Raw dump bytes come from presetBackup() below (API v2, caps backupDump); the
+  //  v1 fallback snapshots via snapshotPreset() + versionSyx().)
 
   // ── per-block monitor (meter) table: paramName → {pid, role, dB range} ──
   monitors: () => req<import('./types').MonitorParams>('/preset/monitors'),

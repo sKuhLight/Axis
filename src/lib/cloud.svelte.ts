@@ -17,6 +17,7 @@ export const SYNC_META: Record<SyncState, { icon: IconName; short: string; label
   outdated: { icon: 'cloudDown', short: 'Update', label: 'Newer version in cloud', col: '#4a82e0' },
   cloudOnly: { icon: 'cloud', short: 'Cloud', label: 'Cloud only · not on this device', col: '#9b8cf0' },
   deviceOnly: { icon: 'device', short: 'Device', label: 'Not backed up to cloud', col: '#6e6e78' },
+  unknown: { icon: 'device', short: 'Device', label: 'On this device · cloud comparison unavailable', col: '#6e6e78' },
   none: { icon: 'cloud', short: '', label: '', col: '#6e6e78' }
 };
 
@@ -41,13 +42,15 @@ class CloudStore {
   /** Latest cloud version for a slot, or null. */
   latestCloud = (location: number): CloudVersion | null => this.byLocation.get(location)?.[0] ?? null;
 
-  /** Sync state of a device slot given its current CRC (undefined ⇒ slot not on device). */
-  stateOf(location: number, deviceCrc: number | undefined): SyncState {
+  /** Sync state of a device slot. `onDevice` is authoritative (a `dev:` library entry came from a
+   *  device scan — it IS on the unit even when its cached summary carries no CRC to compare, e.g.
+   *  name-scan devices or stale cache rows); it defaults to "has a CRC" for back-compat. */
+  stateOf(location: number, deviceCrc: number | undefined, onDevice: boolean = deviceCrc != null): SyncState {
     const cloud = this.byLocation.get(location) ?? [];
     const latest = cloud[0] ?? null;
-    const onDevice = deviceCrc != null;
     if (!onDevice) return latest ? 'cloudOnly' : 'none';
     if (!latest) return 'deviceOnly';
+    if (deviceCrc == null) return 'unknown'; // on device + cloud version exists, but nothing to compare
     if (deviceCrc === latest.crc) return 'synced';
     if (cloud.some((v) => v.crc === deviceCrc)) return 'outdated'; // device matches an older cloud rev
     return 'modified'; // device content was never uploaded

@@ -299,7 +299,9 @@
   function syncStateOf(e: LibEntry): SyncState {
     if (!cloudOn) return 'none';
     if (e.id.startsWith('cloud:')) return 'cloudOnly';
-    return cloud.stateOf(e.summary.number, e.summary.crc);
+    // dev: entries came from a device scan — they ARE on the unit even if the cached summary has no
+    // CRC to compare (name-scan devices, stale cache rows); never let those read as "cloud only".
+    return cloud.stateOf(e.summary.number, e.summary.crc, e.id.startsWith('dev:') || e.summary.crc != null);
   }
   type SyncView = 'all' | 'device' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
   const SYNC_VIEWS: { id: SyncView; label: string; icon: IconName }[] = [
@@ -318,7 +320,7 @@
     const s = syncStateOf(e);
     switch (view) {
       case 'device': return !cloudEntry;
-      case 'cloud': return cloudEntry || s === 'synced' || s === 'modified' || s === 'outdated';
+      case 'cloud': return cloudEntry || s === 'synced' || s === 'modified' || s === 'outdated' || s === 'unknown';
       case 'cloudOnly': return s === 'cloudOnly';
       case 'notBackedUp': return s === 'deviceOnly';
       case 'needsUpload': return s === 'modified';
@@ -377,6 +379,7 @@
       case 'cloudOnly': return { kind: 'load', label: '↓ Load' };
       case 'deviceOnly': return { kind: 'upload', label: '☁ Back up' };
       case 'synced': return { kind: 'upload', label: '☁ Re-upload' };
+      case 'unknown': return { kind: 'upload', label: '☁ Back up' }; // re-snapshot refreshes the CRC too
       default: return null;
     }
   });
@@ -388,13 +391,23 @@
       else if (kind === 'load') { await loadPreset(e); }
     } catch (err) { editor.showToast((err as Error).message || 'Action failed', '#d6543f'); }
   }
+  /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly (caps backupDump); the v1
+   *  fallback snapshots into the version store, then downloads that version's bytes. */
+  async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
+    if (editor.isV2) {
+      const b = await forgefx.presetBackup(n);
+      return Uint8Array.from(b.bytes).buffer;
+    }
+    const { version } = await forgefx.snapshotPreset(n);
+    return (await forgefx.versionSyx(version.id)).arrayBuffer();
+  }
   async function exportEntry(e: LibEntry) {
     try {
       const buf: ArrayBuffer = e.source === 'file'
         ? (library.fileBytes(e.id)?.buffer as ArrayBuffer ?? (() => { throw new Error('no bytes'); })())
         : e.id.startsWith('cloud:')
           ? await forgefx.versionSyx(cloud.latestCloud(e.summary.number)!.id).then((b) => b.arrayBuffer())
-          : await forgefx.backupPreset(e.summary.number);
+          : await deviceEntryBytes(e.summary.number);
       const blob = new Blob([buf], { type: 'application/octet-stream' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -402,6 +415,20 @@
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(a.href);
     } catch { editor.showToast('Export failed', '#d6543f'); }
+  }
+
+  /** Audition a DEVICE preset (Axe-Change style): pull its raw dump and load it into the edit
+   *  buffer — the device plays it WITHOUT switching slots or saving anything. Cloud/file entries
+   *  already audition via their own load paths. */
+  async function auditionEntry(e: LibEntry) {
+    if (e.summary.number < 0) { editor.showToast('No device slot to audition from', '#f5a623'); return; }
+    editor.openBuild();
+    try {
+      const buf = await deviceEntryBytes(e.summary.number);
+      await forgefx.loadBytes(buf);
+      await editor.load();
+      editor.showToast(`Auditioning ${e.summary.name} — Save to keep it on a slot`, '#f5a623');
+    } catch { editor.showToast('Audition failed', '#d6543f'); }
   }
 
   // ── local folders (browse + live-load .syx presets from disk) ──
@@ -460,6 +487,7 @@
     const e = c?.entry;
     if (!e) return;
     if (act === 'load') return void loadPreset(e);
+    if (act === 'audition') return void auditionEntry(e);
     if (act === 'rename') { renameBox = { entry: e, value: e.summary.name, x: c!.x, y: c!.y }; return; }
     if (act === 'export') return void exportEntry(e);
     if (act === 'upload' || act === 'download') return void cloudAction(act, e);
@@ -483,14 +511,18 @@
       s === 'modified' ? { id: 'upload', icon: 'cloudUp', label: 'Upload changes' }
       : s === 'outdated' ? { id: 'download', icon: 'cloudDown', label: 'Update from cloud' }
       : s === 'cloudOnly' ? { id: 'download', icon: 'cloudDown', label: 'Load from cloud' }
-      : s === 'deviceOnly' ? { id: 'upload', icon: 'cloudUp', label: 'Back up to cloud' }
+      : s === 'deviceOnly' || s === 'unknown' ? { id: 'upload', icon: 'cloudUp', label: 'Back up to cloud' }
       : { id: 'upload', icon: 'cloud', label: 'Re-upload to cloud' };
     return [
       { id: 'load', icon: 'load', label: cloudOnly ? 'Load from cloud' : 'Load preset' },
       ...(cloudOnly ? [{ id: 'convert', icon: 'convert', label: 'Convert to device…' } as CtxItem]
                     : [
                         ...(e.source === 'device' && e.summary.number >= 0
-                          ? [{ id: 'rename', icon: 'rename', label: 'Rename & save…' } as CtxItem]
+                          ? [
+                              // edit-buffer load, no slot switch/save — the Axe-Change-style try-out
+                              { id: 'audition', icon: 'load', label: 'Audition (edit buffer)' } as CtxItem,
+                              { id: 'rename', icon: 'rename', label: 'Rename & save…' } as CtxItem
+                            ]
                           : []),
                         { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem
                       ]),
@@ -1111,6 +1143,9 @@
             <div class="st"><span class="sk" title="Estimated DSP load — not the device reading">~CPU</span><span class="sv2" style:color={cpuColor(cpu)}>{cpu}%</span></div>
           </div>
           <button class="load" onclick={() => loadPreset(selected!)}>↓ {selSync === 'cloudOnly' ? 'Load from cloud' : 'Load preset'}</button>
+          {#if selected.source === 'device' && !selected.id.startsWith('cloud:') && selected.summary.number >= 0}
+            <button class="load audition" onclick={() => auditionEntry(selected!)} title="Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style">▶ Audition</button>
+          {/if}
           {#if cloudOn && selSync !== 'none'}
             <div class="cloud-box">
               <span class="cb-chip" style:color={SYNC_META[selSync].col} style:background="{SYNC_META[selSync].col}1f" style:border="1px solid {SYNC_META[selSync].col}40"><Icon name={SYNC_META[selSync].icon} size={12} stroke={2} /> {SYNC_META[selSync].short}</span>
@@ -1436,6 +1471,8 @@
   .sk { font: 600 8px/1 'JetBrains Mono', monospace; color: var(--textmuted); letter-spacing: 0.1em; }
   .sv2 { font-size: 11.5px; font-weight: 600; color: var(--text2); }
   .load { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; height: 42px; border-radius: 11px; background: var(--amber); color: var(--bg2); font-size: 13px; font-weight: 800; cursor: pointer; border: none; }
+  /* secondary variant: edit-buffer audition (no slot switch/save) */
+  .load.audition { margin-top: 6px; background: transparent; color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); }
   .load:hover { filter: brightness(1.08); }
   .d-sec { padding: 16px 20px; }
   .d-sec .lbl { margin-bottom: 11px; display: block; }
