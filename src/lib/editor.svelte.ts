@@ -5,6 +5,7 @@
 import { forgefx, ForgeError, setRequestFailureReporter, isRemote, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
+import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { baseName, packFor, statusColor } from './blocks';
@@ -25,6 +26,8 @@ function loadScopes(): CloudScopes {
 const saveScopes = (s: CloudScopes) => { try { localStorage.setItem(SCOPES_KEY, JSON.stringify(s)); } catch { /* */ } };
 const AUTOSYNC_KEY = 'axs.cloud.autosync';
 const loadAutoSync = (): boolean => { try { return localStorage.getItem(AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
+const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
+const loadLocalAutoSync = (): boolean => { try { return localStorage.getItem(LOCAL_AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
 // Telemetry consent defaults OFF (inverse of auto-sync). Anonymous instance id is a random uuid — never PII.
 const TELEMETRY_KEY = 'axs.telemetry.consent';
 const INSTANCE_KEY = 'axs.telemetry.instanceId';
@@ -227,10 +230,25 @@ class EditorStore {
     fullBackup: boolean;
     autoSync: boolean;
     pendingEmail: string | null;
-  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', paid: false, scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null });
+    /** Free-tier quota readout (server RPC) — null for paid users, signed-out, or a pre-quota server. */
+    quota: { usedBytes: number; snapshots: number; backups: number; limits: { maxStoredBytes: number; maxSnapshots: number; maxBackups: number } | null } | null;
+  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', paid: false, scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null, quota: null });
+  /** Local storage folder (ForgeFX /local/*): a user-picked root with Presets/ (library) + Sync/
+   *  (plain-syx version mirror, unlimited). `available` = the engine serves the routes (404 = old
+   *  engine → feature hidden); `exists` = the configured root is still mounted. */
+  local = $state<{
+    available: boolean;
+    configured: boolean;
+    root: string | null;
+    exists: boolean;
+    syncing: boolean;
+    lastSync: number | null;
+    note: string | null;
+    autoSync: boolean;
+  }>({ available: false, configured: false, root: null, exists: true, syncing: false, lastSync: null, note: null, autoSync: loadLocalAutoSync() });
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
-  axisTab = $state<'account' | 'privacy' | 'about' | 'device'>('account');
+  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device'>('account');
   themeOpen = $state(false); // Appearance / theme picker modal
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
@@ -476,6 +494,14 @@ class EditorStore {
   init = async () => {
     this.customLayouts = loadLayouts();
     this.swipeControls = loadSwipe();
+    // history's inverse writes go straight to forgefx; it calls back here for UI refresh + toasts
+    history.bindHost({
+      load: () => this.load(),
+      reloadParams: () => this.#loadParams(),
+      echoParam: (eid, pid, norm) => this.applyDeviceEvent({ type: 'param', effectId: eid, paramId: pid, norm }),
+      toast: (text, accent) => this.showToast(text, accent),
+      isLegacyAm4: () => !this.isV2 && this.isAm4
+    });
     setRequestFailureReporter(this.#onReqFailure); // auto-report every 5xx/network failure to Faro
     this.loadPorts(); // know the transport early (drives slowLink → meter throttling over MIDI)
     // Desktop-only first-run + update flows: the remote web app has no desktop to update, and the tour /
@@ -486,6 +512,7 @@ class EditorStore {
       this.#initTelemetry();
     }
     this.#initCloud();
+    this.#initLocal();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
@@ -564,6 +591,7 @@ class EditorStore {
   loadVersion = async (id: string) => {
     try {
       await forgefx.loadVersion(id);
+      this.noteBufferReplaced('Loaded snapshot into edit buffer'); // barrier — undo stops here
       await this.load();
       this.showToast('Loaded into edit buffer — Save to keep it on a slot', '#f5a623');
     } catch (e) {
@@ -579,7 +607,7 @@ class EditorStore {
     try {
       const s = await forgefx.cloudStatus();
       const paid = !!s.subscription?.active;
-      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free' };
+      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free', quota: !paid && s.quota ? s.quota : null };
       if (s.user) { await this.cloudSync(); await this.#loadProfile(); await this.refreshRemote(); cloud.refresh(); } // pull latest + profile + remote state + sync-state index on launch
     } catch {
       /* cloud disabled / engine not ready */
@@ -600,15 +628,77 @@ class EditorStore {
       this.showToast('Could not change remote access', '#d6543f');
     }
   };
-  /** Debounced background sync after a local change — batches rapid edits, skips if signed-out/off/in-flight. */
+  /** Debounced background sync after a local change — batches rapid edits, skips if off/in-flight.
+   *  Drives BOTH mirrors: cloud (signed-in + enabled) and the local Sync/ folder (configured + auto). */
   scheduleAutoSync = () => {
-    if (!this.cloud.enabled || !this.cloud.user || !this.cloud.autoSync) return;
+    const doCloud = this.cloud.enabled && !!this.cloud.user && this.cloud.autoSync;
+    const doLocal = this.local.configured && this.local.exists && this.local.autoSync;
+    if (!doCloud && !doLocal) return;
     if (this.#autoSyncT) clearTimeout(this.#autoSyncT);
-    this.#autoSyncT = setTimeout(() => { if (!this.cloud.syncing) this.cloudSync(); }, 8000);
+    this.#autoSyncT = setTimeout(() => {
+      if (doCloud && !this.cloud.syncing) this.cloudSync();
+      if (doLocal && !this.local.syncing) this.localSync();
+    }, 8000);
   };
   setAutoSync = (on: boolean) => {
     this.cloud = { ...this.cloud, autoSync: on };
     try { localStorage.setItem(AUTOSYNC_KEY, on ? '1' : '0'); } catch { /* */ }
+    if (on) this.scheduleAutoSync();
+  };
+
+  // ── local storage folder (Presets/ library + Sync/ version mirror) ──
+  #initLocal = async () => {
+    if (isRemote()) return; // the folder lives on the host PC — hidden in remote sessions
+    try {
+      const s = await forgefx.localConfig();
+      this.local = { ...this.local, available: true, configured: s.configured, root: s.root, exists: s.exists, lastSync: s.lastSync };
+      if (s.configured && s.exists) void library.refreshLocal();
+    } catch { /* 404 = older engine → feature hidden (available stays false) */ }
+  };
+  /** Set (or clear with null) the local root. Native picker in AxisPanel feeds this an absolute path. */
+  setLocalRoot = async (root: string | null) => {
+    try {
+      const s = await forgefx.setLocalRoot(root);
+      this.local = { ...this.local, configured: s.configured, root: s.root, exists: s.exists, lastSync: s.lastSync, note: null };
+      void library.refreshLocal(); // populates or clears the `local:` entries
+      if (s.configured) { this.showToast('Local folder set — Presets/ & Sync/ ready', '#33c46b'); void this.localSync(); }
+      else this.showToast('Local folder cleared', '#9a9aa3');
+    } catch (e) {
+      this.showToast('Could not set folder: ' + (e as Error).message, '#d6543f');
+    }
+  };
+  /** Mirror the version store → the local Sync/ folder (incremental; never deletes user files). */
+  localSync = async () => {
+    if (!this.local.configured || this.local.syncing) return;
+    this.local = { ...this.local, syncing: true, note: null };
+    try {
+      const r = await forgefx.localSync();
+      this.local = { ...this.local, exists: true, lastSync: Date.now(), note: r.written ? `Synced ↓${r.written} to folder` : null };
+    } catch (e) {
+      const status = e instanceof ForgeError ? e.status : 0;
+      if (status === 409) this.local = { ...this.local, exists: false, note: 'Folder missing — remount the drive or pick a new folder' };
+      else this.local = { ...this.local, note: (e as Error).message || 'Local sync failed' };
+    } finally {
+      this.local = { ...this.local, syncing: false };
+    }
+  };
+  /** Re-import versions from the Sync/ folder into the version store (fresh machine / recovery). */
+  localRestore = async () => {
+    if (this.local.syncing) return;
+    this.local = { ...this.local, syncing: true, note: null };
+    try {
+      const r = await forgefx.localRestore();
+      this.showToast(r.imported ? `Restored ${r.imported} version(s) from folder` : 'Nothing new to restore', '#33c46b');
+      cloud.refresh(); // version list changed → refresh sync-state index
+    } catch (e) {
+      this.showToast('Restore failed: ' + (e as Error).message, '#d6543f');
+    } finally {
+      this.local = { ...this.local, syncing: false };
+    }
+  };
+  setLocalAutoSync = (on: boolean) => {
+    this.local = { ...this.local, autoSync: on };
+    try { localStorage.setItem(LOCAL_AUTOSYNC_KEY, on ? '1' : '0'); } catch { /* */ }
     if (on) this.scheduleAutoSync();
   };
 
@@ -675,7 +765,7 @@ class EditorStore {
   };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'account' | 'privacy' | 'about' | 'device' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
+  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };
@@ -695,12 +785,12 @@ class EditorStore {
   };
   /** Pull the synced profile after login and reconcile: adopt a cloud-set contact, and if the cloud has a
    *  telemetry choice, honour it (updating the local mirror + Faro state to match). */
-  /** Re-read the subscription (paid flag + plan) from the server after auth changes. */
+  /** Re-read the subscription (paid flag + plan) + free-tier quota from the server after auth/sync. */
   #refreshSubscription = async () => {
     try {
       const s = await forgefx.cloudStatus();
       const paid = !!s.subscription?.active;
-      this.cloud = { ...this.cloud, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free' };
+      this.cloud = { ...this.cloud, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free', quota: !paid && s.quota ? s.quota : null };
     } catch { /* engine not ready */ }
   };
   #loadProfile = async () => {
@@ -832,13 +922,14 @@ class EditorStore {
     this.cloud.syncing = true;
     this.cloud.note = null;
     try {
-      // Free tier: Axis config only (tags/collections/favorites/filters/layouts/FC/scenes + profile).
-      // Paid tier (active subscription): also sync preset-version blobs. The server re-checks the
-      // subscription and ignores `presets:true` from a free account, so this is cosmetic-only gating.
-      const r = await forgefx.cloudSync({ presets: this.cloud.paid ? this.cloud.scopes.presets : false, config: true });
+      // Preset sync is open to every tier since 0.7.1 — free accounts are quota-limited (3 MB / 1 full
+      // backup / N snapshots), reconciled client-side in ForgeFX and enforced by the server's quota
+      // trigger as a backstop. Config (tags/collections/favorites/filters/layouts + profile) is free.
+      const r = await forgefx.cloudSync({ presets: this.cloud.scopes.presets, config: true });
       const up = r.config.pushed + r.versions.pushed, down = r.config.pulled + r.versions.pulled;
       this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${up} ↓${down}` };
       cloud.refresh();
+      void this.#refreshSubscription(); // quota bar tracks the sync
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Sync failed';
     } finally {
@@ -852,6 +943,7 @@ class EditorStore {
     try {
       const r = await forgefx.backupDevice();
       this.showToast(`Backed up ${r.count} presets`, '#33c46b');
+      if (this.local.configured) void this.localSync(); // land the backup in the local folder immediately
       await this.cloudSync();
     } catch (e) {
       this.cloud.note = (e as Error).message || 'Backup failed';
@@ -965,7 +1057,7 @@ class EditorStore {
         const t0 = performance.now();
         const p = await forgefx.currentPreset().catch(() => null);
         this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
-        if (p && p.number >= 0) this.preset = p;
+        if (p && p.number >= 0) { this.preset = p; this.#histSwitch(p.number); }
       }
     } catch {
       this.conn = { state: 'offline' };
@@ -979,6 +1071,35 @@ class EditorStore {
   get isAm4(): boolean {
     return this.detected?.modelId === 0x15;
   }
+
+  /** Point the history store at the active device+slot (idempotent — cheap to call from poll ticks). */
+  #histSwitch = (n: number) => {
+    void history.switchTo(this.detected?.short ?? this.layout.model ?? 'dev', n);
+  };
+  /** When the edit buffer was loaded from a local Presets/ file, this remembers which one — so Save
+   *  can offer writing the edits back to that file (save-to-disk) instead of a device slot. */
+  bufferSource = $state<{ path: string; name: string } | null>(null);
+  /** The edit buffer was wholesale replaced (audition / snapshot / file load) — undo can't cross this,
+   *  and any local-file link is stale (the local load path re-sets it right after). */
+  noteBufferReplaced = (label: string) => {
+    this.bufferSource = null;
+    history.checkpoint(label, /*barrier*/ true);
+  };
+  /** Save the CURRENT edit buffer back to the local file it was loaded from — no device slot touched. */
+  saveLocalFile = async () => {
+    const src = this.bufferSource;
+    if (!src) return;
+    try {
+      const b = await forgefx.presetBackup(); // dump the active edit buffer (caps backupDump)
+      const r = await forgefx.saveLocalPreset(src.name, b.bytes, { path: src.path, overwrite: true });
+      this.saveOpen = false;
+      history.checkpoint(`Saved to Presets/${r.path}`, false); // marker — undo continues past it, like a slot save
+      this.showToast(`Saved to Presets/${r.path}`, '#33c46b');
+      void library.refreshLocal();
+    } catch (e) {
+      this.showToast('Save to disk failed: ' + (e as Error).message, '#d6543f');
+    }
+  };
 
   load = async () => {
     if (!this.everLoaded) this.status = 'loading';
@@ -1026,6 +1147,8 @@ class EditorStore {
       // failure doesn't masquerade as a preset change (= reload flicker).
       if (n >= 0 && n !== this.lastPreset) {
         this.lastPreset = n;
+        this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+        this.#histSwitch(n); // device-side preset change → swap the history context
         await this.load();
         if (this.selKey) await this.#loadParams();
         if (library.cacheBuilt) library.refreshSlot(n); // CRC-gated sync of the navigated-to slot (catches external edits)
@@ -1137,6 +1260,7 @@ class EditorStore {
 
   // ── param writes (optimistic + debounced continuous) ──
   setParam = (p: NamedParam, v: number) => {
+    const from = p.norm ?? 0; // pre-optimistic value — the undo target (first call of a drag wins)
     p.norm = v;
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return;
@@ -1149,6 +1273,11 @@ class EditorStore {
       }
     }
     if (p.id == null) return;
+    // one gesture = one undo step: rapid same-param writes coalesce (history skips itself while applying)
+    history.recordGesture({
+      kind: 'param', eid: c.effectId, paramId: p.id, continuous: true, from, to: v,
+      block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log
+    });
     clearTimeout(this.#sendTimers[p.id]);
     // API v2: the unified PUT {value, continuous:true} writes every device (AM4 addr = pidLow).
     // Legacy v1 fallback: the AM4 writes via its own SET_NORM route.
@@ -1161,9 +1290,15 @@ class EditorStore {
   };
   // enum/discrete write: send the ordinal (continuous=false → device-confirmed)
   setEnum = (e: EnumParam, value: number) => {
+    const from = e.value;
     e.value = value; // optimistic
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return;
+    if (from !== value) history.record({
+      kind: 'param', eid: c.effectId, paramId: e.id, continuous: false, from, to: value,
+      block: c.display, param: e.name,
+      fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
+    });
     (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {
@@ -1173,6 +1308,7 @@ class EditorStore {
     c.bypassed = next;
     try {
       await forgefx.setBypass(c.effectId, next);
+      history.record({ kind: 'bypass', eid: c.effectId, block: c.display, from: !next, to: next });
       this.showToast(next ? 'Bypassed' : 'Engaged', next ? '#d6543f' : '#5fc46b');
     } catch {
       c.bypassed = !next;
@@ -1185,6 +1321,7 @@ class EditorStore {
     c.channel = ch;
     try {
       await forgefx.setChannel(c.effectId, ch);
+      if (prev) history.record({ kind: 'channel', eid: c.effectId, block: c.display, from: prev, to: ch });
       await this.#loadParams();
     } catch {
       c.channel = prev;
@@ -1193,10 +1330,15 @@ class EditorStore {
   retype = async (value: number) => {
     const c = this.selected;
     if (!c?.pack) return;
+    const from = this.blockType; // capture before the device swaps the model (params reset on retype)
     // value is the device-true model ordinal = the discrete-SET value
     try {
       await forgefx.setType(c.effectId, value);
       await this.#loadParams();
+      if (from && from.value !== value) history.record({
+        kind: 'retype', eid: c.effectId, block: c.display, from: from.value, to: value,
+        fromName: from.name, toName: this.blockType?.name ?? String(value)
+      });
       await this.load();
       this.showToast('Type changed', '#35c9d6');
     } catch (e) {
@@ -1215,6 +1357,7 @@ class EditorStore {
     const c = this.selected;
     if (!c?.pack) return;
     for (const w of writes) await forgefx.setParam(c.effectId, w.paramId, w.value, false).catch(() => {});
+    history.checkpoint(`${c.display} cab changed`, false); // logged, not undoable (old slot state isn't captured) — v1 limitation
     await this.#loadParams();
   };
 
@@ -1247,12 +1390,17 @@ class EditorStore {
     this.layout = { ...this.layout, cells: [...this.layout.cells.filter((c) => !(c.row === row && c.col === col)), cell] };
     try {
       await forgefx.placeCell(this.#W(row), this.#W(col), blockId);
+      history.record({ kind: 'place', row, col, blockId, display });
       this.load(); // background reconcile (real name/effectId)
     } catch {
       this.load();
     }
   };
   removeAt = async (row: number, col: number) => {
+    // capture the doomed cell + its wiring BEFORE the optimistic filter, so undo can restore both
+    const gone = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
+    const inRows = gone?.fromRows.slice() ?? [];
+    const outRows = [...this.layout.cells, ...this.layout.shunts].filter((c) => c.col === col + 1 && c.fromRows.includes(row)).map((c) => c.row);
     this.layout = {
       ...this.layout,
       cells: this.layout.cells.filter((c) => !(c.row === row && c.col === col)),
@@ -1260,6 +1408,7 @@ class EditorStore {
     };
     try {
       await forgefx.clearCell(this.#W(row), this.#W(col));
+      if (gone) history.record({ kind: 'remove', row, col, blockId: gone.effectId, display: gone.display, inRows, outRows });
       this.load(); // background reconcile
     } catch {
       this.load();
@@ -1300,16 +1449,27 @@ class EditorStore {
     this.layout = { ...this.layout, cells: this.layout.cells.map(relocate), shunts: this.layout.shunts.map(relocate) };
     this.selKey = `${row},${col}`;
     try {
+      // mirror the executed call sequence into history ops (undo replays the inverses in reverse)
+      const ops: import('./history.svelte').HistoryOp[] = [];
       if (sameCol) {
         for (const dr of outgoing) await forgefx.cable(this.#W(sr), this.#W(sc), this.#W(dr), false);
+        ops.push(...outgoing.map((dr) => ({ kind: 'cable', srcRow: sr, srcCol: sc, destRow: dr, connect: false }) as const));
         await forgefx.clearCell(this.#W(sr), this.#W(sc));
+        // in-cables die implicitly on clear → carried on the remove op so undo restores them with the block
+        ops.push({ kind: 'remove', row: sr, col: sc, blockId: src.effectId, display: src.display, inRows: incoming, outRows: [] });
         await forgefx.placeCell(this.#W(row), this.#W(col), src.effectId);
+        ops.push({ kind: 'place', row, col, blockId: src.effectId, display: src.display });
         for (const fr of incoming) await forgefx.cable(this.#W(fr), this.#W(col - 1), this.#W(row), true);
+        ops.push(...incoming.map((fr) => ({ kind: 'cable', srcRow: fr, srcCol: col - 1, destRow: row, connect: true }) as const));
         for (const dr of outgoing) await forgefx.cable(this.#W(row), this.#W(col), this.#W(dr), true);
+        ops.push(...outgoing.map((dr) => ({ kind: 'cable', srcRow: row, srcCol: col, destRow: dr, connect: true }) as const));
       } else {
         await forgefx.clearCell(this.#W(sr), this.#W(sc));
+        ops.push({ kind: 'remove', row: sr, col: sc, blockId: src.effectId, display: src.display, inRows: incoming, outRows: outgoing });
         await forgefx.placeCell(this.#W(row), this.#W(col), src.effectId);
+        ops.push({ kind: 'place', row, col, blockId: src.effectId, display: src.display });
       }
+      history.recordComposite(`Moved ${src.display} to r${row + 1}c${col + 1}`, ops);
       this.load(); // background reconcile
       this.showToast('Moved', '#35c9d6');
     } catch {
@@ -1375,20 +1535,33 @@ class EditorStore {
       return shuntBase + nextInst;
     };
     try {
+      const ops: import('./history.svelte').HistoryOp[] = []; // mirror of the executed calls, for undo
       // ensure a carrier cell exists in every intermediate column (along src.row)
       for (let c = src.col + 1; c < destCol; c++) {
         const cell = at(src.row, c);
-        if (!cell) await forgefx.placeCell(this.#W(src.row), this.#W(c), allocShunt());
-        else if (cell.kind === 'block') {
+        if (!cell) {
+          const sid = allocShunt();
+          await forgefx.placeCell(this.#W(src.row), this.#W(c), sid);
+          ops.push({ kind: 'place', row: src.row, col: c, blockId: sid, display: 'Shunt' });
+        } else if (cell.kind === 'block') {
           this.showToast('Clear the cells in between to route through', '#d6543f');
           return;
         }
       }
       // ensure the destination exists (shunt if dropped on an empty cell)
-      if (!at(destRow, destCol)) await forgefx.placeCell(this.#W(destRow), this.#W(destCol), allocShunt());
+      if (!at(destRow, destCol)) {
+        const sid = allocShunt();
+        await forgefx.placeCell(this.#W(destRow), this.#W(destCol), sid);
+        ops.push({ kind: 'place', row: destRow, col: destCol, blockId: sid, display: 'Shunt' });
+      }
       // chain the cables: straight along src.row, then bend into destRow on the last hop
-      for (let c = src.col; c < destCol - 1; c++) await forgefx.cable(this.#W(src.row), this.#W(c), this.#W(src.row), true);
+      for (let c = src.col; c < destCol - 1; c++) {
+        await forgefx.cable(this.#W(src.row), this.#W(c), this.#W(src.row), true);
+        ops.push({ kind: 'cable', srcRow: src.row, srcCol: c, destRow: src.row, connect: true });
+      }
       await forgefx.cable(this.#W(src.row), this.#W(destCol - 1), this.#W(destRow), true);
+      ops.push({ kind: 'cable', srcRow: src.row, srcCol: destCol - 1, destRow, connect: true });
+      history.recordComposite(`Connected ${src.display} → r${destRow + 1}c${destCol + 1}`, ops);
       await this.load();
       this.showToast('Connected', '#35c9d6');
     } catch {
@@ -1398,6 +1571,7 @@ class EditorStore {
   disconnect = async (srcRow: number, srcCol: number, destRow: number) => {
     try {
       await forgefx.cable(this.#W(srcRow), this.#W(srcCol), this.#W(destRow), false);
+      history.record({ kind: 'cable', srcRow, srcCol, destRow, connect: false });
       await this.load();
       this.showToast('Connection removed', '#9a9aa3');
     } catch {
@@ -1418,10 +1592,12 @@ class EditorStore {
   // so reload the grid (badges) + the open block's params (channel may have changed).
   selectScene = async (ui: number) => {
     const prev = this.scene;
+    if (prev === ui) return;
     this.scene = ui; // optimistic
     try {
       // API v2: the unified POST /scene switches every device; legacy v1 AM4 uses its own route.
       await (!this.isV2 && this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
+      history.record({ kind: 'scene', from: prev, to: ui });
       await this.load();
       if (this.selKey) await this.#loadParams();
     } catch {
@@ -1440,6 +1616,7 @@ class EditorStore {
     try {
       const r = await forgefx.setSceneName(ui - 1, clean);
       if (!r.ok) throw new Error('rejected');
+      if ((prev[ui - 1] ?? '') !== clean) history.record({ kind: 'sceneName', index: ui - 1, from: prev[ui - 1] ?? '', to: clean });
       await this.load(); // re-read grid → verifies the device stored the name (sceneNames refreshed)
     } catch {
       this.sceneNames = prev; // revert
@@ -1456,6 +1633,7 @@ class EditorStore {
     try {
       const r = await forgefx.setPresetName(clean);
       if (!r.ok) throw new Error('rejected');
+      if (prev.name !== clean) history.record({ kind: 'presetName', from: prev.name, to: clean });
       await this.poll(); // re-read preset ref → verifies the device stored the name
     } catch {
       this.preset = prev; // revert
@@ -1570,6 +1748,8 @@ class EditorStore {
     try {
       await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
       this.lastPreset = n;
+      this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+      this.#histSwitch(n);
       this.presetOpen = false;
       await this.poll();
       await this.load();
@@ -1611,6 +1791,7 @@ class EditorStore {
       const r = !this.isV2 && this.isAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
       this.saveOpen = false;
       if (r.ok) {
+        history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : n}`, false); // marker — undo continues past it
         this.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');
         await this.poll();
         if (this.canDeepScan) library.refreshSlot(n); // library cache sync (name-scan devices re-scan on open)

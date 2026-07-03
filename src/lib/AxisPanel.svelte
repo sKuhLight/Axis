@@ -3,6 +3,7 @@
   // Three tabs: Account (sign-in / register / sync / contact / delete), Privacy (diagnostics consent +
   // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
   import { editor } from './editor.svelte';
+  import { library } from './library.svelte';
   import Icon from './Icon.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
@@ -70,6 +71,27 @@
   const close = () => (editor.axisOpen = false);
   const soon = (what: string) => editor.showToast(`${what} — coming soon`, '#9b8cf0');
   async function sendReport() { await editor.uploadDebugReport({ kind: 'manual' }); }
+
+  // ── Storage tab (local folder: Presets/ library + Sync/ version mirror) ──
+  const loc = $derived(editor.local);
+  const locAgo = $derived(loc.lastSync ? `${Math.round((Date.now() - loc.lastSync) / 1000)}s ago` : '');
+  const localCount = $derived(library.entries.filter((e) => e.source === 'local').length);
+  const hasPicker = !!(globalThis as { axisDesktop?: { pickFolder?: unknown } }).axisDesktop?.pickFolder;
+  let manualPath = $state(''); // web fallback: no native dialog → type the absolute path
+  async function chooseFolder() {
+    const pick = (globalThis as { axisDesktop?: { pickFolder?: () => Promise<string | null> } }).axisDesktop?.pickFolder;
+    if (!pick) return;
+    const p = await pick();
+    if (p) await editor.setLocalRoot(p);
+  }
+  function restoreFromFolder() {
+    if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void editor.localRestore();
+  }
+  /** Full device backup — on the free plan a new backup replaces the retained one in the cloud. */
+  function fullBackup() {
+    if (!c.paid && !confirm('The free plan keeps your most recent full backup in the cloud — this backup replaces the previous one there. (Your local versions and the local folder keep everything.) Continue?')) return;
+    void editor.cloudFullBackup();
+  }
 </script>
 
 {#snippet disclosure()}
@@ -98,6 +120,9 @@
 
       <div class="tabbar">
         <button class="tb" class:on={editor.axisTab === 'account'} onclick={() => (editor.axisTab = 'account')}>Account</button>
+        {#if loc.available}
+          <button class="tb" class:on={editor.axisTab === 'storage'} onclick={() => (editor.axisTab = 'storage')}>Storage</button>
+        {/if}
         <button class="tb" class:on={editor.axisTab === 'device'} onclick={() => editor.openAxis('device')}>Connection</button>
         <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
         <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
@@ -190,21 +215,31 @@
                   <span class="item-meta">{s.meta}</span>
                 </button>
               {/each}
-              {#if c.paid}
-                <button class="item" onclick={() => editor.setCloudScope('presets', !c.scopes.presets)}>
-                  <span class="chk" class:on={c.scopes.presets}>{#if c.scopes.presets}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
-                  <span class="item-label">Presets</span>
-                  <span class="item-meta">preset versions</span>
-                </button>
-                <button class="item backup" onclick={() => editor.cloudFullBackup()} disabled={c.syncing}>
-                  <span class="chk action"><Icon name="cloud" size={13} /></span>
-                  <span class="item-body">
-                    <span class="item-label">Full device backup</span>
-                    <span class="item-desc">Snapshot every preset on the device, then sync</span>
-                  </span>
-                </button>
-              {/if}
+              <button class="item" onclick={() => editor.setCloudScope('presets', !c.scopes.presets)}>
+                <span class="chk" class:on={c.scopes.presets}>{#if c.scopes.presets}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+                <span class="item-label">Presets</span>
+                <span class="item-meta">{c.paid ? 'preset versions' : 'newest backup + snapshots'}</span>
+              </button>
+              <button class="item backup" onclick={fullBackup} disabled={c.syncing}>
+                <span class="chk action"><Icon name="cloud" size={13} /></span>
+                <span class="item-body">
+                  <span class="item-label">Full device backup</span>
+                  <span class="item-desc">Snapshot every preset on the device, then sync{c.paid ? '' : ' — the free plan keeps your most recent full backup in the cloud'}</span>
+                </span>
+              </button>
             </div>
+
+            {#if !c.paid && c.quota?.limits}
+              {@const q = c.quota}
+              {@const pct = Math.min(100, Math.round((q.usedBytes / q.limits!.maxStoredBytes) * 100))}
+              <div class="quota" class:warn={pct >= 80} class:full={pct >= 100}>
+                <div class="q-row">
+                  <span class="q-lbl">CLOUD STORAGE</span>
+                  <span class="q-val mono">{(q.usedBytes / 1048576).toFixed(2)} / {(q.limits!.maxStoredBytes / 1048576).toFixed(0)} MB · {q.snapshots} of {q.limits!.maxSnapshots} snapshots</span>
+                </div>
+                <div class="q-bar"><div class="q-fill" style="width:{pct}%"></div></div>
+              </div>
+            {/if}
 
             <div class="sec mt">CONTACT</div>
             <p class="muted">Optional — leave a way to reach you if we need to follow up on a bug report. Stored with your synced config; never used for marketing.</p>
@@ -233,6 +268,75 @@
             {/if}
           </div>
         {/if}
+
+      {:else if editor.axisTab === 'storage'}
+        <!-- Local storage folder: Presets/ (library on disk) + Sync/ (plain-syx version mirror) -->
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">🗀</div>
+            <div><div class="h1">Local Storage</div><div class="sub">Your library &amp; backups on disk — unlimited, no account needed</div></div>
+          </div>
+
+          <div class="sec">FOLDER</div>
+          <p class="muted">Pick a folder and Axis manages two subfolders inside it: <strong>Presets/</strong> — a browsable .syx library (drop your collections in, audition without touching device slots) — and <strong>Sync/</strong> — plain .syx backups of your preset versions, readable by FM3-Edit and Fractal-Bot. Works with or without cloud sync.</p>
+          {#if loc.configured}
+            <p class="statline">
+              {#if loc.exists}<span class="badge ok">SET</span>{:else}<span class="badge warn">MISSING</span>{/if}
+              <span class="mono pathtxt">{loc.root}</span>
+            </p>
+            {#if !loc.exists}
+              <p class="slownote"><span class="badge warn">FOLDER MISSING</span> The folder isn't reachable (unmounted drive?). Remount it and everything recovers — or pick a new folder.</p>
+            {/if}
+          {/if}
+          {#if hasPicker}
+            <div class="drow">
+              <button class="sync-now" onclick={chooseFolder}>{loc.configured ? 'Change folder…' : 'Choose folder…'}</button>
+              {#if loc.configured}<button class="link dim" onclick={() => editor.setLocalRoot(null)}>Clear</button>{/if}
+            </div>
+          {:else}
+            <label class="fld" for="loc-path"><span class="flbl">ABSOLUTE PATH</span>
+              <input id="loc-path" class="in sm" type="text" placeholder="/home/you/Axis" bind:value={manualPath} />
+            </label>
+            <div class="drow">
+              <button class="sync-now" onclick={() => manualPath.trim() && editor.setLocalRoot(manualPath.trim())}>Set folder</button>
+              {#if loc.configured}<button class="link dim" onclick={() => editor.setLocalRoot(null)}>Clear</button>{/if}
+            </div>
+          {/if}
+
+          {#if loc.configured}
+            <div class="sec mt">PRESET LIBRARY</div>
+            <p class="muted">{localCount} preset{localCount === 1 ? '' : 's'} indexed from Presets/{library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped (IRs/firmware)` : ''}. They show up in the Preset Browser under “Local”.</p>
+            <button class="sync-now" disabled={!loc.exists} onclick={() => library.refreshLocal(true).then(() => editor.showToast('Local library refreshed', '#33c46b'))}><Icon name="refresh" size={15} /> Re-scan Presets/</button>
+
+            <div class="sec mt">LOCAL SYNC</div>
+            <div class="sync-card">
+              <div class="sync-head">
+                <span class="dot" style="background:{loc.syncing ? '#f5a623' : loc.exists ? '#33c46b' : '#d6543f'}; box-shadow:0 0 8px {loc.syncing ? '#f5a623' : loc.exists ? '#33c46b' : '#d6543f'}"></span>
+                <div class="sync-txt">
+                  <div class="st">{loc.syncing ? 'Syncing…' : loc.lastSync ? 'Folder up to date' : 'Not synced yet'}</div>
+                  <div class="ss">{loc.syncing ? 'Writing versions to Sync/' : loc.lastSync ? `Last synced ${locAgo}` : 'Mirror your preset versions to the folder'}</div>
+                </div>
+              </div>
+              {#if loc.syncing}
+                <div class="bar"><div class="fill"></div></div>
+              {:else}
+                <button class="sync-now" disabled={!loc.exists} onclick={() => editor.localSync()}><Icon name="refresh" size={15} /> Sync to folder now</button>
+              {/if}
+              {#if loc.note}<p class="note">{loc.note}</p>{/if}
+            </div>
+            <button class="item auto" onclick={() => editor.setLocalAutoSync(!loc.autoSync)}>
+              <span class="chk" class:on={loc.autoSync}>{#if loc.autoSync}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
+              <span class="item-body">
+                <span class="item-label">Auto-sync to folder</span>
+                <span class="item-desc">Mirror new snapshots &amp; backups to Sync/ automatically, shortly after they're made. Unlimited — no tier restrictions.</span>
+              </span>
+            </button>
+
+            <div class="sec mt">RESTORE</div>
+            <p class="muted">On a fresh machine (or after data loss), re-import every version from the folder's Sync/ back into Axis. Verified against the index; never overwrites existing versions.</p>
+            <button class="signout" disabled={!loc.exists || loc.syncing} onclick={restoreFromFolder}>Restore from folder…</button>
+          {/if}
+        </div>
 
       {:else if editor.axisTab === 'privacy'}
         <div class="pad">
@@ -479,4 +583,19 @@
   .mbtn { flex: 1; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; }
   .mbtn.on { background: var(--accent); color: var(--accentink); }
   .slownote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 14px; padding: 10px 12px; background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 10px; font-size: 11.5px; line-height: 1.5; color: var(--text2); }
+
+  /* storage tab */
+  .pathtxt { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+
+  /* free-tier quota bar */
+  .quota { margin-top: 14px; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
+  .quota.warn { border-color: rgba(245, 166, 35, 0.45); }
+  .quota.full { border-color: rgba(214, 84, 63, 0.55); }
+  .q-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .q-lbl { font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.12em; color: var(--textmuted); }
+  .q-val { font-size: 10.5px; color: var(--textdim); }
+  .q-bar { height: 6px; margin-top: 9px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .q-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
+  .quota.warn .q-fill { background: var(--amber); }
+  .quota.full .q-fill { background: var(--danger); }
 </style>

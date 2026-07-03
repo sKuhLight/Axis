@@ -2,7 +2,7 @@
 // (so the native `serialport` runs under Electron's Node) and loads the Axis UI *served by that
 // same server over http* — which sidesteps SvelteKit's absolute /_app/ asset paths under file://.
 // No separate install — ForgeFX + the built UI are shipped inside the app.
-const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain, dialog } = require('electron');
 const { setupUpdater } = require('./updater.cjs');
 const path = require('node:path');
 const net = require('node:net');
@@ -137,6 +137,11 @@ async function waitForServer(timeoutMs = 8000) {
   return false;
 }
 
+// Edit-buffer dirty flag, pushed by the renderer (axis:set-dirty). Drives the unsaved-changes
+// dialog on window close — changes live on the DEVICE until saved to a slot, so quitting is safe
+// data-wise, but the user should know their edits aren't stored yet.
+let editDirty = false;
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1320,
@@ -147,6 +152,24 @@ function createWindow() {
     autoHideMenuBar: true,
     title: 'Axis',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
+  });
+  let forceClose = false;
+  win.on('close', (e) => {
+    if (forceClose || !editDirty) return;
+    e.preventDefault();
+    const r = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      buttons: ['Cancel', 'Quit anyway'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Unsaved changes',
+      message: 'The edit buffer has unsaved changes.',
+      detail: 'Your edits live on the device until you save them to a preset slot. They stay on the unit, but switching presets there will discard them.'
+    });
+    if (r === 1) {
+      forceClose = true;
+      win.close();
+    }
   });
   // mirror the Axis renderer console into the debug log
   const LV = ['verbose', 'info', 'warning', 'error'];
@@ -213,6 +236,16 @@ app.whenReady().then(async () => {
   // being used to launch arbitrary local handlers.
   ipcMain.handle('axis:open-external', (_e, url) => {
     if (typeof url === 'string' && /^https:\/\//i.test(url)) shell.openExternal(url);
+  });
+  // Edit-buffer dirty flag from the renderer — read by the window-close guard above.
+  ipcMain.on('axis:set-dirty', (_e, dirty) => {
+    editDirty = !!dirty;
+  });
+  // Native directory picker for the local-storage root (Presets/ + Sync/). The renderer can't open
+  // native dialogs; the chosen absolute path is handed to ForgeFX via PUT /local/config.
+  ipcMain.handle('axis:pick-folder', async () => {
+    const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    return r.canceled ? null : r.filePaths[0];
   });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

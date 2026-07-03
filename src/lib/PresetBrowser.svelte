@@ -8,7 +8,7 @@
   import { create, insertMultiple, search } from '@orama/orama';
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
-  import { forgefx } from './forgefx';
+  import { forgefx, ForgeError } from './forgefx';
   import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
   import { notifyMutation } from './syncBus';
   import Icon, { type IconName } from './Icon.svelte';
@@ -303,23 +303,34 @@
     // CRC to compare (name-scan devices, stale cache rows); never let those read as "cloud only".
     return cloud.stateOf(e.summary.number, e.summary.crc, e.id.startsWith('dev:') || e.summary.crc != null);
   }
-  type SyncView = 'all' | 'device' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
-  const SYNC_VIEWS: { id: SyncView; label: string; icon: IconName }[] = [
+  type SyncView = 'all' | 'device' | 'local' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
+  // "On your FM3" — named after the detected unit; the cloud views only appear when signed in,
+  // "Local presets" only when a local storage folder is configured.
+  const devName = $derived(editor.detected?.connected ? editor.detected.short : (editor.conn.device ?? 'device'));
+  const SYNC_VIEWS = $derived.by((): { id: SyncView; label: string; icon: IconName }[] => [
     { id: 'all', label: 'All presets', icon: 'list' },
-    { id: 'device', label: 'On this device', icon: 'device' },
-    { id: 'cloud', label: 'In cloud', icon: 'cloud' },
-    { id: 'cloudOnly', label: 'Cloud only', icon: 'cloudCheck' },
-    { id: 'notBackedUp', label: 'Not backed up', icon: 'cloudOff' },
-    { id: 'needsUpload', label: 'Needs upload', icon: 'cloudUp' },
-    { id: 'needsUpdate', label: 'Needs update', icon: 'cloudDown' }
-  ];
+    { id: 'device', label: `On your ${devName}`, icon: 'device' },
+    ...(library.localEnabled ? [{ id: 'local' as const, label: 'Local presets', icon: 'folder' as IconName }] : []),
+    ...(cloudOn
+      ? ([
+          { id: 'cloud', label: 'In cloud', icon: 'cloud' },
+          { id: 'cloudOnly', label: 'Cloud only', icon: 'cloudCheck' },
+          { id: 'notBackedUp', label: 'Not backed up', icon: 'cloudOff' },
+          { id: 'needsUpload', label: 'Needs upload', icon: 'cloudUp' },
+          { id: 'needsUpdate', label: 'Needs update', icon: 'cloudDown' }
+        ] as { id: SyncView; label: string; icon: IconName }[])
+      : [])
+  ]);
   let syncView = $state<SyncView>('all');
+  // never strand the user on a view whose button just disappeared (sign-out, local folder cleared)
+  $effect(() => { if (!SYNC_VIEWS.some((v) => v.id === syncView)) syncView = 'all'; });
   function inView(e: LibEntry, view: SyncView): boolean {
     if (view === 'all') return true;
     const cloudEntry = e.id.startsWith('cloud:');
     const s = syncStateOf(e);
     switch (view) {
-      case 'device': return !cloudEntry;
+      case 'device': return e.source === 'device' && !cloudEntry; // real slots only (cloud-only rows synthesize source 'device')
+      case 'local': return e.source === 'local';
       case 'cloud': return cloudEntry || s === 'synced' || s === 'modified' || s === 'outdated' || s === 'unknown';
       case 'cloudOnly': return s === 'cloudOnly';
       case 'notBackedUp': return s === 'deviceOnly';
@@ -338,7 +349,7 @@
     const hs = q && !useOrama ? haystacks : null; // only build the haystack for the substring fallback
     const list = baseEntries.filter((e) => {
       if (folderFilter && e.folder !== folderFilter) return false;
-      if (cloudOn && !matchView(e)) return false;
+      if (!matchView(e)) return false; // device/local views work signed-out too; cloud views only exist when signed in
       const cloudEntry = e.id.startsWith('cloud:');
       for (const c of conds) if (!cloudEntry && !matchCond(e, c)) return false; // param conds need decoded blocks
       if (q) {
@@ -387,7 +398,7 @@
     const n = e.summary.number;
     try {
       if (kind === 'upload') { await editor.backupPreset(n); await editor.cloudSync(); editor.showToast('Backed up to cloud', '#33c46b'); }
-      else if (kind === 'download') { const cv = cloud.latestCloud(n); if (cv) { await forgefx.loadVersion(cv.id); editor.showToast('Loaded cloud version into edit buffer', '#35c9d6'); } }
+      else if (kind === 'download') { const cv = cloud.latestCloud(n); if (cv) { await forgefx.loadVersion(cv.id); editor.noteBufferReplaced('Loaded cloud version into edit buffer'); await editor.load(); editor.showToast('Loaded cloud version into edit buffer', '#35c9d6'); } }
       else if (kind === 'load') { await loadPreset(e); }
     } catch (err) { editor.showToast((err as Error).message || 'Action failed', '#d6543f'); }
   }
@@ -401,13 +412,16 @@
     const { version } = await forgefx.snapshotPreset(n);
     return (await forgefx.versionSyx(version.id)).arrayBuffer();
   }
+  /** Raw .syx bytes for ANY entry kind (imported file / local folder / cloud / device slot). */
+  async function entryBytes(e: LibEntry): Promise<ArrayBuffer> {
+    if (e.source === 'file') return (library.fileBytes(e.id)?.buffer as ArrayBuffer) ?? (() => { throw new Error('no bytes'); })();
+    if (e.source === 'local') return forgefx.localPresetFile(library.localPath(e.id));
+    if (e.id.startsWith('cloud:')) return forgefx.versionSyx(cloud.latestCloud(e.summary.number)!.id).then((b) => b.arrayBuffer());
+    return deviceEntryBytes(e.summary.number);
+  }
   async function exportEntry(e: LibEntry) {
     try {
-      const buf: ArrayBuffer = e.source === 'file'
-        ? (library.fileBytes(e.id)?.buffer as ArrayBuffer ?? (() => { throw new Error('no bytes'); })())
-        : e.id.startsWith('cloud:')
-          ? await forgefx.versionSyx(cloud.latestCloud(e.summary.number)!.id).then((b) => b.arrayBuffer())
-          : await deviceEntryBytes(e.summary.number);
+      const buf = await entryBytes(e);
       const blob = new Blob([buf], { type: 'application/octet-stream' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -415,6 +429,21 @@
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(a.href);
     } catch { editor.showToast('Export failed', '#d6543f'); }
+  }
+  /** Write an entry's .syx into the local Presets/ folder (the app-managed library on disk). */
+  async function saveToLocalFolder(e: LibEntry, overwrite = false): Promise<void> {
+    try {
+      const buf = await entryBytes(e);
+      const r = await forgefx.saveLocalPreset(e.summary.name || 'preset', [...new Uint8Array(buf)], { overwrite });
+      editor.showToast(`Saved to Presets/${r.path}`, '#33c46b');
+      void library.refreshLocal();
+    } catch (err) {
+      if (err instanceof ForgeError && err.status === 409 && !overwrite) {
+        if (confirm(`"${e.summary.name}" already exists in the folder — overwrite?`)) return saveToLocalFolder(e, true);
+        return;
+      }
+      editor.showToast('Save to folder failed', '#d6543f');
+    }
   }
 
   /** Audition a DEVICE preset (Axe-Change style): pull its raw dump and load it into the edit
@@ -426,6 +455,7 @@
     try {
       const buf = await deviceEntryBytes(e.summary.number);
       await forgefx.loadBytes(buf);
+      editor.noteBufferReplaced(`Auditioned ${e.summary.name}`); // history barrier — undo can't cross a buffer swap
       await editor.load();
       editor.showToast(`Auditioning ${e.summary.name} — Save to keep it on a slot`, '#f5a623');
     } catch { editor.showToast('Audition failed', '#d6543f'); }
@@ -490,6 +520,7 @@
     if (act === 'audition') return void auditionEntry(e);
     if (act === 'rename') { renameBox = { entry: e, value: e.summary.name, x: c!.x, y: c!.y }; return; }
     if (act === 'export') return void exportEntry(e);
+    if (act === 'saveLocal') return void saveToLocalFolder(e);
     if (act === 'upload' || act === 'download') return void cloudAction(act, e);
     if (act === 'convert') return void convertToDevice(e);
     if (act === 'delete' && e.source === 'file') { library.removeFile(e.id); editor.showToast('Removed from library', '#33c46b'); return; }
@@ -528,6 +559,7 @@
                       ]),
       'div',
       { id: 'export', icon: 'export', label: 'Export to disk' },
+      ...(library.localEnabled && e.source !== 'local' ? [{ id: 'saveLocal', icon: 'folder', label: 'Save to Axis folder' } as CtxItem] : []),
       ...(cloudOn ? ['div' as const, cloudItem] : []),
       'div',
       { id: 'delete', icon: 'trash', label: 'Delete everywhere', danger: true }
@@ -845,8 +877,12 @@
       const cv = cloud.latestCloud(e.summary.number);
       if (!cv) { editor.showToast('No cloud version found', '#d6543f'); return; }
       editor.openBuild();
-      try { await forgefx.loadVersion(cv.id); editor.showToast(`Loaded ${e.summary.name} from cloud`, '#9b8cf0'); }
-      catch { editor.showToast('Load failed', '#d6543f'); }
+      try {
+        await forgefx.loadVersion(cv.id);
+        editor.noteBufferReplaced(`Loaded ${e.summary.name} from cloud`);
+        await editor.load(); // the buffer changed under the grid — re-read it
+        editor.showToast(`Loaded ${e.summary.name} from cloud`, '#9b8cf0');
+      } catch { editor.showToast('Load failed', '#d6543f'); }
       return;
     }
     // Imported file/folder preset: load its raw .syx straight into the edit buffer (no slot needed).
@@ -854,8 +890,26 @@
       const bytes = library.fileBytes(e.id);
       if (!bytes) { editor.showToast('File bytes unavailable — re-import the folder', '#f5a623'); return; }
       editor.openBuild();
-      try { await forgefx.loadBytes(bytes); editor.showToast(`Loaded ${e.summary.name}`, '#f5a623'); }
-      catch { editor.showToast('Load failed', '#d6543f'); }
+      try {
+        await forgefx.loadBytes(bytes);
+        editor.noteBufferReplaced(`Loaded ${e.summary.name}`);
+        await editor.load();
+        editor.showToast(`Loaded ${e.summary.name}`, '#f5a623');
+      } catch { editor.showToast('Load failed', '#d6543f'); }
+      return;
+    }
+    // Local-folder preset: fetch its .syx from the engine and load it live — no slot needed, no import.
+    if (e.source === 'local') {
+      editor.openBuild();
+      try {
+        const path = library.localPath(e.id);
+        const buf = await forgefx.localPresetFile(path);
+        await forgefx.loadBytes(buf);
+        editor.noteBufferReplaced(`Loaded ${e.summary.name} from local folder`);
+        editor.bufferSource = { path, name: e.summary.name }; // Save can write edits back to this file
+        await editor.load();
+        editor.showToast(`Loaded ${e.summary.name} — Save writes to disk or a slot`, '#f5a623');
+      } catch { editor.showToast('Load failed', '#d6543f'); }
       return;
     }
     if (e.summary.number < 0) { editor.showToast('Open it on the device to load', '#f5a623'); return; }
@@ -927,6 +981,11 @@
       {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
     </button>
     <button class="ghost ic-btn" onclick={addFolder} title="Browse a local folder of .syx presets — load any of them live into the edit buffer"><Icon name="folder" size={14} /> Folder</button>
+    {#if library.localEnabled}
+      <button class="ghost ic-btn" onclick={() => library.refreshLocal(true).then(() => editor.showToast(`Local library refreshed${library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped` : ''}`, '#33c46b'))} title="Re-scan the Axis Presets/ folder on disk"><Icon name="refresh" size={14} /> Local</button>
+    {:else if editor.local.available}
+      <button class="ghost ic-btn" onclick={() => editor.openAxis('storage')} title="Set up a local storage folder — browse your .syx library straight from disk"><Icon name="folder" size={14} /> Local…</button>
+    {/if}
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
@@ -1009,17 +1068,15 @@
       {#if editor.isMobile}
         <div class="side-h side-close"><span class="lbl">LIBRARY & FILTERS</span><button class="folder-x" onclick={() => (sideOpen = false)} title="Close">×</button></div>
       {/if}
-      {#if cloudOn}
-        <div class="side-h"><span class="lbl">LIBRARY</span></div>
-        <div class="views">
-          {#each SYNC_VIEWS as v}
-            <button class="view" class:on={syncView === v.id} onclick={() => { syncView = v.id; sideOpen = false; }}>
-              <span class="view-l"><Icon name={v.icon} size={14} /> {v.label}</span><span class="view-n">{viewCount(v.id)}</span>
-            </button>
-          {/each}
-        </div>
-        <div class="div"></div>
-      {/if}
+      <div class="side-h"><span class="lbl">LIBRARY</span></div>
+      <div class="views">
+        {#each SYNC_VIEWS as v (v.id)}
+          <button class="view" class:on={syncView === v.id} onclick={() => { syncView = v.id; sideOpen = false; }}>
+            <span class="view-l"><Icon name={v.icon} size={14} /> {v.label}</span><span class="view-n">{viewCount(v.id)}</span>
+          </button>
+        {/each}
+      </div>
+      <div class="div"></div>
       {#if library.folders.length}
         <div class="side-h"><span class="lbl">FOLDERS</span><span class="ct">{library.folders.length}</span></div>
         <div class="views">
