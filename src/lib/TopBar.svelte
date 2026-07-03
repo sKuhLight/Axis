@@ -84,7 +84,7 @@
           <span class="caret">▾</span>
         </button>
       {/if}
-      {#if !editor.isAm4 && editor.preset && !editingPreset}
+      {#if editor.canRenamePresets && editor.preset && !editingPreset}
         <button class="prename" title="Rename preset" aria-label="Rename preset" onclick={startRenamePreset}>✎</button>
       {/if}
       <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
@@ -99,7 +99,7 @@
             <button class="scn" class:on={editor.scene === s} title={editor.sceneName(s)} onclick={() => editor.selectScene(s)}>{s}</button>
           {/each}
         </div>
-        {#if !editor.isAm4}
+        {#if editor.canRenameScenes}
           {#if editingScene}
             <input
               class="scn-name-in mono"
@@ -166,22 +166,26 @@
       {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
-    {#if !editor.isMobile && !editor.isAm4}
+    {#if !editor.isMobile && (editor.hasTuner || editor.hasTempo)}
       <div class="status">
-        <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
-          <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
-        </button>
-        <div class="st tempo" title="Tempo — type to set, TAP to tap">
-          <input
-            class="mono bpm"
-            type="number"
-            min="20"
-            max="250"
-            value={editor.bpm}
-            onchange={(e) => editor.setBpm(Number((e.currentTarget as HTMLInputElement).value))}
-          />
-          <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
-        </div>
+        {#if editor.hasTuner}
+          <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
+            <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
+          </button>
+        {/if}
+        {#if editor.hasTempo}
+          <div class="st tempo" title="Tempo — type to set, TAP to tap">
+            <input
+              class="mono bpm"
+              type="number"
+              min="20"
+              max="250"
+              value={editor.bpm}
+              onchange={(e) => editor.setBpm(Number((e.currentTarget as HTMLInputElement).value))}
+            />
+            <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
+          </div>
+        {/if}
         <div class="st cpu link" title="Device link round-trip latency">
           <span class="mono st-lbl">LINK</span>
           <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>

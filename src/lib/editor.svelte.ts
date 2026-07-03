@@ -67,6 +67,39 @@ class EditorStore {
   conn = $state<Conn>({ state: 'connecting' });
   /** Per-model capabilities from the device descriptor (scenes, channels, slot model, …) — drives UI gating. */
   caps = $state<import('./types').DeviceCaps | null>(null);
+  /** Negotiated backend API version (from /healthz `api.version` / /device `apiVersion`).
+   *  1 = legacy pre-caps server → the per-cluster gates below fall back to today's isAm4 branches. */
+  apiVersion = $state(1);
+  /** True when the backend speaks the capabilities-driven unified API (v2): every device goes through
+   *  the unified /preset/* + /scene routes and UI gating comes from `caps`, not the model id. */
+  get isV2(): boolean { return this.apiVersion >= 2; }
+  // ── capability gates (v2: caps-driven; v1 fallback: the legacy isAm4 branches) ──
+  /** Device answers the live current-preset query — safe to poll (watchPreset / poll ticks). */
+  get presetLiveQuery(): boolean { return this.isV2 ? !!this.caps?.presets?.liveQuery : !this.isAm4; }
+  /** Per-block meter/param sweep reads are supported (grid level fills + swipe controls). */
+  get hasBlockMeters(): boolean { return this.isV2 ? !!this.caps?.meters?.blockMeters : !this.isAm4; }
+  /** Live per-block audio monitors are supported (METER toggle). */
+  get hasLiveMonitors(): boolean { return this.isV2 ? !!this.caps?.meters?.liveMonitors : !this.isAm4; }
+  /** Device supports tempo read/write + tap. */
+  get hasTempo(): boolean { return this.isV2 ? !!this.caps?.tempo : !this.isAm4; }
+  /** Device has a tuner. */
+  get hasTuner(): boolean { return this.isV2 ? !!this.caps?.tuner : !this.isAm4; }
+  /** Device mirrors the UI selection on its own screen (grid cursor-select). */
+  get hasCursorSelect(): boolean { return this.isV2 ? !!this.caps?.gridCursorSelect : !this.isAm4; }
+  /** Blocks can expose params without a gen-3 definition pack (don't gate the editor on `pack`). */
+  get paramsWithoutPack(): boolean { return this.isV2 ? !!this.caps?.paramsWithoutPack : this.isAm4; }
+  /** Presets can be renamed (working buffer + stored slots). */
+  get canRenamePresets(): boolean { return this.isV2 ? !!this.caps?.presets?.canRename : !this.isAm4; }
+  /** Scene names are writable on this device. */
+  get canRenameScenes(): boolean { return this.isV2 ? !!this.caps?.sceneNamesWritable : !this.isAm4; }
+  /** Device supports full preset dumps → the library's deep param index (summary/params reads). */
+  get canDeepScan(): boolean { return this.isV2 ? !!this.caps?.presets?.canDeepScan : !this.isAm4; }
+  /** Library indexing is a stored-location NAME scan only (no per-preset dumps/params). */
+  get scanNamesOnly(): boolean {
+    return this.isV2 ? !!this.caps?.presets?.canScanNames && !this.caps?.presets?.canDeepScan : this.isAm4;
+  }
+  /** Save targets render as bank-letter codes (A01..Z04) instead of numeric slots. */
+  get bankLetterAddressing(): boolean { return !!this.caps?.presets && this.caps.presets.addressing === 'bankLetter'; }
   /** Number of scenes this device has (0 if none) — drives the topbar SCN selector. */
   get sceneCount(): number { return this.caps?.hasScenes ? (this.caps.sceneCount || 0) : 0; }
   detected = $state<DetectResult | null>(null); // which Fractal unit is attached (auto-detect)
@@ -237,7 +270,7 @@ class EditorStore {
   placeTarget = $state<{ row: number; col: number } | null>(null);
   presetOpen = $state(false);
   cabPickerOpen = $state(false);
-  am4ToolsOpen = $state(false); // AM4 tools modal (preset backup/restore/decode, firmware validate, modifier view)
+  deviceToolsOpen = $state(false); // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
   toast = $state<{ text: string; accent: string } | null>(null);
 
   #toastT: ReturnType<typeof setTimeout> | null = null;
@@ -383,7 +416,7 @@ class EditorStore {
     return info ? !info.fractal : false; // Fractal USB-MIDI = fast; generic adapter = slow; unknown → don't throttle
   }
   fetchMeters = () => {
-    if (this.isAm4 || this.slowLink) return; // no meter polling on AM4 or a slow MIDI link (keeps editing snappy)
+    if (!this.hasBlockMeters || this.slowLink) return; // no meter polling without the capability or on a slow MIDI link (keeps editing snappy)
     if (this.#metersTimer) clearTimeout(this.#metersTimer);
     this.#metersTimer = setTimeout(async () => {
       const wants: Record<string, number[]> = {};
@@ -404,10 +437,10 @@ class EditorStore {
   // and ONLY while metering is actually enabled + the block editor is open. Polling every placed
   // block flooded the FM3's serial link and caused audio dropouts — never do a full-preset sweep here.
   meteringOn = $state(false); // opt-in; off by default so it can't disturb the device unnoticed
-  /** Per-block metering is only offered on a gen-3 device over a fast link (never AM4, never a slow
-   *  5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is always available separately. */
+  /** Per-block metering is only offered when the device supports live monitors, over a fast link
+   *  (never a slow 5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is separate. */
   get canMeterBlocks(): boolean {
-    return this.status === 'ready' && !this.isAm4 && !this.slowLink && !isRemote();
+    return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink && !isRemote();
   }
   #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
   startLiveMeters = () => {
@@ -415,8 +448,7 @@ class EditorStore {
     const tick = async () => {
       this.#liveMeterTimer = null;
       const eid = this.selected?.effectId;
-      const ok = this.meteringOn && this.status === 'ready' && !this.isAm4 && !this.slowLink && !isRemote()
-        && eid != null && !this.inLibrary && !this.virtual;
+      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
       if (ok) {
         try {
           const rows = await forgefx.monitorsLive(eid); // single-block read only
@@ -461,7 +493,10 @@ class EditorStore {
     } catch {
       /* detect failed — proceed; load() falls back to the gen-3 path */
     }
-    if (!this.isAm4) {
+    // negotiate the API version + capabilities BEFORE the first load(), so every caps gate below
+    // (unified vs legacy routes, polling, meters, renames) is decided correctly from the start
+    await this.#handshake();
+    if (this.presetLiveQuery) {
       try {
         const n = (await forgefx.currentPreset()).number;
         if (n >= 0) this.lastPreset = n;
@@ -881,15 +916,33 @@ class EditorStore {
     else if (id === 'savedFilters') cache('axs.pb.saved');
     else if (id === 'tags' || id === 'collections' || id === 'favs') library.applyRemoteConfig(id, data);
   };
-  // pull current scene + tempo once at load (device → UI)
+  // pull current scene + tempo once at load (device → UI), each gated by its capability so a device
+  // without the feature never eats a timeout (legacy v1: skip both on the AM4 — it ignores the frames)
   #syncTelemetry = async () => {
-    if (this.isAm4) return; // gen-3 scene/tempo frames; the AM4 ignores them → 5s timeouts that clog the queue
+    if (!this.isV2 && this.isAm4) return; // legacy: gen-3 scene/tempo frames; the AM4 ignores them → 5s timeouts that clog the queue
     try {
-      this.scene = (await forgefx.getScene()).index + 1;
-      this.bpm = (await forgefx.getTempo()).bpm;
+      if (this.sceneCount > 0) this.scene = (await forgefx.getScene()).index + 1;
+      if (this.hasTempo) this.bpm = (await forgefx.getTempo()).bpm;
     } catch {
       /* */
     }
+  };
+
+  /** One-shot /device pull that adopts the negotiated API version + capabilities before first load. */
+  #handshake = async () => {
+    try {
+      this.#adoptDevice(await forgefx.device());
+    } catch {
+      /* engine not ready — poll() keeps retrying and adopts caps when it comes up */
+    }
+  };
+  /** Adopt a /device payload: capabilities, API version, preset-slot count. */
+  #adoptDevice = (dev: import('./types').DeviceInfo | null) => {
+    if (!dev) return;
+    if (dev.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
+    if (dev.apiVersion) this.apiVersion = dev.apiVersion;
+    const count = dev.capabilities?.presets?.count;
+    if (count) this.presetCount = count;
   };
 
   #polling = false;
@@ -901,11 +954,12 @@ class EditorStore {
       const h = await forgefx.health();
       const dev = await forgefx.device().catch(() => null); // both free — no device round-trip
       this.conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
-      if (dev?.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
+      if (h.api?.version) this.apiVersion = h.api.version;
+      this.#adoptDevice(dev);
       // The current-preset query is a real device round-trip. On a slow MIDI link it competes with what
       // the user is doing (opening a block, editing), so run it only every ~4th tick there; connection
       // state above stays fresh every tick.
-      if (!this.isAm4 && !(this.slowLink && this.#pollTick++ % 4 !== 0)) {
+      if (this.presetLiveQuery && !(this.slowLink && this.#pollTick++ % 4 !== 0)) {
         const t0 = performance.now();
         const p = await forgefx.currentPreset().catch(() => null);
         this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
@@ -918,15 +972,19 @@ class EditorStore {
     }
   };
 
-  /** AM4 (model 0x15) — flat 4-slot device; render its slots on the same Signal Grid via /am4/grid. */
+  /** @deprecated AM4 (model 0x15) detection — kept ONLY for the legacy v1-server fallback paths
+   *  (API v2 gates everything through `caps`). Do not add new call sites. */
   get isAm4(): boolean {
     return this.detected?.modelId === 0x15;
   }
 
   load = async () => {
     if (!this.everLoaded) this.status = 'loading';
+    // API v2: the unified /preset/grid + /preset/blocks serve EVERY device (AM4 included).
+    // Legacy v1 fallback: the AM4 only answers its own /am4/grid.
+    const legacyAm4 = !this.isV2 && this.isAm4;
     try {
-      const [grid, blocks] = this.isAm4
+      const [grid, blocks] = legacyAm4
         ? [await forgefx.am4Grid(), []]
         : await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
       this.layout = layoutFromGrid(grid, blocks);
@@ -939,7 +997,7 @@ class EditorStore {
       if (!this.everLoaded) this.status = 'offline';
       // We were connected and a (re)load failed — a real device-comm error worth a debug report. Debounced
       // + dismissible + only if upload is configured, so it never spams (see offerDebugReport).
-      else this.offerDebugReport({ kind: 'device-comm', route: this.isAm4 ? '/am4/grid' : '/preset/grid', message: (e as Error)?.message?.slice(0, 200) });
+      else this.offerDebugReport({ kind: 'device-comm', route: legacyAm4 ? '/am4/grid' : '/preset/grid', message: (e as Error)?.message?.slice(0, 200) });
     }
   };
 
@@ -947,7 +1005,7 @@ class EditorStore {
   #contentCheckAt = 0; // last time the current slot's stored content was re-decoded (external-edit catch)
   #watchTick = 0;
   watchPreset = async () => {
-    if (this.isAm4) return; // AM4 has no gen-3 preset-name query (fn 0x0d) — it'd just time out on the AM4's MIDI link
+    if (!this.presetLiveQuery) return; // no live current-preset query on this device — polling would just time out
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
     // On a slow MIDI link, background preset-watch polling competes with edits and inflates latency —
     // run it only every 4th tick (~16s instead of ~4s) so the link stays free for what the user is doing.
@@ -981,9 +1039,9 @@ class EditorStore {
   };
 
   // ── selection ──
-  // mirror the selection on the FM3 screen (cursor-select) so the unit follows the UI
+  // mirror the selection on the device screen (cursor-select) so the unit follows the UI
   selectCellOnDevice = (row: number, col: number) => {
-    if (this.isAm4) return; // AM4 has no gen-3 grid-cell select; opening a slot just reads its params
+    if (!this.hasCursorSelect) return; // no grid cursor-select on this device; opening a slot just reads its params
     forgefx.selectCell(this.#W(row), this.#W(col)).catch(() => {});
   };
 
@@ -995,9 +1053,9 @@ class EditorStore {
     this.editorOpen = true;
     this.editingTabs = false;
     this.activePage = this.#defaultPage();
-    // AM4 audio blocks always have params (read by pidLow from the catalog) — their grid names are
-    // lowercase and don't map to a gen-3 pack, so don't gate the editor on `pack` for AM4.
-    if (!c.pack && !this.isAm4) {
+    // Devices with caps.paramsWithoutPack serve params for any placed block (AM4 slots read by
+    // pidLow from the catalog) — don't gate the editor on a gen-3 `pack` there.
+    if (!c.pack && !this.paramsWithoutPack) {
       this.sheetState = 'nopack';
       this.params = [];
       this.enums = [];
@@ -1040,12 +1098,13 @@ class EditorStore {
 
   #loadParams = async () => {
     const c = this.selected;
-    if (!c || (!c.pack && !this.isAm4)) return; // AM4 blocks have params without a gen-3 pack
+    if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
     this.sheetState = 'loading';
     try {
-      // AM4 reads params by the slot's pidLow (== the effectId the AM4 grid reports); the server
-      // returns the SAME BlockParams DTO as gen-3, so the rest of this method is model-agnostic.
-      const r = this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
+      // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
+      // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
+      // way, so the rest of this method is model-agnostic.
+      const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
       this.enums = r.enums ?? [];
       this.blockType = r.type ?? null;
@@ -1071,7 +1130,7 @@ class EditorStore {
   setParam = (p: NamedParam, v: number) => {
     p.norm = v;
     const c = this.selected;
-    if (!c || (!c.pack && !this.isAm4)) return;
+    if (!c || (!c.pack && !this.paramsWithoutPack)) return;
     // mirror onto the grid meter so the block tile's level/HUD tracks the knob
     if (p.id != null && c.effectId != null) {
       const m = this.meters[c.effectId];
@@ -1082,10 +1141,12 @@ class EditorStore {
     }
     if (p.id == null) return;
     clearTimeout(this.#sendTimers[p.id]);
-    // AM4 writes by wire address (effectId=pidLow, paramId=pidHigh) via SET_NORM; gen-3 by eid+paramId.
+    // API v2: the unified PUT {value, continuous:true} writes every device (AM4 addr = pidLow).
+    // Legacy v1 fallback: the AM4 writes via its own SET_NORM route.
     const eid = c.effectId, pid = p.id as number;
+    const legacyAm4 = !this.isV2 && this.isAm4;
     this.#sendTimers[pid] = setTimeout(
-      () => (this.isAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}),
+      () => (legacyAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}),
       60
     );
   };
@@ -1093,8 +1154,8 @@ class EditorStore {
   setEnum = (e: EnumParam, value: number) => {
     e.value = value; // optimistic
     const c = this.selected;
-    if (!c || (!c.pack && !this.isAm4)) return;
-    (this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
+    if (!c || (!c.pack && !this.paramsWithoutPack)) return;
+    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {
     const c = cell ?? this.selected;
@@ -1258,15 +1319,17 @@ class EditorStore {
     }
     const all = [...this.layout.cells, ...this.layout.shunts];
     const at = (r: number, c: number) => all.find((x) => x.row === r && x.col === c);
-    // FM3-Edit gives every shunt a UNIQUE instance id (SHUNT_ID + n); reusing one id makes the
+    // FM-Edit gives every shunt a UNIQUE instance id (shuntBase + n); reusing one id makes the
     // device accept the first and silently dedupe the rest — which is why a multi-cell connect
     // only ever placed one shunt. Allocate the lowest free instance for each shunt we add.
-    const usedShunts = new Set(all.filter((x) => x.effectId >= SHUNT_ID).map((x) => x.effectId - SHUNT_ID));
+    // The base comes from the device capabilities (gen-3: 1024); SHUNT_ID is the legacy fallback.
+    const shuntBase = this.caps?.shuntBase ?? SHUNT_ID;
+    const usedShunts = new Set(all.filter((x) => x.effectId >= shuntBase).map((x) => x.effectId - shuntBase));
     let nextInst = 0;
     const allocShunt = () => {
       while (usedShunts.has(nextInst)) nextInst++;
       usedShunts.add(nextInst);
-      return SHUNT_ID + nextInst;
+      return shuntBase + nextInst;
     };
     try {
       // ensure a carrier cell exists in every intermediate column (along src.row)
@@ -1314,7 +1377,8 @@ class EditorStore {
     const prev = this.scene;
     this.scene = ui; // optimistic
     try {
-      await (this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
+      // API v2: the unified POST /scene switches every device; legacy v1 AM4 uses its own route.
+      await (!this.isV2 && this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
       await this.load();
       if (this.selKey) await this.#loadParams();
     } catch {
@@ -1324,7 +1388,7 @@ class EditorStore {
   /** Rename a scene (1-based) in the working buffer, then re-read to confirm the device took it.
    *  Optimistic; reverts on failure or if the read-back doesn't match. Not persisted to flash (store is separate). */
   renameScene = async (ui: number, name: string) => {
-    if (this.isAm4 || ui < 1 || ui > 8) return;
+    if (!this.canRenameScenes || ui < 1 || ui > (this.sceneCount || 8)) return;
     const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
     const prev = this.sceneNames.slice();
     const next = this.sceneNames.slice();
@@ -1342,7 +1406,7 @@ class EditorStore {
   /** Rename the working-buffer preset, then re-read to confirm the device took it. Optimistic; reverts on
    *  failure. Not persisted to flash — Save (store) writes it to the slot. */
   renamePreset = async (name: string) => {
-    if (this.isAm4 || !this.preset) return;
+    if (!this.canRenamePresets || !this.preset) return;
     const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
     const prev = this.preset;
     this.preset = { ...prev, name: clean }; // optimistic
@@ -1359,7 +1423,7 @@ class EditorStore {
    *  buffer first if it isn't active (device switches to it), renames the working buffer, then stores it
    *  back — content-safe (same preset, new name). Returns true on success. */
   renameStoredPreset = async (slot: number, name: string): Promise<boolean> => {
-    if (this.isAm4 || slot < 0) return false;
+    if (!this.canRenamePresets || slot < 0) return false;
     const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
     if (!clean) return false;
     const prevSlot = this.preset?.number ?? -1; // where the user was — we return here afterwards
@@ -1459,13 +1523,15 @@ class EditorStore {
 
   // ── preset nav ──
   selectPreset = async (n: number) => {
-    if (this.isAm4) return this.loadAm4Preset(n); // AM4 loads a stored location via its own codec
+    if (!this.isV2 && this.isAm4) return this.loadAm4Preset(n); // legacy v1 fallback: AM4's own codec route
     try {
-      await forgefx.selectPreset(n);
+      await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
       this.lastPreset = n;
       this.presetOpen = false;
       await this.poll();
       await this.load();
+      // no live current-preset query → watchPreset can't refresh the open block after the switch
+      if (!this.presetLiveQuery && this.selKey) await this.#loadParams();
     } catch {
       /* */
     }
@@ -1475,7 +1541,8 @@ class EditorStore {
     const n = Math.max(0, cur + dir);
     return this.selectPreset(n);
   };
-  /** AM4: load a stored location (0..103) into the edit buffer, then re-read the 4-slot grid. */
+  /** @deprecated legacy v1 fallback — AM4: load a stored location (0..103) into the edit buffer,
+   *  then re-read the 4-slot grid. API v2 goes through the unified selectPreset(). */
   loadAm4Preset = async (location: number) => {
     try {
       await forgefx.am4SwitchPreset(location);
@@ -1496,13 +1563,14 @@ class EditorStore {
   };
   save = async (n: number) => {
     try {
-      // AM4 stores to a location (0..103) via its own codec; gen-3 stores the edit buffer to a slot.
-      const r = this.isAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
+      // API v2: the unified /preset/store saves every device (AM4 number = stored location; the
+      // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
+      const r = !this.isV2 && this.isAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
       this.saveOpen = false;
       if (r.ok) {
-        this.showToast(`Saved to preset ${n}`, '#f5a623');
+        this.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');
         await this.poll();
-        if (!this.isAm4) library.refreshSlot(n); // gen-3 library cache sync (AM4 library scans on open)
+        if (this.canDeepScan) library.refreshSlot(n); // library cache sync (name-scan devices re-scan on open)
       } else {
         this.showToast('Save rejected by device', '#d6543f');
       }
