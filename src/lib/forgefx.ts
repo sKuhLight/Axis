@@ -22,7 +22,10 @@ import type {
   PresetSummary,
   DecodedBlock,
   VersionInfo,
-  CloudVersion
+  CloudVersion,
+  LocalConfig,
+  LocalPresetEntry,
+  LocalSyncResult
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -217,8 +220,35 @@ export const forgefx = {
   loadBytes: (bytes: ArrayBuffer | Uint8Array) =>
     fetch(`${BASE}/preset/load`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes as BodyInit, signal: AbortSignal.timeout(12000) })
       .then((r) => { if (!r.ok) throw new ForgeError(r.status, `load → ${r.status}`); return r.json() as Promise<{ ok: boolean }>; }),
+  // ── local storage folder (user-configured root: Presets/ library + Sync/ plain-syx mirror) ──
+  localConfig: () => req<LocalConfig>('/local/config'),
+  setLocalRoot: (root: string | null) => req<LocalConfig>('/local/config', { method: 'PUT', body: JSON.stringify({ root }) }),
+  /** Scan the Presets/ folder (server-cached by mtime). First scan of a huge folder decodes every
+   *  file — generous timeout; subsequent scans are stat-only. */
+  localPresets: (refresh = false) =>
+    req<{ root: string; entries: LocalPresetEntry[]; skipped: number; truncated: boolean }>(`/local/presets${refresh ? '?refresh=1' : ''}`, { signal: AbortSignal.timeout(120000) }),
+  /** Raw .syx bytes of one local library file — fetched on demand (audition/export), never cached client-side. */
+  localPresetFile: (path: string) =>
+    fetch(`${BASE}/local/presets/file?path=${encodeURIComponent(path)}`, { signal: AbortSignal.timeout(12000) })
+      .then((r) => { if (!r.ok) throw new ForgeError(r.status, `local file → ${r.status}`); return r.arrayBuffer(); }),
+  /** Write a preset .syx INTO the local Presets/ folder (409 {error:'exists'} without overwrite).
+   *  `path` addresses an EXACT existing file (save-to-disk write-back); else `name`+`dir` build one. */
+  saveLocalPreset: (name: string, bytes: number[], opts?: { dir?: string; path?: string; overwrite?: boolean }) =>
+    req<{ ok: boolean; path: string }>('/local/presets', { method: 'POST', body: JSON.stringify({ name, bytes, ...opts }) }),
+  /** Mirror the version store → Sync/ (plain .syx + index.json). Incremental; long timeout for big first runs. */
+  localSync: () => req<LocalSyncResult>('/local/sync', { method: 'POST', signal: AbortSignal.timeout(600000) }),
+  /** Re-import Sync/ versions into the version store (fresh machine / data recovery), sha256-verified. */
+  localRestore: () => req<{ ok: boolean; imported: number; skippedExisting: number; skippedBad: number }>('/local/restore', { method: 'POST', signal: AbortSignal.timeout(600000) }),
+
   // ── cloud sync (gated server-side by AXIS_CLOUD) ──
-  cloudStatus: () => req<{ enabled: boolean; url?: string; user: { id: string; email: string } | null; subscription?: { active: boolean; plan: string | null } }>('/cloud/status'),
+  cloudStatus: () => req<{
+    enabled: boolean;
+    url?: string;
+    user: { id: string; email: string } | null;
+    subscription?: { active: boolean; plan: string | null };
+    /** Free-tier quota readout (null when signed out or the server predates the quota migration). */
+    quota?: { paid: boolean; usedBytes: number; snapshots: number; backups: number; limits: { maxStoredBytes: number; maxSnapshots: number; maxBackups: number } | null } | null;
+  }>('/cloud/status'),
   cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),
