@@ -65,6 +65,7 @@
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
         else if (editor.paletteOpen) editor.paletteOpen = false;
         else if (editor.presetOpen) editor.presetOpen = false;
+        else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
         else if (editor.editorOpen) editor.closeEditor();
       }
     };

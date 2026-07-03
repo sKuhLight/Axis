@@ -2,6 +2,7 @@
   import { editor, baseName } from './editor.svelte';
   import { catFor, shade } from './catalog';
   import ControlSurface from './ControlSurface.svelte';
+  import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
 
@@ -102,6 +103,9 @@
 
         <button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>
       </header>
+
+      <!-- grid map navigator: hop between blocks / add / route without leaving the editor -->
+      <GridMap />
 
       <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
       {#if editor.sheetState === 'nopack'}

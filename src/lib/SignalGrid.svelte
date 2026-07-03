@@ -229,6 +229,10 @@
 
   let connectSrc = $state<Cell | null>(null);
   let linkTo = $state<{ x: number; y: number } | null>(null);
+  // where the port pointerdown started — a pointerup within TAP_PX of it is a TAP (arm link mode,
+  // editor.linkFrom) instead of a drag-connect. Drag stays the desktop-primary path.
+  let portStart = { x: 0, y: 0 };
+  const TAP_PX = 10;
 
   function startMove() {
     if (!gesture) return;
@@ -240,6 +244,12 @@
 
   function onBlockDown(cell: Cell, e: PointerEvent) {
     if (connectSrc) return;
+    if (editor.linkFrom) {
+      // armed link mode: this tap picks the destination (any later column) — no gesture/select
+      e.stopPropagation();
+      editor.completeLink(cell.row, cell.col);
+      return;
+    }
     gesture = { cell, startX: e.clientX, startY: e.clientY, lastY: e.clientY, cycleX: e.clientX, moved: false, swiping: false, axis: '' };
     if (lpTimer) clearTimeout(lpTimer);
     lpTimer = setTimeout(() => {
@@ -261,8 +271,15 @@
   function onPortDown(cell: Cell, e: PointerEvent) {
     e.preventDefault();
     e.stopPropagation();
+    if (editor.linkFrom) {
+      // already armed: the armed port cancels, any other cell's port completes to that cell
+      if (editor.linkFrom.row === cell.row && editor.linkFrom.col === cell.col) editor.cancelLink();
+      else editor.completeLink(cell.row, cell.col);
+      return;
+    }
     if (!innerEl) return;
     connectSrc = cell;
+    portStart = { x: e.clientX, y: e.clientY };
     const ir = innerEl.getBoundingClientRect();
     linkTo = { x: e.clientX - ir.left, y: e.clientY - ir.top };
     document.body.style.cursor = 'crosshair';
@@ -322,11 +339,18 @@
       if (lpTimer) clearTimeout(lpTimer);
       if (connectSrc) {
         const src = connectSrc;
-        const tgt = cellFromPoint(e.clientX, e.clientY);
-        if (tgt) editor.connect(src, tgt.row, tgt.col);
         connectSrc = null;
         linkTo = null;
         document.body.style.cursor = '';
+        // a barely-moved pointerup on the port = a TAP → arm link mode (tap-to-connect: pick the
+        // destination with a second tap, on this grid or on the Grid Map — survives page swipes).
+        // A real drag keeps the classic drag-a-cable connect.
+        if (Math.hypot(e.clientX - portStart.x, e.clientY - portStart.y) < TAP_PX) {
+          editor.armLink(src);
+          return;
+        }
+        const tgt = cellFromPoint(e.clientX, e.clientY);
+        if (tgt) editor.connect(src, tgt.row, tgt.col);
         return;
       }
       if (moveMode && moveCell) {
@@ -432,6 +456,15 @@
     }
   }
 </script>
+
+{#if editor.linkFrom}
+  <div class="linkbar" data-screen="Link Bar">
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8 H14 M10 4 L14 8 L10 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    <span class="lb-text">Routing from {editor.linkFrom.display || baseName(editor.linkFrom.pack ?? '') || 'block'} — tap a destination block</span>
+    <span class="lb-spacer"></span>
+    <button class="lb-cancel" onclick={() => editor.cancelLink()}>Cancel</button>
+  </div>
+{/if}
 
 <div
   data-tour="grid"
@@ -597,7 +630,7 @@
                 {/if}
               </div>
             {:else}
-              <button class="cell empty" data-idx="{r},{c}" onclick={() => { if (pageSwiped) { pageSwiped = false; return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
+              <button class="cell empty" data-idx="{r},{c}" onclick={() => { if (pageSwiped) { pageSwiped = false; return; } if (editor.linkFrom) { editor.completeLink(r, c); return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
                 <span class="restdot"></span>
                 <span class="plus">+</span>
               </button>
@@ -655,6 +688,36 @@
 {/if}
 
 <style>
+  /* armed tap-to-connect bar (mock: gridLinkBar) — sits above the grid so it survives paging */
+  .linkbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 14px;
+    background: var(--accent);
+    color: var(--accentink);
+    font: 700 12px/1.3 var(--font-ui);
+  }
+  .lb-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lb-spacer {
+    flex: 1;
+  }
+  .lb-cancel {
+    flex: none;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    font: 700 12px/1 var(--font-ui);
+    background: rgba(0, 0, 0, 0.16);
+    color: var(--accentink);
+  }
   .gridwrap {
     flex: 1;
     min-height: 0;

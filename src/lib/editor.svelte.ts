@@ -100,6 +100,8 @@ class EditorStore {
   }
   /** Save targets render as bank-letter codes (A01..Z04) instead of numeric slots. */
   get bankLetterAddressing(): boolean { return !!this.caps?.presets && this.caps.presets.addressing === 'bankLetter'; }
+  /** Grid routing (cables/shunts) exists on this device — gates route ports/link mode (false on the AM4's flat chain). */
+  get canGridRoute(): boolean { return this.isV2 ? !!this.caps?.gridRouting : !this.isAm4; }
   /** Number of scenes this device has (0 if none) — drives the topbar SCN selector. */
   get sceneCount(): number { return this.caps?.hasScenes ? (this.caps.sceneCount || 0) : 0; }
   detected = $state<DetectResult | null>(null); // which Fractal unit is attached (auto-detect)
@@ -988,6 +990,13 @@ class EditorStore {
         ? [await forgefx.am4Grid(), []]
         : await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
       this.layout = layoutFromGrid(grid, blocks);
+      // an armed link keeps pointing at a cell that may be gone after a reload (preset switch,
+      // external edit) — disarm rather than complete a connect from a phantom source
+      if (this.linkFrom) {
+        const lf = this.linkFrom;
+        const still = [...this.layout.cells, ...this.layout.shunts].some((c) => c.row === lf.row && c.col === lf.col && c.effectId === lf.effectId);
+        if (!still) this.linkFrom = null;
+      }
       this.sceneNames = grid.scenes ?? [];
       this.everLoaded = true;
       this.status = 'ready';
@@ -1306,6 +1315,40 @@ class EditorStore {
     } catch {
       this.load();
     }
+  };
+
+  // ── tap-to-connect link mode (shared by the SignalGrid and the GridMap) ──
+  // Arming lives here (not in a component) so it survives mobile page swipes and works across surfaces:
+  // arm on the grid, complete on the map — or vice versa. `connect()` below spans ANY later column
+  // (shunts through the gaps), so a completed link is never restricted to the adjacent column.
+  linkFrom = $state<Cell | null>(null);
+  /** Arm link mode from a cell's output; arming the same cell again cancels (tap the port twice). */
+  armLink = (c: Cell) => {
+    if (this.linkFrom && this.linkFrom.row === c.row && this.linkFrom.col === c.col) {
+      this.linkFrom = null;
+      return;
+    }
+    this.linkFrom = c;
+  };
+  cancelLink = () => {
+    this.linkFrom = null;
+  };
+  /** While armed: tap a destination cell. Any LATER column completes via connect() (blocks, shunts or
+   *  empty cells — connect lays shunts as needed); the armed cell itself cancels; same/earlier columns
+   *  keep the arm and explain, so the user can page/scroll on and pick a valid target. */
+  completeLink = async (row: number, col: number) => {
+    const src = this.linkFrom;
+    if (!src) return;
+    if (row === src.row && col === src.col) {
+      this.linkFrom = null; // tapped the armed cell again → cancel
+      return;
+    }
+    if (col <= src.col) {
+      this.showToast('Connect to a later column', '#d6543f');
+      return; // stay armed — the user can still pick a valid destination
+    }
+    this.linkFrom = null;
+    await this.connect(src, row, col);
   };
 
   // Connect src → (destRow,destCol), spanning any number of columns. Intermediate
