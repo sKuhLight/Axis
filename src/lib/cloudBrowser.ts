@@ -8,9 +8,19 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-/** True when this build is the remote web app (axisapp.live), not the local desktop app. */
+/** True when this build is the web app (axisapp.live), not the local desktop app. (The env var name
+ *  predates Browser Direct — the web build now hosts BOTH web modes; see webMode().) */
 export const isRemoteBuild = (): boolean => import.meta.env.VITE_AXIS_REMOTE === '1';
 export const remoteConfigured = (): boolean => !!URL && !!ANON;
+
+/** Which web mode this page load runs: 'remote' relays to the user's PC (default — existing links and
+ *  PWA installs keep working), 'direct' talks to the device from this browser over Web MIDI/Serial.
+ *  Chosen per-load via ?mode=direct (the axisapp.live landing page's two launch buttons). */
+export type WebMode = 'remote' | 'direct';
+export function webMode(): WebMode {
+  if (typeof location === 'undefined') return 'remote';
+  return new URLSearchParams(location.search).get('mode') === 'direct' ? 'direct' : 'remote';
+}
 
 let client: SupabaseClient | null = null;
 /** Lazily create the browser Supabase client (auth session persists in localStorage). */

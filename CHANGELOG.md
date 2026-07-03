@@ -2,6 +2,25 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.0-beta — 2026-07-03
+
+### Added
+- **Axis in the browser — no install.** Open **axisapp.live** and click **Launch Axis in web**:
+  the browser talks to your device directly over **Web MIDI** (FM9, Axe-Fx III, AM4 — or any unit
+  through a MIDI interface) or **Web Serial** (FM3 over USB), running the full ForgeFX engine
+  in-page. Everything works like the desktop app: the grid, block editing, scenes, tuner and
+  meters, preset history with undo, snapshots and full-device backups (stored in the browser),
+  free-tier cloud sync, and the **local storage folder** — pick a real folder on disk
+  (Chrome/Edge) and get the same `Presets/` library + `Sync/` mirror as on desktop. The landing
+  page's second button, **Launch Axis Remote**, is the existing control-your-PC mode.
+  Browser support: Chrome/Edge on desktop = everything; Firefox & Android = MIDI devices (no
+  FM3-over-USB, no folder picker); iOS/Safari can't reach devices — use Axis Remote there.
+
+### Changed
+- ForgeFX engine 0.5.0-beta: the device logic, version store, local folder and cloud sync now run
+  on a portable runtime shared verbatim between the Node server and the browser (the HTTP API is
+  unchanged — verified route-for-route by a parity test suite).
+
 ## 0.7.1-beta — 2026-07-03
 
 ### Added

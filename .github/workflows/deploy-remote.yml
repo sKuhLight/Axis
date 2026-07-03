@@ -47,17 +47,49 @@ jobs:
     if: needs.gate.outputs.ready == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Sibling layout for the file: workspace links (forgefx-server → forgefx-midi) — the Browser
+      # Direct runtime is bundled from these packages, so they're checked out + built first.
       - name: Checkout Axis
         uses: actions/checkout@v4
+        with:
+          path: Axis
+      - uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/forgefx-midi
+          path: forgefx-midi
+      - uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/ForgeFX
+          path: ForgeFX
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+          cache-dependency-path: |
+            Axis/package-lock.json
+            ForgeFX/server/package-lock.json
+            forgefx-midi/package-lock.json
 
-      - run: npm ci
+      - name: Build forgefx-midi (codec package)
+        working-directory: forgefx-midi
+        run: |
+          npm ci
+          npm run build
+      - name: Build forgefx-server (runtime package)
+        working-directory: ForgeFX/server
+        run: |
+          npm ci
+          npm run build
 
-      - name: Build remote SPA
+      - name: Install Axis deps
+        working-directory: Axis
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - name: Build web SPA (remote + direct modes)
+        working-directory: Axis
         run: npm run build
         env:
           VITE_AXIS_REMOTE: '1'
@@ -74,11 +106,11 @@ jobs:
       - name: Sync SPA into axis-website/public (preserve landing + legal pages)
         run: |
           rm -rf axis-website/public/_app
-          cp -r build/_app axis-website/public/_app
+          cp -r Axis/build/_app axis-website/public/_app
           # copy the SPA shell + ALL top-level build files (index.html, manifest.webmanifest,
           # service-worker.js, icons, favicon) so the PWA assets reach axisapp.live. The hand-maintained
           # landing/legal pages live only in axis-website (not in build/), so cp preserves them.
-          find build -maxdepth 1 -type f -exec cp {} axis-website/public/ \;
+          find Axis/build -maxdepth 1 -type f -exec cp {} axis-website/public/ \;
 
       - name: Commit & push (triggers Cloudflare auto-deploy)
         run: |
