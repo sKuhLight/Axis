@@ -53,6 +53,9 @@ const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEE
 // match the STEPS array length in Tour.svelte (9 steps → 0..8).
 const TOUR_KEY = 'axs.tour.done';
 const TOUR_LAST = 8;
+// Master kill-switch. The guided tour is disabled everywhere (first-run auto-start + "Replay app
+// tour") — it bugs out at step 4 (Next won't advance) on mobile. Flip back to true once reworked.
+const TOUR_ENABLED: boolean = false;
 const loadTourDone = (): boolean => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
 /** Strip the obvious PII from a string before it leaves the machine: emails + usernames in home paths. */
 function scrubPII(s: string): string {
@@ -730,11 +733,11 @@ class EditorStore {
   /** First-run guided tour. Auto-starts once, only after the consent + Ko-fi notices are resolved so
    *  nothing stacks; persists `axs.tour.done` on finish/skip. Replayable via startTour() from the hub. */
   #maybeStartTour = () => {
-    if (loadTourDone() || this.consentPromptOpen || this.kofiNoticeOpen) return;
+    if (!TOUR_ENABLED || loadTourDone() || this.consentPromptOpen || this.kofiNoticeOpen) return;
     this.tourStep = 0;
     this.tourActive = true;
   };
-  startTour = () => { this.tourStep = 0; this.tourActive = true; };
+  startTour = () => { if (!TOUR_ENABLED) return; this.tourStep = 0; this.tourActive = true; };
   tourNext = () => { if (this.tourStep >= TOUR_LAST) this.endTour(); else this.tourStep++; };
   tourPrev = () => { if (this.tourStep > 0) this.tourStep--; };
   endTour = () => { this.tourActive = false; try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* */ } };
