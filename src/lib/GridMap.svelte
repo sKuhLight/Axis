@@ -22,10 +22,11 @@
   };
 
   // ── fit-to-width sizing + zoom ──
-  // zoom 1 = fit-to-width (the whole chain fits the band, no horizontal scroll); zooming IN scales
-  // cells beyond fit — the overflow pans (no scrollbar chrome) and the open block is auto-centered.
+  // zoom 1 = the comfortable default (fit, cells capped at 32px); zooming IN grows the cells ONLY
+  // as far as the whole grid still fits the band — the dynamic `zoomMax` below stops exactly at
+  // fill-the-width, so tiles can never grow past the viewport.
   const ZOOM_MIN = 1;
-  const ZOOM_MAX = 2.5;
+  const ZOOM_MAX = 2.5; // absolute ceiling; the effective max is min(this, fill-the-band)
   const ZOOM_STEP = 0.25;
   const loadZoom = (): number => {
     try {
@@ -35,7 +36,9 @@
   };
   let zoom = $state(loadZoom());
   const setZoom = (dir: 1 | -1) => {
-    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((zoom + dir * ZOOM_STEP) * 100) / 100));
+    // clamp against the DYNAMIC ceiling so + can never push tiles past the band width; also pull a
+    // persisted zoom that exceeds the current band's ceiling back down on the first adjustment
+    zoom = Math.min(zoomMax, Math.max(ZOOM_MIN, Math.round((Math.min(zoom, zoomMax) + dir * ZOOM_STEP) * 100) / 100));
     try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch { /* */ }
   };
 
@@ -45,16 +48,22 @@
   const PAD_X = 28; // .body horizontal padding (14 + 14)
   let bodyEl = $state<HTMLDivElement | null>(null);
   let bodyW = $state(0); // measured band width (Svelte resize-observes bind:clientWidth)
-  const fitCell = $derived.by(() => {
+  /** Uncapped per-cell space: at this size the grid EXACTLY fills the band width. */
+  const rawFit = $derived.by(() => {
     const inner = bodyW - PAD_X;
-    if (inner <= 0) return editor.isMobile ? 30 : 28; // pre-measure fallback (one frame)
-    const raw = (inner - (cols - 1) * GAP) / cols;
+    return inner > 0 ? (inner - (cols - 1) * GAP) / cols : 0;
+  });
+  const fitCell = $derived.by(() => {
+    if (rawFit <= 0) return editor.isMobile ? 30 : 28; // pre-measure fallback (one frame)
     // phones: below ~22px tiles get too small to tap — hold the 30px touch target and let
     // auto-centering deal with the overflow instead of shrinking further
-    if (editor.isMobile && raw < 22) return 30;
-    return Math.min(Math.max(raw, 16), 32);
+    if (editor.isMobile && rawFit < 22) return 30;
+    return Math.min(Math.max(rawFit, 16), 32);
   });
-  const cell = $derived(Math.round(fitCell * zoom));
+  /** Effective zoom ceiling: cells stop growing when the grid fills the band (never overflow).
+   *  1 when the band is already full (or overflowing via the phone touch-target guard). */
+  const zoomMax = $derived(rawFit > fitCell ? Math.min(ZOOM_MAX, rawFit / fitCell) : 1);
+  const cell = $derived(Math.round(fitCell * Math.min(zoom, zoomMax)));
   const canvasW = $derived(cols * cell + (cols - 1) * GAP);
   const canvasH = $derived(rows * cell + (rows - 1) * GAP);
 
@@ -150,8 +159,8 @@
     <span class="hint mono" class:armed={!!armed}>{hint}</span>
     <span class="sp"></span>
     {#if !collapsed}
-      <button class="fold" title="Zoom out (min = fit to width)" aria-label="Zoom out" disabled={zoom <= ZOOM_MIN} onclick={() => setZoom(-1)}>−</button>
-      <button class="fold" title="Zoom in" aria-label="Zoom in" disabled={zoom >= ZOOM_MAX} onclick={() => setZoom(1)}>+</button>
+      <button class="fold" title="Zoom out" aria-label="Zoom out" disabled={Math.min(zoom, zoomMax) <= ZOOM_MIN} onclick={() => setZoom(-1)}>−</button>
+      <button class="fold" title="Zoom in (max = grid fills the map)" aria-label="Zoom in" disabled={Math.min(zoom, zoomMax) >= zoomMax} onclick={() => setZoom(1)}>+</button>
     {/if}
     {#if editor.canGridRoute}
       <button class="add" title="Add a block" onclick={openAdd}>✛ Add</button>
