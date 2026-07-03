@@ -160,6 +160,14 @@
 
   <!-- ===================== GRID (Build) ===================== -->
   <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+  <sc-if value="{{ gridLinkBar.show }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ gridLinkBar.style }}">
+    <svg width="15" height="15" viewBox="0 0 16 16" style="flex:none;"><path d="M2 8 H14 M10 4 L14 8 L10 12" fill="none" stroke="var(--accentink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ gridLinkBar.text }}</span>
+    <span style="flex:1;"></span>
+    <div onClick="{{ cancelGridLink }}" style="flex:none; padding:5px 12px; border-radius:8px; cursor:pointer; font:700 12px/1 var(--font-ui); background:rgba(0,0,0,.16); color:var(--accentink);">Cancel</div>
+  </div>
+  </sc-if>
   <div class="axs-scroll" data-screen-label="Signal Grid" onPointerDown="{{ onGridDown }}" style="{{ gridScrollStyle }}">
     <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
       <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
@@ -532,6 +540,53 @@
       </sc-if>
       <div onClick="{{ closeEditor }}" style="width:38px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; background:var(--surface2); border:1px solid var(--border2); border-radius:10px; cursor:pointer; font-size:16px; color:var(--textdim);" style-hover="border-color:var(--border3); color:var(--text);">✕</div>
     </div>
+
+    <!-- GRID MAP NAVIGATOR (see the whole chain · jump between blocks · route across pages) -->
+    <sc-if value="{{ map.show }}" hint-placeholder-val="{{ true }}">
+    <div style="{{ map.bandStyle }}">
+      <div style="display:flex; align-items:center; gap:9px; padding:9px 14px 7px;">
+        <span style="font:700 10px/1 var(--font-mono); letter-spacing:.14em; color:var(--textfaint); flex:none;">GRID MAP</span>
+        <sc-if value="{{ map.linkArmed }}" hint-placeholder-val="{{ false }}">
+        <span style="font:600 10px/1.3 var(--font-mono); color:var(--accent); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ map.hint }}</span>
+        </sc-if>
+        <sc-if value="{{ map.linkIdle }}" hint-placeholder-val="{{ true }}">
+        <span style="font:500 10px/1.3 var(--font-mono); color:var(--textmuted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ map.hint }}</span>
+        </sc-if>
+        <span style="flex:1; min-width:6px;"></span>
+        <div onClick="{{ openPalette }}" title="Add a block" style="{{ map.addStyle }}">✛ Add</div>
+        <div onClick="{{ toggleMap }}" title="Collapse map" style="{{ map.collapseStyle }}">{{ map.collapseIcon }}</div>
+      </div>
+      <sc-if value="{{ map.expanded }}" hint-placeholder-val="{{ true }}">
+      <div class="axs-scroll" style="overflow-x:auto; padding:1px 14px 12px;">
+        <div style="{{ map.canvasStyle }}">
+          <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; z-index:0;">
+            <sc-for list="{{ map.wires }}" as="w" hint-placeholder-count="0">
+              <path d="{{ w.d }}" fill="none" stroke="{{ w.stroke }}" stroke-width="1.6"></path>
+            </sc-for>
+          </svg>
+          <div style="{{ map.gridStyle }}">
+            <sc-for list="{{ map.cells }}" as="c" hint-placeholder-count="48">
+              <div data-idx="{{ c.idx }}" onClick="{{ onMapCell }}" style="{{ c.style }}" style-hover="{{ c.hover }}">
+                <sc-if value="{{ c.isBlock }}" hint-placeholder-val="{{ false }}">
+                <span style="{{ c.glyphStyle }}">{{ c.glyph }}</span>
+                </sc-if>
+                <sc-if value="{{ c.isShunt }}" hint-placeholder-val="{{ false }}">
+                <span style="width:52%; height:2px; background:#4a4a55; border-radius:1px;"></span>
+                </sc-if>
+                <sc-if value="{{ c.isEmpty }}" hint-placeholder-val="{{ true }}">
+                <span style="{{ c.plusStyle }}">+</span>
+                </sc-if>
+                <sc-if value="{{ c.showPort }}" hint-placeholder-val="{{ false }}">
+                <div data-idx="{{ c.idx }}" onClick="{{ onMapPort }}" title="Route from here" style="{{ c.portStyle }}"></div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
 
     <!-- TABS (drag/swipe to scroll on desktop + mobile) -->
     <div ref="{{ tabsRef }}" onPointerDown="{{ onTabsDown }}" class="axs-scroll" style="display:flex; gap:8px; padding:11px 16px 4px; overflow-x:auto; flex:none; cursor:grab; user-select:none;">
@@ -1414,6 +1469,7 @@ class Component extends DCLogic {
       selects:{}, openSelect:null, openSelectRect:null,
       recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
       knobs:{}, toggles:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, hoverCell:null, moveMode:false, moveIdx:null, moveOver:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
+      mapOpen:true, mapLink:null,
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
       oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] },
       acctOpen:false, acctView:"auth", acctTab:"signin", acctMode:"password", authEmail:"", verifyKind:"magic",
@@ -1480,7 +1536,10 @@ class Component extends DCLogic {
         this.gesture=null; this.moveModeActive=false;
         this.setState({ adjust:null, moveMode:false, moveIdx:null, moveOver:null }); return;
       }
-      if (this.connectDrag){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
+      if (this.connectDrag){ const cd=this.connectDrag; const moved=Math.abs(e.clientX-cd.sx)+Math.abs(e.clientY-cd.sy)>10;
+        if(moved){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); }
+        else { this.connectDrag=null; this.setState({ linkTo:null, gridLink:cd.from }); this.showToast("Tap a block in the next column",this.tk.accent); }
+        document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
       this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
     };
     this._resize = () => this.setState({ vw: window.innerWidth, vh: window.innerHeight });
@@ -1679,6 +1738,7 @@ class Component extends DCLogic {
   onCellClick = (e) => {
     if(this._suppressCell && Date.now()-this._suppressCell<350) return;
     const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
+    if(this.state.gridLink!=null){ this.gridArmedTap(idx); return; }
     if(c && (c.catId||c.shunt)) return; // filled handled by pointer gesture
     this.openPaletteFor(idx);
   };
@@ -1701,6 +1761,7 @@ class Component extends DCLogic {
 
   onBlockDown = (e) => {
     const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
+    if(this.state.gridLink!=null){ e.stopPropagation(); this.gridArmedTap(idx); return; }
     if(!c || (!c.catId && !c.shunt) || this._portActive) return;
     const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label);
     this.gesture={ idx, isBlock:!!c.catId, paramLock:!!this._dense, startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, axis:null, moved:false, qcKey:key, startVal:this.kval(key), label, qcList:qcl, qi, lastSteps:0 };
@@ -1717,7 +1778,7 @@ class Component extends DCLogic {
     e.preventDefault(); e.stopPropagation();
     const from=+e.currentTarget.dataset.port;
     const inner=document.querySelector("[data-grid-inner]"); this._innerRect = inner ? inner.getBoundingClientRect() : null;
-    this.connectDrag={ from }; this._didConnect=true; this._portActive=true;
+    this.connectDrag={ from, sx:e.clientX, sy:e.clientY }; this._didConnect=true; this._portActive=true;
     document.body.style.cursor="crosshair";
     const ir=this._innerRect; if(ir) this.setState({ linkTo:{ x:e.clientX-ir.left, y:e.clientY-ir.top } });
   };
@@ -1737,6 +1798,14 @@ class Component extends DCLogic {
     routes[from]=list;
     this.setState({ grid, routes }); this.showToast("Connected",this.tk.accent);
   }
+  cancelGridLink = () => this.setState({ gridLink:null });
+  gridArmedTap(idx){
+    const from=this.state.gridLink; if(from==null) return false;
+    const fc=from%12, tc=idx%12;
+    if(idx!==from && tc===fc+1) this.mapConnect(from,idx);
+    else if(idx!==from) this.showToast("Connect to the next column","#d6543f");
+    this.setState({ gridLink:null }); return true;
+  }
   onCableEnter = (e) => { const f=e.currentTarget.dataset.from, t=e.currentTarget.dataset.to; this.setState({ hoverCable:f+"-"+t }); };
   onCableLeave = () => { if(this.state.hoverCable) this.setState({ hoverCable:null }); };
   removeRoute = (e) => {
@@ -1751,6 +1820,91 @@ class Component extends DCLogic {
     const grid=this.state.grid.slice(); grid[idx]=null;
     const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; });
     this.setState({ grid, routes }); this.showToast("Shunt removed",this.tk.textdim);
+  }
+
+  // ---- editor mini grid-map (in-editor navigator + router) ----
+  toggleMap = () => this.setState({ mapOpen:!this.state.mapOpen, mapLink:null });
+  onMapPort = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; this.setState({ mapLink: this.state.mapLink===idx?null:idx }); };
+  onMapCell = (e) => {
+    const idx=+e.currentTarget.dataset.idx, S=this.state;
+    if(S.mapLink!=null){
+      const from=S.mapLink, fc=from%12, tc=idx%12;
+      if(idx!==from && tc===fc+1) this.mapConnect(from,idx);
+      else if(idx!==from) this.showToast("Link to the next column","#d6543f");
+      this.setState({ mapLink:null }); return;
+    }
+    const c=S.grid[idx];
+    if(c && c.catId) this.openBlock(idx);
+    else if(!c) this.openPaletteFor(idx);
+  };
+  mapConnect(from,to){
+    const grid=this.state.grid.slice();
+    if(!this.cellHas(to)) grid[to]={shunt:true};
+    const routes=Object.assign({},this.state.routes);
+    const list=(routes[from]||[]).slice();
+    if(list.indexOf(to)<0) list.push(to);
+    routes[from]=list;
+    this.setState({ grid, routes }); this.showToast("Linked",this.tk.accent);
+  }
+  buildMap(sel){
+    const S=this.state, COLS=12, ROWS=4, mob=this.isMobile();
+    const cell=mob?30:26, gap=4, cw=cell+gap;
+    const canvasW=COLS*cell+(COLS-1)*gap, canvasH=ROWS*cell+(ROWS-1)*gap;
+    const link=S.mapLink, linkArmed=link!=null, linkCol=linkArmed?(link%COLS):-2;
+    const cx=(col)=>col*cw, cy=(row)=>row*cw;
+    const cells=[];
+    for(let idx=0; idx<COLS*ROWS; idx++){
+      const col=idx%COLS, row=Math.floor(idx/COLS), c=S.grid[idx];
+      const isSel = idx===S.selected && !!(c&&c.catId);
+      const validTarget = linkArmed && col===linkCol+1;
+      const style={ gridColumn:(col+1)+" / span 1", gridRow:(row+1)+" / span 1", position:"relative", borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxSizing:"border-box", transition:"transform .1s, box-shadow .1s" };
+      let glyph="", glyphStyle={}, isBlock=false, isShunt=false, isEmpty=false, plusStyle={}, showPort=false, portStyle={}, hover="";
+      if(c && c.catId){
+        isBlock=true; const cat=this.byId[c.catId], a=cat.accent, dim=c.bypassed;
+        glyph=cat.glyph;
+        style.background="linear-gradient(180deg,"+this.shade(a,dim?-0.55:-0.32)+","+this.shade(a,dim?-0.7:-0.55)+")";
+        style.border="1px solid "+this.shade(a,isSel?0.12:-0.08);
+        glyphStyle={ fontSize:mob?15:13, lineHeight:1, color:dim?"rgba(255,255,255,.4)":"#fff" };
+        if(isSel){ style.boxShadow="0 0 0 2px "+this.tk.accent+", 0 0 10px "+this.aT(45); style.transform="scale(1.04)"; style.zIndex=2; }
+        hover="box-shadow:0 0 0 1px "+this.aT(55)+";";
+        if(col<COLS-1){ showPort=true;
+          const armedHere=linkArmed&&link===idx;
+          portStyle={ position:"absolute", right:-4, top:"50%", transform:armedHere?"translateY(-50%) scale(1.3)":"translateY(-50%)", width:9, height:9, borderRadius:"50%", background:armedHere?this.tk.accent:this.shade(a,0.18), border:"1.5px solid "+this.tk.bg2, cursor:"crosshair", zIndex:4, transition:"transform .1s" };
+        }
+      } else if(c && c.shunt){
+        isShunt=true; style.background=this.tk.surface; style.border="1px solid "+this.tk.border2;
+      } else {
+        isEmpty=true;
+        style.background=validTarget?this.aT(14):"transparent";
+        style.border="1px dashed "+(validTarget?this.tk.accent:this.tk.border2);
+        plusStyle={ fontSize:13, lineHeight:1, color:validTarget?this.tk.accent:this.tk.textmuted, fontWeight:600 };
+        hover="border-color:"+this.tk.border3+";";
+      }
+      if(validTarget && (isBlock||isShunt)) style.boxShadow="0 0 0 2px "+this.tk.accent;
+      cells.push({ idx, style, hover, isBlock, isShunt, isEmpty, glyph, glyphStyle, plusStyle, showPort, portStyle });
+    }
+    const wires=[];
+    Object.keys(S.routes).forEach(k=>{
+      const from=+k, fc=from%COLS, fr=Math.floor(from/COLS);
+      const fromCell=S.grid[from], a=(fromCell&&fromCell.catId)?this.byId[fromCell.catId].accent:this.tk.textfaint;
+      (S.routes[k]||[]).forEach(to=>{
+        const tc=to%COLS, tr=Math.floor(to/COLS);
+        const x1=cx(fc)+cell, y1=cy(fr)+cell/2, x2=cx(tc), y2=cy(tr)+cell/2, mx=(x1+x2)/2;
+        wires.push({ d:"M"+x1+" "+y1+" C"+mx+" "+y1+","+mx+" "+y2+","+x2+" "+y2, stroke:this.shade(a,0.1) });
+      });
+    });
+    const expanded=S.mapOpen!==false;
+    return {
+      show:!!sel, expanded, linkArmed, linkIdle:!linkArmed,
+      hint: linkArmed ? "Tap a block in the next column to link — or tap the map to cancel" : "Tap a block to edit · ○ then a neighbour to route · + to add",
+      canvasStyle:{ position:"relative", width:canvasW+"px", height:canvasH+"px", flex:"none" },
+      gridStyle:{ position:"relative", zIndex:1, display:"grid", gridTemplateColumns:"repeat("+COLS+","+cell+"px)", gridTemplateRows:"repeat("+ROWS+","+cell+"px)", gap:gap+"px" },
+      cells, wires,
+      bandStyle:{ flex:"none", background:this.tk.bg2, borderBottom:"1px solid "+this.tk.surface2 },
+      addStyle:{ display:"flex", alignItems:"center", gap:5, height:28, padding:"0 11px", borderRadius:8, cursor:"pointer", font:"700 11px/1 var(--font-ui)", background:this.aT(12), border:"1px solid "+this.aT(35), color:this.tk.accent, whiteSpace:"nowrap" },
+      collapseStyle:{ width:28, height:28, flex:"none", display:"flex", alignItems:"center", justifyContent:"center", borderRadius:8, cursor:"pointer", background:this.tk.surface, border:"1px solid "+this.tk.border2, color:this.tk.textdim, fontSize:11 },
+      collapseIcon: expanded?"▴":"▾"
+    };
   }
 
   // ---- editor ----
@@ -1842,7 +1996,7 @@ class Component extends DCLogic {
   onColsFit = () => { const c=this.clamp(this.state.mobCols||4,3,12); this.setState({ mobCols: c>=12?4:12, page:0 }); this.showToast(c>=12?"Edit view":"Overview — connect across columns",this.tk.accent); };
   toggleDrawer = () => this.setState({ drawerOpen:!this.state.drawerOpen });
   closeDrawer = () => this.setState({ drawerOpen:false });
-  onGridDown = (e) => { if(!this.isMobile()) return; if(e.target&&e.target.closest&&e.target.closest("[data-port]")) return; const ce=e.target&&e.target.closest?e.target.closest("[data-idx]"):null; if(ce && this.cellHas(+ce.dataset.idx)) return; this.gridSwipe={ startX:e.clientX, startY:e.clientY, axis:null, moved:false }; };
+  onGridDown = (e) => { if(!this.isMobile()) return; if(e.target&&e.target.closest&&e.target.closest("[data-port]")) return; const ce=e.target&&e.target.closest?e.target.closest("[data-idx]"):null; if(this.state.gridLink!=null && ce) return; if(ce && this.cellHas(+ce.dataset.idx)) return; this.gridSwipe={ startX:e.clientX, startY:e.clientY, axis:null, moved:false }; };
   onPagePrev = () => this.changePage(-1);
   onPageNext = () => this.changePage(1);
   onPageDot = (e) => { const pc=this.pageCountNow(); this.setState({ page:this.clamp(+e.currentTarget.dataset.p,0,pc-1) }); };
@@ -2172,10 +2326,13 @@ class Component extends DCLogic {
     (function(){ const stack=[]; S.grid.forEach((c,i)=>{ if(c&&c.catId==="in") stack.push(i); }); const seen=new Set(); while(stack.length){ const n=stack.pop(); if(seen.has(n))continue; seen.add(n); liveSet.add(n); (S.routes[n]||[]).forEach(t=>{ if(!seen.has(t)) stack.push(t); }); } })();
     const paraEmpty=(idx)=> isFilled(idx-12) || isFilled(idx+12);  // empty cell directly above/below the chain → "open a parallel row here"
 
+    const armed=S.gridLink, armedCol=(armed!=null)?(armed%12):-2;
     const cells=S.grid.map((c,idx)=>{
       const col=idx%12, selected=idx===S.selected;
+      const isTarget=(armed!=null && col===armedCol+1), isArmSrc=(armed!=null && idx===armed);
       const base={ position:"relative", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, aspectRatio:"1 / 0.95", borderRadius:11, userSelect:"none", pointerEvents:"auto", transition:"box-shadow .12s, transform .12s" };
       const outStyle={ position:"absolute", right:-8, top:"50%", marginTop:-10, width:20, height:20, borderRadius:"50%", border:"2px solid "+this.tk.bg+"", cursor:"crosshair", zIndex:6, background:selected?this.tk.accent:this.tk.border3, boxShadow:selected?"0 0 9px "+this.aT(60)+"":"none" };
+      if(isArmSrc){ outStyle.background=this.tk.accent; outStyle.boxShadow="0 0 13px "+this.aT(80); outStyle.transform="scale(1.18)"; }
       if(!c || (!c.catId && !c.shunt)){
         const dragging=S.moveMode, para=paraEmpty(idx), over=(dragging && S.moveOver===idx), hov=(!dragging && S.hoverCell===idx);
         let bd="1px solid transparent", bg="transparent", boxShadow="none", plusColor=this.tk.accent, plusScale=1, plusOp=1, showPlus=false;
@@ -2185,6 +2342,7 @@ class Component extends DCLogic {
           else if(para){ bd="1px dashed #5066b0"; bg="rgba(79,107,237,.12)"; plusColor="#8fa0f5"; plusOp=0.9; }
           else { bd="1px dashed #3f4f54"; bg="rgba(120,180,190,.05)"; plusColor="#566b6e"; plusOp=0.55; }
         } else if(hov){ showPlus=true; bd="1px dashed "+this.tk.accent+""; bg=this.aT(8); boxShadow="inset 0 0 0 1px "+this.aT(30)+""; }
+        if(isTarget){ showPlus=true; bd="1px dashed "+this.tk.accent; bg=this.aT(16); boxShadow="0 0 0 2px "+this.tk.accent; plusColor=this.tk.accent; plusOp=1; plusScale=1; }
         const plusStyle = showPlus
           ? { fontSize:"19px", fontWeight:300, lineHeight:1, color:plusColor, opacity:plusOp, transform:"scale("+plusScale+")", transition:"opacity .15s ease, transform .15s ease, color .15s ease" }
           : { width:"5px", height:"5px", borderRadius:"50%", background:"#33333d", transition:"all .15s ease" };  // resting nav dot
@@ -2193,13 +2351,14 @@ class Component extends DCLogic {
           boxStyle:Object.assign({},base,{ background:bg, border:bd, boxShadow, cursor:"pointer", transition:"border-color .15s ease, background-color .15s ease, box-shadow .15s ease" }),
           hoverStyle:"" };
       }
-      if(c.shunt) return { idx, cls:"", isBlock:false, isShunt:true, isEmpty:false, canDrag:true, showOut:col<11, outStyle, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:this.tk.bg2,border:"1px solid "+(selected?"#f5a623":"#20202a"),cursor:"grab"}), hoverStyle:"border-color:"+this.tk.accent+";" };
+      if(c.shunt) return { idx, cls:"", isBlock:false, isShunt:true, isEmpty:false, canDrag:true, showOut:col<11, outStyle, label:"", type:"", glyph:"", glyphStyle:{}, showChan:false, bypassed:false, channel:"", boxStyle:Object.assign({},base,{background:this.tk.bg2,border:"1px solid "+(isTarget?this.tk.accent:(selected?"#f5a623":"#20202a")),boxShadow:isTarget?"0 0 0 2px "+this.tk.accent:"none",cursor:"grab"}), hoverStyle:"border-color:"+this.tk.accent+";" };
       const cat=this.byId[c.catId], a=cat.accent;
       const moving=S.moveMode && S.moveIdx===idx;
       const box=Object.assign({},base,{ background:"linear-gradient(180deg,"+this.shade(a,-0.42)+","+this.shade(a,-0.62)+")", border:"1px solid "+this.shade(a,-0.05), cursor:"pointer", touchAction:"none", overflow:"hidden",
         boxShadow:selected?"inset 0 1px 0 rgba(255,255,255,.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245,166,35,.34)":"inset 0 1px 0 rgba(255,255,255,.1), 0 2px 6px rgba(0,0,0,.35)",
         opacity:c.bypassed?0.45:(moving?0.3:1), filter:c.bypassed?"grayscale(.6)":"none" });
       if(S._placed===idx) box.animation="axsPlace .34s cubic-bezier(.2,.9,.3,1)";
+      if(isTarget) box.boxShadow=(box.boxShadow||"")+", 0 0 0 2px "+this.tk.accent;
       const qcl=this.qcList(idx), qi=(S.qc[idx]||0)%qcl.length, qlabel=qcl[qi];
       const fillPct=Math.round(this.kval(this.qcKey(idx,qlabel)));
       const adjusting=!!(S.adjust && S.adjust.idx===idx);
@@ -2222,6 +2381,10 @@ class Component extends DCLogic {
         flow:live, flowStroke:srcByp?"#5a6b6e":this.tk.accent, flowStyle:{ animation:"axsFlow 1.15s linear infinite", opacity:srcByp?0.5:1, pointerEvents:"none" } }); }); });
     let linkPath=null; if(S.linkTo && this.connectDrag){ const rf=R[this.connectDrag.from]; if(rf) linkPath=cableD(rf.right,rf.cy,S.linkTo.x,S.linkTo.y); }
     const hasRects=!!R._w;
+    const gridLinkBar = (S.gridLink!=null)
+      ? { show:true, text:"Linking from "+((S.grid[S.gridLink]&&S.grid[S.gridLink].catId)?this.byId[S.grid[S.gridLink].catId].name:"block")+" — tap a highlighted block in the next column",
+          style:{ display:"flex", alignItems:"center", gap:9, padding:"9px 14px", background:this.tk.accent, color:this.tk.accentink, font:"700 12px/1.3 var(--font-ui)", flex:"none" } }
+      : { show:false, text:"", style:{} };
 
     let crumbTitle="—", crumbType="";
     if(sel){ const cat=this.byId[sel.catId]; crumbTitle=cat.name+" · Ch "+sel.channel; crumbType=sel.type; }
@@ -2471,11 +2634,12 @@ class Component extends DCLogic {
       onPresetPrev:this.onPresetPrev, onPresetNext:this.onPresetNext, onPresetPick:this.onPresetPick,
       openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
       gridScrollStyle, gridInnerStyle, gridStyle, gridClass, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
-      onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown,
+      onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown, gridLinkBar, cancelGridLink:this.cancelGridLink,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
       onCellClick:this.onCellClick, onCellEnter:this.onCellEnter, onCellLeave:this.onCellLeave, onBlockToggle:this.onBlockToggle, onToggleSwitch:this.onToggleSwitch,
       editorOpen:S.editorOpen, ed, ieq, oeq,
+      map:this.buildMap(sel), toggleMap:this.toggleMap, onMapCell:this.onMapCell, onMapPort:this.onMapPort,
       onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onContentDown:this.onContentDown, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
       onKnobDown:this.onKnobDown, onKnobReset:this.onKnobReset,
       onBlockDown:this.onBlockDown, onBlockWheel:this.onBlockWheel, moveMode:S.moveMode, moveGhost, binStyle,
