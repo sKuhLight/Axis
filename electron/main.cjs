@@ -109,7 +109,6 @@ function loadForgeFxEnv() {
 
 async function startForgeFX() {
   process.env.PORT = PORT;
-  process.env.FORGEFX_DEFINITIONS = path.join(forgefxRoot, 'definitions');
   process.env.FORGEFX_STATIC = staticDir; // serve the Axis SPA from the engine
   process.env.FORGEFX_DATA_DIR = process.env.FORGEFX_DATA_DIR || path.join(app.getPath('userData'), 'store'); // Axis config + backups
   loadForgeFxEnv(); // populate Supabase/cloud/telemetry env before the server module reads it
