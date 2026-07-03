@@ -44,7 +44,7 @@ jobs:
           path: forgefx-midi
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # match the app build toolchain (Capacitor 8 needs Node >=22)
 
       - name: Build forgefx-midi (codec)
         working-directory: forgefx-midi

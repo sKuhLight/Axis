@@ -37,7 +37,7 @@ jobs:
           path: forgefx-midi
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # Capacitor 8 CLI requires Node >=22
 
       # Same build order as the desktop release: codec → server (its exports point at dist/) → UI.
       # Unlike the Electron build, no symlink de-vendoring is needed — Vite inlines forgefx-server
