@@ -10,6 +10,7 @@
   import type { Cell } from './grid';
 
   const COLLAPSE_KEY = 'axs.gridmap.collapsed';
+  const ZOOM_KEY = 'axs.gridmap.zoom';
   const loadCollapsed = (): boolean => {
     try { return localStorage.getItem(COLLAPSE_KEY) === '1'; }
     catch { return false; }
@@ -20,10 +21,40 @@
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* */ }
   };
 
+  // ── fit-to-width sizing + zoom ──
+  // zoom 1 = fit-to-width (the whole chain fits the band, no horizontal scroll); zooming IN scales
+  // cells beyond fit — the overflow pans (no scrollbar chrome) and the open block is auto-centered.
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 2.5;
+  const ZOOM_STEP = 0.25;
+  const loadZoom = (): number => {
+    try {
+      const z = Number(localStorage.getItem(ZOOM_KEY));
+      return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 1;
+    } catch { return 1; }
+  };
+  let zoom = $state(loadZoom());
+  const setZoom = (dir: 1 | -1) => {
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((zoom + dir * ZOOM_STEP) * 100) / 100));
+    try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch { /* */ }
+  };
+
   const rows = $derived(editor.layout.rows || 4);
   const cols = $derived(editor.layout.cols || 12);
-  const cell = $derived(editor.isMobile ? 30 : 26);
-  const GAP = 4;
+  const GAP = 6;
+  const PAD_X = 28; // .body horizontal padding (14 + 14)
+  let bodyEl = $state<HTMLDivElement | null>(null);
+  let bodyW = $state(0); // measured band width (Svelte resize-observes bind:clientWidth)
+  const fitCell = $derived.by(() => {
+    const inner = bodyW - PAD_X;
+    if (inner <= 0) return editor.isMobile ? 30 : 28; // pre-measure fallback (one frame)
+    const raw = (inner - (cols - 1) * GAP) / cols;
+    // phones: below ~22px tiles get too small to tap — hold the 30px touch target and let
+    // auto-centering deal with the overflow instead of shrinking further
+    if (editor.isMobile && raw < 22) return 30;
+    return Math.min(Math.max(raw, 16), 32);
+  });
+  const cell = $derived(Math.round(fitCell * zoom));
   const canvasW = $derived(cols * cell + (cols - 1) * GAP);
   const canvasH = $derived(rows * cell + (rows - 1) * GAP);
 
@@ -97,6 +128,20 @@
   const showPort = (cl: Cell) => editor.canGridRoute && cl.col < cols - 1 && cl.pack !== 'Output';
   // while armed, every cell in a LATER column is a valid destination
   const isTarget = (c: number) => !!armed && c > armed.col;
+
+  // auto-center the relevant cell — the armed link source while routing, else the open block —
+  // whenever it, the cell size (zoom/fit) or the band width changes, so overflow never needs
+  // manual scrolling to find the part that matters
+  $effect(() => {
+    const key = armed ? `${armed.row},${armed.col}` : editor.selKey;
+    const el = bodyEl;
+    const size = cell; // tracked: re-center on zoom / fit changes
+    if (!el || !key || bodyW <= 0) return;
+    const col = Number(key.split(',')[1]);
+    if (!Number.isFinite(col) || col < 0) return;
+    const x = PAD_X / 2 + col * (size + GAP) + size / 2; // cell center incl. left padding
+    el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: 'smooth' });
+  });
 </script>
 
 <div class="map" data-screen="Grid Map">
@@ -104,13 +149,17 @@
     <span class="ttl mono">GRID MAP</span>
     <span class="hint mono" class:armed={!!armed}>{hint}</span>
     <span class="sp"></span>
+    {#if !collapsed}
+      <button class="fold" title="Zoom out (min = fit to width)" aria-label="Zoom out" disabled={zoom <= ZOOM_MIN} onclick={() => setZoom(-1)}>−</button>
+      <button class="fold" title="Zoom in" aria-label="Zoom in" disabled={zoom >= ZOOM_MAX} onclick={() => setZoom(1)}>+</button>
+    {/if}
     {#if editor.canGridRoute}
       <button class="add" title="Add a block" onclick={openAdd}>✛ Add</button>
     {/if}
     <button class="fold" title={collapsed ? 'Expand map' : 'Collapse map'} aria-label={collapsed ? 'Expand map' : 'Collapse map'} onclick={toggle}>{collapsed ? '▾' : '▴'}</button>
   </div>
   {#if !collapsed}
-    <div class="body scroll">
+    <div class="body" bind:this={bodyEl} bind:clientWidth={bodyW}>
       <div class="canvas" style="width:{canvasW}px; height:{canvasH}px;">
         <svg class="wires" width={canvasW} height={canvasH}>
           {#each wires as w (w.key)}
@@ -243,13 +292,22 @@
     color: var(--textdim);
     font-size: 11px;
   }
+  .fold:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
   .body {
     overflow-x: auto;
     padding: 1px 14px 12px;
+    /* zoomed-in overflow pans by touch/wheel — no scrollbar chrome (auto-centering finds the open block) */
+    scrollbar-width: none;
+  }
+  .body::-webkit-scrollbar {
+    display: none;
   }
   .canvas {
     position: relative;
-    flex: none;
+    margin: 0 auto; /* center the mini-grid when it's narrower than the band */
   }
   .wires {
     position: absolute;

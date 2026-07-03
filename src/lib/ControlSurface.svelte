@@ -802,8 +802,8 @@
   const knobRot = (p: number) => (-135 + 2.7 * p).toFixed(1);
 </script>
 
-<!-- page tabs + live control search -->
-<div class="tabs ws-scroll">
+<!-- page tabs + live control search (wrapping chip rows — never a horizontal scrollbar) -->
+<div class="tabs">
   <div class="csearch" class:active={searching}>
     <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
     <input class="csin" placeholder="Find a control…" bind:value={q} />
@@ -1195,10 +1195,16 @@
   .tabs {
     display: flex;
     align-items: center;
+    flex-wrap: wrap; /* same chip-row pattern as the preset browser's filter chips — wrap, don't scroll */
     gap: 8px;
     padding: 10px 14px 6px;
-    overflow-x: auto;
     flex: none;
+  }
+  /* phones: the search takes the first line, the page tabs wrap as chips below it */
+  @media (max-width: 759px) {
+    .tabs .csearch {
+      flex-basis: 100%;
+    }
   }
   .tab {
     flex: none;
