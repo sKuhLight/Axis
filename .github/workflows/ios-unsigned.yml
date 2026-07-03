@@ -1,0 +1,96 @@
+name: ios-unsigned
+
+# Build an UNSIGNED iOS IPA on a macOS runner and upload it as a workflow artifact. iOS won't run an
+# unsigned app directly — you re-sign it at install time with a free Apple ID via SideStore/AltStore/
+# Sideloadly. No signing secrets or paid Apple Developer account needed; the macOS runner is only for
+# Apple's build toolchain. See docs/mobile-ios.md.
+#
+# Trigger: run manually (once the workflow is on the default branch) or push an `ios-v*` tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ios-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: Axis
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          path: Axis
+      - name: Checkout ForgeFX (runtime engine)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/ForgeFX
+          path: ForgeFX
+      - name: Checkout forgefx-midi (codec package)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/forgefx-midi
+          path: forgefx-midi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Same build order as the desktop release: codec → server (its exports point at dist/) → UI.
+      # Unlike the Electron build, no symlink de-vendoring is needed — Vite inlines forgefx-server
+      # into the web bundle, and cap sync just copies build/ into the native project.
+      - name: Build forgefx-midi (codec)
+        working-directory: forgefx-midi
+        run: |
+          npm ci
+          npm run build
+      - name: Build ForgeFX server (runtime)
+        working-directory: ForgeFX/server
+        run: |
+          npm ci
+          npm run build
+      - name: Install Axis
+        run: npm ci
+
+      - name: Build mobile web bundle + sync iOS
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          npm run build:mobile
+          npx cap sync ios
+
+      - name: Build unsigned .app (device)
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+          test -d "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/App.app"
+
+      - name: Package into an IPA (Payload/App.app)
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/App.app"
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          ( cd "$RUNNER_TEMP" && zip -qry Axis-unsigned.ipa Payload )
+          ls -la "$RUNNER_TEMP/Axis-unsigned.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: axis-ios-unsigned
+          path: ${{ runner.temp }}/Axis-unsigned.ipa
+          if-no-files-found: error

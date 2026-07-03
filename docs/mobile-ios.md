@@ -6,30 +6,28 @@ native shell. The device is reached over **native CoreMIDI** (USB / Bluetooth MI
 FM3 USB-serial is out of scope on iOS — use a DIN/BLE MIDI adapter or Axis Remote.
 
 Because there's no Mac in the loop, the IPA is produced entirely by CI (`macos-latest`) and
-downloaded as a workflow artifact for sideload.
+downloaded as a workflow artifact. It is **unsigned** — you sign it at install time with a free
+Apple ID via **SideStore** (or AltStore / Sideloadly). No paid Apple Developer account, no signing
+secrets, no certificate. iOS still won't launch an unsigned app; the sideload tool does the signing.
 
-## One-time setup: repository secrets
-
-Add these under **Settings → Secrets and variables → Actions**:
-
-| Secret | What it is |
-|---|---|
-| `IOS_CERTIFICATE_P12_BASE64` | `base64 -i cert.p12` — an Apple distribution or development signing cert |
-| `IOS_CERTIFICATE_PASSWORD` | password for that `.p12` |
-| `IOS_PROVISIONING_PROFILE_BASE64` | `base64 -i profile.mobileprovision` — an **ad-hoc** profile for app id `live.axisapp.axis`, containing each test iPhone's UDID |
-| `APPLE_TEAM_ID` | your 10-character Apple Team ID |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | already used by the desktop release; baked into the web bundle for cloud sync + Axis Remote |
-
-Creating the profile requires an Apple Developer account (paid). Add each tester's UDID to the
-profile; adding a new device means regenerating the profile and rebuilding.
+The only secrets used are `SUPABASE_URL` / `SUPABASE_ANON_KEY` (already set for the desktop release),
+baked into the web bundle for cloud sync + Axis Remote. If absent, those features are just disabled.
 
 ## Build an IPA
 
-Run the **ios-adhoc** workflow (Actions tab → Run workflow), or push a tag `ios-v*`.
-It checks out the three sibling repos, builds codec → server → mobile web bundle, `cap sync ios`,
-signs, archives, exports an ad-hoc IPA, and uploads it as the `axis-ios-adhoc` artifact.
+Push a tag `ios-v*` (e.g. `ios-v0.8.0-beta.1`) — or run the **ios-unsigned** workflow manually once
+it's on the default branch. It checks out the three sibling repos, builds codec → server → mobile web
+bundle, `cap sync ios`, compiles an unsigned `.app`, zips it into `Payload/App.app` → `.ipa`, and
+uploads it as the `axis-ios-unsigned` artifact.
 
-Install the IPA on a registered device via Apple Configurator, Xcode Devices, or a sideload tool.
+## Install via SideStore
+
+Download the `axis-ios-unsigned` artifact, unzip to get `Axis-unsigned.ipa`, and open it in SideStore
+(Files → the IPA, or AltStore's "+"). SideStore re-signs it with your free Apple ID and installs.
+
+Free-account limits: the app expires after **7 days** (SideStore refreshes it over its on-device
+connection), and at most **3** sideloaded apps at once. SideStore may rewrite the bundle id — harmless
+for testing. CoreMIDI, Bluetooth MIDI, and networking all work on a free account.
 
 ## OTA web updates (optional)
 
