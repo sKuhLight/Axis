@@ -2,7 +2,7 @@
 // local ForgeFX, so it signs the user into Supabase in the browser, joins their private Realtime channel,
 // and installs the relay transport (setRemoteTransport). Once connected, the entire existing Axis UI runs
 // unchanged — every /api call is routed to the user's PC. In the desktop build this is inert (active=false).
-import { browserSupabase, isRemoteBuild, remoteConfigured } from './cloudBrowser';
+import { browserSupabase, isRemoteBuild, remoteConfigured, webMode } from './cloudBrowser';
 import { connectRemote } from './remoteTransport';
 import { setRemoteTransport, forgefx } from './forgefx';
 import { editor } from './editor.svelte';
@@ -35,8 +35,9 @@ async function hydrateRemoteConfig(): Promise<void> {
 }
 
 class RemoteBoot {
-  /** True when this is the remote web app (VITE_AXIS_REMOTE=1), not the desktop build. */
-  active = $state(isRemoteBuild());
+  /** True when this page load is the remote web mode (web build, and ?mode=direct not chosen) —
+   *  Browser Direct loads boot via direct.svelte.ts instead. */
+  active = $state(isRemoteBuild() && webMode() === 'remote');
   phase = $state<Phase>('signin');
   email = $state('');
   note = $state<string | null>(null);

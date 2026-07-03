@@ -1,6 +1,6 @@
 {
   "name": "axis",
-  "version": "0.7.1-beta",
+  "version": "0.8.0-beta",
   "description": "Axis — editor for Fractal devices (FM3), bundling the ForgeFX engine",
   "author": {
     "name": "sKuhLight",
@@ -23,7 +23,10 @@
     "@grafana/faro-web-sdk": "^2.8.1",
     "@orama/orama": "^3.1.18",
     "@supabase/supabase-js": "^2.110.0",
+    "brotli-wasm": "^3.0.1",
     "electron-updater": "^6.3.9",
+    "forgefx-server": "file:../ForgeFX/server",
+    "js-sha256": "^0.11.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

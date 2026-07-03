@@ -2,7 +2,7 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter, isRemote, CLIENT_ID } from './forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter, isRemote, isDirect, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { history } from './history.svelte';
@@ -953,10 +953,11 @@ class EditorStore {
   };
 
   // live tuner/tempo/scene/cpu pushes from the device (local: SSE). Remote mode gets the same CHANGE events
-  // over the relay channel (see remote.svelte.ts → applyDeviceEvent), so SSE is skipped there.
+  // over the relay channel (see remote.svelte.ts → applyDeviceEvent); Browser Direct subscribes to the
+  // in-page runtime's event bus (see direct.svelte.ts) — SSE is skipped in both.
   #openEvents = () => {
     if (this.#events) return;
-    if (isRemote()) return; // remote mode: SSE can't ride the relay; change events arrive via the channel
+    if (isRemote() || isDirect()) return; // events arrive via relay channel / runtime subscription instead
     try {
       this.#events = forgefx.events((e) => this.applyDeviceEvent(e));
     } catch {
