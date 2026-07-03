@@ -11,6 +11,8 @@
   const pad = $derived((n: number) => (editor.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
   const overwritingCurrent = $derived(editor.preset?.number === target);
   const mob = $derived(editor.isMobile);
+  // Buffer loaded from a local Presets/ file → offer writing the edits back to that file too.
+  const src = $derived(editor.bufferSource);
 </script>
 
 {#if editor.saveOpen}
@@ -20,10 +22,19 @@
         <span class="dot"></span>
         <span class="title">Save preset</span>
       </div>
-      <p class="body">
-        Store the current edit buffer to a preset location on the device.
-        <strong>This overwrites whatever is in that location.</strong>
-      </p>
+      {#if src}
+        <p class="body">
+          This preset was loaded from your local folder. Save the edits back to
+          <b class="mono">{src.path}</b> on disk — or store them to a device slot below.
+        </p>
+        <button class="btn disk" onclick={() => editor.saveLocalFile()}>💾 Save to disk — Presets/{src.path}</button>
+        <div class="or"><span>or store to a device slot</span></div>
+      {:else}
+        <p class="body">
+          Store the current edit buffer to a preset location on the device.
+          <strong>This overwrites whatever is in that location.</strong>
+        </p>
+      {/if}
       <label class="field">
         <span class="lbl mono">SAVE TO</span>
         <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
@@ -39,7 +50,7 @@
       <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
       <div class="actions">
         <button class="btn cancel" onclick={() => (editor.saveOpen = false)}>Cancel</button>
-        <button class="btn save" onclick={() => editor.save(target)}>Save to {pad(target)}</button>
+        <button class="btn save" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</button>
       </div>
     </div>
   </div>
@@ -179,5 +190,44 @@
   }
   .save:hover {
     border-color: var(--amber-border);
+  }
+  /* save-to-disk (local-file write-back) — safe action, accent-colored, full width above the slot form */
+  .disk {
+    display: block;
+    width: 100%;
+    margin: 0 0 14px;
+    background: var(--surface2);
+    border: 1px solid var(--accent-border);
+    color: var(--accent);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .disk:hover {
+    background: var(--accent-tint);
+    border-color: var(--accent);
+  }
+  .or {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 14px;
+    font-size: 10px;
+    color: var(--text-mut);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .or::before,
+  .or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-2, var(--border2));
+  }
+  .body b.mono {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
   }
 </style>

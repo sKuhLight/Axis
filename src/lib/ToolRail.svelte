@@ -1,5 +1,6 @@
 <script lang="ts">
   import { editor } from './editor.svelte';
+  import { history } from './history.svelte';
 
   const RAIL = [
     { id: 'build', label: 'Build', short: 'Grid', icon: '▦' },
@@ -121,6 +122,10 @@
         <span class="sh">Tools</span>
       </button>
     {/if}
+    <button class="item" class:active={history.panelOpen} title="History — changelog & undo (Ctrl+Z)" onclick={() => (history.panelOpen = !history.panelOpen)}>
+      <span class="ic">↶</span>
+      <span class="sh">History</span>
+    </button>
     <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
       <span class="ic">◐</span>
       <span class="sh">Theme</span>
@@ -200,6 +205,7 @@
     </div>
 
     <div class="d-foot">
+      <button class="d-foot-b" onclick={() => { closeDrawer(); history.panelOpen = true; }}><span class="d-ic">↶</span>History</button>
       <button class="d-foot-b" onclick={() => { closeDrawer(); editor.themeOpen = true; }}><span class="d-ic">◐</span>Theme</button>
       <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openAxis('account'); }}>
         <span class="d-ic">◈</span>{editor.cloud.user ? 'Account' : 'Sign in'}

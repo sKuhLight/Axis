@@ -38,12 +38,13 @@ export interface ParamQuery {
 }
 
 export interface LibEntry {
-  /** stable id: `dev:<n>` for a device preset slot, `file:<name>` for an imported .syx. */
+  /** stable id: `dev:<n>` for a device preset slot, `file:<name>` for an imported .syx,
+   *  `local:<relPath>` for a preset in the configured local Presets/ folder. */
   id: string;
-  source: 'device' | 'file';
+  source: 'device' | 'file' | 'local';
   summary: PresetSummary;
   fav: boolean;
-  /** imported presets only: the folder they came from (for grouping/browsing). */
+  /** imported/local presets only: the folder they came from (for grouping/browsing). */
   folder?: string;
 }
 
@@ -378,6 +379,39 @@ class LibraryStore {
     });
   }
 
+  // ── local storage folder (server-scanned Presets/ directory; bytes fetched on demand) ──
+  /** True when a local root is configured and the engine serves /local/* (feature-detect via refreshLocal). */
+  localEnabled = $state(false);
+  /** Non-preset .syx files (IRs/cabs/firmware) skipped by the last local scan. */
+  localSkipped = $state(0);
+  /** Relative path (under Presets/) of a `local:` entry. */
+  localPath = (id: string): string => id.slice('local:'.length);
+  /** Re-scan the local Presets/ folder and swap all `local:` entries in one pass. The server cache
+   *  (mtime-keyed) is the source of truth — no bytes or summaries are persisted client-side. */
+  async refreshLocal(refresh = false): Promise<void> {
+    if (isRemote()) return; // local folder lives on the host PC — hidden in remote sessions
+    try {
+      const r = await forgefx.localPresets(refresh);
+      const favs = new Set(load<string[]>(LS.favs, []));
+      const locals: LibEntry[] = r.entries.map((en) => ({
+        id: `local:${en.path}`,
+        source: 'local' as const,
+        // decoded server-side by the same offline decoder as file imports (typed as PresetSummary);
+        // guard the two collection fields the UI iterates in case an older engine omits them
+        summary: { ...en.summary, name: en.name, scenes: en.summary.scenes ?? [], blocks: en.summary.blocks ?? [], models: en.summary.models ?? {}, amps: en.summary.amps ?? [] },
+        fav: favs.has(`local:${en.path}`),
+        folder: en.path.includes('/') ? en.path.slice(0, en.path.lastIndexOf('/')) : undefined
+      }));
+      this.localSkipped = r.skipped;
+      this.localEnabled = true;
+      this.entries = [...this.entries.filter((e) => e.source !== 'local'), ...locals].sort(this.#order);
+    } catch {
+      // 409 = unconfigured/root missing, 404 = older engine → feature off, entries cleared
+      this.localEnabled = false;
+      this.entries = this.entries.filter((e) => e.source !== 'local');
+    }
+  }
+
   /** Raw .syx bytes for an imported preset (for live load), or null. */
   fileBytes(id: string): Uint8Array | null {
     const b = this.#fileBytes[id];
@@ -438,8 +472,9 @@ class LibraryStore {
       this.hydrating = false;
     }
   }
-  /** True once every entry the param filter could apply to has its params available. */
-  paramsReady = $derived.by(() => this.entries.every((e) => e.source === 'file' || e.summary.params || this.#paramsCache[e.id]));
+  /** True once every entry the param filter could apply to has its params available. (Non-device
+   *  entries never block: file params are embedded; local params aren't indexed — they just won't match.) */
+  paramsReady = $derived.by(() => this.entries.every((e) => e.source !== 'device' || e.summary.params || this.#paramsCache[e.id]));
 
   // ── param-query mutators (the advanced-search UI binds to these) ──
   addParamQuery(q: ParamQuery): void {
@@ -459,8 +494,12 @@ class LibraryStore {
   });
 
   #order = (a: LibEntry, b: LibEntry) => {
-    if (a.source !== b.source) return a.source === 'device' ? -1 : 1;
+    if (a.source !== b.source) {
+      const rank = (s: LibEntry['source']) => (s === 'device' ? 0 : s === 'local' ? 1 : 2);
+      return rank(a.source) - rank(b.source);
+    }
     if (a.source === 'device') return a.summary.number - b.summary.number;
+    if (a.source === 'local') return a.id.localeCompare(b.id); // path order (folders group naturally)
     return a.summary.name.localeCompare(b.summary.name);
   };
   #cacheDevice() {

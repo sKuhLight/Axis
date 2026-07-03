@@ -2,6 +2,30 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.7.1-beta — 2026-07-03
+
+### Added
+- **Preset history with undo/redo.** Every edit to the active preset — knob moves, block
+  place/remove/move, cables, bypass, channel, type, scene and renames — is recorded as a readable
+  changelog ("Amp1 · Drive 4.2 → 6.8"). **Ctrl+Z / Ctrl+Shift+Z** undo and redo by replaying the
+  inverse writes on the device; a knob drag coalesces into a single step. The History panel (new
+  rail button) lists every step with revert-to-here; history persists per preset across restarts.
+  Loading a snapshot/file into the edit buffer sets a barrier — the log is kept, undo stops there.
+- **Unsaved-changes guard.** Closing Axis with an edited (unsaved) buffer now asks first — a native
+  dialog on the desktop app, the browser prompt in web mode.
+- **Local storage folder.** Pick a folder (Axis hub → Storage) and Axis manages `Presets/` — a
+  browsable `.syx` library scanned straight from disk (drop your collections in; audition any of
+  them into the edit buffer without touching device slots; "Save to Axis folder" from the browser's
+  context menu) — and `Sync/` — your preset versions mirrored as plain, tool-readable `.syx` files
+  plus an index, auto-synced after every snapshot/backup, **unlimited, no account needed**. A
+  Restore action re-imports everything on a fresh machine.
+- **Cloud preset sync for free accounts.** Preset versions + full-device backups now sync for
+  everyone: the free plan includes **3 MB of preset storage, your most recent full device backup,
+  and 5 snapshots** (a full FM3 backup is ~1.6 MB — it fits comfortably); supporters stay
+  unlimited. The account panel shows a live storage/snapshot usage bar, and a new full backup
+  replaces the previous one in the cloud after a confirmation. Nothing is ever deleted from a
+  formerly-supporter account — over-quota pushes are refused, never pruned silently.
+
 ## 0.7.0-beta — 2026-07-03
 
 ### Added

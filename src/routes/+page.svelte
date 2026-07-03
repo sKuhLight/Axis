@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { editor } from '$lib/editor.svelte';
+  import { history } from '$lib/history.svelte';
   import { surfInit } from '$lib/surfaceStore.svelte';
+  import HistoryPanel from '$lib/HistoryPanel.svelte';
   import ToolRail from '$lib/ToolRail.svelte';
   import TopBar from '$lib/TopBar.svelte';
   import SignalGrid from '$lib/SignalGrid.svelte';
@@ -54,14 +56,24 @@
 
     const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
     const onKey = (e: KeyboardEvent) => {
+      // never hijack undo/redo while typing (rename fields, search inputs)
+      const t = e.target as HTMLElement | null;
+      const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         editor.paletteMode = 'place';
         editor.placeTarget = null;
         editor.paletteOpen = true;
+      } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        void (e.shiftKey ? history.redo() : history.undo());
+      } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        void history.redo();
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
+        else if (history.panelOpen) history.panelOpen = false;
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
         else if (editor.paletteOpen) editor.paletteOpen = false;
         else if (editor.presetOpen) editor.presetOpen = false;
@@ -69,14 +81,28 @@
         else if (editor.editorOpen) editor.closeEditor();
       }
     };
+    // Unsaved-changes guard, web mode only — in the desktop build the Electron main process owns the
+    // close dialog (fed by the setDirty $effect below); double-blocking here would fight it.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if ((window as unknown as { axisDesktop?: { isDesktop?: boolean } }).axisDesktop?.isDesktop) return;
+      if (!editor.layout.crcValid) { e.preventDefault(); e.returnValue = ''; }
+    };
     window.addEventListener('resize', onResize);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('beforeunload', onBeforeUnload);
     return () => {
       if (tp) clearInterval(tp);
       if (tw) clearInterval(tw);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('beforeunload', onBeforeUnload);
     };
+  });
+
+  // Desktop: push the edit-buffer dirty flag to the Electron main process, which shows the native
+  // "Unsaved changes" dialog on window close (crcValid = device CRC matches the stored preset).
+  $effect(() => {
+    (window as unknown as { axisDesktop?: { setDirty?: (d: boolean) => void } }).axisDesktop?.setDirty?.(!editor.layout.crcValid);
   });
 </script>
 
@@ -102,6 +128,7 @@
   <CommandPalette />
   <CabPicker />
   <DeviceTools />
+  <HistoryPanel />
   <PresetPicker />
   <SaveDialog />
   <TunerOverlay />
