@@ -27,17 +27,38 @@ jobs:
         with:
           repository: sKuhLight/ForgeFX
           path: ForgeFX
+      # the server links the codec as file:../../forgefx-midi — check it out as the sibling
+      # the link expects and build it (its package exports point at dist/)
+      - name: Checkout forgefx-midi (codec package)
+        uses: actions/checkout@v4
+        with:
+          repository: sKuhLight/forgefx-midi
+          path: forgefx-midi
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # Build ForgeFX (the bundled server) and keep only production deps for shipping.
+      - name: Build forgefx-midi (codec)
+        working-directory: forgefx-midi
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+
+      # Build ForgeFX (the bundled server) and keep only production deps for shipping. npm links
+      # forgefx-midi as a SYMLINK pointing outside the bundle — electron-builder must ship real
+      # files, so the symlink is replaced with a plain copy (dist + catalog + package.json; the
+      # codec has zero runtime deps).
       - name: Build ForgeFX server
         working-directory: ForgeFX/server
+        shell: bash
         run: |
           npm ci
           npm run build
           npm prune --omit=dev
+          rm -rf node_modules/forgefx-midi
+          mkdir -p node_modules/forgefx-midi
+          cp -R ../../forgefx-midi/package.json ../../forgefx-midi/dist ../../forgefx-midi/catalog node_modules/forgefx-midi/
 
       # Inject the production env (Supabase + telemetry) into the bundled server. index.ts loads
       # server/.env relative to itself; electron-builder bundles it (see extraResources filter).
