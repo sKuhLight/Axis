@@ -308,6 +308,30 @@ export interface CloudVersion {
   stored: number;
 }
 
+// ── local storage folder (ForgeFX /local/*: Presets/ library + Sync/ plain-syx mirror) ──
+export interface LocalConfig {
+  configured: boolean;
+  root: string | null;
+  exists: boolean;
+  writable: boolean;
+  lastSync: number | null;
+}
+/** One .syx in the local Presets/ folder — decoded summary from the server's mtime-keyed scan cache. */
+export interface LocalPresetEntry {
+  path: string; // relative to Presets/, '/'-separated
+  name: string;
+  size: number;
+  mtime: number;
+  summary: PresetSummary;
+}
+export interface LocalSyncResult {
+  ok: boolean;
+  written: number;
+  skippedExisting: number;
+  total: number;
+  backups: number;
+}
+
 /** Per-preset cloud sync state, computed from device CRC + local versions + the cloud index.
  *  'unknown' = the preset IS on the device and a cloud version exists, but the entry carries no
  *  CRC to compare (name-scan devices, stale cache rows) — never mislabel that as cloud-only. */

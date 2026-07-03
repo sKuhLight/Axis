@@ -8,7 +8,11 @@ contextBridge.exposeInMainWorld('axisDesktop', {
   // read this session's debug log (axis-debug.txt) for the "Upload Debug Log" report; '' if unavailable
   readDebugLog: () => ipcRenderer.invoke('axis:read-debug-log'),
   // open an external https URL (legal pages, etc.) in the OS browser, not an in-app window
-  openExternal: (url) => ipcRenderer.invoke('axis:open-external', url)
+  openExternal: (url) => ipcRenderer.invoke('axis:open-external', url),
+  // edit-buffer dirty flag → main shows the native "Unsaved changes" dialog on window close
+  setDirty: (dirty) => ipcRenderer.send('axis:set-dirty', !!dirty),
+  // native directory picker (local storage root) — returns the absolute path, or null if cancelled
+  pickFolder: () => ipcRenderer.invoke('axis:pick-folder')
 });
 
 // auto-update bridge: subscribe to status events + trigger check/download/install
