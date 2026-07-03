@@ -20,6 +20,10 @@ files:
 extraResources:
   - from: build
     to: axis-ui
+  # NOTE: node_modules/forgefx-midi is an npm SYMLINK to ../../forgefx-midi (the sibling codec
+  # repo). Before packaging, replace it with a real copy (dist + catalog + package.json) — the
+  # release workflow does this; for a local desktop:build run the same three lines from
+  # .github/workflows/release.yml ("Build ForgeFX server" step).
   - from: ../ForgeFX/server/dist
     to: forgefx/server/dist
   - from: ../ForgeFX/server/node_modules
@@ -28,8 +32,6 @@ extraResources:
     to: forgefx/server/package.json
   - from: ../ForgeFX/definitions
     to: forgefx/definitions
-  - from: ../ForgeFX/vendor
-    to: forgefx/vendor
   # Bundle the production env (Supabase creds + AXIS_CLOUD/AXIS_TELEMETRY/AXIS_FARO_URL). The release
   # workflow writes ../ForgeFX/server/.env from CI secrets; a `filter` (not a literal file) so builds
   # without a .env (e.g. a fresh local clone) simply skip it instead of failing.
