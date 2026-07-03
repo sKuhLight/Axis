@@ -60,7 +60,9 @@ const reportFailure = (route: string, method: string, status: number, message: s
 // unchanged). NOTE: only req()-based calls route through this; the SSE `events()` stream and the few
 // direct-fetch helpers (binary upload/restore) get their own relay handling in a later increment.
 export type RemoteResponse = { status: number; contentType: string; body: string | ArrayBuffer };
-export type RemoteTransport = (rq: { method: string; path: string; body?: string }) => Promise<RemoteResponse>;
+/** Binary bodies (Uint8Array) are only produced/consumed in Browser Direct mode — the Realtime relay
+ *  envelope stays string-only (remote.svelte.ts never sends binary). */
+export type RemoteTransport = (rq: { method: string; path: string; body?: string | Uint8Array }) => Promise<RemoteResponse>;
 let remote: RemoteTransport | null = null;
 // Latency layer for remote mode: coalesce identical in-flight GETs into one relay round-trip, and keep a
 // session cache for device-static endpoints (catalogs/help/address models) so opening blocks + dropdowns
@@ -78,11 +80,35 @@ function remoteCacheable(path: string): boolean {
     /^\/help\//.test(p)
   );
 }
-export function setRemoteTransport(fn: RemoteTransport | null): void {
+/** How requests reach ForgeFX: 'local' = HTTP to a local server (desktop/dev), 'remote' = relayed to a
+ *  host PC over the Realtime channel, 'direct' = an in-page ForgeFX runtime talking to the device over
+ *  Web MIDI / Web Serial (Browser Direct). remote + direct share the transport-function plumbing; the
+ *  mode matters for feature gating (session caching + relay latency tricks are remote-only, the local
+ *  storage folder exists in local AND direct, SSE only in local). */
+export type TransportMode = 'local' | 'remote' | 'direct';
+let mode: TransportMode = 'local';
+export function setRemoteTransport(fn: RemoteTransport | null, as: Exclude<TransportMode, 'local'> = 'remote'): void {
   remote = fn;
+  mode = fn ? as : 'local';
   remoteInflight.clear();
 }
-export const isRemote = (): boolean => remote !== null;
+export const isRemote = (): boolean => mode === 'remote';
+/** True in Browser Direct mode (in-page runtime; no local server, no relay). */
+export const isDirect = (): boolean => mode === 'direct';
+
+/** Binary round-trip through the installed transport — Browser Direct only. The four raw-fetch helpers
+ *  below (version .syx / preset load / local file / offline decode) use this instead of hitting the
+ *  static web host (which has no /api). */
+async function transportBinary(path: string, method: string, body?: Uint8Array): Promise<RemoteResponse> {
+  const r = await remote!({ method, path, body });
+  if (r.status < 200 || r.status >= 300) {
+    reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`);
+    throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
+  }
+  return r;
+}
+const asArrayBuffer = (b: string | ArrayBuffer): ArrayBuffer =>
+  typeof b === 'string' ? (new TextEncoder().encode(b).buffer as ArrayBuffer) : b;
 
 /** One relay round-trip with identical parsing + failure reporting as local mode. */
 async function relayReq<T>(path: string, method: string, init?: RequestInit): Promise<T> {
@@ -212,14 +238,20 @@ export const forgefx = {
   // Full device backup dumps every populated slot — minutes on a full unit. Override the default 12s
   // ceiling with a generous one so the client doesn't abort a backup that's still running.
   backupDevice: (label = 'Full device backup') => req<{ id: string; count: number }>(`/backup/device`, { method: 'POST', body: JSON.stringify({ label }), signal: AbortSignal.timeout(600000) }),
-  versionSyx: (id: string) => fetch(`${BASE}/version/${id}/syx`).then((r) => r.blob()),
+  versionSyx: (id: string) =>
+    isDirect()
+      ? transportBinary(`/version/${id}/syx`, 'GET').then((r) => new Blob([asArrayBuffer(r.body)]))
+      : fetch(`${BASE}/version/${id}/syx`).then((r) => r.blob()),
   loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
   /** Restore a snapshot to its origin slot (load + commit to that slot — destructive for the slot). */
   restoreVersion: (id: string) => req<{ ok: boolean; location: number }>(`/version/${id}/restore`, { method: 'POST' }),
   /** Load arbitrary raw .syx bytes (an imported file/folder preset) straight into the edit buffer. */
   loadBytes: (bytes: ArrayBuffer | Uint8Array) =>
-    fetch(`${BASE}/preset/load`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes as BodyInit, signal: AbortSignal.timeout(12000) })
-      .then((r) => { if (!r.ok) throw new ForgeError(r.status, `load → ${r.status}`); return r.json() as Promise<{ ok: boolean }>; }),
+    isDirect()
+      ? transportBinary('/preset/load', 'POST', bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+          .then((r) => JSON.parse(typeof r.body === 'string' ? r.body : new TextDecoder().decode(r.body)) as { ok: boolean })
+      : fetch(`${BASE}/preset/load`, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes as BodyInit, signal: AbortSignal.timeout(12000) })
+          .then((r) => { if (!r.ok) throw new ForgeError(r.status, `load → ${r.status}`); return r.json() as Promise<{ ok: boolean }>; }),
   // ── local storage folder (user-configured root: Presets/ library + Sync/ plain-syx mirror) ──
   localConfig: () => req<LocalConfig>('/local/config'),
   setLocalRoot: (root: string | null) => req<LocalConfig>('/local/config', { method: 'PUT', body: JSON.stringify({ root }) }),
@@ -229,8 +261,10 @@ export const forgefx = {
     req<{ root: string; entries: LocalPresetEntry[]; skipped: number; truncated: boolean }>(`/local/presets${refresh ? '?refresh=1' : ''}`, { signal: AbortSignal.timeout(120000) }),
   /** Raw .syx bytes of one local library file — fetched on demand (audition/export), never cached client-side. */
   localPresetFile: (path: string) =>
-    fetch(`${BASE}/local/presets/file?path=${encodeURIComponent(path)}`, { signal: AbortSignal.timeout(12000) })
-      .then((r) => { if (!r.ok) throw new ForgeError(r.status, `local file → ${r.status}`); return r.arrayBuffer(); }),
+    isDirect()
+      ? transportBinary(`/local/presets/file?path=${encodeURIComponent(path)}`, 'GET').then((r) => asArrayBuffer(r.body))
+      : fetch(`${BASE}/local/presets/file?path=${encodeURIComponent(path)}`, { signal: AbortSignal.timeout(12000) })
+          .then((r) => { if (!r.ok) throw new ForgeError(r.status, `local file → ${r.status}`); return r.arrayBuffer(); }),
   /** Write a preset .syx INTO the local Presets/ folder (409 {error:'exists'} without overwrite).
    *  `path` addresses an EXACT existing file (save-to-disk write-back); else `name`+`dir` build one. */
   saveLocalPreset: (name: string, bytes: number[], opts?: { dir?: string; path?: string; overwrite?: boolean }) =>
@@ -271,6 +305,10 @@ export const forgefx = {
   presetParams: (n: number) => req<{ blocks: DecodedBlock[] }>(`/presets/${n}/params`),
   /** Decode a preset .syx file (raw bytes) offline → library summary. */
   decodePresetFile: async (bytes: ArrayBuffer | Uint8Array): Promise<PresetSummary> => {
+    if (isDirect()) {
+      const r = await transportBinary('/preset/decode', 'POST', bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+      return JSON.parse(typeof r.body === 'string' ? r.body : new TextDecoder().decode(r.body)) as PresetSummary;
+    }
     const res = await fetch(`${BASE}/preset/decode`, {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
