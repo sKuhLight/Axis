@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import CapApp_SPM // the local SPM library target holding MainViewController + the AxisMidi plugin
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +8,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Root VC programmatically (no Main storyboard) so we control the CAPBridgeViewController
+        // subclass that registers the app-local AxisMidi plugin. Compile-time cross-module reference —
+        // a wrong module/name fails the CI build rather than black-screening the device.
+        window = UIWindow(frame: UIScreen.main.bounds)
+        window?.rootViewController = MainViewController()
+        window?.makeKeyAndVisible()
         return true
     }
 
