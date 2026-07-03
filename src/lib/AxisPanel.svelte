@@ -4,6 +4,8 @@
   // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
+  import { isDirect } from './forgefx';
+  import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
@@ -76,9 +78,17 @@
   const loc = $derived(editor.local);
   const locAgo = $derived(loc.lastSync ? `${Math.round((Date.now() - loc.lastSync) / 1000)}s ago` : '');
   const localCount = $derived(library.entries.filter((e) => e.source === 'local').length);
-  const hasPicker = !!(globalThis as { axisDesktop?: { pickFolder?: unknown } }).axisDesktop?.pickFolder;
+  // Browser Direct: the "path" is a File System Access directory handle — the browser picker replaces
+  // the native one, and the config root is just the folder's display name.
+  const directPicker = isDirect() && directBoot.support.folder;
+  const hasPicker = directPicker || !!(globalThis as { axisDesktop?: { pickFolder?: unknown } }).axisDesktop?.pickFolder;
   let manualPath = $state(''); // web fallback: no native dialog → type the absolute path
   async function chooseFolder() {
+    if (directPicker) {
+      const name = await directBoot.pickFolder();
+      if (name) await editor.setLocalRoot(name);
+      return;
+    }
     const pick = (globalThis as { axisDesktop?: { pickFolder?: () => Promise<string | null> } }).axisDesktop?.pickFolder;
     if (!pick) return;
     const p = await pick();

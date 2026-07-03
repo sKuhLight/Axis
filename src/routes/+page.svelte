@@ -25,7 +25,9 @@
   import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
   import RemoteGate from '$lib/RemoteGate.svelte';
+  import DirectGate from '$lib/DirectGate.svelte';
   import { remoteBoot } from '$lib/remote.svelte';
+  import { directBoot } from '$lib/direct.svelte';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
   // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
@@ -46,12 +48,15 @@
     tp = setInterval(() => editor.poll(), pollMs);
     tw = setInterval(() => editor.watchPreset(), watchMs);
   }
-  // Remote build: start the app the moment the relay session goes live.
+  // Web build: start the app the moment the relay session (remote) or the in-page runtime (direct)
+  // goes live. Desktop starts immediately in onMount.
   $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
+  $effect(() => { if (directBoot.active && directBoot.phase === 'ready') startApp(); });
 
   onMount(() => {
     editor.setViewport(window.innerWidth, window.innerHeight);
     if (remoteBoot.active) remoteBoot.init(); // resume session / show the gate; startApp() fires when ready
+    else if (directBoot.active) { /* DirectGate drives connect; startApp() fires when ready */ }
     else startApp();
 
     const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
@@ -108,6 +113,8 @@
 
 {#if remoteBoot.active && remoteBoot.phase !== 'ready'}
   <RemoteGate />
+{:else if directBoot.active && directBoot.phase !== 'ready'}
+  <DirectGate />
 {:else}
 <div class="app">
   <ToolRail />
