@@ -2,6 +2,26 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.2-beta — 2026-07-04
+
+### Added
+- **Two more devices — Axe-Fx II and VP4 (community beta).** Axis now detects and edits the
+  **Axe-Fx II** family (the 4×12 grid, 8 scenes, X/Y channels, per-block params, bypass, and
+  preset backup) and the **VP4** (its 4-slot serial chain, block params, bypass, and save). Both
+  auto-detect over USB-MIDI, or force the profile manually in the Axis hub → Connection. These
+  ship **untested on hardware** — treat them as beta and confirm changes on the device. Known
+  limits this release:
+  - **VP4** lists the blocks a preset contains, but their order reflects **discovery order, not
+    the true physical slot** (the slot-position read isn't decoded yet); writes are limited to
+    continuous knob values, bypass, and save — block placement, scene switching, and rename are
+    not yet decoded and are disabled.
+  - **Axe-Fx II** is the more complete of the two; routing **cables aren't drawn** on its grid yet
+    (blocks render and edit; the signal path between them isn't visualised).
+
+### Changed
+- Bundled **ForgeFX engine** gains the Axe-Fx II (gen-2) and VP4 device drivers plus their
+  handshake / port-name detection; the forgefx-midi codec enables both model IDs.
+
 ## 0.8.0-beta — 2026-07-03
 
 ### Added
