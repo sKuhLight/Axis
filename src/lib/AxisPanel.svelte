@@ -39,7 +39,7 @@
 
   // ── Connection & Device tab ──
   const PROFILES: { key: import('./types').ProfileKey; label: string }[] = [
-    { key: 'auto', label: 'Auto-detect' }, { key: 'fm3', label: 'FM3' }, { key: 'fm9', label: 'FM9' }, { key: 'axe3', label: 'Axe-Fx III' }, { key: 'am4', label: 'AM4' }
+    { key: 'auto', label: 'Auto-detect' }, { key: 'fm3', label: 'FM3' }, { key: 'fm9', label: 'FM9' }, { key: 'axe3', label: 'Axe-Fx III' }, { key: 'axe2', label: 'Axe-Fx II' }, { key: 'vp4', label: 'VP4' }, { key: 'am4', label: 'AM4' }
   ];
   const serialPorts = $derived(editor.ports.filter((p) => p.transport === 'serial'));
   const midiIns = $derived(editor.ports.filter((p) => p.transport === 'midi' && p.dir === 'input'));

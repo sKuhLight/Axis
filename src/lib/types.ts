@@ -581,7 +581,7 @@ export interface PresetGrid {
 // connection picker (serial + MIDI ports)
 export type ConnPick = { transport: 'serial' | 'midi'; id: string; inId?: string; outId?: string };
 /** Manual device-profile override (Axis "Connection & Device"). 'auto' = detect. */
-export type ProfileKey = 'auto' | 'fm3' | 'fm9' | 'axe3' | 'am4';
+export type ProfileKey = 'auto' | 'fm3' | 'fm9' | 'axe3' | 'am4' | 'axe2' | 'vp4';
 export interface ConnInfo extends ConnPick {
   label: string;
   fractal: boolean;
