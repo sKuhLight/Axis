@@ -26,8 +26,11 @@
   import Toast from '$lib/Toast.svelte';
   import RemoteGate from '$lib/RemoteGate.svelte';
   import DirectGate from '$lib/DirectGate.svelte';
+  import MobileGate from '$lib/MobileGate.svelte';
   import { remoteBoot } from '$lib/remote.svelte';
   import { directBoot } from '$lib/direct.svelte';
+  import { mobileBoot } from '$lib/mobile.svelte';
+  import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
   // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
@@ -52,10 +55,15 @@
   // goes live. Desktop starts immediately in onMount.
   $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
   $effect(() => { if (directBoot.active && directBoot.phase === 'ready') startApp(); });
+  $effect(() => { if (mobileBoot.active && mobileBoot.phase === 'ready') startApp(); });
 
   onMount(() => {
     editor.setViewport(window.innerWidth, window.innerHeight);
-    if (remoteBoot.active) remoteBoot.init(); // resume session / show the gate; startApp() fires when ready
+    if (mobileBoot.active) {
+      // Confirm the running web bundle so Capgo doesn't roll it back, then check for an OTA update.
+      // MobileGate drives connect; startApp() fires when ready.
+      void otaNotifyReady().then(() => otaCheck());
+    } else if (remoteBoot.active) remoteBoot.init(); // resume session / show the gate; startApp() fires when ready
     else if (directBoot.active) { /* DirectGate drives connect; startApp() fires when ready */ }
     else startApp();
 
@@ -111,7 +119,9 @@
   });
 </script>
 
-{#if remoteBoot.active && remoteBoot.phase !== 'ready'}
+{#if mobileBoot.active && mobileBoot.phase !== 'ready'}
+  <MobileGate />
+{:else if remoteBoot.active && remoteBoot.phase !== 'ready'}
   <RemoteGate />
 {:else if directBoot.active && directBoot.phase !== 'ready'}
   <DirectGate />

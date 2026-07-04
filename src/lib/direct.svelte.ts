@@ -7,23 +7,13 @@
 // see docs/browser-direct-runtime-plan.md). This module only supplies the browser adapters.
 // Types only at module scope — the runtime itself is dynamic-imported in #assemble() so the desktop
 // and remote-mode bundles never carry it (Vite splits it into a chunk loaded on first connect).
-import type {
-  RegistryDeps,
-  RuntimeDeps,
-  RouterLocalDeps,
-  Conn,
-  ConnInfo,
-  Transport,
-  Store,
-  DeviceEvent
-} from 'forgefx-server/runtime';
-import { setRemoteTransport, type RemoteResponse } from './forgefx';
-import { isRemoteBuild, remoteConfigured, webMode } from './cloudBrowser';
+import type { Conn, Transport, Store } from 'forgefx-server/runtime';
+import { isRemoteBuild, webMode } from './cloudBrowser';
 import { editor } from './editor.svelte';
 import { WebMidiTransport, pairFractalPorts } from './direct/webmidi';
 import { WebSerialTransport, requestFractalSerialPort } from './direct/webserial';
-import { createIdbStoreBackend, createBrowserCodec } from './direct/idbStore';
-import { FsaFolderAdapter, pickLocalFolder, restoreLocalFolder } from './direct/fsaFolder';
+import { pickLocalFolder, restoreLocalFolder } from './direct/fsaFolder';
+import { assembleRuntime } from './direct/runtime';
 
 type Phase = 'pick' | 'connecting' | 'ready' | 'error';
 
@@ -123,85 +113,27 @@ class DirectBoot {
     this.note = friendly && /denied|security/i.test(msg) ? friendly : msg;
   };
 
-  /** Build store + registry + router around the chosen transport and install it. */
+  /** Build store + registry + router around the chosen transport and install it. Web-specific bits
+   *  (restore the FSA folder handle, phase transitions) live here; the transport-agnostic assembly
+   *  is shared with the native mobile boot via assembleRuntime(). */
   #assemble = async (transport: Transport, conn: Conn) => {
     this.phase = 'connecting';
-    const rt = await import('forgefx-server/runtime');
 
-    // 1. Persistent store: IndexedDB mirror + brotli/sha256 codec (desktop-compatible blob format).
-    const [backend, codec] = await Promise.all([createIdbStoreBackend(), createBrowserCodec()]);
-    const store = rt.createStore(backend, codec);
-    this.#store = store;
-    this.#sha256 = codec.sha256Hex;
-
-    // 2. Registry: the ONE transport is the one the user just granted; detection (fn 0x00 handshake)
-    //    runs over it exactly like on desktop. Overrides live in localStorage.
-    let connOverride: Conn | null = null;
-    const connInfo: ConnInfo[] = [
-      { transport: conn.transport, id: conn.id, label: transport.label, fractal: true, ...(conn.transport === 'midi' ? { dir: 'input' as const } : {}) }
-    ];
-    const deps: RegistryDeps = {
-      resolveConn: async () => connOverride ?? conn,
-      openConn: () => transport,
-      listConnections: async () => connInfo,
-      getConnOverride: () => connOverride,
-      setConnOverride: (c) => { connOverride = c; },
-      getProfileOverride: () => localStorage.getItem(PROFILE_KEY),
-      setProfileOverride: (key) => {
-        if (key) localStorage.setItem(PROFILE_KEY, key);
-        else localStorage.removeItem(PROFILE_KEY);
-      },
-      autoDetectPath: () => null,
-      midiAvailable: () => this.support.midi
-    };
-    const registry = rt.createRegistry(deps);
-
-    // 3. Local storage folder (File System Access, Chromium): restore a previously-picked handle
-    //    silently; the Storage tab's picker sets a new one. The adapter is handle-bound — the
-    //    config's `root` string is display-only in the browser.
+    // Restore a previously-picked local folder silently (Chromium only); the Storage tab's picker
+    // sets a new one. The adapter is handle-bound — assembleRuntime reads it live via getFolder().
     this.#folder = this.support.folder ? await restoreLocalFolder(false) : null;
-    const local: RouterLocalDeps | undefined = this.support.folder
-      ? {
-          adapterFor: () => {
-            if (!this.#folder) throw new Error('no folder granted');
-            return new FsaFolderAdapter(this.#folder);
-          },
-          isAbsolute: () => true, // browser roots are handles, not paths — any label is acceptable
-          resolveRoot: (root) => root,
-          scanCache: {
-            load: () => backend.getJSON('localScan', {}),
-            save: (cache) => backend.putJSON('localScan', cache)
-          },
-          sha256Hex: codec.sha256Hex
-        }
-      : undefined;
 
-    // 4. Cloud sync — same Supabase project as the desktop build (publishable anon key).
-    const cloud = remoteConfigured()
-      ? rt.createCloud(
-          {
-            url: import.meta.env.VITE_SUPABASE_URL as string,
-            anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string
-          },
-          store
-        )
-      : undefined;
-
-    // 5. Router in, SSE out: install as the forgefx transport, events via subscription.
-    const router = rt.createRouter({ registry, store, local, cloud } satisfies RuntimeDeps);
-    setRemoteTransport(async (rq): Promise<RemoteResponse> => {
-      const r = await router.handle(rq.method, rq.path, rq.body);
-      return {
-        status: r.status,
-        contentType: r.contentType,
-        body: typeof r.body === 'string' ? r.body : (r.body.slice().buffer as ArrayBuffer)
-      };
-    }, 'direct');
-    this.#unsubEvents = router.subscribe((e: DeviceEvent) => editor.applyDeviceEvent(e));
-
-    // 6. Probe the device before declaring ready — a wrong port fails here, not in the editor.
-    const detect = await router.handle('GET', '/device/detect');
-    if (detect.status >= 500) throw new Error('The device did not answer. Check the connection and try again.');
+    const { store, sha256Hex, unsub } = await assembleRuntime({
+      transport,
+      conn,
+      support: this.support,
+      profileKey: PROFILE_KEY,
+      getFolder: () => this.#folder,
+      onEvent: (e) => editor.applyDeviceEvent(e)
+    });
+    this.#store = store;
+    this.#sha256 = sha256Hex;
+    this.#unsubEvents = unsub;
 
     this.phase = 'ready';
   };
