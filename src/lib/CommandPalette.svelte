@@ -349,7 +349,7 @@
     max-height: 88vh;
     border-radius: 18px 18px 0 0;
     border-bottom: 0;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--axis-safe-bottom);
     animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .search {
