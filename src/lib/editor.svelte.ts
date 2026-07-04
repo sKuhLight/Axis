@@ -297,7 +297,7 @@ class EditorStore {
   ports = $state<ConnInfo[]>([]);
   portChosen = $state<ConnPick | null>(null);
   portOverride = $state<ConnPick | null>(null);
-  /** Forced device-profile key ('fm3'|'fm9'|'axe3'|'am4'), or null when auto-detecting. */
+  /** Forced device-profile key ('fm3'|'fm9'|'axe3'|'axe2'|'vp4'|'am4'), or null when auto-detecting. */
   profileOverride = $state<string | null>(null);
   paletteOpen = $state(false);
   paletteMode = $state<'place' | 'retype'>('place');
