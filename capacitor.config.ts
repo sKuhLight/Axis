@@ -13,6 +13,12 @@ const config: CapacitorConfig = {
     contentInset: 'always'
   },
   plugins: {
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'DARK',
+      hidden: false,
+      animation: 'NONE'
+    },
     // Self-hosted OTA: we drive checks manually against our own manifest (GitHub Releases), so the
     // updater's built-in auto-update to Capgo cloud is off. See src/lib/direct/ota.ts.
     CapacitorUpdater: {

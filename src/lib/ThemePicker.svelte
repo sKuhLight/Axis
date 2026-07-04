@@ -73,7 +73,7 @@
   .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 380; display: flex; align-items: center; justify-content: center; padding: 24px; animation: axsOverlay 0.18s ease-out; }
   .card { width: 420px; max-width: 100%; max-height: 88vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55); color: var(--text); padding: 22px 22px 24px; animation: axsPalette 0.16s ease-out; }
   .bg.mob { align-items: flex-end; padding: 0; }
-  .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
+  .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding-bottom: calc(24px + var(--axis-safe-bottom)); animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
   .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
   .h1 { font-size: 19px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }

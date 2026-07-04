@@ -50,6 +50,10 @@
   --r-lg: 14px;
   --rail-w: 66px;
   --topbar-h: 52px;
+  --axis-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --axis-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --axis-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --axis-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 
   /* ── backwards-compat aliases (older components still reference these; they now follow the theme) ── */
   --bg-rail: var(--bg2);
