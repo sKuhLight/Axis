@@ -87,7 +87,7 @@
     width: 100%;
     max-width: 100%;
     border-radius: 18px 18px 0 0;
-    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    padding: 20px 18px calc(20px + var(--axis-safe-bottom));
     animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
   }
   .head {

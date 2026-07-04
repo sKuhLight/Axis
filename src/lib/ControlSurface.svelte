@@ -24,9 +24,9 @@
   const GAP = 8;
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇' };
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   type Widget = { id: string; key: string; x: number; y: number; w: number; h: number; view: string };
   type Board = { pageOrder: string[]; page: string; boards: Record<string, Widget[]> };
@@ -34,9 +34,47 @@
   // ── live control catalog (rebuilt from the device params; widgets reference these by key) ──
   const knobById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
   const enumById = $derived(new Map(editor.enums.map((e) => [e.id, e])));
-  // live audio meter for the block this surface edits (null if the block reports no monitor level)
-  const mon = $derived(editor.monitorFor(editor.selected?.effectId ?? -1));
+  // live audio meter(s) for the block this surface edits — a block can report several (OUTPUT VU L+R,
+  // M-Comp 3 bands, cab gain+VU); `mon` is the primary (first) for the label/dB text, `mons` is all bars.
+  const mons = $derived(editor.monitorsFor(editor.selected?.effectId ?? -1));
+  const mon = $derived(mons[0] ?? null);
   const meterDbText = $derived(mon?.db != null ? `${mon.db >= 0 ? '+' : ''}${mon.db.toFixed(1)} dB` : mon ? `${Math.round(mon.norm * 100)}%` : '—');
+  // short per-bar tag when a block has several monitors (L/R for VU, band number for M-Comp, else role)
+  const meterTag = (m: import('./types').LiveMonitor): string =>
+    /VUL$/.test(m.paramName) ? 'L' : /VUR$/.test(m.paramName) ? 'R'
+      : (m.paramName.match(/GAINMON(\d)$/)?.[1] ?? (m.role === 'gainReduction' ? 'GR' : m.role === 'vu' ? 'VU' : '·'));
+  // bar fill 0..1. Gain-reduction meters read INVERTED on the wire (norm 1.0 = 0 dB = no reduction at
+  // idle); show them growing from empty as reduction increases. Level/VU/detector fill with signal.
+  const meterFill = (m: import('./types').LiveMonitor | null): number =>
+    !m ? 0 : m.role === 'gainReduction' ? 1 - m.norm : m.norm;
+  // ── looper waveform (Looper block only) ── downsample the ~595-sample envelope to ~110 bars for the SVG.
+  const NWAVE = 110;
+  const waveBars = $derived.by<number[]>(() => {
+    const w = editor.looperWave?.wave;
+    if (!w || !w.length) return [];
+    const out: number[] = [];
+    for (let i = 0; i < NWAVE; i++) {
+      const a = Math.floor((i * w.length) / NWAVE), b = Math.max(a + 1, Math.floor(((i + 1) * w.length) / NWAVE));
+      let peak = 0; for (let j = a; j < b && j < w.length; j++) peak = Math.max(peak, w[j] ?? 0);
+      out.push(peak);
+    }
+    return out;
+  });
+  const wavePos = $derived(Math.max(0, Math.min(1, editor.looperWave?.position ?? 0)));
+  const hasWave = $derived(waveBars.length > 0);
+  // looper transport buttons. record/play/overdub/reverse/half/once latch (toggle on/off); stop/undo are
+  // momentary (write on=true, don't latch). Local latch state — the device's own transport state isn't
+  // decoded yet, so this tracks what we've sent.
+  const LOOP_BTNS: readonly [string, string][] = [['record', 'REC'], ['play', '▶'], ['stop', '■'], ['overdub', 'DUB'], ['undo', '↺'], ['reverse', 'REV'], ['half', '½']];
+  const LOOP_MOMENTARY = new Set(['stop', 'undo']);
+  let loopLatch = $state<Record<string, boolean>>({});
+  function pressLoop(action: string) {
+    if (editMode) return;
+    if (LOOP_MOMENTARY.has(action)) { editor.looperControl(action, true); return; }
+    const next = !loopLatch[action];
+    loopLatch = { ...loopLatch, [action]: next };
+    editor.looperControl(action, next);
+  }
   const catalog = $derived.by<Ctl[]>(() => {
     const hidden = new Set(hideIds);
     const out: Ctl[] = [];
@@ -54,6 +92,8 @@
     // Live audio meter — offered only when this block actually reports a monitor level (INPUT/OUTPUT/
     // COMP/GATE/CAB/DRIVE/FILTER…). Draggable/scalable like any widget; value from editor.monitorFor.
     if (mon) out.push({ key: 'meter', kind: 'meter', label: mon.role === 'gainReduction' ? 'Gain Reduction' : mon.role === 'vu' ? 'VU' : 'Meter', id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
+    // Looper waveform — offered only for the Looper block (when live waveform data is present).
+    if (hasWave) out.push({ key: 'wave', kind: 'wave', label: 'Loop', id: -4, w: 4, h: 2, view: 'wave', views: ['wave'] });
     return out;
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
@@ -1076,8 +1116,35 @@
                 <div class="action" class:byp={editor.selected?.bypassed} onpointerdown={(e) => e.stopPropagation()} onclick={() => !editMode && editor.toggleBypass()}>{editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}</div>
               {:else if c.kind === 'meter'}
                 <div class="kval rel">{meterDbText}</div>
-                <div class="mtrack" title="Live level ({c.label})">
-                  <div class="mfill" style:height="{Math.round((mon?.norm ?? 0) * 100)}%" style:background={(mon?.norm ?? 0) >= 0.92 ? '#d6543f' : (mon?.norm ?? 0) >= 0.75 ? '#f5a623' : accent}></div>
+                <div class="mrow" title="Live level ({c.label})">
+                  {#each (mons.length ? mons : [null]) as m}
+                    <div class="mcol">
+                      <div class="mtrack">
+                        <div class="mfill" style:height="{Math.round(meterFill(m) * 100)}%" style:background={meterFill(m) >= 0.92 ? '#d6543f' : meterFill(m) >= 0.75 ? '#f5a623' : accent}></div>
+                      </div>
+                      {#if mons.length > 1 && m}<div class="mtag">{meterTag(m)}</div>{/if}
+                    </div>
+                  {/each}
+                </div>
+                <div class="lbl">{c.label}</div>
+              {:else if c.kind === 'wave'}
+                <!-- looper waveform: envelope bars around the centre + a live playhead line -->
+                <div class="wavebox" title="Looper waveform">
+                  <svg class="wavesvg" viewBox="0 0 {NWAVE} 40" preserveAspectRatio="none">
+                    {#each waveBars as mag, i}
+                      <rect x={i + 0.15} y={20 - mag * 19} width="0.7" height={Math.max(0.5, mag * 38)} fill={accent} opacity="0.85" />
+                    {/each}
+                    <line class="playhead" x1={wavePos * NWAVE} y1="0" x2={wavePos * NWAVE} y2="40" />
+                  </svg>
+                  {#if editor.looperWave?.level != null}
+                    <div class="wavelvl"><div class="mfill" style:width="{Math.round((editor.looperWave.level ?? 0) * 100)}%" style:background={accent}></div></div>
+                  {/if}
+                  <div class="loopbtns">
+                    {#each LOOP_BTNS as [act, sym]}
+                      <button class="loopbtn" class:on={loopLatch[act]} class:rec={act === 'record'}
+                        onpointerdown={(e) => e.stopPropagation()} onclick={() => pressLoop(act)}>{sym}</button>
+                    {/each}
+                  </div>
                 </div>
                 <div class="lbl">{c.label}</div>
               {/if}
@@ -1657,7 +1724,83 @@
     background: linear-gradient(180deg, var(--accentbright), var(--accent));
     border-radius: 8px;
   }
-  /* live audio meter widget — read-only vertical level bar */
+  /* looper waveform widget — envelope + live playhead + level bar */
+  .wavebox {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 4px;
+    min-height: 40px;
+    padding: 4px 0;
+  }
+  .wavesvg {
+    flex: 1;
+    width: 100%;
+    min-height: 28px;
+    border-radius: 6px;
+    background: var(--track);
+    border: 1px solid var(--border);
+  }
+  .wavesvg .playhead {
+    stroke: #f5a623;
+    stroke-width: 0.6;
+    vector-effect: non-scaling-stroke;
+  }
+  .wavelvl {
+    position: relative;
+    height: 4px;
+    border-radius: 3px;
+    background: var(--track);
+    overflow: hidden;
+  }
+  .wavelvl .mfill {
+    position: absolute;
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    border-radius: 3px;
+  }
+  .loopbtns {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .loopbtn {
+    flex: 1;
+    min-width: 34px;
+    padding: 5px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--track);
+    color: var(--fg, #ddd);
+    cursor: pointer;
+  }
+  .loopbtn:hover { border-color: var(--accent, #35c9d6); }
+  .loopbtn.on { background: var(--accent, #35c9d6); color: #04121a; border-color: transparent; }
+  .loopbtn.rec.on { background: #d6543f; color: #fff; }
+  /* live audio meter widget — read-only vertical level bar(s); a block may report several (VU L/R, M-Comp bands) */
+  .mrow {
+    display: flex;
+    flex: 1;
+    gap: 6px;
+    justify-content: center;
+    align-items: stretch;
+    min-height: 24px;
+  }
+  .mcol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .mtag {
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.65;
+  }
   .mtrack {
     position: relative;
     width: 16px;

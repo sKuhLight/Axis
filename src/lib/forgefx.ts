@@ -431,6 +431,12 @@ export const forgefx = {
   /** Live per-block audio meters: each placed monitored block's normalized level + dB. */
   monitorsLive: (eid?: number) =>
     req<import('./types').LiveMonitor[]>(`/preset/monitors/live${eid != null ? `?eid=${eid}` : ''}`),
+  /** Looper page telemetry: live waveform envelope (0..1) + playhead position (0..1) + level. */
+  looper: (eid: number) =>
+    req<{ wave: number[]; position: number | null; level: number | null }>(`/preset/looper?eid=${eid}`),
+  /** Toggle a looper transport control (record/play/stop/overdub/undo/once/reverse/half). */
+  looperControl: (eid: number, action: string, on: boolean) =>
+    req<{ ok: boolean }>('/preset/looper/control', { method: 'POST', body: JSON.stringify({ eid, action, on }) }),
 
   // ── unified device tools (API v2, capability-gated server-side → 501 {error:'unsupported'}) ──
   /** Fast stored-location name scan (caps presets.canScanNames) — the library index for devices
