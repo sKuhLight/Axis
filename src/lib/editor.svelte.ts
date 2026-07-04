@@ -126,6 +126,9 @@ class EditorStore {
   params = $state<NamedParam[]>([]);
   enums = $state<EnumParam[]>([]);
   blockType = $state<{ value: number; name: string } | null>(null);
+  blockSlug = $state<string | null>(null); // catalog slug of the open block (from blockParams) — gates the looper poll
+  /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
+  looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
   /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
@@ -150,9 +153,17 @@ class EditorStore {
   /** Current model/type name of a placed block (for the grid tile sub-label). */
   typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
   /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
-  liveMeters = $state<Record<number, import('./types').LiveMonitor>>({});
-  /** Live audio meter for a block (null if that block has no monitor / not yet read). */
-  monitorFor = (effectId: number): import('./types').LiveMonitor | null => this.liveMeters[effectId] ?? null;
+  liveMeters = $state<Record<number, import('./types').LiveMonitor[]>>({});
+  /** Primary live meter for a block (first monitor; null if none / not yet read) — back-compat. */
+  monitorFor = (effectId: number): import('./types').LiveMonitor | null => this.liveMeters[effectId]?.[0] ?? null;
+  /** ALL live meters a block reports (e.g. OUTPUT VU L+R, M-Comp 3 bands, cab gain+VU). */
+  monitorsFor = (effectId: number): import('./types').LiveMonitor[] => this.liveMeters[effectId] ?? [];
+  /** Toggle a looper transport control (record/play/stop/overdub/undo/once/reverse/half) on the open block. */
+  looperControl = async (action: string, on: boolean) => {
+    const eid = this.selected?.effectId;
+    if (eid == null) return;
+    try { await forgefx.looperControl(eid, action, on); } catch { /* best-effort */ }
+  };
   scene = $state(1);
   /** Scene names of the open preset (index 0 = scene 1), decoded from the grid read. Empty string = unnamed. */
   sceneNames = $state<string[]>([]);
@@ -474,16 +485,20 @@ class EditorStore {
       const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
       if (ok) {
         try {
-          const rows = await forgefx.monitorsLive(eid); // single-block read only
+          const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
           const next = { ...this.liveMeters };
-          for (const r of rows) next[r.effectId] = r;
+          next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
           this.liveMeters = next;
         } catch {
           /* best-effort */
         }
+        // Looper: also fetch the live waveform + playhead + level for the open Looper block.
+        if (this.blockSlug === 'looper') {
+          try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
+        }
       }
-      // 500 ms when active (1 read/tick), 2 s idle heartbeat when metering is off.
-      this.#liveMeterTimer = setTimeout(tick, ok ? 500 : 2000);
+      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
+      this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
     };
     tick();
   };
@@ -995,10 +1010,15 @@ class EditorStore {
         break;
       }
       case 'changed': {
-        // structural change elsewhere (block placed/removed, preset switched) — reload, debounced so a
-        // burst coalesces into one refresh.
+        // structural change elsewhere (block placed/removed, preset switched, or a device-side edit the
+        // unit doesn't push — AM4 front-panel / AM4-Edit) — reload, debounced so a burst coalesces into
+        // one refresh. Also re-read the open block's knobs: load() only refreshes the grid + blocks, so
+        // without this a front-panel knob turn on the currently-open block would leave its arcs stale.
         if (this.#eventReload) clearTimeout(this.#eventReload);
-        this.#eventReload = setTimeout(() => { this.load(); }, 250);
+        this.#eventReload = setTimeout(async () => {
+          await this.load();
+          if (this.selKey) await this.#loadParams();
+        }, 250);
         break;
       }
       case 'config': if (e.origin !== CLIENT_ID) this.#applyConfig(e.id, e.data); break; // ignore our own echo
@@ -1244,6 +1264,8 @@ class EditorStore {
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
       this.enums = r.enums ?? [];
       this.blockType = r.type ?? null;
+      this.blockSlug = r.slug ?? null;
+      if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
       this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {

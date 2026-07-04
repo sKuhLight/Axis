@@ -363,7 +363,7 @@
     border-right: 1px solid var(--border2);
     box-shadow: 8px 0 44px rgba(0, 0, 0, 0.55);
     animation: axsDrawer 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
-    padding-top: env(safe-area-inset-top);
+    padding-top: var(--axis-safe-top);
   }
   .d-head {
     display: flex;
@@ -530,7 +530,7 @@
     flex: none;
     display: flex;
     gap: 6px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    padding: 10px 12px calc(10px + var(--axis-safe-bottom));
     border-top: 1px solid var(--border);
   }
   .d-foot-b {
