@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>@keyframes axisGridFlow{ to{ stroke-dashoffset:-24; } }</style>
+</helmet>
+<div ref="{{ rootRef }}" style="display:flex; flex-direction:column; width:100%; height:100%; min-width:0; min-height:0; background:transparent;">
+  <div class="lz-scroll" style="{{ scrollStyle }}">
+    <div style="{{ innerStyle }}">
+      <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
+        <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0"><path d="{{ cab.d }}" fill="none" stroke="{{ cab.color }}" stroke-width="2" stroke-linecap="round" opacity="0.55"></path><path d="{{ cab.d }}" fill="none" stroke="{{ cab.flowColor }}" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="0.1 12" style="animation:axisGridFlow 1.15s linear infinite;"></path></sc-for>
+      </svg>
+      <div style="{{ matrixStyle }}">
+        <sc-for list="{{ cells }}" as="c" hint-placeholder-count="48">
+          <sc-if value="{{ c.isBlock }}" hint-placeholder-val="{{ true }}">
+            <div data-idx="{{ c.idx }}" onPointerDown="{{ onDown }}" onDblClick="{{ onDbl }}" style="{{ c.style }}" style-hover="{{ c.hover }}">
+              <div style="{{ c.fillStyle }}"></div>
+              <div style="{{ c.chanStyle }}">{{ c.channel }}</div>
+              <div data-idx="{{ c.idx }}" onPointerDown="{{ stopProp }}" onClick="{{ onToggle }}" style="{{ c.dotStyle }}"></div>
+              <span style="{{ c.glyphStyle }}">{{ c.glyph }}</span>
+              <sc-if value="{{ c.showName }}" hint-placeholder-val="{{ true }}"><div style="position:relative; z-index:2; font:700 13px/1.05 'Hanken Grotesk',sans-serif; color:#fff; text-align:center; text-shadow:0 1px 2px rgba(0,0,0,.5);">{{ c.name }}</div></sc-if>
+              <sc-if value="{{ c.showOut }}" hint-placeholder-val="{{ false }}"><div style="{{ c.outStyle }}"></div></sc-if>
+              <sc-if value="{{ c.showType }}" hint-placeholder-val="{{ true }}"><div style="position:relative; z-index:2; font:500 9px/1.1 'JetBrains Mono',monospace; color:rgba(255,255,255,.6); text-align:center; max-width:90%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px;">{{ c.type }}</div></sc-if>
+              <sc-if value="{{ c.adjusting }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; inset:0; z-index:7; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(8,8,10,.62);"><div style="font:700 24px/1 'JetBrains Mono',monospace; color:#fff;">{{ c.adjVal }}</div><div style="font:700 9px/1 'JetBrains Mono',monospace; color:var(--accent,#35c9d6); margin-top:5px; letter-spacing:.08em; text-transform:uppercase;">{{ c.adjLabel }}</div></div></sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ c.isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onAdd }}" style="{{ c.style }}" style-hover="border-color:#3a3a44; color:#9a9aa3;">＋</div>
+          </sc-if>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:760,&quot;height&quot;:420}}">
+class Component extends DCLogic {
+  shade(hex,amt){ let c=(hex||"#888").replace("#",""); if(c.length===3) c=c.split("").map(x=>x+x).join(""); let r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16); const t=amt<0?0:255, p=Math.abs(amt); r=Math.round(r+(t-r)*p); g=Math.round(g+(t-g)*p); b=Math.round(b+(t-b)*p); return "rgb("+r+","+g+","+b+")"; }
+  componentDidMount(){ this._el=null; this._ro=new ResizeObserver(()=>{ if(this._el){ this._lastW=this._el.clientWidth; this._lastH=this._el.clientHeight; this.forceUpdate(); } }); }
+  componentWillUnmount(){ if(this._ro) this._ro.disconnect(); }
+  renderVals(){
+    const p=this.props; const gp=p.gp||{}, cat=p.cat||{}, COLS=p.cols||12, ROWS=p.rows||4;
+    const params=p.params||{}, bypassed=p.bypassed||{}, gridMode=p.gridMode||"auto", blockSize=(p.blockSize==null?1:p.blockSize);
+    const selected=p.selected, editorOpen=p.editorOpen, editMode=!!p.editMode, adjust=p.adjust||null;
+    const SIZES=[{w:82,h:66},{w:106,h:82},{w:132,h:100}];
+    const availW=p.availW||(this._el&&this._el.clientWidth)||this._lastW||600, availH=p.availH||(this._el&&this._el.clientHeight)||this._lastH||500;
+    const mapMode = gridMode==="map" || (gridMode==="auto" && availW<620) || !!p.minimap;
+    const sz=mapMode?{w:54,h:46}:SIZES[blockSize]; const gap=mapMode?6:8;
+    const cwByW=Math.min(sz.w, Math.floor((availW-30-(COLS-1)*gap)/COLS));
+    const cwByH=Math.min(sz.w, Math.round(sz.w*(((availH-30-(ROWS-1)*gap)/ROWS)/sz.h)));
+    const cw=Math.max(mapMode?24:38, Math.min(cwByW||sz.w, cwByH||sz.w));
+    const ch=Math.round(sz.h*(cw/sz.w));
+    const col=(i)=>i%COLS, rowOf=(i)=>Math.floor(i/COLS);
+    const cx=(i)=>col(i)*(cw+gap)+cw/2, cy=(i)=>rowOf(i)*(ch+gap)+ch/2;
+    const total=COLS*ROWS;
+    const showType=!mapMode&&blockSize>=1, showName=!mapMode;
+    const cells=[];
+    for(let i=0;i<total;i++){ const g=gp[i];
+      if(g){ const c=cat[g.catId]||{c:"#888",g:"?"}; const a=c.c; const sel=selected===i&&editorOpen; const byp=!!bypassed[i];
+        const val=Math.round(params[i]!=null?params[i]:g.val); const adj=!!(adjust&&adjust.idx===i);
+        cells.push({ isBlock:true, isEmpty:false, idx:i, name:g.name, type:g.type, glyph:c.g, channel:g.channel,
+          showType, showName, showOut:(!mapMode && col(i)<COLS-1 && !!gp[i+1]), adjusting:adj, adjVal:(adjust?adjust.val:val), adjLabel:(adjust?adjust.label:g.param),
+          outStyle:`position:absolute; right:-7px; top:50%; margin-top:-6px; width:12px; height:12px; border-radius:50%; z-index:6; background:${this.shade(a,0.1)}; border:2px solid #0c0c0e; box-shadow:0 0 6px rgba(0,0,0,.5);`,
+          style:`position:relative; overflow:hidden; border-radius:${mapMode?9:11}px; cursor:pointer; touch-action:none; user-select:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${mapMode?0:2}px; padding:${mapMode?2:4}px; background:linear-gradient(180deg, ${this.shade(a,-0.42)}, ${this.shade(a,-0.62)}); border:1px solid ${sel?"#f5a623":this.shade(a,-0.05)}; box-shadow:${sel?"inset 0 1px 0 rgba(255,255,255,.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245,166,35,.34)":"inset 0 1px 0 rgba(255,255,255,.1), 0 2px 6px rgba(0,0,0,.35)"}; opacity:${byp?0.5:1}; ${byp?"filter:grayscale(.5);":""}`,
+          hover:sel?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.4);",
+          fillStyle:`position:absolute; left:0; right:0; bottom:0; height:${byp?0:val}%; background:linear-gradient(180deg, ${this.shade(a,0.35)}, ${a}); opacity:${adj?1:.78}; border-top:2px solid rgba(255,255,255,.7); z-index:0; pointer-events:none; transition:height .05s linear;`,
+          glyphStyle:`position:relative; z-index:2; font-size:${mapMode?16:15}px; line-height:1; color:rgba(255,255,255,.85); ${mapMode?"":"margin-bottom:1px;"}`,
+          chanStyle:`position:absolute; top:5px; right:6px; z-index:3; font:700 8px/1 'JetBrains Mono',monospace; color:rgba(255,255,255,.85); background:rgba(0,0,0,.3); border-radius:4px; padding:2px 4px; ${(mapMode||blockSize<1)?"display:none;":""}`,
+          dotStyle:`position:absolute; top:${mapMode?4:6}px; left:${mapMode?4:6}px; z-index:4; width:${mapMode?7:9}px; height:${mapMode?7:9}px; border-radius:50%; cursor:pointer; ${(!byp)?"background:#46d17f; box-shadow:0 0 6px rgba(70,209,127,.85);":"background:#80808a;"}`
+        });
+      } else { cells.push({ isBlock:false, isEmpty:true, idx:i,
+          style:`display:flex; align-items:center; justify-content:center; border-radius:${mapMode?9:11}px; border:1.5px dashed #26262c; color:#33333a; font-size:${mapMode?13:18}px; cursor:pointer;` }); }
+    }
+    const cables=[];
+    for(let i=0;i<total;i++){ if(gp[i]&&gp[i+1]&&col(i)<COLS-1){ cables.push({ d:`M ${cx(i)} ${cy(i)} L ${cx(i+1)} ${cy(i+1)}`, color:"#46464f", flowColor:"#35c9d6" }); } }
+    if(gp[5]&&gp[12]){ cables.push({ d:`M ${cx(5)} ${cy(5)} C ${cx(5)+46} ${cy(5)}, ${cx(12)-46} ${cy(12)}, ${cx(12)} ${cy(12)}`, color:"#46464f", flowColor:"#35c9d6" }); }
+    const bus=p.bus||{};
+    return {
+      rootRef:(el)=>{ if(el&&el!==this._el){ this._el=el; if(this._ro){ this._ro.disconnect(); this._ro.observe(el); } this._lastW=el.clientWidth; this._lastH=el.clientHeight; } },
+      cells, cables,
+      innerStyle:`position:relative; width:${COLS*(cw+gap)-gap}px; height:${ROWS*(ch+gap)-gap}px;`,
+      matrixStyle:`display:grid; grid-template-columns:repeat(${COLS}, ${cw}px); grid-auto-rows:${ch}px; gap:${gap}px; position:relative; z-index:1;`,
+      scrollStyle:"flex:1; min-height:0; overflow:auto; padding:14px 16px 18px; display:flex; justify-content:center;",
+      onDown:(e)=>{ const i=+e.currentTarget.dataset.idx; if(bus.down) bus.down(i,e); },
+      onDbl:(e)=>{ const i=+e.currentTarget.dataset.idx; if(bus.dbl) bus.dbl(i); },
+      onToggle:(e)=>{ e.stopPropagation(); const i=+e.currentTarget.dataset.idx; if(bus.toggleBlock) bus.toggleBlock(i,e); },
+      onAdd:()=>{ if(bus.add) bus.add(); },
+      stopProp:(e)=>e.stopPropagation()
+    };
+  }
+}
+</script>
+</body>
+</html>

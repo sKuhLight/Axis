@@ -29,7 +29,7 @@
 </style>
 </helmet>
 
-<div ref="{{ rootRef }}" onContextMenu="{{ onRootCtx }}" style="position:fixed; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden; -webkit-touch-callout:none;">
+<div ref="{{ rootRef }}" onContextMenu="{{ onRootCtx }}" style="position:absolute; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden; -webkit-touch-callout:none;">
 
   <!-- ===================== LEFT RAIL ===================== -->
   <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
@@ -173,6 +173,7 @@
   </div>
   </sc-if>
   <div class="axs-scroll" data-screen-label="Signal Grid" onPointerDown="{{ onGridDown }}" style="{{ gridScrollStyle }}">
+    <div style="{{ gridClipStyle }}">
     <div ref="{{ gridRef }}" data-grid-inner="1" style="{{ gridInnerStyle }}">
       <svg style="position:absolute; inset:0; width:100%; height:100%; overflow:visible; z-index:0; pointer-events:none;">
         <sc-for list="{{ cables }}" as="cab" hint-placeholder-count="0">
@@ -242,6 +243,7 @@
         </sc-for>
       </div>
     </div>
+    </div>
   </div>
   <sc-if value="{{ pager.show }}" hint-placeholder-val="{{ false }}">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 14px 13px; background:var(--bg2); border-top:1px solid var(--surface2); flex:none;">
@@ -275,6 +277,7 @@
   <sc-if value="{{ isFc }}" hint-placeholder-val="{{ false }}">
   <div data-screen-label="FC Controllers" style="flex:1; min-height:0; display:flex; flex-direction:column; background:var(--bg); overflow:hidden;">
 
+    <sc-if value="{{ fcShowBoard }}" hint-placeholder-val="{{ true }}">
     <!-- header strip -->
     <div style="display:flex; align-items:center; gap:13px; padding:12px 18px; border-bottom:1px solid var(--surface2); flex:none; flex-wrap:wrap;">
       <span style="font:700 12px/1 var(--font-mono); letter-spacing:.16em; color:var(--text2);">FC CONTROLLERS</span>
@@ -286,7 +289,9 @@
       <span style="flex:1; min-width:6px;"></span>
       <span style="font:600 10px/1 var(--font-mono); color:var(--textfaint);">{{ fc.deviceNote }}</span>
     </div>
+    </sc-if>
 
+    <sc-if value="{{ fcShowLay }}" hint-placeholder-val="{{ true }}">
     <!-- LAYOUTS (top strip) -->
     <div class="axs-scroll" style="{{ fc.stripStyle }}">
       <span style="font:700 10px/1 var(--font-mono); letter-spacing:.14em; color:var(--textmuted); flex:none; margin-right:2px;">LAYOUTS</span>
@@ -297,7 +302,9 @@
         </div>
       </sc-for>
     </div>
+    </sc-if>
 
+    <sc-if value="{{ fcShowBoard }}" hint-placeholder-val="{{ true }}">
     <!-- BOARD (hero) -->
     <div style="{{ fc.boardStyle }}">
         <div style="display:flex; align-items:center; gap:12px; margin:0 auto 14px; max-width:1060px;">
@@ -333,7 +340,10 @@
         </div>
       </div>
 
+    </sc-if>
+
       <!-- INSPECTOR -->
+      <sc-if value="{{ fcShowInsp }}" hint-placeholder-val="{{ true }}">
       <sc-if value="{{ fc.scrimStyle }}" hint-placeholder-val="{{ false }}">
         <div onClick="{{ fc.onCloseInsp }}" style="{{ fc.scrimStyle }}"></div>
       </sc-if>
@@ -356,6 +366,7 @@
         <div class="axs-scroll" style="{{ fc.inspBodyStyle }}">
 
           <!-- identity: label + color + mini-display -->
+          <sc-if value="{{ fcShowLed }}" hint-placeholder-val="{{ true }}">
           <div style="{{ fc.identityStyle }}">
             <input value="{{ fc.sw.label }}" onInput="{{ fc.onLabel }}" placeholder="{{ fc.sw.placeholder }}" style="width:100%; box-sizing:border-box; background:var(--bg2); border:1px solid var(--border2); border-radius:11px; padding:12px 14px; color:#fff; font:600 14px/1 var(--font-ui),sans-serif; outline:none;" />
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -378,9 +389,11 @@
               </sc-if>
             </div>
           </div>
+          </sc-if>
 
           <!-- actions: tap + hold -->
           <sc-for list="{{ fc.sw.actions }}" as="act" hint-placeholder-count="2">
+            <sc-if value="{{ act.show }}" hint-placeholder-val="{{ true }}">
             <div style="{{ act.cardStyle }}">
               <div style="display:flex; align-items:center; gap:9px;">
                 <span style="width:9px; height:9px; border-radius:3px; background:{{ act.dotColor }};"></span>
@@ -496,10 +509,12 @@
               </div>
               </sc-if>
             </div>
+            </sc-if>
           </sc-for>
 
         </div>
       </div>
+      </sc-if>
       </sc-if>
   </div>
   </sc-if><!-- /isFc -->
@@ -1508,7 +1523,7 @@
 class Component extends DCLogic {
   constructor(props){
     super(props);
-    this.initTheme();
+    this.initTheme(); this.fcPart=(props&&props.fcPart)||null; this.bus=window.__FCBus||(window.__FCBus={instances:new Set(), state:{}}); if(!this.bus.state) this.bus.state={}; if(this.fcPart){ this._theme=this.defaultTheme(); this.tk=this.resolveTk(this._theme); }
     const AMP = ["5F1 Tweed","5F1 Tweed EC","5F8 Tweed Bright","5F8 Tweed Jumped","5F8 Tweed Normal","6G4 Super","6G12 Concert","59 Bassguy Bright","59 Bassguy Jumped","59 Bassguy Normal","59 Bassguy RI Jumped","65 Bassguy Bass","65 Bassguy Normal","1959SLP Jumped","1959SLP Normal","1959SLP Treble","1987X Jumped","1987X Normal","1987X Treble","5153 50W Blue","5153 100W Blue","5153 100W Green","5153 100W Red","5153 100W Stealth Blue","5153 100W Stealth Green","5153 100W Stealth Red","AC-20 12AX7 Bass","AC-20 12AX7 Treble","AC-20 EF86 Bass","AC-20 EF86 Treble","Angle Severe 1","Angle Severe 2","Archean","Archean Bright","Archean Clean","Atomica High","Atomica Low","Band-Commander","Big Hair","Blankenship Leeds","Bludojai Clean","Bludojai Lead","Bludojai Lead PAB","Bogfish Brown","Bogfish Strato","Brit 800 #34","Brit 800 2203 High","Brit 800 2203 Low","Brit 800 2204 High","Brit 800 2204 Low","Brit 800 Mod","Brit 800 Studio 20","Brit AFS100 1","Brit AFS100 2","Brit Brown","Brit JM45","Brit JM45 Jumped","Brit JVM OD1 Green","Brit JVM OD1 Orange","Brit JVM OD1 Red","Brit JVM OD2 Green","Brit JVM OD2 Orange","Brit JVM OD2 Red","Brit Pre","Brit Silver","Brit Super","Buddah DuoMaster","CA3+ Clean","CA3+ Lead","CA3+ Rhythm","Cameron CCV 1A","Cameron CCV 1B","Cameron CCV 2A","Cameron CCV 2B","Cameron CCV 2C","Cameron CCV 2D","Capt Hook 1A","Capt Hook 1B","Capt Hook 2A","Capt Hook 2B","Capt Hook 3A","Capt Hook 3B","Car Ambler","Carol-Ann OD-2","Carol-Ann Triptik Classic","Carol-Ann Triptik Clean","Carol-Ann Triptik Modern","Carol-Ann Tucana Clean","Carol-Ann Tucana Lead","Citrus A30 Clean","Citrus A30 Dirty","Citrus Bass 200","Citrus RV50","Citrus Terrier","Class-A 15W TB","Class-A 30W","Class-A 30W Bright","Class-A 30W Brilliant","Class-A 30W Hot","Class-A 30W TB","Comet 60","Comet Concourse","Cornfed M50","Das Metall","Deluxe 6G3","Deluxe Tweed","Deluxe Tweed Jumped","Deluxe Verb Normal","Deluxe Verb Vibrato","Diamante Fire","Dirty Shirley 1","Dirty Shirley 2","Div/13 CJ","Div/13 CJ Boost","Div/13 FT37 High","Div/13 FT37 Low","Dizzy V4 Blue 2","Dizzy V4 Blue 3","Dizzy V4 Blue 4","Dizzy V4 Silver 2","Dizzy V4 Silver 3","Dizzy V4 Silver 4","Double Verb Normal","Double Verb Silverface","Double Verb Vibrato","Dweezil's Bassguy","Energyball","Euro Blue","Euro Blue Modern","Euro Red"];
 
     this.CATS = [
@@ -1646,7 +1661,7 @@ class Component extends DCLogic {
     this.L0=Math.log10(20); this.L1=Math.log10(20000);
   }
 
-  componentDidMount(){
+  componentDidMount(){ if(this.bus){ this.bus.instances.add(this); if(this.bus.state) Object.assign(this.state, this.bus.state); }
     this.applyTheme(this.state.theme);
     this._key = (e) => {
       if ((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); this.openPalette(); return; }
@@ -1755,7 +1770,7 @@ class Component extends DCLogic {
     const avail=vh-60-52-contentH; // topbar + grid vertical padding
     return this.clamp(avail,260,vh-180);
   }
-  componentWillUnmount(){
+  componentWillUnmount(){ if(this.bus) this.bus.instances.delete(this);
     window.removeEventListener("keydown", this._key);
     window.removeEventListener("pointermove", this._move);
     window.removeEventListener("pointerup", this._up);
@@ -1831,9 +1846,9 @@ class Component extends DCLogic {
   defaultTheme(){ return {base:'dark',accent:'#35c9d6',custom:{},scale:100,fontUi:'Hanken Grotesk',fontMono:'JetBrains Mono',preset:'midnight'}; }
   initTheme(){ let s={}; try{ s=JSON.parse(localStorage.getItem('axis.theme')||'{}'); }catch(e){} this._theme=Object.assign(this.defaultTheme(), s); this.tk=this.resolveTk(this._theme); }
   aT(p){ return 'color-mix(in srgb, '+this.tk.accent+' '+p+'%, transparent)'; }
-  rootRef=(el)=>{ this.rootEl=el; if(el) el.style.zoom=((this.state&&this.state.theme?this.state.theme.scale:100)||100)/100; };
-  applyTheme(cfg){ const tk=this.resolveTk(cfg); const el=document.documentElement; Object.keys(tk).forEach(k=>{ el.style.setProperty('--'+k, tk[k]); if(this.rootEl) this.rootEl.style.setProperty('--'+k, tk[k]); }); if(this.rootEl) this.rootEl.style.zoom=(cfg.scale||100)/100; try{ localStorage.setItem('axis.theme', JSON.stringify(cfg)); }catch(e){} }
-  setTheme(patch){ const t=Object.assign({}, this.state.theme, patch); this.tk=this.resolveTk(t); this.setState({theme:t}, ()=>this.applyTheme(t)); }
+  rootRef=(el)=>{ this.rootEl=el; if(el) el.style.zoom=this.fcPart?1:(((this.state&&this.state.theme?this.state.theme.scale:100)||100)/100); };
+  applyTheme(cfg){ const tk=this.resolveTk(cfg); const el=this.rootEl||document.documentElement; Object.keys(tk).forEach(k=>{ el.style.setProperty('--'+k, tk[k]); if(this.rootEl) this.rootEl.style.setProperty('--'+k, tk[k]); }); if(this.rootEl) this.rootEl.style.zoom=(cfg.scale||100)/100; try{ localStorage.setItem('axis.theme', JSON.stringify(cfg)); }catch(e){} }
+  setTheme(patch){ const t=Object.assign({}, this.state.theme, patch); this.tk=this.resolveTk(t); this.setState({theme:t}, ()=>this.applyTheme(t)); } setState(patch, cb){ const p=(typeof patch==="function")?patch(this.state):patch; if(p) Object.assign(this.state,p); if(this.bus&&p){ const SH=["fcLayout","fcView","fcSwitch","fcLayouts","fcDevice","fcInspOpen"]; const sh={}; let has=false; SH.forEach(k=>{ if(k in p){ sh[k]=p[k]; has=true; } }); if(has){ if(this.bus.state) Object.assign(this.bus.state, sh); this.bus.instances.forEach(i=>{ if(i!==this){ Object.assign(i.state,sh); try{ i.forceUpdate(); }catch(e){} } }); } } try{ this.forceUpdate(); }catch(e){} if(cb) cb(); }
   applyPreset(id){ const p=this.THEME_PRESETS.find(x=>x.id===id); if(!p) return; this.setTheme({preset:id, base:p.base, accent:p.accent, custom:Object.assign({}, p.pal||{})}); }
   onOpenTheme=()=>this.setState({themeOpen:true, drawerOpen:false});
   onCloseTheme=()=>this.setState({themeOpen:false});
@@ -1901,7 +1916,7 @@ class Component extends DCLogic {
   }
 
   // ---- grid + routing ----
-  gridRef = (el) => { this.gridInnerEl = el; };
+  gridRef = (el) => { this.gridInnerEl = el; if(el && this.fcPart==="grid"){ const host=(el.parentElement&&el.parentElement.parentElement)||el.parentElement; if(host && typeof ResizeObserver!=="undefined" && this._gridRO!==host){ if(this._gridRO_obj) this._gridRO_obj.disconnect(); this._gridRO_obj=new ResizeObserver(()=>{ const w=host.clientWidth, h=host.clientHeight; if((w && Math.abs(w-(this._gridW||0))>1)||(h && Math.abs(h-(this._gridH||0))>1)){ this._gridW=w; this._gridH=h; if(this._gridRAF) cancelAnimationFrame(this._gridRAF); this._gridRAF=requestAnimationFrame(()=>this.forceUpdate()); } }); this._gridRO_obj.observe(host); this._gridRO=host; this._gridW=host.clientWidth; this._gridH=host.clientHeight; } } };
   cellHas(i){ const c=this.state.grid[i]; return !!(c && (c.catId || c.shunt)); }
   availParams(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return ["Level"]; const cat=this.byId[c.catId]; const base=["Level","Balance"]; const extra=(c.catId==="amp")?["Gain","Master","Bass","Mid","Treble","Presence"]:(cat.knobs||[]); extra.forEach(k=>{ if(base.indexOf(k)<0) base.push(k); }); return base; }
   qcList(idx){ const sel=this.state.qcSel&&this.state.qcSel[idx]; if(sel&&sel.length) return sel; const c=this.state.grid[idx]; if(!c||!c.catId) return ["Level"]; if(c.catId==="amp") return ["Level","Gain","Master","Bass","Treble"]; const cat=this.byId[c.catId]; const a=["Level"]; (cat.knobs||[]).slice(0,3).forEach(k=>{ if(a.indexOf(k)<0) a.push(k); }); return a; }
@@ -1916,7 +1931,7 @@ class Component extends DCLogic {
   };
   onCellEnter = (e) => { if(this.state.moveMode) return; const idx=+e.currentTarget.dataset.idx; if(this.state.grid[idx]) return; if(this.state.hoverCell!==idx) this.setState({ hoverCell:idx }); };
   onCellLeave = (e) => { const idx=+e.currentTarget.dataset.idx; if(this.state.hoverCell===idx) this.setState({ hoverCell:null }); };
-  openBlock(idx){ const c=this.state.grid[idx]; if(c&&c.shunt){ this.removeNode(idx); return; } if(!c) return; const wasOpen=this.state.editorOpen; this.setState({ selected:idx, editorOpen:true, editorH:wasOpen?this.state.editorH:this.computeDockH(), activePage:this.defaultPage(c.catId,this.effMode(idx)) }); }
+  openBlock(idx){ const c=this.state.grid[idx]; if(c&&c.shunt){ this.removeNode(idx); return; } if(!c) return; if(this.fcPart==="grid"){ if(this.props.onSelectBlock) this.props.onSelectBlock(idx, c); this.setState({selected:idx}); return; } const wasOpen=this.state.editorOpen; this.setState({ selected:idx, editorOpen:true, editorH:wasOpen?this.state.editorH:this.computeDockH(), activePage:this.defaultPage(c.catId,this.effMode(idx)) }); }
   handleTap(idx){
     const c=this.state.grid[idx];
     if(c && c.shunt){ this.removeNode(idx); return; }
@@ -2505,7 +2520,7 @@ class Component extends DCLogic {
       sw:{ index:si, num:si+1, label:sw.label, placeholder:this.fcAutoLabel(sw.tap), custom:sw.custom,
            labelMode:sw.labelMode, labelModes, showCustom:sw.labelMode==="custom",
            colorList, onColor:this.onFcColor, onLabel:this.onFcLabel, onLabelMode:this.onFcLabelMode, onCustom:this.onFcCustom,
-           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:this.tk.bg2, border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"14px 16px", display:"flex", flexDirection:"column", gap:10, borderRight: idx===0?"1px solid "+this.tk.surface2+"":"none" }; return a; }) },
+           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.show = (!this.fcPart || this.fcPart==="inspector" || this.fcPart===a.which); a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:this.tk.bg2, border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"14px 16px", display:"flex", flexDirection:"column", gap:10, borderRight: (idx===0 && (!this.fcPart||this.fcPart==="inspector"))?"1px solid "+this.tk.surface2+"":"none" }; return a; }) },
       onCat:this.onFcCat, onFn:this.onFcFn, onScene:this.onFcScene, onChannel:this.onFcChannel, onBlock:this.onFcBlock,
       onLayoutTo:this.onFcLayoutTo, onWrap:this.onFcWrap, onPreset:this.onFcPreset, onLimit:this.onFcLimit
     };
@@ -2513,11 +2528,11 @@ class Component extends DCLogic {
 
   renderVals(){
     const S=this.state, mob=this.isMobile(), sel=S.grid[S.selected]; this.tk=this.resolveTk(S.theme);
-    const isFc=(S.railActive==="fc"), isBuild=!isFc, fc=this.fcView(mob);
-    const showFull=!mob;
+    const fcp=this.fcPart; const isFc=fcp?(fcp!=="grid"):(S.railActive==="fc"), isBuild=fcp?(fcp==="grid"):!isFc, fc=this.fcView(mob); const fcShowBoard=!fcp||fcp==="board", fcShowLay=!fcp||fcp==="board"||fcp==="layouts", fcShowInsp=!fcp||fcp==="inspector"||fcp==="led"||fcp==="tap"||fcp==="hold", fcShowLed=!fcp||fcp==="inspector"||fcp==="led"; if(fcp){ fc.scrimStyle=null; fc.inspShow=true; fc.inspStyle={ flex:"1 1 0%", minHeight:0, display:"flex", flexDirection:"column", background:this.tk.bg2 }; }
+    const showFull=fcp?false:!mob;
 
     // topbar (slim single row)
-    const topbarStyle={ display:"flex", alignItems:"center", gap:mob?8:12, padding:mob?"0 12px":"0 16px", height:60, background:"linear-gradient(180deg,#141416,"+this.tk.bg2+")", borderBottom:"1px solid "+this.tk.surface2+"", flex:"none", overflowX:"hidden", overflowY:"hidden" };
+    const topbarStyle={ display: (this.fcPart?"none":"flex"), alignItems:"center", gap:mob?8:12, padding:mob?"0 12px":"0 16px", height:60, background:"linear-gradient(180deg,#141416,"+this.tk.bg2+")", borderBottom:"1px solid "+this.tk.surface2+"", flex:"none", overflowX:"hidden", overflowY:"hidden" };
     const addBtnStyle=mob
       ? { display:"flex", alignItems:"center", justifyContent:"center", width:42, height:42, padding:0, background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:11, color:"#bfeef2", cursor:"pointer", flex:"none" }
       : { display:"flex", alignItems:"center", gap:9, height:38, padding:"0 14px 0 13px", background:"linear-gradient(180deg,#1d2a2c,#16201f)", border:"1px solid #2c4a4b", borderRadius:10, color:"#bfeef2", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", flex:"none", whiteSpace:"nowrap" };
@@ -2538,27 +2553,55 @@ class Component extends DCLogic {
     const drawerModes=[{id:"basic",label:"Basic"},{id:"advanced",label:"Advanced"}].map(g=>({ id:g.id, label:g.label, style:dmStyle((S.globalMode||"basic")===g.id) }));
 
     // grid + routing
-    const visCols = mob ? this.clamp(S.mobCols||4, 3, 12) : 12;
-    const gap = mob ? (visCols<=4?16:visCols<=6?12:visCols<=8?9:6) : 26;
-    const colW = mob ? Math.max(20, Math.floor(((S.vw||360)-24-(visCols-1)*gap)/visCols)) : 0;
-    const pageCount = mob ? Math.ceil(12/visCols) : 1;
+    const gpPart = this.fcPart==="grid"; const gpMode = gpPart ? (this.props.gridMode||"auto") : "full"; const gpSize = gpPart ? (this.props.blockSize==null?1:this.props.blockSize) : 1;
+    const _gpHost = this.gridInnerEl && ((this.gridInnerEl.parentElement&&this.gridInnerEl.parentElement.parentElement)||this.gridInnerEl.parentElement);
+    const gpW = gpPart ? ((_gpHost&&_gpHost.clientWidth)||this._gridW||(S.vw||1280)) : (S.vw||1280);
+    const gpH = gpPart ? ((_gpHost&&_gpHost.clientHeight)||this._gridH||600) : 600;
+    // Resolved grid mode. Auto steps Full -> Map -> mobile as the panel narrows OR flattens, so it never scrollbars.
+    const gpSizeMin=[56,72,96][gpSize]||72; const gpFullGap=Math.round(gpSizeMin*0.32);
+    const fullMin = 12*gpSizeMin + 11*gpFullGap + 44;   // width a scroll-free full grid needs
+    const fullMinH = 4*Math.round(gpSizeMin*0.95) + 3*gpFullGap + 56;  // height a scroll-free full grid needs
+    let gMode;
+    if(!gpPart){ gMode = mob ? "mobile" : "full"; }
+    else if(gpMode==="map"){ gMode="map"; }
+    else if(gpMode==="full"){ gMode="full"; }
+    else { gMode = gpW < 620 ? "mobile" : ((gpW < fullMin || gpH < fullMinH) ? "map" : "full"); }   // auto
+    const gpMap = (gMode==="map");
+    const gMob = (gMode==="mobile");
+    const visCols = gMob ? this.clamp(S.mobCols||6, 3, 12) : 12;
+    const gpMinCol = gpMap ? 30 : gpSizeMin;
+    const gap = gMob ? (visCols<=4?16:visCols<=6?12:visCols<=8?9:6) : (gpMap?7:(gpPart?gpFullGap:26));
+    // integer column width; the scroll box is capped to exactly one page (pageW) so no next-page block can bleed in
+    const colW = gMob ? Math.max(28, Math.floor((gpW-24-(visCols-1)*gap)/visCols)) : 0;
+    const pageW = gMob ? (visCols*colW+(visCols-1)*gap) : 0;
+    const stripW = gMob ? (12*colW+11*gap) : 0;
+    const pageCount = gMob ? Math.ceil(12/visCols) : 1;
     const page = this.clamp(S.page||0, 0, pageCount-1);
     const pageShift = visCols*(colW+gap);
-    const denseGrid = mob && visCols>6;  // blocks too small for per-block param swipe — disable it
+    const denseGrid = gMob && visCols>6;  // blocks too small for per-block param swipe — disable it
     this._dense = denseGrid;
-    const showType = !mob || colW>=56;   // progressive disclosure: drop the type sub-label when blocks get small
-    const gridScrollStyle=mob
+    const showType = gMob ? colW>=56 : (!gpMap && gpSize>=1);
+    const gridScrollStyle=gMob
       ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"radial-gradient(120% 120% at 50% 0%,"+this.tk.surface+","+this.tk.bg+" 70%)", WebkitOverflowScrolling:"touch" }
-      : { flex:1, minHeight:0, overflow:"auto", padding:"26px 22px", background:"radial-gradient(120% 120% at 50% 0%,"+this.tk.surface+","+this.tk.bg+" 70%)", WebkitOverflowScrolling:"touch" };
-    const gridInnerStyle=mob
-      ? { position:"relative", width:(12*colW+11*gap)+"px", transform:"translateX("+(-page*pageShift)+"px)", transition:"transform .26s cubic-bezier(.3,.8,.3,1)" }
-      : { position:"relative", width:"100%", maxWidth:1680, margin:"0 auto" };
-    const gridStyle={ display:"grid", gridTemplateColumns:mob?("repeat(12, "+colW+"px)"):"repeat(12, minmax(72px,1fr))", gap, width:"100%", position:"relative", zIndex:1, pointerEvents:"none" };
+      : { flex:1, minHeight:0, overflow:"auto", padding:(gpMap?"14px 16px":"26px 22px"), background:"radial-gradient(120% 120% at 50% 0%,"+this.tk.surface+","+this.tk.bg+" 70%)", WebkitOverflowScrolling:"touch" };
+    // clip wrapper: exactly one page wide, centered — guarantees no next-page block bleeds past the edge
+    const gridClipStyle=gMob
+      ? { position:"relative", width:pageW+"px", maxWidth:"100%", marginLeft:"auto", marginRight:"auto", overflow:"hidden" }
+      : { position:"relative", width:"100%" };
+    // pane-relative height cap: cell width never exceeds what 4 scroll-free rows allow inside THIS pane
+    const _padV = gpMap ? 34 : 58;
+    const _colCapH = gpPart ? Math.max(22, Math.floor(((gpH-_padV-3*gap)/4)/0.95)) : 9999;
+    const _mapColMax = Math.min(42, _colCapH);
+    const _fullColMax = Math.min(140, _colCapH);
+    const gridInnerStyle=gMob
+      ? { position:"relative", width:stripW+"px", transform:"translateX("+(-page*pageShift)+"px)", transition:"transform .26s cubic-bezier(.3,.8,.3,1)" }
+      : { position:"relative", width:"100%", maxWidth:(gpMap?Math.min(720,12*_mapColMax+11*gap+2):Math.min(1680,12*_fullColMax+11*gap+2)), margin:"0 auto" };
+    const gridStyle={ display:"grid", gridTemplateColumns:gMob?("repeat(12, "+colW+"px)"):(gpMap?("repeat(12, minmax(24px,"+_mapColMax+"px))"):("repeat(12, minmax("+Math.min(gpMinCol,_fullColMax)+"px,1fr))")), gap, width:"100%", position:"relative", zIndex:1, pointerEvents:"none" };
     const gridClass = S.moveMode ? "axsDrag" : "";
     const stepStyle=(dis)=>({ width:mob?42:34, height:mob?42:34, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:dis?"default":"pointer", fontSize:19, fontWeight:600, color:dis?this.tk.border3:this.tk.text2, background:dis?"transparent":this.tk.surface2 });
-    const pager={ show:mob, multi:pageCount>1, cols:visCols, lessStyle:stepStyle(visCols<=3), moreStyle:stepStyle(visCols>=12),
+    const pager={ show:gMob, multi:pageCount>1, cols:visCols, lessStyle:stepStyle(visCols<=3), moreStyle:stepStyle(visCols>=12),
       dots:Array.from({length:pageCount},(v,i)=>({ i, style:{ width:i===page?20:7, height:7, borderRadius:4, background:i===page?this.tk.accent:this.tk.border2, transition:"all .2s", cursor:"pointer" } })),
-      hint: pageCount>1 ? "Swipe to pan \u00b7 pinch to zoom" : "Pinch to fit more" };
+      hint: pageCount>1 ? "Swipe or tap the dots to move across the chain" : "Fewer columns · bigger blocks" };
 
     // --- signal-graph + adjacency: drives live-cable flow and "quiet empty" treatment ---
     const isFilled = (i)=> i>=0 && i<48 && S.grid[i] && (S.grid[i].catId || S.grid[i].shunt);
@@ -2609,6 +2652,15 @@ class Component extends DCLogic {
       const togDotStyle={ width:7, height:7, borderRadius:"50%", background:on?"#46d17f":"#80808a", boxShadow:on?"0 0 6px rgba(70,209,127,.85)":"none", transition:"all .12s" };
       return { idx, cls:"", isBlock:true, isShunt:false, isEmpty:false, canDrag:true, showOut:col<11 && c.catId!=="out", outStyle, label:c.label, type:c.type, glyph:cat.glyph, glyphStyle:{fontSize:"15px",lineHeight:"1",color:"rgba(255,255,255,.82)",position:"relative",zIndex:2}, showChan:(c.catId==="amp")||(c.channel&&c.channel!=="A"), channel:c.channel, canBypass, togStyle, togDotStyle, togHover:"transform:scale(1.2);", showType, hatchStyle:{ position:"absolute", inset:0, zIndex:1, borderRadius:10, background:"repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 5px, rgba(0,0,0,0) 5px 11px)", pointerEvents:"none" }, bypassed:c.bypassed, boxStyle:box, hoverStyle:selected?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.35);", fillStyle, fillPct, qcCount:qcl.length, showDots:qcl.length>1 && !denseGrid, dots, adjusting, adjustLabel:adjusting?S.adjust.label:"", adjustValue:adjusting?S.adjust.value:0 };
     });
+
+    // MAP MODE — strip cells down to a clean glyph minimap (tap a block, then a neighbour, to route)
+    if(gpMap){ cells.forEach(cl=>{
+      if(cl.isBlock){ cl.showType=false; cl.showChan=false; cl.showDots=false; cl.canBypass=false; cl.label=""; cl.fillStyle={display:"none"};
+        cl.glyphStyle=Object.assign({},cl.glyphStyle,{fontSize:"16px",color:"rgba(255,255,255,.9)"});
+        if(cl.showOut){ cl.outStyle=Object.assign({},cl.outStyle,{width:11,height:11,right:-5,marginTop:-5,border:"2px solid "+this.tk.bg}); } }
+      else if(cl.isEmpty && (cl.plus==="" || !cl.plus)){ cl.plus="+"; cl.plusStyle={ fontSize:"12px", fontWeight:300, lineHeight:1, color:this.tk.textmuted, opacity:0.45 };
+        cl.boxStyle=Object.assign({},cl.boxStyle,{border:"1px dashed "+this.tk.border2}); }
+    }); }
 
     // cables
     const R=S.rects||{};
@@ -2933,13 +2985,13 @@ class Component extends DCLogic {
       onThemeBase:this.onThemeBase, onThemeAccent:this.onThemeAccent, onThemePreset:this.onThemePreset, onThemeScale:this.onThemeScale, onThemeFontUi:this.onThemeFontUi, onThemeFontMono:this.onThemeFontMono, onThemeReset:this.onThemeReset,
       acct, accountOpen:S.acctOpen, openAccount:this.openAccount, closeAccount:this.closeAccount,
       showFull, isMobileView:mob, topbarStyle, addBtnStyle, saveBtnStyle, railItems, onRail:this.onRail,
-      isBuild, isFc, fc,
+      isBuild, isFc, fc, fcShowBoard, fcShowLay, fcShowInsp, fcShowLed,
       drawerOpen:S.drawerOpen, toggleDrawer:this.toggleDrawer, closeDrawer:this.closeDrawer, drawerNav, drawerScenes, drawerModes,
       scenes, onScene:this.onScene, bpm:S.bpm, cpuText:cpu+"%", cpuTextStyle:{font:"700 11px/1 var(--font-mono)",color:cpuColor}, cpuBarStyle:{ width:cpu+"%", height:"100%", background:cpuColor, borderRadius:3 },
       globalModes, onGlobalMode:this.onGlobalMode, onTuner:this.onTuner, onTap:this.onTap, showCrumb:showFull && !S.editorOpen,
       onPresetPrev:this.onPresetPrev, onPresetNext:this.onPresetNext, onPresetPick:this.onPresetPick,
       openPalette:this.openPalette, onSave:this.onSave, crumbTitle, crumbType,
-      gridScrollStyle, gridInnerStyle, gridStyle, gridClass, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
+      gridScrollStyle, gridClipStyle, gridInnerStyle, gridStyle, gridClass, cells, gridRef:this.gridRef, pager, onPagePrev:this.onPagePrev, onPageNext:this.onPageNext, onPageDot:this.onPageDot,
       onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown, gridLinkBar, cancelGridLink:this.cancelGridLink,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
@@ -2960,7 +3012,8 @@ class Component extends DCLogic {
       presetNum, presetName, presetOpen:S.presetOpen, presetQuery:S.presetQuery, pp,
       closePresetPicker:this.closePresetPicker, onPresetQuery:this.onPresetQuery, onPresetKey:this.onPresetKey, presetRef:this.presetRef,
       onPresetFilter:this.onPresetFilter, onPresetRow:this.onPresetRow, onPresetHover:this.onPresetHover, onFav:this.onFav,
-      selectMenu, onFaderDown:this.onFaderDown, onFaderReset:this.onFaderReset, onSelectOpen:this.onSelectOpen, onSelectClose:this.onSelectClose, onSelectPick:this.onSelectPick
+      selectMenu, onFaderDown:this.onFaderDown, onFaderReset:this.onFaderReset, onSelectOpen:this.onSelectOpen, onSelectClose:this.onSelectClose, onSelectPick:this.onSelectPick,
+      ...(this.fcPart ? { editorOpen:false, histOpen:false, paletteOpen:false, drawerOpen:false, libOpen:false, themeOpen:false, ctxShow:false, showHistPill:false, presetOpen:false } : {})
     };
   }
 
