@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c0c0e;--bg2:#0b0b0d;--surface:#141417;--surface2:#1c1c21;--border:#1c1c22;--border2:#26262c;--border3:#34343c;--text:#e9e9ee;--text2:#cfcfd6;--textdim:#9a9aa3;--textfaint:#6e6e78;--textmuted:#56565e;--accent:#35c9d6;--accentdim:#2fb0c9;--accentbright:#4fd1dc;--accentink:#06181a;--font-ui:'Hanken Grotesk',system-ui,sans-serif;--font-mono:'JetBrains Mono',ui-monospace,monospace;}
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); overscroll-behavior:none; }
+  ::selection{ background:var(--accent); color:var(--accentink); }
+  .pb-scroll::-webkit-scrollbar{ width:9px; height:9px; }
+  .pb-scroll::-webkit-scrollbar-track{ background:transparent; }
+  .pb-scroll::-webkit-scrollbar-thumb{ background:var(--border2); border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  .pb-scroll::-webkit-scrollbar-thumb:hover{ background:var(--border3); }
+  @keyframes pbPop{ from{ opacity:0; transform:translateY(6px) scale(.99); } to{ opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes pbFade{ from{ opacity:0; } to{ opacity:1; } }
+  input{ font-family:inherit; }
+  input::placeholder{ color:var(--textmuted); }
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="position:absolute; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden;">
+
+  <!-- ===================== TOOL RAIL ===================== -->
+  <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}">
+  <div style="{{ railStyle }}">
+    <div style="margin-bottom:10px;">
+      <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="var(--accent)"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="#f5a623"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="var(--border3)" stroke-width="1.6"></path></svg>
+    </div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+      <div title="{{ r.label }}" style="{{ r.style }}" style-hover="background:var(--surface2);">
+        <span style="font-size:18px; line-height:1;">{{ r.icon }}</span>
+        <span style="font-size:8.5px; font-weight:600; letter-spacing:.02em;">{{ r.short }}</span>
+      </div>
+    </sc-for>
+    <div style="flex:1;"></div>
+    <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
+      <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
+      <span style="font:600 8px/1 var(--font-mono); color:var(--textmuted);">FW1.4</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== MAIN COLUMN ===================== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+
+    <sc-if value="{{ showTop }}" hint-placeholder-val="{{ true }}">
+    <!-- TOP BAR -->
+    <div data-screen-label="Browser Header" style="display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; padding:12px 20px; border-bottom:1px solid var(--border); flex:none;">
+      <sc-if value="{{ showMenuBtn }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ toggleLib }}" title="Library & filters" style="width:40px; height:40px; flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:var(--surface); border:1px solid var(--border2); border-radius:11px; cursor:pointer;">
+        <span style="width:16px; height:2px; border-radius:2px; background:var(--text2);"></span>
+        <span style="width:16px; height:2px; border-radius:2px; background:var(--text2);"></span>
+        <span style="width:16px; height:2px; border-radius:2px; background:var(--text2);"></span>
+      </div>
+      </sc-if>
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span style="font-size:17px; font-weight:800; letter-spacing:-.01em;">Preset Browser</span>
+        <span style="font:600 10px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.04em;">{{ countLine }}</span>
+      </div>
+      <!-- global sync chip -->
+      <div onClick="{{ onSyncJump }}" title="{{ syncChipTitle }}" style="{{ syncChipStyle }}" style-hover="filter:brightness(1.15);">
+        <span style="{{ syncDotStyle }}"></span>
+        <span>{{ syncChipText }}</span>
+      </div>
+      <div onClick="{{ onOpenTheme }}" title="Appearance & theme" style="{{ themeBtnStyle }}" style-hover="border-color:var(--border3);"><span style="font-size:15px; line-height:1;">◐</span></div>
+      <div style="flex:1;"></div>
+      <!-- device filter -->
+      <div style="display:flex; align-items:center; gap:7px;">
+        <span style="font:600 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.12em;">DEVICE</span>
+        <div onClick="{{ onDeviceFilter }}" title="Filter by Fractal device model" style="{{ deviceBtnStyle }}" style-hover="border-color:var(--border3);">
+          <span style="{{ deviceDotStyle }}"></span>
+          <span>{{ deviceLabel }}</span>
+          <span style="font-size:10px; color:var(--textmuted);">▾</span>
+        </div>
+      </div>
+      <!-- sort -->
+      <div style="display:flex; align-items:center; gap:7px;">
+        <span style="font:600 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.12em;">SORT</span>
+        <div style="display:flex; gap:3px; background:var(--bg2); border:1px solid var(--border2); border-radius:9px; padding:3px;">
+          <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="3">
+            <div data-sort="{{ s.id }}" onClick="{{ onSort }}" style="{{ s.style }}">{{ s.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <!-- advanced toggle -->
+      <div data-on="adv" onClick="{{ onToggleAdvanced }}" title="Toggle the typed query language with autocomplete" style="{{ advBtnStyle }}">
+        <span style="{{ advDotStyle }}"></span>
+        <span>Advanced search</span>
+      </div>
+    </div>
+
+    <!-- QUERY BAR -->
+    <div style="padding:13px 20px 12px; border-bottom:1px solid var(--surface2); flex:none; position:relative; z-index:60; background:var(--bg2);">
+      <div style="display:flex; align-items:stretch; gap:9px;">
+        <div style="flex:1; min-width:0; position:relative;">
+          <div style="{{ queryWrapStyle }}">
+            <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--textfaint)" stroke-width="1.5"></circle><path d="M10.6 10.6 L14 14" stroke="var(--textfaint)" stroke-width="1.5" stroke-linecap="round"></path></svg>
+            <input ref="{{ queryRef }}" onInput="{{ onQueryInput }}" onKeyDown="{{ onQueryKey }}" onFocus="{{ onQueryFocus }}" onBlur="{{ onQueryBlur }}" onClick="{{ onQuerySelect }}" onKeyUp="{{ onQuerySelect }}" placeholder="{{ queryPlaceholder }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font-size:14px; font-family:var(--font-mono); font-weight:500; letter-spacing:.01em;">
+            <sc-if value="{{ showClear }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onClearQuery }}" title="Clear" style="flex:none; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:7px; cursor:pointer; color:var(--textfaint); font-size:15px;" style-hover="background:var(--border); color:var(--text);">×</div>
+            </sc-if>
+          </div>
+          <!-- AUTOCOMPLETE -->
+          <sc-if value="{{ acOpen }}" hint-placeholder-val="{{ false }}">
+          <div class="pb-scroll" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:320px; overflow-y:auto; background:var(--surface); border:1px solid var(--border2); border-radius:13px; box-shadow:0 24px 60px rgba(0,0,0,.6); z-index:200; animation:pbPop .13s ease-out; padding:6px;">
+            <sc-if value="{{ acCtxLabel }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:7px 11px 5px; font:600 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.1em; text-transform:uppercase;">{{ acCtxLabel }}</div>
+            </sc-if>
+            <sc-for list="{{ acItems }}" as="a" hint-placeholder-count="5">
+              <div data-i="{{ a.i }}" onMouseDown="{{ onAcDown }}" onMouseEnter="{{ onAcHover }}" style="{{ a.style }}">
+                <span style="{{ a.dotStyle }}"></span>
+                <span style="font:600 13px/1.2 var(--font-mono); color:var(--text);">{{ a.label }}</span>
+                <span style="flex:1;"></span>
+                <span style="font:500 10px/1 var(--font-mono); color:var(--textfaint);">{{ a.hint }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ acEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:14px 12px; font:500 12px/1.4 var(--font-mono); color:var(--textfaint);">No matches — keep typing</div>
+            </sc-if>
+            <div style="display:flex; align-items:center; gap:14px; padding:8px 11px 5px; margin-top:4px; border-top:1px solid var(--surface2); font:600 9px/1 var(--font-mono); color:var(--textmuted);">
+              <span>↑↓ move</span><span>↵ insert</span><span>esc close</span>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        <div onClick="{{ onSaveCurrent }}" title="Save current filter" style="{{ saveBtnStyle }}">
+          <span style="font-size:14px; line-height:1;">☆</span>
+          <span>Save filter</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUILDER CHIPS -->
+    <div class="pb-scroll" style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:12px 20px; border-bottom:1px solid var(--border); flex:none; background:var(--bg);">
+      <span style="font:600 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.12em; margin-right:2px;">FILTERS</span>
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="0">
+        <div style="{{ c.wrapStyle }}">
+          <span data-ci="{{ c.ci }}" onClick="{{ c.headClick }}" style="{{ c.headStyle }}" title="{{ c.headTitle }}">
+            <span style="{{ c.dotStyle }}"></span>{{ c.label }}
+          </span>
+          <sc-if value="{{ c.isBlock }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ c.params }}" as="p" hint-placeholder-count="0">
+              <span style="{{ p.style }}">{{ p.label }}<span data-ci="{{ p.ci }}" data-pi="{{ p.pi }}" onClick="{{ onParamRemove }}" style="margin-left:5px; cursor:pointer; color:var(--textdim); font-size:12px;" style-hover="color:#fff;">×</span></span>
+            </sc-for>
+            <span data-ci="{{ c.ci }}" onClick="{{ onAddParam }}" style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:7px; font:600 11px/1 var(--font-mono); color:var(--textfaint); cursor:pointer; border:1px dashed var(--border3);" style-hover="color:var(--accent); border-color:#2a5a5e;">+ param</span>
+          </sc-if>
+          <span data-ci="{{ c.ci }}" onClick="{{ onChipRemove }}" style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:24px; cursor:pointer; color:var(--textdim); font-size:14px; border-left:1px solid rgba(255,255,255,.08);" style-hover="color:#fff;">×</span>
+        </div>
+      </sc-for>
+      <div data-anchor="addfilter" onClick="{{ onAddFilter }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 12px; border-radius:9px; background:var(--surface); border:1px solid var(--border2); cursor:pointer; font-size:12px; font-weight:600; color:var(--text2);" style-hover="border-color:var(--border3); color:#fff;">
+        <span style="font-size:14px; line-height:1; color:var(--accent);">+</span>Add filter
+      </div>
+      <sc-if value="{{ noChips }}" hint-placeholder-val="{{ true }}">
+      <span style="font:500 11.5px/1 var(--font-mono); color:var(--textmuted);">{{ noChipsHint }}</span>
+      </sc-if>
+      <div style="flex:1;"></div>
+      <sc-if value="{{ hasChips }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onClearQuery }}" style="display:inline-flex; align-items:center; height:30px; padding:0 11px; border-radius:9px; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--textdim);" style-hover="color:var(--text); background:var(--surface);">Clear all</div>
+      </sc-if>
+    </div>
+
+    </sc-if>
+
+    <!-- BODY -->
+    <div style="flex:1; min-height:0; display:flex;">
+
+      <sc-if value="{{ showSources }}" hint-placeholder-val="{{ true }}">
+      <!-- SAVED SIDEBAR -->
+      <sc-if value="{{ libBackdrop }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeLib }}" style="position:fixed; inset:0; z-index:160; background:rgba(6,6,8,.55); animation:pbFade .12s;"></div>
+      </sc-if>
+      <div class="pb-scroll" style="{{ libStyle }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 16px 9px;">
+          <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">LIBRARY</span>
+          <span style="display:inline-flex; align-items:center; gap:5px; font:600 9px/1 var(--font-mono); color:#33c46b;"><span style="width:6px; height:6px; border-radius:50%; background:#33c46b; box-shadow:0 0 6px #33c46b;"></span>{{ cloudSummary }}</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px; padding:0 9px 12px;">
+          <sc-for list="{{ views }}" as="v" hint-placeholder-count="7">
+            <div data-view="{{ v.id }}" onClick="{{ onView }}" style="{{ v.style }}" style-hover="background:var(--surface);">
+              <span style="{{ v.glyphStyle }}">{{ v.glyph }}</span>
+              <span style="flex:1; font-size:12.5px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ v.label }}</span>
+              <span style="{{ v.countStyle }}">{{ v.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:1px; background:var(--border); margin:0 14px 12px;"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:0 16px 9px;">
+          <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">SAVED FILTERS</span>
+          <span style="font:600 10px/1 var(--font-mono); color:var(--textmuted);">{{ savedCount }}</span>
+        </div>
+        <sc-if value="{{ saving }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:0 12px 8px;">
+          <input ref="{{ saveNameRef }}" onKeyDown="{{ onSaveNameKey }}" onBlur="{{ onSaveCancel }}" placeholder="Name this filter…" style="width:100%; background:var(--surface); border:1px solid var(--accent); border-radius:9px; padding:9px 11px; color:var(--text); font-size:12.5px; font-weight:600; outline:none;">
+        </div>
+        </sc-if>
+        <div style="display:flex; flex-direction:column; gap:3px; padding:0 9px 10px;">
+          <sc-for list="{{ saved }}" as="f" hint-placeholder-count="4">
+            <div data-id="{{ f.id }}" onClick="{{ onApplySaved }}" style="{{ f.style }}" style-hover="background:var(--surface);">
+              <span style="{{ f.dotStyle }}"></span>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                <span style="font-size:12.5px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.name }}</span>
+                <span style="font:500 9.5px/1.2 var(--font-mono); color:var(--textfaint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.sub }}</span>
+              </div>
+              <span data-id="{{ f.id }}" onClick="{{ onDupSaved }}" title="Duplicate" style="flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:var(--textfaint); font-size:12px;" style-hover="background:var(--border2); color:var(--text);">⧉</span>
+              <span data-id="{{ f.id }}" onClick="{{ onDelSaved }}" title="Delete" style="flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:var(--textfaint); font-size:14px;" style-hover="background:#3a1f1f; color:#e87b6a;">×</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noSaved }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 8px; font:500 11px/1.5 var(--font-mono); color:var(--textmuted);">No saved filters yet. Build a query and hit Save filter.</div>
+          </sc-if>
+        </div>
+
+        <div style="height:1px; background:var(--border); margin:4px 14px 12px;"></div>
+        <div style="padding:0 16px 9px; font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">QUICK TAGS</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 18px;">
+          <sc-for list="{{ quickTags }}" as="t" hint-placeholder-count="10">
+            <span data-tag="{{ t.label }}" onClick="{{ onQuickTag }}" style="{{ t.style }}" style-hover="border-color:var(--border3);">{{ t.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      </sc-if>
+
+      <!-- RESULTS -->
+      <sc-if value="{{ showResults }}" hint-placeholder-val="{{ true }}">
+      <div class="pb-scroll" style="flex:1; min-width:0; overflow-y:auto; background:var(--bg);">
+        <div style="display:flex; flex-direction:column;">
+          <sc-if value="{{ hasMarked }}" hint-placeholder-val="{{ false }}">
+          <div style="position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:9px; padding:10px 18px; background:var(--bg2); border-bottom:1px solid var(--surface2); box-shadow:0 6px 16px rgba(0,0,0,.35);">
+            <span style="font:700 11px/1 var(--font-mono); color:var(--accent);">{{ selCount }} selected</span>
+            <span style="flex:1;"></span>
+            <div data-act="export" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:var(--text2); background:var(--surface); border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:#fff;">⤓ Export</div>
+            <div data-act="upload" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:var(--text2); background:var(--surface); border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:#fff;">☁ Back up</div>
+            <div data-act="removeDevice" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:var(--text2); background:var(--surface); border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:#fff;">Remove</div>
+            <div data-act="delete" onClick="{{ onSelAction }}" style="display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; cursor:pointer; font-size:11.5px; font-weight:700; color:#e87b6a; background:#1f1315; border:1px solid #3a1f1f;" style-hover="border-color:#5a2d2d; color:#fff;">Delete</div>
+            <div onClick="{{ clearMarks }}" title="Clear selection" style="flex:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; color:var(--textdim); font-size:15px;" style-hover="background:var(--border); color:var(--text);">✕</div>
+          </div>
+          </sc-if>
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="12">
+            <div style="{{ row.swipeWrapStyle }}">
+            <sc-if value="{{ row.swipeOn }}" hint-placeholder-val="{{ false }}">
+            <div style="{{ row.actionsWrapStyle }}">
+              <div data-n="{{ row.n }}" onClick="{{ onSwipeLoad }}" style="{{ row.actLoadStyle }}"><span style="font-size:16px; line-height:1;">▶</span>Load</div>
+              <div data-n="{{ row.n }}" onClick="{{ onSwipeBackup }}" style="{{ row.actBackupStyle }}"><span style="font-size:16px; line-height:1;">☁</span>{{ row.backupLabel }}</div>
+              <div data-n="{{ row.n }}" onClick="{{ onSwipeDelete }}" style="{{ row.actDeleteStyle }}"><span style="font-size:15px; line-height:1;">🗑</span>Delete</div>
+            </div>
+            </sc-if>
+            <div data-n="{{ row.n }}" data-rowfront="{{ row.n }}" onPointerDown="{{ onSwipeDown }}" onPointerMove="{{ onSwipeMove }}" onPointerUp="{{ onSwipeUp }}" onPointerCancel="{{ onSwipeUp }}" onClick="{{ onRowClick }}" onContextMenu="{{ onRowContext }}" style="{{ row.frontStyle }}" style-hover="{{ row.hoverStyle }}">
+              <span data-n="{{ row.n }}" onClick="{{ onCheckClick }}" title="Select" style="{{ row.checkStyle }}">{{ row.checkMark }}</span>
+              <span style="{{ row.numStyle }}">{{ row.num }}</span>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <sc-if value="{{ row.renaming }}" hint-placeholder-val="{{ false }}">
+                  <input ref="{{ renameRef }}" onClick="{{ stop }}" onKeyDown="{{ onRenameKey }}" onBlur="{{ onRenameBlur }}" defaultValue="{{ row.name }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:var(--bg2); border:1px solid var(--accent); border-radius:7px; padding:5px 9px; color:var(--text); font-size:14px; font-weight:700; outline:none;">
+                  </sc-if>
+                  <sc-if value="{{ row.notRenaming }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:14.5px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.name }}</span>
+                  </sc-if>
+                  <sc-for list="{{ row.tags }}" as="tg" hint-placeholder-count="2">
+                    <span style="{{ tg.style }}">{{ tg.label }}</span>
+                  </sc-for>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                  <sc-for list="{{ row.blocks }}" as="b" hint-placeholder-count="5">
+                    <span style="{{ b.style }}" title="{{ b.title }}">{{ b.label }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="{{ row.deviceChipStyle }}">{{ row.device }}</span>
+                  <span style="{{ row.cloudChipStyle }}" title="{{ row.cloudTitle }}">{{ row.cloudChipText }}</span>
+                </div>
+                <span style="font:600 9.5px/1 var(--font-mono); color:var(--textfaint);">{{ row.author }}</span>
+                <div style="display:flex; align-items:center; gap:7px;">
+                  <span style="font:600 8px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.06em;">CPU</span>
+                  <div style="width:46px; height:6px; background:var(--surface); border:1px solid var(--border2); border-radius:4px; overflow:hidden;"><div style="{{ row.cpuBarStyle }}"></div></div>
+                  <span style="{{ row.cpuTextStyle }}">{{ row.cpuText }}</span>
+                </div>
+              </div>
+            </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ moreRows }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ onMoreRows }}" style="display:flex; align-items:center; justify-content:center; gap:8px; margin:10px 18px 16px; height:40px; border-radius:10px; cursor:pointer; background:var(--surface); border:1px solid var(--border2); color:var(--textdim); font-family:var(--font-ui),sans-serif; font-size:12px; font-weight:600;">{{ moreRowsLabel }}</div>
+          </sc-if>
+        </div>
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 30px; gap:14px; text-align:center;">
+          <svg width="44" height="44" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--border3)" stroke-width="1.3"></circle><path d="M10.6 10.6 L14 14" stroke="var(--border3)" stroke-width="1.3" stroke-linecap="round"></path></svg>
+          <span style="font-size:15px; font-weight:700; color:var(--textdim);">No presets match this filter</span>
+          <span style="font:500 12px/1.5 var(--font-mono); color:var(--textmuted); max-width:340px;">Loosen a parameter range or remove a block condition.</span>
+        </div>
+        </sc-if>
+      </div>
+
+      </sc-if>
+
+      <!-- DETAIL -->
+      <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ true }}">
+      <div class="pb-scroll" style="{{ detailStyle }}">
+        <sc-if value="{{ showDetailBack }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:10px; padding:11px 14px; background:color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter:blur(6px); border-bottom:1px solid var(--border);">
+          <div onClick="{{ closeDetail }}" style="display:flex; align-items:center; gap:6px; height:40px; padding:0 14px 0 9px; border-radius:10px; background:var(--surface); border:1px solid var(--border2); cursor:pointer; font-size:13px; font-weight:700; color:var(--text2);"><span style="font-size:18px; line-height:1;">‹</span>Results</div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ detail }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column;">
+          <!-- header -->
+          <div style="padding:20px 20px 16px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px;">
+              <span style="font:700 13px/1 var(--font-mono); color:#f5a623;">{{ detail.num }}</span>
+              <span style="font-size:19px; font-weight:800; letter-spacing:-.01em;">{{ detail.name }}</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;">
+              <sc-for list="{{ detail.tags }}" as="tg" hint-placeholder-count="2">
+                <span style="{{ tg.style }}">{{ tg.label }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.1em;">AUTHOR</span><span style="font-size:11.5px; font-weight:600; color:var(--text2);">{{ detail.author }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.1em;">SCENES</span><span style="font-size:11.5px; font-weight:600; color:var(--text2);">{{ detail.scenes }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.1em;">CPU</span><span style="{{ detail.cpuStyle }}">{{ detail.cpuText }}</span></div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><span style="font:600 8px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.1em;">DEVICE</span><span style="{{ detail.deviceStyle }}">{{ detail.device }}</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:13px; padding:10px 12px; background:var(--bg2); border:1px solid var(--surface2); border-radius:11px;">
+              <span style="{{ detail.cloud.chipStyle }}">{{ detail.cloud.chipText }}</span>
+              <span style="flex:1; min-width:0; font:600 10.5px/1.5 var(--font-mono); color:var(--textdim);">{{ detail.cloud.statusLine }}</span>
+            </div>
+            <div style="display:flex; gap:9px;">
+              <div onClick="{{ onLoad }}" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:42px; border-radius:11px; background:#f5a623; color:#1a1206; font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.01em;" style-hover="filter:brightness(1.08);">
+                <span style="font-size:14px;">↓</span> {{ detail.cloud.loadLabel }}
+              </div>
+              <sc-if value="{{ detail.cloud.hasAction }}" hint-placeholder-val="{{ false }}">
+              <div data-pn="{{ detail.n }}" data-kind="{{ detail.cloud.actionKind }}" onClick="{{ onCloudAction }}" title="{{ detail.cloud.actionTitle }}" style="{{ detail.cloud.actionStyle }}" style-hover="filter:brightness(1.08);">{{ detail.cloud.actionLabel }}</div>
+              </sc-if>
+            </div>
+            <div onClick="{{ onConvertOpen }}" title="Convert this preset for another Fractal device" style="display:flex; align-items:center; justify-content:center; gap:7px; margin-top:9px; height:36px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700; color:var(--textdim); background:transparent; border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:var(--text);">⇄ Convert for another device</div>
+          </div>
+          <!-- version history -->
+          <div style="padding:16px 20px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+              <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">VERSION HISTORY</span>
+              <span style="flex:1;"></span>
+              <span style="font:600 9px/1 var(--font-mono); color:var(--textmuted);">{{ detail.cloud.versionCount }}</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <sc-for list="{{ detail.cloud.versions }}" as="v" hint-placeholder-count="3">
+                <div style="{{ v.rowStyle }}">
+                  <span style="{{ v.dotStyle }}"></span>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px;">
+                    <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+                      <span style="font:700 11.5px/1 var(--font-mono); color:var(--text);">{{ v.v }}</span>
+                      <sc-for list="{{ v.badges }}" as="bd" hint-placeholder-count="0">
+                        <span style="{{ bd.style }}">{{ bd.label }}</span>
+                      </sc-for>
+                    </div>
+                    <span style="font-size:11.5px; color:var(--textdim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ v.note }}</span>
+                    <span style="font:500 9.5px/1 var(--font-mono); color:var(--textmuted);">{{ v.meta }}</span>
+                  </div>
+                  <sc-if value="{{ v.canRevert }}" hint-placeholder-val="{{ true }}">
+                  <div data-pn="{{ detail.n }}" data-vi="{{ v.idx }}" onClick="{{ onRevert }}" title="Restore this version to device" style="flex:none; align-self:center; padding:0 11px; height:30px; display:flex; align-items:center; border-radius:8px; cursor:pointer; font-size:11px; font-weight:700; color:var(--text2); background:var(--surface); border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:#fff;">Restore</div>
+                  </sc-if>
+                  <sc-if value="{{ v.isCurrent }}" hint-placeholder-val="{{ false }}">
+                  <span style="flex:none; align-self:center; font:700 8.5px/1 var(--font-mono); color:#33c46b; letter-spacing:.06em;">ON DEVICE</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <!-- signal chain -->
+          <div style="padding:16px 20px;">
+            <div style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em; margin-bottom:11px;">SIGNAL CHAIN</div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:5px;">
+              <sc-for list="{{ detail.chain }}" as="ch" hint-placeholder-count="6">
+                <span style="{{ ch.style }}" title="{{ ch.title }}"><span style="font-size:11px;">{{ ch.glyph }}</span>{{ ch.label }}</span>
+                <sc-if value="{{ ch.arrow }}" hint-placeholder-val="{{ true }}"><span style="color:var(--border3); font-size:11px;">›</span></sc-if>
+              </sc-for>
+            </div>
+          </div>
+          <!-- block breakdown -->
+          <div style="padding:4px 20px 28px; display:flex; flex-direction:column; gap:11px;">
+            <div style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em; margin-bottom:1px;">BLOCK PARAMETERS</div>
+            <sc-for list="{{ detail.blocks }}" as="blk" hint-placeholder-count="3">
+              <div style="border:1px solid var(--surface2); border-radius:12px; overflow:hidden; background:var(--bg2);">
+                <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--surface2);">
+                  <span style="{{ blk.dotStyle }}"></span>
+                  <span style="font-size:13px; font-weight:700; color:var(--text);">{{ blk.name }}</span>
+                  <span style="flex:1;"></span>
+                  <span style="font:600 9px/1 var(--font-mono); color:var(--textfaint);">{{ blk.inst }}</span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:1px; background:var(--surface2);">
+                  <sc-for list="{{ blk.params }}" as="pr" hint-placeholder-count="4">
+                    <div style="{{ pr.style }}">
+                      <span style="font:600 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.04em;">{{ pr.k }}</span>
+                      <span style="{{ pr.valStyle }}">{{ pr.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ noDetail }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:90px 30px; gap:13px; text-align:center; height:100%;">
+          <span style="font-size:30px; opacity:.4;">◧</span>
+          <span style="font-size:14px; font-weight:700; color:var(--textfaint);">Select a preset</span>
+          <span style="font:500 11px/1.5 var(--font-mono); color:var(--border3); max-width:230px;">Its full block + parameter breakdown and signal chain show up here.</span>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <!-- ===================== GENERIC SEARCHABLE PICKER ===================== -->
+  <sc-if value="{{ picker }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ onPickerClose }}" style="position:fixed; inset:0; z-index:300; animation:pbFade .1s;">
+    <div onMouseDown="{{ stop }}" style="{{ picker.style }}">
+      <div style="padding:10px 12px 8px; border-bottom:1px solid var(--surface2);">
+        <div style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.12em; margin-bottom:9px;">{{ picker.title }}</div>
+        <div style="display:flex; align-items:center; gap:8px; background:var(--bg2); border:1px solid var(--border2); border-radius:9px; padding:8px 10px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--textfaint)" stroke-width="1.6"></circle><path d="M10.6 10.6 L14 14" stroke="var(--textfaint)" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          <input ref="{{ pickerSearchRef }}" onInput="{{ onPickerSearch }}" onKeyDown="{{ onPickerKey }}" placeholder="{{ picker.placeholder }}" spellcheck="false" autocomplete="off" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font-size:12.5px; font-weight:600;">
+        </div>
+      </div>
+      <div class="pb-scroll" style="max-height:288px; overflow-y:auto; padding:6px;">
+        <sc-for list="{{ picker.items }}" as="it" hint-placeholder-count="8">
+          <div data-v="{{ it.v }}" onClick="{{ onPickerPick }}" style="{{ it.style }}" style-hover="background:var(--border);">
+            <sc-if value="{{ it.dot }}" hint-placeholder-val="{{ false }}"><span style="{{ it.dotStyle }}"></span></sc-if>
+            <span style="font-size:12.5px; font-weight:600; color:var(--text);">{{ it.label }}</span>
+            <span style="flex:1;"></span>
+            <span style="font:500 10px/1 var(--font-mono); color:var(--textfaint);">{{ it.sub }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ picker.empty }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:14px 12px; font:500 12px/1.4 var(--font-mono); color:var(--textfaint);">No matches</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== CONTEXT MENU ===================== -->
+  <sc-if value="{{ ctx }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ closeCtx }}" onContextMenu="{{ ctxPrevent }}" style="position:fixed; inset:0; z-index:380; animation:pbFade .08s;">
+    <div onMouseDown="{{ stop }}" onContextMenu="{{ ctxPrevent }}" style="{{ ctx.style }}">
+      <sc-if value="{{ ctx.title }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:7px 11px 6px; font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.1em;">{{ ctx.title }}</div>
+      </sc-if>
+      <sc-for list="{{ ctx.items }}" as="m" hint-placeholder-count="6">
+        <sc-if value="{{ m.divider }}" hint-placeholder-val="{{ false }}">
+        <div style="height:1px; background:var(--surface2); margin:5px 8px;"></div>
+        </sc-if>
+        <sc-if value="{{ m.isItem }}" hint-placeholder-val="{{ true }}">
+        <div data-act="{{ m.id }}" onClick="{{ onCtxAction }}" style="{{ m.style }}" style-hover="{{ m.hover }}">
+          <span style="{{ m.glyphStyle }}">{{ m.glyph }}</span>
+          <span style="flex:1;">{{ m.label }}</span>
+          <span style="font:600 9px/1 var(--font-mono); color:var(--textmuted);">{{ m.hint }}</span>
+        </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== CONFIRM DIALOG ===================== -->
+  <sc-if value="{{ confirm }}" hint-placeholder-val="{{ false }}">
+  <div onMouseDown="{{ onConfirmNo }}" style="position:fixed; inset:0; z-index:420; background:rgba(6,6,8,.66); display:flex; align-items:center; justify-content:center; padding:20px; animation:pbFade .1s;">
+    <div onMouseDown="{{ stop }}" style="width:400px; max-width:100%; background:var(--surface); border:1px solid var(--border2); border-radius:16px; box-shadow:0 32px 80px rgba(0,0,0,.6); overflow:hidden; animation:pbPop .15s ease-out;">
+      <div style="padding:22px 22px 18px;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:13px;">
+          <span style="{{ confirm.iconStyle }}">{{ confirm.icon }}</span>
+          <span style="font-size:17px; font-weight:800; color:#fff;">{{ confirm.title }}</span>
+        </div>
+        <div style="font-size:13px; line-height:1.6; color:var(--textdim);">{{ confirm.message }}</div>
+      </div>
+      <div style="display:flex; gap:10px; padding:0 22px 22px;">
+        <div onClick="{{ onConfirmNo }}" style="flex:1; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; cursor:pointer; font-size:13px; font-weight:700; color:var(--text2); background:var(--surface2); border:1px solid var(--border2);" style-hover="border-color:var(--border3); color:#fff;">Cancel</div>
+        <div onClick="{{ onConfirmYes }}" style="{{ confirm.yesStyle }}" style-hover="filter:brightness(1.08);">{{ confirm.confirmLabel }}</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===================== TOAST ===================== -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:400; display:flex; align-items:center; gap:10px; padding:11px 16px; background:var(--surface2); border:1px solid var(--border2); border-radius:11px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:pbPop .14s ease-out;">
+    <span style="{{ toast.dot }}"></span>
+    <span style="font-size:12.5px; font-weight:600; color:var(--text);">{{ toast.text }}</span>
+  </div>
+  </sc-if>
+
+</div>
+
+<sc-if value="{{ themeOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onCloseTheme }}" data-screen-label="Appearance" style="{{ themeOverlayStyle }}">
+  <div onClick="{{ stopTheme }}" style="{{ themeCardStyle }}">
+    <div style="display:flex; align-items:center; gap:11px; padding:18px 20px 15px; border-bottom:1px solid var(--border); flex:none;">
+      <span style="font:800 16px/1 var(--font-ui); color:var(--text); letter-spacing:-.01em;">Appearance</span>
+      <div style="flex:1;"></div>
+      <div onClick="{{ onCloseTheme }}" title="Close" style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; color:var(--textdim); background:var(--surface); border:1px solid var(--border2); font-size:15px;">✕</div>
+    </div>
+    <div class="pb-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:24px;">
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">PRESETS</span>
+        <div style="display:flex; flex-direction:column; gap:7px;">
+          <sc-for list="{{ themePresets }}" as="p" hint-placeholder-count="5">
+            <div data-pid="{{ p.pid }}" onClick="{{ onThemePreset }}" style="{{ p.style }}">
+              <span style="{{ p.dotStyle }}"></span>
+              <span style="{{ p.nameStyle }}">{{ p.name }}</span>
+              <span style="{{ p.tagStyle }}">{{ p.base }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">MODE</span>
+        <div style="display:flex; gap:5px; background:var(--surface); border:1px solid var(--border2); border-radius:11px; padding:4px;">
+          <div data-base="dark" onClick="{{ onThemeBase }}" style="{{ themeBaseDark }}">Dark</div>
+          <div data-base="light" onClick="{{ onThemeBase }}" style="{{ themeBaseLight }}">Light</div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">ACCENT</span>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <sc-for list="{{ accentSwatches }}" as="a" hint-placeholder-count="6">
+            <div data-acc="{{ a.acc }}" onClick="{{ onThemeAccent }}" style="{{ a.style }}"></div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">INTERFACE SCALE</span>
+          <span style="font:700 12px/1 var(--font-mono); color:var(--accent);">{{ themeScaleLabel }}</span>
+        </div>
+        <input type="range" min="80" max="130" step="5" value="{{ themeScale }}" onInput="{{ onThemeScale }}" style="width:100%; accent-color:var(--accent); cursor:pointer;">
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">INTERFACE FONT</span>
+        <select value="{{ fontUiVal }}" onChange="{{ onThemeFontUi }}" style="{{ selStyle }}">
+          <sc-for list="{{ fontUiOpts }}" as="o" hint-placeholder-count="3">
+            <option value="{{ o.v }}">{{ o.v }}</option>
+          </sc-for>
+        </select>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:11px;">
+        <span style="font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.14em;">MONOSPACE FONT</span>
+        <select value="{{ fontMonoVal }}" onChange="{{ onThemeFontMono }}" style="{{ selStyle }}">
+          <sc-for list="{{ fontMonoOpts }}" as="o" hint-placeholder-count="3">
+            <option value="{{ o.v }}">{{ o.v }}</option>
+          </sc-for>
+        </select>
+      </div>
+
+      <div onClick="{{ onThemeReset }}" style="display:flex; align-items:center; justify-content:center; height:42px; border-radius:11px; cursor:pointer; font:700 12.5px/1 var(--font-ui); color:var(--textdim); background:var(--surface); border:1px solid var(--border2);" style-hover="color:var(--text); border-color:var(--border3);">Reset to defaults</div>
+
+    </div>
+  </div>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#35c9d6&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#35c9d6&quot;,&quot;#f5a623&quot;,&quot;#9b8cf0&quot;,&quot;#33c46b&quot;],&quot;section&quot;:&quot;Appearance&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;comfortable&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;advancedDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.initTheme();
+    // ---------- catalog ----------
+    this.CAT = {
+      in:["In","#4f6bed","→"], out:["Out","#2fa15f","⇥"],
+      amp:["Amp","#d98a2b","◣"], cab:["Cab","#7d7d87","▦"], drive:["Drive","#d6543f","◈"],
+      comp:["Comp","#b3a52b","▮"], chorus:["Chorus","#2fb0c9","∿"], flange:["Flange","#c95bc0","≋"],
+      phaser:["Phaser","#8a6fd6","◠"], filter:["Filter","#d65b9e","⌇"], enhance:["Enhance","#9b8cf0","◎"],
+      delay:["Delay","#4a82e0","⟫"], reverb:["Reverb","#3fa890","◜"]
+    };
+    // filterable block tokens (order = picker order)
+    this.FILTERABLE = ["amp","drive","cab","comp","chorus","flange","phaser","filter","enhance","delay","reverb"];
+    this.BLOCK_TOKENS = {}; this.TOKEN_TO_ID = {};
+    Object.keys(this.CAT).forEach(id=>{ const tok=id.toUpperCase(); this.BLOCK_TOKENS[id]=tok; this.TOKEN_TO_ID[tok]=id; });
+
+    // ---------- value lists ----------
+    const AMP=["5F1 Tweed","5153 100W Blue","5153 100W Red","5153 100W Stealth Red","Brit 800 #34","Brit JM45","Brit JVM OD2 Red","1959SLP Treble","Class-A 30W","Dizzy V4 Blue","Citrus A30 Dirty","Deluxe Tweed","Double Verb Normal","Euro Red Modern","USA Lead 1","USA Lead 2","Recto Orange Modern","PVH 6160 Block","Friedman BE","Cameron CCV 2C","Buttery Lead","Solo 100 Lead"];
+    const CABS=["4x12 Brit 65","4x12 Brit 70","4x12 Recto","2x12 USA Deluxe","1x12 Tweed","1x12 Princeton","2x12 Brit Silver","4x12 Mesa OS"];
+    const DRIVES=["TS808 OD","TS9 OD","Klone Chiron","Tube Drive","Esoteric RCB","Esoteric ROD","Face Fuzz","Fat Rat","Plus Distortion","Bit Crusher","Treble Boost","FET Boost"];
+    const REVERBS=["Medium Hall","Large Hall","Small Room","Large Room","Plate 1","Plate 2","Spring 1","Spring 2","Cathedral","Ambience","Shimmer","Cave"];
+    const DELAYS=["Digital Mono","Digital Stereo","Tube Tape","Tape","BBD Mono","BBD Stereo","Reverse","Multitap","Ping-Pong","Diffusion"];
+    const COMPS=["Pedal 1","Pedal 2","Studio","Optical","Tube","Juice 70","Dynamic","Class A"];
+    const FILTERS=["Lowpass","Highpass","Bandpass","Peaking","Auto-Wah","Talk"];
+    const NOTES=["1/4","1/8","1/8 dot","1/16","Free"];
+    this.VALS={AMP,CABS,DRIVES,REVERBS,DELAYS,COMPS,FILTERS,NOTES};
+
+    // ---------- param specs: [name, kind, a, b] ----------
+    this.PSPEC = {
+      amp:[["TYPE","enum",AMP],["GAIN","num",0,10],["MASTER","num",0,10],["LEVEL","num",0,10],["BASS","num",0,10],["MID","num",0,10],["TREBLE","num",0,10],["PRESENCE","num",0,10],["BRIGHT","bool"]],
+      cab:[["TYPE","enum",CABS],["LEVEL","num",-20,6]],
+      drive:[["TYPE","enum",DRIVES],["DRIVE","num",0,10],["TONE","num",0,10],["LEVEL","num",0,10],["MIX","num",0,100]],
+      reverb:[["TYPE","enum",REVERBS],["TIME","num",0,10],["MIX","num",0,100],["WIDTH","num",0,10],["LOWCUT","num",20,2000],["HIGHCUT","num",2000,20000]],
+      delay:[["TYPE","enum",DELAYS],["TIME","num",0,2000],["FEEDBACK","num",0,100],["MIX","num",0,100],["TEMPO","enum",NOTES]],
+      comp:[["TYPE","enum",COMPS],["THRESHOLD","num",-60,0],["RATIO","num",1,20],["LEVEL","num",-12,12]],
+      chorus:[["RATE","num",0,10],["DEPTH","num",0,10],["MIX","num",0,100]],
+      flange:[["RATE","num",0,10],["DEPTH","num",0,10],["FEEDBACK","num",0,100],["MIX","num",0,100]],
+      phaser:[["RATE","num",0,10],["DEPTH","num",0,10],["STAGES","num",2,12]],
+      filter:[["TYPE","enum",FILTERS],["FREQ","num",20,20000],["Q","num",0.1,10]],
+      enhance:[["WIDTH","num",0,10],["MIX","num",0,100]]
+    };
+
+    this.TAGS=["Clean","Crunch","Hi-Gain","Lead","Rhythm","Ambient","Bass","Acoustic","Blues","Metal","Djent","Country","Funk","Jazz","Worship","Hendrix","SRV","Gilmour","80s","Modern","Live","Fuzz"];
+    this.TAGCOL={Clean:"#35c9d6",Crunch:"#f5a623","Hi-Gain":"#d6543f",Lead:"#d65b9e",Rhythm:"#8a8a94",Ambient:"#9b8cf0",Bass:"#4f6bed",Acoustic:"#7fae4a",Blues:"#4a82e0",Metal:"#d6543f",Djent:"#c95bc0",Country:"#b3a52b",Funk:"#2fb0c9",Jazz:"#3fa890",Worship:"#9b8cf0",Hendrix:"#f5a623",SRV:"#d98a2b",Gilmour:"#35c9d6","80s":"#c95bc0",Modern:"#8a6fd6",Live:"#33c46b",Fuzz:"#d6543f"};
+
+    this.DEVICES=["Axe-Fx III","FM9","FM3"];
+    this.DEVCOL={"Axe-Fx III":"#4f6bed","FM9":"#2fb0c9","FM3":"#d98a2b","all":"#8a8a94"};
+    this.DEVSHORT={"Axe-Fx III":"Axe-Fx III","FM9":"FM9","FM3":"FM3"};
+    // ---- shared cross-instance bus: sources / list / detail stay in sync ----
+    const bus = window.__PBBus || (window.__PBBus = { instances:new Set(), state:null, PRESETS:null, PBYN:null,
+      rank:{list:0,detail:1,sources:2,full:3},
+      notify(){ this.instances.forEach(i=>{ try{ i.forceUpdate(); }catch(e){} }); },
+      owner(){ let best=null,br=99; this.instances.forEach(i=>{ const r=(this.rank[i.part]!=null?this.rank[i.part]:3); if(r<br){ br=r; best=i; } }); return best; } });
+    this.bus = bus;
+    this.part = (props && props.part) || "full";
+    if(bus.PRESETS){ this.PRESETS=bus.PRESETS; this.PBYN=bus.PBYN; }
+    else { this.PRESETS = this.buildPresets(); this.PBYN={}; this.PRESETS.forEach(p=>this.PBYN[p.n]=p); this.buildCloud(); bus.PRESETS=this.PRESETS; bus.PBYN=this.PBYN; }
+
+    const adv = props && props.advancedDefault===false ? false : true;
+    if(bus.state){ this.state = bus.state; }
+    else { this.state = {
+      advanced:adv, query:"", simpleQ:"", caret:0,
+      conditions:[], sort:"num", selected:null,
+      acOpen:false, acItems:[], acIndex:0, acCtxLabel:"",
+      picker:null, pickerSearch:"", pickerHi:0,
+      saving:false,
+      saved: this.seedSaved(),
+      cloudOverride:{}, view:"all", toast:null,
+      marked:{}, anchorN:null, renaming:null, renames:{}, deleted:{}, ctx:null,
+      deviceFilter:"all", confirm:null,
+      vw:(typeof window!=="undefined"?window.innerWidth:1440), libOpen:false, swipeN:null,
+      theme:this._theme, themeOpen:false
+    }; bus.state = this.state; }
+    this._caret=0;
+  }
+
+  // shared setState: mutate the one shared state object, re-render every mounted instance
+  setState(patch, cb){ const p=(typeof patch==="function")?patch(this.state):patch; if(this.bus){ if(p) Object.assign(this.bus.state,p); this.bus.instances.forEach(i=>{ if(p) Object.assign(i.state,p); try{ i.forceUpdate(); }catch(e){} }); if(!this.bus.instances.size && p) Object.assign(this.state,p); } else { if(p) Object.assign(this.state,p); try{ this.forceUpdate(); }catch(e){} } if(cb) cb(); }
+
+  componentDidMount(){ if(this.bus){ this.bus.instances.add(this); Object.assign(this.state, this.bus.state); } this.loadSaved(); this.applyTheme(this.state.theme);
+    this._rz=()=>{ if(window.innerWidth!==this.state.vw) this.setState({vw:window.innerWidth}); };
+    window.addEventListener("resize",this._rz);
+  }
+  componentWillUnmount(){ if(this.bus) this.bus.instances.delete(this); window.removeEventListener("resize",this._rz); if(this._tt) clearTimeout(this._tt); }
+  isMobile(){ return this.state.vw<760; }
+  navCompact(){ return this.state.vw<1024; }
+  toggleLib=()=>this.setState({libOpen:!this.state.libOpen});
+  closeLib=()=>this.setState({libOpen:false});
+  closeDetail=()=>this.setState({selected:null});
+
+  // ===================== THEME ENGINE =====================
+  PALETTES = {
+    dark:  {bg:'#0c0c0e',bg2:'#0b0b0d',surface:'#141417',surface2:'#1c1c21',border:'#1c1c22',border2:'#26262c',border3:'#34343c',text:'#e9e9ee',text2:'#cfcfd6',textdim:'#9a9aa3',textfaint:'#6e6e78',textmuted:'#56565e'},
+    light: {bg:'#e9ebf0',bg2:'#dfe1e8',surface:'#ffffff',surface2:'#f1f2f6',border:'#e0e2ea',border2:'#cfd2dc',border3:'#b4b8c6',text:'#181a20',text2:'#3d4048',textdim:'#5e626e',textfaint:'#8a8e9c',textmuted:'#a7abb8'}
+  };
+  ACCENT_SWATCHES = ['#35c9d6','#4f6bed','#9b8cf0','#f5a623','#33c46b','#e5588f'];
+  THEME_PRESETS = [
+    {id:'midnight',name:'Midnight',base:'dark',accent:'#35c9d6',pal:{}},
+    {id:'stage',name:'Stage',base:'dark',accent:'#f5a623',pal:{bg:'#080809',bg2:'#050506',surface:'#151210',surface2:'#221c15',border:'#241f18',border2:'#34291d',border3:'#473b28',text:'#ffffff',text2:'#e8e4dc',textdim:'#b3ac9e',textfaint:'#7f776a',textmuted:'#60594e'}},
+    {id:'nebula',name:'Nebula',base:'dark',accent:'#9b8cf0',pal:{bg:'#0b0a10',bg2:'#08070d',surface:'#141320',surface2:'#1e1c2e',border:'#201e30',border2:'#2c2942',border3:'#3b3654',text:'#eceaf5',text2:'#cac6dc',textdim:'#9b96b4',textfaint:'#6e6986',textmuted:'#54506a'}},
+    {id:'daylight',name:'Daylight',base:'light',accent:'#1f9fae',pal:{}},
+    {id:'paper',name:'Paper',base:'light',accent:'#b5642a',pal:{bg:'#efe9dd',bg2:'#e5decd',surface:'#fbf7ef',surface2:'#f2ebdd',border:'#e4dccb',border2:'#d6ccb5',border3:'#bcb094',text:'#231f17',text2:'#453f32',textdim:'#6d6553',textfaint:'#9a9179',textmuted:'#b4ab93'}}
+  ];
+  FONT_UI = [['Hanken Grotesk',"'Hanken Grotesk',system-ui,sans-serif"],['Manrope',"'Manrope',system-ui,sans-serif"],['Space Grotesk',"'Space Grotesk',system-ui,sans-serif"]];
+  FONT_MONO = [['JetBrains Mono',"'JetBrains Mono',ui-monospace,monospace"],['IBM Plex Mono',"'IBM Plex Mono',ui-monospace,monospace"],['Space Mono',"'Space Mono',ui-monospace,monospace"]];
+  lum(hex){ const n=parseInt(hex.slice(1),16); const r=(n>>16&255)/255,g=(n>>8&255)/255,b=(n&255)/255; const f=c=>c<=.03928?c/12.92:Math.pow((c+.055)/1.055,2.4); return .2126*f(r)+.7152*f(g)+.0722*f(b); }
+  shade(hex,p){ const n=parseInt(hex.slice(1),16); let r=n>>16&255,g=n>>8&255,b=n&255; const t=Math.abs(p),to=p<0?0:255; r=Math.round((to-r)*t+r); g=Math.round((to-g)*t+g); b=Math.round((to-b)*t+b); return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
+  readable(hex){ return this.lum(hex)>0.5 ? '#0a1416' : '#ffffff'; }
+  resolveTk(cfg){ const base=Object.assign({}, this.PALETTES[cfg.base==='light'?'light':'dark']); const acc=cfg.accent||'#35c9d6'; base.accent=acc; base.accentdim=this.shade(acc,cfg.base==='light'?0.12:-0.16); base.accentbright=this.shade(acc,0.28); base.accentink=this.readable(acc); base['font-ui']=(this.FONT_UI.find(x=>x[0]===cfg.fontUi)||this.FONT_UI[0])[1]; base['font-mono']=(this.FONT_MONO.find(x=>x[0]===cfg.fontMono)||this.FONT_MONO[0])[1]; if(cfg.custom) Object.assign(base, cfg.custom); return base; }
+  defaultTheme(){ return {base:'dark',accent:'#35c9d6',custom:{},scale:100,fontUi:'Hanken Grotesk',fontMono:'JetBrains Mono',preset:'midnight'}; }
+  initTheme(){ this._theme=this.defaultTheme(); this.tk=this.resolveTk(this._theme); }
+  aT(p){ return 'color-mix(in srgb, '+this.tk.accent+' '+p+'%, transparent)'; }
+  rootRef=(el)=>{ this.rootEl=el; if(el) el.style.zoom=((this.state&&this.state.theme?this.state.theme.scale:100)||100)/100; };
+  applyTheme(cfg){ const tk=this.resolveTk(cfg); const el=this.rootEl||document.documentElement; Object.keys(tk).forEach(k=>{ el.style.setProperty('--'+k, tk[k]); if(this.rootEl) this.rootEl.style.setProperty('--'+k, tk[k]); }); if(this.rootEl) this.rootEl.style.zoom=(cfg.scale||100)/100; try{ localStorage.setItem('pb.theme', JSON.stringify(cfg)); }catch(e){} }
+  setTheme(patch){ const t=Object.assign({}, this.state.theme, patch); this.tk=this.resolveTk(t); this.setState({theme:t}, ()=>this.applyTheme(t)); }
+  applyPreset(id){ const p=this.THEME_PRESETS.find(x=>x.id===id); if(!p) return; this.setTheme({preset:id, base:p.base, accent:p.accent, custom:Object.assign({}, p.pal||{})}); }
+  onOpenTheme=()=>this.setState({themeOpen:true, libOpen:false});
+  onCloseTheme=()=>this.setState({themeOpen:false});
+  onThemeBase=(e)=>this.setTheme({base:e.currentTarget.dataset.base, preset:null, custom:{}});
+  onThemeAccent=(e)=>this.setTheme({accent:e.currentTarget.dataset.acc, preset:null});
+  onThemePreset=(e)=>this.applyPreset(e.currentTarget.dataset.pid);
+  onThemeScale=(e)=>this.setTheme({scale:+e.currentTarget.value});
+  onThemeFontUi=(e)=>this.setTheme({fontUi:e.currentTarget.value, preset:null});
+  onThemeFontMono=(e)=>this.setTheme({fontMono:e.currentTarget.value, preset:null});
+  onThemeReset=()=>{ const d=this.defaultTheme(); this.tk=this.resolveTk(d); this.setState({theme:d},()=>this.applyTheme(d)); };
+
+  // ===================== DATA GEN =====================
+  rng(seed){ let t=seed>>>0; return ()=>{ t+=0x6D2B79F5; let r=Math.imul(t^(t>>>15),1|t); r^=r+Math.imul(r^(r>>>7),61|r); return ((r^(r>>>14))>>>0)/4294967296; }; }
+  pick(r,a){ return a[Math.floor(r()*a.length)%a.length]; }
+  rn(r,min,max,dec){ const v=min+(max-min)*r(); const m=Math.pow(10,dec||0); return Math.round(v*m)/m; }
+
+  buildPresets(){
+    const V=this.VALS;
+    const seeds=[
+      ["Studio Clean",["Clean","Rhythm"],"Fractal Factory"],
+      ["Glassy Twang",["Clean","Country"],"Cooper Carter"],
+      ["Pristine Chime",["Clean","80s"],"M. Asbury"],
+      ["Crystal Pad",["Clean","Ambient"],"L. Mills"],
+      ["Worship Swell",["Worship","Ambient"],"J. Sklar"],
+      ["Ambient Church",["Worship","Ambient","Clean"],"J. Sklar"],
+      ["Sparkle Clean",["Clean"],"Fractal Factory"],
+      ["Pedal Platform",["Clean","Rhythm"],"You"],
+      ["Texas Flood",["Blues","SRV","Lead"],"R. Marino"],
+      ["Hendrix Wail",["Hendrix","Blues","Fuzz"],"R. Marino"],
+      ["Voodoo Lead",["Hendrix","Lead"],"R. Marino"],
+      ["SRV Strat",["SRV","Blues"],"Cooper Carter"],
+      ["Blues Breaker",["Blues","Crunch"],"M. Asbury"],
+      ["Smooth Blues",["Blues","Lead"],"L. Mills"],
+      ["Foxy Fuzz",["Hendrix","Fuzz","Lead"],"R. Marino"],
+      ["Little Wing",["Hendrix","Clean","Ambient"],"R. Marino"],
+      ["Brit Crunch",["Crunch","Rhythm"],"Fractal Factory"],
+      ["Plexi Roar",["Crunch","Hi-Gain"],"T. Nordvik"],
+      ["AC Vox Chime",["Crunch","Clean","80s"],"M. Asbury"],
+      ["70s Rock",["Crunch","Lead"],"Cooper Carter"],
+      ["Marshall Stack",["Hi-Gain","Crunch"],"T. Nordvik"],
+      ["Classic Rhythm",["Rhythm","Crunch"],"You"],
+      ["Modern Djent",["Djent","Metal","Hi-Gain"],"T. Nordvik"],
+      ["Recto Brutal",["Metal","Hi-Gain"],"T. Nordvik"],
+      ["8-String Chug",["Djent","Metal","Modern"],"T. Nordvik"],
+      ["5153 Lead",["Metal","Lead","Hi-Gain"],"Cooper Carter"],
+      ["Tight Metal",["Metal","Rhythm","Modern"],"T. Nordvik"],
+      ["Doom Sludge",["Metal","Fuzz"],"T. Nordvik"],
+      ["Prog Lead",["Djent","Lead","Ambient"],"Cooper Carter"],
+      ["Thall Tone",["Djent","Metal","Modern"],"T. Nordvik"],
+      ["Chicken Pickin",["Country","Clean"],"L. Mills"],
+      ["Funk Strat",["Funk","Clean"],"L. Mills"],
+      ["Jazz Box",["Jazz","Clean"],"M. Asbury"],
+      ["Nashville Hot",["Country","Lead"],"Cooper Carter"],
+      ["Motown Bass",["Bass","Funk"],"L. Mills"],
+      ["Smooth Jazz",["Jazz","Ambient"],"M. Asbury"],
+      ["Ambient Wash",["Ambient","Clean"],"J. Sklar"],
+      ["Shimmer Lead",["Ambient","Lead","Modern"],"J. Sklar"],
+      ["Soaring Lead",["Lead","Hi-Gain","Ambient"],"Cooper Carter"],
+      ["Gilmour Lead",["Gilmour","Lead","Ambient"],"R. Marino"],
+      ["Big Sky",["Ambient","Worship"],"J. Sklar"],
+      ["Post-Rock Bloom",["Ambient","Modern","Clean"],"J. Sklar"],
+      ["Slap Bass",["Bass","Funk"],"L. Mills"],
+      ["Fingerstyle Bass",["Bass","Rhythm"],"You"],
+      ["Rock Bass DI",["Bass","Rhythm","Live"],"Fractal Factory"],
+      ["Live Worship 2",["Worship","Live","Clean"],"J. Sklar"],
+      ["Practice Tone",["Rhythm","Live"],"You"],
+      ["DEBUG",["Modern"],"You"]
+    ];
+    return seeds.map((s,idx)=>this.genPreset(idx, s[0], s[1], s[2]));
+  }
+
+  has(tags,arr){ return tags.some(t=>arr.indexOf(t)>=0); }
+
+  genPreset(idx,name,tags,author){
+    const n=idx+1; const r=this.rng(n*2654435+101);
+    const V=this.VALS;
+    const metal=this.has(tags,["Metal","Djent"]);
+    const blues=this.has(tags,["Blues","SRV","Hendrix"]);
+    const clean=this.has(tags,["Clean","Worship","Acoustic"]);
+    const ambient=this.has(tags,["Ambient","Worship","Gilmour"]);
+    const lead=this.has(tags,["Lead"]);
+    const funk=this.has(tags,["Funk","Country","Jazz"]);
+    const bass=this.has(tags,["Bass"]);
+    const fuzz=this.has(tags,["Fuzz"]);
+
+    let ampPool, gMin,gMax;
+    if(metal){ ampPool=["5153 100W Red","PVH 6160 Block","Recto Orange Modern","USA Lead 2","Friedman BE","Cameron CCV 2C","Euro Red Modern"]; gMin=7; gMax=9.5; }
+    else if(blues){ ampPool=["Brit JM45","1959SLP Treble","Brit 800 #34","Class-A 30W","Buttery Lead"]; gMin=4.5; gMax=6.8; }
+    else if(clean){ ampPool=["Deluxe Tweed","Class-A 30W","5F1 Tweed","Citrus A30 Dirty","Double Verb Normal","Dizzy V4 Blue"]; gMin=2; gMax=4.2; }
+    else if(funk){ ampPool=["Deluxe Tweed","Double Verb Normal","5F1 Tweed","Dizzy V4 Blue"]; gMin=2.5; gMax=4.5; }
+    else { ampPool=V.AMP; gMin=3; gMax=7; }
+    if(lead){ gMax=Math.min(9.5,gMax+1.5); gMin=Math.min(gMin+1,gMax-0.5); }
+
+    const blocks=[];
+    blocks.push({type:"in",inst:"In 1",params:{}});
+    if(funk || clean){ if(r()>0.45) blocks.push({type:"comp",inst:"Comp 1",params:this.fillComp(r,V)}); }
+    const wantDrive = blues||metal||lead||fuzz || r()>0.42;
+    if(wantDrive) blocks.push({type:"drive",inst:"Drive 1",params:this.fillDrive(r,V,{metal,blues,fuzz})});
+    blocks.push({type:"amp",inst:"Amp 1",params:this.fillAmp(r,ampPool,gMin,gMax)});
+    blocks.push({type:"cab",inst:"Cab 1",params:this.fillCab(r,V,{metal,clean})});
+    if(funk && r()>0.55) blocks.push({type:"filter",inst:"Filter 1",params:this.fillFilter(r,V)});
+    if(this.has(tags,["80s"]) || (clean && r()>0.6)) blocks.push({type:"chorus",inst:"Chorus 1",params:this.fillChorus(r)});
+    if(r()>0.86) blocks.push({type:"flange",inst:"Flange 1",params:this.fillFlange(r)});
+    if(ambient && r()>0.55) blocks.push({type:"enhance",inst:"Enhance 1",params:{WIDTH:this.rn(r,5,10,1),MIX:this.rn(r,20,60,0)}});
+    const wantDelay = lead||ambient||this.has(tags,["Gilmour"]) || r()>0.4;
+    if(wantDelay) blocks.push({type:"delay",inst:"Delay 1",params:this.fillDelay(r,V,{ambient})});
+    const wantVerb = ambient||clean || r()>0.25;
+    if(wantVerb) blocks.push({type:"reverb",inst:"Reverb 1",params:this.fillReverb(r,V,{ambient})});
+    blocks.push({type:"out",inst:"Out 1",params:{}});
+
+    const fxCount=blocks.length-3;
+    let cpu=Math.round(34 + fxCount*5.5 + r()*16); if(metal||ambient) cpu+=6; cpu=Math.max(31,Math.min(95,cpu));
+    const scenes=1+Math.floor(r()*8);
+    return {n,name,tags,author,cpu,scenes,blocks};
+  }
+  fillAmp(r,pool,gMin,gMax){ return {TYPE:this.pick(r,pool),GAIN:this.rn(r,gMin,gMax,1),MASTER:this.rn(r,3.5,8,1),LEVEL:this.rn(r,3,7,1),BASS:this.rn(r,3,8,1),MID:this.rn(r,3,8,1),TREBLE:this.rn(r,4,8,1),PRESENCE:this.rn(r,3,7,1),BRIGHT:r()>0.5?"On":"Off"}; }
+  fillCab(r,V,o){ let pool=V.CABS; if(o.metal) pool=["4x12 Recto","4x12 Mesa OS","4x12 Brit 70"]; else if(o.clean) pool=["1x12 Tweed","1x12 Princeton","2x12 USA Deluxe","2x12 Brit Silver"]; return {TYPE:this.pick(r,pool),LEVEL:this.rn(r,-3,3,1)}; }
+  fillDrive(r,V,o){ let pool=V.DRIVES; if(o.metal) pool=["Esoteric RCB","Fat Rat","Plus Distortion","FET Boost"]; else if(o.fuzz) pool=["Face Fuzz","Fat Rat"]; else if(o.blues) pool=["TS808 OD","TS9 OD","Klone Chiron","Tube Drive"]; return {TYPE:this.pick(r,pool),DRIVE:this.rn(r,3,8.5,1),TONE:this.rn(r,4,7.5,1),LEVEL:this.rn(r,4,7,1),MIX:100}; }
+  fillDelay(r,V,o){ return {TYPE:this.pick(r,V.DELAYS),TIME:this.pick(r,[240,300,375,420,480,500,560]),FEEDBACK:this.rn(r,15,48,0),MIX:this.rn(r,o.ambient?22:12,o.ambient?42:30,0),TEMPO:this.pick(r,V.NOTES)}; }
+  fillReverb(r,V,o){ let pool=o.ambient?["Large Hall","Cathedral","Shimmer","Cave","Large Room"]:["Medium Hall","Small Room","Plate 1","Spring 1","Spring 2","Plate 2"]; return {TYPE:this.pick(r,pool),TIME:this.rn(r,o.ambient?5.5:2,o.ambient?9.5:6,1),MIX:this.rn(r,o.ambient?32:12,o.ambient?60:34,0),WIDTH:this.rn(r,6,10,1),LOWCUT:this.pick(r,[40,60,80,100,120]),HIGHCUT:this.pick(r,[6000,8000,10000,12000])}; }
+  fillComp(r,V){ return {TYPE:this.pick(r,V.COMPS),THRESHOLD:this.rn(r,-32,-10,0),RATIO:this.rn(r,2,6,1),LEVEL:this.rn(r,0,4,1)}; }
+  fillChorus(r){ return {RATE:this.rn(r,1,4,1),DEPTH:this.rn(r,3,7,1),MIX:this.rn(r,20,45,0)}; }
+  fillFlange(r){ return {RATE:this.rn(r,0.5,3,1),DEPTH:this.rn(r,3,8,1),FEEDBACK:this.rn(r,20,60,0),MIX:this.rn(r,30,50,0)}; }
+  fillFilter(r,V){ return {TYPE:this.pick(r,["Auto-Wah","Bandpass","Peaking","Lowpass"]),FREQ:this.pick(r,[400,600,800,1200,2000]),Q:this.rn(r,0.5,4,1)}; }
+
+  // ===================== QUERY PARSE / FORMAT =====================
+  splitOn(str,ch){ const out=[]; let depth=0,start=0; for(let i=0;i<str.length;i++){ const c=str[i]; if(c==="(")depth++; else if(c===")")depth=Math.max(0,depth-1); else if(c===ch&&depth===0){ out.push({text:str.slice(start,i),start,end:i}); start=i+1; } } out.push({text:str.slice(start),start,end:str.length}); return out; }
+  tokId(tok){ return this.TOKEN_TO_ID[(tok||"").trim().toUpperCase()]||null; }
+  specParam(id,name){ const a=this.PSPEC[id]||[]; return a.find(x=>x[0]===name)||null; }
+
+  parseParam(s){ const m=s.match(/^\s*([A-Za-z]+)\s*(>=|<=|!=|=|>|<)\s*(.+?)\s*$/); if(!m) return null; return {name:m[1].toUpperCase(),op:m[2],val:m[3].trim()}; }
+  parseTerm(t){
+    let m;
+    if(m=t.match(/^tag:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"tag",val:v}:null; }
+    if(m=t.match(/^name:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"name",val:v}:null; }
+    if(m=t.match(/^author:\s*"?([^"]*)"?$/i)){ const v=m[1].trim(); return v?{kind:"author",val:v}:null; }
+    if(m=t.match(/^(cpu|scenes)\s*(>=|<=|!=|=|>|<)\s*(\d+\.?\d*)$/i)){ return {kind:m[1].toLowerCase(),op:m[2],val:m[3]}; }
+    const pi=t.indexOf("(");
+    if(pi>=0){ const id=this.tokId(t.slice(0,pi)); if(!id) return null; let inner=t.slice(pi+1); if(inner.endsWith(")")) inner=inner.slice(0,-1); const params=this.splitOn(inner,",").map(s=>this.parseParam(s.text)).filter(Boolean); return {kind:"block",block:id,params}; }
+    const id=this.tokId(t); return id?{kind:"block",block:id,params:[]}:null;
+  }
+  parseQuery(text){ return this.splitOn(text,"+").map(s=>this.parseTerm(s.text.trim())).filter(Boolean); }
+  q(v){ return /[\s,()]/.test(v)?'"'+v+'"':v; }
+  condToText(c){
+    if(c.kind==="block"){ const tok=this.BLOCK_TOKENS[c.block]; if(!c.params||!c.params.length) return tok; return tok+"("+c.params.map(p=>p.name+p.op+p.val).join(", ")+")"; }
+    if(c.kind==="tag") return "tag:"+this.q(c.val);
+    if(c.kind==="name") return "name:"+this.q(c.val);
+    if(c.kind==="author") return "author:"+this.q(c.val);
+    if(c.kind==="cpu") return "cpu"+c.op+c.val;
+    if(c.kind==="scenes") return "scenes"+c.op+c.val;
+    return "";
+  }
+  condsToQuery(conds){ return conds.map(c=>this.condToText(c)).filter(Boolean).join("  +  "); }
+
+  // ===================== MATCH =====================
+  cmp(a,op,b){ switch(op){case ">":return a>b;case "<":return a<b;case ">=":return a>=b;case "<=":return a<=b;case "!=":return Math.abs(a-b)>1e-9;default:return Math.abs(a-b)<1e-9;} }
+  matchParam(b,pc){ const v=b.params[pc.name]; if(v==null||v==="") return false; const spec=this.specParam(b.type,pc.name); const num = spec && spec[1]==="num"; if(!num){ const sv=String(v).toLowerCase(); const q=pc.val.toLowerCase(); if(pc.op==="!=") return !sv.includes(q); return sv.includes(q); } const nv=Number(v); const range=pc.val.match(/^\s*(-?\d+\.?\d*)\s*-\s*(-?\d+\.?\d*)\s*$/); if(range){ const a=parseFloat(range[1]),bb=parseFloat(range[2]); return nv>=Math.min(a,bb)&&nv<=Math.max(a,bb); } const t=parseFloat(pc.val); if(isNaN(t)) return false; return this.cmp(nv,pc.op,t); }
+  matchCond(p,c){
+    if(c.kind==="tag") return p.tags.some(t=>t.toLowerCase().includes(c.val.toLowerCase()));
+    if(c.kind==="name") return p.name.toLowerCase().includes(c.val.toLowerCase());
+    if(c.kind==="author") return p.author.toLowerCase().includes(c.val.toLowerCase());
+    if(c.kind==="cpu") return this.cmp(p.cpu,c.op,parseFloat(c.val));
+    if(c.kind==="scenes") return this.cmp(p.scenes,c.op,parseFloat(c.val));
+    if(c.kind==="block"){ const bs=p.blocks.filter(b=>b.type===c.block); if(!bs.length) return false; if(!c.params||!c.params.length) return true; return bs.some(b=>c.params.every(pc=>this.matchParam(b,pc))); }
+    return true;
+  }
+  matchPreset(p,conds,simpleQ){
+    for(const c of conds){ if(!this.matchCond(p,c)) return false; }
+    if(simpleQ){ const toks=simpleQ.toLowerCase().split(/\s+/).filter(Boolean); const hay=(p.name+" "+p.tags.join(" ")+" "+p.author+" "+p.blocks.map(b=>this.CAT[b.type][0]+" "+(b.params.TYPE||"")).join(" ")).toLowerCase(); if(!toks.every(t=>hay.includes(t))) return false; }
+    return true;
+  }
+
+  // ===================== AUTOCOMPLETE =====================
+  curText(){ return this.qref ? this.qref.value : this.state.query; }
+  activeConds(){ return this.state.advanced ? this.parseQuery(this.curText()) : this.state.conditions; }
+
+  suggest(text,caret){
+    const segs=this.splitOn(text,"+"); let seg=segs[segs.length-1];
+    for(const s of segs){ if(caret>=s.start && caret<=s.end){ seg=s; break; } }
+    const local=text.slice(seg.start, caret);
+    const opens=(local.match(/\(/g)||[]).length, closes=(local.match(/\)/g)||[]).length;
+    if(opens>closes){
+      const pi=local.indexOf("("); const id=this.tokId(local.slice(0,pi));
+      const after=local.slice(pi+1); const parts=this.splitOn(after,","); const frag=parts[parts.length-1].text;
+      const pm=frag.match(/^\s*([A-Za-z]+)\s*(>=|<=|!=|=|>|<)\s*(.*)$/);
+      if(pm){ return {ctx:"value", items:this.sgValue(id,pm[1].toUpperCase(),pm[3]), label:"value · "+pm[1].toUpperCase()}; }
+      const pf=(frag.match(/[A-Za-z]*$/)||[""])[0];
+      return {ctx:"param", items:this.sgParam(id,pf), label:(this.CAT[id]?this.CAT[id][0]:"")+" parameter"};
+    }
+    let m;
+    if(m=local.match(/tag:\s*"?([A-Za-z0-9 ]*)$/i)) return {ctx:"tag", items:this.sgList(this.TAGS,m[1],"tag",true), label:"tag"};
+    if(m=local.match(/author:\s*"?([A-Za-z0-9. ]*)$/i)){ const authors=Array.from(new Set(this.PRESETS.map(p=>p.author))); return {ctx:"author", items:this.sgList(authors,m[1],"author",true), label:"author"}; }
+    const tf=(local.match(/[A-Za-z]*$/)||[""])[0];
+    return {ctx:"block", items:this.sgBlock(tf), label:"block / token"};
+  }
+  mkItem(label,insert,fragLen,hint,color,dot){ return {label,insert,fragLen,hint:hint||"",color:color||this.tk.textfaint,dot:dot!==false}; }
+  sgBlock(frag){ const f=frag.toLowerCase(); const out=[]; this.FILTERABLE.forEach(id=>{ const lbl=this.BLOCK_TOKENS[id]; if(lbl.toLowerCase().includes(f)||this.CAT[id][0].toLowerCase().includes(f)) out.push(this.mkItem(lbl,lbl+"(",frag.length,"block · "+this.CAT[id][0],this.CAT[id][1])); }); [["tag:","filter by tag"],["author:","filter by author"],["name:","name contains"],["cpu<","cpu below"],["scenes>","scene count"]].forEach(t=>{ if(t[0].toLowerCase().startsWith(f)||f==="") out.push(this.mkItem(t[0],t[0],frag.length,t[1],this.tk.textmuted,false)); }); return out; }
+  sgParam(id,frag){ const f=frag.toLowerCase(); return (this.PSPEC[id]||[]).filter(s=>s[0].toLowerCase().includes(f)).map(s=>{ const hint=s[1]==="enum"?"type":(s[1]==="num"?(s[2]+"–"+s[3]):"On/Off"); return this.mkItem(s[0],s[0]+(s[1]==="num"?">":"="),frag.length,hint,this.tk.textfaint); }); }
+  sgValue(id,pname,frag){ const spec=this.specParam(id,pname); if(!spec) return []; const f=frag.toLowerCase(); if(spec[1]==="enum"){ return spec[2].filter(v=>v.toLowerCase().includes(f)).slice(0,40).map(v=>this.mkItem(v,this.q(v),frag.length,"",this.CAT[id]?this.CAT[id][1]:this.tk.textfaint)); } if(spec[1]==="bool"){ return ["On","Off"].filter(v=>v.toLowerCase().includes(f)).map(v=>this.mkItem(v,v,frag.length,"")); } const lo=spec[2],hi=spec[3]; const cand=[lo, Math.round((lo+hi)*0.25*10)/10, Math.round((lo+hi)*0.5*10)/10, Math.round((lo+hi)*0.75*10)/10, hi].map(x=> (Math.abs(x)<10?x:Math.round(x))); return Array.from(new Set(cand)).filter(v=>String(v).startsWith(frag.trim())||frag.trim()==="").map(v=>this.mkItem(String(v),String(v),frag.length,"value")); }
+  sgList(arr,frag,kind,dot){ const f=(frag||"").toLowerCase(); return arr.filter(v=>v.toLowerCase().includes(f)).slice(0,40).map(v=>this.mkItem(v,this.q(v),(frag||"").length,kind,kind==="tag"?(this.TAGCOL[v]||this.tk.textfaint):this.tk.textfaint, kind==="tag")); }
+
+  recomputeAc(){
+    if(!this.state.advanced){ if(this.state.acOpen) this.setState({acOpen:false,acItems:[]}); return; }
+    const v=this.curText(); const c=this._caret;
+    const res=this.suggest(v,c);
+    this.setState({acItems:res.items, acCtxLabel:res.label, acIndex:0, acOpen:true});
+  }
+  onQueryInput=(e)=>{ const v=e.target.value; this._caret=e.target.selectionStart; if(this.state.advanced){ this.setState({query:v},()=>this.recomputeAc()); } else { this.setState({simpleQ:v}); } };
+  onQuerySelect=(e)=>{ this._caret=e.target.selectionStart; if(this.state.advanced && this.state.acOpen) this.recomputeAc(); };
+  onQueryFocus=()=>{ if(this.state.advanced) this.recomputeAc(); };
+  onQueryBlur=()=>{ setTimeout(()=>this.setState({acOpen:false}),130); };
+  onQueryKey=(e)=>{ if(!this.state.advanced) return; if(!this.state.acOpen){ if(e.key==="ArrowDown"){ this.recomputeAc(); } return; } const n=this.state.acItems.length; if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({acIndex:Math.min(n-1,this.state.acIndex+1)}); } else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({acIndex:Math.max(0,this.state.acIndex-1)}); } else if(e.key==="Enter"||e.key==="Tab"){ if(n){ e.preventDefault(); this.acceptAc(this.state.acIndex); } } else if(e.key==="Escape"){ e.preventDefault(); this.setState({acOpen:false}); } };
+  onAcHover=(e)=>{ this.setState({acIndex:+e.currentTarget.dataset.i}); };
+  onAcDown=(e)=>{ e.preventDefault(); this.acceptAc(+e.currentTarget.dataset.i); };
+  acceptAc(i){ const item=this.state.acItems[i]; if(!item||!this.qref) return; const v=this.qref.value; const caret=this._caret; const start=Math.max(0,caret-item.fragLen); const nt=v.slice(0,start)+item.insert+v.slice(caret); const nc=start+item.insert.length; this.qref.value=nt; this.qref.focus(); try{this.qref.setSelectionRange(nc,nc);}catch(e){} this._caret=nc; this.setState({query:nt},()=>this.recomputeAc()); }
+
+  // ===================== TOGGLE / CLEAR =====================
+  onToggleAdvanced=()=>{
+    if(this.state.advanced){ const conds=this.parseQuery(this.curText()); if(this.qref) this.qref.value=""; this.setState({advanced:false, conditions:conds, simpleQ:"", acOpen:false, acItems:[]}); }
+    else { const txt=this.condsToQuery(this.state.conditions); if(this.qref) this.qref.value=txt; this._caret=txt.length; this.setState({advanced:true, query:txt}); }
+  };
+  setQuery(text,focus){ if(this.qref){ this.qref.value=text; if(focus){ this.qref.focus(); try{this.qref.setSelectionRange(text.length,text.length);}catch(e){} this._caret=text.length; } } this.setState({query:text}, ()=>{ if(focus) this.recomputeAc(); }); }
+  onClearQuery=()=>{ if(this.state.advanced){ if(this.qref) this.qref.value=""; this.setState({query:"",acItems:[],acOpen:false}); } else { this.setState({conditions:[],simpleQ:""}); if(this.qref) this.qref.value=""; } };
+
+  // ===================== BUILDER EDITS =====================
+  editConds(fn){
+    if(this.state.advanced){ const c=this.parseQuery(this.curText()); fn(c); this.setQuery(this.condsToQuery(c)); }
+    else { const c=this.state.conditions.map(x=>({...x, params:x.params?x.params.map(p=>({...p})):x.params})); fn(c); this.setState({conditions:c}); }
+  }
+  onChipRemove=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci; this.editConds(c=>c.splice(ci,1)); };
+  onParamRemove=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci, pi=+e.currentTarget.dataset.pi; this.editConds(c=>{ if(c[ci]&&c[ci].params) c[ci].params.splice(pi,1); }); };
+  onQuickTag=(e)=>{ const tag=e.currentTarget.dataset.tag; this.editConds(c=>{ const i=c.findIndex(x=>x.kind==="tag"&&x.val.toLowerCase()===tag.toLowerCase()); if(i>=0) c.splice(i,1); else c.push({kind:"tag",val:tag}); }); if(this.state.libOpen) this.setState({libOpen:false}); };
+
+  // ===================== PICKERS =====================
+  openPicker(kind,ctx,anchorEl,rectOverride){ const rect=rectOverride||(anchorEl?anchorEl.getBoundingClientRect():{left:300,bottom:200}); this._pickerOpening=true; this.setState({picker:{kind,ctx,rect}, pickerSearch:"", pickerHi:0}); }
+  componentDidUpdate(){ if(this._pickerOpening && this.pickerSearchEl){ this._pickerOpening=false; try{this.pickerSearchEl.focus();}catch(e){} } if(this._saveOpening && this.saveNameEl){ this._saveOpening=false; try{this.saveNameEl.focus();}catch(e){} } if(this._renameOpening && this.renameEl){ this._renameOpening=false; try{ this.renameEl.focus(); this.renameEl.select(); }catch(e){} } }
+  pickerSearchRef=(el)=>{ this.pickerSearchEl=el; };
+  qrefCb=(el)=>{ this.qref=el; };
+  onPickerSearch=(e)=>{ this.setState({pickerSearch:e.target.value, pickerHi:0}); };
+  onPickerClose=()=>{ this.setState({picker:null}); };
+  stop=(e)=>e.stopPropagation();
+  onPickerKey=(e)=>{ const items=this._pickerItems||[]; if(e.key==="ArrowDown"){ e.preventDefault(); this.setState({pickerHi:Math.min(items.length-1,this.state.pickerHi+1)}); } else if(e.key==="ArrowUp"){ e.preventDefault(); this.setState({pickerHi:Math.max(0,this.state.pickerHi-1)}); } else if(e.key==="Enter"){ e.preventDefault(); const it=items[this.state.pickerHi]; if(it) this.pickerPick(it.v); } else if(e.key==="Escape"){ this.setState({picker:null}); } };
+  onPickerPick=(e)=>{ this.pickerPick(e.currentTarget.dataset.v); };
+  pickerPick(v){
+    const pk=this.state.picker; if(!pk) return; const kind=pk.kind, ctx=pk.ctx||{};
+    if(kind==="device"){ this.setState({deviceFilter:v, picker:null}); return; }
+    if(kind==="convert"){ this.setState({picker:null}); this.convertPreset(ctx.n, v); return; }
+    if(kind==="addfilter"){
+      if(v==="tag"){ this.openPicker("tag",{}, this._lastAnchor); return; }
+      if(v==="cpu"){ this.editConds(c=>c.push({kind:"cpu",op:"<",val:"60"})); this.setState({picker:null}); return; }
+      if(v==="scenes"){ this.editConds(c=>c.push({kind:"scenes",op:">",val:"4"})); this.setState({picker:null}); return; }
+      if(v==="author"){ this.openPicker("author",{}, this._lastAnchor); return; }
+      // block id
+      this.editConds(c=>c.push({kind:"block",block:v,params:[]})); this.setState({picker:null}); return;
+    }
+    if(kind==="tag"){ this.editConds(c=>{ if(!c.some(x=>x.kind==="tag"&&x.val===v)) c.push({kind:"tag",val:v}); }); this.setState({picker:null}); return; }
+    if(kind==="author"){ this.editConds(c=>c.push({kind:"author",val:v})); this.setState({picker:null}); return; }
+    if(kind==="param"){ const id=ctx.block; const spec=this.specParam(id,v); if(spec && (spec[1]==="enum"||spec[1]==="bool"||spec[1]==="num")){ this.openPicker("value",{block:id,param:v,kind:spec[1]}, this._lastAnchor); } return; }
+    if(kind==="value"){ const ci=ctx.ci; const op=ctx.op||"="; this.editConds(c=>{ const target = (ci!=null && c[ci]) ? c[ci] : c.filter(x=>x.kind==="block"&&x.block===ctx.block).slice(-1)[0]; if(target){ if(!target.params) target.params=[]; target.params.push({name:ctx.param, op:op, val:v}); } }); this.setState({picker:null}); return; }
+  }
+  onAddFilter=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("addfilter",{}, e.currentTarget); };
+  onAddParam=(e)=>{ e.stopPropagation(); const ci=+e.currentTarget.dataset.ci; const conds=this.activeConds(); const cond=conds[ci]; if(!cond||cond.kind!=="block") return; this._lastAnchor=e.currentTarget; this.openPicker("param",{block:cond.block, ci}, e.currentTarget); };
+
+  // value picker entries (numeric → op+val combos handled by ctx.op)
+  pickerItems(){
+    const pk=this.state.picker; if(!pk) return []; const f=(this.state.pickerSearch||"").toLowerCase(); const ctx=pk.ctx||{};
+    if(pk.kind==="device"){ const opts=["all"].concat(this.DEVICES); const cf=d=>this.PRESETS.filter(p=>!this.state.deleted[p.n]&&(d==="all"||p.device===d)).length; return opts.filter(d=>(d==="all"?"all devices":d.toLowerCase()).includes(f)).map(d=>({v:d,label:d==="all"?"All devices":d,sub:cf(d)+" presets",dot:d!=="all",color:this.DEVCOL[d]})); }
+    if(pk.kind==="convert"){ const src=this.PBYN[ctx.n]; if(!src) return []; return this.DEVICES.filter(d=>d!==src.device&&d.toLowerCase().includes(f)).map(d=>({v:d,label:"Convert to "+d,sub:this.convHint(src.device,d),dot:true,color:this.DEVCOL[d]})); }
+    if(pk.kind==="addfilter"){ const items=[]; this.FILTERABLE.forEach(id=>items.push({v:id,label:this.BLOCK_TOKENS[id],sub:"block",dot:true,color:this.CAT[id][1]})); items.push({v:"tag",label:"tag:",sub:"by tag",dot:false}); items.push({v:"author",label:"author:",sub:"by author",dot:false}); items.push({v:"cpu",label:"cpu",sub:"CPU usage",dot:false}); items.push({v:"scenes",label:"scenes",sub:"scene count",dot:false}); return items.filter(i=>i.label.toLowerCase().includes(f)||i.sub.toLowerCase().includes(f)); }
+    if(pk.kind==="tag"){ return this.TAGS.filter(t=>t.toLowerCase().includes(f)).map(t=>({v:t,label:t,sub:"",dot:true,color:this.TAGCOL[t]||this.tk.textfaint})); }
+    if(pk.kind==="author"){ return Array.from(new Set(this.PRESETS.map(p=>p.author))).filter(a=>a.toLowerCase().includes(f)).map(a=>({v:a,label:a,sub:"",dot:false})); }
+    if(pk.kind==="param"){ const id=ctx.block; return (this.PSPEC[id]||[]).filter(s=>s[0].toLowerCase().includes(f)).map(s=>({v:s[0],label:s[0],sub:s[1]==="enum"?"type":(s[1]==="num"?s[2]+"–"+s[3]:"On/Off"),dot:false})); }
+    if(pk.kind==="value"){ const spec=this.specParam(ctx.block,ctx.param); if(!spec) return []; if(spec[1]==="enum") return spec[2].filter(v=>v.toLowerCase().includes(f)).map(v=>({v:v,label:v,sub:"",dot:true,color:this.CAT[ctx.block]?this.CAT[ctx.block][1]:this.tk.textfaint})); if(spec[1]==="bool") return ["On","Off"].filter(v=>v.toLowerCase().includes(f)).map(v=>({v:v,label:v,sub:"",dot:false})); const lo=spec[2],hi=spec[3]; const mids=[lo,(lo+hi)*0.25,(lo+hi)*0.5,(lo+hi)*0.75,hi].map(x=>Math.abs(x)<10?Math.round(x*10)/10:Math.round(x)); return Array.from(new Set(mids)).filter(v=>String(v).includes(f)).map(v=>({v:String(v),label:String(v),sub:"value",dot:false})); }
+    return [];
+  }
+
+  // ===================== SAVED FILTERS =====================
+  seedSaved(){ return [
+    {id:"s1",name:"Hendrix Tones",query:"tag:Hendrix"},
+    {id:"s2",name:"All 5153 Rigs",query:"AMP(TYPE=5153)"},
+    {id:"s3",name:"Big Ambient Verbs",query:"REVERB(TYPE=Large Hall, MIX>30)"},
+    {id:"s4",name:"High-Gain Leads",query:"AMP(GAIN>7)  +  tag:Lead"},
+    {id:"s5",name:"Low-CPU Live Set",query:"cpu<55  +  tag:Live"},
+    {id:"s6",name:"TS-Boosted Blues",query:"DRIVE(TYPE=TS808)  +  tag:Blues"}
+  ]; }
+  loadSaved(){ try{ const j=JSON.parse(localStorage.getItem("pb.saved")||"null"); if(Array.isArray(j)&&j.length) this.setState({saved:j}); }catch(e){} }
+  persistSaved(saved){ try{ localStorage.setItem("pb.saved", JSON.stringify(saved)); }catch(e){} }
+  onApplySaved=(e)=>{ const id=e.currentTarget.dataset.id; const f=this.state.saved.find(x=>x.id===id); if(!f) return; if(!this.state.advanced){ this.setState({advanced:true},()=>{ if(this.qref) this.qref.value=f.query; this.setQuery(f.query,false); }); } else { if(this.qref) this.qref.value=f.query; this.setQuery(f.query,false); } this.setState({libOpen:false}); };
+  onDupSaved=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id; const f=this.state.saved.find(x=>x.id===id); if(!f) return; const copy={id:"s"+Date.now(),name:f.name+" copy",query:f.query}; const saved=this.state.saved.concat([copy]); this.setState({saved}); this.persistSaved(saved); };
+  onDelSaved=(e)=>{ e.stopPropagation(); const id=e.currentTarget.dataset.id; const saved=this.state.saved.filter(x=>x.id!==id); this.setState({saved}); this.persistSaved(saved); };
+  onSaveCurrent=()=>{ this._saveOpening=true; this.setState({saving:true}); };
+  saveNameRef=(el)=>{ this.saveNameEl=el; };
+  onSaveCancel=()=>{ setTimeout(()=>this.setState({saving:false}),120); };
+  onSaveNameKey=(e)=>{ if(e.key==="Escape"){ this.setState({saving:false}); return; } if(e.key!=="Enter") return; const name=e.target.value.trim(); if(!name){ this.setState({saving:false}); return; } const query = this.state.advanced ? this.curText() : this.condsToQuery(this.state.conditions); const item={id:"s"+Date.now(), name, query}; const saved=this.state.saved.concat([item]); this.setState({saving:false, saved}); this.persistSaved(saved); };
+
+  // ===================== ROW / SORT / SELECT =====================
+  onSort=(e)=>this.setState({sort:e.currentTarget.dataset.sort});
+  onRowClick=(e)=>{ if(this._noclick){ this._noclick=false; return; } if(this.state.swipeN!=null){ this.setState({swipeN:null}); return; } const n=+e.currentTarget.dataset.n; if(e.metaKey||e.ctrlKey){ this.toggleMark(n); return; } if(e.shiftKey && this.state.anchorN!=null){ this.markRange(this.state.anchorN,n); return; } this.setState({selected:n, anchorN:n}); };
+
+  // ===================== SELECTION =====================
+  effName(n){ return this.state.renames[n] || (this.PBYN[n]?this.PBYN[n].name:"Preset"); }
+  markCount(){ return Object.keys(this.state.marked).length; }
+  toggleMark(n){ const m=Object.assign({},this.state.marked); if(m[n]) delete m[n]; else m[n]=true; this.setState({marked:m, anchorN:n}); }
+  clearMarks=()=>this.setState({marked:{}});
+  onCheckClick=(e)=>{ e.stopPropagation(); this.toggleMark(+e.currentTarget.dataset.n); };
+  markRange(a,b){ const order=this._order||[]; const ia=order.indexOf(a), ib=order.indexOf(b); if(ia<0||ib<0){ this.toggleMark(b); return; } const lo=Math.min(ia,ib), hi=Math.max(ia,ib); const m=Object.assign({},this.state.marked); for(let i=lo;i<=hi;i++) m[order[i]]=true; this.setState({marked:m, anchorN:b}); }
+  onSelAction=(e)=>{ const id=e.currentTarget.dataset.act; const ns=Object.keys(this.state.marked).map(Number); if(!ns.length) return; this.runAction(id,ns,ns[0]); };
+
+  // ===================== CONTEXT MENU =====================
+  onRowContext=(e)=>{ e.preventDefault(); const n=+e.currentTarget.dataset.n; const inSel=!!this.state.marked[n]; const target=(inSel && this.markCount()>1)?"sel":"row"; if(target==="row") this.setState({selected:n}); this.setState({ctx:{x:e.clientX,y:e.clientY,target,n}}); };
+  closeCtx=()=>this.setState({ctx:null});
+  ctxPrevent=(e)=>e.preventDefault();
+  onCtxAction=(e)=>{ const id=e.currentTarget.dataset.act; const ctx=this.state.ctx; if(!ctx) return; this.setState({ctx:null}); const ns = ctx.target==="sel" ? Object.keys(this.state.marked).map(Number) : [ctx.n]; this.runAction(id,ns,ctx.n); };
+
+  // ===================== PRESET MANAGEMENT =====================
+  runAction(id,ns,primaryN){
+    if(id==="load"){ const p=this.PBYN[primaryN]; this.setState({selected:primaryN}); const sync=this.deriveSync(this.cloudOf(p)); this.showToast(sync==="cloudOnly"?("Loading "+this.effName(primaryN)+" from cloud…"):("Loaded "+this.effName(primaryN)),"#f5a623"); return; }
+    if(id==="rename"){ this._renameOpening=true; this.setState({renaming:primaryN, selected:primaryN}); return; }
+    if(id==="duplicate"){ this.duplicatePreset(primaryN); return; }
+    if(id==="export"){ this.exportPresets(ns); return; }
+    if(id==="upload"||id==="backup"){ this.cloudBatch(ns,"up"); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+" backed up to cloud","#33c46b"); return; }
+    if(id==="update"||id==="download"){ this.cloudBatch(ns,"down"); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+" synced from cloud",this.tk.accent); return; }
+    if(id==="convert"){ this.openPicker("convert",{n:primaryN}, null, {left:(this.state.ctx?this.state.ctx.x:300), bottom:(this.state.ctx?this.state.ctx.y:200)}); return; }
+    if(id==="removeDevice"){ this.confirmRemove(ns); return; }
+    if(id==="delete"){ this.confirmDelete(ns); return; }
+  }
+  // ----- confirm dialogs (delete / overwrite) -----
+  askConfirm(opts){ this.setState({confirm:opts}); }
+  onConfirmYes=()=>{ const c=this.state.confirm; this.setState({confirm:null}); if(c&&c.run) c.run(); };
+  onConfirmNo=()=>this.setState({confirm:null});
+  confirmDelete(ns){ const label=ns.length>1?(ns.length+" presets"):("“"+this.effName(ns[0])+"”"); this.askConfirm({ title:"Delete "+(ns.length>1?ns.length+" presets":"preset"), message:"This permanently removes "+label+" from this device and the cloud, including every saved version. This can't be undone.", confirmLabel:ns.length>1?("Delete "+ns.length):"Delete", danger:true, run:()=>this.deletePresets(ns) }); }
+  confirmRemove(ns){ const label=ns.length>1?(ns.length+" presets"):("“"+this.effName(ns[0])+"”"); this.askConfirm({ title:"Remove from device", message:"Removes "+label+" from this device. Cloud copies (and their versions) are kept — presets with no cloud backup will be deleted entirely.", confirmLabel:ns.length>1?("Remove "+ns.length):"Remove", danger:true, run:()=>this.removeFromDevice(ns) }); }
+  // ----- converter -----
+  convertPreset(n,target){ const src=this.PBYN[n]; if(!src) return; if(src.device===target){ this.showToast("Already an "+target+" preset",this.tk.textdim); return; }
+    const cap=this.deviceCap(target);
+    let fx=src.blocks.filter(b=>b.type!=="in"&&b.type!=="out");
+    const dropped=Math.max(0, fx.length-cap); if(dropped>0) fx=fx.slice(0,cap);
+    const blocks=[{type:"in",inst:"In 1",params:{}}].concat(JSON.parse(JSON.stringify(fx))).concat([{type:"out",inst:"Out 1",params:{}}]);
+    const nn=this._nextN();
+    const cpu=Math.min(95, Math.round(src.cpu*(target==="FM3"?1.16:(target==="FM9"?1.06:0.9))));
+    const copy={ n:nn, name:this.effName(n)+" ("+target+")", tags:src.tags.slice(), author:"You", cpu, scenes:src.scenes, device:target, converted:true, blocks };
+    const note=dropped>0?("Converted from "+src.device+" — "+dropped+" block"+(dropped>1?"s":"")+" trimmed to fit "+target):("Converted from "+src.device);
+    copy.cl={presence:"deviceOnly", versions:[{v:"v1",date:"just now",note,author:"You"}], localIdx:0, cloudIdx:-1};
+    this.PRESETS.push(copy); this.PBYN[nn]=copy; this.setState({selected:nn, deviceFilter:"all", picker:null});
+    this.showToast(dropped>0?("Converted to "+target+" · "+dropped+" block"+(dropped>1?"s":"")+" trimmed"):("Converted to "+target),this.tk.accent);
+  }
+  onConvertOpen=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("convert",{n:this.state.selected}, e.currentTarget); };
+  onDeviceFilter=(e)=>{ this._lastAnchor=e.currentTarget; this.openPicker("device",{}, e.currentTarget); };
+  cloudBatch(ns,dir){ const o=Object.assign({},this.state.cloudOverride); ns.forEach(n=>{ const base=this.PBYN[n].cl; const cur=Object.assign({presence:base.presence,localIdx:base.localIdx,cloudIdx:base.cloudIdx}, o[n]||{}); cur.presence="both"; if(dir==="up") cur.cloudIdx=cur.localIdx<0?0:cur.localIdx; else cur.localIdx=cur.cloudIdx<0?0:cur.cloudIdx; o[n]=cur; }); this.setState({cloudOverride:o, marked:{}}); }
+  removeFromDevice(ns){ const o=Object.assign({},this.state.cloudOverride); const del=Object.assign({},this.state.deleted); let gone=0; ns.forEach(n=>{ const base=this.PBYN[n].cl; const cur=Object.assign({presence:base.presence,localIdx:base.localIdx,cloudIdx:base.cloudIdx}, o[n]||{}); if(cur.presence==="deviceOnly"){ del[n]=true; gone++; } else { cur.presence="cloudOnly"; cur.localIdx=-1; o[n]=cur; } }); const sel=ns.indexOf(this.state.selected)>=0&&del[this.state.selected]?null:this.state.selected; this.setState({cloudOverride:o, deleted:del, marked:{}, selected:sel}); this.showToast((ns.length>1?ns.length+" presets":this.effName(ns[0]))+(gone?" deleted (no cloud copy)":" removed from device — kept in cloud"),this.tk.textdim); }
+  deletePresets(ns){ const del=Object.assign({},this.state.deleted); ns.forEach(n=>del[n]=true); const sel=ns.indexOf(this.state.selected)>=0?null:this.state.selected; this.setState({deleted:del, marked:{}, selected:sel}); this.showToast("Deleted "+(ns.length>1?ns.length+" presets":this.effName(ns[0])),"#e87b6a"); }
+  duplicatePreset(n){ const src=this.PBYN[n]; if(!src) return; const nn=this._nextN(); const copy={n:nn,name:this.effName(n)+" copy",tags:src.tags.slice(),author:"You",cpu:src.cpu,scenes:src.scenes,blocks:JSON.parse(JSON.stringify(src.blocks))}; copy.cl={presence:"deviceOnly",versions:[{v:"v1",date:"just now",note:"Duplicated from "+this.effName(n),author:"You"}],localIdx:0,cloudIdx:-1}; this.PRESETS.push(copy); this.PBYN[nn]=copy; this.setState({selected:nn}); this.showToast("Duplicated as “"+copy.name+"”",this.tk.accent); }
+  _nextN(){ let mx=0; this.PRESETS.forEach(p=>{ if(p.n>mx) mx=p.n; }); return mx+1; }
+  exportObj(n){ const p=this.PBYN[n]; const m=this.cloudOf(p); return { format:"axis-preset", version:1, name:this.effName(n), tags:p.tags, author:p.author, cpu:p.cpu, scenes:p.scenes, deviceVersion:m.localIdx>=0?m.versions[m.localIdx].v:null, cloudVersion:m.cloudIdx>=0?m.versions[m.cloudIdx].v:null, blocks:p.blocks }; }
+  exportPresets(ns){ try{ const data=ns.map(n=>this.exportObj(n)); const single=data.length===1; const blob=new Blob([JSON.stringify(single?data[0]:data,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=(single?this.effName(ns[0]).replace(/[^\w.-]+/g,"_"):("axis-presets-"+data.length))+".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); this.showToast("Exported "+(single?this.effName(ns[0]):data.length+" presets")+" to disk",this.tk.accent); this.setState({marked:{}}); }catch(err){ this.showToast("Export failed","#e87b6a"); } }
+  renameRef=(el)=>{ this.renameEl=el; };
+  onRenameKey=(e)=>{ if(e.key==="Enter"){ e.preventDefault(); this.commitRename(e.target.value); } else if(e.key==="Escape"){ e.preventDefault(); this.setState({renaming:null}); } };
+  onRenameBlur=(e)=>{ this.commitRename(e.target.value); };
+  commitRename(v){ const n=this.state.renaming; if(n==null) return; const name=(v||"").trim(); const renames=Object.assign({},this.state.renames); const changed = name && name!==this.effName(n); if(name) renames[n]=name; this.setState({renaming:null, renames}); if(changed) this.showToast("Renamed to “"+name+"”",this.tk.accent); }
+  onLoad=()=>{ const p=this.PBYN[this.state.selected]; if(!p) return; const sync=this.deriveSync(this.cloudOf(p)); this.showToast(sync==="cloudOnly"?("Loading "+p.name+" from cloud…"):("Loaded "+p.name),"#f5a623"); };
+
+  // ===================== CLOUD SYNC =====================
+  buildCloud(){
+    const times=["just now","2h ago","yesterday","2 days ago","5 days ago","last week","Mar 14","Feb 28","Jan 9","Dec 2"];
+    const notes=["Tweaked amp gain","Reverb mix +6%","Added delay block","Re-voiced mids","Trimmed CPU load","Cloud backup","Live-set tweak","Renamed scenes","Swapped cab IR","Boost level up","Tightened low end","New lead boost"];
+    const authors=["You","Cooper Carter","T. Nordvik","R. Marino","J. Sklar"];
+    this.PRESETS.forEach(p=>{
+      const r=this.rng(p.n*40503+13);
+      let presence;
+      if(p.n%11===0) presence="cloudOnly";
+      else if(p.n%8===0) presence="deviceOnly";
+      else presence="both";
+      const count=2+Math.floor(r()*4); // 2..5
+      const top=count+1+Math.floor(r()*3);
+      const versions=[];
+      for(let i=0;i<count;i++){ versions.push({ v:"v"+(top-i), date:times[Math.min(i,times.length-1)], note:this.pick(r,notes), author:(i===0&&presence!=="cloudOnly")?"You":this.pick(r,authors) }); }
+      let localIdx, cloudIdx;
+      if(presence==="cloudOnly"){ localIdx=-1; cloudIdx=0; }
+      else if(presence==="deviceOnly"){ localIdx=0; cloudIdx=-1; }
+      else { const roll=p.n%5; if(roll===0){ localIdx=0; cloudIdx=1; } else if(roll===1){ localIdx=1; cloudIdx=0; } else { localIdx=0; cloudIdx=0; } }
+      const dv=p.n%10; p.device = dv<5?"Axe-Fx III":(dv<8?"FM9":"FM3");
+      p.cl={ presence, versions, localIdx, cloudIdx };
+    });
+  }
+  deviceCap(d){ return d==="FM3"?6:(d==="FM9"?10:99); }
+  convHint(src,dst){ const c=this.deviceCap(dst); return c<this.deviceCap(src)?("fewer blocks · may trim"):"full headroom"; }
+  cloudOf(p){ const o=this.state.cloudOverride[p.n]; if(!o) return p.cl; return Object.assign({}, p.cl, o); }
+  deriveSync(m){ if(m.presence==="cloudOnly") return "cloudOnly"; if(m.presence==="deviceOnly") return "deviceOnly"; if(m.localIdx===m.cloudIdx) return "synced"; return m.localIdx<m.cloudIdx ? "modified" : "outdated"; }
+  cloudMeta(sync){ return ({
+    synced:{label:"Synced",short:"Synced",glyph:"☁",col:"#33c46b"},
+    modified:{label:"Local edits",short:"Local edit",glyph:"↑",col:"#f5a623"},
+    outdated:{label:"Cloud newer",short:"Update",glyph:"↓",col:"#4a82e0"},
+    cloudOnly:{label:"Cloud only",short:"Cloud",glyph:"☁",col:"#9b8cf0"},
+    deviceOnly:{label:"Not backed up",short:"Device",glyph:"▪",col:this.tk.textfaint}
+  })[sync]; }
+  setCloud(n,patch){ const cur=this.cloudOf(this.PBYN[n]); const o=Object.assign({}, this.state.cloudOverride); o[n]=Object.assign({ presence:cur.presence, localIdx:cur.localIdx, cloudIdx:cur.cloudIdx }, patch); this.setState({cloudOverride:o}); }
+  onView=(e)=>this.setState({view:e.currentTarget.dataset.view, libOpen:false, swipeN:null});
+  onSyncJump=()=>this.setState({view:"upload", libOpen:false, swipeN:null});
+
+  // ---- swipe-to-action (mobile) ----
+  ACTIONW=222;
+  onSwipeDown=(e)=>{ if(!this.isMobile()) return; const n=+e.currentTarget.dataset.rowfront; try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){}
+    this._sw={ n, x0:e.clientX, y0:e.clientY, el:e.currentTarget, base:(this.state.swipeN===n?-this.ACTIONW:0), isSwipe:false, decided:false, last:0 }; };
+  onSwipeMove=(e)=>{ const sw=this._sw; if(!sw) return; const dx=e.clientX-sw.x0, dy=e.clientY-sw.y0;
+    if(!sw.decided){ if(Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)){ sw.decided=true; sw.isSwipe=true; } else if(Math.abs(dy)>10){ sw.decided=true; sw.isSwipe=false; } }
+    if(sw.isSwipe){ e.preventDefault(); let t=this.clamp(sw.base+dx, -this.ACTIONW, 0); sw.last=t; sw.el.style.transition="none"; sw.el.style.transform="translateX("+t+"px)"; } };
+  onSwipeUp=(e)=>{ const sw=this._sw; if(!sw){ return; } this._sw=null; try{ sw.el.releasePointerCapture(e.pointerId); }catch(_){}
+    if(sw.isSwipe){ this._noclick=true; const open = sw.last < -this.ACTIONW/2; this.setState({ swipeN: open?sw.n:null }); } };
+  closeSwipe=()=>{ if(this.state.swipeN!=null) this.setState({swipeN:null}); };
+  onSwipeLoad=(e)=>{ e.stopPropagation(); const n=+e.currentTarget.dataset.n; this.setState({selected:n, swipeN:null}); this.showToast("Loaded “"+this.effName(n)+"” to device",this.tk.accent); };
+  onSwipeBackup=(e)=>{ e.stopPropagation(); const n=+e.currentTarget.dataset.n; const m=this.cloudOf(this.PBYN[n]); this.setCloud(n,{presence:"both",cloudIdx:m.localIdx}); this.setState({swipeN:null}); this.showToast("Backed up to cloud","#33c46b"); };
+  onSwipeDelete=(e)=>{ e.stopPropagation(); const n=+e.currentTarget.dataset.n; this.setState({swipeN:null}); this.askConfirm({ title:"Delete “"+this.effName(n)+"”", message:"Removes this preset from the device list. Cloud backups are kept.", confirmLabel:"Delete", danger:true, run:()=>{ const d=Object.assign({},this.state.deleted); d[n]=true; const sel=this.state.selected===n?null:this.state.selected; this.setState({deleted:d, selected:sel}); this.showToast("Deleted “"+this.effName(n)+"”","#e87b6a"); } }); };
+  onCloudAction=(e)=>{ e.stopPropagation(); const pn=+e.currentTarget.dataset.pn; const kind=e.currentTarget.dataset.kind; const m=this.cloudOf(this.PBYN[pn]);
+    if(kind==="upload"){ this.setCloud(pn,{presence:"both",cloudIdx:m.localIdx}); this.showToast("Uploaded to cloud","#33c46b"); }
+    else if(kind==="backup"){ this.setCloud(pn,{presence:"both",cloudIdx:m.localIdx}); this.showToast("Backed up to cloud","#33c46b"); }
+    else if(kind==="update"){ this.setCloud(pn,{presence:"both",localIdx:m.cloudIdx}); this.showToast("Updated from cloud",this.tk.accent); }
+    else if(kind==="download"){ this.setCloud(pn,{presence:"both",localIdx:m.cloudIdx}); this.showToast("Downloaded to device",this.tk.accent); }
+  };
+  onRevert=(e)=>{ e.stopPropagation(); const pn=+e.currentTarget.dataset.pn; const idx=+e.currentTarget.dataset.vi; const m=this.cloudOf(this.PBYN[pn]); const vs=this.PBYN[pn].cl.versions; const target=vs[idx]; const curV=m.localIdx>=0?vs[m.localIdx].v:null;
+    this.askConfirm({ title:"Restore "+(target?target.v:"version"), message:"Restores "+(target?target.v:"this version")+" to the device"+(curV?(", replacing the current device version ("+curV+")"):"")+". The replaced version stays in history.", confirmLabel:"Restore", danger:false, run:()=>this.doRevert(pn,idx) }); };
+  doRevert(pn,idx){ const m=this.cloudOf(this.PBYN[pn]); const presence=m.presence==="cloudOnly"?"both":m.presence; this.setCloud(pn,{presence, localIdx:idx}); const v=this.PBYN[pn].cl.versions[idx]; this.showToast("Restored "+(v?v.v:"version")+" to device","#f5a623"); }
+  showToast(text,col){ if(this._tt) clearTimeout(this._tt); this.setState({toast:{text,col:col||"#33c46b"}}); this._tt=setTimeout(()=>this.setState({toast:null}),2100); }
+
+  // ===================== HELPERS =====================
+  pad(n){ return String(n).padStart(3,"0"); }
+  fmt(v){ if(typeof v==="number"){ return Number.isInteger(v)?String(v):v.toFixed(1); } return String(v); }
+  cpuColor(c){ return c>=80?"#e87b6a":(c>=62?"#f5a623":"#33c46b"); }
+
+  // matched param keys for a block, given conds
+  matchedKeys(p,conds){ const map={}; conds.forEach(c=>{ if(c.kind!=="block"||!c.params) return; p.blocks.forEach((b,bi)=>{ if(b.type!==c.block) return; c.params.forEach(pc=>{ if(this.matchParam(b,pc)){ map[bi+":"+pc.name]=true; } }); }); }); return map; }
+
+  // ===================== RENDER =====================
+  renderVals(){
+    const S=this.state; this.tk=this.resolveTk(S.theme); const advanced=S.advanced; const accent=this.tk.accent; const dense=this.props.density==="compact";
+    // ---- part gating: one mount renders one region; overlays render only on the owner instance ----
+    const part = this.part || "full";
+    const showRail = part==="full";
+    const showTop = part==="full" || part==="list";
+    const showSources = part==="full" || part==="sources";
+    const showResults = part==="full" || part==="list";
+    const showDetail = part==="full" || part==="detail";
+    const isOwner = !this.bus || this.bus.owner()===this;
+    const conds=this.activeConds();
+    const simpleQ=advanced?"":S.simpleQ;
+
+    // rail (static)
+    const railDefs=[["▦","Grid","grid",false],["◫","Layout","fc",false],["≣","Presets","preset",true],["◷","Tools","tools",false],["⚙","Setup","set",false]];
+    const rail=railDefs.map(d=>({label:d[1],icon:d[0],short:d[1].slice(0,4),style:{width:52,height:50,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,borderRadius:11,cursor:"pointer",color:d[3]?this.tk.text:this.tk.textfaint,background:d[3]?this.tk.surface2:"transparent",border:d[3]?"1px solid "+this.tk.border2:"1px solid transparent"}}));
+
+    // sorts
+    const sortDefs=[["num","#"],["name","A-Z"],["cpu","CPU"]];
+    const sorts=sortDefs.map(d=>{ const act=S.sort===d[0]; return {id:d[0],label:d[1],style:{padding:"6px 11px",borderRadius:7,fontSize:11,fontWeight:700,fontFamily:"var(--font-mono)",cursor:"pointer",color:act?this.tk.bg:this.tk.textdim,background:act?accent:"transparent"}}; });
+
+    // cloud library views
+    const metaOf=p=>{ const m=this.cloudOf(p); return {m, sync:this.deriveSync(m)}; };
+    const devOK=p=>(S.deviceFilter==="all"||p.device===S.deviceFilter);
+    const cnt=fn=>this.PRESETS.filter(p=>!S.deleted[p.n]&&devOK(p)&&fn(metaOf(p))).length;
+    const viewDefs=[
+      ["all","All presets","≣",this.tk.textdim,()=>true],
+      ["device","On this device","▣",this.tk.textfaint,x=>x.m.presence!=="cloudOnly"],
+      ["cloud","In cloud","☁",this.tk.accent,x=>x.m.presence!=="deviceOnly"],
+      ["cloudOnly","Cloud only","☁","#9b8cf0",x=>x.m.presence==="cloudOnly"],
+      ["deviceOnly","Not backed up","▪",this.tk.textfaint,x=>x.m.presence==="deviceOnly"],
+      ["upload","Needs upload","↑","#f5a623",x=>x.sync==="modified"],
+      ["update","Needs update","↓","#4a82e0",x=>x.sync==="outdated"]
+    ];
+    const curView=viewDefs.find(d=>d[0]===S.view)||viewDefs[0];
+    const viewPred=curView[4];
+    const views=viewDefs.map(d=>{ const act=S.view===d[0]; const c=cnt(d[4]);
+      return { id:d[0], label:d[1], glyph:d[2], count:c,
+        glyphStyle:{flex:"none",width:18,textAlign:"center",fontSize:13,color:d[3]},
+        countStyle:{font:"600 10px/1 var(--font-mono)",color:act?d[3]:this.tk.textmuted,minWidth:16,textAlign:"right"},
+        style:{display:"flex",alignItems:"center",gap:9,padding:"8px 9px",borderRadius:10,cursor:"pointer",background:act?this.aT(8):"transparent",border:"1px solid "+(act?accent+"55":"transparent")} }; });
+    const inCloudCount=cnt(x=>x.m.presence!=="deviceOnly");
+    const toSyncCount=cnt(x=>x.sync==="modified"||x.sync==="outdated");
+    const cloudSummary= toSyncCount>0 ? (inCloudCount+" · "+toSyncCount+" to sync") : (inCloudCount+" synced");
+
+    // results
+    let list=this.PRESETS.filter(p=>!S.deleted[p.n] && devOK(p) && viewPred(metaOf(p)) && this.matchPreset(p,conds,simpleQ));
+    list=list.slice().sort((a,b)=> S.sort==="name"?this.effName(a.n).localeCompare(this.effName(b.n)): S.sort==="cpu"?b.cpu-a.cpu: a.n-b.n);
+    this._order=list.map(p=>p.n);
+    // soft cap: mount a small page of rows first (keeps dock mounts fast); "Show all" expands
+    const totalRows=list.length;
+    if(!S.showAllRows && totalRows>14) list=list.slice(0,14);
+    const rowPad=dense?"9px 16px":"13px 18px";
+    const rows=list.map(p=>{ const sel=p.n===S.selected; const tags=p.tags.slice(0,3).map(t=>({label:t,style:{padding:"2px 7px",borderRadius:5,fontSize:9.5,fontWeight:700,fontFamily:"var(--font-mono)",letterSpacing:".02em",color:this.TAGCOL[t]||this.tk.textdim,background:(this.TAGCOL[t]||this.tk.textdim)+"1f"}}));
+      const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map(b=>{ const c=this.CAT[b.type]; const ty=b.params.TYPE; return {label:c[0]+(ty?" · "+ty:""), title:b.inst+(ty?" — "+ty:""), style:{display:"inline-flex",alignItems:"center",padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"var(--font-mono)",color:c[1],background:c[1]+"17",border:"1px solid "+c[1]+"33",maxWidth:160,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
+      const cc=this.cpuColor(p.cpu);
+      const rcm=this.cloudMeta(this.deriveSync(this.cloudOf(p)));
+      const mk=!!S.marked[p.n];
+      const rmob=this.isMobile(); const swOpen=S.swipeN===p.n;
+      const frontBg = mk?this.tk.surface:(sel?"#111417":this.tk.bg);
+      const baseStyle={display:"flex",alignItems:"center",gap:14,padding:rowPad,borderBottom:"1px solid "+this.tk.surface,cursor:"pointer",background:mk?accent+"14":(sel?this.aT(6):"transparent"),borderLeft:(sel||mk)?"2px solid "+accent:"2px solid transparent"};
+      const actBtn=(bg,fg)=>({width:74,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer",font:"700 11px/1 var(--font-ui)",color:fg,background:bg,userSelect:"none"});
+      return { n:p.n, num:this.pad(p.n), name:this.effName(p.n), author:p.author, tags, blocks,
+        swipeOn:rmob,
+        swipeWrapStyle: rmob?{position:"relative",overflow:"hidden"}:{},
+        actionsWrapStyle:{position:"absolute",top:0,right:0,bottom:0,display:"flex",alignItems:"stretch",zIndex:0},
+        actLoadStyle:actBtn("#1b2b2d",this.tk.accentbright), actBackupStyle:actBtn("#16241a","#48d18a"), actDeleteStyle:actBtn("#2a1616","#f08a7a"),
+        backupLabel:"Back up",
+        renaming:S.renaming===p.n, notRenaming:S.renaming!==p.n,
+        checkMark:mk?"✓":"", checkStyle:{flex:"none",width:18,height:18,borderRadius:5,border:"1px solid "+(mk?accent:this.tk.border3),background:mk?accent:"transparent",color:this.tk.accentink,display:"flex",alignItems:"center",justifyContent:"center",font:"700 11px/1 var(--font-ui)",cursor:"pointer"},
+        cloudChipText:rcm.glyph+" "+rcm.short, cloudTitle:rcm.label,
+        cloudChipStyle:{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 7px",borderRadius:5,font:"700 9px/1 var(--font-mono)",letterSpacing:".02em",color:rcm.col,background:rcm.col+"1f",border:"1px solid "+rcm.col+"40"},
+        device:p.device, deviceChipStyle:{display:"inline-flex",alignItems:"center",padding:"2px 7px",borderRadius:5,font:"700 9px/1 var(--font-mono)",letterSpacing:".02em",color:(this.DEVCOL[p.device]||this.tk.textdim),background:(this.DEVCOL[p.device]||this.tk.textdim)+"1f",border:"1px solid "+(this.DEVCOL[p.device]||this.tk.textdim)+"40"},
+        cpuText:p.cpu+"%", cpuBarStyle:{width:p.cpu+"%",height:"100%",background:cc}, cpuTextStyle:{font:"700 10px/1 var(--font-mono)",color:cc,minWidth:30,textAlign:"right"},
+        numStyle:{font:"700 13px/1 var(--font-mono)",color:sel?"#f5a623":this.tk.textmuted,flex:"none",width:34},
+        style:baseStyle,
+        frontStyle: rmob?Object.assign({},baseStyle,{position:"relative",zIndex:1,background:frontBg,transform:swOpen?"translateX(-"+this.ACTIONW+"px)":"translateX(0)",transition:"transform .24s cubic-bezier(.4,0,.2,1)",touchAction:"pan-y"}):baseStyle,
+        hoverStyle:{background:mk?accent+"1f":(sel?this.aT(8):this.tk.bg2)} };
+    });
+    const empty=rows.length===0;
+
+    // builder chips
+    const chips=conds.map((c,ci)=>{
+      if(c.kind==="block"){ const cat=this.CAT[c.block]; const params=(c.params||[]).map((p,pi)=>({label:p.name+p.op+p.val, ci, pi, style:{display:"inline-flex",alignItems:"center",height:24,padding:"0 6px 0 9px",borderRadius:7,font:"600 11px/1 var(--font-mono)",color:this.tk.text,background:this.tk.surface2}}));
+        return { ci, isBlock:true, label:cat[0], headTitle:cat[0]+" block", headClick:this.onAddParam, dotStyle:{display:"inline-block",width:7,height:7,borderRadius:2,marginRight:7,background:cat[1]},
+          headStyle:{display:"inline-flex",alignItems:"center",height:26,padding:"0 10px",borderRadius:7,fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",background:cat[1]+"26",border:"1px solid "+cat[1]+"55"}, params };
+      }
+      const map={tag:["Tag",this.TAGCOL[c.val]||this.tk.textdim],name:["Name",this.tk.textdim],author:["Author",this.tk.textdim],cpu:["CPU","#f5a623"],scenes:["Scenes","#4f6bed"]};
+      const meta=map[c.kind]||["?",this.tk.textdim]; const txt = c.kind==="tag"||c.kind==="name"||c.kind==="author" ? meta[0]+": "+c.val : meta[0]+" "+c.op+" "+c.val;
+      return { ci, isBlock:false, label:txt, headTitle:txt, headClick:this.stop, dotStyle:{display:"inline-block",width:7,height:7,borderRadius:"50%",marginRight:7,background:meta[1]}, headStyle:{display:"inline-flex",alignItems:"center",height:26,padding:"0 10px",borderRadius:7,fontSize:12,fontWeight:600,color:this.tk.text}, params:[] };
+    }).map(c=>({ ...c, wrapStyle:{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 4px 3px 4px",borderRadius:9,background:this.tk.surface,border:"1px solid "+this.tk.border2} }));
+    const noChips=conds.length===0; const hasChips=conds.length>0;
+
+    // saved
+    const saved=S.saved.map(f=>{ const cs=this.parseQuery(f.query); const active=this.condsToQuery(conds)===this.condsToQuery(cs) && conds.length>0; const firstBlock=cs.find(x=>x.kind==="block"); const dot=firstBlock?this.CAT[firstBlock.block][1]:(cs[0]&&cs[0].kind==="tag"?(this.TAGCOL[cs[0].val]||this.tk.textdim):this.tk.textfaint);
+      return { id:f.id, name:f.name, sub:f.query||"(empty)", dotStyle:{flex:"none",width:8,height:8,borderRadius:"50%",background:dot,marginTop:4}, style:{display:"flex",alignItems:"flex-start",gap:9,padding:"9px 9px",borderRadius:10,cursor:"pointer",background:active?this.aT(8):"transparent",border:active?"1px solid "+accent+"55":"1px solid transparent"} }; });
+    const noSaved=S.saved.length===0;
+
+    // quick tags
+    const quickList=["Clean","Crunch","Hi-Gain","Lead","Ambient","Metal","Blues","Hendrix","Worship","Funk","Bass","Modern"];
+    const activeTags=conds.filter(c=>c.kind==="tag").map(c=>c.val.toLowerCase());
+    const quickTags=quickList.map(t=>{ const on=activeTags.indexOf(t.toLowerCase())>=0; const col=this.TAGCOL[t]||this.tk.textdim; return {label:t,style:{display:"inline-flex",alignItems:"center",padding:"5px 10px",borderRadius:8,fontSize:11,fontWeight:700,fontFamily:"var(--font-mono)",cursor:"pointer",color:on?this.tk.bg:col,background:on?col:col+"14",border:"1px solid "+(on?col:col+"33")}}; });
+
+    // detail
+    let detail=null;
+    if(S.selected!=null && this.PBYN[S.selected]){ const p=this.PBYN[S.selected]; const mk=this.matchedKeys(p,conds); const cc=this.cpuColor(p.cpu);
+      const chain=p.blocks.map((b,i)=>{ const c=this.CAT[b.type]; return {label:c[0],glyph:c[1+1]||c[2],title:b.inst, arrow:i<p.blocks.length-1, style:{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:7,font:"600 10.5px/1 var(--font-mono)",color:c[1],background:c[1]+"18",border:"1px solid "+c[1]+"33"}}; });
+      const blocks=p.blocks.filter(b=>b.type!=="in"&&b.type!=="out").map((b)=>{ const realIdx=p.blocks.indexOf(b); const c=this.CAT[b.type]; const keys=Object.keys(b.params); const params=keys.map(k=>{ const matched=mk[realIdx+":"+k]; return {k, v:this.fmt(b.params[k]), style:{flex:"1 1 calc(50% - 1px)",minWidth:0,display:"flex",flexDirection:"column",gap:3,padding:"8px 11px",background:matched?this.aT(10):this.tk.bg2}, valStyle:{fontSize:12.5,fontWeight:700,fontFamily:"var(--font-mono)",color:matched?accent:this.tk.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}; });
+        return {name:c[0], inst:b.inst, dotStyle:{width:9,height:9,borderRadius:3,background:c[1]}, params}; });
+      // cloud sync + versions
+      const dm=this.cloudOf(p); const dsync=this.deriveSync(dm); const dcm=this.cloudMeta(dsync);
+      const localV=dm.localIdx>=0?dm.versions[dm.localIdx].v:null;
+      const cloudV=dm.cloudIdx>=0?dm.versions[dm.cloudIdx].v:null;
+      let statusLine, loadLabel="Load preset", action=null;
+      if(dsync==="synced"){ statusLine="Device & cloud both on "+localV+" · synced "+dm.versions[dm.localIdx].date; }
+      else if(dsync==="modified"){ statusLine="Device "+localV+" · cloud "+cloudV+" — local edits not uploaded"; action={kind:"upload",label:"Upload",title:"Upload local changes to cloud"}; }
+      else if(dsync==="outdated"){ statusLine="Device "+localV+" · cloud "+cloudV+" — newer version in cloud"; action={kind:"update",label:"Update",title:"Pull the newer cloud version"}; }
+      else if(dsync==="cloudOnly"){ statusLine="Cloud "+cloudV+" · not on this device"; loadLabel="Load from cloud"; action={kind:"download",label:"Download",title:"Save a copy to this device"}; }
+      else { statusLine="Device "+localV+" · not backed up to cloud"; action={kind:"backup",label:"Back up",title:"Back up to cloud"}; }
+      const dversions=dm.versions.map((vv,idx)=>{ const isLocal=idx===dm.localIdx, isCloud=idx===dm.cloudIdx; const badges=[];
+        if(isLocal) badges.push({label:"On device",col:this.tk.accent}); if(isCloud) badges.push({label:"In cloud",col:"#9b8cf0"});
+        const dotc=isLocal?this.tk.accent:(isCloud?"#9b8cf0":this.tk.border2);
+        return { idx, v:vv.v, note:vv.note, meta:vv.date+" · "+vv.author, isCurrent:isLocal, canRevert:!isLocal,
+          badges:badges.map(b=>({label:b.label,style:{padding:"2px 6px",borderRadius:4,font:"700 8.5px/1 var(--font-mono)",letterSpacing:".03em",color:b.col,background:b.col+"22"}})),
+          dotStyle:{flex:"none",width:9,height:9,borderRadius:"50%",marginTop:4,background:dotc,boxShadow:(isLocal||isCloud)?"0 0 6px "+dotc:"none"},
+          rowStyle:{display:"flex",gap:11,padding:"10px 11px",borderRadius:10,background:isLocal?this.aT(6):"transparent"} }; });
+      const dcloud={ chipText:dcm.glyph+" "+dcm.label, chipStyle:{flex:"none",display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:7,font:"700 10px/1 var(--font-mono)",letterSpacing:".02em",color:dcm.col,background:dcm.col+"1f",border:"1px solid "+dcm.col+"40"},
+        statusLine, loadLabel, hasAction:!!action, actionKind:action&&action.kind, actionLabel:action&&action.label, actionTitle:action&&action.title,
+        actionStyle:{flex:"none",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 15px",height:42,borderRadius:11,cursor:"pointer",fontSize:12.5,fontWeight:800,color:this.tk.accentink,background:accent,whiteSpace:"nowrap"},
+        versions:dversions, versionCount:dm.versions.length+" versions" };
+      detail={ n:p.n, cloud:dcloud, num:this.pad(p.n), name:this.effName(p.n), author:p.author, scenes:p.scenes, cpuText:p.cpu+"%", cpuStyle:{fontSize:11.5,fontWeight:700,fontFamily:"var(--font-mono)",color:cc},
+        device:p.device, deviceStyle:{fontSize:11.5,fontWeight:700,fontFamily:"var(--font-mono)",color:this.DEVCOL[p.device]||this.tk.text2},
+        tags:p.tags.map(t=>({label:t,style:{padding:"3px 9px",borderRadius:6,fontSize:10.5,fontWeight:700,fontFamily:"var(--font-mono)",color:this.TAGCOL[t]||this.tk.textdim,background:(this.TAGCOL[t]||this.tk.textdim)+"1f"}})),
+        chain, blocks, onLoad:this.onLoad };
+    }
+
+    // autocomplete styled
+    const acItems=S.acItems.map((a,i)=>({ i, label:a.label, hint:a.hint, dotStyle:{flex:"none",width:8,height:8,borderRadius:a.dot?"2px":"50%",background:a.dot?a.color:"transparent",border:a.dot?"none":"1px solid "+a.color}, style:{display:"flex",alignItems:"center",gap:10,padding:"8px 11px",borderRadius:9,cursor:"pointer",background:i===S.acIndex?this.tk.surface2:"transparent"} }));
+
+    // picker
+    let picker=null; if(S.picker){ this._pickerItems=this.pickerItems(); const hi=Math.min(S.pickerHi,Math.max(0,this._pickerItems.length-1));
+      const items=this._pickerItems.map((it,i)=>({ v:it.v, label:it.label, sub:it.sub||"", dot:!!it.dot, dotStyle:{flex:"none",width:8,height:8,borderRadius:3,background:it.color||this.tk.textfaint}, style:{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,cursor:"pointer",background:i===hi?this.tk.border:"transparent"} }));
+      const titleMap={addfilter:"Add a filter",tag:"Pick a tag",author:"Pick an author",param:"Pick a parameter",value:"Pick a value",device:"Filter by device",convert:"Convert preset to…"};
+      const placeMap={addfilter:"Search blocks & tokens…",tag:"Search tags…",author:"Search authors…",param:"Search parameters…",value:"Search values…",device:"Search devices…",convert:"Search devices…"};
+      const r=S.picker.rect; const left=Math.min(Math.max(12,r.left), (typeof window!=="undefined"?window.innerWidth:1440)-312); const top=(r.bottom||200)+6;
+      picker={ style:{position:"fixed",left:left+"px",top:top+"px",width:300,maxHeight:360,background:this.tk.surface,border:"1px solid "+this.tk.border2,borderRadius:13,boxShadow:"0 24px 60px rgba(0,0,0,.6)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"pbPop .12s ease-out"}, title:titleMap[S.picker.kind]||"Pick", placeholder:placeMap[S.picker.kind]||"Search…", items, empty:items.length===0 };
+    }
+
+    // header bits
+    const advBtnStyle={display:"inline-flex",alignItems:"center",gap:8,height:34,padding:"0 13px",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:700,color:advanced?this.tk.accentink:this.tk.text2,background:advanced?accent:this.tk.surface,border:"1px solid "+(advanced?accent:this.tk.border2)};
+    const advDotStyle={width:8,height:8,borderRadius:"50%",background:advanced?this.tk.accentink:this.tk.textmuted};
+    const queryWrapStyle={display:"flex",alignItems:"center",gap:10,height:46,padding:"0 14px",background:this.tk.bg2,border:"1px solid "+(S.acOpen&&advanced?accent:this.tk.border2),borderRadius:12,transition:"border-color .12s"};
+    const saveBtnStyle={display:"inline-flex",alignItems:"center",gap:8,padding:"0 16px",borderRadius:12,cursor:"pointer",fontSize:12.5,fontWeight:700,color:this.tk.text2,background:this.tk.surface,border:"1px solid "+this.tk.border2,whiteSpace:"nowrap"};
+
+    // device filter control
+    const devCol=this.DEVCOL[S.deviceFilter]||this.tk.textdim;
+    const deviceLabel=S.deviceFilter==="all"?"All devices":S.deviceFilter;
+    const deviceActive=S.deviceFilter!=="all";
+    const deviceBtnStyle={display:"inline-flex",alignItems:"center",gap:8,height:34,padding:"0 12px",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:700,color:deviceActive?this.tk.text:this.tk.text2,background:this.tk.surface,border:"1px solid "+(deviceActive?devCol+"66":this.tk.border2)};
+    const deviceDotStyle={width:8,height:8,borderRadius:"50%",background:devCol};
+
+    // confirm dialog (delete / overwrite)
+    let confirm=null;
+    if(S.confirm){ const dg=!!S.confirm.danger; confirm={ title:S.confirm.title, message:S.confirm.message, confirmLabel:S.confirm.confirmLabel||"Confirm",
+      icon: dg?"⚠":"↺", iconStyle:{flex:"none",width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,background:dg?"#2a1416":this.aT(12),color:dg?"#e87b6a":this.tk.accent,border:"1px solid "+(dg?"#3a1f1f":this.aT(30))},
+      yesStyle:{flex:1,height:44,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:11,cursor:"pointer",fontSize:13,fontWeight:800,color:dg?"#fff":this.tk.accentink,background:dg?"#d6543f":accent} }; }
+
+    // context menu
+    let ctx=null;
+    if(S.ctx && this.PBYN[S.ctx.n]){
+      const multi=S.ctx.target==="sel"; const ns=multi?Object.keys(S.marked).map(Number):[S.ctx.n];
+      const cm=this.cloudOf(this.PBYN[S.ctx.n]); const csync=this.deriveSync(cm);
+      const raw=[];
+      const it=(id,label,glyph,hint,danger)=>raw.push({id,label,glyph,hint:hint||"",danger:!!danger});
+      const div=()=>raw.push({divider:true});
+      if(!multi){ it("load", csync==="cloudOnly"?"Load from cloud":"Load preset","↓","↵"); it("rename","Rename","✎"); it("duplicate","Duplicate","⧉"); it("convert","Convert to device…","⇄"); }
+      it("export", multi?("Export "+ns.length+" to disk"):"Export to disk","⤓");
+      div();
+      if(multi){ it("upload","Back up to cloud","☁"); it("download","Sync from cloud","⟳"); }
+      else if(csync==="modified") it("upload","Upload to cloud","☁");
+      else if(csync==="outdated") it("update","Update from cloud","↓");
+      else if(csync==="cloudOnly") it("download","Download to device","↓");
+      else if(csync==="deviceOnly") it("backup","Back up to cloud","☁");
+      else it("upload","Re-upload to cloud","☁");
+      div();
+      it("removeDevice", multi?("Remove "+ns.length+" from device"):"Remove from device","⊘");
+      it("delete", multi?("Delete "+ns.length+" presets"):"Delete everywhere","✕",true);
+      const W=(typeof window!=="undefined"?window.innerWidth:1440), H=(typeof window!=="undefined"?window.innerHeight:900);
+      const x=Math.min(S.ctx.x, W-244), y=Math.min(S.ctx.y, H-raw.length*36-30);
+      ctx={ title: multi?(ns.length+" presets"):this.effName(S.ctx.n),
+        style:{position:"fixed",left:x+"px",top:y+"px",width:230,background:this.tk.surface,border:"1px solid "+this.tk.border2,borderRadius:11,boxShadow:"0 24px 60px rgba(0,0,0,.6)",padding:6,zIndex:381,animation:"pbPop .1s ease-out"},
+        items: raw.map(m=> m.divider?{divider:true,isItem:false}:{ divider:false, isItem:true, id:m.id, label:m.label, glyph:m.glyph, hint:m.hint,
+          glyphStyle:{flex:"none",width:18,textAlign:"center",fontSize:13,color:m.danger?"#e87b6a":this.tk.textdim},
+          style:{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12.5,fontWeight:600,color:m.danger?"#e87b6a":this.tk.text},
+          hover: m.danger?"background:#2a1416;":("background:"+this.tk.border+";") }) };
+    }
+
+    // ===== responsive layout =====
+    const mob=this.isMobile(); const navc=this.navCompact();
+    const railStyle = mob ? {display:"none"} : {width:66,flex:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"13px 0",background:this.tk.bg2,borderRight:"1px solid "+this.tk.border,zIndex:10};
+    const libStyle = navc
+      ? {position:"fixed",left:0,top:0,bottom:0,width:284,maxWidth:"85vw",zIndex:170,background:this.tk.bg2,borderRight:"1px solid "+this.tk.surface2,overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:"0 24px 80px rgba(0,0,0,.55)",transform:S.libOpen?"translateX(0)":"translateX(-102%)",transition:"transform .22s cubic-bezier(.4,0,.2,1)"}
+      : {width:248,flex:"none",borderRight:"1px solid "+this.tk.border,background:this.tk.bg2,overflowY:"auto",display:"flex",flexDirection:"column"};
+    const detailStyle = mob
+      ? {position:"fixed",inset:0,zIndex:180,background:this.tk.bg2,overflowY:"auto",display:(S.selected!=null?"block":"none")}
+      : {width:368,flex:"none",borderLeft:"1px solid "+this.tk.border,background:this.tk.bg2,overflowY:"auto"};
+    // ===== theme panel =====
+    const th=S.theme;
+    const seg=(on)=>({flex:1,height:38,display:"flex",alignItems:"center",justifyContent:"center",gap:7,borderRadius:9,cursor:"pointer",font:"700 12px/1 var(--font-ui)",color:on?"var(--accentink)":"var(--textdim)",background:on?"var(--accent)":"transparent",transition:"all .15s"});
+    const accentSwatches=this.ACCENT_SWATCHES.map(c=>({acc:c, style:{width:36,height:36,borderRadius:10,cursor:"pointer",background:c,border:th.accent===c?"2px solid var(--text)":"2px solid var(--border2)",boxShadow:th.accent===c?"inset 0 0 0 2px var(--bg)":"none"}}));
+    const themePresets=this.THEME_PRESETS.map(p=>{ const on=th.preset===p.id; return {pid:p.id, name:p.name, base:(p.base==="light"?"Light":"Dark"), dotStyle:{width:13,height:13,borderRadius:"50%",flex:"none",background:p.accent,boxShadow:"0 0 0 3px "+(p.base==="light"?"#ffffff":"#0c0c0e")}, style:{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:11,cursor:"pointer",background:on?this.aT(12):"var(--surface)",border:on?"1px solid "+this.aT(60):"1px solid var(--border2)"}, nameStyle:{font:"700 12.5px/1 var(--font-ui)",color:"var(--text)"}, tagStyle:{font:"600 8.5px/1 var(--font-mono)",color:"var(--textfaint)",marginLeft:"auto",letterSpacing:".08em"}}; });
+    const selStyle={width:"100%",height:40,padding:"0 11px",background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:10,color:"var(--text)",font:"600 13px/1 var(--font-ui)",cursor:"pointer",outline:"none"};
+    const fontUiOpts=this.FONT_UI.map(x=>({v:x[0], sel:x[0]===th.fontUi})); const fontMonoOpts=this.FONT_MONO.map(x=>({v:x[0], sel:x[0]===th.fontMono}));
+    return {
+      rootRef:this.rootRef, onOpenTheme:this.onOpenTheme, onCloseTheme:this.onCloseTheme, themeOpen:S.themeOpen, stopTheme:this.stop,
+      themeBtnStyle:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,flex:"none",borderRadius:9,cursor:"pointer",color:"var(--textdim)",background:"var(--surface)",border:"1px solid var(--border2)"},
+      themeOverlayStyle:{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)",display:"flex",justifyContent:"flex-end"},
+      themeCardStyle:{width:380,maxWidth:"92vw",height:"100%",background:"var(--bg2)",borderLeft:"1px solid var(--border2)",display:"flex",flexDirection:"column",boxShadow:"-24px 0 80px rgba(0,0,0,.5)"},
+      themeBaseDark:seg(th.base!=="light"), themeBaseLight:seg(th.base==="light"),
+      accentSwatches, themePresets, selStyle, fontUiOpts, fontMonoOpts,
+      themeScale:th.scale, themeScaleLabel:th.scale+"%", fontUiVal:th.fontUi, fontMonoVal:th.fontMono,
+      onThemeBase:this.onThemeBase, onThemeAccent:this.onThemeAccent, onThemePreset:this.onThemePreset, onThemeScale:this.onThemeScale, onThemeFontUi:this.onThemeFontUi, onThemeFontMono:this.onThemeFontMono, onThemeReset:this.onThemeReset,
+      railStyle, libStyle, detailStyle, showMenuBtn:navc, toggleLib:this.toggleLib, closeLib:this.closeLib, libBackdrop:navc&&S.libOpen, showDetailBack:mob, closeDetail:this.closeDetail,
+      rail, sorts, onSort:this.onSort,
+      views, onView:this.onView, cloudSummary,
+      onSyncJump:this.onSyncJump, syncChipText:(toSyncCount>0?(toSyncCount+" to sync"):"All synced"),
+      syncChipTitle:(toSyncCount>0?(toSyncCount+" presets have local edits or cloud updates — tap to review"):"Everything is backed up to cloud"),
+      syncChipStyle:{display:"inline-flex",alignItems:"center",gap:7,height:34,padding:"0 13px",borderRadius:9,cursor:"pointer",font:"700 11px/1 var(--font-mono)",letterSpacing:".02em",color:(toSyncCount>0?"#f5a623":"#33c46b"),background:(toSyncCount>0?"#f5a623":"#33c46b")+"14",border:"1px solid "+(toSyncCount>0?"#f5a623":"#33c46b")+"40"},
+      syncDotStyle:{width:7,height:7,borderRadius:"50%",flex:"none",background:(toSyncCount>0?"#f5a623":"#33c46b"),boxShadow:(toSyncCount>0?"0 0 0 3px #f5a62322":"none")},
+      hasMarked:this.markCount()>0, selCount:this.markCount(), clearMarks:this.clearMarks, onCheckClick:this.onCheckClick, onSelAction:this.onSelAction,
+      onRowContext:this.onRowContext, ctx, closeCtx:this.closeCtx, ctxPrevent:this.ctxPrevent, onCtxAction:this.onCtxAction,
+      renameRef:this.renameRef, onRenameKey:this.onRenameKey, onRenameBlur:this.onRenameBlur,
+      deviceLabel, deviceBtnStyle, deviceDotStyle, onDeviceFilter:this.onDeviceFilter, onConvertOpen:this.onConvertOpen,
+      confirm, onConfirmYes:this.onConfirmYes, onConfirmNo:this.onConfirmNo,
+      onLoad:this.onLoad, onCloudAction:this.onCloudAction, onRevert:this.onRevert,
+      toast: S.toast?{ text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.col, boxShadow:"0 0 8px "+S.toast.col, display:"inline-block", flex:"none" } }:null,
+      countLine: (conds.length||simpleQ) ? (list.length+" of "+this.PRESETS.length+" presets") : (this.PRESETS.length+" presets"),
+      advBtnStyle, advDotStyle, onToggleAdvanced:this.onToggleAdvanced,
+      queryRef:this.qrefCb,
+      onQueryInput:this.onQueryInput, onQueryKey:this.onQueryKey, onQueryFocus:this.onQueryFocus, onQueryBlur:this.onQueryBlur, onQuerySelect:this.onQuerySelect,
+      queryPlaceholder: advanced ? "AMP(TYPE=5153, GAIN>7)  +  REVERB(MIX>30)  +  tag:Lead" : "Search presets, tags, amps…",
+      queryWrapStyle, showClear: advanced ? !!S.query : !!S.simpleQ, onClearQuery:this.onClearQuery,
+      saveBtnStyle, onSaveCurrent:this.onSaveCurrent,
+      acOpen:S.acOpen&&advanced, acItems, acCtxLabel:S.acCtxLabel, acEmpty:S.acOpen&&advanced&&acItems.length===0, onAcDown:this.onAcDown, onAcHover:this.onAcHover,
+      chips, noChips, hasChips, noChipsHint: advanced?"Type a query above, or add filters →":"Add block, parameter & tag filters →",
+      onChipRemove:this.onChipRemove, onParamRemove:this.onParamRemove, onAddParam:this.onAddParam, onAddFilter:this.onAddFilter,
+      saved, savedCount:S.saved.length, noSaved, onApplySaved:this.onApplySaved, onDupSaved:this.onDupSaved, onDelSaved:this.onDelSaved,
+      saving:S.saving, saveNameRef:this.saveNameRef, onSaveNameKey:this.onSaveNameKey, onSaveCancel:this.onSaveCancel,
+      quickTags, onQuickTag:this.onQuickTag,
+      rows, empty, onRowClick:this.onRowClick,
+      detail, noDetail:!detail,
+      picker, onPickerClose:this.onPickerClose, onPickerSearch:this.onPickerSearch, onPickerKey:this.onPickerKey, onPickerPick:this.onPickerPick, pickerSearchRef:this.pickerSearchRef, stop:this.stop,
+      // ---- part-gating overrides (duplicate keys: last wins) ----
+      part, showRail, showTop, showSources, showResults, showDetail,
+      moreRows:(!S.showAllRows && totalRows>14), moreRowsLabel:"Show all "+totalRows+" presets", onMoreRows:()=>this.setState({showAllRows:true}),
+      libStyle: (part==="sources" ? "position:relative; width:100%; flex:1; min-width:0; height:100%; overflow-y:auto; background:var(--surface);" : libStyle),
+      detailStyle: (part==="detail" ? "position:relative; width:100%; flex:1; min-width:0; height:100%; overflow-y:auto; background:var(--bg2);" : detailStyle),
+      picker: (isOwner ? picker : null),
+      ctx: (isOwner ? ctx : null),
+      confirm: (isOwner ? confirm : null),
+      themeOpen: (isOwner && S.themeOpen),
+      toast: (isOwner && S.toast ? { text:S.toast.text, dot:{ width:9, height:9, borderRadius:"50%", background:S.toast.col, boxShadow:"0 0 8px "+S.toast.col, display:"inline-block", flex:"none" } } : null)
+    };
+  }
+}
+</script>
+</body>
+</html>

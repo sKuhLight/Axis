@@ -11,6 +11,8 @@
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
+  import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
+  import { getOptionalWorkbenchContext } from './workbench';
 
   let {
     slug = '',
@@ -25,6 +27,8 @@
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
   const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇' };
+  const workbench = getOptionalWorkbenchContext();
+  const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
   type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
@@ -839,6 +843,51 @@
     setNorm(pid, (knob(pid)?.norm ?? 0) + dir * 0.02);
   }
 
+  function pinnable(c: Ctl | undefined): c is Ctl {
+    return !!c && c.id >= 0 && (c.kind === 'cont' || c.kind === 'toggle' || c.kind === 'select');
+  }
+
+  async function pinControlToWorkbench(c: Ctl) {
+    if (!workbenchCanPin || !workbench || !pinnable(c)) return;
+    const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
+      controller: workbench.controller,
+      source: 'host',
+      args: {
+        paramId: c.id,
+        title: c.label
+      }
+    });
+    if (result.success) editor.showToast(`Pinned ${c.label}`, '#35c9d6');
+  }
+
+  function pagePinIds(): number[] {
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const widget of viewWidgets) {
+      const c = catByKey.get(widget.key);
+      if (!pinnable(c) || seen.has(c.id)) continue;
+      seen.add(c.id);
+      ids.push(c.id);
+    }
+    return ids;
+  }
+
+  async function pinPageToWorkbench() {
+    if (!workbenchCanPin || !workbench) return;
+    const paramIds = pagePinIds();
+    if (!paramIds.length) return;
+    const block = editor.selected?.display ?? 'Block';
+    const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
+      controller: workbench.controller,
+      source: 'host',
+      args: {
+        paramIds,
+        title: `${block} Controls`
+      }
+    });
+    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, '#35c9d6');
+  }
+
   // dropdown popover geometry
   const selMenu = $derived.by(() => {
     if (!openSelect) return null;
@@ -1005,6 +1054,9 @@
     <div class="stepper"><span class="sl">ROWS</span><button onclick={() => gridResize('rows', -1)}>−</button><span class="sv">{rows}</span><button onclick={() => gridResize('rows', 1)}>＋</button></div>
     <span class="ab-note">applies to every block</span>
     <span class="ab-sp"></span>
+    {#if workbenchCanPin}
+      <button class="ab-btn" onclick={pinPageToWorkbench} title="Pin this page to a Workbench custom panel">⌖ Pin page</button>
+    {/if}
     <button class="ab-btn" class:on={effCompact} onclick={toggleCompact} title="Free = leave gaps · Packed = no holes">{effCompact ? '⊞ Packed' : '⊡ Free'}</button>
     <button class="ab-btn" onclick={tidyUp}>⤢ Tidy up</button>
   </div>
@@ -1171,6 +1223,9 @@
                 {#if c.kind === 'cont'}
                   {@const sp = knob(c.id)}
                   <button class="qbadge" class:on={editor.isSwipeControl(c.id)} onpointerdown={(e) => e.stopPropagation()} onclick={() => sp && editor.toggleSwipeControl(sp)} title="Map to grid swipe control (adjust from the Signal Grid tile)">⚡</button>
+                {/if}
+                {#if workbenchCanPin && pinnable(c)}
+                  <button class="pinbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => pinControlToWorkbench(c)} title="Pin to a Workbench custom panel">⌖</button>
                 {/if}
                 <button class="rsz" onpointerdown={(e) => onResizeDown(e, w.id)} aria-label="Resize">
                   <svg width="13" height="13" viewBox="0 0 13 13"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke={accent} stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -1606,7 +1661,7 @@
   }
   /* in arrange mode the whole tile is grabbable — the controls don't intercept the pointer,
      only the chrome buttons (remove / retype / resize) stay interactive */
-  .card.editing > :not(.wx):not(.vcyc):not(.rsz):not(.qbadge) {
+  .card.editing > :not(.wx):not(.vcyc):not(.rsz):not(.qbadge):not(.pinbadge) {
     pointer-events: none;
   }
   .card.dragging {
@@ -2103,6 +2158,27 @@
     background: rgba(245, 166, 35, 0.22);
     border-color: var(--amber);
     color: var(--amber);
+  }
+  .pinbadge {
+    position: absolute;
+    bottom: 4px;
+    right: 56px;
+    z-index: 8;
+    width: 21px;
+    height: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 11px;
+    background: rgba(53, 201, 214, 0.14);
+    border: 1px solid rgba(53, 201, 214, 0.5);
+    color: var(--accentbright);
+  }
+  .pinbadge:hover {
+    background: rgba(53, 201, 214, 0.22);
+    border-color: var(--accent);
   }
   .vcyc {
     position: absolute;

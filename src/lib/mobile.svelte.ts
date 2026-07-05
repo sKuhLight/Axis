@@ -11,6 +11,7 @@ import { isMobileBuild } from './cloudBrowser';
 import { editor } from './editor.svelte';
 import { assembleRuntime, type RuntimeSupport } from './direct/runtime';
 import { AxisMidi, NativeMidiTransport, type AxisMidiEndpoint } from './direct/nativeMidi';
+import { remoteBoot } from './remote.svelte';
 
 type Phase = 'pick' | 'connecting' | 'ready' | 'error';
 
@@ -87,7 +88,6 @@ class MobileBoot {
 
   /** Fall back to Axis Remote (relay to the user's PC) — hand off to the existing remote boot. */
   useRemote = async () => {
-    const { remoteBoot } = await import('./remote.svelte');
     remoteBoot.active = true;
     this.active = false; // yield the gate to RemoteGate
     await remoteBoot.init();

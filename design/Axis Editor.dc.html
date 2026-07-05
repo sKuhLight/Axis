@@ -29,7 +29,7 @@
 </style>
 </helmet>
 
-<div ref="{{ rootRef }}" style="position:fixed; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden;">
+<div ref="{{ rootRef }}" onContextMenu="{{ onRootCtx }}" style="position:fixed; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden; -webkit-touch-callout:none;">
 
   <!-- ===================== LEFT RAIL ===================== -->
   <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
@@ -44,6 +44,10 @@
       </div>
     </sc-for>
     <div style="flex:1;"></div>
+    <!-- history -->
+    <div onClick="{{ openHist }}" title="History · undo timeline" style="width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:10px; cursor:pointer; color:var(--textdim); background:var(--surface); border:1px solid var(--border2); margin-bottom:6px;" style-hover="border-color:var(--border3); color:var(--text2);">
+      <svg width="16" height="16" viewBox="0 0 16 16" style="flex:none;"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 4.6 V8 L10.3 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+    </div>
     <!-- appearance -->
     <div onClick="{{ onOpenTheme }}" title="Appearance & theme" style="width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:10px; cursor:pointer; color:var(--textdim); background:var(--surface); border:1px solid var(--border2); margin-bottom:6px;" style-hover="border-color:var(--border3); color:var(--text2);">
       <span style="font-size:15px; line-height:1;">◐</span>
@@ -192,7 +196,7 @@
       </svg>
       <div style="{{ gridStyle }}">
         <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="48">
-          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" onMouseEnter="{{ onCellEnter }}" onMouseLeave="{{ onCellLeave }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
+          <div data-idx="{{ cell.idx }}" onClick="{{ onCellClick }}" onContextMenu="{{ onCellCtx }}" onPointerDown="{{ onBlockDown }}" onWheel="{{ onBlockWheel }}" onMouseEnter="{{ onCellEnter }}" onMouseLeave="{{ onCellLeave }}" style="{{ cell.boxStyle }}" style-hover="{{ cell.hoverStyle }}">
             <sc-if value="{{ cell.isBlock }}" hint-placeholder-val="{{ false }}">
               <div style="{{ cell.fillStyle }}"></div>
               <div style="{{ cell.glyphStyle }}">{{ cell.glyph }}</div>
@@ -760,6 +764,10 @@
       </div>
       <span style="flex:1; min-width:10px;"></span>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div onClick="{{ openLib }}" title="Save / recall block presets" style="display:flex; align-items:center; gap:7px; height:44px; padding:0 15px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:700; background:var(--surface); border:1px solid var(--border2); color:var(--text2);" style-hover="border-color:var(--border3); color:#fff;">
+          <svg width="15" height="15" viewBox="0 0 16 16" style="flex:none;"><path d="M2.5 3.2 h11 v9.6 h-11 z M2.5 6 h11 M5.5 3.2 v9.6" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+          <span>Library</span>
+        </div>
         <div onClick="{{ onMute }}" style="{{ ed.muteStyle }}">{{ ed.muteLabel }}</div>
         <div onClick="{{ onSceneIgnore }}" style="{{ ed.sceneStyle }}">Scene Ignore</div>
         <div onClick="{{ onBypass }}" style="{{ ed.bypassStyle }}">{{ ed.bypassLabel }}</div>
@@ -830,6 +838,21 @@
               <span style="{{ cpuTextStyle }}">{{ cpuText }}</span>
             </div>
           </div>
+        <div style="margin-top:22px;">
+          <div style="font:600 9px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.13em; margin-bottom:11px;">TOOLS</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div onClick="{{ openHist }}" style="display:flex; align-items:center; gap:11px; height:44px; padding:0 13px; background:var(--surface); border:1px solid var(--border); border-radius:11px; cursor:pointer;" style-hover="border-color:var(--border3);">
+              <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none; color:var(--textdim);"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 4.6 V8 L10.3 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <span style="flex:1; font-size:13px; font-weight:600; color:var(--text2);">History</span>
+              <span style="font:600 10px/1 var(--font-mono); color:var(--textfaint);">{{ histCountLabel }}</span>
+            </div>
+            <div onClick="{{ openLib }}" style="display:flex; align-items:center; gap:11px; height:44px; padding:0 13px; background:var(--surface); border:1px solid var(--border); border-radius:11px; cursor:pointer;" style-hover="border-color:var(--border3);">
+              <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none; color:var(--textdim);"><path d="M2.5 3.2 h11 v9.6 h-11 z M2.5 6 h11 M5.5 3.2 v9.6" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+              <span style="flex:1; font-size:13px; font-weight:600; color:var(--text2);">Block Library</span>
+              <span style="font-size:15px; color:var(--textmuted);">›</span>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
       <!-- account footer -->
@@ -1265,6 +1288,23 @@
   </div>
   </sc-if>
 
+  <!-- ===================== UNDO / REDO PILL ===================== -->
+  <sc-if value="{{ showHistPill }}" hint-placeholder-val="{{ true }}">
+  <div style="{{ histPillStyle }}">
+    <div onClick="{{ undo }}" title="Undo (Cmd Z)" style="{{ undoBtnStyle }}" style-hover="background:var(--surface2);">
+      <svg width="17" height="17" viewBox="0 0 18 18" style="flex:none;"><path d="M6 4 L2.5 7.5 L6 11 M2.5 7.5 H11 a4.5 4.5 0 0 1 0 9 H7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </div>
+    <div onClick="{{ redo }}" title="Redo (Cmd Shift Z)" style="{{ redoBtnStyle }}" style-hover="background:var(--surface2);">
+      <svg width="17" height="17" viewBox="0 0 18 18" style="flex:none;"><path d="M12 4 L15.5 7.5 L12 11 M15.5 7.5 H7 a4.5 4.5 0 0 0 0 9 H11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </div>
+    <div style="width:1px; height:20px; background:var(--border2); flex:none;"></div>
+    <div onClick="{{ openHist }}" title="History" style="display:flex; align-items:center; gap:7px; height:34px; padding:0 12px; border-radius:9px; cursor:pointer; color:var(--textdim);" style-hover="background:var(--surface2); color:var(--text2);">
+      <svg width="15" height="15" viewBox="0 0 16 16" style="flex:none;"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 4.6 V8 L10.3 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+      <span style="{{ histCountStyle }}">{{ histCount }}</span>
+    </div>
+  </div>
+  </sc-if>
+
   <!-- ===================== TOAST ===================== -->
   <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
   <div style="position:absolute; bottom:24px; left:50%; z-index:300; display:flex; align-items:center; gap:11px; padding:12px 17px; background:var(--surface2); border:1px solid var(--border2); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:axsToast 2.2s ease forwards;">
@@ -1274,6 +1314,122 @@
   </sc-if>
 
 </div>
+
+<!-- ===================== BLOCK CONTEXT MENU ===================== -->
+<sc-if value="{{ ctxShow }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ onCtxOverlay }}" onContextMenu="{{ onCtxOverlay }}" style="position:fixed; inset:0; z-index:360;">
+  <div onClick="{{ stop }}" onContextMenu="{{ onRootCtx }}" style="{{ ctxMenuStyle }}">
+    <sc-if value="{{ ctxTitle }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:7px 11px 6px; font:700 9px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.1em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ctxTitle }}</div>
+    </sc-if>
+    <sc-for list="{{ ctxItems }}" as="it" hint-placeholder-count="6">
+      <sc-if value="{{ it.isDivider }}" hint-placeholder-val="{{ false }}">
+        <div style="height:1px; background:var(--surface2); margin:5px 8px;"></div>
+      </sc-if>
+      <sc-if value="{{ it.isNormal }}" hint-placeholder-val="{{ true }}">
+        <div data-act="{{ it.act }}" onClick="{{ onCtxAct }}" style="{{ it.style }}" style-hover="background:var(--surface2)">
+          <svg width="15" height="15" viewBox="0 0 16 16" style="{{ it.iconWrapStyle }}"><path d="{{ it.icon }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span style="flex:1; white-space:nowrap;">{{ it.label }}</span>
+          <sc-if value="{{ it.hint }}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.04em;">{{ it.hint }}</span></sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ it.isDanger }}" hint-placeholder-val="{{ false }}">
+        <div data-act="{{ it.act }}" onClick="{{ onCtxAct }}" style="{{ it.style }}" style-hover="background:rgba(232,123,106,.13)">
+          <svg width="15" height="15" viewBox="0 0 16 16" style="{{ it.iconWrapStyle }}"><path d="{{ it.icon }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <span style="flex:1; white-space:nowrap;">{{ it.label }}</span>
+          <sc-if value="{{ it.hint }}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 var(--font-mono); color:var(--textmuted); letter-spacing:.04em;">{{ it.hint }}</span></sc-if>
+        </div>
+      </sc-if>
+    </sc-for>
+    <sc-if value="{{ ctxLifted }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:7px; margin:4px 6px 2px; padding:7px 9px 3px; border-top:1px solid var(--border);">
+        <svg width="13" height="13" viewBox="0 0 16 16" style="flex:none;"><path d="M8 2 v12 M8 2 l-2.5 2.5 M8 2 l2.5 2.5 M2 8 h12 M2 8 l2.5 -2.5 M2 8 l2.5 2.5" fill="none" stroke="var(--textfaint)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font:600 10.5px/1.3 var(--font-mono); color:var(--textfaint); letter-spacing:.02em;">Keep holding &amp; drag to move</span>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===================== HISTORY ===================== -->
+<sc-if value="{{ histOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeHist }}" data-screen-label="History" style="position:fixed; inset:0; z-index:380; background:rgba(6,6,8,.55); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:axsOverlay .14s ease;">
+  <div onClick="{{ stop }}" style="width:560px; max-width:94vw; max-height:72vh; margin-bottom:max(26px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border2); border-radius:16px; box-shadow:0 24px 70px rgba(0,0,0,.6); animation:axsPalette .18s ease; overflow:hidden;">
+    <div style="display:flex; align-items:center; gap:11px; padding:17px 18px 15px; border-bottom:1px solid var(--border); flex:none;">
+      <span style="font:800 16px/1 var(--font-ui); color:#fff; letter-spacing:-.01em;">History</span>
+      <span style="font:600 11px/1 var(--font-mono); color:var(--textfaint); letter-spacing:.04em;">{{ presetNum }} · {{ presetName }}</span>
+      <span style="flex:1;"></span>
+      <div onClick="{{ undo }}" title="Undo" style="{{ undoHdrStyle }}" style-hover="border-color:var(--border3);">
+        <svg width="14" height="14" viewBox="0 0 18 18" style="flex:none;"><path d="M6 4 L2.5 7.5 L6 11 M2.5 7.5 H11 a4.5 4.5 0 0 1 0 9 H7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span>Undo</span>
+      </div>
+      <div onClick="{{ redo }}" title="Redo" style="{{ redoHdrStyle }}" style-hover="border-color:var(--border3);">
+        <svg width="14" height="14" viewBox="0 0 18 18" style="flex:none;"><path d="M12 4 L15.5 7.5 L12 11 M15.5 7.5 H7 a4.5 4.5 0 0 0 0 9 H11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span>Redo</span>
+      </div>
+      <div onClick="{{ closeHist }}" title="Close" style="width:32px; height:32px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; color:var(--textdim); background:var(--surface2); border:1px solid var(--border2);" style-hover="color:var(--text);">✕</div>
+    </div>
+    <div class="axs-scroll" style="flex:1; min-height:0; overflow-y:auto;">
+      <sc-for list="{{ histEntries }}" as="h" hint-placeholder-count="3">
+        <div style="{{ h.rowStyle }}">
+          <span style="font:500 12px/1 var(--font-mono); color:var(--textfaint); flex:none; width:64px;">{{ h.time }}</span>
+          <span style="font-size:13px; font-weight:500; color:{{ h.color }}; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ h.label }}</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ histEmpty }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:38px 20px; text-align:center; color:var(--textmuted); font-size:13px;">No changes yet — edit a block, then undo any step from here.</div>
+      </sc-if>
+    </div>
+    <div style="display:flex; align-items:center; padding:12px 18px; border-top:1px solid var(--border); flex:none;">
+      <span style="font:500 12px/1 var(--font-mono); color:var(--textmuted);">{{ histCountLabel }}</span>
+      <span style="flex:1;"></span>
+      <div onClick="{{ clearHist }}" style="font-size:12.5px; font-weight:600; color:#d6543f; cursor:pointer;" style-hover="text-decoration:underline;">Clear history</div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ===================== BLOCK LIBRARY ===================== -->
+<sc-if value="{{ libOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeLib }}" data-screen-label="Block Library" style="position:fixed; inset:0; z-index:380; background:rgba(6,6,8,.55); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; animation:axsOverlay .14s ease;">
+  <div onClick="{{ stop }}" style="width:560px; max-width:94vw; max-height:76vh; margin-bottom:max(26px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border2); border-radius:16px; box-shadow:0 24px 70px rgba(0,0,0,.6); animation:axsPalette .18s ease; overflow:hidden;">
+    <div style="display:flex; align-items:center; gap:11px; padding:17px 18px 14px; border-bottom:1px solid var(--border); flex:none;">
+      <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none; color:var(--accent);"><path d="M2.5 3.2 h11 v9.6 h-11 z M2.5 6 h11 M5.5 3.2 v9.6" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+      <span style="font:800 16px/1 var(--font-ui); color:#fff; letter-spacing:-.01em;">Block Library</span>
+      <span style="flex:1;"></span>
+      <div onClick="{{ closeLib }}" title="Close" style="width:32px; height:32px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; color:var(--textdim); background:var(--surface2); border:1px solid var(--border2);" style-hover="color:var(--text);">✕</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; padding:13px 18px; border-bottom:1px solid var(--border); flex:none; flex-wrap:wrap;">
+      <sc-for list="{{ libFilters }}" as="f" hint-placeholder-count="2">
+        <div data-filt="{{ f.id }}" onClick="{{ onLibFilter }}" style="{{ f.style }}">{{ f.label }}</div>
+      </sc-for>
+      <span style="flex:1;"></span>
+      <div onClick="{{ onLibSaveCurrent }}" style="{{ libSaveStyle }}" style-hover="border-color:var(--accent); color:var(--accent);">
+        <svg width="14" height="14" viewBox="0 0 16 16" style="flex:none;"><path d="M4 3 h8 v10 l-4 -2.6 -4 2.6 z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+        <span>{{ libSaveLabel }}</span>
+      </div>
+    </div>
+    <div class="axs-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:8px;">
+      <sc-for list="{{ libEntries }}" as="e" hint-placeholder-count="4">
+        <div data-lib="{{ e.id }}" onClick="{{ onLibLoad }}" style="{{ e.rowStyle }}" style-hover="border-color:var(--border3); background:var(--surface2);">
+          <span style="{{ e.dotStyle }}"></span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:13.5px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ e.name }}</div>
+            <div style="font:500 11px/1.3 var(--font-mono); color:var(--textfaint); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ e.meta }}</div>
+          </div>
+          <span style="font:600 10px/1 var(--font-mono); color:var(--textmuted); flex:none;">{{ e.time }}</span>
+          <div data-lib="{{ e.id }}" onClick="{{ onLibDelete }}" title="Delete" style="width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; color:var(--textmuted);" style-hover="color:#d6543f; background:rgba(214,84,63,.12);">
+            <svg width="14" height="14" viewBox="0 0 16 16" style="flex:none;"><path d="M4 5 h8 M6.4 5 V3.6 h3.2 V5 M5 5 l.7 8 h4.6 l.7 -8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </div>
+      </sc-for>
+      <sc-if value="{{ libEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:38px 20px; text-align:center; color:var(--textmuted); font-size:13px;">No saved blocks in this category yet. Save the current block to reuse it later.</div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</sc-if>
 
 <sc-if value="{{ themeOpen }}" hint-placeholder-val="{{ false }}">
 <div onClick="{{ onCloseTheme }}" data-screen-label="Appearance" style="{{ themeOverlayStyle }}">
@@ -1470,6 +1626,14 @@ class Component extends DCLogic {
       recents:[ {catId:"amp",type:"Brit 800 #34"}, {catId:"delay",type:"Tube Tape"}, {catId:"reverb",type:"Large Hall"} ],
       knobs:{}, toggles:{}, toast:null, bpm:120, vw:1280, qc:{}, qcSel:{}, adjust:null, hoverCell:null, moveMode:false, moveIdx:null, moveOver:null, movePos:{x:0,y:0}, moveOverBin:false, linkTo:null,
       mapOpen:true, mapLink:null,
+      hist:{ past:[], future:[] }, ctx:null, clip:null, histOpen:false,
+      libOpen:false, libFor:null,
+      blockLib:[
+        { id:"bl1", name:"Tight Modern Boost", catId:"drive", type:"T808 Mod", note:"gain stage", cfg:{ knobs:{ "controls:Drive":78, "controls:Tone":62, "controls:Level":54 } }, time:"yesterday" },
+        { id:"bl2", name:"Big Studio Plate", catId:"reverb", type:"Large Plate", note:"vocal-style tail", cfg:{ knobs:{ "controls:Time":66, "controls:Mix":34 } }, time:"3 days ago" },
+        { id:"bl3", name:"Slap 120", catId:"delay", type:"Tube Tape", note:"quarter-note slap", cfg:{ knobs:{ "controls:Time":40, "controls:Mix":28, "controls:Feedback":22 } }, time:"last week" },
+        { id:"bl4", name:"5153 Rhythm", catId:"amp", type:"5153 100W Blue", note:"tight low end", cfg:{ knobs:{} }, time:"last week" }
+      ],
       ieq:{ type:"Peaking", freq:1200, q:1.2, gain:4, lowCut:60, highCut:14000, def:55 },
       oeq:{ on:true, type:"Graphic 8-Band", bands:[2,4,1,-2,-1,3,2,-1] },
       acctOpen:false, acctView:"auth", acctTab:"signin", acctMode:"password", authEmail:"", verifyKind:"magic",
@@ -1486,6 +1650,11 @@ class Component extends DCLogic {
     this.applyTheme(this.state.theme);
     this._key = (e) => {
       if ((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); this.openPalette(); return; }
+      if ((e.metaKey||e.ctrlKey) && (e.key==="z"||e.key==="Z")){ e.preventDefault(); if(e.shiftKey) this.redo(); else this.undo(); return; }
+      if ((e.metaKey||e.ctrlKey) && (e.key==="y"||e.key==="Y")){ e.preventDefault(); this.redo(); return; }
+      if (e.key==="Escape" && this.state.ctx) this.closeCtx();
+      if (e.key==="Escape" && this.state.histOpen) this.closeHist();
+      if (e.key==="Escape" && this.state.libOpen) this.closeLib();
       if (e.key==="Escape" && this.state.paletteOpen) this.closePalette();
       if (e.key==="Escape" && this.state.presetOpen) this.closePresetPicker();
     };
@@ -1500,6 +1669,7 @@ class Component extends DCLogic {
       if (this.gesture){
         const g=this.gesture; g.curX=e.clientX; g.curY=e.clientY;
         if (this.moveModeActive){ this.updateMove(e); return; }
+        if (g.lifted){ const dx=e.clientX-g.startX, dy=e.clientY-g.startY; if(Math.abs(dx)>10||Math.abs(dy)>10){ this.closeCtx(); this.startMove(g.idx); this.updateMove(e); } return; }
         const dx=e.clientX-g.startX, dy=e.clientY-g.startY;
         if (!g.axis){ if (Math.abs(dx)>6||Math.abs(dy)>6){ clearTimeout(this._lpTimer); g.axis=Math.abs(dx)>Math.abs(dy)?"h":"v"; g.moved=true; } else return; }
         if (g.paramLock){ return; }  // dense grid: ignore param swipe; horizontal handled as page-pan on release
@@ -1531,6 +1701,7 @@ class Component extends DCLogic {
       if (this.gesture){
         clearTimeout(this._lpTimer); const g=this.gesture;
         if (this.moveModeActive){ this.finishMove(e); }
+        else if (g.lifted){ this._ctxAt = Date.now(); /* menu open; suppress the synthesized click from this release */ }
         else if (g.paramLock && g.moved && g.axis==="h"){ const dx=e.clientX-g.startX; if(Math.abs(dx)>44) this.changePage(dx<0?1:-1); }
         else if (!g.moved){ this.handleTap(g.idx); }
         this.gesture=null; this.moveModeActive=false;
@@ -1540,6 +1711,7 @@ class Component extends DCLogic {
         if(moved){ this.finishConnect(e); this.connectDrag=null; this.setState({ linkTo:null }); }
         else { this.connectDrag=null; this.setState({ linkTo:null, gridLink:cd.from }); this.showToast("Tap a block in the next column",this.tk.accent); }
         document.body.style.cursor=""; setTimeout(()=>{this._portActive=false;},60); return; }
+      if(this.drag && this.drag.key && this._knobBefore){ const key=this.drag.key; const endVal=this.kval(key); if(Math.abs(endVal-this.drag.startVal)>0.5){ const parts=key.split(":"); const kidx=+parts[1]; const plabel=parts[parts.length-1]; this.histRecord(this.blockLabel(this.state.grid[kidx])+" · "+plabel+" "+Math.round(this.drag.startVal)+" → "+Math.round(endVal), this._knobBefore); } this._knobBefore=null; }
       this.drag=null; this.eqDrag=null; this.sliderDrag=null; this.faderDrag=null; this.edResize=null; document.body.style.cursor="";
     };
     this._resize = () => this.setState({ vw: window.innerWidth, vh: window.innerHeight });
@@ -1695,17 +1867,17 @@ class Component extends DCLogic {
   place(catId,type){
     const cat=this.byId[catId];
     if(this.state.paletteMode==="retype"){
-      const idx=this.state.placeTarget, grid=this.state.grid.slice();
+      const idx=this.state.placeTarget, grid=this.state.grid.slice(); const before=this.histSnap();
       grid[idx]=Object.assign({},grid[idx],{type});
-      this.setState({grid,paletteOpen:false}); this.showToast("Type changed to "+type,cat.accent); this.pushRecent(catId,type); return;
+      this.setState({grid,paletteOpen:false}, ()=>this.histRecord("Changed type to "+type, before)); this.showToast("Type changed to "+type,cat.accent); this.pushRecent(catId,type); return;
     }
     let idx=this.state.placeTarget!=null?this.state.placeTarget:(this.state.grid[this.state.selected]?this.firstEmpty():this.state.selected);
     if(idx==null) idx=this.firstEmpty();
     if(idx==null){ this.showToast("Grid is full","#d6543f"); this.setState({paletteOpen:false}); return; }
-    const grid=this.state.grid.slice();
+    const grid=this.state.grid.slice(); const before=this.histSnap();
     grid[idx]={catId,type,label:cat.short,channel:"A",bypassed:false};
     const wasOpen=this.state.editorOpen;
-    this.setState({grid,paletteOpen:false,selected:idx,editorOpen:true,editorH:wasOpen?this.state.editorH:this.computeDockH(),activePage:this.defaultPage(catId,this.effMode(idx)),_placed:idx});
+    this.setState({grid,paletteOpen:false,selected:idx,editorOpen:true,editorH:wasOpen?this.state.editorH:this.computeDockH(),activePage:this.defaultPage(catId,this.effMode(idx)),_placed:idx}, ()=>this.histRecord("Placed "+cat.short, before));
     setTimeout(()=>this.setState({_placed:null}),360);
     this.pushRecent(catId,type); this.showToast("Placed "+type+" · "+cat.name,cat.accent);
   }
@@ -1760,18 +1932,20 @@ class Component extends DCLogic {
   }
 
   onBlockDown = (e) => {
+    if(e.button===2 || e.button===1){ return; }
     const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx];
     if(this.state.gridLink!=null){ e.stopPropagation(); this.gridArmedTap(idx); return; }
     if(!c || (!c.catId && !c.shunt) || this._portActive) return;
     const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label);
     this.gesture={ idx, isBlock:!!c.catId, paramLock:!!this._dense, startX:e.clientX, startY:e.clientY, curX:e.clientX, curY:e.clientY, axis:null, moved:false, qcKey:key, startVal:this.kval(key), label, qcList:qcl, qi, lastSteps:0 };
     clearTimeout(this._lpTimer);
-    this._lpTimer=setTimeout(()=>{ const g=this.gesture; if(g && !g.axis && !this.moveModeActive) this.startMove(g.idx); }, 380);
+    this._lpTimer=setTimeout(()=>{ const g=this.gesture; if(g && !g.axis && !this.moveModeActive) this.armLift(g); }, 380);
   };
+  armLift(g){ g.lifted=true; if(navigator.vibrate){ try{ navigator.vibrate(12); }catch(_){} } this.openCtxAt(g.idx, g.curX||g.startX, g.curY||g.startY); }
   startMove(idx){ this.moveModeActive=true; const g=this.gesture||{}; this.setState({ moveMode:true, moveIdx:idx, movePos:{x:g.curX||0,y:g.curY||0}, moveOverBin:false, adjust:null, hoverCell:null }); }
   updateMove(e){ const el=document.elementFromPoint(e.clientX,e.clientY); const overBin=!!(el&&el.closest&&el.closest("[data-bin]")); const ce=el&&el.closest?el.closest("[data-idx]"):null; const over=ce?+ce.dataset.idx:null; this.setState({ movePos:{x:e.clientX,y:e.clientY}, moveOverBin:overBin, moveOver:over }); }
   finishMove(e){ const from=this.state.moveIdx; const el=document.elementFromPoint(e.clientX,e.clientY); if(el&&el.closest&&el.closest("[data-bin]")){ this.removeAt(from); this.showToast("Block deleted","#d6543f"); } else { const ce=el&&el.closest?el.closest("[data-idx]"):null; if(ce){ const to=+ce.dataset.idx; if(to!==from) this.moveBlock(from,to); } } }
-  moveBlock(from,to){ const grid=this.state.grid.slice(); const t=grid[to]; grid[to]=grid[from]; grid[from]=t; const remap=i=> i===from?to:(i===to?from:i); const routes={}; Object.keys(this.state.routes).forEach(k=>{ routes[remap(+k)]=this.state.routes[k].map(remap); }); this.setState({grid,routes,selected:to}); this.showToast("Moved",this.tk.accent); }
+  moveBlock(from,to){ const before=this.histSnap(); const mv=this.blockLabel(this.state.grid[from]); const grid=this.state.grid.slice(); const t=grid[to]; grid[to]=grid[from]; grid[from]=t; const remap=i=> i===from?to:(i===to?from:i); const routes={}; Object.keys(this.state.routes).forEach(k=>{ routes[remap(+k)]=this.state.routes[k].map(remap); }); this.setState({grid,routes,selected:to}, ()=>this.histRecord("Moved "+mv, before)); this.showToast("Moved",this.tk.accent); }
   removeAt(idx){ const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes}); }
   onBlockWheel = (e) => { const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx]; if(!c||!c.catId) return; e.preventDefault(); const qcl=this.qcList(idx), qi=(this.state.qc[idx]||0)%qcl.length, label=qcl[qi], key=this.qcKey(idx,label); const v=Math.max(0,Math.min(100,this.kval(key)-Math.sign(e.deltaY)*4)); this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:v}), adjust:{idx,label,value:Math.round(v)} }); clearTimeout(this._flashTimer); this._flashTimer=setTimeout(()=>this.setState({adjust:null}),800); };
   onPortDown = (e) => {
@@ -1923,8 +2097,8 @@ class Component extends DCLogic {
   onContentDown = (e) => { if(e.target&&e.target.closest&&e.target.closest("[data-key],[data-eq],[data-path],[data-t],[data-q],[data-page],[data-ch],[data-toggle],[data-sel],[data-pick]")) return; this.contentSwipe={ startX:e.clientX, startY:e.clientY }; };
   swipePage(dir){ const list=this._pageNames||[]; if(list.length<2) return; let i=list.indexOf(this.state.activePage); if(i<0) i=0; const ni=this.clamp(i+dir,0,list.length-1); if(ni!==i){ this.setState({ activePage:list[ni] }); this.showToast(list[ni],this.tk.accent); } }
   onRetype = () => { const c=this.state.grid[this.state.selected]; if(!c) return; this.setState({ paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:this.state.selected, paletteMode:"retype" }); };
-  onBypass = () => { const grid=this.state.grid.slice(); const c=grid[this.state.selected]; grid[this.state.selected]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); };
-  onBlockToggle = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out") return; const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}); this.showToast((c.bypassed?"On · ":"Off · ")+this.byId[c.catId].name, c.bypassed?"#46d17f":this.tk.textdim); };
+  onBypass = () => { this.toggleBypassAt(this.state.selected); };
+  onBlockToggle = (e) => { e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; this.toggleBypassAt(idx); };
   onToggleSwitch = (e) => { const key=e.currentTarget.dataset.tkey; this.setState({ toggles:Object.assign({},this.state.toggles,{[key]:!this.togVal(key)}) }); };
   onMute = () => {};
   onSceneIgnore = () => {};
@@ -2002,10 +2176,76 @@ class Component extends DCLogic {
   onPageDot = (e) => { const pc=this.pageCountNow(); this.setState({ page:this.clamp(+e.currentTarget.dataset.p,0,pc-1) }); };
   onSave = () => this.showToast("Preset saved","#f5a623");
   closeEditor = () => this.setState({ editorOpen:false });
-  onRemove = () => { const idx=this.state.selected; const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:this.isMobile()?false:true}); this.showToast("Block removed","#d6543f"); };
+  onRemove = () => { this.removeBlock(this.state.selected); };
 
-  onKnobDown = (e) => { e.preventDefault(); const key=e.currentTarget.dataset.key; this.drag={key,startX:e.clientX,startY:e.clientY,startVal:this.kval(key),axis:null}; document.body.style.cursor="ns-resize"; };
+  onKnobDown = (e) => { e.preventDefault(); const key=e.currentTarget.dataset.key; this.drag={key,startX:e.clientX,startY:e.clientY,startVal:this.kval(key),axis:null}; this._knobBefore=this.histSnap(); document.body.style.cursor="ns-resize"; };
   onKnobReset = (e) => { const key=e.currentTarget.dataset.key; this.setState({ knobs:Object.assign({},this.state.knobs,{[key]:50}) }); };
+
+  // ===================== HISTORY (undo / redo) =====================
+  nowClock(){ /* hh:mm:ss */ const d=new Date(); const p=n=>(n<10?"0":"")+n; return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
+  blockLabel(c){ if(!c) return "Block"; if(!c.catId) return "Shunt"; const cat=this.byId[c.catId]; return (cat?cat.short:c.catId); }
+  histSnap(){ const S=this.state; return { grid:S.grid, routes:S.routes, knobs:S.knobs, toggles:S.toggles, selects:S.selects, blockModes:S.blockModes, selected:S.selected }; }
+  histApply(snap){ this.setState({ grid:snap.grid, routes:snap.routes, knobs:snap.knobs, toggles:snap.toggles, selects:snap.selects, blockModes:snap.blockModes, selected:snap.selected }); }
+  histRecord(label, before){ const after=this.histSnap(); const past=(this.state.hist.past||[]).concat([{ label, before, after, time:this.nowClock() }]); this.setState({ hist:{ past:past.slice(-60), future:[] } }); }
+  canUndo(){ return (this.state.hist.past||[]).length>0; }
+  canRedo(){ return (this.state.hist.future||[]).length>0; }
+  undo = () => { const past=(this.state.hist.past||[]).slice(); if(!past.length) return; const e=past.pop(); const future=[e].concat(this.state.hist.future||[]); this.histApply(e.before); this.setState({ hist:{ past, future } }); this.showToast("Undo · "+e.label, this.tk.textdim); };
+  redo = () => { const future=(this.state.hist.future||[]).slice(); if(!future.length) return; const e=future.shift(); const past=(this.state.hist.past||[]).concat([e]); this.histApply(e.after); this.setState({ hist:{ past, future } }); this.showToast("Redo · "+e.label, this.tk.accent); };
+  clearHist = () => { this.setState({ hist:{ past:[], future:[] } }); this.showToast("History cleared", this.tk.textdim); };
+  openHist = () => this.setState({ histOpen:true, drawerOpen:false, ctx:null });
+  closeHist = () => this.setState({ histOpen:false });
+
+  // ===================== BLOCK CONTEXT MENU =====================
+  onCellCtx = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    this.openCtxAt(+e.currentTarget.dataset.idx, e.clientX, e.clientY);
+  };
+  openCtxAt(idx, cx, cy){
+    const c=this.state.grid[idx];
+    const isIO=!!(c&&(c.catId==="in"||c.catId==="out"));
+    const hasBlock=!!(c&&c.catId&&!isIO);
+    const empty=!(c&&(c.catId||c.shunt));
+    const pad=10, mw=214, mh= empty?150:(isIO?150:352);
+    const x=Math.min(cx, (this.state.vw||window.innerWidth)-mw-pad);
+    const y=Math.min(cy, (this.state.vh||window.innerHeight)-mh-pad);
+    this.setState({ ctx:{ idx, x:Math.max(pad,x), y:Math.max(pad,y), hasBlock, isIO, empty, lifted:this.isMobile() } });
+    this._ctxAt = Date.now();
+  }
+  onCtxOverlay = (e) => { if(Date.now()-(this._ctxAt||0) < 450) return; this.closeCtx(); };
+  closeCtx = () => this.setState({ ctx:null });
+  onRootCtx = (e) => { e.preventDefault(); };
+  onCtxAct = (e) => {
+    e.stopPropagation();
+    if(Date.now()-(this._ctxAt||0) < 450) return;
+    const act=e.currentTarget.dataset.act; const idx=this.state.ctx?this.state.ctx.idx:this.state.selected;
+    this.setState({ ctx:null });
+    if(act==="edit"){ this.setState({ selected:idx, editorOpen:true, editorH:this.state.editorOpen?this.state.editorH:this.computeDockH(), activePage:this.defaultPage(this.state.grid[idx].catId,this.effMode(idx)) }); return; }
+    if(act==="toggle"){ this.toggleBypassAt(idx); return; }
+    if(act==="duplicate"){ this.duplicateBlock(idx); return; }
+    if(act==="copy"){ this.copyBlock(idx); return; }
+    if(act==="paste"){ this.pasteInto(idx); return; }
+    if(act==="savelib"){ this.saveToLib(idx); return; }
+    if(act==="loadlib"){ this.openLib(idx); return; }
+    if(act==="retype"){ const c=this.state.grid[idx]; this.setState({ selected:idx, paletteOpen:true, query:"", hi:0, paletteCat:c.catId, placeTarget:idx, paletteMode:"retype" }); return; }
+    if(act==="add"){ this.setState({ selected:idx, paletteOpen:true, query:"", hi:0, paletteCat:null, placeTarget:idx, paletteMode:"place" }); return; }
+    if(act==="remove"){ this.removeBlock(idx); return; }
+  };
+  toggleBypassAt(idx){ const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out") return; const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}, ()=>this.histRecord((grid[idx].bypassed?"Bypassed ":"Engaged ")+this.blockLabel(c), before)); this.showToast(grid[idx].bypassed?"Bypassed":"Engaged", grid[idx].bypassed?"#d6543f":"#5fc46b"); }
+  removeBlock(idx){ const c=this.state.grid[idx]; if(!c) return; const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:(this.state.selected===idx&&this.isMobile())?false:this.state.editorOpen}, ()=>this.histRecord("Removed "+this.blockLabel(c), before)); this.showToast("Removed "+this.blockLabel(c),"#d6543f"); }
+  copyBlock(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return; this.setState({ clip:{ block:Object.assign({},c), cfg:this.blockCfgSnap(idx) } }); this.showToast("Copied "+this.blockLabel(c),this.tk.accent); }
+  pasteInto(idx){ const clip=this.state.clip; if(!clip){ this.showToast("Clipboard empty","#d6543f"); return; } const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=Object.assign({},clip.block,{bypassed:false}); const knobs=Object.assign({},this.state.knobs); Object.keys(clip.cfg.knobs||{}).forEach(sub=>{ knobs["k:"+idx+":"+sub]=clip.cfg.knobs[sub]; }); this.setState({grid,knobs,selected:idx,editorOpen:true,editorH:this.state.editorOpen?this.state.editorH:this.computeDockH()}, ()=>this.histRecord("Pasted "+this.blockLabel(clip.block), before)); this.showToast("Pasted "+this.blockLabel(clip.block),this.tk.accent); }
+  duplicateBlock(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return; const dst=this.firstEmpty(); if(dst==null){ this.showToast("Grid is full","#d6543f"); return; } const before=this.histSnap(); const grid=this.state.grid.slice(); grid[dst]=Object.assign({},c,{bypassed:false}); const cfg=this.blockCfgSnap(idx); const knobs=Object.assign({},this.state.knobs); Object.keys(cfg.knobs||{}).forEach(sub=>{ knobs["k:"+dst+":"+sub]=cfg.knobs[sub]; }); this.setState({grid,knobs,selected:dst,editorOpen:true,editorH:this.state.editorOpen?this.state.editorH:this.computeDockH(),_placed:dst}, ()=>this.histRecord("Duplicated "+this.blockLabel(c), before)); setTimeout(()=>this.setState({_placed:null}),360); this.showToast("Duplicated "+this.blockLabel(c),this.tk.accent); }
+
+  // ===================== PER-BLOCK LIBRARY =====================
+  blockCfgSnap(idx){ const knobs={}; Object.keys(this.state.knobs||{}).forEach(k=>{ const pre="k:"+idx+":"; if(k.indexOf(pre)===0) knobs[k.slice(pre.length)]=this.state.knobs[k]; }); return { knobs }; }
+  saveToLib(idx){ const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out"){ this.showToast("Select an effect block first","#d6543f"); return; } const cat=this.byId[c.catId]; const base=(c.type||cat.short); let name=base, n=2; const names=this.state.blockLib.map(e=>e.name); while(names.indexOf(name)>=0){ name=base+" "+n; n++; } const entry={ id:"bl"+Date.now(), name, catId:c.catId, type:c.type||cat.short, note:"saved just now", cfg:this.blockCfgSnap(idx), time:"just now" }; this.setState({ blockLib:[entry].concat(this.state.blockLib) }); this.showToast("Saved “"+name+"” to library",cat.accent); }
+  openLib = (idx) => { const i=(typeof idx==="number")?idx:this.state.selected; const c=this.state.grid[i]; const cat=(c&&c.catId&&c.catId!=="in"&&c.catId!=="out")?c.catId:null; this.setState({ libOpen:true, libFor:cat, selected:i, ctx:null, drawerOpen:false }); };
+  closeLib = () => this.setState({ libOpen:false });
+  onLibSaveCurrent = () => { this.saveToLib(this.state.selected); };
+  onLibLoad = (e) => { const id=e.currentTarget.dataset.lib; const entry=this.state.blockLib.find(x=>x.id===id); if(!entry) return; let idx=this.state.selected; const cur=this.state.grid[idx]; const compat=cur&&cur.catId===entry.catId; if(!compat){ idx=this.firstEmpty(); if(idx==null){ this.showToast("Grid is full","#d6543f"); return; } } const before=this.histSnap(); const grid=this.state.grid.slice(); const cat=this.byId[entry.catId]; grid[idx]=Object.assign({},grid[idx]||{},{ catId:entry.catId, type:entry.type, label:cat.short, channel:(grid[idx]&&grid[idx].channel)||"A", bypassed:false }); const knobs=Object.assign({},this.state.knobs); Object.keys(entry.cfg.knobs||{}).forEach(sub=>{ knobs["k:"+idx+":"+sub]=entry.cfg.knobs[sub]; }); this.setState({ grid, knobs, selected:idx, libOpen:false, editorOpen:true, editorH:this.state.editorOpen?this.state.editorH:this.computeDockH(), activePage:this.defaultPage(entry.catId,this.effMode(idx)), _placed:idx }, ()=>this.histRecord("Loaded “"+entry.name+"”", before)); setTimeout(()=>this.setState({_placed:null}),360); this.showToast("Loaded “"+entry.name+"”",cat.accent); };
+  onLibDelete = (e) => { e.stopPropagation(); const id=e.currentTarget.dataset.lib; this.setState({ blockLib:this.state.blockLib.filter(x=>x.id!==id) }); this.showToast("Removed from library",this.tk.textdim); };
+  onLibFilter = (e) => { const f=e.currentTarget.dataset.filt; this.setState({ libFor: f==="all"?null:f }); };
+
 
   // ---- eq ----
   onEqDown = (e) => { e.preventDefault(); e.stopPropagation(); this.eqDrag={ kind:e.currentTarget.dataset.eq, bi:+e.currentTarget.dataset.bi, svg:e.currentTarget.ownerSVGElement }; this.eqMove(e); };
@@ -2617,7 +2857,73 @@ class Component extends DCLogic {
     const themePresets=this.THEME_PRESETS.map(p=>{ const on=th.preset===p.id; return {pid:p.id, name:p.name, base:(p.base==="light"?"Light":"Dark"), dotStyle:{width:13,height:13,borderRadius:"50%",flex:"none",background:p.accent,boxShadow:"0 0 0 3px "+(p.base==="light"?"#ffffff":"#0c0c0e")}, style:{display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:11,cursor:"pointer",background:on?this.aT(12):"var(--surface)",border:on?"1px solid "+this.aT(60):"1px solid var(--border2)"}, nameStyle:{font:"700 12.5px/1 var(--font-ui)",color:"var(--text)"}, tagStyle:{font:"600 8.5px/1 var(--font-mono)",color:"var(--textfaint)",marginLeft:"auto",letterSpacing:".08em"}}; });
     const themeSelStyle={width:"100%",height:40,padding:"0 11px",background:"var(--surface)",border:"1px solid var(--border2)",borderRadius:10,color:"var(--text)",font:"600 13px/1 var(--font-ui)",cursor:"pointer",outline:"none"};
     const fontUiOpts=this.FONT_UI.map(x=>({v:x[0]})); const fontMonoOpts=this.FONT_MONO.map(x=>({v:x[0]}));
+
+    // ---- history / undo-redo pill ----
+    const H=S.hist||{past:[],future:[]};
+    const histCanUndo=(H.past||[]).length>0, histCanRedo=(H.future||[]).length>0;
+    const histCount=(H.past||[]).length;
+    const histCountStyle={ font:"700 11px/1 var(--font-mono)", color: histCount?this.tk.text2:this.tk.textfaint };
+    const histCountLabel=histCount+(histCount===1?" entry":" entries");
+    const histEntries=(H.past||[]).slice().reverse().map((e,i)=>({ time:e.time, label:e.label, color:i===0?this.tk.text:this.tk.text2, rowStyle:{ display:"flex", alignItems:"center", gap:14, padding:"13px 18px", borderBottom:"1px solid "+this.tk.border } }));
+    const histEmpty=histCount===0;
+    const edOpen=S.editorOpen;
+    const showHistPill=isBuild && !(mob && edOpen) && !S.moveMode;
+    const pillBottom = mob ? 80 : (edOpen ? (this.state.editorH||380)+18 : 22);
+    const histPillStyle={ position:"fixed", left: mob?12:80, bottom:pillBottom, zIndex:120, display:"flex", alignItems:"center", gap:3, padding:4, background:this.tk.surface, border:"1px solid "+this.tk.border2, borderRadius:13, boxShadow:"0 10px 30px rgba(0,0,0,.45)", backdropFilter:"blur(8px)" };
+    const pbtn=(on)=>({ width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:9, cursor:on?"pointer":"default", color:on?this.tk.text2:this.tk.border3 });
+    const undoBtnStyle=pbtn(histCanUndo), redoBtnStyle=pbtn(histCanRedo);
+    const hbtn=(on)=>({ display:"flex", alignItems:"center", gap:6, height:32, padding:"0 12px", borderRadius:9, cursor:on?"pointer":"default", font:"700 12px/1 var(--font-ui)", color:on?this.tk.text2:this.tk.border3, background:this.tk.surface2, border:"1px solid "+this.tk.border2, opacity:on?1:0.55 });
+    const undoHdrStyle=hbtn(histCanUndo), redoHdrStyle=hbtn(histCanRedo);
+
+    // ---- block context menu ----
+    const ctx=S.ctx; const ctxShow=!!ctx; let ctxItems=[], ctxMenuStyle={}, ctxTitle="";
+    if(ctx){
+      ctxMenuStyle={ position:"fixed", left:ctx.x, top:ctx.y, width:230, padding:6, background:this.tk.surface, border:"1px solid "+this.tk.border2, borderRadius:11, boxShadow:"0 24px 60px rgba(0,0,0,.6)", zIndex:361, animation:"axsPalette .12s ease" };
+      const cc=S.grid[ctx.idx];
+      ctxTitle = ctx.empty ? "Empty slot" : (cc ? (cc.type || (this.byId[cc.catId]&&this.byId[cc.catId].name) || "Block").toUpperCase() : "");
+      const row=(act,label,icon,opt)=>{ opt=opt||{}; const danger=!!opt.danger; return { isItem:true, isNormal:!danger, isDanger:danger, isDivider:false, act, label, icon, hint:opt.hint||"", style:{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:12.5, fontWeight:600, color: danger?"#e87b6a":this.tk.text }, iconColor: danger?"#e87b6a":this.tk.textdim, iconWrapStyle:{ flex:"none", color: danger?"#e87b6a":this.tk.textdim } }; };
+      const dv=()=>({ isItem:false, isDivider:true });
+      if(ctx.empty){
+        ctxItems=[ row("add","Add block here","M8 3 V13 M3 8 H13"), dv(), row("paste", S.clip?("Paste "+this.blockLabel(S.clip.block)):"Paste","M5 3 h6 v11 h-6 z M6.5 3 V2 h3 v1") ];
+      } else if(ctx.isIO){
+        ctxItems=[ row("edit","Edit block","M11 3 l2 2 -7 7 -3 1 1 -3 z") ];
+      } else {
+        const byp=cc&&cc.bypassed;
+        ctxItems=[
+          row("edit","Edit block","M11 3 l2 2 -7 7 -3 1 1 -3 z", {hint:"Enter"}),
+          row("toggle", byp?"Engage":"Bypass","M8 2.5 V7.5 M4.4 4.6 a5 5 0 1 0 7.2 0"),
+          row("retype","Change type…","M3 6 h8 l-2.4 -2.4 M13 10 H5 l2.4 2.4"),
+          dv(),
+          row("duplicate","Duplicate","M6 6 h7 v7 h-7 z M3 3 h7 v2.2 M3 3 v7 h2.2"),
+          row("copy","Copy","M6 6 h7 v7 h-7 z M3 3 h7 v2.2 M3 3 v7 h2.2"),
+          row("paste", S.clip?"Paste over":"Paste","M5 3 h6 v11 h-6 z M6.5 3 V2 h3 v1"),
+          dv(),
+          row("savelib","Save to Library","M4 3 h8 v10 l-4 -2.6 -4 2.6 z"),
+          row("loadlib","Open Library…","M3 3.5 h4.5 v9 H3 z M9 3.5 H13.5 v9 H9 z"),
+          dv(),
+          row("remove","Remove","M4 5 h8 M6.4 5 V3.6 h3.2 V5 M5 5 l.7 8 h4.6 l.7 -8", {danger:true})
+        ];
+      }
+    }
+
+    // ---- block library ----
+    const catName=(id)=> this.byId[id]?this.byId[id].name:id;
+    const libCats=Array.from(new Set(S.blockLib.map(e=>e.catId)));
+    const libFilters=[{id:"all",label:"All",active:!S.libFor}].concat(libCats.map(id=>({id,label:catName(id),active:S.libFor===id}))).map(f=>({ id:f.id, label:f.label, style:{ height:30, padding:"0 13px", display:"flex", alignItems:"center", borderRadius:8, cursor:"pointer", font:"700 11.5px/1 var(--font-ui)", background:f.active?this.tk.accent:this.tk.surface2, color:f.active?this.tk.accentink:this.tk.textdim, border:"1px solid "+(f.active?this.tk.accent:this.tk.border2) } }));
+    const libList=S.libFor?S.blockLib.filter(e=>e.catId===S.libFor):S.blockLib;
+    const libEntries=libList.map(e=>{ const acc=this.byId[e.catId]?this.byId[e.catId].accent:this.tk.accent; return { id:e.id, name:e.name, meta:catName(e.catId)+" · "+e.type+(e.note?" · "+e.note:""), time:e.time, dotStyle:{ width:11, height:11, borderRadius:3, flex:"none", background:acc, boxShadow:"0 0 0 3px "+this.tk.bg }, rowStyle:{ display:"flex", alignItems:"center", gap:12, padding:"11px 12px", borderRadius:11, cursor:"pointer", background:this.tk.surface, border:"1px solid "+this.tk.border2 } }; });
+    const libEmpty=libEntries.length===0;
+    const selBlk=S.grid[S.selected];
+    const canSaveSel=!!(selBlk&&selBlk.catId&&selBlk.catId!=="in"&&selBlk.catId!=="out");
+    const libSaveLabel=canSaveSel?("Save "+(selBlk.type||this.byId[selBlk.catId].short)):"Select a block to save";
+    const libSaveStyle={ display:"flex", alignItems:"center", gap:7, height:34, padding:"0 13px", borderRadius:9, cursor:canSaveSel?"pointer":"default", font:"700 12px/1 var(--font-ui)", color:canSaveSel?this.tk.text2:this.tk.textmuted, background:this.tk.surface2, border:"1px dashed "+this.tk.border3, opacity:canSaveSel?1:0.6 };
+
     return {
+      histCanUndo, histCanRedo, histCount, histCountStyle, histCountLabel, histEntries, histEmpty,
+      showHistPill, histPillStyle, undoBtnStyle, redoBtnStyle, undoHdrStyle, redoHdrStyle,
+      undo:this.undo, redo:this.redo, openHist:this.openHist, closeHist:this.closeHist, clearHist:this.clearHist, histOpen:S.histOpen,
+      ctxShow, ctxItems, ctxMenuStyle, ctxTitle, ctxLifted:!!(ctx&&ctx.lifted&&!ctx.empty), onCtxAct:this.onCtxAct, closeCtx:this.closeCtx, onCtxOverlay:this.onCtxOverlay, onRootCtx:this.onRootCtx,
+      libOpen:S.libOpen, openLib:this.openLib, closeLib:this.closeLib, libFilters, onLibFilter:this.onLibFilter, libEntries, libEmpty, onLibLoad:this.onLibLoad, onLibDelete:this.onLibDelete, onLibSaveCurrent:this.onLibSaveCurrent, libSaveStyle, libSaveLabel,
       onOpenTheme:this.onOpenTheme, onCloseTheme:this.onCloseTheme, themeOpen:S.themeOpen, stopTheme:this.stop,
       themeOverlayStyle:{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)",display:"flex",justifyContent:"flex-end"},
       themeCardStyle:{width:380,maxWidth:"92vw",height:"100%",background:"var(--bg2)",borderLeft:"1px solid var(--border2)",display:"flex",flexDirection:"column",boxShadow:"-24px 0 80px rgba(0,0,0,.5)"},
@@ -2637,7 +2943,7 @@ class Component extends DCLogic {
       onColsLess:this.onColsLess, onColsMore:this.onColsMore, onColsFit:this.onColsFit, onGridDown:this.onGridDown, gridLinkBar, cancelGridLink:this.cancelGridLink,
       onDragStart:this.onDragStart, onDragOver:this.onDragOver, onDrop:this.onDrop, onDragEnd:this.onDragEnd,
       cables, linkPath, hasRects, onPortDown:this.onPortDown, removeRoute:this.removeRoute, onCableEnter:this.onCableEnter, onCableLeave:this.onCableLeave,
-      onCellClick:this.onCellClick, onCellEnter:this.onCellEnter, onCellLeave:this.onCellLeave, onBlockToggle:this.onBlockToggle, onToggleSwitch:this.onToggleSwitch,
+      onCellClick:this.onCellClick, onCellCtx:this.onCellCtx, onCellEnter:this.onCellEnter, onCellLeave:this.onCellLeave, onBlockToggle:this.onBlockToggle, onToggleSwitch:this.onToggleSwitch,
       editorOpen:S.editorOpen, ed, ieq, oeq,
       map:this.buildMap(sel), toggleMap:this.toggleMap, onMapCell:this.onMapCell, onMapPort:this.onMapPort,
       onMode:this.onMode, onResetMode:this.onResetMode, onEditorResizeDown:this.onEditorResizeDown, onTabsDown:this.onTabsDown, tabsRef:this.tabsRef, onContentDown:this.onContentDown, onChannel:this.onChannel, onPage:this.onPage, onRetype:this.onRetype, onBypass:this.onBypass, onMute:this.onMute, onSceneIgnore:this.onSceneIgnore, onRemove:this.onRemove, closeEditor:this.closeEditor, onQuickToggle:this.onQuickToggle,
