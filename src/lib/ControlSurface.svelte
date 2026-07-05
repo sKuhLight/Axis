@@ -328,6 +328,17 @@
     if (!lay?.pages?.length) return null;
     const boards: Record<string, Widget[]> = {};
     const pageOrder: string[] = [];
+    // Page names are the keys of the `{#each pageOrder (pg)}` block, so they MUST be unique — a device
+    // layout can repeat a name (e.g. Delay ships its own "More" page, which also collides with the
+    // catch-all below) and a duplicate key is a fatal `each_key_duplicate`. Suffix any repeat.
+    const usedNames = new Set<string>();
+    const uniqName = (n: string): string => {
+      const base = n || 'Page';
+      let name = base;
+      for (let i = 2; usedNames.has(name); i++) name = `${base} ${i}`;
+      usedNames.add(name);
+      return name;
+    };
     for (const pg of lay.pages) {
       const ws: Widget[] = [];
       const seen = new Set<string>();
@@ -339,7 +350,7 @@
         ws.push(mk(cat));
       }
       if (!ws.length) continue;
-      const name = pg.name?.trim() || `Page ${pageOrder.length + 1}`;
+      const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
       boards[name] = packList(ws); // tidy left→right, top→bottom in editor order
       pageOrder.push(name);
     }
@@ -347,8 +358,9 @@
     const placed = new Set(pageOrder.flatMap((p) => boards[p]!.map((w) => w.key)));
     const rest = catalog.filter((c) => !placed.has(c.key));
     if (rest.length) {
-      boards['More'] = packList(rest.map(mk));
-      pageOrder.push('More');
+      const name = uniqName('More');
+      boards[name] = packList(rest.map(mk));
+      pageOrder.push(name);
     }
     return { pageOrder, page: pageOrder[0]!, boards };
   }
