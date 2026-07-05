@@ -2,6 +2,22 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.3-beta — 2026-07-05
+
+### Fixed
+- **FM3 block types now populate for every effect.** Phaser, Chorus, Tremolo, Filter and Flanger
+  showed an empty **Type** list and a blank type name; the model list is now resolved from the
+  block's own TYPE data. (Closes the same gap wherever the data already ships for other gen-3
+  devices.)
+- **Per-block channel A–D switching refreshes the editor.** Switching a block's channel now reloads
+  that channel's type and parameter values, instead of leaving the editor showing channel A.
+- **Delay block editor no longer crashes.** Opening Delay hit a fatal duplicate-page-name error —
+  its device layout ships a page named "More" that collided with the built-in catch-all "More"
+  page. Page names are now de-duplicated (this also un-hides Delay's real "More" controls).
+
+### Changed
+- Bundled **ForgeFX engine** picks up the FM3 block-type and channel-read fixes above.
+
 ## 0.8.2-beta — 2026-07-04
 
 ### Added
