@@ -1660,6 +1660,7 @@ class EditorStore {
       const r = await forgefx.setPresetName(clean);
       if (!r.ok) throw new Error('rejected');
       if (prev.name !== clean) history.record({ kind: 'presetName', from: prev.name, to: clean });
+      if (typeof prev.number === 'number' && prev.number >= 0) library.applySlotName(prev.number, clean); // keep the library list in sync
       await this.poll(); // re-read preset ref → verifies the device stored the name
     } catch {
       this.preset = prev; // revert
@@ -1680,9 +1681,15 @@ class EditorStore {
       const r1 = await forgefx.setPresetName(clean);
       if (!r1.ok) throw new Error('name rejected');
       if (this.preset) this.preset = { ...this.preset, name: clean };
-      const r2 = await forgefx.store(slot); // persist to the slot
-      if (!r2.ok) throw new Error('store rejected');
-      library.refreshSlot(slot);
+      // Deep-dump devices (gen-3) rename the EDIT BUFFER, so a store persists it to the slot. Name-scan
+      // devices (AM4) rename the STORED location directly — a store here would re-save the buffer (old
+      // name) over it and clobber the rename, so skip it.
+      if (this.canDeepScan) {
+        const r2 = await forgefx.store(slot); // persist the renamed buffer to the slot
+        if (!r2.ok) throw new Error('store rejected');
+      }
+      library.applySlotName(slot, clean); // reflect the rename in the list immediately (no racy re-scan)
+      if (this.canDeepScan) library.refreshSlot(slot); // deep-scan: reconcile the full summary/CRC
       // return to the preset the user was on before the rename
       if (switched && prevSlot >= 0) await this.selectPreset(prevSlot);
       else await this.poll();

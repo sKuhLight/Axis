@@ -124,7 +124,13 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
     ? rt.createCloud(
         {
           url: import.meta.env.VITE_SUPABASE_URL as string,
-          anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string
+          anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          // Email-confirmation link lands here. In the web build the origin IS the stable public domain
+          // (axisapp.live), so derive it — no localhost, no per-build value. Must be on the Supabase
+          // redirect allow-list. Override via VITE_AXIS_AUTH_CONFIRM_URL if a fixed URL is preferred.
+          confirmRedirectUrl:
+            (import.meta.env.VITE_AXIS_AUTH_CONFIRM_URL as string | undefined) ??
+            `${location.origin}/auth/confirmed`
         },
         store
       )
