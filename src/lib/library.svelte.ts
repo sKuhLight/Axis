@@ -561,11 +561,48 @@ class LibraryStore {
   /** Preset name for a device slot from the cache (for the quick picker). '' if not cached. */
   nameOfSlot = (n: number): string => this.entries.find((e) => e.source === 'device' && e.summary.number === n)?.summary.name ?? '';
 
+  /** Optimistically set a device slot's cached name after a CONFIRMED rename — no wire read.
+   *  Name-scan devices (AM4) rename the stored slot directly, but a follow-up locations re-scan
+   *  races the navigate-back on the shared serial transport (and can transiently read the slot
+   *  empty → drop the entry), so the rename never lands in the list. Patch the entry in place
+   *  instead; refreshSlot still reconciles deep-scan (gen-3) devices. No-op if the slot isn't cached. */
+  applySlotName(n: number, name: string): void {
+    const clean = name.trim();
+    if (!clean) return;
+    const id = `dev:${n}`;
+    const prev = this.entries.find((e) => e.id === id && e.source === 'device');
+    if (!prev || prev.summary.name === clean) return;
+    const byId = new Map(this.entries.map((e) => [e.id, e] as const));
+    byId.set(id, { ...prev, summary: { ...prev.summary, name: clean } });
+    this.entries = [...byId.values()].sort(this.#order);
+    this.#cacheDevice();
+  }
+
   /** Re-read one device slot into the cache, keeping the index in sync with saves + external edits.
    *  CRC-gated: if the slot's content fingerprint matches the cached one, it's a no-op (no re-write). */
   async refreshSlot(n: number): Promise<void> {
     const id = `dev:${n}`;
     try {
+      // Name-scan devices (AM4: canScanNames && !canDeepScan) have no full preset dump — presetSummary
+      // 501s there. Refresh just the stored name from the locations scan so a rename/save reflects in the
+      // library without a full rescan (matches the lightweight entry the initial name-scan builds).
+      const dev = await forgefx.device().catch(() => null);
+      const caps = dev?.capabilities;
+      const nameScan = (dev?.apiVersion ?? 1) >= 2 ? !!caps?.presets?.canScanNames && !caps?.presets?.canDeepScan : dev?.modelByte === '0x15';
+      if (nameScan) {
+        const loc = (await forgefx.presetLocations()).locations.find((p) => p.location === n);
+        const byId = new Map(this.entries.map((e) => [e.id, e] as const));
+        if (loc && !loc.isEmpty && loc.name.trim() && !isEmptyName(loc.name)) {
+          const prev = byId.get(id);
+          byId.set(id, {
+            id, source: 'device', fav: prev?.fav ?? false,
+            summary: { number: n, name: loc.name, model: dev?.model ?? 'AM4', crcValid: true, scenes: [], blocks: [], models: {}, amps: [] } as PresetSummary
+          });
+        } else byId.delete(id);
+        this.entries = [...byId.values()].sort(this.#order);
+        this.#cacheDevice();
+        return;
+      }
       const s = await forgefx.presetSummary(n, true);
       const cached = this.entries.find((e) => e.id === id);
       // unchanged + already fully cached → nothing to do (skip the IndexedDB write + reactivity churn)

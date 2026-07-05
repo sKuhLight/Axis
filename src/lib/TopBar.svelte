@@ -166,7 +166,7 @@
       {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
-    {#if !editor.isMobile && (editor.hasTuner || editor.hasTempo)}
+    {#if !editor.isMobile && (editor.hasTuner || editor.hasTempo || editor.conn.state === 'online')}
       <div class="status">
         {#if editor.hasTuner}
           <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
