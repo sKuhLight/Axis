@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyWorkbenchDocument } from '../defaults';
+import { repairWorkbenchDocument } from '../invariants';
 import { reduceWorkbenchDocument } from '../reducer';
 import type { PanelInstance, WidgetInstance, WorkbenchDocument } from '../schema';
 import { selectActiveLayout } from '../selectors';
@@ -151,11 +152,140 @@ describe('reduceWorkbenchDocument — panels', () => {
     expect(closed.error?.code).toBe('locked-panel');
   });
 
+  it('tabs a panel onto a stack it is already in', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    next = reduceWorkbenchDocument(next, {
+      type: 'panel.add',
+      panel: panel('panel.b'),
+      region: 'main',
+      target: { kind: 'tab', targetPanelId: 'panel.a' }
+    }).next;
+
+    const tabbed = reduceWorkbenchDocument(next, { type: 'panel.tab', panelId: 'panel.a', targetPanelId: 'panel.b' });
+    const root = layout(tabbed.next).dock.root.main;
+
+    expect(tabbed.success).toBe(true);
+    expect(root?.kind).toBe('tabs');
+    if (root?.kind === 'tabs') {
+      expect(root.panelIds).toEqual(['panel.b', 'panel.a']);
+      expect(root.activePanelId).toBe('panel.a');
+    }
+  });
+
+  it('rejects tabbing unknown panels', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    const missingPanel = reduceWorkbenchDocument(first, { type: 'panel.tab', panelId: 'missing', targetPanelId: 'panel.a' });
+    const missingTarget = reduceWorkbenchDocument(first, { type: 'panel.tab', panelId: 'panel.a', targetPanelId: 'missing' });
+
+    expect(missingPanel.success).toBe(false);
+    expect(missingPanel.error?.code).toBe('missing-panel');
+    expect(missingTarget.success).toBe(false);
+    expect(missingTarget.error?.code).toBe('missing-target');
+  });
+
+  it('renames a panel with a trimmed title', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    const renamed = reduceWorkbenchDocument(first, { type: 'panel.rename', panelId: 'panel.a', title: '  Inspector  ' });
+
+    expect(renamed.success).toBe(true);
+    expect(layout(renamed.next).panels['panel.a'].title).toBe('Inspector');
+  });
+
+  it('rejects invalid panel rename commands', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    const empty = reduceWorkbenchDocument(first, { type: 'panel.rename', panelId: 'panel.a', title: '' });
+    const whitespace = reduceWorkbenchDocument(first, { type: 'panel.rename', panelId: 'panel.a', title: '   ' });
+    const missing = reduceWorkbenchDocument(first, { type: 'panel.rename', panelId: 'missing', title: 'Inspector' });
+
+    expect(empty.success).toBe(false);
+    expect(empty.error?.code).toBe('invalid-command');
+    expect(whitespace.success).toBe(false);
+    expect(whitespace.error?.code).toBe('invalid-command');
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-panel');
+  });
+
+  it('collapses and expands a panel', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    const collapsed = reduceWorkbenchDocument(first, { type: 'panel.collapse', panelId: 'panel.a', collapsed: true });
+    const expanded = reduceWorkbenchDocument(collapsed.next, { type: 'panel.collapse', panelId: 'panel.a', collapsed: false });
+    const missing = reduceWorkbenchDocument(first, { type: 'panel.collapse', panelId: 'missing', collapsed: true });
+
+    expect(collapsed.success).toBe(true);
+    expect(layout(collapsed.next).panels['panel.a'].collapsed).toBe(true);
+    expect(expanded.success).toBe(true);
+    expect(layout(expanded.next).panels['panel.a'].collapsed).toBe(false);
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-panel');
+  });
+
+  it('rejects adding a second panel with the same singleton key', () => {
+    const first = reduceWorkbenchDocument(doc(), {
+      type: 'panel.add',
+      panel: panel('panel.a', { singletonKey: 'inspector' }),
+      region: 'main'
+    }).next;
+    const duplicate = reduceWorkbenchDocument(first, {
+      type: 'panel.add',
+      panel: panel('panel.b', { singletonKey: 'inspector' }),
+      region: 'main'
+    });
+
+    expect(duplicate.success).toBe(false);
+    expect(duplicate.error?.code).toBe('duplicate-singleton');
+    expect(duplicate.error?.message).toContain('inspector');
+    expect(layout(duplicate.next).panels['panel.b']).toBeUndefined();
+  });
+
+  it('repairs duplicate singleton panels by keeping the docked instance', () => {
+    const next = doc();
+    layout(next).panels['panel.b'] = panel('panel.b', { singletonKey: 'inspector' });
+    layout(next).panels['panel.a'] = panel('panel.a', { singletonKey: 'inspector' });
+    layout(next).dock.root.main = { kind: 'tabs', id: 'tabs.main', activePanelId: 'panel.a', panelIds: ['panel.a'] };
+
+    const repaired = repairWorkbenchDocument(next);
+    const root = layout(repaired).dock.root.main;
+
+    expect(layout(repaired).panels['panel.a']).toBeDefined();
+    expect(layout(repaired).panels['panel.b']).toBeUndefined();
+    expect(root?.kind).toBe('tabs');
+    if (root?.kind === 'tabs') expect(root.panelIds).toEqual(['panel.a']);
+  });
+
   it('resizes a region', () => {
     const resized = reduceWorkbenchDocument(doc(), { type: 'region.resize', region: 'right', sizePx: 420 });
 
     expect(resized.success).toBe(true);
     expect(layout(resized.next).dock.regions.right.sizePx).toBe(420);
+  });
+
+  it('clamps region resize to non-negative sizes', () => {
+    const resized = reduceWorkbenchDocument(doc(), { type: 'region.resize', region: 'left', sizePx: -50 });
+
+    expect(resized.success).toBe(true);
+    expect(layout(resized.next).dock.regions.left.sizePx).toBe(0);
+  });
+
+  it('resizes splits with normalized ratios', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' }).next;
+    const split = reduceWorkbenchDocument(first, {
+      type: 'panel.split',
+      panel: panel('panel.b'),
+      targetPanelId: 'panel.a',
+      axis: 'horizontal'
+    }).next;
+    const root = layout(split).dock.root.main;
+    const splitId = root?.kind === 'split' ? root.id : '';
+
+    const resized = reduceWorkbenchDocument(split, { type: 'split.resize', splitId, ratio: [3, 1] });
+    const missing = reduceWorkbenchDocument(split, { type: 'split.resize', splitId: 'missing', ratio: [1, 1] });
+
+    const resizedRoot = layout(resized.next).dock.root.main;
+    expect(resized.success).toBe(true);
+    expect(resizedRoot?.kind).toBe('split');
+    if (resizedRoot?.kind === 'split') expect(resizedRoot.ratio).toEqual([0.75, 0.25]);
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-split');
   });
 
   it('collapses a region', () => {
@@ -206,6 +336,24 @@ describe('reduceWorkbenchDocument — widget zones', () => {
     expect(missingZone.success).toBe(false);
     expect(missingZone.error?.code).toBe('missing-zone');
   });
+
+  it('deletes zones while moving widgets to an explicit target zone', () => {
+    let next = reduceWorkbenchDocument(doc(), {
+      type: 'zone.ensure',
+      zone: { id: 'panel:panel.a', label: 'Panel A', orientation: 'free', acceptsGroups: true }
+    }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.a', 'panel:panel.a'), zone: 'panel:panel.a' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'panel:panel.a', 1), zone: 'panel:panel.a' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.c'), zone: 'top.left' }).next;
+
+    const deleted = reduceWorkbenchDocument(next, { type: 'zone.delete', zoneId: 'panel:panel.a', moveWidgetsTo: 'top.left' });
+
+    expect(deleted.success).toBe(true);
+    expect(layout(deleted.next).zones['panel:panel.a']).toBeUndefined();
+    expect(layout(deleted.next).widgets['widget.c'].order).toBe(0);
+    expect(layout(deleted.next).widgets['widget.a']).toMatchObject({ zone: 'top.left', order: 1 });
+    expect(layout(deleted.next).widgets['widget.b']).toMatchObject({ zone: 'top.left', order: 2 });
+  });
 });
 
 describe('reduceWorkbenchDocument — widgets', () => {
@@ -246,6 +394,33 @@ describe('reduceWorkbenchDocument — widgets', () => {
 
     expect(hidden.success).toBe(false);
     expect(hidden.error?.code).toBe('locked-widget');
+  });
+
+  it('resizes widgets', () => {
+    const first = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a'), zone: 'top.left' }).next;
+    const compact = reduceWorkbenchDocument(first, { type: 'widget.resize', widgetId: 'widget.a', size: 'compact' });
+    const mini = reduceWorkbenchDocument(compact.next, { type: 'widget.resize', widgetId: 'widget.a', size: 'mini' });
+    const missing = reduceWorkbenchDocument(first, { type: 'widget.resize', widgetId: 'missing', size: 'compact' });
+
+    expect(compact.success).toBe(true);
+    expect(layout(compact.next).widgets['widget.a'].size).toBe('compact');
+    expect(mini.success).toBe(true);
+    expect(layout(mini.next).widgets['widget.a'].size).toBe('mini');
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-widget');
+  });
+
+  it('prevents resizing a locked widget', () => {
+    const first = reduceWorkbenchDocument(doc(), {
+      type: 'widget.add',
+      widget: widget('widget.a', 'top.left', 0, { locked: true }),
+      zone: 'top.left'
+    }).next;
+    const resized = reduceWorkbenchDocument(first, { type: 'widget.resize', widgetId: 'widget.a', size: 'compact' });
+
+    expect(resized.success).toBe(false);
+    expect(resized.error?.code).toBe('locked-widget');
+    expect(layout(resized.next).widgets['widget.a'].size).toBe('default');
   });
 
   it('groups widgets', () => {

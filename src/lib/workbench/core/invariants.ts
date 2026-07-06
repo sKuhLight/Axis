@@ -61,6 +61,7 @@ export function normalizeRatios(ratio: unknown, childCount: number): number[] {
   if (!Array.isArray(ratio) || ratio.length !== childCount) {
     return new Array(childCount).fill(1 / childCount);
   }
+  // Floor invalid or non-positive entries at 0.01 so no pane collapses to zero width and the division by `total` stays stable.
   const values = ratio.map((value) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0.01));
   const total = values.reduce((sum, value) => sum + value, 0);
   return total > 0 ? values.map((value) => value / total) : new Array(childCount).fill(1 / childCount);
@@ -199,6 +200,37 @@ function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPane
   return null;
 }
 
+function collectDockPanelIds(node: DockNode | null, ids: Set<string>): void {
+  if (!node) return;
+  if (node.kind === 'tabs') {
+    for (const panelId of Array.isArray(node.panelIds) ? node.panelIds : []) ids.add(panelId);
+    return;
+  }
+  if (node.kind === 'split') {
+    for (const child of Array.isArray(node.children) ? node.children : []) collectDockPanelIds(child, ids);
+  }
+}
+
+function dedupeSingletonPanels(layout: WorkbenchLayout): void {
+  const docked = new Set<string>();
+  for (const region of DOCK_REGION_IDS) collectDockPanelIds(layout.dock.root[region], docked);
+  const keptByKey = new Map<string, string>();
+  for (const panel of Object.values(layout.panels)) {
+    if (!panel.singletonKey) continue;
+    const kept = keptByKey.get(panel.singletonKey);
+    if (!kept) {
+      keptByKey.set(panel.singletonKey, panel.id);
+      continue;
+    }
+    if (!docked.has(kept) && docked.has(panel.id)) {
+      delete layout.panels[kept];
+      keptByKey.set(panel.singletonKey, panel.id);
+    } else {
+      delete layout.panels[panel.id];
+    }
+  }
+}
+
 function normalizeWidgetOrders(layout: WorkbenchLayout): void {
   const byZone = new Map<string, WidgetInstance[]>();
   for (const widget of Object.values(layout.widgets)) {
@@ -314,6 +346,7 @@ export function repairWorkbenchDocument(doc: WorkbenchDocument): WorkbenchDocume
 
   for (const layout of Object.values(next.layouts)) {
     ensureLayoutShape(layout);
+    dedupeSingletonPanels(layout);
     const seenPanels = new Set<string>();
     for (const region of DOCK_REGION_IDS) {
       layout.dock.root[region] = repairDockNode(layout.dock.root[region], layout, seenPanels);
