@@ -281,7 +281,25 @@ the group, no insertion indicator).**
   cross-group = detachFromOtherGroups; group-create = design center-28% band
   (was any-proximity). 17 new tests. Deferred cosmetic: grip stays V13's
   in-flow left column (design floats a ⠿ chip top-left).
-- V14c **bottom-nav mode leaves the rail visible**: with "Use Bottom Navigation"
+- V14a+b FOLLOW-UP (operator, _234944.png, agent re-dispatched): the placeholder
+  paints OVER members instead of opening a real gap (members must shift — port
+  the design's IN-FLOW spacer from support.js, not an overlay rect), and the
+  dragged widget's origin stays rendered in place — the widget must lift and
+  travel with the pointer (full-size preview in DragLayer, origin hidden).
+- V14c+d LANDED (`826c818` + `8525fcb`): rail renders nav ONLY in side mode
+  (pure shouldRenderRail/shouldRenderRailNav; bottom mode keeps a slim 64px
+  widgets-only strip when rail widgets exist or while editing — design §9 rule);
+  bottom mode suppresses the phone hamburger/drawer entirely (persistent bar);
+  bottom entries icon-only everywhere (phone media rule scoped away from bottom
+  mode; labels → aria-label). PLUS operator-intent override of the design spec:
+  the mobile PROFILE now SEEDS navMode 'bottom' (spec seeds 'side'/hamburger —
+  operator: "completely against any use of a bottom based nav... if its not
+  there all the time") + one-shot ensureAxisMobileBottomNav migration for
+  persisted docs (doc-metadata marker 'axisMobileBottomNav', deliberate
+  switches back to side are never overridden). New e2e 10-nav-bottom-mode
+  (desktop bottom mode + phone boot default + way back to side); 07 preset
+  spec updated (Stage bottom mode ⇒ no rail nav). +4 unit / 2 e2e.
+- V14c **bottom-nav mode leaves the rail visible** (original finding): with "Use Bottom Navigation"
   on, the full sidebar rail still renders — the rail must hide when bottom nav
   is active.
 - V14d **mobile bottom-nav UX broken**: on mobile the bottom nav hides behind a
