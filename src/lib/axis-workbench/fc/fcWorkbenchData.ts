@@ -190,6 +190,23 @@ export function axisFcActionLabel(
   return fn ? `${catName} · ${fn.name}` : catName;
 }
 
+/**
+ * Clamp a slot value into the function-slot range and report whether it sits at either
+ * bound. Drives the card steppers' clamp + disabled-at-edge affordance (04-fc-and-grid.md
+ * §3.5 stepper). `preset` slots default to 0–511, everything else 0–127 (matches the panel's
+ * slotRange fallback and the production FcEditor `min`/`max`).
+ */
+export function axisFcSlotBounds(
+  slot: AxisFcSlotLike,
+  raw: number
+): { value: number; lo: number; hi: number; atMin: boolean; atMax: boolean } {
+  const lo = slot.min ?? 0;
+  const hi = slot.max ?? (slot.type === 'preset' ? 511 : 127);
+  const bounded = Math.max(lo, Math.min(hi, hi < lo ? lo : hi));
+  const value = Math.max(lo, Math.min(bounded, Number.isFinite(raw) ? raw : lo));
+  return { value, lo, hi, atMin: value <= lo, atMax: value >= hi };
+}
+
 export function createAxisFcDataView(input: AxisFcDataInput): AxisFcDataView {
   const model = input.model;
   if (!model) {
