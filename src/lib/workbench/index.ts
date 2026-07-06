@@ -8,6 +8,7 @@ export * from './svelte/contextMenu';
 export * from './svelte/layouts';
 export * from './svelte/library';
 export * from './svelte/navigation';
+export * from './svelte/moveAlternatives';
 export * from './svelte/renderRegistry';
 export * from './svelte/sizing';
 export * from './svelte/theme';

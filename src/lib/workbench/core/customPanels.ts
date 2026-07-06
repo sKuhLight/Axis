@@ -16,6 +16,17 @@ import type {
 } from './commands';
 
 export const PANEL_WIDGET_ZONE_PREFIX = 'panel:';
+export const DEFAULT_CUSTOM_PANEL_GRID = {
+  columns: 4,
+  rowHeight: 42,
+  gap: 8
+} as const;
+
+export interface CustomPanelGridSettings {
+  columns: number;
+  rowHeight: number;
+  gap: number;
+}
 
 export interface CreateCustomPanelCommandsOptions {
   id?: string;
@@ -37,12 +48,49 @@ export interface CreateBoundWidgetCommandOptions {
   state?: JsonObject;
 }
 
+export interface CreateCustomPanelFromWidgetsCommandsOptions extends CreateCustomPanelCommandsOptions {
+  widgetIds: string[];
+}
+
 function uniqueId(base: string, used: Set<string>): string {
   if (!used.has(base)) return base;
   for (let index = 1; ; index += 1) {
     const id = `${base}.copy${index}`;
     if (!used.has(id)) return id;
   }
+}
+
+function readPositiveInt(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.round(value)))
+    : fallback;
+}
+
+function readGridState(state: JsonObject | undefined): JsonObject | undefined {
+  const grid = state?.grid;
+  return grid && typeof grid === 'object' && !Array.isArray(grid) ? grid as JsonObject : undefined;
+}
+
+export function customPanelGridSettings(state: JsonObject | undefined): CustomPanelGridSettings {
+  const grid = readGridState(state);
+  return {
+    columns: readPositiveInt(grid?.columns, DEFAULT_CUSTOM_PANEL_GRID.columns, 1, 24),
+    rowHeight: readPositiveInt(grid?.rowHeight, DEFAULT_CUSTOM_PANEL_GRID.rowHeight, 24, 160),
+    gap: readPositiveInt(grid?.gap, DEFAULT_CUSTOM_PANEL_GRID.gap, 0, 24)
+  };
+}
+
+export function customPanelStateWithGrid(state: JsonObject | undefined): JsonObject {
+  const settings = customPanelGridSettings(state);
+  return {
+    ...state,
+    grid: {
+      ...readGridState(state),
+      columns: settings.columns,
+      rowHeight: settings.rowHeight,
+      gap: settings.gap
+    }
+  };
 }
 
 export function panelWidgetZoneId(panelId: string): WidgetZoneId {
@@ -71,7 +119,7 @@ export function createCustomPanelCommands(
     title: options.title ?? 'Custom Panel',
     closable: true,
     collapsible: true,
-    state: options.panelState
+    state: customPanelStateWithGrid(options.panelState)
   };
 
   return [
@@ -115,4 +163,39 @@ export function createBoundWidgetCommand(
     zone: options.zone,
     index: options.index
   };
+}
+
+export function createCustomPanelFromWidgetsCommands(
+  doc: WorkbenchDocument,
+  options: CreateCustomPanelFromWidgetsCommandsOptions
+): WorkbenchCommand[] {
+  const layout = selectActiveLayout(doc);
+  if (!layout) return [];
+  const widgetIds = options.widgetIds.filter((widgetId) => !!layout.widgets[widgetId] && !layout.widgets[widgetId].locked);
+  if (!widgetIds.length) return [];
+
+  const panelCommands = createCustomPanelCommands(doc, {
+    id: options.id,
+    type: options.type,
+    title: options.title,
+    region: options.region,
+    target: options.target,
+    zoneLabel: options.zoneLabel,
+    panelState: {
+      acceptsWidgets: true,
+      ...options.panelState
+    }
+  });
+  const addPanel = panelCommands.find((command) => command.type === 'panel.add');
+  if (!addPanel || addPanel.type !== 'panel.add') return panelCommands;
+
+  return [
+    ...panelCommands,
+    {
+      type: 'widget.move',
+      widgetIds,
+      zone: panelWidgetZoneId(addPanel.panel.id),
+      index: 0
+    }
+  ];
 }

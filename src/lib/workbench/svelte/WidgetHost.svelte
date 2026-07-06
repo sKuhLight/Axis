@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
-  import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../core';
+  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize, type WorkbenchCommand } from '../core';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
   import { createWidgetTemplateFromWidget } from './library';
+  import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
 
   let {
     widget,
@@ -42,20 +43,26 @@
       disabled: widget.locked || widget.size === 'mini',
       run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'mini' })
     },
+    ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
+      id: `move-${option.id}`,
+      label: option.label,
+      separatorBefore: index === 0,
+      danger: option.id === 'hidden',
+      disabled: widget.locked || widget.zone === option.id,
+      run: () =>
+        controller.dispatch({
+          type: 'widget.move',
+          widgetIds: [widget.id],
+          zone: option.id,
+          floatingRect: option.id === 'floating' ? (widget.floatingRect ?? { x: 48, y: 72 }) : undefined
+        })
+    })),
     {
       id: 'save',
       label: 'Save To Library',
       separatorBefore: true,
       disabled: widget.locked,
       run: saveWidgetTemplate
-    },
-    {
-      id: 'hide',
-      label: 'Hide Widget',
-      danger: true,
-      separatorBefore: true,
-      disabled: widget.locked,
-      run: () => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })
     }
   ]);
 
@@ -177,6 +184,22 @@
     return { rect: line, kind: 'insert', orientation, label: zone };
   }
 
+  function workspaceEdgeDropAt(x: number, y: number): { region: DockRegionId; rect: WorkbenchRect } | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const workspace = el?.closest<HTMLElement>('.aw-workspace');
+    if (!workspace) return null;
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const nx = (x - rect.left) / rect.width;
+    const ny = (y - rect.top) / rect.height;
+    const edge = 0.18;
+    if (nx < edge) return { region: 'left', rect: { left: rect.left, top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
+    if (nx > 1 - edge) return { region: 'right', rect: { left: rect.right - Math.min(rect.width * 0.24, 220), top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
+    if (ny < edge) return { region: 'top', rect: { left: rect.left, top: rect.top, width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
+    if (ny > 1 - edge) return { region: 'bottom', rect: { left: rect.left, top: rect.bottom - Math.min(rect.height * 0.22, 150), width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
+    return null;
+  }
+
   function widgetDropAt(x: number, y: number) {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
     const zoneEl = el?.closest<HTMLElement>('[data-zone]');
@@ -209,14 +232,15 @@
       const groupCommand = groupCommandAt(pointer.x, pointer.y);
       const target = widgetDropAt(pointer.x, pointer.y);
       const preview = widgetPreviewAt(pointer.x, pointer.y);
+      const edgeDrop = !groupCommand && !target ? workspaceEdgeDropAt(pointer.x, pointer.y) : null;
       controller.setDrag({
         kind: 'widget',
         widgetIds: [widget.id],
         startedAt,
         pointer,
-        targetLabel: groupCommand ? 'Group widgets' : target ? target.zone : undefined,
-        previewRect: preview?.rect,
-        previewKind: preview?.kind,
+        targetLabel: groupCommand ? 'Group widgets' : target ? target.zone : edgeDrop ? `New panel in ${edgeDrop.region}` : undefined,
+        previewRect: preview?.rect ?? edgeDrop?.rect,
+        previewKind: preview?.kind ?? (edgeDrop ? 'zone' : undefined),
         previewOrientation: preview?.orientation
       });
     };
@@ -227,8 +251,18 @@
       if (dragging) {
         const groupCommand = groupCommandAt(ev.clientX, ev.clientY);
         const target = widgetDropAt(ev.clientX, ev.clientY);
+        const edgeDrop = !groupCommand && !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
         if (groupCommand) controller.dispatch(groupCommand);
         else if (target) controller.dispatch(widgetDropCommand([widget.id], target));
+        else if (edgeDrop) {
+          controller.dispatchMany(
+            createCustomPanelFromWidgetsCommands($controller.document, {
+              widgetIds: [widget.id],
+              title: 'Custom Panel',
+              region: edgeDrop.region
+            })
+          );
+        }
         controller.setDrag(null);
       }
     };
@@ -236,6 +270,24 @@
     e.preventDefault();
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+  }
+
+  function moveByKey(e: KeyboardEvent) {
+    if (!$controller.editMode || widget.locked || widget.groupId) return;
+    const direction = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0;
+    if (!direction) return;
+    const siblings = Object.values($controller.activeLayout?.widgets ?? {})
+      .filter((item) => item.zone === widget.zone && !item.groupId)
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+    const currentIndex = siblings.findIndex((item) => item.id === widget.id);
+    if (currentIndex < 0) return;
+    e.preventDefault();
+    controller.dispatch({
+      type: 'widget.move',
+      widgetIds: [widget.id],
+      zone: widget.zone,
+      index: nextOrderedIndex(currentIndex, direction as -1 | 1, siblings.length)
+    });
   }
 </script>
 
@@ -254,7 +306,7 @@
     <Component widget={widget} {size} dispatch={(command: WorkbenchCommand) => controller.dispatch(command)} editMode={$controller.editMode} />
   {/if}
   {#if $controller.editMode && !widget.locked && !widget.groupId}
-    <div class="aw-widget-drag-surface" role="button" tabindex="0" aria-label="Move widget" onpointerdown={dragPointerDown}></div>
+    <div class="aw-widget-drag-surface" role="button" tabindex="0" aria-label="Move widget" onpointerdown={dragPointerDown} onkeydown={moveByKey}></div>
   {/if}
   {#if $controller.editMode && !widget.locked && !widget.groupId}
     <div class="aw-widget-edit">

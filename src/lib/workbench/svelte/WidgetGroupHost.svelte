@@ -5,6 +5,8 @@
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
   import { createWidgetTemplateFromGroup } from './library';
+  import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
+  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance } from '../core';
 
   let { groupId }: { groupId: string } = $props();
   const { controller } = getWorkbenchContext();
@@ -13,9 +15,25 @@
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 
   const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
+    ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
+      id: `move-${option.id}`,
+      label: option.label,
+      separatorBefore: index === 0,
+      danger: option.id === 'hidden',
+      disabled: !group || group.locked,
+      run: () =>
+        group &&
+        controller.dispatch({
+          type: 'widget.move',
+          widgetIds: group.widgetIds,
+          zone: option.id,
+          floatingRect: option.id === 'floating' ? { x: 48, y: 72 } : undefined
+        })
+    })),
     {
       id: 'save',
       label: 'Save Group To Library',
+      separatorBefore: true,
       disabled: !group || group.locked,
       run: saveGroupTemplate
     },
@@ -25,14 +43,6 @@
       separatorBefore: true,
       disabled: !group || group.locked,
       run: () => group && controller.dispatch({ type: 'widget.ungroup', groupId: group.id })
-    },
-    {
-      id: 'hide',
-      label: 'Hide Group',
-      danger: true,
-      separatorBefore: true,
-      disabled: !group || group.locked,
-      run: () => group && controller.dispatch({ type: 'widget.hide', widgetIds: group.widgetIds })
     }
   ]);
 
@@ -111,6 +121,22 @@
     return { rect: line, kind: 'insert' as const, orientation, label: zone };
   }
 
+  function workspaceEdgeDropAt(x: number, y: number): { region: DockRegionId; rect: WorkbenchRect } | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const workspace = el?.closest<HTMLElement>('.aw-workspace');
+    if (!workspace) return null;
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const nx = (x - rect.left) / rect.width;
+    const ny = (y - rect.top) / rect.height;
+    const edge = 0.18;
+    if (nx < edge) return { region: 'left', rect: { left: rect.left, top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
+    if (nx > 1 - edge) return { region: 'right', rect: { left: rect.right - Math.min(rect.width * 0.24, 220), top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
+    if (ny < edge) return { region: 'top', rect: { left: rect.left, top: rect.top, width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
+    if (ny > 1 - edge) return { region: 'bottom', rect: { left: rect.left, top: rect.bottom - Math.min(rect.height * 0.22, 150), width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
+    return null;
+  }
+
   function dragPointerDown(e: PointerEvent) {
     if (!$controller.editMode || !group || group.locked || e.button !== 0) return;
     const startedAt = { x: e.clientX, y: e.clientY };
@@ -122,14 +148,15 @@
       dragging = true;
       const target = widgetDropAt(pointer.x, pointer.y);
       const preview = widgetPreviewAt(pointer.x, pointer.y);
+      const edgeDrop = !target ? workspaceEdgeDropAt(pointer.x, pointer.y) : null;
       controller.setDrag({
         kind: 'widget',
         widgetIds: group.widgetIds,
         startedAt,
         pointer,
-        targetLabel: target ? target.zone : undefined,
-        previewRect: preview?.rect,
-        previewKind: preview?.kind,
+        targetLabel: target ? target.zone : edgeDrop ? `New panel in ${edgeDrop.region}` : undefined,
+        previewRect: preview?.rect ?? edgeDrop?.rect,
+        previewKind: preview?.kind ?? (edgeDrop ? 'zone' : undefined),
         previewOrientation: preview?.orientation
       });
     };
@@ -139,7 +166,17 @@
       window.removeEventListener('pointerup', onUp);
       if (dragging && group) {
         const target = widgetDropAt(ev.clientX, ev.clientY);
+        const edgeDrop = !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
         if (target) controller.dispatch(widgetDropCommand(group.widgetIds, target));
+        else if (edgeDrop) {
+          controller.dispatchMany(
+            createCustomPanelFromWidgetsCommands($controller.document, {
+              widgetIds: group.widgetIds,
+              title: 'Custom Panel',
+              region: edgeDrop.region
+            })
+          );
+        }
         controller.setDrag(null);
       }
     };
@@ -148,12 +185,42 @@
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
+
+  function moveByKey(e: KeyboardEvent) {
+    if (!$controller.editMode || !group || group.locked) return;
+    const direction = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0;
+    if (!direction) return;
+    const layout = $controller.activeLayout;
+    const anchor = group.widgetIds
+      .map((id) => layout?.widgets[id])
+      .filter((widget): widget is WidgetInstance => !!widget)
+      .sort((a, b) => a.order - b.order)[0];
+    if (!layout || !anchor) return;
+    const units = Object.values(layout.widgets)
+      .filter((item) => item.zone === anchor.zone)
+      .reduce<{ id: string; order: number }[]>((acc, item) => {
+        const id = item.groupId ?? item.id;
+        if (acc.some((unit) => unit.id === id)) return acc;
+        acc.push({ id, order: item.order });
+        return acc;
+      }, [])
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+    const currentIndex = units.findIndex((unit) => unit.id === group.id);
+    if (currentIndex < 0) return;
+    e.preventDefault();
+    controller.dispatch({
+      type: 'widget.move',
+      widgetIds: group.widgetIds,
+      zone: anchor.zone,
+      index: nextOrderedIndex(currentIndex, direction as -1 | 1, units.length)
+    });
+  }
 </script>
 
 {#if group}
   <div class="aw-widget-group" data-widget-group={group.id} role="group" oncontextmenu={openMenu}>
     {#if $controller.editMode && !group.locked}
-      <button class="aw-group-grip" type="button" title="Move group" onpointerdown={dragPointerDown}>⋮</button>
+      <button class="aw-group-grip" type="button" title="Move group" onpointerdown={dragPointerDown} onkeydown={moveByKey}>⋮</button>
       <button
         class="aw-group-ungroup"
         type="button"

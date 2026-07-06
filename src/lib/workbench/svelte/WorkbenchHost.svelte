@@ -22,11 +22,28 @@
   const layout = $derived($controller.activeLayout);
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
   const rootStyle = $derived(workbenchThemeStyle(theme));
+  let navDrawerOpen = $state(false);
 </script>
 
 <WorkbenchProvider {controller} {registry}>
-  <div class={rootClass} class:aw-editing={$controller.editMode} style={rootStyle}>
-    <aside class="aw-rail" data-zone-shell="rail">
+  <div
+    class={rootClass}
+    class:aw-editing={$controller.editMode}
+    class:aw-dragging-panel={$controller.drag?.kind === 'panel'}
+    class:aw-dragging-widget={$controller.drag?.kind === 'widget'}
+    style={rootStyle}
+  >
+    {#if navDrawerOpen}
+      <button class="aw-mobile-nav-scrim" type="button" aria-label="Close navigation" onclick={() => (navDrawerOpen = false)}></button>
+    {/if}
+
+    {#if !navDrawerOpen}
+      <button class="aw-mobile-menu" type="button" title="Menu" aria-label="Open navigation" onclick={() => (navDrawerOpen = true)}>
+        <span></span><span></span><span></span>
+      </button>
+    {/if}
+
+    <aside class="aw-rail" class:open={navDrawerOpen} data-zone-shell="rail">
       <div class="aw-mark" aria-hidden="true">
         <span></span><span></span><span></span>
       </div>
@@ -172,28 +189,90 @@
 
   @media (max-width: 760px) {
     .aw-root {
-      flex-direction: column;
+      flex-direction: row;
     }
     .aw-rail {
-      width: 100%;
-      height: 58px;
-      flex-direction: row;
-      order: 2;
-      border-right: 0;
-      border-top: 1px solid var(--aw-border);
-      padding: 6px 8px calc(6px + var(--aw-safe-bottom, 0px));
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 230;
+      width: 80px;
+      height: auto;
+      flex-direction: column;
+      border-right: 1px solid var(--aw-border);
+      border-top: 0;
+      padding: calc(14px + var(--aw-safe-top, 0px)) 8px calc(14px + var(--aw-safe-bottom, 0px));
+      box-shadow: 10px 0 40px rgba(0, 0, 0, 0.55);
+      transform: translateX(-96px);
+      transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .aw-rail.open {
+      transform: translateX(0);
     }
     .aw-mark {
-      display: none;
+      width: 48px;
+      height: 38px;
+      display: grid;
     }
     .aw-frame {
-      order: 1;
+      flex: 1;
+      order: 0;
     }
     :global(.aw-root.aw-editing .aw-workspace) {
       padding-top: 72px;
     }
     .aw-topbar {
+      padding-left: 62px;
       grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
     }
+    .aw-mobile-menu {
+      position: absolute;
+      top: calc(11px + var(--aw-safe-top, 0px));
+      left: 11px;
+      z-index: 120;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: 1px solid var(--aw-border-2);
+      border-radius: 11px;
+      background: var(--aw-bg-2);
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    }
+    .aw-mobile-menu:hover {
+      border-color: var(--aw-border-3);
+    }
+    .aw-mobile-menu span {
+      width: 18px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--aw-text-2);
+    }
+    .aw-mobile-nav-scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 225;
+      border: 0;
+      background: rgba(6, 6, 8, 0.52);
+      backdrop-filter: blur(2px);
+      animation: awFadeIn 0.16s ease;
+    }
+  }
+
+  @media (min-width: 761px) {
+    .aw-mobile-menu,
+    .aw-mobile-nav-scrim {
+      display: none;
+    }
+  }
+
+  @keyframes awFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>
