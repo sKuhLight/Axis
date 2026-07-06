@@ -36,7 +36,9 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
-| `b031b68` | **T33** | Docked `be-part="modifier"` part: shared `ModifierEditorCore` (flyout/dock variants, overlay unchanged), typed `blockEditorModifierController`, ControlSurface ∿-badge ownership rule. **Registry registration PENDING** — apply the one-liners from the T33 agent report after the auto-fit task frees the registry files (manifest: export `AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES` from `blockEditor/types`; registry: register `axis.blockEditor.modifier` → `AxisBlockEditorModifierPanel`). |
+| `c3609df` | auto-fit | Generic estW auto-fit (`workbench/core/widgetFit.ts`): joint fit ×0.62, keep-set shedding in document order, 44px chip reserve; Axis estW table + keep-set (preset/save) via registry sizing provider (`widgets/widgetEstWidths.ts`); top zones fit jointly (fitGroup), gaps 12/10/8; manual density = ceiling; edit mode never sheds. |
+| `8310758` | T33 (2/2) | Registered `axis.blockEditor.modifier` → `AxisBlockEditorModifierPanel` (manifest + registry). |
+| `b031b68` | **T33** | Docked `be-part="modifier"` part: shared `ModifierEditorCore` (flyout/dock variants, overlay unchanged), typed `blockEditorModifierController`, ControlSurface ∿-badge ownership rule. Registration followed in `8310758`. |
 | `6b224d4` | **T09/T10** | Live nav targets (Setup/Controllers → docked VirtualScreen; Scenes/Live → placeholder panels; add-or-focus semantics in `axisWorkbenchNavigationActions.ts`), Theme nav entry, bottom-zone hint ticker + legal widgets. Nav-id reconciliation deferred to T31. |
 
 ## Verification debt (needs hardware / a device or browser session)
@@ -52,6 +54,9 @@
   legal links (Ko-fi/imprint open externally), theme entry opens the theme dialog.
 - T33: flyout still behaves identically in the old shell; docked modifier part
   targets from the ∿ badge; Clear chip; knob formats (ms=v*5, slope, signed offset).
+- auto-fit: top bar steps default→compact→mini as the window narrows; shed widgets
+  land in the ⋯ chip (preset+save never shed); edit mode shows everything; bottom
+  hint still flexes; gridbar widgets fit at 8px gaps.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -64,16 +69,12 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **Generic estW auto-fit port** — estW × 0.62 joint-fit + keep-set shedding into
-   `WidgetZone`/sizing (spec: `01-shell.md`/`02-widgets.md` auto-fit section). IN FLIGHT.
-2. **T33 registry registration** — small follow-up once the auto-fit task lands
-   (exact edits recorded in the Landed row above / T33 agent report).
-3. **FC part visual parity** (spec: `04-fc-and-grid.md` §1). IN FLIGHT (restarted once:
+1. **FC part visual parity** (spec: `04-fc-and-grid.md` §1). IN FLIGHT (restarted once:
    a stray "haiku" message derailed the first run — instructed to disregard).
-4. **T13** — layout presets, driven by the six extracted preset kinds
+2. **T13** — layout presets, driven by the six extracted preset kinds
    (default/stage/studio/compact + tablet/mobile, spec: `01-shell.md`). Waits for the
    roster to settle (after 1–3).
-5. Operator's batched visual check over everything (P0: phone T02 check).
+3. Operator's batched visual check over everything (P0: phone T02 check).
 
 ## Session conventions (from the operator)
 
