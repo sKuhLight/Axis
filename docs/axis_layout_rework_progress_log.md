@@ -166,7 +166,9 @@ colW/cellH/gap/mapMode.
   hover to show labels; FINISH tokenization (WorkbenchHost/TabStack → theme.ts
   defaults, drop guard tolerance).
 - R9c dock openers: LEFT opener missing; RIGHT opener must overlay the actual
-  right-region panels (sheet was consuming the whole screen).
+  right-region panels (sheet was consuming the whole screen). EXTENDED mid-flight
+  (operator): region hierarchy → LEFT|RIGHT full height, TOP/MAIN/BOTTOM stacked
+  between them (was top/bottom full-width).
 - R9d mobile block flow (operator design): phone + block tapped → block editor
   ~75% bottom, grid in map above under top bar; minimized → mobile col layout.
 Operator confirmed tokenization incomplete — folded into R9b.
