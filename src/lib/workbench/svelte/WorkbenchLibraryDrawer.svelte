@@ -10,6 +10,7 @@
     type WidgetZoneId
   } from '../core';
   import { getWorkbenchContext } from './context';
+  import { focusTrap } from './focusTrap';
   import {
     instantiatePanelTemplateCommands,
     instantiateWidgetTemplateCommands,
@@ -77,10 +78,10 @@
 
 {#if open}
   <button class="aw-lib-scrim" type="button" aria-label="Close library" onclick={onClose}></button>
-  <aside class="aw-lib-drawer" aria-label="Widget Library">
+  <aside class="aw-lib-drawer" aria-label="Widget Library" use:focusTrap={{ onClose }}>
     <header class="aw-lib-head">
       <span>Widget Library</span>
-      <button type="button" title="Close" onclick={onClose}>×</button>
+      <button type="button" class="aw-lib-close" title="Close" aria-label="Close library" data-autofocus onclick={onClose}>×</button>
     </header>
 
     <div class="aw-lib-scroll">
@@ -369,6 +370,17 @@
   }
   .aw-lib-row:hover {
     border-color: var(--aw-border-3);
+  }
+  /* T18: consistent keyboard focus ring on every interactive element in the
+     drawer — accent outline, focus-visible only so pointer UX is untouched. */
+  .aw-lib-drawer :is(button, select, input):focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+  }
+  .aw-lib-row:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+    border-color: var(--aw-accent);
   }
   .aw-lib-row.saved {
     background: color-mix(in srgb, var(--aw-accent) 5%, var(--aw-surface));

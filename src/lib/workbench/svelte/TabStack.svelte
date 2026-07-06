@@ -364,6 +364,13 @@
     color: var(--aw-text);
     background: color-mix(in srgb, var(--aw-surface) 70%, transparent);
   }
+  /* T18: keyboard focus ring for the pane header (tab pills + mini actions).
+     focus-visible only, accent token — no always-on outline for pointer use. */
+  .aw-pane-tab:focus-visible,
+  .aw-pane-btn:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: -1px;
+  }
   .aw-pane-btn.danger:hover {
     color: var(--aw-danger);
   }

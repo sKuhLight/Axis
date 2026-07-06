@@ -291,6 +291,20 @@
     color: var(--aw-text);
     border-color: var(--aw-accent);
   }
+  /* T18: keyboard focus ring for the per-entry nav controls (drag handle, hide,
+     menu). focus-visible only, accent token. The menu/hide affordances also
+     become visible when focused so a keyboard user can reach them. */
+  .aw-nav-entry:focus-within .aw-nav-menu,
+  .aw-nav-menu:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .aw-nav-drag:focus-visible,
+  .aw-nav-hide:focus-visible,
+  .aw-nav-menu:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+  }
   @media (max-width: 760px) {
     .aw-nav {
       flex: 1;
