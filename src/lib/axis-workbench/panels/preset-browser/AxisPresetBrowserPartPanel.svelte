@@ -40,6 +40,15 @@
     AXIS_PB_QUICK_TAGS,
     condsToQuery
   } from '../../presetBrowser/presetBrowserWorkbenchQuery';
+  import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
+  import {
+    buildAxisPbMenuActions,
+    toWorkbenchMenuItems,
+    type AxisPbMenuActionId
+  } from '../../presetBrowser/presetBrowserWorkbenchMenu';
+  import ContextMenu from '../../../workbench/svelte/ContextMenu.svelte';
+  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from '../../../workbench/svelte/contextMenu';
+  import { longPress } from '../../longPress';
 
   let { panel }: { panel: PanelInstance } = $props();
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
@@ -172,6 +181,106 @@
   function auditionEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
     void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
+  }
+
+  // ── §4.3 inline rename ──────────────────────────────────────────────────────────────────────
+  // Double-click on a device-slot row name edits it inline; committing routes through the SAME path
+  // the monolith uses (editor.renameStoredPreset → loads the slot, renames the buffer, stores, reflects
+  // in the library). Only device slots on rename-capable devices are editable (editor.canRenamePresets).
+  let renamingId = $state<string | null>(null);
+  let renameValue = $state('');
+  function canRename(entry: AxisPresetBrowserEntrySummary): boolean {
+    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.cloudOnly && (entry.number ?? -1) >= 0;
+  }
+  function beginRename(entry: AxisPresetBrowserEntrySummary) {
+    if (!canRename(entry)) return;
+    renamingId = entry.id;
+    renameValue = entry.name;
+  }
+  function commitRename(entry: AxisPresetBrowserEntrySummary) {
+    const next = renameValue.trim();
+    const id = renamingId;
+    renamingId = null;
+    if (!id || id !== entry.id || !next || next === entry.name || entry.number == null) return;
+    void editor.renameStoredPreset(entry.number, next);
+  }
+  function cancelRename() {
+    renamingId = null;
+  }
+
+  // ── §4.4 row context menu (right-click / long-press) ────────────────────────────────────────
+  // The generic workbench ContextMenu, rendered by the overlay OWNER instance only (§1 rank rule) so a
+  // split sources|list|detail layout never double-renders the menu. Actions carry real backing:
+  // Load/Audition (runtime), Favorite (library.toggleFav), Rename (editor.renameStoredPreset), and the
+  // cloud up/down actions (editor.backupPreset+cloudSync / runtime cloud-version load) only when signed in.
+  let menuOpen = $state(false);
+  let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  let menuItems = $state<WorkbenchMenuItem[]>([]);
+  let menuEntry: AxisPresetBrowserEntrySummary | null = null;
+
+  function openRowMenu(entry: AxisPresetBrowserEntrySummary, pos: WorkbenchMenuPosition) {
+    menuEntry = entry;
+    const actions = buildAxisPbMenuActions(
+      {
+        id: entry.id,
+        cloudOnly: entry.cloudOnly,
+        deviceSlot: entry.sourceId === 'device' && (entry.number ?? -1) >= 0,
+        fav: entry.fav,
+        syncState: entry.syncState
+      },
+      { canRename: editor.canRenamePresets, cloudOn }
+    );
+    menuItems = toWorkbenchMenuItems(actions, dispatchMenuAction);
+    menuPos = pos;
+    menuOpen = true;
+  }
+  function onRowContext(event: MouseEvent, entry: AxisPresetBrowserEntrySummary) {
+    event.preventDefault();
+    // The menu is a shared overlay — always select the row first so detail/menu act on the same entry.
+    axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    openRowMenu(entry, menuPositionFromPointer(event));
+  }
+  function dispatchMenuAction(id: AxisPbMenuActionId) {
+    const entry = menuEntry;
+    if (!entry) return;
+    switch (id) {
+      case 'load':
+        void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
+        return;
+      case 'audition':
+        void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
+        return;
+      case 'favorite':
+        library.toggleFav(entry.id);
+        return;
+      case 'rename':
+        beginRename(entry);
+        return;
+      case 'cloudUpload':
+        void cloudUpload(entry);
+        return;
+      case 'cloudDownload':
+        void cloudDownload(entry);
+        return;
+    }
+  }
+  // Cloud actions mirror the monolith cloudAction() verbatim: upload = snapshot the slot to the version
+  // store then push to cloud; download = load the latest cloud version into the edit buffer.
+  async function cloudUpload(entry: AxisPresetBrowserEntrySummary) {
+    if (entry.number == null || entry.number < 0) {
+      editor.showToast('No device slot to back up', '#f5a623');
+      return;
+    }
+    await editor.backupPreset(entry.number);
+    await editor.cloudSync();
+  }
+  async function cloudDownload(entry: AxisPresetBrowserEntrySummary) {
+    const versionId = cloud.latestCloud(entry.number ?? -1)?.id;
+    if (!versionId) {
+      editor.showToast('No cloud version to download', '#d6543f');
+      return;
+    }
+    await editor.loadVersion(versionId);
   }
 </script>
 
@@ -346,27 +455,88 @@
     {/if}
     <div class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
       {#each rowCap.rows as entry}
-        <button
-          type="button"
+        {@const anatomy = axisPbRowAnatomy(entry)}
+        <div
+          class="preset-row"
           class:active={snapshot.entryId === entry.id}
           class:marked={snapshot.marked[entry.id]}
           class:fav={entry.fav}
-          onclick={(e) => onRowClick(entry, e)}
-          ondblclick={() => loadEntry(entry)}
           role="option"
           aria-selected={snapshot.entryId === entry.id}
+          tabindex="0"
+          onclick={(e) => onRowClick(entry, e)}
+          ondblclick={() => (canRename(entry) ? beginRename(entry) : loadEntry(entry))}
+          oncontextmenu={(e) => onRowContext(e, entry)}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') loadEntry(entry);
+          }}
+          use:longPress={{
+            onLongPress: (d) => {
+              axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+              openRowMenu(entry, { x: d.x, y: d.y });
+            }
+          }}
         >
-          <span class="checkbox" class:on={snapshot.marked[entry.id]}>{snapshot.marked[entry.id] ? '✓' : ''}</span>
+          <button
+            type="button"
+            class="checkbox"
+            class:on={snapshot.marked[entry.id]}
+            aria-label={snapshot.marked[entry.id] ? 'Unmark preset' : 'Mark preset'}
+            onclick={(e) => {
+              e.stopPropagation();
+              axisPresetBrowserWorkbenchController.toggleMark(entry.id);
+            }}
+          >{snapshot.marked[entry.id] ? '✓' : ''}</button>
           <span class="preset-number" class:sel={snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
           <span class="preset-main">
-            <strong>{entry.name}</strong>
-            <small>{entry.model || `${entry.blockCount} blocks`}</small>
+            {#if renamingId === entry.id}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                class="rename-in"
+                type="text"
+                maxlength="32"
+                autofocus
+                spellcheck="false"
+                bind:value={renameValue}
+                onclick={(e) => e.stopPropagation()}
+                ondblclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') commitRename(entry);
+                  else if (e.key === 'Escape') cancelRename();
+                }}
+                onblur={() => commitRename(entry)}
+              />
+            {:else}
+              <strong>{entry.name}</strong>
+            {/if}
+            {#if anatomy.tagPills.length}
+              <span class="tag-pills">
+                {#each anatomy.tagPills as tag}<em class="tag-pill">{tag}</em>{/each}
+              </span>
+            {/if}
+            {#if anatomy.blockChips.length}
+              <span class="block-chips">
+                {#each anatomy.blockChips as chip}
+                  <em class="block-chip" style:--c={chip.color} title={chip.title}>{chip.label}</em>
+                {/each}
+              </span>
+            {/if}
           </span>
           <span class="preset-meta">
-            <i>{entry.sceneCount} scn</i>
-            <i>{entry.blockCount} blk</i>
+            <span class="meta-top">
+              <i class="scenes">{anatomy.sceneCount} scn</i>
+              {#if anatomy.cloud}
+                <i class="cloud-chip" style:--c={anatomy.cloud.color} title={anatomy.cloud.label}>{anatomy.cloud.glyph} {anatomy.cloud.short}</i>
+              {/if}
+            </span>
+            <span class="cpu-meter" title="Estimated DSP load from block makeup — not the device's live CPU">
+              <i class="cpu-l">~CPU</i>
+              <i class="cpu-bar"><b style:width={`${anatomy.cpu.pct}%`} style:background={anatomy.cpu.color}></b></i>
+              <i class="cpu-t" style:color={anatomy.cpu.color}>{anatomy.cpu.pct}%</i>
+            </span>
           </span>
-        </button>
+        </div>
       {/each}
     </div>
     {#if rowCap.capped}
@@ -490,6 +660,13 @@
       {@render detailBody()}
     {/if}
   </section>
+{/if}
+
+<!-- §4.4 row context menu — rendered once, on the overlay-owner part (§1 rank rule: list < detail <
+     sources < full) so split layouts don't duplicate it. Anchored in fixed/viewport coords so it works
+     cross-panel. -->
+{#if isOwner}
+  <ContextMenu open={menuOpen} position={menuPos} items={menuItems} label="Preset actions" onClose={() => (menuOpen = false)} />
 {/if}
 
 <style>
@@ -666,14 +843,26 @@
     display: grid;
     gap: 4px;
   }
-  .axis-preset-list button {
+  /* §4.3 row: checkbox | number | main(name+tags+block chips) | meta(scenes/cloud + CPU meter). */
+  .preset-row {
     min-height: 42px;
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr) auto;
+    grid-template-columns: 18px 34px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
-    padding: 5px 9px;
-    text-transform: none;
+    gap: 12px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    border-radius: 8px;
+    background: var(--bg2);
+    cursor: pointer;
+  }
+  .preset-row:hover {
+    background: color-mix(in srgb, var(--accent) 4%, var(--bg2));
+  }
+  .preset-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .preset-number {
     color: var(--textdim);
@@ -682,50 +871,133 @@
   .preset-main {
     min-width: 0;
     display: grid;
-    gap: 3px;
+    gap: 4px;
   }
-  .preset-main strong,
-  .preset-main small {
+  .preset-main strong {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .preset-main strong {
     color: var(--text);
-    font-size: 12px;
+    font: 700 13px/1.15 var(--font-ui);
   }
-  .preset-main small,
+  .rename-in {
+    width: 100%;
+    box-sizing: border-box;
+    height: 26px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    padding: 0 8px;
+    font: 600 12px/1 var(--font-mono);
+    outline: none;
+  }
+  .tag-pills,
+  .block-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .tag-pill {
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+    font: 700 9.5px/1 var(--font-mono);
+    font-style: normal;
+    white-space: nowrap;
+  }
+  .block-chip {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, var(--c) 33%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--c) 17%, transparent);
+    color: var(--c);
+    font: 600 10px/1.2 var(--font-mono);
+    font-style: normal;
+  }
   .preset-meta {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 3px;
-    color: var(--textdim);
-    font-size: 10px;
+    gap: 5px;
+  }
+  .meta-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .preset-meta i {
     font-style: normal;
   }
-  .axis-preset-list button.fav .preset-number {
+  .scenes {
+    color: var(--textdim);
+    font: 600 9.5px/1 var(--font-mono);
+  }
+  .cloud-chip {
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--c) 12%, transparent);
+    color: var(--c);
+    font: 700 9px/1 var(--font-mono);
+    white-space: nowrap;
+  }
+  .cpu-meter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cpu-l {
+    color: var(--textmuted, var(--textdim));
+    font: 600 8px/1 var(--font-mono);
+    letter-spacing: 0.06em;
+  }
+  .cpu-bar {
+    width: 46px;
+    height: 6px;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--track, var(--bg));
+  }
+  .cpu-bar b {
+    display: block;
+    height: 100%;
+  }
+  .cpu-t {
+    font: 700 10px/1 var(--font-mono);
+  }
+  .preset-row.fav .preset-number {
     color: var(--accent);
   }
-  .axis-preset-list button {
-    grid-template-columns: 18px 40px minmax(0, 1fr) auto;
+  .preset-row.active {
+    border-left-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 6%, var(--bg2));
   }
-  .axis-preset-list button.active,
-  .axis-preset-list button.marked {
+  .preset-row.marked {
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 8%, var(--bg2));
+    border-left-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg2));
   }
   .checkbox {
     width: 18px;
     height: 18px;
+    padding: 0;
     display: grid;
     place-items: center;
     border: 1px solid var(--border3, var(--border));
     border-radius: 5px;
+    background: transparent;
     color: var(--bg);
+    cursor: pointer;
     font: 700 11px/1 var(--font-mono);
   }
   .checkbox.on {
