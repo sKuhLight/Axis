@@ -20,6 +20,8 @@ export interface AxisPresetBrowserLibEntryLike {
     blocks?: AxisPresetBrowserBlockSummary[] | null;
     amps?: string[] | null;
     models?: Record<string, string[]> | null;
+    /** Device-slot CRC — used to resolve cloud sync state via cloud.stateOf (§3). */
+    crc?: number | null;
   };
 }
 
@@ -36,6 +38,10 @@ export interface AxisPresetBrowserEntrySummary {
   folder: string | null;
   tags: string[];
   blocks: AxisPresetBrowserBlockSummary[];
+  /** Resolved cloud sync state (from cloud.stateOf via the host); 'none' when signed out. */
+  syncState: SyncState;
+  /** A synthesized cloud-only row (host id starts with `cloud:`). */
+  cloudOnly: boolean;
 }
 
 export interface AxisPresetBrowserSourceSummary {
@@ -50,6 +56,10 @@ export interface AxisPresetBrowserDataView {
   visibleEntries: AxisPresetBrowserEntrySummary[];
   selectedEntry: AxisPresetBrowserEntrySummary | null;
   activeSourceId: AxisPresetBrowserSourceId;
+  /** Cloud-presence views with live counts for the sources sidebar (§3). */
+  presenceViews: AxisPresetBrowserPresenceViewSummary[];
+  /** The active presence view (§3). */
+  activePresenceView: AxisPbPresenceView;
   /** Ordered list of visible entry ids — the display order shift-click range uses (§4.4). */
   order: string[];
 }
@@ -68,9 +78,28 @@ export interface AxisPresetBrowserDataInput {
   simpleQuery?: string;
   /** Result ordering (§4.1). Defaults to preset number. */
   sort?: AxisPresetBrowserSortMode;
+  /** Resolve an entry's cloud sync state (host reads the reactive cloud store). Defaults to 'none'. */
+  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState;
+  /** Active cloud-presence view (§3). When set (and not 'all'), the list is filtered by it. */
+  presenceView?: AxisPbPresenceView;
+  /** Per-view counts (respecting the presence filter) for the sources sidebar. */
+  presenceViews?: AxisPbPresenceViewDef[];
+}
+
+export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceViewDef {
+  count: number;
 }
 
 import { matchEntryFromSummary, matchPreset, type AxisPbCond } from './presetBrowserWorkbenchQuery';
+import type { SyncState } from '../../types';
+import {
+  AXIS_PB_PRESENCE_VIEWS,
+  entryInPresenceView,
+  presenceViewCount,
+  type AxisPbPresenceRow,
+  type AxisPbPresenceView,
+  type AxisPbPresenceViewDef
+} from './presetBrowserWorkbenchPresence';
 
 const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'cloud'];
 
@@ -91,8 +120,11 @@ export function normalizeAxisPresetBrowserSourceId(sourceId: AxisPresetBrowserSo
 
 export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInput): AxisPresetBrowserDataView {
   const activeSourceId = normalizeAxisPresetBrowserSourceId(input.sourceId);
-  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf));
-  const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) => normalizeEntry(entry, input.tagsOf));
+  const syncStateOf = input.syncStateOf;
+  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, syncStateOf));
+  const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) =>
+    normalizeEntry(entry, input.tagsOf, syncStateOf)
+  );
   const counts = new Map<AxisPresetBrowserSourceId, number>([['all', entries.length]]);
 
   for (const entry of entries) {
@@ -106,15 +138,28 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     .sort((a, b) => sourceSortIndex(a) - sourceSortIndex(b) || axisPresetBrowserSourceLabel(a).localeCompare(axisPresetBrowserSourceLabel(b)))
     .map((id) => ({ id, label: axisPresetBrowserSourceLabel(id), count: counts.get(id) ?? 0 }));
 
+  // Presence-view counts (§3) run over the full entry set (only device-filter/deletions would trim it,
+  // handled upstream) so the sidebar shows the honest totals; the design shows counts regardless of the
+  // active source/query. Signed-out (no syncStateOf) leaves cloud views at count 0.
+  const presenceRows: AxisPbPresenceRow[] = entries.map(toPresenceRow);
+  const presenceDefs = input.presenceViews ?? AXIS_PB_PRESENCE_VIEWS;
+  const presenceViews = presenceDefs.map((def) => ({ ...def, count: presenceViewCount(presenceRows, def.id) }));
+  const activePresenceView: AxisPbPresenceView = input.presenceView ?? 'all';
+
   const bySource = activeSourceId === 'all'
     ? filteredEntries
     : filteredEntries.filter((entry) => entry.sourceId === activeSourceId);
 
+  const byPresence =
+    activePresenceView === 'all'
+      ? bySource
+      : bySource.filter((entry) => entryInPresenceView(toPresenceRow(entry), activePresenceView));
+
   const conditions = input.conditions ?? [];
   const simpleQuery = (input.simpleQuery ?? '').trim();
   const queried = conditions.length || simpleQuery
-    ? bySource.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery))
-    : bySource;
+    ? byPresence.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery))
+    : byPresence;
 
   const visibleEntries = sortEntries(queried, input.sort ?? 'num');
   const order = visibleEntries.map((entry) => entry.id);
@@ -126,8 +171,14 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     visibleEntries,
     selectedEntry,
     activeSourceId,
+    presenceViews,
+    activePresenceView,
     order
   };
+}
+
+function toPresenceRow(entry: AxisPresetBrowserEntrySummary): AxisPbPresenceRow {
+  return { source: entry.sourceId, cloudOnly: entry.cloudOnly, syncState: entry.syncState };
 }
 
 function sortEntries(
@@ -146,7 +197,11 @@ function sortEntries(
   return list;
 }
 
-function normalizeEntry(entry: AxisPresetBrowserLibEntryLike, tagsOf?: (entryId: string) => string[]): AxisPresetBrowserEntrySummary {
+function normalizeEntry(
+  entry: AxisPresetBrowserLibEntryLike,
+  tagsOf?: (entryId: string) => string[],
+  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState
+): AxisPresetBrowserEntrySummary {
   const blocks = entry.summary.blocks ?? [];
   const firstModel = entry.summary.model
     ?? entry.summary.amps?.[0]
@@ -165,7 +220,9 @@ function normalizeEntry(entry: AxisPresetBrowserLibEntryLike, tagsOf?: (entryId:
     fav: entry.fav === true,
     folder: entry.folder ?? null,
     tags: tagsOf?.(entry.id) ?? [],
-    blocks
+    blocks,
+    syncState: syncStateOf?.(entry) ?? 'none',
+    cloudOnly: entry.id.startsWith('cloud:')
   };
 }
 
