@@ -115,8 +115,8 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
       state: widgetState(90, { fixedSlot: 'rail.footer' })
     }),
     'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 2, { size: 'compact', state: widgetState(90) }),
-    'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0),
-    'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1)
+    'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0, { state: { mode: 'auto' } }),
+    'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1, { state: { size: 'M' } })
   };
 
   layout.navigation.entries = {

@@ -7,6 +7,11 @@
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
 
+  // optional grid-view override (workbench gridbar): 'auto' fits to the pane with tilePx as the size
+  // cap, 'full' fixes tiles at tilePx and scrolls. The old shell renders <SignalGrid /> without it →
+  // stock fit behavior. Desktop only; mobile keeps its own column-density paging.
+  let { view = null }: { view?: { mode: 'auto' | 'full'; tilePx: number } | null } = $props();
+
   // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
   // dark mode, softly lightened (dark family-tint ink) in light mode.
   const light = $derived(theme.cfg.base === 'light');
@@ -51,18 +56,21 @@
   // Mobile fills the page width exactly (clean paging). Desktop fits BOTH axes as a square-ish tile and
   // caps the size, so on a wide/fullscreen window the grid stays a comfortable size and centers rather
   // than spanning edge-to-edge.
+  const fixedTile = $derived(!mob && view?.mode === 'full'); // fixed-size tiles, grid scrolls in the pane
   const colW = $derived.by(() => {
+    if (fixedTile) return view!.tilePx;
     if (availW <= 1) return mob ? 88 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
     const fillW = (availW - (hCols - 1) * gap) / hCols;
     if (mob) return Math.max(24, fillW);
-    // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ MAX_TILE.
+    // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ the size cap.
     const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
-    return Math.max(24, Math.min(fillW, fitH / ASPECT, MAX_TILE));
+    return Math.max(24, Math.min(fillW, fitH / ASPECT, view?.tilePx ?? MAX_TILE));
   });
   const cellH = $derived.by(() => {
     const sq = colW * ASPECT;
+    if (fixedTile) return sq;
     if (availH <= 1) return sq;
     const fitH = (availH - (rows - 1) * gap) / rows;
     return Math.max(24, Math.min(sq, fitH));
@@ -484,7 +492,7 @@
     <!-- svelte-ignore a11y_consider_explicit_label -->
     <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(-1)}>‹</button>
   {/if}
-  <div class="viewport" bind:this={vpEl}>
+  <div class="viewport" class:free={fixedTile} bind:this={vpEl}>
   {#if editor.status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if editor.status === 'offline'}
@@ -640,9 +648,15 @@
       </div>
     </div>
 
-    <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+    {#if !fixedTile}
+      <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+    {/if}
   {/if}
   </div>
+  {#if fixedTile && editor.status !== 'loading' && editor.status !== 'offline'}
+    <!-- outside the scrolling viewport so it stays pinned while the fixed-size grid pans -->
+    <button class="regrid pin" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+  {/if}
   {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
     <button class="pgarrow" aria-label="Next page" disabled={page === editor.pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(1)}>›</button>
@@ -747,6 +761,16 @@
   }
   .gridwrap.mob .viewport {
     justify-content: flex-start; /* horizontal paging translates the grid from the left */
+  }
+  /* fixed-tile ('full') mode: the grid keeps its chosen size and pans instead of shrinking. Auto
+     margins center it while it fits and collapse to 0 when it overflows, so no edge is clipped. */
+  .viewport.free {
+    overflow: auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .viewport.free .inner {
+    margin: auto;
   }
   .inner {
     position: relative;
@@ -1151,6 +1175,10 @@
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
+  }
+  .regrid.pin {
+    right: 36px;
+    bottom: 34px;
   }
   .regrid:hover {
     border-color: var(--accent);

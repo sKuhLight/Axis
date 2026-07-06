@@ -464,6 +464,13 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       widget.size = command.size;
       return ok(next);
     }
+    case 'widget.state': {
+      // functional state (not layout), so locked widgets may still update it
+      const widget = layout.widgets[command.widgetId];
+      if (!widget) return fail(doc, 'missing-widget', `Widget ${command.widgetId} does not exist.`);
+      widget.state = { ...widget.state, ...command.state };
+      return ok(next);
+    }
     case 'widget.group': {
       const widgetIds = [...new Set(command.widgetIds)];
       if (widgetIds.length < 2) return fail(doc, 'invalid-command', 'Grouping requires at least two widgets.');
