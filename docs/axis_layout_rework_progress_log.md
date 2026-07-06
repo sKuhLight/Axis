@@ -156,10 +156,10 @@ colW/cellH/gap/mapMode.
   focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
   state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
   mobile sheets → T21/T23).
-**Round 7 COMPLETE. Wave 2 IN FLIGHT (2 opus):** R8a T21+T23 mobile chrome
-(safe-area insets --axis-safe-*→--aw-safe-* through Host/DockWorkspace + phone
-bottom-sheet drawers w/ swipe-to-close); R8b T26 Playwright E2E suite for the
-gated shell (dock/widgets/nav/custom panels/persistence reload).
+**Round 7 COMPLETE. Round 8:** R8a T21+T23 LANDED (`0b4116f`) — all four safe-area
+insets mapped + consumed edge-by-edge; phone bottom sheets (nav/dock/library) with
+tested swipe-to-close (≥96px / ≥0.55px/ms, scroll-intent cancel), guards green.
+R8b T26 Playwright E2E still IN FLIGHT (e2e/ + package.json only).
 
 **Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
 - `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
