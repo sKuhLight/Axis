@@ -281,11 +281,28 @@ the group, no insertion indicator).**
   cross-group = detachFromOtherGroups; group-create = design center-28% band
   (was any-proximity). 17 new tests. Deferred cosmetic: grip stays V13's
   in-flow left column (design floats a ⠿ chip top-left).
-- V14a+b FOLLOW-UP (operator, _234944.png, agent re-dispatched): the placeholder
-  paints OVER members instead of opening a real gap (members must shift — port
-  the design's IN-FLOW spacer from support.js, not an overlay rect), and the
-  dragged widget's origin stays rendered in place — the widget must lift and
-  travel with the pointer (full-size preview in DragLayer, origin hidden).
+- V14a+b FOLLOW-UP LANDED (`ea6cae4`, operator finding _234944.png): the real
+  drag model lives in design/'Axis Layout System.dc.html' (NOT support.js —
+  that's just the dc-runtime). Zones AND groups now splice a real dashed slot
+  child into the flex flow at the live index (neighbours physically reflow,
+  divider suppressed at the slot, rail slot 88% width, zone gap yields while a
+  group is hovered); dragged widget/whole group lifts (display:none, zone
+  closes the space) and DragLayer renders the REAL widget component as a
+  half-opaque scale-1.03 ghost at the grab offset (zoom-calibrated: visual
+  coords for position, layout px for sizes). Bonus real bugs fixed: zone
+  hit-testing counted nested group members (skewed indices → top-level units
+  only + pure unit→widget-order mapping) and in-group insert dispatched
+  widget.group index:undefined which APPENDED THE WHOLE GROUP to the zone end
+  (anchoredWidgetIndex keeps it in place). Tests -6 obsolete/+10. Deferred:
+  grid-variant zones show a plain grid-cell slot (no design reference); drag
+  feel = operator/hardware pass.
+
+**ROUND 14 COMPLETE — suite: check 0 errors, unit 746/746, e2e 38/38
+chromium+firefox.** Verification debt added for the next visual pass: group
+border/gap/ghost feel vs design side-by-side, in-group reorder without detach,
+cross-group moves, group-create center-band, bottom-nav on the real phone
+(persistent bar, safe-areas, icon-only), widgets-only rail strip in bottom
+mode, mobile side↔bottom switching via entry context menu.
 - V14c+d LANDED (`826c818` + `8525fcb`): rail renders nav ONLY in side mode
   (pure shouldRenderRail/shouldRenderRailNav; bottom mode keeps a slim 64px
   widgets-only strip when rail widgets exist or while editing — design §9 rule);
