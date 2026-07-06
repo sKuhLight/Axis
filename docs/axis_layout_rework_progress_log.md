@@ -116,6 +116,13 @@ framework via data/adapter seams (plan task T35).
 Block Editor bottom ONLY (landed as the commit after `c021cd6`). "Layout Profiles"
 get built later, together with the operator — do not pre-build them.
 
+**Screenshot round 2 (operator, 2026-07-06 ~14:45): "looks much better overall — keep
+going."** One bug found and FIXED (`f8e2f7a`): grid cables kept pre-resize
+coordinates on pane drags — the measurement pass was never re-triggered (mount-time
+observer attached before the grid element existed; re-measure effect only tracked
+old-shell window signals). Inner element now observed reactively + effect tracks
+colW/cellH/gap/mapMode.
+
 ### Visual fix round — worklist (from the screenshot delta) — ALL THREE LANDED
 
 - **V1 grid tiles**: FIXED (`9e72a93`). Root cause: mode resolution was fed the
