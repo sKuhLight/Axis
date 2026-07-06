@@ -126,9 +126,9 @@ colW/cellH/gap/mapMode.
 **Round 7 (new session, fresh budget) — IN FLIGHT (3 opus):**
 - R7a T18 focus management: focusTrap.ts utility, trap/restore + Escape for
   ContextMenu/drawers/mobile nav, :focus-visible across chrome (tokens only).
-- R7b T19 floating widgets: pointer drag-to-reposition (state-persisted x/y),
-  z-raise on interact, viewport clamping + offscreen self-heal, no geometry
-  transitions.
+- R7b T19 floating widgets: LANDED (`ae9bb33`) — grip strip drag + arrow nudge,
+  raise-on-pointer-down (order-derived z), clamp/self-heal (core/floating.ts,
+  16 tests), positions persist via widget.move floatingRect.
 - R7c T24 FC polish: itemized affordance checklist vs FcEditor + 04 §1/§3/§5,
   close or explicitly defer each; hardware-verify items appended below.
 Wave 2 after these (file conflicts): T21 safe-areas, T23 bottom-sheet drawers,
