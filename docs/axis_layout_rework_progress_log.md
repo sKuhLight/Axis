@@ -125,18 +125,17 @@ colW/cellH/gap/mapMode.
 
 **Round 5 (operator report ~15:24, final batch of the session) — IN FLIGHT (2 opus
 agents):**
-- W1 grid: (a) auto mode shows a scrollbar on large panes — suspect V1's pane-host
-  rect gives the resolver more chrome allowance than §2.2's baked-in padV(58/34) →
-  colCapH overflows the real content box; invariant to enforce: auto/map NEVER
-  scrollbar, only 'full' pans. (b) below the mobile threshold the grid shrinks tiny
-  instead of switching to the production PAGED grid — render the paged path pane-
-  driven on desktop (real mobile via editor.isMobile unchanged). Files: SignalGrid,
-  gridView, grid panel.
+- W1 grid: FIXED (`00c1593`). Scrollbar was HORIZONTAL: fixedTile engaged for
+  auto-resolved-full and sizes off the height cap only → 12-col width overflowed the
+  pane (1400×520 M: 1489 vs 1356). Fixed tiles/scrolling now gated to EXPLICIT
+  'full'; auto fits both axes (64-test no-overflow sweep). Mobile tier (<620px pane)
+  renders the real paged grid with pane-local cols/page state; true mobile + old
+  shell untouched.
 - W2 chrome: FIXED (`32357ca`). Root cause: 3-col topbar grid + zones render only
   when non-empty → auto-flow put top.right in the center column in normal mode.
   Zones pinned to explicit columns; edit chrome floats above chips (no accent fill,
   no clipping). Needs operator eyes (no live screenshot possible headless).
-Operator note: batch instructed with Opus per usage budget (~20% left).
+Operator note: batch instructed with Opus per usage budget (~20% left). BOTH LANDED — round 5 complete; suite 453/453.
 
 **Round 4 (operator report, ~15:00) — LANDED (`eda0074`):** gridbar chips (Full/Map/
 Auto + S/M/L) missing and no map/mobile auto-stepping in the operator's hand-built
