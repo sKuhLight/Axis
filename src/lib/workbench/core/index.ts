@@ -4,6 +4,7 @@ export * from './defaults';
 export * from './floating';
 export * from './ids';
 export * from './invariants';
+export * from './layoutPackage';
 export * from './migrations';
 export * from './parameterSources';
 export * from './profiles';

@@ -115,10 +115,19 @@
 
 ## Deliberately deferred (documented in commits / agent reports)
 
-- T12 P1/P2: full row anatomy (CPU meter, per-block chips, inline rename), context
-  menus/swipe actions, detail cloud card/version restore, generic picker, builder-chip
-  param editing, saved-filter inline UI. Deep param matching stays in the monolith
-  (needs hydrated/decoded blocks).
+- T12 P1/P2 (partial — DONE this pass, uncommitted, main-session review pending):
+  §4.3 full row anatomy (per-block family chips "Cat · TYPE", ~CPU meter+colour,
+  cloud/device presence chip, up to 3 tag pills, scenes) + inline rename (dbl-click
+  device-slot name → editor.renameStoredPreset, same path as the monolith) + §4.4
+  row context menu via the generic workbench ContextMenu (owner-gated by isOwner):
+  Load / Audition / Favorite-Unfavorite / Rename / cloud Upload+Download by sync
+  state — only backed actions (no Duplicate/Convert/Export/Delete — no workbench
+  backing). Long-press (touch/pen, longPress.ts) opens the same menu; mouse uses
+  right-click. New pure modules presetBrowserWorkbenchRowChips.ts +
+  presetBrowserWorkbenchMenu.ts (+ 17 tests). check 0 err, workbench vitest 335/335.
+  STILL DEFERRED: swipe-to-action rows (222px 3-col — long-press covers touch menu),
+  detail cloud card/version restore, generic picker, builder-chip param editing.
+  Deep param matching stays in the monolith (needs hydrated/decoded blocks).
 - Widget library curation: meterToggle et al. not in `doc.widgetLibrary` groups —
   consistent with existing curated subset, revisit with T13.
 
@@ -268,6 +277,32 @@ Remaining: T31 operator visual pass + fix round, P3 (T27 cross-block param
 writes, T29 layout import/export UI, T30 layout undo/redo), TabStack/
 WorkbenchHost token externalization, Layout Profiles (WITH OPERATOR), T35
 migration audit (last).
+
+**T29 layout/panel import-export UI — DONE (uncommitted, main-session review + commit
+pending). check 0 errors, vitest 602/602 (+9 new).**
+- New `src/lib/workbench/core/layoutPackage.ts` (exported from core/index.ts): portable,
+  versioned, self-contained packages. `exportLayoutPackage`/`exportPanelPackage` →
+  `{ kind:'workbench.layout.package'|'workbench.panel.package', version:1, schemaVersion:1,
+  layout|template }`. `importLayoutPackage`/`importPanelPackage` DEEP re-mint EVERY id via
+  `createWorkbenchId` (layout/template id, panels, widgets, groups, dock split+tabs node
+  ids) AND re-map `panel:<id>` widget-zone refs + group membership through the id map;
+  source ids reserved first (`reserveWorkbenchIds`). Layout import probes through
+  `repairWorkbenchDocument` + `validateWorkbenchDocument` before adoption. Typed
+  `LayoutPackageError` (wrong-kind/wrong-version/wrong-schema-version/malformed/
+  not-serializable/invalid-after-import). NOTE: kinds are framework-neutral (no `axis.`
+  prefix) to pass the frameworkBoundary guard; the pre-existing `packages.ts` (command-
+  based, top-level-id-only) is left untouched.
+- `WorkbenchLibraryDrawer.svelte`: Import·Export section (Import .json file input +
+  Export Current Layout), Saved Layouts·Export list (per-layout Export), Export button on
+  each panel-template row, inline status line (ok/error). Import ADDS the layout via
+  `layout.save` (NOT auto-applied — appears in the Layout Library). Blob download +
+  FileReader inlined. Feedback uses an inline `.aw-lib-status` line, NOT the parallel
+  agent's toast surface — every `setStatus` call is marked `// toast candidate` for a
+  later swap.
+- Tests: `core/test/layoutPackage.test.ts` (9) — round-trip zero-collision into a doc
+  holding the original, dock-node (split+tabs) re-mint, `panel:` zone + group re-map,
+  clean-validate, wrong-kind/version/schema/malformed rejection, panel-template round-trip,
+  cross-importer rejection, filename stem.
 
 **Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
 - `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
