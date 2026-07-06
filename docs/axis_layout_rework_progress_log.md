@@ -179,6 +179,30 @@ colW/cellH/gap/mapMode.
   reserved hamburger gap in bottom-nav mode; desktop rail = icon-only, expands on
   hover to show labels; FINISH tokenization (WorkbenchHost/TabStack → theme.ts
   defaults, drop guard tolerance).
+  **DONE (uncommitted, main-session review pending):**
+  1. Themed scrollbars: one `:global(.aw-root *)` block in WorkbenchHost
+     (`scrollbar-width:thin` + `scrollbar-color` + `::-webkit-scrollbar*`, 8px,
+     transparent track, `--aw-border-3` thumb → accent-mix on hover) — every
+     scrollable descendant inherits.
+  2. Bottom bar never h-scrolls: `.aw-bottombar` is always flex-row +
+     `overflow:hidden` + `min-width:0`; degrade order = Customize fixed leftmost
+     → nav (bottom mode) `flex:0 1` icon-only (label dropped, 46px, no
+     `overflow-x:auto`) → `[data-zone=bottom]` widgets `flex:1 1 min-width:0` fit
+     + shed into existing ⋯. Verified headless: bottombar scrollWidth == clientWidth
+     at 1600/1333/400.
+  3. Customize into bottom bar: new `.aw-bottom-customize` button leftmost in BOTH
+     nav modes (toggles editMode; icon-only <760px); EditRibbon reduced to the
+     EXPANDED overlay only (renders nothing when not editing); floating FAB gone.
+  4. Rail icon-only + hover-expand: outer `.aw-rail` keeps FIXED slot width
+     (`--aw-rail-w` 58px) so the dock never reflows; inner `.aw-rail-inner` is an
+     absolutely-positioned overlay that widens to `--aw-rail-w-expanded` (200px)
+     on hover (150ms intent timer) / focus-within (immediate); labels hidden at
+     rest, shown expanded. Geometry guard safe (WorkbenchHost not a dock file).
+  5. Tokenization FINISHED: theme.ts WORKBENCH_TOKEN_DEFAULTS is now the single
+     source (var(--host,#hex) shape + --aw-accent-indigo/--aw-widget-h/--aw-rail-w*),
+     injected via `rootStyle`; WorkbenchHost inline hex block removed; TabStack
+     tab chrome tokenized; noHexColors TOLERATED set REMOVED — guard enforces the
+     whole renderer with zero tolerance. check 0 err, vitest 565/565.
 - R9c dock openers: LEFT opener missing; RIGHT opener must overlay the actual
   right-region panels (sheet was consuming the whole screen). EXTENDED mid-flight
   (operator): region hierarchy → LEFT|RIGHT full height, TOP/MAIN/BOTTOM stacked

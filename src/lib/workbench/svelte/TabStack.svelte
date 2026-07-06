@@ -296,7 +296,7 @@
   .aw-pane-grip {
     flex: none;
     padding: 0 3px;
-    color: #5a5a63;
+    color: var(--aw-text-faint);
     font: 700 11px/1 var(--aw-font-mono);
     cursor: grab;
   }
@@ -317,7 +317,7 @@
     border: 0;
     border-radius: 7px;
     padding: 5px 10px;
-    color: #9a9aa3;
+    color: var(--aw-text-muted);
     background: transparent;
     cursor: pointer;
     font: 700 10px/1 var(--aw-font-ui);
@@ -329,8 +329,8 @@
     white-space: nowrap;
   }
   .aw-pane-tab.active {
-    color: #8fe3ea;
-    background: #1c2b2c;
+    color: color-mix(in srgb, var(--aw-accent) 68%, white);
+    background: color-mix(in srgb, var(--aw-accent) 15%, var(--aw-surface));
   }
   /* A lone panel label still reads as a pill so the head has a clear anchor. */
   .aw-pane-head.single .aw-pane-tab {
@@ -356,7 +356,7 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: #9a9aa3;
+    color: var(--aw-text-muted);
     cursor: pointer;
     font-size: 12px;
   }

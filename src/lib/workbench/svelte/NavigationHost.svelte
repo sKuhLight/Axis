@@ -212,19 +212,31 @@
     gap: 5px;
     min-width: 0;
   }
-  /* Bottom-nav mode (design §9): entries lay out horizontally, 52px wide, radius
-     10. This is viewport-independent — it fires wherever the active layout's
-     navigation.mode is `bottom`, driven by WorkbenchHost placing this nav in the
-     bottom bar. The entry component (owned elsewhere) is width:100%, so the
-     wrapper fixes the item width here. */
+  /* Bottom-nav mode (design §9): entries lay out horizontally. Directive 2 — the
+     bar must NEVER scroll horizontally, so this row never gets `overflow-x:auto`.
+     Entries are icon-only here (label hidden below) and shrink flexibly so a
+     handful of entries always fit; the container clips as a last resort rather
+     than paint a scrollbar. */
   .aw-nav[data-nav-mode='bottom'] {
     flex-direction: row;
     gap: 6px;
-    overflow-x: auto;
+    min-width: 0;
+    overflow: hidden;
+    flex-wrap: nowrap;
   }
   .aw-nav[data-nav-mode='bottom'] .aw-nav-entry {
-    width: 52px;
-    flex: none;
+    width: 46px;
+    flex: 0 1 46px;
+    min-width: 40px;
+  }
+  /* Icon-only in the bottom bar: the entry component's label is dropped so the
+     row stays compact and never overflows the bar (the glyph + tooltip carry it). */
+  .aw-nav[data-nav-mode='bottom'] :global(.axis-nav-entry .lbl) {
+    display: none;
+  }
+  .aw-nav[data-nav-mode='bottom'] :global(.axis-nav-entry) {
+    height: 44px;
+    gap: 0;
   }
   /* In the vertical rail a footer entry (e.g. account) sinks to the bottom;
      in the horizontal bottom nav it trails to the right instead. */
