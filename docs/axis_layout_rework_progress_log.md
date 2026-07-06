@@ -116,7 +116,7 @@ framework via data/adapter seams (plan task T35).
 Block Editor bottom ONLY (landed as the commit after `c021cd6`). "Layout Profiles"
 get built later, together with the operator — do not pre-build them.
 
-### Visual fix round — worklist (from the screenshot delta)
+### Visual fix round — worklist (from the screenshot delta) — ALL THREE LANDED
 
 - **V1 grid tiles**: FIXED (`9e72a93`). Root cause: mode resolution was fed the
   padding-stripped viewport content box, double-counting pane chrome (the §2.2
@@ -125,8 +125,12 @@ get built later, together with the operator — do not pre-build them.
   anatomy already matched — no CSS changes. NOTE for the operator: on a SHORT grid
   pane (≈<400px for SIZE M) auto→map is BY DESIGN; use a taller pane or SIZE S for
   full labeled tiles.
-- **V2 preset browser blank**: the docked Preset Browser panel renders an empty body;
-  design shows sources-with-counts, saved filters, query bar, rich rows. IN FLIGHT.
+- **V2 preset browser blank**: FIXED (`ac971d6`). Root cause: the full part embedded
+  the legacy PresetBrowser monolith, which never painted inside the dock body chain.
+  Now composes the design's 3-column split from the same snippets as the parts
+  (sources + query/list + detail), all live library data, honest empty states,
+  responsive column collapse. Deferred to cloud wiring (06 §9): cloud presence
+  views (In cloud/Needs upload/…) + saved-filters section in the sources column.
 - **V3 chrome + widget styling**: FIXED (`0cc30cd`). Single 36px pane header
   (grip + tab pills + mini actions + context menu) in TabStack, PanelHost body-only;
   bg-2 pane bodies + hairline; always-on EMPTY PANEL hint; Customize FAB + rail
