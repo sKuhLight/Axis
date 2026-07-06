@@ -222,7 +222,18 @@ menuPositionFromPointer + edit chrome during V13b.
   height (elementFromPoint fell through to the dock path) — bar zones stretch.
   NOTE for visual pass: in-place reorder WITHIN a group resolves as detach+
   regroup (design reference has no distinct gesture); zoom hotfix uninvolved.
-- V13e/f agent in flight; V13b agent launched after V13g/h landed (same files).
+- V13e+f LANDED (`f227f65`): docked PB search parity (caret-aware autocomplete:
+  block/param/value/tag contexts + accept-splice/tidy; FILTERS builder chips w/
+  addfilter→param→value picker chain) + detail parity (per-block param cards,
+  ≤12 non-default, matched-cell highlight, Load-params hydration, drag/dblclick
+  block-or-param → filters over application/x-axis-query payload). Pure modules:
+  presetBrowserWorkbenchSpecs/Autocomplete/Filters/Params + 34 tests (+2
+  controller editConds). **Stale-blocker note:** "deep param matching needs
+  hydrated blocks / stays monolith" was WRONG — the docked host already wires
+  library.paramsOf/hydrateParams; nothing data-blocked. Still monolith-only by
+  scope: Orama ranking, MiniGrid preview, version history, folders, mobile
+  slide-in sidebar.
+- V13b agent in flight (edit-chrome placement + UI-scale overlay audit).
 
 **Original round-13 worklist — operator visual pass round 2 (2026-07-06 ~20:35).
 Screenshots:
