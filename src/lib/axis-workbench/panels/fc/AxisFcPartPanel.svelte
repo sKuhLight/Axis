@@ -9,6 +9,7 @@
   import {
     axisFcActionLabel,
     axisFcCategoryColor,
+    axisFcSlotBounds,
     createAxisFcDataView,
     type AxisFcSide,
     type AxisFcSlotLike
@@ -121,15 +122,9 @@
     return axisFcActionLabel(runtimeSnapshot.model, side, cfg, runtimeSnapshot.edits);
   }
 
-  function slotRange(slot: AxisFcSlotLike): { lo: number; hi: number } {
-    const hiDefault = slot.type === 'preset' ? 511 : 127;
-    return { lo: slot.min ?? 0, hi: slot.max ?? hiDefault };
-  }
-
   function stepSlot(side: AxisFcSide, slot: AxisFcSlotLike, delta: number) {
-    const { lo, hi } = slotRange(slot);
-    const next = Math.max(lo, Math.min(hi, slotNumber(side, slot.i, slot.min ?? 0) + delta));
-    void axisFcWorkbenchRuntime.writeSlot(side, slot.i, next, cfg);
+    const { value } = axisFcSlotBounds(slot, slotNumber(side, slot.i, slot.min ?? 0) + delta);
+    void axisFcWorkbenchRuntime.writeSlot(side, slot.i, value, cfg);
   }
 
   function sceneOptions(slot: AxisFcSlotLike): number[] {
@@ -191,6 +186,9 @@
             </div>
           {/if}
           <span class="fc-spacer"></span>
+          {#if runtimeSnapshot.reading}
+            <span class="fc-reading" title="Reading switch state from the connected unit">reading…</span>
+          {/if}
           <span class="fc-devnote">{data.deviceNote}</span>
         </div>
       {/if}
@@ -207,6 +205,8 @@
                 class:on={layout.active}
                 class:master={layout.label === 'Master'}
                 class:assigned={layout.assigned}
+                aria-pressed={layout.active}
+                title={`${layout.label === 'Master' ? 'Master layout' : `Layout ${layout.label}`}${layout.assigned ? ' · has assigned switches' : ''}`}
                 onclick={() => axisFcWorkbenchController.selectLayout(layout.index)}
               >
                 {layout.label === 'Master' ? 'MASTER' : layout.label}
@@ -222,8 +222,14 @@
                 type="button"
                 class="fc-laychip"
                 class:on={config.active}
+                aria-pressed={config.active}
+                title={`Config ${config.label}`}
                 onclick={() => axisFcWorkbenchController.selectSwitch(config.index)}>{config.label}</button>
             {/each}
+            {#if data.configs.length > 64}
+              <span class="fc-more" title="This device exposes a flat FC config space with no decoded geometry"
+                >+{data.configs.length - 64} more</span>
+            {/if}
           </div>
         {/if}
       {/if}
@@ -257,6 +263,8 @@
                   class="fc-tile"
                   class:on={tile.active}
                   class:empty={tile.empty}
+                  aria-pressed={tile.active}
+                  title={`Switch ${tile.num}${tile.empty ? ' · unassigned' : ` · ${tile.tapText}`}`}
                   style={`--fc-led:${tile.ledHex ?? 'var(--aw-border)'}`}
                   onclick={() => axisFcWorkbenchController.selectSwitch(tile.index, snapshot.side)}
                 >
@@ -288,7 +296,7 @@
         <div class="fc-insp">
           <div class="fc-ihead">
             <span class="fc-ilab">SWITCH</span>
-            <span class="fc-inum">{(data.selectedSwitch ?? 0) + 1}</span>
+            <span class="fc-inum">{data.selectedSwitch == null ? '—' : data.selectedSwitch + 1}</span>
             {#if data.views.length > 1}
               <span class="fc-idiv"></span>
               <span class="fc-viewlab">VIEW</span>
@@ -299,10 +307,17 @@
               <span class="fc-present" title="Configured on the device (live read)">● on unit</span>
             {/if}
             {#if runtimeSnapshot.reading}
-              <span class="fc-reading">reading…</span>
+              <span class="fc-reading" title="Reading switch state from the connected unit">reading…</span>
             {/if}
           </div>
 
+          {#if data.hasGeometry && data.selectedSwitch == null}
+            <!-- inspector part shown without a selection: guide the user to the board (§3.1 hint) -->
+            <div class="fc-empty">
+              <strong>No switch selected</strong>
+              <span>Pick a switch on the board to edit its Tap &amp; Hold actions</span>
+            </div>
+          {:else}
           <div class="fc-ibody" class:solo={part !== 'inspector'}>
             {#if showIdentity}
               <!-- identity: label + LED color + mini-display (§3.4) -->
@@ -310,12 +325,14 @@
                 <div class="fc-sidehead">
                   <span class="fc-seclab">LABEL</span>
                   <span class="fc-spacer"></span>
-                  <div class="fc-seg small">
+                  <div class="fc-seg small" role="group" aria-label="Label side">
                     {#each SIDES as side (side)}
                       <button
                         type="button"
                         class="fc-segbtn"
                         class:on={snapshot.side === side}
+                        aria-pressed={snapshot.side === side}
+                        title={`Edit the ${side} label`}
                         onclick={() => axisFcWorkbenchController.selectSide(side)}>{side.toUpperCase()}</button>
                     {/each}
                   </div>
@@ -355,6 +372,8 @@
                           type="button"
                           class="fc-segbtn"
                           class:on={fieldNumber(`${snapshot.side}Display`) === mode.value}
+                          aria-pressed={fieldNumber(`${snapshot.side}Display`) === mode.value}
+                          title={`Mini-display: ${mode.label}`}
                           onclick={() =>
                             axisFcWorkbenchRuntime.writeField(`${snapshot.side}Display`, mode.value, cfg)}
                           >{mode.label}</button>
@@ -371,6 +390,7 @@
               {/if}
             {/each}
           </div>
+          {/if}
         </div>
       {/if}
     {/if}
@@ -384,6 +404,8 @@
       class="fc-viewchip"
       class:on={view.active}
       class:assigned={view.assigned}
+      aria-pressed={view.active}
+      title={`View ${view.label}${view.assigned ? ' · has assigned switches' : ''}`}
       onclick={() => axisFcWorkbenchController.selectView(view.index)}
     >
       {view.label}
@@ -413,6 +435,8 @@
               type="button"
               class="fc-chip"
               class:on={fieldNumber(`${which}Category`) === cat.value}
+              aria-pressed={fieldNumber(`${which}Category`) === cat.value}
+              title={`${which.toUpperCase()} category: ${cat.label}`}
               style={`--fc-cat:${axisFcCategoryColor(cat.label) ?? 'var(--aw-accent)'}`}
               onclick={() => axisFcWorkbenchRuntime.setCategory(which, cat.value, cfg)}>{cat.label}</button>
           {/each}
@@ -439,6 +463,8 @@
               type="button"
               class="fc-chip accent"
               class:on={fieldNumber(`${which}Function`) === f.ord}
+              aria-pressed={fieldNumber(`${which}Function`) === f.ord}
+              title={`Function: ${f.name}`}
               onclick={() => axisFcWorkbenchRuntime.writeField(`${which}Function`, f.ord, cfg)}>{f.name}</button>
           {/each}
         </div>
@@ -482,6 +508,8 @@
                   type="button"
                   class="fc-chip accent"
                   class:on={slotNumber(which, slot.i) === oi}
+                  aria-pressed={slotNumber(which, slot.i) === oi}
+                  title={`${slot.role}: ${option}`}
                   onclick={() => axisFcWorkbenchRuntime.writeSlot(which, slot.i, oi, cfg)}>{option}</button>
               {/each}
             </div>
@@ -495,6 +523,8 @@
                   type="button"
                   class="fc-mini"
                   class:on={slotNumber(which, slot.i) === ci}
+                  aria-pressed={slotNumber(which, slot.i) === ci}
+                  title={`Channel ${channel}`}
                   onclick={() => axisFcWorkbenchRuntime.writeSlot(which, slot.i, ci, cfg)}>{channel}</button>
               {/each}
             </div>
@@ -508,23 +538,26 @@
                   type="button"
                   class="fc-mini"
                   class:on={slotNumber(which, slot.i, slot.min ?? 1) === scene}
+                  aria-pressed={slotNumber(which, slot.i, slot.min ?? 1) === scene}
+                  title={`${slot.role} ${scene}`}
                   onclick={() => axisFcWorkbenchRuntime.writeSlot(which, slot.i, scene, cfg)}>{scene}</button>
               {/each}
             </div>
           </div>
         {:else}
-          {@const range = slotRange(slot)}
+          {@const bounds = axisFcSlotBounds(slot, slotNumber(which, slot.i, slot.min ?? 0))}
+          {@const wide = bounds.hi - bounds.lo > 32}
           <div class="fc-inline">
             <span class="fc-inlinelab">{slot.role}{slot.type === 'block' ? ' (block id)' : ''}</span>
-            <div class="fc-stepper">
-              {#if range.hi - range.lo > 32}
-                <button type="button" class="fc-step" onclick={() => stepSlot(which, slot, -10)}>«</button>
+            <div class="fc-stepper" title={`Range ${bounds.lo}–${bounds.hi}`}>
+              {#if wide}
+                <button type="button" class="fc-step" disabled={bounds.atMin} aria-label="−10" title="−10" onclick={() => stepSlot(which, slot, -10)}>«</button>
               {/if}
-              <button type="button" class="fc-step" onclick={() => stepSlot(which, slot, -1)}>−</button>
-              <span class="fc-stepval">{slotNumber(which, slot.i, slot.min ?? 0)}</span>
-              <button type="button" class="fc-step" onclick={() => stepSlot(which, slot, 1)}>+</button>
-              {#if range.hi - range.lo > 32}
-                <button type="button" class="fc-step" onclick={() => stepSlot(which, slot, 10)}>»</button>
+              <button type="button" class="fc-step" disabled={bounds.atMin} aria-label="−1" title="−1" onclick={() => stepSlot(which, slot, -1)}>−</button>
+              <span class="fc-stepval">{bounds.value}</span>
+              <button type="button" class="fc-step" disabled={bounds.atMax} aria-label="+1" title="+1" onclick={() => stepSlot(which, slot, 1)}>+</button>
+              {#if wide}
+                <button type="button" class="fc-step" disabled={bounds.atMax} aria-label="+10" title="+10" onclick={() => stepSlot(which, slot, 10)}>»</button>
               {/if}
             </div>
           </div>
@@ -576,6 +609,15 @@
   .fc-spacer {
     flex: 1;
     min-width: 6px;
+  }
+
+  /* keyboard focus ring — the panel is fully operable from the keyboard (T18-adjacent) */
+  .fc-part :is(button, input):focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+  }
+  .fc-part .fc-swatch:focus-visible {
+    outline-offset: 3px;
   }
 
   /* ── header strip (§3.1) ─────────────────────────────────────────────── */
@@ -664,10 +706,20 @@
     font: 700 11px/1 var(--aw-font-mono);
     letter-spacing: 0.08em;
   }
+  .fc-laychip:hover:not(.on) {
+    border-color: var(--aw-border-3);
+    color: var(--aw-text);
+  }
   .fc-laychip.on {
     background: var(--aw-accent);
     border-color: var(--aw-accent);
     color: var(--aw-accent-ink);
+  }
+  .fc-more {
+    flex: none;
+    align-self: center;
+    font: 600 10px/1 var(--aw-font-mono);
+    color: var(--aw-text-muted);
   }
   .fc-dot {
     position: absolute;
@@ -737,6 +789,10 @@
   .fc-viewchip.assigned {
     color: var(--aw-text-2);
   }
+  .fc-viewchip:hover:not(.on) {
+    border-color: var(--aw-border-3);
+    color: var(--aw-text);
+  }
   .fc-viewchip.on {
     background: var(--aw-accent);
     border-color: var(--aw-accent);
@@ -766,6 +822,9 @@
     transition:
       border-color 0.12s,
       box-shadow 0.12s;
+  }
+  .fc-tile:hover:not(.on) {
+    border-color: var(--aw-border-3);
   }
   .fc-tile.empty {
     background: var(--aw-bg-2);
@@ -986,6 +1045,9 @@
     cursor: pointer;
     padding: 0;
   }
+  .fc-swatch:hover:not(.on) {
+    border-color: var(--aw-border-3);
+  }
   .fc-swatch.on {
     border-color: #fff;
     box-shadow: 0 0 0 2px var(--aw-accent);
@@ -1020,6 +1082,9 @@
     padding: 0 9px;
     font: 700 9px/1 var(--aw-font-mono);
     letter-spacing: 0.08em;
+  }
+  .fc-segbtn:hover:not(.on) {
+    color: var(--aw-text);
   }
   .fc-segbtn.on {
     background: var(--aw-accent);
@@ -1085,6 +1150,10 @@
     white-space: nowrap;
     cursor: pointer;
   }
+  .fc-chip:hover:not(.on) {
+    border-color: var(--aw-border-3);
+    color: var(--aw-text);
+  }
   .fc-chip.on {
     background: var(--fc-cat);
     border-color: var(--fc-cat);
@@ -1105,6 +1174,10 @@
     color: var(--aw-text-2);
     font: 700 12px/1 var(--aw-font-mono);
     cursor: pointer;
+  }
+  .fc-mini:hover:not(.on) {
+    border-color: var(--aw-border-3);
+    color: var(--aw-text);
   }
   .fc-mini.on {
     background: var(--aw-accent);
@@ -1144,6 +1217,14 @@
     font: 600 13px/1 var(--aw-font-mono);
     cursor: pointer;
   }
+  .fc-step:hover:not(:disabled) {
+    border-color: var(--aw-border-3);
+    color: var(--aw-text);
+  }
+  .fc-step:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
   .fc-stepval {
     min-width: 38px;
     text-align: center;
@@ -1161,6 +1242,9 @@
     cursor: pointer;
     transition: background 0.15s;
     padding: 0;
+  }
+  .fc-pill:hover:not(.on) {
+    background: var(--aw-border-3);
   }
   .fc-pill.on {
     background: var(--aw-accent);

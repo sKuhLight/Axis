@@ -5,6 +5,7 @@ import {
   axisFcCategoryColor,
   axisFcDeviceForSwitchCount,
   axisFcLayoutLabel,
+  axisFcSlotBounds,
   createAxisFcDataView,
   type AxisFcModelLike
 } from '../fc/fcWorkbenchData';
@@ -204,6 +205,32 @@ describe('FC Workbench data view', () => {
     expect(third).toMatchObject({ config: 14, label: 'Rhythm', active: true, ledHex: '#35c9d6' });
     // hold-only assignment still counts as non-empty
     expect(fourth).toMatchObject({ config: 15, empty: false, holdText: 'Preset' });
+  });
+
+  it('clamps slot steppers to the function-slot range and flags the bounds (§3.5)', () => {
+    // default range: preset 0–511, everything else 0–127
+    expect(axisFcSlotBounds({ i: 0, role: 'Preset', type: 'preset' }, 600)).toMatchObject({
+      value: 511,
+      lo: 0,
+      hi: 511,
+      atMin: false,
+      atMax: true
+    });
+    expect(axisFcSlotBounds({ i: 0, role: 'Value', type: 'number' }, 200)).toMatchObject({ value: 127, atMax: true });
+    expect(axisFcSlotBounds({ i: 0, role: 'Value', type: 'number' }, -5)).toMatchObject({ value: 0, atMin: true, atMax: false });
+    // explicit min/max from the decoded slot def wins
+    expect(axisFcSlotBounds({ i: 0, role: 'Low', type: 'number', min: 4, max: 8 }, 3)).toMatchObject({
+      value: 4,
+      lo: 4,
+      hi: 8,
+      atMin: true
+    });
+    expect(axisFcSlotBounds({ i: 0, role: 'Low', type: 'number', min: 4, max: 8 }, 6)).toMatchObject({
+      atMin: false,
+      atMax: false
+    });
+    // non-finite input falls back to the low bound instead of NaN
+    expect(axisFcSlotBounds({ i: 0, role: 'Value', type: 'number' }, Number.NaN).value).toBe(0);
   });
 
   it('flags assigned layouts and views from read-back and session edits', () => {
