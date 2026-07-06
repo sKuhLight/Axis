@@ -258,6 +258,28 @@ is probe-verified in tests only), group member drag-out feel + the in-group
 reorder note above, bottom-bar drops, docked-PB autocomplete/filters/param-
 listing against the monolith side-by-side, PB reopen from the rail.
 
+**ROUND 14 — operator visual pass 3 (2026-07-06 ~23:30), IN FLIGHT.
+Screenshots: ~/Bilder/Bildschirmfotos/Bildschirmfoto_20260706_232516.png (design:
+group w/ dashed border around the WHOLE group), _232649.png (design: drag-into-
+group shows a dashed placeholder where the widget will land), _232736.png (ours:
+group not visually distinct), _232825.png (ours: drag-into-group only outlines
+the group, no insertion indicator).**
+- V14a **group visual parity**: the dashed/dotted border must wrap the WHOLE
+  group (grip left, group buttons top-right) like the design; our groups are
+  indistinguishable from loose widgets in edit mode.
+- V14b **group drop/reorder insertion indicator**: dragging INTO a group must
+  show where the widget will land (design shows a dashed placeholder at the
+  insertion point); rearranging WITHIN a group needs the same position feedback.
+  (Round-13 note said in-group reorder = detach+regroup with no distinct
+  gesture — operator expects visible in-group placement, so build it.)
+- V14c **bottom-nav mode leaves the rail visible**: with "Use Bottom Navigation"
+  on, the full sidebar rail still renders — the rail must hide when bottom nav
+  is active.
+- V14d **mobile bottom-nav UX broken**: on mobile the bottom nav hides behind a
+  hamburger + bottom flyout — "completely against any use of a bottom based
+  nav"; the bar must be persistently visible on mobile. Bottom-nav entries must
+  be icon-only (currently truncated label fragments show).
+
 **Original round-13 worklist — operator visual pass round 2 (2026-07-06 ~20:35).
 Screenshots:
 ~/Bilder/Bildschirmfotos/Bildschirmfoto_20260706_203127.png (light-theme library
