@@ -61,6 +61,9 @@ function persist(doc: WorkbenchDocument): void {
 export const axisWorkbenchController = createWorkbenchController(mem, {
   onChange: persist
 });
+// The controller repairs the document it was constructed with; adopt the repaired copy so the
+// cache push in axisWorkbenchInit never re-uploads an unrepaired document.
+mem = axisWorkbenchController.document;
 registerAxisWorkbenchBindings(axisWorkbenchController.bindingRegistry);
 
 export const axisWorkbenchDoc = (): WorkbenchDocument => mem;
@@ -68,9 +71,11 @@ export const axisWorkbenchRev = (): number => rev;
 
 export function axisWorkbenchApplyRemote(doc: unknown): void {
   const next = normalizeAxisWorkbenchDocument(doc);
-  mem = next;
   axisWorkbenchController.setDocument(next, { notify: false });
-  cacheSave(next);
+  // setDocument repairs (dedupes node ids, normalizes shapes) — keep the repaired doc, not `next`,
+  // so the cache never re-poisons the next boot with an unrepaired document.
+  mem = axisWorkbenchController.document;
+  cacheSave(mem);
   rev += 1;
 }
 

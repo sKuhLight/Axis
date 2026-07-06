@@ -42,6 +42,32 @@ export function createIdGenerator(options: IdGeneratorOptions = {}): WorkbenchId
   };
 }
 
-const runtimeGenerator = createIdGenerator();
+const runtimeCounters: Record<string, number> = {};
 
-export const createWorkbenchId = (prefix: WorkbenchIdPrefix): string => runtimeGenerator.next(prefix);
+// Matches ids minted by createIdGenerator (`tabs-0001`, `split-0012`, …).
+const GENERATED_ID_PATTERN = /^([a-z0-9_-]+?)-(\d{4,})$/;
+
+/**
+ * Bump the session id counters past any generated-looking ids that already exist in a loaded
+ * document, so `createWorkbenchId` never re-mints one of them. The runtime counters are
+ * module-scoped and reset on every page load; without this, a persisted `tabs-0001` from a
+ * previous session collides with the first stack created in the next one (duplicate keyed-each
+ * ids crash the dock render).
+ */
+export function reserveWorkbenchIds(ids: Iterable<string>): void {
+  for (const id of ids) {
+    if (typeof id !== 'string') continue;
+    const match = GENERATED_ID_PATTERN.exec(id);
+    if (!match) continue;
+    const key = match[1];
+    const value = Number(match[2]);
+    if (!Number.isFinite(value)) continue;
+    if ((runtimeCounters[key] ?? 0) < value) runtimeCounters[key] = value;
+  }
+}
+
+export const createWorkbenchId = (prefix: WorkbenchIdPrefix): string => {
+  const key = cleanPrefix(prefix);
+  runtimeCounters[key] = (runtimeCounters[key] ?? 0) + 1;
+  return `${key}-${String(runtimeCounters[key]).padStart(4, '0')}`;
+};
