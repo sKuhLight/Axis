@@ -179,15 +179,16 @@ colW/cellH/gap/mapMode.
   focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
   state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
   mobile sheets → T21/T23).
-**Round 10 (deferral cleanup) — IN FLIGHT (4 opus + e2e realignment):**
-- R10a PROFILE switcher UI (ribbon segmented control over setAxisProfileOverride).
-- R10b generic workbench toast surface (toasts.ts + WorkbenchToasts in Host) wired
-  to layout-apply / save-to-library.
-- R10c T29 layout import/export (core layoutPackage w/ full id re-mint via
-  createWorkbenchId + LibraryDrawer UI).
-- R10d T12 leftovers: PB full row anatomy (block chips/CPU/presence), inline
-  rename via the monolith's path, row context menus (owner-gated, real actions
-  only); swipe optional.
+**Round 10 (deferral cleanup) — ALL FOUR LANDED.** Unit 610/610, check 0 errors.
+- `8257832` R10a PROFILE switcher (pinned vs Auto w/ resolved hint).
+- `57df36f` R10b generic toast surface (queue w/ injectable clock; layout-apply/
+  copy/save-to-library wired from action layers). NOTE: commit 8257832 briefly
+  referenced toasts before 57df36f added them (parallel-edit wart, one commit).
+- `7c728a4` R10c T29 import/export (deep id re-mint; legacy packages.ts shallow
+  re-key flagged as follow-up).
+- `0eb1c2b` R10d PB row anatomy + owner-gated context menus (real actions only;
+  222px swipe stack deferred, long-press covers touch).
+Still in flight: E2E realignment (e2e/** only).
 After this wave the board is ONLY: operator verification, Layout Profiles
 (TOGETHER), hardware-gated items, T35 audit.
 
