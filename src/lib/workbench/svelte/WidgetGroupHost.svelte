@@ -249,6 +249,9 @@
 <ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Widget group actions" onClose={() => (menuOpen = false)} />
 
 <style>
+  /* Design AxisGroup module chrome: bg --aw-bg-2, border 1px --aw-border, radius
+     10, padding 0 2px, overflow visible so the grip + edit bubbles float above.
+     The module is the ONLY chrome — members render borderless inside it (V14a). */
   .aw-widget-group {
     position: relative;
     min-width: 0;
@@ -261,6 +264,20 @@
     border: 1px solid var(--aw-border);
     border-radius: 10px;
     background: var(--aw-bg-2);
+  }
+  /* In edit mode the WHOLE group reads as one bounded unit: a dashed accent
+     border around the module (design edit-mode group treatment — the dashed teal
+     box in the reference). Members inside carry no separate dashed chrome, so the
+     group no longer looks like a row of loose widgets (V14a). */
+  :global(.aw-root.aw-editing) .aw-widget-group {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--aw-accent) 55%, var(--aw-border));
+  }
+  /* Hover-during-drag: while a drag hovers a group, the border swaps to full
+     accent (design border-color swap from --aw-border to --aw-accent when an
+     insert index is active). */
+  :global(.aw-root.aw-dragging-widget) .aw-widget-group:hover {
+    border-color: var(--aw-accent);
   }
   .aw-group-grip {
     align-self: stretch;

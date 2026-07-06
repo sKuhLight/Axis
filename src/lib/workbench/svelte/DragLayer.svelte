@@ -34,6 +34,7 @@
         class:tab={drag.kind === 'panel' && drag.previewKind === 'tab'}
         class:split={drag.kind === 'panel' && drag.previewKind === 'split'}
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
+        class:placeholder={drag.kind === 'widget' && drag.previewKind === 'placeholder'}
         class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
         style="
           left:{drag.previewRect.left / zoom}px;
@@ -144,6 +145,15 @@
   .aw-drop-preview.group {
     border-style: solid;
     background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+  }
+  /* In-group insert slot (design AxisGroup `indStyle`): a widget-sized dashed
+     box spliced at the computed member index, previewing exactly where the drop
+     lands between members. Distinct from the thin `.insert` zone-gap line. */
+  .aw-drop-preview.placeholder {
+    border: 1.5px dashed var(--aw-accent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    box-shadow: none;
   }
   @keyframes awPreviewIn {
     from { opacity: 0; transform: scale(0.992); }

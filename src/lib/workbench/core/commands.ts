@@ -87,7 +87,19 @@ export type WorkbenchCommand =
   | { type: 'widget.hide'; widgetIds: string[] }
   | { type: 'widget.resize'; widgetId: string; size: WidgetSize }
   | { type: 'widget.state'; widgetId: string; state: JsonObject }
-  | { type: 'widget.group'; widgetIds: string[]; groupId?: string; zone?: WidgetZoneId; index?: number }
+  | {
+      type: 'widget.group';
+      widgetIds: string[];
+      groupId?: string;
+      zone?: WidgetZoneId;
+      index?: number;
+      // Explicit member sequence for the resulting group. When omitted the
+      // reducer orders members by their current zone `order` (the create/append
+      // default). When supplied it is used verbatim — this expresses a positional
+      // in-group insert or an in-group reorder (V14b): the caller has already
+      // computed where the moved member lands between its siblings.
+      memberOrder?: string[];
+    }
   | { type: 'widget.ungroup'; groupId: string }
   | { type: 'zone.ensure'; zone: WidgetZoneState }
   | { type: 'zone.rename'; zoneId: WidgetZoneId; label: string }
