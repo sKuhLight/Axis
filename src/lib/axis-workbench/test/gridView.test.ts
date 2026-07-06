@@ -15,7 +15,9 @@ import {
   readAxisBlockSize,
   readAxisGridMode,
   resolveAxisGridMetrics,
-  stepAxisBlockSize
+  resolveAxisGridPresentation,
+  stepAxisBlockSize,
+  type AxisGridView
 } from '../gridView';
 
 const widget = (type: string, zone = 'gridbar', state?: Record<string, string>): WidgetInstance => ({
@@ -204,5 +206,80 @@ describe('resolveAxisGridMetrics', () => {
       expect(met.colCapH).toBe(58);
       expect(met.mapColMax).toBe(AXIS_GRID_MAP_COL_MAX); // 42, not the ~30 the stripped box yielded
     });
+  });
+});
+
+describe('resolveAxisGridPresentation (view-active NEVER consults editor.isMobile)', () => {
+  const gview = (mode: 'auto' | 'full' | 'map', size: 'S' | 'M' | 'L' = 'M'): Pick<AxisGridView, 'mode' | 'size'> => ({
+    mode,
+    size
+  });
+
+  // The T31 / Round-9 bug: a window under the old shell's 1366 boundary sets editor.isMobile=true. When a
+  // workbench view is active, that flag must be IGNORED — the presentation derives purely from the pane
+  // metrics. These cases pin the 1333px-window scenario: a sub-1366 window with a comfortable grid pane.
+  describe('1333px window (isMobile=true) with a view active', () => {
+    // pane ~950 wide → auto resolves to full/map (never mobile); the Map chip resolves to map at any pane.
+    const mapMetrics = resolveAxisGridMetrics(gview('map'), 950, 520).mode; // 'map'
+    const autoMetrics = resolveAxisGridMetrics(gview('auto'), 950, 520).mode; // full or map by pane
+
+    it('Map chip → map mode, NOT the legacy pager, even though isMobile is true', () => {
+      const p = resolveAxisGridPresentation({ view: gview('map'), metricsMode: mapMetrics, isMobile: true });
+      expect(p.mapMode).toBe(true);
+      expect(p.paged).toBe(false); // the whole point: no legacy-mob pager
+      expect(p.paneMobile).toBe(false);
+      expect(p.fixedTile).toBe(false);
+    });
+
+    it('Auto → full or map by the pane (never the legacy-mob pager) while isMobile is true', () => {
+      expect(autoMetrics === 'full' || autoMetrics === 'map').toBe(true); // ~950×520 pane is above the 620 tier
+      const p = resolveAxisGridPresentation({ view: gview('auto'), metricsMode: autoMetrics, isMobile: true });
+      expect(p.paged).toBe(false);
+      expect(p.paneMobile).toBe(false);
+      if (autoMetrics === 'full') expect(p.mapMode).toBe(false);
+      else expect(p.mapMode).toBe(true);
+    });
+
+    it('explicit Full chip → fixed-tile pan, not the pager, while isMobile is true', () => {
+      const fullMetrics = resolveAxisGridMetrics(gview('full'), 950, 520).mode; // 'full'
+      const p = resolveAxisGridPresentation({ view: gview('full'), metricsMode: fullMetrics, isMobile: true });
+      expect(p.fixedTile).toBe(true);
+      expect(p.paged).toBe(false);
+      expect(p.mapMode).toBe(false);
+    });
+  });
+
+  it('explicit Map at a TINY pane stays map (the user chose it) — never degrades to the pager', () => {
+    // even a sub-620 pane: 'map' pins map, so metricsMode is 'map' regardless of size.
+    const tinyMap = resolveAxisGridMetrics(gview('map'), 400, 300).mode;
+    expect(tinyMap).toBe('map');
+    const p = resolveAxisGridPresentation({ view: gview('map'), metricsMode: tinyMap, isMobile: true });
+    expect(p.mapMode).toBe(true);
+    expect(p.paged).toBe(false);
+  });
+
+  it('AUTO at a sub-620 pane reaches the workbench mobile tier (paged), on any window width', () => {
+    const mobileMetrics = resolveAxisGridMetrics(gview('auto'), 500, 500).mode; // 'mobile'
+    expect(mobileMetrics).toBe('mobile');
+    // wide desktop window (isMobile=false): still paged, because the PANE is in the mobile tier.
+    const wide = resolveAxisGridPresentation({ view: gview('auto'), metricsMode: mobileMetrics, isMobile: false });
+    expect(wide.paged).toBe(true);
+    expect(wide.paneMobile).toBe(true);
+    // narrow window (isMobile=true): identical — driven by the pane, not the window.
+    const narrow = resolveAxisGridPresentation({ view: gview('auto'), metricsMode: mobileMetrics, isMobile: true });
+    expect(narrow).toEqual(wide);
+  });
+
+  it('old shell (view == null) keeps window-driven paging via isMobile', () => {
+    const mobile = resolveAxisGridPresentation({ view: null, metricsMode: null, isMobile: true });
+    expect(mobile.paged).toBe(true);
+    expect(mobile.paneMobile).toBe(false); // paneMobile is workbench-only
+    expect(mobile.mapMode).toBe(false);
+    expect(mobile.fixedTile).toBe(false);
+
+    const desktop = resolveAxisGridPresentation({ view: null, metricsMode: null, isMobile: false });
+    expect(desktop.paged).toBe(false);
+    expect(desktop.mapMode).toBe(false);
+    expect(desktop.fixedTile).toBe(false);
   });
 });
