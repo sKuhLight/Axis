@@ -123,6 +123,17 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
+**Round 6 (final push, operator: "use all remaining budget") — IN FLIGHT (3 opus):**
+- R6a T16/T17/T20: hex→token sweep in EditRibbon/WidgetZone/LibraryDrawer + no-hex
+  guard test, Axis var fallbacks → theme adapter, invalid-drop preview styling
+  (DragLayer/drag.ts). WorkbenchHost hex line handed to R6c.
+- R6b T28: reducer tab-stack finder extraction + conservative repair dedupe
+  (invariants refactor may be skipped — behavior-neutral is the acceptance).
+- R6c T22: bottom navigation mode — schema 'bottom' + renderer (NavigationHost/
+  WorkbenchHost) consuming layout.navigation.mode (presets already store it),
+  active tint works in both modes, phone drawer preserved.
+If cut off: check each agent's report, review diffs, commit per chunk as before.
+
 **Round 5 (operator report ~15:24, final batch of the session) — IN FLIGHT (2 opus
 agents):**
 - W1 grid: FIXED (`00c1593`). Scrollbar was HORIZONTAL: fixedTile engaged for
