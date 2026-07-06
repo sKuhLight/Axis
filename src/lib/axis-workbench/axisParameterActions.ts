@@ -1,5 +1,8 @@
 import {
+  WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
   createCustomPanelFromParameterSourcesCommands,
+  isDockRegionId,
+  parseWorkbenchParameterSource,
   type JsonObject,
   type WorkbenchActionHandler,
   type WorkbenchParameterSource
@@ -7,6 +10,7 @@ import {
 import { axisParameterSourcesFromCurrentEditor } from './axisParameterSources';
 
 export const AXIS_PIN_SELECTED_PARAMETERS_ACTION = 'axis.pinSelectedParameters';
+export const AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION = WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION;
 
 export type AxisParameterSourceProvider = () => WorkbenchParameterSource[] | Promise<WorkbenchParameterSource[]>;
 
@@ -63,6 +67,25 @@ export function createAxisPinSelectedParametersAction(
           panelType: 'axis.customPanel',
           title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(sources),
           region: 'right'
+        })
+      );
+    }
+  };
+}
+
+export function createAxisParameterSourceEdgeDropAction(): WorkbenchActionHandler {
+  return {
+    id: AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION,
+    run: async ({ controller, args }) => {
+      const raw = typeof args?.source === 'string' ? args.source : '';
+      const source = parseWorkbenchParameterSource(raw);
+      if (!source) return;
+      const region = typeof args?.region === 'string' && isDockRegionId(args.region) ? args.region : 'right';
+      controller.dispatchMany(
+        createCustomPanelFromParameterSourcesCommands(controller.document, [source], {
+          panelType: 'axis.customPanel',
+          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : source.label,
+          region
         })
       );
     }

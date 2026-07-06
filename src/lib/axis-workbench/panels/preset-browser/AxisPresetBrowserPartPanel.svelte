@@ -90,16 +90,27 @@
     </header>
 
     {#if part === 'sources'}
+      <div class="axis-source-total">
+        <strong>{data.entries.length}</strong>
+        <span>indexed presets</span>
+      </div>
       <div class="axis-part-list">
         {#each data.sources as source}
           <button type="button" class:active={data.activeSourceId === source.id} onclick={() => selectSource(source.id)}>
-            <span>{source.label}</span>
+            <span class="source-main">
+              <strong>{source.label}</strong>
+              <i style:width={`${data.entries.length ? Math.max(4, (source.count / data.entries.length) * 100) : 0}%`}></i>
+            </span>
             <em>{source.count}</em>
           </button>
         {/each}
       </div>
     {:else if part === 'list'}
       {#if data.visibleEntries.length}
+        <div class="axis-list-summary">
+          <span>{data.visibleEntries.length} presets</span>
+          <strong>{data.sources.find((source) => source.id === data.activeSourceId)?.label ?? data.activeSourceId}</strong>
+        </div>
         <div class="axis-preset-list" role="listbox" aria-label="Preset list">
           {#each data.visibleEntries.slice(0, 120) as entry}
             <button
@@ -116,7 +127,10 @@
                 <strong>{entry.name}</strong>
                 <small>{entry.model || `${entry.blockCount} blocks`}</small>
               </span>
-              <span class="preset-meta">{entry.sceneCount} scn</span>
+              <span class="preset-meta">
+                <i>{entry.sceneCount} scn</i>
+                <i>{entry.blockCount} blk</i>
+              </span>
             </button>
           {/each}
         </div>
@@ -133,6 +147,12 @@
             <span>{data.selectedEntry.number == null ? data.selectedEntry.sourceLabel : `Preset ${String(data.selectedEntry.number).padStart(3, '0')}`}</span>
             <h3>{data.selectedEntry.name}</h3>
             {#if data.selectedEntry.model}<p>{data.selectedEntry.model}</p>{/if}
+          </div>
+
+          <div class="detail-status">
+            <span class:on={selectedDetail?.gridLoaded}>Grid</span>
+            <span class:on={selectedDetail?.paramsLoaded}>Params</span>
+            <span class:on={(selectedDetail?.versions.length ?? 0) > 0}>Versions</span>
           </div>
 
           <dl>
@@ -239,6 +259,34 @@
     display: grid;
     gap: 8px;
   }
+  .axis-source-total,
+  .axis-list-summary {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+    border-radius: 8px;
+    padding: 0 11px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
+  }
+  .axis-source-total strong,
+  .axis-list-summary strong {
+    color: var(--text);
+    font: 900 18px/1 var(--font-mono);
+  }
+  .axis-source-total span,
+  .axis-list-summary span {
+    color: var(--textdim);
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .axis-list-summary strong {
+    font-size: 12px;
+    text-transform: uppercase;
+  }
   button {
     height: 34px;
     border: 1px solid var(--border);
@@ -256,6 +304,26 @@
     justify-content: space-between;
     gap: 10px;
     padding: 0 10px;
+  }
+  .source-main {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    flex: 1;
+  }
+  .source-main strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .source-main i {
+    height: 3px;
+    max-width: 100%;
+    border-radius: 999px;
+    background: var(--accent);
   }
   .axis-part-list em {
     color: var(--textdim);
@@ -301,8 +369,15 @@
   }
   .preset-main small,
   .preset-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
     color: var(--textdim);
     font-size: 10px;
+  }
+  .preset-meta i {
+    font-style: normal;
   }
   .axis-preset-list button.fav .preset-number {
     color: var(--accent);
@@ -331,6 +406,27 @@
     margin: 0;
     color: var(--textdim);
     font-size: 12px;
+  }
+  .detail-status {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .detail-status span {
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--textdim);
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .detail-status span.on {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+    color: var(--accent);
   }
   dl {
     margin: 0;
