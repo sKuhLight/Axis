@@ -233,7 +233,30 @@ menuPositionFromPointer + edit chrome during V13b.
   library.paramsOf/hydrateParams; nothing data-blocked. Still monolith-only by
   scope: Orama ranking, MiniGrid preview, version history, folders, mobile
   slide-in sidebar.
-- V13b agent in flight (edit-chrome placement + UI-scale overlay audit).
+- V13b LANDED (`b0824c6`): the misplaced ⋯/×/grip clusters were negative
+  absolute offsets (top:-13/right:-12) escaping the widget/group box — in
+  28-38px bar chips the cluster cleared the chip and sat on neighbours. Now
+  inset top-right inside the widget's own box (token backdrop, collapses to a
+  single ⋯ at compact/mini, 18→16px), groups follow the same model (grip stays
+  in-flow per AxisGroup.dc.html); panel-header + floating chrome were already
+  in-flow. UI-scale audit: ContextMenu had the SAME zoom double-application as
+  the drag layer (fixed overlay at raw visual coords) — self-calibrates via the
+  scrim probe now, identity at 100%; 7 tests for the placement math. DragLayer
+  clean; no other offenders in the workbench overlay set.
+- E2E-CAUGHT HOTFIX (`e91396f`): V13c's square rest-state entries (42px) in a
+  rail whose hover/focus expansion kept 50px rows → pressing an entry expanded
+  the rail on focus and shifted entries down mid-click → mouseup landed off the
+  button, click never fired, nav docking silently dead (7 specs × 2 browsers
+  red: 03-dock/04-nav/06-persistence all funnel through clickNav). Expanded
+  rows now share the rest-state height. Bisect: 813da8d green → 3840fd1 red.
+
+**ROUND 13 COMPLETE — suite after: check 0 errors, unit 717/717 (was 662),
+e2e 34/34 chromium+firefox.** Round-13 verification debt for the next visual
+pass: drawer three-view UX vs operator expectation (V13a), square rail at all
+themes/scales, edit-chrome anchoring at UI scale ≠ 100% (context-menu de-zoom
+is probe-verified in tests only), group member drag-out feel + the in-group
+reorder note above, bottom-bar drops, docked-PB autocomplete/filters/param-
+listing against the monolith side-by-side, PB reopen from the rail.
 
 **Original round-13 worklist — operator visual pass round 2 (2026-07-06 ~20:35).
 Screenshots:
