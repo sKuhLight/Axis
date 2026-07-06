@@ -3,11 +3,15 @@
   import WidgetZone from '../../workbench/svelte/WidgetZone.svelte';
   import { selectVisibleWidgetsByZone } from '../../workbench';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
-  import { axisGridViewFromWidgets } from '../gridView';
+  import { AXIS_DEFAULT_GRID_VIEW, axisGridViewFromWidgets } from '../gridView';
 
   const { controller } = getWorkbenchContext();
   const barVisible = $derived(selectVisibleWidgetsByZone($controller.document, 'gridbar').length > 0 || $controller.editMode);
-  const view = $derived(axisGridViewFromWidgets(Object.values($controller.activeLayout?.widgets ?? {})));
+  // No grid-control widgets in this layout → fall back to auto+M so pane-relative
+  // stepping (full → map) still works; the widgets only override, never enable it.
+  const view = $derived(
+    axisGridViewFromWidgets(Object.values($controller.activeLayout?.widgets ?? {})) ?? AXIS_DEFAULT_GRID_VIEW
+  );
 </script>
 
 <div class="axis-pane-fill">
