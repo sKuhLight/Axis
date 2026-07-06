@@ -99,6 +99,33 @@
    contentMode rendering, T12 P1/P2 row anatomy + context menus, T16 remaining
    tokenization.
 
+## Operator feedback 2026-07-06 (screenshot round 1)
+
+Reference screenshots: `~/Bilder/Bildschirmfotos/DesignLook.png` (target) vs
+`Current.png` (implemented). The panel ARRANGEMENT in Current.png was hand-made by
+the operator as a showcase — do NOT "fix" the default layout from it. **"Layout
+Profiles" will be built later, together with the operator.**
+
+Standing rule (also plan T35): **keep every production feature** — the design
+missing something (preset/block search recents/favorites/all, …) never justifies
+removing it. After full implementation, audit what is app-generic (search/filter/
+favorites, pickers, toasts, menus…) and migrate it into the standalone workbench
+framework via data/adapter seams (plan task T35).
+
+### Visual fix round — worklist (from the screenshot delta)
+
+- **V1 grid tiles**: current renders tiny ~30px circle glyphs with dashed empties on
+  a large pane; design shows sizable rounded-square colored tiles with glyph+label.
+  Suspect the new pane-relative metrics (availW/availH measurement or map/auto
+  stepping) shrink tiles wrongly; plus tile shape/label parity vs design. IN FLIGHT.
+- **V2 preset browser blank**: the docked Preset Browser panel renders an empty body;
+  design shows sources-with-counts, saved filters, query bar, rich rows. IN FLIGHT.
+- **V3 chrome + widget styling**: design's compact pill panel headers vs our full tab
+  bars; widget chip styling (mono tokens, tight paddings), Customize FAB. IN FLIGHT.
+- Top-bar widget roster differences in Current.png may be the operator's stale
+  persisted layout — revisit after V1–V3 with the operator (ties into Layout
+  Profiles later; do not auto-migrate now).
+
 ## Session conventions (from the operator)
 
 - Implementation subagents run on **Opus 4.8**; the main session (Fable) verifies,
