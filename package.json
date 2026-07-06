@@ -21,7 +21,8 @@
     "build:mobile": "VITE_AXIS_MOBILE=1 VITE_OTA_MANIFEST_URL=https://github.com/sKuhLight/Axis/releases/download/ota-ios-latest/latest-ios.json vite build",
     "mobile:sync": "npm run build:mobile && cap sync ios",
     "test": "vitest run",
-    "test:workbench-visual": "node scripts/workbench-visual-smoke.mjs"
+    "test:workbench-visual": "node scripts/workbench-visual-smoke.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@capacitor/app": "8.1.0",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@capacitor/cli": "8.4.1",
     "@capacitor/ios": "8.4.1",
+    "@playwright/test": "^1.61.1",
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
