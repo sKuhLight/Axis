@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
-  import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLibraryDrawer.svelte';
+  import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLayoutDrawer.svelte';
   import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
   import AxisProfileSwitcher from './AxisProfileSwitcher.svelte';
   import {
@@ -24,7 +24,7 @@
   // profile switcher always has a layout to show. Idempotent.
   seedAxisProfiles(axisWorkbenchController);
 
-  // Bridge the Axis-side rolling backups into the generic library drawer's
+  // Bridge the Axis-side rolling backups into the generic Layouts drawer's
   // "Backups" section (module-singleton seam exported by the drawer, same
   // pattern as toasts.ts — least ceremony vs threading a prop through
   // WorkbenchHost → EditRibbon for one optional integration). Idempotent.

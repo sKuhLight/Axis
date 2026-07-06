@@ -11,24 +11,32 @@
   let { extras }: { extras?: Snippet } = $props();
 
   const { controller } = getWorkbenchContext();
-  let libraryOpen = $state(false);
+  // V13a: the old single "library" drawer is split into purpose-built views.
+  // `libraryView` selects which browser the shared drawer renders; a null value
+  // means it is closed. Layouts open their own drawer.
+  let libraryView = $state<'panels' | 'widgets' | null>(null);
   let layoutsOpen = $state(false);
 
   function toggleEdit() {
     if ($controller.editMode) {
-      libraryOpen = false;
+      libraryView = null;
       layoutsOpen = false;
     }
     controller.toggleEditMode();
   }
 
-  function openLibrary() {
+  function openPanels() {
     layoutsOpen = false;
-    libraryOpen = true;
+    libraryView = 'panels';
+  }
+
+  function openWidgets() {
+    layoutsOpen = false;
+    libraryView = 'widgets';
   }
 
   function openLayouts() {
-    libraryOpen = false;
+    libraryView = null;
     layoutsOpen = true;
   }
 
@@ -97,10 +105,10 @@
       aria-label="Redo layout change"
       disabled={!$controller.canRedoLayout}
       onclick={redoLayout}>↷ Redo</button>
-    <button class="aw-edit-action" type="button" title="Show dockable panels" onclick={openLibrary}>▤ Panels</button>
+    <button class="aw-edit-action" type="button" title="Browse and add panels" onclick={openPanels}>▤ Panels</button>
     <button class="aw-edit-action" type="button" title="Insert custom panel" onclick={addCustomPanel}>＋ Panel</button>
-    <button class="aw-edit-action" type="button" title="Open widget library" onclick={openLibrary}>▤ Widgets</button>
-    <button class="aw-edit-action" type="button" title="Open layout library" onclick={openLayouts}>▤ Layouts</button>
+    <button class="aw-edit-action" type="button" title="Browse and add widgets" onclick={openWidgets}>▤ Widgets</button>
+    <button class="aw-edit-action" type="button" title="Saved layouts, backups, import/export" onclick={openLayouts}>▤ Layouts</button>
     {#if $controller.lastResult?.error}
       <span class="aw-edit-error">{$controller.lastResult.error.message}</span>
     {/if}
@@ -108,7 +116,11 @@
   </div>
 {/if}
 
-<WorkbenchLibraryDrawer open={libraryOpen && $controller.editMode} onClose={() => (libraryOpen = false)} />
+<WorkbenchLibraryDrawer
+  open={libraryView !== null && $controller.editMode}
+  view={libraryView ?? 'panels'}
+  onClose={() => (libraryView = null)}
+/>
 <WorkbenchLayoutDrawer open={layoutsOpen && $controller.editMode} onClose={() => (layoutsOpen = false)} />
 
 <style>
