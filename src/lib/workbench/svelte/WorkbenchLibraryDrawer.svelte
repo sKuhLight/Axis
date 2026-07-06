@@ -263,8 +263,8 @@
     max-width: 90vw;
     display: flex;
     flex-direction: column;
-    background: #0c1213;
-    border-left: 1px solid #1a3a3c;
+    background: color-mix(in srgb, var(--aw-accent) 3%, var(--aw-bg-2));
+    border-left: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
     box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5);
     animation: awLibSlide 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
@@ -275,10 +275,10 @@
     align-items: center;
     gap: 9px;
     padding: 17px 18px;
-    border-bottom: 1px solid #163032;
+    border-bottom: 1px solid color-mix(in srgb, var(--aw-accent) 18%, var(--aw-border));
   }
   .aw-lib-head span {
-    color: #fff;
+    color: var(--aw-text);
     font-size: 15px;
     font-weight: 800;
   }
@@ -333,7 +333,7 @@
     gap: 5px;
   }
   .aw-lib-targets span {
-    color: var(--aw-text-faint, #768385);
+    color: var(--aw-text-faint);
     font: 800 9px/1 var(--aw-font-mono);
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -342,10 +342,10 @@
     width: 100%;
     height: 30px;
     min-width: 0;
-    border: 1px solid #1b3b3d;
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
     border-radius: 8px;
-    background: #091011;
-    color: #e8f6f6;
+    background: var(--aw-bg);
+    color: var(--aw-text);
     font: 700 11px/1 var(--aw-font-mono);
   }
   .aw-lib-list {
@@ -371,12 +371,12 @@
     border-color: var(--aw-border-3);
   }
   .aw-lib-row.saved {
-    background: #12181c;
-    border-color: #2a4a44;
+    background: color-mix(in srgb, var(--aw-accent) 5%, var(--aw-surface));
+    border-color: color-mix(in srgb, var(--aw-accent) 30%, var(--aw-border));
   }
   .aw-lib-row.add {
-    background: #101d1e;
-    border-color: #234d4f;
+    background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-bg-2));
+    border-color: color-mix(in srgb, var(--aw-accent) 32%, var(--aw-border));
   }
   .aw-lib-row.add:hover,
   .aw-lib-row.saved:hover {
@@ -440,7 +440,7 @@
   }
   .aw-lib-ico {
     flex: none;
-    color: #4fd1dc;
+    color: var(--aw-accent);
     font-size: 14px;
   }
   .aw-lib-dot {
