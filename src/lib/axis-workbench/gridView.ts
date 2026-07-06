@@ -21,6 +21,12 @@ export interface AxisGridView {
   size: AxisBlockSize;
 }
 
+// Workbench fallback when a layout carries no gridMode/blockSize widgets (hand-built layout,
+// widgets hidden/deleted): auto + M ≈ the old stock fit, but with the design's pane-relative
+// map stepping still active — the grid's responsive behavior must never depend on the user's
+// widget placement. The old shell (<SignalGrid /> without view) keeps stock behavior.
+export const AXIS_DEFAULT_GRID_VIEW: AxisGridView = { mode: 'auto', tilePx: AXIS_BLOCK_TILE_PX.M, size: 'M' };
+
 export function readAxisGridMode(value: unknown): AxisGridMode {
   return value === 'full' || value === 'map' ? value : 'auto';
 }

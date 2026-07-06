@@ -3,7 +3,7 @@ import { isRemoteBuild } from '../cloudBrowser';
 import { notifyMutation } from '../syncBus';
 import { createWorkbenchController, migrateWorkbenchDocument, repairWorkbenchDocument, type WorkbenchDocument } from '../workbench';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets } from './axisWorkbenchDefaults';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
 export const AXIS_WORKBENCH_CACHE_KEY = 'axs.workbench.doc';
@@ -21,7 +21,9 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   if (!isRecord(raw.profiles) || !Object.keys(raw.profiles).length || !isRecord(raw.layouts) || !Object.keys(raw.layouts).length) {
     return createAxisWorkbenchDefaultDocument();
   }
-  return migrateWorkbenchDocument(input);
+  // Self-heal: layouts with a Signal Grid panel but no grid-control widgets get
+  // gridMode/blockSize seeded into their gridbar (hand-built layouts, sparse presets).
+  return ensureAxisGridControlWidgets(migrateWorkbenchDocument(input));
 }
 
 function cacheLoad(): WorkbenchDocument {

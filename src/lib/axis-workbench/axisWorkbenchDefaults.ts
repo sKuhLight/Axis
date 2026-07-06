@@ -222,3 +222,32 @@ function widgetTemplate(id: string, title: string, sources: WidgetInstance[]): W
     widgets: Object.fromEntries(sources.map((source, index) => [source.id, { ...source, order: index, locked: false, groupId: null }]))
   };
 }
+
+/**
+ * Self-heal grid controls: any layout that docks a Signal Grid panel gets the
+ * gridMode/blockSize widgets seeded into its gridbar when the layout carries
+ * neither (hand-built layouts, sparse presets). The design treats them as
+ * widgets so users CAN move/hide them — but a layout that never had them
+ * shouldn't silently lose the grid's mode/size controls. Runs during document
+ * normalization (see axisWorkbenchStore), so it must be idempotent and never
+ * touch a layout that has either widget anywhere (including 'hidden' — that is
+ * an explicit user choice).
+ */
+export function ensureAxisGridControlWidgets(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object') continue;
+    const panels = Object.values(layout.panels ?? {});
+    if (!panels.some((instance) => instance?.type === 'axis.signalGrid')) continue;
+    const widgets = (layout.widgets = layout.widgets ?? {});
+    const types = new Set(Object.values(widgets).map((instance) => instance?.type));
+    if (types.has('axis.gridMode') || types.has('axis.blockSize')) continue;
+    // Canonical ids only — if either key is somehow taken by a foreign widget, leave the
+    // layout alone (seeding must stay strictly idempotent; the panel's auto+M fallback
+    // keeps the grid behaving either way).
+    if (widgets['axis.widget.gridMode'] || widgets['axis.widget.blockSize']) continue;
+    const gridbarCount = Object.values(widgets).filter((instance) => instance?.zone === 'gridbar').length;
+    widgets['axis.widget.gridMode'] = widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', gridbarCount, { state: { mode: 'auto' } });
+    widgets['axis.widget.blockSize'] = widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', gridbarCount + 1, { state: { size: 'M' } });
+  }
+  return doc;
+}
