@@ -178,6 +178,46 @@ describe('Workbench library helpers', () => {
     expect(Object.keys(explicitTemplate?.widgets ?? {})).toEqual(['widget.tuner', 'widget.tempo']);
   });
 
+  // V13a: the split panel/widget browsers dropped the global TARGET dropdowns.
+  // Click-to-add is now contextual — panels default to the main region and
+  // widgets default to the top.right zone. These lock in the defaults the
+  // browsers rely on so the split can't silently regress the drop target.
+  it('adds a panel template to the main region by default (Panels browser)', () => {
+    let doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    doc = reduceWorkbenchDocument(doc, {
+      type: 'panel.add',
+      panel: { id: 'panel.seed', type: 'test.seed', title: 'Seed' },
+      region: 'left'
+    }).next;
+
+    const commands = instantiatePanelTemplateCommands(doc, {
+      id: 'template.custom',
+      title: 'Custom',
+      panels: { 'panel.custom': { id: 'panel.custom', type: 'test.custom', title: 'Custom' } }
+    });
+
+    const add = commands.find((command) => command.type === 'panel.add');
+    expect(add).toMatchObject({ type: 'panel.add', region: 'main' });
+  });
+
+  it('adds a widget template to the top.right zone by default (Widgets browser)', () => {
+    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    const template: WidgetTemplate = {
+      id: 'template.solo',
+      title: 'Solo',
+      widgets: {
+        'widget.solo': { id: 'widget.solo', type: 'test.solo', zone: 'top.left', order: 0, size: 'default' }
+      }
+    };
+
+    const commands = instantiateWidgetTemplateCommands(doc, template, { zone: 'top.right' });
+    let next = doc;
+    for (const command of commands) next = reduceWorkbenchDocument(next, command).next;
+    const layout = selectActiveLayout(next)!;
+
+    expect(layout.widgets['widget.solo'].zone).toBe('top.right');
+  });
+
   it('creates widget add and group commands from widget templates', () => {
     const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
     const template: WidgetTemplate = {

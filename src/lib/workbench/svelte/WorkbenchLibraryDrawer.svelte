@@ -1,45 +1,23 @@
-<script lang="ts" module>
-  /**
-   * App-provided backup seam. The drawer is generic — it cannot know where (or
-   * whether) the host keeps document backups. A host that has them registers a
-   * provider here (module singleton, the same seam shape as toasts.ts) and the
-   * drawer grows a "Backups" section. Chosen over threading a prop from the
-   * host shell because the drawer is instantiated by EditRibbon inside the
-   * generic renderer — a prop would have to travel WorkbenchHost → EditRibbon →
-   * drawer for one optional integration.
-   */
-  export interface WorkbenchBackupEntry {
-    /** 1-based generation slot (1 = newest). */
-    slot: number;
-    /** Host revision counter carried by the backup (0 when unknown). */
-    rev: number;
-    /** ISO timestamp of the backup's last change, when known. */
-    updatedAt: string | null;
-    /** Number of layouts inside the backup. */
-    layoutCount: number;
-  }
-
-  export interface WorkbenchBackupProvider {
-    list(): WorkbenchBackupEntry[];
-    /** Restore a generation; returns false when the slot is empty/unreadable. */
-    restore(slot: number): boolean;
-  }
-
-  let workbenchBackupProvider: WorkbenchBackupProvider | null = null;
-
-  export function registerWorkbenchBackupProvider(provider: WorkbenchBackupProvider | null): void {
-    workbenchBackupProvider = provider;
-  }
-</script>
-
 <script lang="ts">
+  /**
+   * Purpose-built browser drawer. The Edit ribbon opens this in one of two
+   * views (V13a split — "a UX nightmare" was one drawer showing panels,
+   * widgets, saved layouts, backups AND global target dropdowns at once):
+   *
+   *   - `view="panels"`  → panel browser ONLY: saved panel templates you can
+   *     add to the layout (Load / Rename / Export / Delete) plus hidden nav
+   *     entries you can restore.
+   *   - `view="widgets"` → widget browser ONLY: saved widget templates plus
+   *     the hidden-widget shelf, each addable to the layout.
+   *
+   * Layouts, backups and import/export now live in WorkbenchLayoutDrawer
+   * (the "Layouts" ribbon button). No global TARGET dropdowns are exposed
+   * here any more — placement is contextual: click-to-add drops into a sane
+   * default zone/region, and the drag layer (owned elsewhere) still lets you
+   * drop an item exactly where you want it.
+   */
   import {
-    DEFAULT_WIDGET_ZONES,
-    DOCK_REGION_IDS,
-    exportLayoutPackage,
     exportPanelPackage,
-    importLayoutPackage,
-    importPanelPackage,
     layoutPackageFilename,
     selectActiveLayout,
     selectHiddenWidgets,
@@ -57,7 +35,17 @@
     labelFromWorkbenchType
   } from './library';
 
-  let { open, onClose }: { open: boolean; onClose: () => void } = $props();
+  let {
+    open,
+    view,
+    onClose
+  }: { open: boolean; view: 'panels' | 'widgets'; onClose: () => void } = $props();
+
+  // Contextual placement defaults — no global TARGET selects any more. Panels
+  // land in the main region; widgets land in the top-right zone (matching the
+  // legacy defaults). Drag-to-place (drag layer) covers "put it exactly here".
+  const DEFAULT_PANEL_REGION: DockRegionId = 'main';
+  const DEFAULT_WIDGET_ZONE: WidgetZoneId = 'top.right';
 
   // T23: phone flag (matches the 760px breakpoint) — the drawer presents as a
   // bottom sheet with swipe-to-close below phone width, a right-edge drawer above.
@@ -74,8 +62,12 @@
 
   const { controller } = getWorkbenchContext();
   const layout = $derived(selectActiveLayout($controller.document));
-  const panelTemplates = $derived(Object.values($controller.document.panelLibrary).sort((a, b) => a.title.localeCompare(b.title)));
-  const widgetTemplates = $derived(Object.values($controller.document.widgetLibrary).sort((a, b) => a.title.localeCompare(b.title)));
+  const panelTemplates = $derived(
+    Object.values($controller.document.panelLibrary).sort((a, b) => a.title.localeCompare(b.title))
+  );
+  const widgetTemplates = $derived(
+    Object.values($controller.document.widgetLibrary).sort((a, b) => a.title.localeCompare(b.title))
+  );
   const hiddenWidgets = $derived(selectHiddenWidgets($controller.document));
   const placedWidgets = $derived.by(() =>
     Object.values(layout?.widgets ?? {})
@@ -87,21 +79,28 @@
       .filter((entry) => entry.hidden)
       .sort((a, b) => (a.label ?? a.id).localeCompare(b.label ?? b.id))
   );
-  const savedLayouts = $derived(Object.values($controller.document.layouts).sort((a, b) => a.label.localeCompare(b.label)));
-  let renamingKind = $state<'panel' | 'widget' | null>(null);
+
+  const title = $derived(view === 'panels' ? 'Panels' : 'Widgets');
+
   let renamingTemplateId = $state<string | null>(null);
   let renameDraft = $state('');
-  let targetRegion = $state<DockRegionId>('main');
-  let targetZone = $state<WidgetZoneId>('top.right');
 
-  // T29: import/export. Inline status line (a parallel agent owns the toast
-  // surface — do NOT import toasts.ts here; each `setStatus` call marks where a
-  // toast could later replace the inline feedback).
+  // Inline status line (a parallel agent owns the toast surface — do NOT import
+  // toasts.ts here; each `setStatus` call marks where a toast could later
+  // replace the inline feedback).
   let status = $state<{ tone: 'ok' | 'error'; message: string } | null>(null);
-  let fileInput = $state<HTMLInputElement | null>(null);
   function setStatus(tone: 'ok' | 'error', message: string) {
     status = { tone, message };
   }
+
+  // Clear any stale rename/status when the drawer opens or its view changes.
+  $effect(() => {
+    void open;
+    void view;
+    renamingTemplateId = null;
+    renameDraft = '';
+    status = null;
+  });
 
   function downloadJson(stem: string, data: unknown) {
     if (typeof window === 'undefined') return;
@@ -116,28 +115,6 @@
     URL.revokeObjectURL(url);
   }
 
-  // T29: export the ACTIVE layout as a self-contained, collision-safe package.
-  function exportActiveLayout() {
-    if (!layout) return;
-    const pkg = exportLayoutPackage($controller.document, layout.id);
-    if (!pkg) {
-      setStatus('error', 'Could not export the current layout.'); // toast candidate
-      return;
-    }
-    downloadJson(layoutPackageFilename(layout.label), pkg);
-    setStatus('ok', `Exported "${layout.label}".`); // toast candidate
-  }
-
-  function exportSavedLayout(layoutId: string, label: string) {
-    const pkg = exportLayoutPackage($controller.document, layoutId);
-    if (!pkg) {
-      setStatus('error', `Could not export "${label}".`); // toast candidate
-      return;
-    }
-    downloadJson(layoutPackageFilename(label), pkg);
-    setStatus('ok', `Exported "${label}".`); // toast candidate
-  }
-
   function exportPanelTemplate(templateId: string, title: string) {
     const pkg = exportPanelPackage($controller.document, templateId);
     if (!pkg) {
@@ -148,95 +125,30 @@
     setStatus('ok', `Exported "${title}".`); // toast candidate
   }
 
-  // T29: import a layout OR panel package. The imported layout is ADDED to the
-  // library (layout.save) and NOT auto-applied; every id is re-minted upstream.
-  async function onImportFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = ''; // allow re-importing the same file
-    if (!file) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(await file.text());
-    } catch {
-      setStatus('error', 'File is not valid JSON.'); // toast candidate
-      return;
-    }
-
-    const asLayout = importLayoutPackage(parsed);
-    if (asLayout.success) {
-      const result = controller.dispatch({ type: 'layout.save', layout: asLayout.payload });
-      if (result.success) setStatus('ok', `Imported layout "${asLayout.payload.label}" — apply it from the Layout Library.`); // toast candidate
-      else setStatus('error', 'Imported layout could not be saved.'); // toast candidate
-      return;
-    }
-
-    const asPanel = importPanelPackage(parsed);
-    if (asPanel.success) {
-      const result = controller.dispatch({ type: 'library.panel.save', template: asPanel.payload });
-      if (result.success) setStatus('ok', `Imported panel "${asPanel.payload.title}".`); // toast candidate
-      else setStatus('error', 'Imported panel could not be saved.'); // toast candidate
-      return;
-    }
-
-    // Report the most specific failure (layout parse is the primary path here).
-    setStatus('error', asLayout.error.message); // toast candidate
-  }
-
-  // Backups (app-provided seam above): the list is re-read every time the
-  // drawer opens; restore is a two-step inline confirm.
-  let backups = $state<WorkbenchBackupEntry[]>([]);
-  let confirmBackupSlot = $state<number | null>(null);
-  $effect(() => {
-    if (!open) return;
-    backups = workbenchBackupProvider?.list() ?? [];
-    confirmBackupSlot = null;
-  });
-
-  function backupTimestamp(entry: WorkbenchBackupEntry): string {
-    if (!entry.updatedAt) return 'Unknown time';
-    const parsed = new Date(entry.updatedAt);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
-  }
-
-  function restoreBackup(entry: WorkbenchBackupEntry): void {
-    if (!workbenchBackupProvider) return;
-    let restored = false;
-    try {
-      restored = workbenchBackupProvider.restore(entry.slot);
-    } catch {
-      restored = false;
-    }
-    confirmBackupSlot = null;
-    if (restored) setStatus('ok', `Restored backup ${entry.slot}.`); // toast candidate
-    else setStatus('error', `Backup ${entry.slot} could not be restored.`); // toast candidate
-    backups = workbenchBackupProvider.list();
-  }
-
   function widgetTitle(widget: WidgetInstance): string {
-    return widget.state?.label && typeof widget.state.label === 'string' ? widget.state.label : labelFromWorkbenchType(widget.type);
+    return widget.state?.label && typeof widget.state.label === 'string'
+      ? widget.state.label
+      : labelFromWorkbenchType(widget.type);
   }
 
   function navTitle(entry: NavigationEntryState): string {
     return entry.label ?? entry.id;
   }
 
-  function startRename(kind: 'panel' | 'widget', templateId: string, title: string) {
-    renamingKind = kind;
+  function startRename(templateId: string, title: string) {
     renamingTemplateId = templateId;
     renameDraft = title;
   }
 
   function cancelRename() {
-    renamingKind = null;
     renamingTemplateId = null;
     renameDraft = '';
   }
 
   function commitRename() {
-    if (!renamingKind || !renamingTemplateId) return;
+    if (!renamingTemplateId) return;
     const result = controller.dispatch(
-      renamingKind === 'panel'
+      view === 'panels'
         ? { type: 'library.panel.rename', templateId: renamingTemplateId, title: renameDraft }
         : { type: 'library.widget.rename', templateId: renamingTemplateId, title: renameDraft }
     );
@@ -250,122 +162,35 @@
 </script>
 
 {#if open}
-  <button class="aw-lib-scrim" type="button" aria-label="Close library" onclick={onClose}></button>
+  <button class="aw-lib-scrim" type="button" aria-label={`Close ${title.toLowerCase()}`} onclick={onClose}></button>
   <aside
     class="aw-lib-drawer"
     class:aw-sheet={isPhone}
-    aria-label="Widget Library"
+    aria-label={`${title} browser`}
     use:focusTrap={{ onClose }}
     use:bottomSheetSwipe={{ enabled: isPhone, onClose, scrollContainer: () => scrollEl }}
   >
     <!-- T23: grab bar for the phone bottom-sheet presentation (CSS-hidden on desktop). -->
     <div class="aw-lib-grip" aria-hidden="true"></div>
     <header class="aw-lib-head">
-      <span>Widget Library</span>
-      <button type="button" class="aw-lib-close" title="Close" aria-label="Close library" data-autofocus onclick={onClose}>×</button>
+      <span>{title}</span>
+      <button type="button" class="aw-lib-close" title="Close" aria-label={`Close ${title.toLowerCase()}`} data-autofocus onclick={onClose}>×</button>
     </header>
 
     <div class="aw-lib-scroll" bind:this={scrollEl}>
-      <section class="aw-lib-section">
-        <h2>Import · Export</h2>
-        <div class="aw-lib-io">
-          <button type="button" class="aw-lib-io-btn" onclick={() => fileInput?.click()}>Import .json</button>
-          <button type="button" class="aw-lib-io-btn" disabled={!layout} onclick={exportActiveLayout}>
-            Export Current Layout
-          </button>
-          <input
-            bind:this={fileInput}
-            class="aw-lib-file"
-            type="file"
-            accept="application/json,.json"
-            aria-label="Import layout or panel package"
-            onchange={onImportFile}
-          />
-        </div>
-        {#if status}
-          <p class="aw-lib-status" class:error={status.tone === 'error'} role="status">{status.message}</p>
-        {/if}
-      </section>
-
-      {#if backups.length}
-        <section class="aw-lib-section">
-          <h2>Backups</h2>
-          <div class="aw-lib-list">
-            {#each backups as entry (entry.slot)}
-              <div class="aw-lib-row saved" title={`Backup generation ${entry.slot}`}>
-                <span class="aw-lib-ico">⧗</span>
-                <span>{backupTimestamp(entry)}</span>
-                <i>{entry.layoutCount} {entry.layoutCount === 1 ? 'layout' : 'layouts'}</i>
-                {#if confirmBackupSlot === entry.slot}
-                  <button class="aw-lib-save" type="button" onclick={() => restoreBackup(entry)}>Confirm</button>
-                  <button type="button" onclick={() => (confirmBackupSlot = null)}>Cancel</button>
-                {:else}
-                  <button
-                    class="aw-lib-load"
-                    type="button"
-                    title="Replace the current document with this backup (the current one is backed up first)"
-                    onclick={() => (confirmBackupSlot = entry.slot)}
-                  >
-                    Restore
-                  </button>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        </section>
+      {#if status}
+        <p class="aw-lib-status" class:error={status.tone === 'error'} role="status">{status.message}</p>
       {/if}
 
-      {#if savedLayouts.length}
+      {#if view === 'panels'}
         <section class="aw-lib-section">
-          <h2>Saved Layouts · Export</h2>
-          <div class="aw-lib-list">
-            {#each savedLayouts as saved (saved.id)}
-              <div class="aw-lib-row saved" title={saved.label}>
-                <span class="aw-lib-ico">▦</span>
-                <span>{saved.label}</span>
-                <button class="aw-lib-export" type="button" onclick={() => exportSavedLayout(saved.id, saved.label)}>
-                  Export
-                </button>
-              </div>
-            {/each}
-          </div>
-        </section>
-      {/if}
-
-      <section class="aw-lib-section">
-        <h2>Target</h2>
-        <div class="aw-lib-targets">
-          <label>
-            <span>Panels</span>
-            <select bind:value={targetRegion}>
-              {#each DOCK_REGION_IDS as region}
-                <option value={region}>{region}</option>
-              {/each}
-            </select>
-          </label>
-          <label>
-            <span>Widgets</span>
-            <select bind:value={targetZone}>
-              {#each DEFAULT_WIDGET_ZONES.filter((zone) => zone !== 'hidden') as zone}
-                <option value={zone}>{zone}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      {#if panelTemplates.length || widgetTemplates.length}
-        <section class="aw-lib-section">
-          <h2>Saved · Tap To Load</h2>
+          <h2>Saved Panels</h2>
           <div class="aw-lib-list">
             {#each panelTemplates as template (template.id)}
-              <div
-                class="aw-lib-row saved"
-                title={template.title}
-              >
+              <div class="aw-lib-row saved" title={template.title}>
                 <span class="aw-lib-ico">▤</span>
-                {#if renamingKind === 'panel' && renamingTemplateId === template.id}
-                  <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Template title" onkeydown={renameKeydown} />
+                {#if renamingTemplateId === template.id}
+                  <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Panel title" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
                 {:else}
@@ -374,11 +199,12 @@
                   <button
                     class="aw-lib-load"
                     type="button"
-                    onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: targetRegion }))}
+                    title={`Add ${template.title} to your layout`}
+                    onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: DEFAULT_PANEL_REGION }))}
                   >
-                    Load
+                    Add
                   </button>
-                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename('panel', template.id, template.title)}>
+                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename(template.id, template.title)}>
                     Rename
                   </button>
                   <button class="aw-lib-export" type="button" title={`Export ${template.title}`} onclick={() => exportPanelTemplate(template.id, template.title)}>
@@ -394,15 +220,40 @@
                   </button>
                 {/if}
               </div>
+            {:else}
+              <p class="aw-lib-empty">No saved panels yet.</p>
             {/each}
+          </div>
+        </section>
+
+        {#if hiddenNav.length}
+          <section class="aw-lib-section">
+            <h2>Hidden Nav · Tap To Restore</h2>
+            <div class="aw-lib-list">
+              {#each hiddenNav as entry (entry.id)}
+                <button
+                  class="aw-lib-row add"
+                  type="button"
+                  title={navTitle(entry)}
+                  onclick={() => controller.dispatch({ type: 'navigation.show', entryId: entry.id })}
+                >
+                  <span class="aw-lib-ico">＋</span>
+                  <span>{navTitle(entry)}</span>
+                  <i>nav</i>
+                </button>
+              {/each}
+            </div>
+          </section>
+        {/if}
+      {:else}
+        <section class="aw-lib-section">
+          <h2>Saved Widgets</h2>
+          <div class="aw-lib-list">
             {#each widgetTemplates as template (template.id)}
-              <div
-                class="aw-lib-row saved"
-                title={template.title}
-              >
+              <div class="aw-lib-row saved" title={template.title}>
                 <span class="aw-lib-ico">⛁</span>
-                {#if renamingKind === 'widget' && renamingTemplateId === template.id}
-                  <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Template title" onkeydown={renameKeydown} />
+                {#if renamingTemplateId === template.id}
+                  <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Widget title" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
                 {:else}
@@ -411,11 +262,12 @@
                   <button
                     class="aw-lib-load"
                     type="button"
-                    onclick={() => controller.dispatchMany(instantiateWidgetTemplateCommands($controller.document, template, { zone: targetZone }))}
+                    title={`Add ${template.title} to your layout`}
+                    onclick={() => controller.dispatchMany(instantiateWidgetTemplateCommands($controller.document, template, { zone: DEFAULT_WIDGET_ZONE }))}
                   >
-                    Load
+                    Add
                   </button>
-                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename('widget', template.id, template.title)}>
+                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename(template.id, template.title)}>
                     Rename
                   </button>
                   <button
@@ -428,64 +280,46 @@
                   </button>
                 {/if}
               </div>
+            {:else}
+              <p class="aw-lib-empty">No saved widgets yet.</p>
             {/each}
           </div>
         </section>
-      {/if}
 
-      <section class="aw-lib-section">
-        <h2>Hidden · Tap To Add</h2>
-        <div class="aw-lib-list">
-          {#each hiddenWidgets as widget (widget.id)}
-            <button
-              class="aw-lib-row add"
-              type="button"
-              title={widgetTitle(widget)}
-              onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: targetZone })}
-            >
-              <span class="aw-lib-ico">＋</span>
-              <span>{widgetTitle(widget)}</span>
-              <i>hidden</i>
-            </button>
-          {:else}
-            <p class="aw-lib-empty">All widgets are placed.</p>
-          {/each}
-        </div>
-      </section>
-
-      <section class="aw-lib-section">
-        <h2>On Your Layout · Tap To Hide</h2>
-        <div class="aw-lib-list">
-          {#each placedWidgets as widget (widget.id)}
-            <button
-              class="aw-lib-row placed"
-              type="button"
-              disabled={widget.locked}
-              title={widget.locked ? 'Locked widget' : `Hide ${widgetTitle(widget)}`}
-              onclick={() => !widget.locked && controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })}
-            >
-              <span class="aw-lib-dot"></span>
-              <span>{widgetTitle(widget)}</span>
-              <i>{widget.zone}</i>
-            </button>
-          {/each}
-        </div>
-      </section>
-
-      {#if hiddenNav.length}
         <section class="aw-lib-section">
-          <h2>Hidden Nav · Tap To Restore</h2>
+          <h2>Hidden Widgets · Tap To Add</h2>
           <div class="aw-lib-list">
-            {#each hiddenNav as entry (entry.id)}
+            {#each hiddenWidgets as widget (widget.id)}
               <button
                 class="aw-lib-row add"
                 type="button"
-                title={navTitle(entry)}
-                onclick={() => controller.dispatch({ type: 'navigation.show', entryId: entry.id })}
+                title={widgetTitle(widget)}
+                onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: DEFAULT_WIDGET_ZONE })}
               >
                 <span class="aw-lib-ico">＋</span>
-                <span>{navTitle(entry)}</span>
-                <i>nav</i>
+                <span>{widgetTitle(widget)}</span>
+                <i>hidden</i>
+              </button>
+            {:else}
+              <p class="aw-lib-empty">All widgets are placed.</p>
+            {/each}
+          </div>
+        </section>
+
+        <section class="aw-lib-section">
+          <h2>On Your Layout · Tap To Hide</h2>
+          <div class="aw-lib-list">
+            {#each placedWidgets as widget (widget.id)}
+              <button
+                class="aw-lib-row placed"
+                type="button"
+                disabled={widget.locked}
+                title={widget.locked ? 'Locked widget' : `Hide ${widgetTitle(widget)}`}
+                onclick={() => !widget.locked && controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })}
+              >
+                <span class="aw-lib-dot"></span>
+                <span>{widgetTitle(widget)}</span>
+                <i>{widget.zone}</i>
               </button>
             {/each}
           </div>
@@ -526,10 +360,9 @@
   .aw-lib-grip {
     display: none;
   }
-  /* T23: below phone width the library becomes a bottom sheet — full width,
+  /* T23: below phone width the browser becomes a bottom sheet — full width,
      rounded top, grab bar, slides up. Swipe the sheet down (when the list is
-     scrolled to the top) to close. Slide via keyframe animation (this component
-     is not geometry-guarded, but keeping it consistent with the dock sheets). */
+     scrolled to the top) to close. */
   @media (max-width: 760px) {
     .aw-lib-drawer {
       top: auto;
@@ -611,33 +444,6 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
-  .aw-lib-targets {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .aw-lib-targets label {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .aw-lib-targets span {
-    color: var(--aw-text-faint);
-    font: 800 9px/1 var(--aw-font-mono);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .aw-lib-targets select {
-    width: 100%;
-    height: 30px;
-    min-width: 0;
-    border: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
-    border-radius: 8px;
-    background: var(--aw-bg);
-    color: var(--aw-text);
-    font: 700 11px/1 var(--aw-font-mono);
-  }
   .aw-lib-list {
     display: flex;
     flex-direction: column;
@@ -662,7 +468,7 @@
   }
   /* T18: consistent keyboard focus ring on every interactive element in the
      drawer — accent outline, focus-visible only so pointer UX is untouched. */
-  .aw-lib-drawer :is(button, select, input):focus-visible {
+  .aw-lib-drawer :is(button, input):focus-visible {
     outline: 2px solid var(--aw-accent);
     outline-offset: 2px;
   }
@@ -758,33 +564,8 @@
     text-align: center;
     font: 600 11px/1 var(--aw-font-mono);
   }
-  /* T29: import/export toolbar + inline status line. */
-  .aw-lib-io {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .aw-lib-io-btn {
-    min-height: 34px;
-    border: 1px solid color-mix(in srgb, var(--aw-accent) 32%, var(--aw-border));
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-bg-2));
-    color: var(--aw-accent);
-    cursor: pointer;
-    font: 800 11px/1 var(--aw-font-ui);
-  }
-  .aw-lib-io-btn:hover:not(:disabled) {
-    border-color: var(--aw-accent);
-  }
-  .aw-lib-io-btn:disabled {
-    opacity: 0.48;
-    cursor: default;
-  }
-  .aw-lib-file {
-    display: none;
-  }
   .aw-lib-status {
-    margin: 8px 0 0;
+    margin: 0 0 12px;
     padding: 8px 10px;
     border: 1px solid color-mix(in srgb, var(--aw-accent) 30%, var(--aw-border));
     border-radius: 8px;
