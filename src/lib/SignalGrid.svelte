@@ -46,16 +46,24 @@
   const rows = $derived(editor.layout.rows || 4);
   const mob = $derived(editor.isMobile);
   const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
-  // available grid area = the gridwrap CONTENT box (measured). It's flex-sized + overflow:hidden, so it
-  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
+  // available grid area = the viewport CONTENT box (measured). It's flex-sized + overflow:hidden, so it
+  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement. Used for
+  // the exact fillW/fitH px fit (Axis uses fixed-px tracks, unlike the design's CSS minmax/1fr).
   let availW = $state(1);
   let availH = $state(1);
+  // pane-host box (the gridwrap: the grid pane body incl. its scroll padding + gridbar chrome). The design
+  // resolves the grid MODE + the 4-row height cap from the raw pane-host rect (gpW/gpH) and bakes the
+  // padding into its constants (fullMin/fullMinH +44/56, colCapH −_padV). Feeding the padding-stripped
+  // viewport box there instead would double-count the chrome and collapse a comfortable pane into map with
+  // ~30px tiles — so mode/cap resolution keys off THIS host rect, matching 04-fc-and-grid.md §2.2 verbatim.
+  let paneW = $state(1);
+  let paneH = $state(1);
   // ── workbench pane-relative resolution (04-fc-and-grid.md §2.2) ──
   // Only when a gridbar view is supplied and we're on desktop. Auto steps full → map by the pane rect;
   // 'full'/'map' pin their mode. (Auto's <620px "mobile" tier degrades to map on desktop — the true
   // mobile paging path stays gated on editor.isMobile so its pinch/pager chrome is unaffected.)
   const metrics = $derived(
-    !mob && view ? resolveAxisGridMetrics(view, availW > 1 ? availW : 0, availH > 1 ? availH : 0) : null
+    !mob && view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
   );
   const mapMode = $derived(metrics?.mode === 'map'); // desktop glyph minimap (§2.5)
   const gap = $derived(
@@ -141,11 +149,24 @@
       }
     });
     if (vpEl) wro.observe(vpEl);
+    // measure the pane-host box (gridwrap border-box: padding + gridbar chrome included) for mode/cap
+    // resolution — matches the design's gpW/gpH (see paneW/paneH note). border-box so the padding the
+    // design's constants already account for isn't stripped out.
+    const pro = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1]?.borderBoxSize?.[0];
+      const el = wrapEl;
+      const w = box ? box.inlineSize : el?.clientWidth ?? 0;
+      const h = box ? box.blockSize : el?.clientHeight ?? 0;
+      if (w) paneW = w;
+      if (h) paneH = h;
+    });
+    if (wrapEl) pro.observe(wrapEl);
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
       ro.disconnect();
       wro.disconnect();
+      pro.disconnect();
       window.removeEventListener('resize', onResize);
     };
   });
