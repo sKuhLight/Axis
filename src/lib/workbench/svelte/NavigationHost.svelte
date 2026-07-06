@@ -212,6 +212,26 @@
     gap: 5px;
     min-width: 0;
   }
+  /* Bottom-nav mode (design §9): entries lay out horizontally, 52px wide, radius
+     10. This is viewport-independent — it fires wherever the active layout's
+     navigation.mode is `bottom`, driven by WorkbenchHost placing this nav in the
+     bottom bar. The entry component (owned elsewhere) is width:100%, so the
+     wrapper fixes the item width here. */
+  .aw-nav[data-nav-mode='bottom'] {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+  }
+  .aw-nav[data-nav-mode='bottom'] .aw-nav-entry {
+    width: 52px;
+    flex: none;
+  }
+  /* In the vertical rail a footer entry (e.g. account) sinks to the bottom;
+     in the horizontal bottom nav it trails to the right instead. */
+  .aw-nav[data-nav-mode='bottom'] .aw-nav-entry[data-fixed='rail.footer'] {
+    margin-top: 0;
+    margin-left: auto;
+  }
   .aw-nav-entry {
     position: relative;
     min-width: 0;

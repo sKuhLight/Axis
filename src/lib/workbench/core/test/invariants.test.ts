@@ -178,6 +178,34 @@ describe('Workbench invariants', () => {
     expect(suffix).toBeGreaterThan(9000);
   });
 
+  it('preserves a valid bottom navigation mode', () => {
+    const next = doc();
+    layout(next).navigation.mode = 'bottom';
+
+    const repaired = repairWorkbenchDocument(next);
+
+    expect(layout(repaired).navigation.mode).toBe('bottom');
+  });
+
+  it('repairs an unknown navigation mode back to side', () => {
+    const next = doc();
+    // Simulate a persisted/plugin document carrying an out-of-union mode value.
+    (layout(next).navigation as { mode: string }).mode = 'floating';
+
+    const repaired = repairWorkbenchDocument(next);
+
+    expect(layout(repaired).navigation.mode).toBe('side');
+  });
+
+  it('repairs a missing navigation mode to side', () => {
+    const next = doc();
+    delete (layout(next).navigation as { mode?: string }).mode;
+
+    const repaired = repairWorkbenchDocument(next);
+
+    expect(layout(repaired).navigation.mode).toBe('side');
+  });
+
   it('validates JSON serializability', () => {
     const next = doc() as WorkbenchDocument & { bad?: unknown };
     next.bad = () => 'nope';
