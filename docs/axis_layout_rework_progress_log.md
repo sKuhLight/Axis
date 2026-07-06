@@ -36,6 +36,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `6b224d4` | **T09/T10** | Live nav targets (Setup/Controllers → docked VirtualScreen; Scenes/Live → placeholder panels; add-or-focus semantics in `axisWorkbenchNavigationActions.ts`), Theme nav entry, bottom-zone hint ticker + legal widgets. Nav-id reconciliation deferred to T31. |
 
 ## Verification debt (needs hardware / a device or browser session)
 
@@ -46,6 +47,8 @@
   profile won't show it. Verify on the actual phone before closing T02 in the plan.
 - Grid map/auto stepping, meter toggle, FC widgets, PB split panes: visually verified only
   via tests; browser smoke (Claude-in-Chrome on :5173) still pending.
+- T09/T10: nav entries dock/focus the right panels, placeholder styling, hint ticker,
+  legal links (Ko-fi/imprint open externally), theme entry opens the theme dialog.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -58,15 +61,17 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **T09/T10** — nav + placeholder panels + theme entry + bottom-bar parity
-   (spec: `01-shell.md`; shares registry files → run alone).
-2. **Generic estW auto-fit port** — estW × 0.62 joint-fit + keep-set shedding into
-   `WidgetZone`/sizing (spec: `01-shell.md`/`02-widgets.md` auto-fit section).
-3. **T33** — `be-part="modifier"` panel (spec: `05-block-editor.md`).
-4. **FC part visual parity** (spec: `04-fc-and-grid.md` §1).
-5. **T13** — layout presets, driven by the six extracted preset kinds
-   (default/stage/studio/compact + tablet/mobile, spec: `01-shell.md`).
-6. Browser/hardware verification pass over everything above (P0: phone T02 check).
+1. **Generic estW auto-fit port** — estW × 0.62 joint-fit + keep-set shedding into
+   `WidgetZone`/sizing (spec: `01-shell.md`/`02-widgets.md` auto-fit section). IN FLIGHT.
+2. **T33** — `be-part="modifier"` panel (spec: `05-block-editor.md`). IN FLIGHT; its
+   registry registration is boundary-blocked → main session applies the reported
+   one-liners on review.
+3. **FC part visual parity** (spec: `04-fc-and-grid.md` §1). IN FLIGHT (restarted once:
+   a stray "haiku" message derailed the first run — instructed to disregard).
+4. **T13** — layout presets, driven by the six extracted preset kinds
+   (default/stage/studio/compact + tablet/mobile, spec: `01-shell.md`). Waits for the
+   roster to settle (after 1–3).
+5. Operator's batched visual check over everything (P0: phone T02 check).
 
 ## Session conventions (from the operator)
 
