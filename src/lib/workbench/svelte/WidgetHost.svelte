@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
-  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize, type WorkbenchCommand } from '../core';
+  import { capWidgetSize, createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize, type WorkbenchCommand } from '../core';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
@@ -17,7 +17,11 @@
 
   const { controller, registry } = getWorkbenchContext();
   const Component = $derived(registry.widget(widget.type));
-  const size = $derived(forcedSize ?? widget.size ?? 'default');
+  // Auto-fit (`forcedSize`) may only shrink below the widget's manual size,
+  // never grow above it — manual density is a ceiling (design mkW §3).
+  const size = $derived(
+    forcedSize != null ? capWidgetSize(forcedSize, widget.size ?? 'default') : widget.size ?? 'default'
+  );
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 

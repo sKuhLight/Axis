@@ -10,3 +10,4 @@ export * from './reducer';
 export * from './registry';
 export * from './schema';
 export * from './selectors';
+export * from './widgetFit';

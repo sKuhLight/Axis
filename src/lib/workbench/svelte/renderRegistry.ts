@@ -47,11 +47,25 @@ export interface WorkbenchNavigationRenderer {
   component: WorkbenchNavigationComponent;
 }
 
+/**
+ * App-provided widget sizing data for the generic auto-fit
+ * (`workbench/core/widgetFit.ts`). The generic layer holds no widget-type
+ * knowledge — apps register their `estW` table and keep-set here. When absent,
+ * WidgetZone falls back to a flat per-widget estimate.
+ */
+export interface WorkbenchWidgetSizingProvider {
+  /** Design `estW` for a widget type (member width; summed for groups). */
+  estWidth: (type: string) => number;
+  /** Whether a widget type is keep-protected (never sheds into `⋯`). */
+  isKeep?: (type: string) => boolean;
+}
+
 export class WorkbenchRenderRegistry {
   #panels = new Map<string, WorkbenchPanelComponent>();
   #widgets = new Map<string, WorkbenchWidgetComponent>();
   #navigation = new Map<string, WorkbenchNavigationComponent>();
   #actions = new Map<string, WorkbenchActionHandler['run']>();
+  #widgetSizing: WorkbenchWidgetSizingProvider | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
   constructor(
@@ -74,6 +88,14 @@ export class WorkbenchRenderRegistry {
 
   registerAction(handler: WorkbenchActionHandler): void {
     this.#actions.set(handler.id, handler.run);
+  }
+
+  registerWidgetSizing(provider: WorkbenchWidgetSizingProvider): void {
+    this.#widgetSizing = provider;
+  }
+
+  get widgetSizing(): WorkbenchWidgetSizingProvider | null {
+    return this.#widgetSizing;
   }
 
   panel(type: string): WorkbenchPanelComponent | undefined {

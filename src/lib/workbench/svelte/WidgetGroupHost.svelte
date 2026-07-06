@@ -6,9 +6,9 @@
   import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
   import { createWidgetTemplateFromGroup } from './library';
   import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
-  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance } from '../core';
+  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize } from '../core';
 
-  let { groupId }: { groupId: string } = $props();
+  let { groupId, forcedSize }: { groupId: string; forcedSize?: WidgetSize } = $props();
   const { controller } = getWorkbenchContext();
   const group = $derived($controller.activeLayout?.widgetGroups[groupId]);
   let menuOpen = $state(false);
@@ -235,7 +235,7 @@
       {@const widget = $controller.activeLayout?.widgets[widgetId]}
       {#if widget}
         {#if index > 0}<span class="aw-widget-divider"></span>{/if}
-        <WidgetHost {widget} />
+        <WidgetHost {widget} {forcedSize} />
       {/if}
     {/each}
   </div>
