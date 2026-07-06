@@ -188,7 +188,14 @@ colW/cellH/gap/mapMode.
   re-key flagged as follow-up).
 - `0eb1c2b` R10d PB row anatomy + owner-gated context menus (real actions only;
   222px swipe stack deferred, long-press covers touch).
-Still in flight: E2E realignment (e2e/** only).
+Still in flight: E2E realignment (e2e/** only, relaunched after a process-exit
+interruption — partial spec edits preserved) AND **Round 11 storage hardening**
+(operator-approved, one opus agent; restarted once after a startup misfire):
+(1) rolling local backups bak1..3 + Restore in the library drawer, (2) persist-
+cost measurement then trimming (drop per-change repair / coalesce cache writes /
+pagehide flush — only what numbers justify), (3) rev+updatedAt stamping with
+stale-write protection (older incoming docs get backed up, never silently
+clobber) + cloud debounce 400→1500ms. schemaVersion stays 1.
 After this wave the board is ONLY: operator verification, Layout Profiles
 (TOGETHER), hardware-gated items, T35 audit.
 
