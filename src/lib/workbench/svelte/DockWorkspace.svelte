@@ -4,6 +4,7 @@
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
   import { sideSwipe } from './sideSwipe';
+  import { isPagesLayout, resolveLayoutContentMode } from './contentMode';
   import {
     WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -14,6 +15,11 @@
   let mobileDock = $state<DockRegionId | null>(null);
   let edgeDropRegion = $state<DockRegionId | null>(null);
   const layout = $derived($controller.activeLayout);
+  // 01-shell §11: `settings.contentMode==="pages"` (stage/tablet/mobile presets)
+  // shows one content section full-bleed instead of the fixed multi-region dock.
+  // Repair-safe read (unknown => fixed). Edit mode reverts to fixed so every
+  // region stays reachable for rearranging (see contentMode.ts).
+  const pagesMode = $derived(isPagesLayout(resolveLayoutContentMode(layout), $controller.editMode));
 
   // T23: phone flag (matches the 760px CSS breakpoint) — gates bottom-sheet
   // swipe-to-close on the dock drawers. matchMedia keeps it observer-free.
@@ -38,6 +44,13 @@
   function toggleMobileDock(region: DockRegionId): void {
     mobileDock = mobileDock === region ? null : region;
   }
+
+  // In pages mode the LEFT/RIGHT regions aren't inline (they're reachable via the
+  // openers), so a top-drawer isn't part of that model; keep any stale top drawer
+  // from surviving a mode switch. Left/right drawers still work in pages mode.
+  $effect(() => {
+    if (pagesMode && mobileDock === 'top') mobileDock = null;
+  });
 
   function hasParameterSource(event: DragEvent): boolean {
     return Array.from(event.dataTransfer?.types ?? []).includes(WORKBENCH_PARAMETER_SOURCE_MIME);
@@ -87,36 +100,50 @@
 <section
   class="aw-workspace"
   class:parameter-edge-drop={!!edgeDropRegion}
+  class:aw-workspace-pages={pagesMode}
   aria-label="Workbench dock workspace"
   ondragover={onParameterDragOver}
   ondragleave={onParameterDragLeave}
   ondrop={onParameterDrop}
 >
-  <DockRegion region="left" mobileInlineHidden />
+  <!-- Pages mode (01-shell §3/§11): the active section's content fills the page.
+       The LEFT/RIGHT regions stop being inline columns (so a section truly fills
+       the width) and become edge openers — matching the design's mobile rule
+       "left/right become overlay drawers … Bottom stays inline" (§11). TOP,
+       MAIN and BOTTOM stay inline, so the main content (grid) plus the mobile
+       control surfaces (block editor docked bottom, R9d phone flow) remain
+       visible. Fixed mode (default) renders the full multi-region dock unchanged.
+       Edit mode always resolves to fixed, so every region is rearrangeable. -->
+  {#if !pagesMode}
+    <DockRegion region="left" mobileInlineHidden />
+  {/if}
   <div class="aw-workspace-center">
     <DockRegion region="top" mobileInlineHidden />
     <DockRegion region="main" />
     <DockRegion region="bottom" />
   </div>
-  <DockRegion region="right" mobileInlineHidden />
+  {#if !pagesMode}
+    <DockRegion region="right" mobileInlineHidden />
+  {/if}
 
   {#if hasRegion('left') && mobileDock !== 'left'}
-    <button class="aw-mobile-dock-indicator left" type="button" title="Open left dock" onclick={() => toggleMobileDock('left')}>◧ Left</button>
+    <button class="aw-mobile-dock-indicator left" class:pages-opener={pagesMode} type="button" title="Open left dock" onclick={() => toggleMobileDock('left')}>◧ Left</button>
   {/if}
   {#if hasRegion('right') && mobileDock !== 'right'}
-    <button class="aw-mobile-dock-indicator right" type="button" title="Open right dock" onclick={() => toggleMobileDock('right')}>Right ◨</button>
+    <button class="aw-mobile-dock-indicator right" class:pages-opener={pagesMode} type="button" title="Open right dock" onclick={() => toggleMobileDock('right')}>Right ◨</button>
   {/if}
-  {#if hasRegion('top') && mobileDock !== 'top'}
+  {#if !pagesMode && hasRegion('top') && mobileDock !== 'top'}
     <button class="aw-mobile-dock-indicator top" type="button" title="Open top dock" onclick={() => toggleMobileDock('top')}>▽ Top</button>
   {/if}
 
   {#if mobileDock}
-    <button class="aw-mobile-dock-scrim" type="button" aria-label="Close dock drawer" onclick={() => (mobileDock = null)}></button>
+    <button class="aw-mobile-dock-scrim" class:pages-active={pagesMode} type="button" aria-label="Close dock drawer" onclick={() => (mobileDock = null)}></button>
     {#if sideDrawer}
       <!-- R9c: LEFT/RIGHT present as partial-width side overlays that slide in
            from their edge and close on a horizontal swipe toward that edge. -->
       <div
         class="aw-mobile-dock-drawer side {mobileDock}"
+        class:pages-active={pagesMode}
         role="dialog"
         aria-modal="true"
         aria-label={`${mobileDock} dock`}
@@ -184,6 +211,86 @@
   }
   .aw-dock-sheet-grip {
     display: none;
+  }
+
+  /* Pages mode (01-shell §3/§11): the LEFT/RIGHT regions leave the inline flow
+     and become edge openers + a partial-width side overlay, at ANY viewport width
+     (the stage preset is pages mode on desktop). These rules mirror the phone
+     drawer presentation but are gated on the `.pages-*` classes instead of the
+     760px media query so they apply on desktop/tablet too. The phone media query
+     below still governs the fixed-mode mobile drawers. */
+  .aw-mobile-dock-indicator.pages-opener {
+    position: absolute;
+    z-index: 170;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 13px;
+    border-radius: 11px;
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 42%, var(--aw-border));
+    background: var(--aw-bg-2);
+    color: color-mix(in srgb, var(--aw-accent) 78%, white);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    font: 800 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .aw-mobile-dock-indicator.pages-opener:hover {
+    border-color: var(--aw-accent);
+  }
+  .aw-mobile-dock-indicator.pages-opener:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+  }
+  .aw-mobile-dock-indicator.pages-opener.left {
+    left: calc(10px + var(--aw-safe-left, 0px));
+    bottom: calc(64px + var(--aw-safe-bottom, 0px));
+  }
+  .aw-mobile-dock-indicator.pages-opener.right {
+    right: calc(10px + var(--aw-safe-right, 0px));
+    bottom: calc(64px + var(--aw-safe-bottom, 0px));
+  }
+  .aw-mobile-dock-scrim.pages-active {
+    position: absolute;
+    inset: 0;
+    z-index: 150;
+    display: block;
+    border: 0;
+    background: rgba(6, 6, 8, 0.5);
+    backdrop-filter: blur(2px);
+    animation: awDockFadeIn 0.16s ease;
+  }
+  .aw-mobile-dock-drawer.pages-active {
+    position: absolute;
+    z-index: 180;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--aw-bg-2);
+    top: var(--aw-safe-top, 0px);
+    bottom: 0;
+    width: min(85%, 360px);
+    padding-bottom: var(--aw-safe-bottom, 0px);
+  }
+  .aw-mobile-dock-drawer.pages-active.side.right {
+    right: var(--aw-safe-right, 0px);
+    left: auto;
+    border-radius: 16px 0 0 16px;
+    box-shadow: -14px 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: awDockSideRight 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  .aw-mobile-dock-drawer.pages-active.side.left {
+    left: var(--aw-safe-left, 0px);
+    right: auto;
+    border-radius: 0 16px 16px 0;
+    box-shadow: 14px 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: awDockSideLeft 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .aw-edge-drop-preview {
     position: absolute;
