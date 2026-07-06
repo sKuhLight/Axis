@@ -25,6 +25,21 @@ test.describe('Persistence', () => {
     await clickNav(page, 'scenes');
     await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
 
+    // Cache writes are debounced ~150ms (storage hardening round 11) with a
+    // pagehide flush of PENDING writes — corrupting inside the debounce window
+    // would just be overwritten by that flush on reload (correct app behavior:
+    // never lose an edit on close). Wait until the docked state has actually
+    // landed in storage so the corruption is the final word.
+    await page.waitForFunction(
+      (key) => (window.localStorage.getItem(key) ?? '').includes('axis.scenes'),
+      WORKBENCH_DOC_KEY
+    );
+    // …and then let ALL debounced writes drain: docking dispatches more than one
+    // command, so a second 150ms timer can still be pending after the first write
+    // lands — it would rewrite the doc right over our corruption. 400ms > any
+    // trailing debounce window.
+    await page.waitForTimeout(400);
+
     // Corrupt the persisted doc with invalid JSON, then reload.
     await page.evaluate((key) => window.localStorage.setItem(key, '{not valid json'), WORKBENCH_DOC_KEY);
     await page.reload();
