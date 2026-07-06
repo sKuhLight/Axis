@@ -170,6 +170,18 @@ colW/cellH/gap/mapMode.
   focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
   state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
   mobile sheets → T21/T23).
+**Round 10 (deferral cleanup) — IN FLIGHT (4 opus + e2e realignment):**
+- R10a PROFILE switcher UI (ribbon segmented control over setAxisProfileOverride).
+- R10b generic workbench toast surface (toasts.ts + WorkbenchToasts in Host) wired
+  to layout-apply / save-to-library.
+- R10c T29 layout import/export (core layoutPackage w/ full id re-mint via
+  createWorkbenchId + LibraryDrawer UI).
+- R10d T12 leftovers: PB full row anatomy (block chips/CPU/presence), inline
+  rename via the monolith's path, row context menus (owner-gated, real actions
+  only); swipe optional.
+After this wave the board is ONLY: operator verification, Layout Profiles
+(TOGETHER), hardware-gated items, T35 audit.
+
 **Round 9 — ALL FOUR LANDED** (`9b1848b` grid gating, `4d6ef07` shell chrome +
 tokens DONE incl. guard tolerance removed, `8532cff` full-height side regions +
 side-overlay drawers, `32175ad` phone block flow). Unit 565/565.
