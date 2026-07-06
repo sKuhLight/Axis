@@ -87,6 +87,17 @@
   a tooltip; board header shows `reading…` during live read; inspector-part with no
   selection shows the "No switch selected" hint; flat-config strip shows the "+N more"
   overflow badge past 64. Verify visually + a keyboard-only tab through the inspector.
+- **T21+T23 mobile chrome (R8a)**: iOS safe-area — on a notched device (iPhone
+  simulator, portrait + landscape) verify the rail/topbar/bottombar/Customize FAB
+  clear the notch, home-indicator, and landscape edge insets; nothing clips under
+  the status bar. **T23 swipe feel** — on a real touch device below 760px: nav
+  drawer + each dock drawer + library present as bottom sheets (rounded top, grab
+  bar, slide up from bottom); dragging the sheet down past ~96px OR a fast flick
+  closes it; a slow short drag snaps back; dragging while the sheet's list is
+  scrolled (not at top) scrolls the list instead of closing; scrim tap + Escape
+  still close; reopening after a swipe-close animates cleanly (no stuck offscreen
+  sheet). Desktop (>760px) presentation must be unchanged (rail docked left, library
+  drawer from the right edge).
 
 ## Deliberately deferred (documented in commits / agent reports)
 

@@ -9,6 +9,7 @@
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, type WorkbenchTheme } from './theme';
   import { focusTrap } from './focusTrap';
+  import { bottomSheetSwipe } from './bottomSheet';
   import type { Snippet } from 'svelte';
 
   let {
@@ -46,10 +47,16 @@
   // resolver never mutates layout contents — it only picks a profile id, and the
   // controller dispatches `profile.activate` solely when the resolved id differs.
   let rootEl = $state<HTMLElement | null>(null);
+  // T23: phone-width flag (matches the 760px CSS breakpoint) gates bottom-sheet
+  // swipe-to-close so the gesture is inert on tablet/desktop.
+  let isPhone = $state(false);
   $effect(() => {
     const el = rootEl;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const resolve = () => controller.resolveProfileForWidth(el.clientWidth);
+    const resolve = () => {
+      controller.resolveProfileForWidth(el.clientWidth);
+      isPhone = el.clientWidth <= 760;
+    };
     resolve();
     const observer = new ResizeObserver(resolve);
     observer.observe(el);
@@ -80,9 +87,14 @@
     <aside
       class="aw-rail"
       class:open={navDrawerOpen}
+      class:aw-sheet={isPhone && navDrawerOpen}
       data-zone-shell="rail"
       use:focusTrap={{ enabled: showMobileDrawer && navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
+      use:bottomSheetSwipe={{ enabled: isPhone, open: navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
     >
+      <!-- T23: grab bar for the phone bottom-sheet presentation (CSS hides it
+           outside phone width). Swipe it (or the sheet) down to close. -->
+      <div class="aw-sheet-grip" aria-hidden="true"></div>
       <div class="aw-mark" aria-hidden="true">
         <span></span><span></span><span></span>
       </div>
@@ -143,6 +155,13 @@
     --aw-danger: var(--danger, #d6543f);
     --aw-font-ui: var(--font-ui, system-ui, sans-serif);
     --aw-font-mono: var(--font-mono, ui-monospace, monospace);
+    /* T21: neutral safe-area inset fallbacks. The Axis theme maps these to the
+       real env(safe-area-inset-*) via axisWorkbenchTheme; 0px here keeps the
+       generic shell correct with no host. */
+    --aw-safe-top: 0px;
+    --aw-safe-right: 0px;
+    --aw-safe-bottom: 0px;
+    --aw-safe-left: 0px;
     --aw-widget-h: 38px;
   }
 
@@ -167,13 +186,15 @@
   }
 
   .aw-rail {
-    width: var(--rail-w, 66px);
+    /* T21: the docked rail sits on the screen's left edge — pad by the left
+       safe-area inset (landscape notch) and top/bottom insets. */
+    width: calc(var(--rail-w, 66px) + var(--aw-safe-left, 0px));
     flex: none;
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 9px;
-    padding: 10px 8px 12px;
+    padding: calc(10px + var(--aw-safe-top, 0px)) 8px calc(12px + var(--aw-safe-bottom, 0px)) calc(8px + var(--aw-safe-left, 0px));
     background: var(--aw-bg-2);
     border-right: 1px solid var(--aw-border);
     box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.025);
@@ -232,8 +253,10 @@
   }
 
   .aw-topbar {
+    /* T21: the top bar's right edge is the screen's right edge (the rail owns
+       the left inset); respect the top + right insets. */
     height: calc(58px + var(--aw-safe-top, 0px));
-    padding: var(--aw-safe-top, 0px) 12px 0;
+    padding: var(--aw-safe-top, 0px) calc(12px + var(--aw-safe-right, 0px)) 0 12px;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     border-bottom: 1px solid var(--aw-border);
     box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.025);
@@ -255,8 +278,10 @@
   }
 
   .aw-bottombar {
+    /* T21: bottom bar hugs the home-indicator (bottom inset) and screen right
+       edge (right inset); left inset belongs to the rail. */
     min-height: calc(38px + var(--aw-safe-bottom, 0px));
-    padding: 4px 12px var(--aw-safe-bottom, 0px);
+    padding: 4px calc(12px + var(--aw-safe-right, 0px)) var(--aw-safe-bottom, 0px) 12px;
     border-top: 1px solid var(--aw-border);
   }
 
@@ -287,24 +312,42 @@
     .aw-root {
       flex-direction: row;
     }
+    /* T23: on phone the nav drawer is a bottom sheet — full width, pinned to the
+       bottom edge, rounded top, slides up from below. Safe-area insets keep it
+       clear of the notch/home-indicator and landscape edges. Transform-only
+       transition (geometry-safe) drives the slide; swipe-to-close is layered by
+       the bottomSheetSwipe action (JS transform, no CSS transition). */
     .aw-rail {
       position: fixed;
-      top: 0;
-      left: 0;
+      left: var(--aw-safe-left, 0px);
+      right: var(--aw-safe-right, 0px);
       bottom: 0;
+      top: auto;
       z-index: 230;
-      width: 80px;
+      width: auto;
+      max-height: 82vh;
       height: auto;
       flex-direction: column;
-      border-right: 1px solid var(--aw-border);
-      border-top: 0;
-      padding: calc(14px + var(--aw-safe-top, 0px)) 8px calc(14px + var(--aw-safe-bottom, 0px));
-      box-shadow: 10px 0 40px rgba(0, 0, 0, 0.55);
-      transform: translateX(-96px);
+      border: 0;
+      border-top: 1px solid var(--aw-border);
+      border-radius: 18px 18px 0 0;
+      padding: 6px 12px calc(16px + var(--aw-safe-bottom, 0px));
+      box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.55);
+      overflow-y: auto;
+      transform: translateY(calc(100% + 24px));
       transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
     }
     .aw-rail.open {
-      transform: translateX(0);
+      transform: translateY(0);
+    }
+    .aw-sheet-grip {
+      flex: none;
+      align-self: center;
+      width: 40px;
+      height: 4px;
+      margin: 2px 0 8px;
+      border-radius: 3px;
+      background: var(--aw-border-3);
     }
     .aw-mark {
       width: 48px;
@@ -319,13 +362,14 @@
       padding-top: 72px;
     }
     .aw-topbar {
-      padding-left: 62px;
+      /* Leave room for the hamburger (offset by the left inset). */
+      padding-left: calc(62px + var(--aw-safe-left, 0px));
       grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
     }
     .aw-mobile-menu {
       position: absolute;
       top: calc(11px + var(--aw-safe-top, 0px));
-      left: 11px;
+      left: calc(11px + var(--aw-safe-left, 0px));
       z-index: 120;
       width: 42px;
       height: 42px;
@@ -357,6 +401,16 @@
       background: rgba(6, 6, 8, 0.52);
       backdrop-filter: blur(2px);
       animation: awFadeIn 0.16s ease;
+    }
+  }
+
+  .aw-sheet-grip {
+    display: none;
+  }
+
+  @media (max-width: 760px) {
+    .aw-sheet-grip {
+      display: block;
     }
   }
 

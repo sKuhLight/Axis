@@ -2,6 +2,7 @@
   import DockRegion from './DockRegion.svelte';
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
+  import { bottomSheetSwipe } from './bottomSheet';
   import {
     WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -12,6 +13,18 @@
   let mobileDock = $state<DockRegionId | null>(null);
   let edgeDropRegion = $state<DockRegionId | null>(null);
   const layout = $derived($controller.activeLayout);
+
+  // T23: phone flag (matches the 760px CSS breakpoint) — gates bottom-sheet
+  // swipe-to-close on the dock drawers. matchMedia keeps it observer-free.
+  let isPhone = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(max-width: 760px)');
+    const sync = () => (isPhone = mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
 
   function hasRegion(region: DockRegionId): boolean {
     return !!layout?.dock.root[region];
@@ -100,7 +113,10 @@
       aria-modal="true"
       aria-label={`${mobileDock} dock`}
       use:focusTrap={{ onClose: () => (mobileDock = null) }}
+      use:bottomSheetSwipe={{ enabled: isPhone, onClose: () => (mobileDock = null) }}
     >
+      <!-- T23: grab bar for the phone bottom-sheet presentation. -->
+      <div class="aw-dock-sheet-grip" aria-hidden="true"></div>
       <DockRegion region={mobileDock} overlay />
     </div>
   {/if}
@@ -135,6 +151,9 @@
   .aw-mobile-dock-indicator,
   .aw-mobile-dock-scrim,
   .aw-mobile-dock-drawer {
+    display: none;
+  }
+  .aw-dock-sheet-grip {
     display: none;
   }
   .aw-edge-drop-preview {
@@ -212,22 +231,24 @@
       outline: 2px solid var(--aw-accent);
       outline-offset: 2px;
     }
+    /* Dock openers sit above the home-indicator inset; left/right also clear
+       landscape safe-area edges (T21). */
     .aw-mobile-dock-indicator.left {
-      left: 10px;
-      bottom: 64px;
+      left: calc(10px + var(--aw-safe-left, 0px));
+      bottom: calc(64px + var(--aw-safe-bottom, 0px));
       height: 40px;
       padding: 0 13px;
       border-radius: 11px;
     }
     .aw-mobile-dock-indicator.right {
-      right: 10px;
-      bottom: 64px;
+      right: calc(10px + var(--aw-safe-right, 0px));
+      bottom: calc(64px + var(--aw-safe-bottom, 0px));
       height: 40px;
       padding: 0 13px;
       border-radius: 11px;
     }
     .aw-mobile-dock-indicator.top {
-      top: 8px;
+      top: calc(8px + var(--aw-safe-top, 0px));
       left: 50%;
       height: 26px;
       padding: 0 16px;
@@ -244,52 +265,48 @@
       backdrop-filter: blur(2px);
       animation: awDockFadeIn 0.16s ease;
     }
+    /* T23: all three dock drawers present as bottom sheets on phone — full
+       width, pinned to the bottom edge, rounded top, grab bar, slide up. The
+       slide uses a keyframe `animation` (not a `transition`) so the geometry
+       guard stays satisfied; swipe-to-close drives transform via JS. Safe-area
+       insets keep the sheet clear of the notch/home-indicator/landscape edges. */
     .aw-mobile-dock-drawer {
       position: absolute;
+      left: var(--aw-safe-left, 0px);
+      right: var(--aw-safe-right, 0px);
+      bottom: 0;
+      top: auto;
+      width: auto;
+      max-height: min(90%, calc(100% - 40px - var(--aw-safe-top, 0px)));
       z-index: 180;
       display: flex;
+      flex-direction: column;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
       background: var(--aw-bg-2);
-      box-shadow: 0 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      border-radius: 18px 18px 0 0;
+      padding-bottom: var(--aw-safe-bottom, 0px);
+      box-shadow: 0 -14px 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      animation: awDockSheetUp 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
     }
-    .aw-mobile-dock-drawer.left {
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: min(88vw, 320px);
-      animation: awDockSlideLeft 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
-    }
-    .aw-mobile-dock-drawer.right {
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: min(88vw, 340px);
-      animation: awDockSlideRight 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
-    }
-    .aw-mobile-dock-drawer.top {
-      left: 0;
-      top: 0;
-      right: 0;
-      height: min(72%, 260px);
-      animation: awDockSlideTop 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    .aw-dock-sheet-grip {
+      flex: none;
+      align-self: center;
+      width: 40px;
+      height: 4px;
+      margin: 8px 0 6px;
+      border-radius: 3px;
+      display: block;
+      background: var(--aw-border-3);
     }
   }
   @keyframes awDockFadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
   }
-  @keyframes awDockSlideLeft {
-    from { transform: translateX(calc(-100% - 60px)); }
-    to { transform: translateX(0); }
-  }
-  @keyframes awDockSlideRight {
-    from { transform: translateX(calc(100% + 60px)); }
-    to { transform: translateX(0); }
-  }
-  @keyframes awDockSlideTop {
-    from { transform: translateY(calc(-100% - 60px)); }
+  @keyframes awDockSheetUp {
+    from { transform: translateY(calc(100% + 24px)); }
     to { transform: translateY(0); }
   }
 </style>
