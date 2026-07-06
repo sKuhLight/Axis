@@ -29,19 +29,20 @@
 </button>
 
 <style>
+  /* Design 01-shell §9: rail nav items 52×50, radius 11, glyph 18px, label 10px/600. */
   .axis-nav-entry {
     width: 100%;
     min-width: 0;
-    height: 48px;
+    height: 50px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
-    border: 0;
-    border-radius: 9px;
+    gap: 4px;
+    border: 1px solid transparent;
+    border-radius: 11px;
     background: transparent;
-    color: var(--textdim);
+    color: var(--textfaint);
     cursor: pointer;
   }
   .axis-nav-entry:hover {
@@ -52,7 +53,7 @@
     color: var(--accent);
   }
   .ic {
-    font-size: 17px;
+    font-size: 18px;
     line-height: 1;
   }
   .lbl {
@@ -60,7 +61,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 9px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 600;
   }
 </style>
