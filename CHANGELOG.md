@@ -2,6 +2,38 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.4-beta — 2026-07-07
+
+### Added
+- **AM4 tuner.** The AM4 now has a live tuner in Axis — big note + octave, a cents needle, the
+  detected frequency, and the string highlight — the same tuner the other devices use. Open it
+  from the tool rail or the top bar. *(Decoded from device captures; not yet confirmed on real
+  hardware — if a reading looks off, please report it.)*
+- **FM9 & Axe-Fx III — full effect model lists.** Every effect's **Type** picker now shows the
+  complete model list (amps, drives, reverbs, delays, choruses, flangers, phasers…), matching the
+  unit. FM9 previously showed only a few families; both devices are now complete.
+- **FM9 & Axe-Fx III — real cabinet / IR names.** The cab picker now shows factory cabinet and IR
+  names instead of bare numbers. (Your own USER IRs are still read live from the device.)
+- **FM9 & Axe-Fx III — accurate knob ranges & units.** Parameter ranges and units now come from
+  device-true data, so on-screen values line up with the hardware.
+
+### Fixed
+- **Drive/amp "Type" now changes the actual model (FM3, FM9, Axe-Fx III).** Picking a Drive block's
+  type used to read and write the wrong parameter (a clipping/diode control) instead of the
+  amp/drive model, so changing the type seemed to do nothing — or moved the wrong knob. It now
+  targets the real model selector.
+- **Front-panel scene changes now show up in Axis (FM3, FM9, Axe-Fx III, AM4).** Change the scene on
+  the hardware (footswitch or front panel) and Axis follows — not just the scene number, but the
+  whole grid: per-scene bypass, channels, and parameter values all refresh.
+- **Switching amp channel on the device updates the amp name (FM3, FM9, Axe-Fx III).** Changing the
+  amp block's channel (A–D) on the hardware now updates the amp model name and its parameters in
+  Axis to match the device screen (previously only in-app channel switches did).
+
+### Changed
+- Bundled **ForgeFX engine** carries all of the above — the FM9/Axe-Fx III model lists, cabinet/IR
+  names and ranges, the Type-selector fix, the front-panel scene & channel watches, and the AM4
+  tuner.
+
 ## 0.8.3-beta — 2026-07-05
 
 ### Fixed
