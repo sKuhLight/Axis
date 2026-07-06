@@ -2,6 +2,7 @@ import {
   WORKBENCH_SCHEMA_VERSION,
   cloneWorkbenchDocument,
   isJsonSerializable,
+  remintLayoutInteriorIds,
   selectActiveLayout,
   type PanelTemplate,
   type WidgetTemplate,
@@ -118,8 +119,13 @@ export function importWorkbenchPackageCommands(
   switch (workbenchPackage.kind) {
     case 'layout': {
       const layout = payload as WorkbenchLayout;
-      layout.id = options.id ?? (options.overwrite ? layout.id : uniqueId(layout.id, new Set(Object.keys(doc.layouts))));
-      return [{ type: 'layout.save', layout }];
+      const layoutId = options.id ?? (options.overwrite ? layout.id : uniqueId(layout.id, new Set(Object.keys(doc.layouts))));
+      // The top-level layout id follows this path's own de-dup/explicit/overwrite
+      // policy, but the layout also carries interior ids (dock nodes, panel/widget/
+      // group ids, `panel:` zone refs, tab-stack panelIds). Re-key those through the
+      // T02-safe deep re-mint so importing a layout into a document that already holds
+      // those ids cannot produce duplicate keyed-each ids and crash the dock render.
+      return [{ type: 'layout.save', layout: remintLayoutInteriorIds(layout, layoutId) }];
     }
     case 'profile': {
       const profile = payload as WorkbenchProfile;
