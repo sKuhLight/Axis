@@ -482,6 +482,57 @@ describe('reduceWorkbenchDocument — widgets', () => {
     expect(ungrouped.error?.code).toBe('locked-widget-group');
   });
 
+  // Regression (V13g): dragging a single member out of a group via `widget.move`
+  // must detach it from the group. Before the fix `placeWidgets` left `groupId`
+  // (and the group's `widgetIds`) untouched, so the member could never leave and
+  // grouped-widget drag-out silently did nothing.
+  it('detaches a single member from its group on widget.move', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.c', 'top.left', 2), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b', 'widget.c'], groupId: 'group.a' }).next;
+
+    const moved = reduceWorkbenchDocument(next, { type: 'widget.move', widgetIds: ['widget.b'], zone: 'top.right' });
+
+    expect(moved.success).toBe(true);
+    expect(layout(moved.next).widgets['widget.b'].groupId).toBeNull();
+    expect(layout(moved.next).widgets['widget.b'].zone).toBe('top.right');
+    expect(layout(moved.next).widgetGroups['group.a'].widgetIds).toEqual(['widget.a', 'widget.c']);
+    // The two remaining members stay grouped.
+    expect(layout(moved.next).widgets['widget.a'].groupId).toBe('group.a');
+    expect(layout(moved.next).widgets['widget.c'].groupId).toBe('group.a');
+  });
+
+  // Regression (V13g): pulling a member out of a two-member group dissolves the
+  // group (a group of one is not a group).
+  it('dissolves a group that drops below two members after a member drag-out', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b'], groupId: 'group.a' }).next;
+
+    const moved = reduceWorkbenchDocument(next, { type: 'widget.move', widgetIds: ['widget.a'], zone: 'top.center' });
+
+    expect(moved.success).toBe(true);
+    expect(layout(moved.next).widgetGroups['group.a']).toBeUndefined();
+    expect(layout(moved.next).widgets['widget.a'].groupId).toBeNull();
+    expect(layout(moved.next).widgets['widget.b'].groupId).toBeNull();
+  });
+
+  // Moving the WHOLE group together (the group grip passes every member id) keeps
+  // the group intact — only partial moves detach.
+  it('keeps a group intact when every member moves together', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b'], groupId: 'group.a' }).next;
+
+    const moved = reduceWorkbenchDocument(next, { type: 'widget.move', widgetIds: ['widget.a', 'widget.b'], zone: 'top.right' });
+
+    expect(moved.success).toBe(true);
+    expect(layout(moved.next).widgetGroups['group.a'].widgetIds).toEqual(['widget.a', 'widget.b']);
+    expect(layout(moved.next).widgets['widget.a'].groupId).toBe('group.a');
+    expect(layout(moved.next).widgets['widget.a'].zone).toBe('top.right');
+  });
+
   it('ungroups widgets', () => {
     let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
     next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
