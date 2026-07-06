@@ -120,7 +120,8 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
     'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
-    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.right', 5, { state: widgetState(95) }),
+    'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) }),
+    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.right', 6, { state: widgetState(95) }),
     'axis.widget.search': widget('axis.widget.search', 'axis.search', 'hidden', 0),
     'axis.widget.history': widget('axis.widget.history', 'axis.history', 'rail', 0, { size: 'compact' }),
     'axis.widget.account': widget('axis.widget.account', 'axis.account', 'rail', 1, {

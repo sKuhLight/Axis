@@ -25,6 +25,7 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.tuner',
   'axis.tempo',
   'axis.cpu',
+  'axis.meterToggle',
   'axis.save',
   'axis.search',
   'axis.history',

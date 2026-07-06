@@ -4,13 +4,27 @@
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
   import {
     AXIS_GRID_MODES,
+    axisGridMapDots,
     cycleAxisBlockSize,
+    cycleAxisGridMode,
     readAxisBlockSize,
     readAxisGridMode,
     stepAxisBlockSize,
     type AxisBlockSize,
     type AxisGridMode
   } from '../gridView';
+  import { axisFcWorkbenchController, type AxisFcControllerSnapshot } from '../fc/fcWorkbenchController';
+  import { axisFcWorkbenchRuntime } from '../fc/fcWorkbenchRuntime';
+  import type { AxisFcModelLike } from '../fc/fcWorkbenchData';
+  import {
+    AXIS_FC_DEVICES,
+    axisFcLayoutChipLabel,
+    createAxisHoldRepeat,
+    cycleAxisFcDevice,
+    cycleAxisFcLayout,
+    readAxisFcDevice,
+    type AxisFcDevice
+  } from './widgetControls';
 
   let {
     widget,
@@ -41,6 +55,34 @@
   const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
   const gridMode = $derived(readAxisGridMode(widget.state?.mode));
   const blockSize = $derived(readAxisBlockSize(widget.state?.size));
+  const isFcKind = $derived(kind === 'fcDevice' || kind === 'fcLayouts' || kind === 'fcSwitchView');
+  let fcSel = $state<AxisFcControllerSnapshot>(axisFcWorkbenchController.snapshot);
+  let fcModel = $state<AxisFcModelLike | null>(axisFcWorkbenchRuntime.snapshot.model);
+  $effect(() => {
+    if (!isFcKind) return;
+    const offSel = axisFcWorkbenchController.subscribe((next) => (fcSel = next));
+    const offModel = axisFcWorkbenchRuntime.subscribe((next) => (fcModel = next.model));
+    return () => {
+      offSel();
+      offModel();
+    };
+  });
+  // roster sizes from the live FC model when a panel has loaded it; design counts otherwise
+  const fcLayoutCount = $derived(fcModel?.layouts ?? 9);
+  const fcViewCount = $derived(fcModel?.views ?? 4);
+  const fcLayout = $derived(Math.max(0, Math.min(fcLayoutCount - 1, fcSel.layout)));
+  const fcView = $derived(Math.max(0, Math.min(fcViewCount - 1, fcSel.view)));
+  const fcSwitch = $derived(fcSel.switchIndex ?? 0);
+  const fcDevice = $derived(readAxisFcDevice(widget.state?.device));
+  const mapDots = $derived(
+    kind === 'gridMap'
+      ? axisGridMapDots(
+          [...editor.layout.cells, ...editor.layout.shunts],
+          editor.layout.rows || 4,
+          editor.layout.cols || 12
+        )
+      : []
+  );
   const paramTarget = $derived(widget.binding?.target ?? {});
   const paramBlock = $derived(readString(paramTarget.block) ?? readString(widget.state?.block) ?? 'Block');
   const paramLabel = $derived(readString(paramTarget.param) ?? readString(paramTarget.label) ?? readString(widget.state?.label) ?? 'Parameter');
@@ -92,6 +134,10 @@
     dispatch({ type: 'widget.state', widgetId: widget.id, state: { size: next } });
   }
 
+  function setFcDevice(device: AxisFcDevice) {
+    dispatch({ type: 'widget.state', widgetId: widget.id, state: { device } });
+  }
+
   function presetStep(delta: number) {
     if (pnumRaw < 0) {
       editor.presetOpen = true;
@@ -99,6 +145,18 @@
     }
     void editor.selectPreset(Math.max(0, pnumRaw + delta));
   }
+
+  // hold-to-repeat (spec §1.3: 380ms arm, 100ms repeat) for preset ‹/› and blocksize −/+
+  const presetPrevHold = createAxisHoldRepeat(() => presetStep(-1));
+  const presetNextHold = createAxisHoldRepeat(() => presetStep(1));
+  const sizeLessHold = createAxisHoldRepeat(() => setBlockSize(stepAxisBlockSize(blockSize, -1)));
+  const sizeMoreHold = createAxisHoldRepeat(() => setBlockSize(stepAxisBlockSize(blockSize, 1)));
+  $effect(() => () => {
+    presetPrevHold.stop();
+    presetNextHold.stop();
+    sizeLessHold.stop();
+    sizeMoreHold.stop();
+  });
 
   function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim() ? value : undefined;
@@ -163,7 +221,15 @@
 {#if kind === 'preset'}
   <div class="axis-widget axis-preset" data-size={size}>
     {#if !mini}
-      <button class="preset-arrow" type="button" title="Previous preset" onclick={() => presetStep(-1)}>‹</button>
+      <button
+        class="preset-arrow"
+        type="button"
+        title="Previous preset (hold to scan)"
+        onclick={() => presetStep(-1)}
+        onpointerdown={(event) => presetPrevHold.start(event)}
+        onpointerup={presetPrevHold.stop}
+        onpointerleave={presetPrevHold.stop}
+      >‹</button>
     {/if}
     <button class="preset-main" type="button" onclick={openWidget}>
       <span class="mono token">PRE</span>
@@ -172,7 +238,15 @@
       {#if !mini}<span class="chev">▾</span>{/if}
     </button>
     {#if !mini}
-      <button class="preset-arrow" type="button" title="Next preset" onclick={() => presetStep(1)}>›</button>
+      <button
+        class="preset-arrow"
+        type="button"
+        title="Next preset (hold to scan)"
+        onclick={() => presetStep(1)}
+        onpointerdown={(event) => presetNextHold.start(event)}
+        onpointerup={presetNextHold.stop}
+        onpointerleave={presetNextHold.stop}
+      >›</button>
     {/if}
   </div>
 {:else if kind === 'scenes'}
@@ -224,10 +298,10 @@
             class="pill-chip"
             class:on={mode === gridMode || mini}
             type="button"
-            title={mode === 'full' ? 'Blocks at the chosen size — grid pans' : 'Fit blocks to the pane'}
-            onclick={() => setGridMode(mini ? (gridMode === 'full' ? 'auto' : 'full') : mode)}
+            title={mode === 'full' ? 'Blocks at the chosen size — grid pans' : mode === 'map' ? 'Glyph minimap' : 'Fit blocks to the pane'}
+            onclick={() => setGridMode(mini ? cycleAxisGridMode(gridMode) : mode)}
           >
-            {mode === 'full' ? 'Full' : 'Auto'}
+            {mode === 'full' ? 'Full' : mode === 'map' ? 'Map' : 'Auto'}
           </button>
         {/if}
       {/each}
@@ -239,9 +313,27 @@
     {#if mini}
       <button class="mono strong size-cycle" type="button" title="Cycle block size" onclick={() => setBlockSize(cycleAxisBlockSize(blockSize))}>{blockSize}</button>
     {:else}
-      <button class="step" type="button" title="Smaller blocks" disabled={blockSize === 'S'} onclick={() => setBlockSize(stepAxisBlockSize(blockSize, -1))}>−</button>
+      <button
+        class="step"
+        type="button"
+        title="Smaller blocks (hold)"
+        disabled={blockSize === 'S'}
+        onclick={() => setBlockSize(stepAxisBlockSize(blockSize, -1))}
+        onpointerdown={(event) => sizeLessHold.start(event)}
+        onpointerup={sizeLessHold.stop}
+        onpointerleave={sizeLessHold.stop}
+      >−</button>
       <span class="mono strong">{blockSize}</span>
-      <button class="step" type="button" title="Bigger blocks" disabled={blockSize === 'L'} onclick={() => setBlockSize(stepAxisBlockSize(blockSize, 1))}>+</button>
+      <button
+        class="step"
+        type="button"
+        title="Bigger blocks (hold)"
+        disabled={blockSize === 'L'}
+        onclick={() => setBlockSize(stepAxisBlockSize(blockSize, 1))}
+        onpointerdown={(event) => sizeMoreHold.start(event)}
+        onpointerup={sizeMoreHold.stop}
+        onpointerleave={sizeMoreHold.stop}
+      >+</button>
     {/if}
   </div>
 {:else if kind === 'paramControl'}
@@ -312,6 +404,119 @@
     </svg>
     {#if expanded}<span>Search presets...</span>{/if}
   </button>
+{:else if kind === 'logo'}
+  <div class="axis-widget square logo" data-size={size} title="Axis">
+    <svg width="26" height="26" viewBox="0 0 30 30" aria-hidden="true">
+      <circle cx="9" cy="9" r="3.4" class="logo-a"></circle>
+      <circle cx="21" cy="9" r="3.4" class="logo-b"></circle>
+      <circle cx="15" cy="21" r="3.4" class="logo-c"></circle>
+      <path d="M9 9 L21 9 L15 21 Z" fill="none" class="logo-tri"></path>
+    </svg>
+  </div>
+{:else if kind === 'gridMap'}
+  <button
+    class="axis-widget map"
+    data-size={size}
+    type="button"
+    title="Grid map · show the Block Editor navigator"
+    onclick={() => dispatch({ type: 'panel.activate', panelId: 'axis.blockEditor' })}
+  >
+    <span class="map-dots">
+      {#each mapDots as on, i (i)}
+        <span class="map-dot" class:on></span>
+      {/each}
+    </span>
+    {#if expanded}<span class="mono token">MAP</span>{/if}
+  </button>
+{:else if kind === 'fcDevice'}
+  <div class="axis-widget chips" data-size={size}>
+    {#if expanded}<span class="mono token">FC</span>{/if}
+    <div class="chip-row">
+      {#if mini}
+        <button
+          class="pill-chip on"
+          type="button"
+          title={`FC device ${fcDevice} · tap for next`}
+          onclick={() => setFcDevice(cycleAxisFcDevice(fcDevice))}
+        >
+          {fcDevice}
+        </button>
+      {:else}
+        {#each AXIS_FC_DEVICES as device (device)}
+          <button
+            class="pill-chip"
+            class:on={device === fcDevice}
+            type="button"
+            title={`FC device ${device}`}
+            onclick={() => setFcDevice(device)}
+          >
+            {device}
+          </button>
+        {/each}
+      {/if}
+    </div>
+  </div>
+{:else if kind === 'fcLayouts'}
+  <div class="axis-widget chips" data-size={size}>
+    {#if expanded}<span class="mono token">LAY</span>{/if}
+    <div class="chip-row">
+      {#if mini}
+        <button
+          class="num-chip on"
+          type="button"
+          title={`Layout ${axisFcLayoutChipLabel(fcLayout)} · tap for next`}
+          onclick={() => axisFcWorkbenchController.selectLayout(cycleAxisFcLayout(fcLayout, fcLayoutCount))}
+        >
+          {axisFcLayoutChipLabel(fcLayout)}
+        </button>
+      {:else}
+        {#each Array(fcLayoutCount) as _, i}
+          <button
+            class="num-chip"
+            class:on={i === fcLayout}
+            type="button"
+            title={`Layout ${axisFcLayoutChipLabel(i)}`}
+            onclick={() => axisFcWorkbenchController.selectLayout(i)}
+          >
+            {axisFcLayoutChipLabel(i)}
+          </button>
+        {/each}
+      {/if}
+    </div>
+  </div>
+{:else if kind === 'fcSwitchView'}
+  <div class="axis-widget fc-switch" data-size={size}>
+    {#if expanded}<span class="mono token">SW</span>{/if}
+    <button class="fc-arrow" type="button" title="Previous switch" onclick={() => axisFcWorkbenchController.selectSwitch(Math.max(0, fcSwitch - 1))}>‹</button>
+    <span class="mono big fc-num">{fcSwitch + 1}</span>
+    <button class="fc-arrow" type="button" title="Next switch" onclick={() => axisFcWorkbenchController.selectSwitch(fcSwitch + 1)}>›</button>
+    {#if expanded}<span class="mono token">VIEW</span>{/if}
+    {#if !mini}
+      <div class="chip-row">
+        {#each Array(fcViewCount) as _, i}
+          <button class="num-chip" class:on={i === fcView} type="button" title={`View ${i + 1}`} onclick={() => axisFcWorkbenchController.selectView(i)}>
+            {i + 1}
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+{:else if kind === 'meterToggle'}
+  <button
+    class="axis-widget meter-toggle"
+    class:on={editor.meteringOn}
+    data-size={size}
+    type="button"
+    disabled={!editor.canMeterBlocks}
+    title={editor.canMeterBlocks
+      ? "Per-block audio meters — polls the open block's level once per ~0.5s"
+      : 'Per-block metering needs a ready device with live monitors on a fast link'}
+    onclick={() => (editor.meteringOn = !editor.meteringOn)}
+  >
+    <span class="meter-glyph">▊</span>
+    {#if expanded}<span class="mono token">METER</span>{/if}
+    {#if notMini}<span class="mono meter-state">{editor.meteringOn ? 'ON' : 'OFF'}</span>{/if}
+  </button>
 {:else}
   <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title={kind}>
     <span class="glyph">{kind === 'tuner' ? '♪' : kind === 'undoRedo' ? '↶' : '•'}</span>
@@ -364,14 +569,12 @@
   .axis-widget[data-size='compact'] {
     height: 34px;
     padding-inline: 10px;
-    gap: 6px;
+    gap: 8px;
   }
   .axis-widget[data-size='mini'] {
-    width: 28px;
     height: 28px;
-    justify-content: center;
-    padding: 0;
-    gap: 0;
+    padding: 0 7px;
+    gap: 5px;
     border-radius: 8px;
   }
   .axis-preset {
@@ -525,6 +728,8 @@
   }
   .square[data-size='mini'] {
     width: 28px;
+    justify-content: center;
+    padding: 0;
   }
   .account span {
     width: 24px;
@@ -605,5 +810,75 @@
     color: var(--textdim);
     font-size: 15px;
     line-height: 1;
+  }
+  .logo {
+    cursor: default;
+  }
+  .logo .logo-a {
+    fill: var(--aw-accent);
+  }
+  .logo .logo-b {
+    fill: var(--blue, var(--aw-accent));
+  }
+  .logo .logo-c {
+    fill: var(--aw-amber);
+  }
+  .logo .logo-tri {
+    stroke: var(--aw-border-3);
+    stroke-width: 1.6;
+  }
+  .map-dots {
+    display: grid;
+    flex: none;
+    grid-template-columns: repeat(6, 3px);
+    grid-auto-rows: 3px;
+    gap: 2px;
+  }
+  .map-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 1px;
+    background: var(--aw-border-2);
+  }
+  .map-dot.on {
+    background: var(--aw-accent);
+  }
+  .fc-arrow {
+    width: 16px;
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    background: transparent;
+    color: var(--aw-text-muted);
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .fc-arrow:hover {
+    color: var(--aw-text);
+  }
+  .fc-num {
+    min-width: 14px;
+    text-align: center;
+  }
+  .meter-toggle .meter-glyph {
+    color: var(--aw-text-faint);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .meter-toggle .meter-state {
+    color: var(--aw-text-faint);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .meter-toggle.on .meter-glyph,
+  .meter-toggle.on .meter-state {
+    color: var(--aw-accent);
+  }
+  .meter-toggle:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 </style>
