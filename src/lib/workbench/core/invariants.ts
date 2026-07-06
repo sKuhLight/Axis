@@ -1,4 +1,5 @@
 import { createEmptyWorkbenchDocument, createEmptyDockLayout, createDefaultWidgetZoneLayout, createEmptyNavigationLayout } from './defaults';
+import { createWorkbenchId, reserveWorkbenchIds } from './ids';
 import {
   DOCK_REGION_IDS,
   WORKBENCH_SCHEMA_VERSION,
@@ -72,9 +73,16 @@ function validateDockNode(
   layout: WorkbenchLayout,
   path: string,
   seenPanels: Map<string, string>,
+  seenNodeIds: Map<string, string>,
   issues: WorkbenchValidationIssue[]
 ): void {
   if (!node) return;
+  const firstNodePath = seenNodeIds.get(node.id);
+  if (firstNodePath) {
+    issue(issues, 'duplicate-node-id', `Dock node id ${node.id} appears more than once in the layout.`, `${path} (first: ${firstNodePath})`);
+  } else {
+    seenNodeIds.set(node.id, path);
+  }
   if (node.kind === 'tabs') {
     if (!Array.isArray(node.panelIds)) {
       issue(issues, 'invalid-tabs', 'Tab stack panelIds must be an array.', `${path}.panelIds`);
@@ -99,7 +107,7 @@ function validateDockNode(
     if (!Array.isArray(node.ratio) || node.ratio.length !== node.children.length) {
       issue(issues, 'invalid-split-ratio', `Split ${node.id} ratio count must match child count.`, `${path}.ratio`);
     }
-    node.children.forEach((child, index) => validateDockNode(child, layout, `${path}.children[${index}]`, seenPanels, issues));
+    node.children.forEach((child, index) => validateDockNode(child, layout, `${path}.children[${index}]`, seenPanels, seenNodeIds, issues));
   }
 }
 
@@ -123,11 +131,12 @@ export function validateWorkbenchDocument(doc: WorkbenchDocument): WorkbenchVali
 
   for (const [layoutId, layout] of Object.entries(doc.layouts ?? {})) {
     const seenPanels = new Map<string, string>();
+    const seenNodeIds = new Map<string, string>();
     for (const region of DOCK_REGION_IDS) {
       if (!layout.dock?.regions?.[region]) {
         issue(issues, 'missing-region-state', `Dock region ${region} is missing state.`, `$.layouts.${layoutId}.dock.regions.${region}`);
       }
-      validateDockNode(layout.dock?.root?.[region] ?? null, layout, `$.layouts.${layoutId}.dock.root.${region}`, seenPanels, issues);
+      validateDockNode(layout.dock?.root?.[region] ?? null, layout, `$.layouts.${layoutId}.dock.root.${region}`, seenPanels, seenNodeIds, issues);
     }
 
     for (const [groupId, group] of Object.entries(layout.widgetGroups ?? {})) {
@@ -163,7 +172,16 @@ export function validateWorkbenchDocument(doc: WorkbenchDocument): WorkbenchVali
   };
 }
 
-function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPanels: Set<string>): DockNode | null {
+function uniqueNodeId(node: DockNode, seenNodeIds: Set<string>): string {
+  // Duplicate node ids happen when a persisted layout meets a fresh session id counter (see
+  // reserveWorkbenchIds); keyed renders crash on them, so re-mint the later occurrence.
+  let id = typeof node.id === 'string' && node.id ? node.id : createWorkbenchId(node.kind);
+  if (seenNodeIds.has(id)) id = createWorkbenchId(node.kind);
+  seenNodeIds.add(id);
+  return id;
+}
+
+function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPanels: Set<string>, seenNodeIds: Set<string>): DockNode | null {
   if (!node) return null;
   if (node.kind === 'tabs') {
     const panelIds = (Array.isArray(node.panelIds) ? node.panelIds : []).filter((panelId) => {
@@ -175,6 +193,7 @@ function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPane
     const repaired: TabStackDockNode = {
       ...node,
       kind: 'tabs',
+      id: uniqueNodeId(node, seenNodeIds),
       panelIds,
       activePanelId: panelIds.includes(node.activePanelId) ? node.activePanelId : panelIds[0]
     };
@@ -183,13 +202,14 @@ function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPane
 
   if (node.kind === 'split') {
     const children = (Array.isArray(node.children) ? node.children : [])
-      .map((child) => repairDockNode(child, layout, seenPanels))
+      .map((child) => repairDockNode(child, layout, seenPanels, seenNodeIds))
       .filter((child): child is DockNode => !!child);
     if (children.length === 0) return null;
     if (children.length === 1) return children[0];
     const repaired: SplitDockNode = {
       ...node,
       kind: 'split',
+      id: uniqueNodeId(node, seenNodeIds),
       axis: node.axis === 'vertical' ? 'vertical' : 'horizontal',
       children,
       ratio: normalizeRatios(node.ratio, children.length)
@@ -198,6 +218,29 @@ function repairDockNode(node: DockNode | null, layout: WorkbenchLayout, seenPane
   }
 
   return null;
+}
+
+function collectDockNodeIds(node: DockNode | null, ids: Set<string>): void {
+  if (!node) return;
+  if (typeof node.id === 'string' && node.id) ids.add(node.id);
+  if (node.kind === 'split') {
+    for (const child of Array.isArray(node.children) ? node.children : []) collectDockNodeIds(child, ids);
+  }
+}
+
+function collectDocumentIds(doc: WorkbenchDocument): Set<string> {
+  const ids = new Set<string>();
+  for (const key of Object.keys(doc.profiles ?? {})) ids.add(key);
+  for (const key of Object.keys(doc.panelLibrary ?? {})) ids.add(key);
+  for (const key of Object.keys(doc.widgetLibrary ?? {})) ids.add(key);
+  for (const [layoutId, layout] of Object.entries(doc.layouts ?? {})) {
+    ids.add(layoutId);
+    for (const key of Object.keys(layout.panels ?? {})) ids.add(key);
+    for (const key of Object.keys(layout.widgets ?? {})) ids.add(key);
+    for (const key of Object.keys(layout.widgetGroups ?? {})) ids.add(key);
+    for (const region of DOCK_REGION_IDS) collectDockNodeIds(layout.dock?.root?.[region] ?? null, ids);
+  }
+  return ids;
 }
 
 function collectDockPanelIds(node: DockNode | null, ids: Set<string>): void {
@@ -344,12 +387,17 @@ export function repairWorkbenchDocument(doc: WorkbenchDocument): WorkbenchDocume
     else return createEmptyWorkbenchDocument();
   }
 
+  // Keep the session id counters ahead of every id already present in the document, so ids minted
+  // during this session (splits, tab stacks, groups, …) can never collide with persisted ones.
+  reserveWorkbenchIds(collectDocumentIds(next));
+
   for (const layout of Object.values(next.layouts)) {
     ensureLayoutShape(layout);
     dedupeSingletonPanels(layout);
     const seenPanels = new Set<string>();
+    const seenNodeIds = new Set<string>();
     for (const region of DOCK_REGION_IDS) {
-      layout.dock.root[region] = repairDockNode(layout.dock.root[region], layout, seenPanels);
+      layout.dock.root[region] = repairDockNode(layout.dock.root[region], layout, seenPanels, seenNodeIds);
     }
     normalizeWidgetGroups(layout);
     normalizeWidgetOrders(layout);
