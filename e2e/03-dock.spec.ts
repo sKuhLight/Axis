@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, clickNav, regionTabs } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
 
 test.describe('Dock interactions', () => {
   test('drag a panel tab from bottom into the main region', async ({ page }) => {
@@ -12,17 +12,19 @@ test.describe('Dock interactions', () => {
     const sb = await src.boundingBox();
     const mb = await mainStack.boundingBox();
     expect(sb && mb).toBeTruthy();
+    const tx = mb!.x + mb!.width / 2;
+    const ty = mb!.y + mb!.height / 2;
 
     // Manual pointer drag: press, move past the 5px threshold, glide to main.
     await page.mouse.move(sb!.x + sb!.width / 2, sb!.y + sb!.height / 2);
     await page.mouse.down();
     await page.mouse.move(sb!.x + sb!.width / 2 + 8, sb!.y + sb!.height / 2 + 8);
-    await page.mouse.move(mb!.x + mb!.width / 2, mb!.y + mb!.height / 2, { steps: 10 });
+    await page.mouse.move(tx, ty, { steps: 10 });
 
     // The drag layer semantics flip the root into panel-drag mode.
     await expect(page.locator('.aw-root.aw-dragging-panel')).toHaveCount(1);
 
-    await page.mouse.move(mb!.x + mb!.width / 2, mb!.y + mb!.height / 2, { steps: 4 });
+    await page.mouse.move(tx, ty, { steps: 4 });
     await page.mouse.up();
 
     // Block Editor now lives in the main stack alongside Signal Grid.
@@ -39,6 +41,10 @@ test.describe('Dock interactions', () => {
     await expect(mainTabs).toHaveText([/Signal Grid/, /Setup/, /Scenes/]);
     // Last-docked panel is active.
     await expect(mainTabs.filter({ hasText: 'Scenes' })).toHaveClass(/active/);
+
+    // The last clickNav left the rail expanded (focusin); collapse it so the
+    // 200px overlay stops covering the left edge of the main tab strip.
+    await collapseRail(page);
 
     // Clicking the Signal Grid tab (outside edit mode) activates it.
     await mainTabs.filter({ hasText: 'Signal Grid' }).click();
