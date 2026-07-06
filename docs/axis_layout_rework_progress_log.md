@@ -112,6 +112,10 @@ removing it. After full implementation, audit what is app-generic (search/filter
 favorites, pickers, toasts, menus…) and migrate it into the standalone workbench
 framework via data/adapter seams (plan task T35).
 
+**Start layout (operator decision 2026-07-06):** boot default = Signal Grid main +
+Block Editor bottom ONLY (landed as the commit after `c021cd6`). "Layout Profiles"
+get built later, together with the operator — do not pre-build them.
+
 ### Visual fix round — worklist (from the screenshot delta)
 
 - **V1 grid tiles**: current renders tiny ~30px circle glyphs with dashed empties on
