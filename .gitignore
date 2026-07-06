@@ -20,3 +20,6 @@ CLAUDE.md
 
 # Design reference screenshots (large PNGs, not needed in the repo)
 design/screenshots/
+
+# Local Workbench visual smoke screenshots
+.workbench-smoke/
