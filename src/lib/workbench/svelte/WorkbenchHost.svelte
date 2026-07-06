@@ -299,6 +299,17 @@
   .aw-rail:not(.aw-rail-expanded) :global(.axis-nav-entry .lbl) {
     display: none;
   }
+  /* V13c: at rest (icon-only) every rail nav item renders as a square, centered
+     in the rail's fixed column, so the active/hover tint is a square rounded
+     tile rather than a wide rounded rect. The rail body is `--aw-rail-w` wide
+     with 8px side padding; the square is sized to fit that content box and
+     centered so it stays square whatever the surrounding widths are. */
+  .aw-rail:not(.aw-rail-expanded) :global(.axis-nav-entry) {
+    width: calc(var(--aw-rail-w, 58px) - 16px);
+    height: calc(var(--aw-rail-w, 58px) - 16px);
+    margin-inline: auto;
+    aspect-ratio: 1 / 1;
+  }
   .aw-rail.aw-rail-expanded :global(.axis-nav-entry) {
     flex-direction: row;
     justify-content: flex-start;

@@ -25,14 +25,31 @@ describe('isAxisNavigationEntryActive', () => {
     expect(isAxisNavigationEntryActive(controller.document, CLEAN, 'fc')).toBe(false);
   });
 
-  it('tints library / fc / theme / account purely from the editor overlay snapshot', () => {
+  it('tints fc / theme / account purely from the editor overlay snapshot', () => {
     const controller = defaultController();
     const doc = controller.document;
-    expect(isAxisNavigationEntryActive(doc, { ...CLEAN, libraryOpen: true }, 'library')).toBe(true);
     expect(isAxisNavigationEntryActive(doc, { ...CLEAN, virtualSlug: 'fc' }, 'fc')).toBe(true);
     expect(isAxisNavigationEntryActive(doc, { ...CLEAN, virtualSlug: 'amp' }, 'fc')).toBe(false);
     expect(isAxisNavigationEntryActive(doc, { ...CLEAN, themeOpen: true }, 'theme')).toBe(true);
     expect(isAxisNavigationEntryActive(doc, { ...CLEAN, accountOpen: true }, 'account')).toBe(true);
+  });
+
+  it('tints library from the legacy overlay OR the docked Preset Browser panel (V13d)', async () => {
+    const controller = defaultController();
+    // Legacy overlay still tints it (surfaced outside the workbench shell).
+    expect(isAxisNavigationEntryActive(controller.document, { ...CLEAN, libraryOpen: true }, 'library')).toBe(true);
+    // No overlay + PB not docked ⇒ inactive.
+    expect(isAxisNavigationEntryActive(controller.document, CLEAN, 'library')).toBe(false);
+
+    // Dock the Preset Browser panel via the nav action ⇒ library tints from the doc.
+    await createAxisNavigationPanelAction({
+      actionId: 'axis.openPresetBrowser',
+      panelId: 'axis.presetBrowser',
+      panelType: 'axis.presetBrowser',
+      title: 'Preset Browser',
+      region: 'left'
+    }).run({ controller, source: 'navigation' });
+    expect(isAxisNavigationEntryActive(controller.document, CLEAN, 'library')).toBe(true);
   });
 
   it('an open overlay/rail screen suppresses the grid tint (it sits over the grid)', () => {

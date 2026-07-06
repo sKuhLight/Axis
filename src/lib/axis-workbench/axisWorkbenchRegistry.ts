@@ -95,7 +95,22 @@ AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
 );
 
 registry.registerAction({ id: 'axis.openGrid', run: async () => (await axisEditor()).openBuild() });
-registry.registerAction({ id: 'axis.openPresetBrowser', run: async () => (await axisEditor()).openLibrary() });
+// Preset Browser nav entry docks-or-focuses the workbench Preset Browser panel
+// (V13d), the same add-or-focus semantics as Setup/Scenes/Controllers — so a
+// closed PB panel can be reopened from the rail instead of only via a layout
+// reload. The panelId matches the singleton key seeded by the defaults roster
+// (createAxisWorkbenchPanels), so re-docking never mints a colliding id.
+// The old overlay Preset Browser (editor.openLibrary) stays reachable from the
+// legacy ToolRail shell and the top-bar search widget (feature-keep).
+registry.registerAction(
+  createAxisNavigationPanelAction({
+    actionId: 'axis.openPresetBrowser',
+    panelId: 'axis.presetBrowser',
+    panelType: 'axis.presetBrowser',
+    title: 'Preset Browser',
+    region: 'left'
+  })
+);
 registry.registerAction({
   id: 'axis.openFc',
   run: async () => {

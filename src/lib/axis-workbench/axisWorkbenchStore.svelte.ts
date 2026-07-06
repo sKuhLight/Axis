@@ -14,7 +14,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
 export { AXIS_WORKBENCH_CACHE_KEY };
@@ -51,7 +51,9 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   }
   // Self-heal: layouts with a Signal Grid panel but no grid-control widgets get
   // gridMode/blockSize seeded into their gridbar (hand-built layouts, sparse presets).
-  return ensureAxisGridControlWidgets(migrateWorkbenchDocument(input));
+  // Also strip rail widgets retired in V13c (History widget + "AX" account avatar)
+  // so pre-V13c persisted docs don't leave ghosts on the rail.
+  return pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(migrateWorkbenchDocument(input)));
 }
 
 function cacheLoad(): WorkbenchDocument {
