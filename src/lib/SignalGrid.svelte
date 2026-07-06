@@ -45,7 +45,6 @@
   const cols = $derived(editor.layout.rows ? editor.layout.cols : 12);
   const rows = $derived(editor.layout.rows || 4);
   const mob = $derived(editor.isMobile);
-  const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
   // available grid area = the viewport CONTENT box (measured). It's flex-sized + overflow:hidden, so it
   // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement. Used for
   // the exact fillW/fitH px fit (Axis uses fixed-px tracks, unlike the design's CSS minmax/1fr).
@@ -65,28 +64,51 @@
   const metrics = $derived(
     !mob && view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
   );
-  const mapMode = $derived(metrics?.mode === 'map'); // desktop glyph minimap (§2.5)
+  // Workbench mobile TIER: a docked grid pane narrower than the design's mobile threshold (<620px)
+  // renders the REAL paged presentation (page-width columns, page dots/arrows, swipe paging) instead
+  // of degrading to shrunk map tiles. Driven by the PANE, not the window — so it must NOT read
+  // editor.isMobile (the window may be a wide desktop). `paged` is the union: either the true mobile
+  // shell OR a workbench pane in the mobile tier. `paneMobile` is the workbench-only slice (view active,
+  // desktop window, pane below threshold); its column density + page live in pane-local state below so
+  // editor.mobCols/gridPage (the real-mobile state) stay untouched.
+  const paneMobile = $derived(!mob && !!view && metrics?.mode === 'mobile');
+  const paged = $derived(mob || paneMobile);
+  // pane-local paging state for the workbench mobile tier (never touches the editor's real-mobile state).
+  // Column density defaults to the design's mobile default (6 cols, 04-fc-and-grid.md §2.2 `S.mobCols||6`).
+  let paneCols = $state(6);
+  let panePage = $state(0);
+  const paneColsCl = $derived(Math.max(3, Math.min(12, paneCols)));
+  const panePageCount = $derived(Math.ceil(12 / paneColsCl));
+  // unified column density, sourced from the editor for real mobile, pane-local for the workbench tier
+  const visCols = $derived(paneMobile ? paneColsCl : mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
+  const mapMode = $derived(metrics?.mode === 'map' && !paneMobile); // desktop glyph minimap (§2.5)
   const gap = $derived(
-    mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : mapMode ? 7 : metrics ? metrics.fullGap : 26
+    paged ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : mapMode ? 7 : metrics ? metrics.fullGap : 26
   );
-  const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
+  const hCols = $derived(paged ? visCols : cols); // columns that fill the width (one page)
   const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
   const MAX_TILE = 150; // desktop: never let a tile grow past this — a full-screen 12-col row must not
   //                       stretch tiles to the whole monitor width (looks bad); center the grid instead.
   // Mobile fills the page width exactly (clean paging). Desktop fits BOTH axes as a square-ish tile and
   // caps the size, so on a wide/fullscreen window the grid stays a comfortable size and centers rather
   // than spanning edge-to-edge.
-  const fixedTile = $derived(!mob && metrics?.mode === 'full'); // fixed-size tiles, grid scrolls in the pane
+  // fixed-size tiles that pan in a scrolling pane — ONLY the explicit 'full' view mode. `auto` never
+  // uses fixed tiles even when it RESOLVES to full: fixed tiles size purely off the height cap
+  // (fullColMax), so the 12-col width routinely exceeds the pane and .viewport.free's overflow:auto
+  // shows a scrollbar. The design invariant is that only 'full' scrolls; auto/map must always fit. So
+  // auto-resolved-full falls through to the fit-both-axes path below (centers, never scrolls).
+  const fixedTile = $derived(!paged && view?.mode === 'full' && metrics?.mode === 'full');
   // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140 (·colCapH), else legacy MAX_TILE.
   const tileCap = $derived(metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE));
   const colW = $derived.by(() => {
     if (fixedTile) return Math.min(view!.tilePx, metrics!.fullColMax);
-    if (availW <= 1) return mob ? 88 : mapMode ? 30 : 96;
+    if (availW <= 1) return paged ? 88 : mapMode ? 30 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
     const fillW = (availW - (hCols - 1) * gap) / hCols;
-    if (mob) return Math.max(24, fillW);
+    if (paged) return Math.max(24, fillW);
     // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ the size cap.
+    // The width term (fillW) is what keeps auto/auto-resolved-full from ever overflowing horizontally.
     const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
     return Math.max(mapMode ? 24 : 24, Math.min(fillW, fitH / ASPECT, tileCap));
   });
@@ -97,11 +119,42 @@
     const fitH = (availH - (rows - 1) * gap) / rows;
     return Math.max(24, Math.min(sq, fitH));
   });
-  const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
+  // page count + current page: editor state for the real mobile shell, pane-local for the workbench tier.
+  const pageCount = $derived(paneMobile ? panePageCount : editor.pageCount);
+  const page = $derived(
+    paneMobile
+      ? Math.max(0, Math.min(panePageCount - 1, panePage))
+      : Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage))
+  );
   const pageShift = $derived(visCols * (colW + gap));
-  const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
+  const dense = $derived(paged && visCols > 6); // blocks too small for per-block param swipe
   // map mode strips the type line, dots, label (§2.5); otherwise progressive disclosure by width.
   const showType = $derived(!mapMode && colW >= 56);
+  // pane-local paging helpers (workbench mobile tier) — mirror editor.changePage/setPage without touching
+  // the editor's real-mobile state. Clamp panePage when the density changes.
+  $effect(() => {
+    void panePageCount;
+    if (panePage > panePageCount - 1) panePage = Math.max(0, panePageCount - 1);
+  });
+  function paneChangePage(d: number) {
+    panePage = Math.max(0, Math.min(panePageCount - 1, panePage + d));
+  }
+  function gridChangePage(d: number) {
+    if (paneMobile) paneChangePage(d);
+    else editor.changePage(d);
+  }
+  function gridSetPage(p: number) {
+    if (paneMobile) panePage = Math.max(0, Math.min(panePageCount - 1, p));
+    else editor.setPage(p);
+  }
+  function gridChangeCols(d: number) {
+    if (paneMobile) paneCols = Math.max(3, Math.min(12, paneCols + d));
+    else editor.changeCols(d);
+  }
+  function gridColsFit() {
+    if (paneMobile) paneCols = paneColsCl >= 12 ? 4 : 12;
+    else editor.colsFit();
+  }
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -491,7 +544,11 @@
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     const dist = Math.hypot(dx, dy) || 1;
-    editor.setCols(Math.round(pinch.cols * (pinch.dist / dist)));
+    const n = Math.round(pinch.cols * (pinch.dist / dist));
+    // route pinch to the pane-local density on the workbench tier (touch on a desktop window) so the
+    // editor's real-mobile state is never touched; real mobile keeps writing editor.setCols.
+    if (paneMobile) paneCols = Math.max(3, Math.min(12, n));
+    else editor.setCols(n);
   }
   function touchEnd() {
     pinch = null;
@@ -499,7 +556,7 @@
   // true right after a page-swipe, so the empty-cell click that follows pointerup is suppressed
   let pageSwiped = $state(false);
   function bgDown(e: PointerEvent) {
-    if (!mob) return;
+    if (!paged) return;
     // only a placed block runs its own horizontal gesture (cycle control) — empty cells, shunts and
     // background all page. (Previously bailed on any [data-idx], i.e. the whole grid matrix, so paging
     // only worked in the padding around it.)
@@ -512,7 +569,7 @@
     pageSwipeX = null;
     if (Math.abs(dx) > 50) {
       pageSwiped = true;
-      editor.changePage(dx < 0 ? 1 : -1);
+      gridChangePage(dx < 0 ? 1 : -1);
     }
   }
 </script>
@@ -529,7 +586,7 @@
 <div
   data-tour="grid"
   class="gridwrap scroll"
-  class:mob={editor.isMobile}
+  class:mob={paged}
   bind:this={wrapEl}
   data-screen="Signal Grid"
   role="group"
@@ -540,9 +597,9 @@
   onpointerdown={bgDown}
   onpointerup={bgUp}
 >
-  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+  {#if paged && editor.status === 'ready' && pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(-1)}>‹</button>
+    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => gridChangePage(-1)}>‹</button>
   {/if}
   <div class="viewport" class:free={fixedTile} bind:this={vpEl}>
   {#if editor.status === 'loading'}
@@ -556,9 +613,9 @@
   {:else}
     <div
       class="inner"
-      class:mob={editor.isMobile}
+      class:mob={paged}
       bind:this={innerEl}
-      style={mob
+      style={paged
         ? `width:${cols * colW + (cols - 1) * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
         : ''}
     >
@@ -711,30 +768,30 @@
     <!-- outside the scrolling viewport so it stays pinned while the fixed-size grid pans -->
     <button class="regrid pin" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
   {/if}
-  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+  {#if paged && editor.status === 'ready' && pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="pgarrow" aria-label="Next page" disabled={page === editor.pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(1)}>›</button>
+    <button class="pgarrow" aria-label="Next page" disabled={page === pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => gridChangePage(1)}>›</button>
   {/if}
 </div>
 
-<!-- mobile column-density pager + page dots -->
-{#if editor.isMobile && editor.status === 'ready'}
+<!-- mobile / workbench-tier column-density pager + page dots -->
+{#if paged && editor.status === 'ready'}
   <div class="pager">
     <div class="density">
-      <button class="step" disabled={visCols <= 3} title="Bigger blocks" onclick={() => editor.changeCols(-1)}>−</button>
-      <button class="dnum" title="Tap for full overview" onclick={() => editor.colsFit()}>
+      <button class="step" disabled={visCols <= 3} title="Bigger blocks" onclick={() => gridChangeCols(-1)}>−</button>
+      <button class="dnum" title="Tap for full overview" onclick={gridColsFit}>
         <span class="dn mono">{visCols}</span><span class="dl mono">COLS</span>
       </button>
-      <button class="step" disabled={visCols >= 12} title="Fit more columns" onclick={() => editor.changeCols(1)}>+</button>
+      <button class="step" disabled={visCols >= 12} title="Fit more columns" onclick={() => gridChangeCols(1)}>+</button>
     </div>
-    {#if editor.pageCount > 1}
+    {#if pageCount > 1}
       <div class="dots">
-        {#each Array(editor.pageCount) as _, i (i)}
-          <button class="pdot" class:on={i === page} aria-label="Page {i + 1}" onclick={() => editor.setPage(i)}></button>
+        {#each Array(pageCount) as _, i (i)}
+          <button class="pdot" class:on={i === page} aria-label="Page {i + 1}" onclick={() => gridSetPage(i)}></button>
         {/each}
       </div>
     {/if}
-    <span class="phint mono">{editor.pageCount > 1 ? 'Swipe to pan · pinch to zoom' : 'Pinch to fit more'}</span>
+    <span class="phint mono">{pageCount > 1 ? (mob ? 'Swipe to pan · pinch to zoom' : 'Swipe / arrows to page') : mob ? 'Pinch to fit more' : 'Use ± to fit more'}</span>
   </div>
 {/if}
 
