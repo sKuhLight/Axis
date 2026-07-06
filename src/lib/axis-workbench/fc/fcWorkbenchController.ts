@@ -43,9 +43,11 @@ export class AxisFcWorkbenchController {
   }
 
   selectLayout(layout: number): void {
+    // Design parity (04-fc-and-grid.md §3.2): selecting a layout resets view AND switch.
     this.#snapshot = {
       ...this.#snapshot,
       layout: Math.max(0, Math.floor(layout)),
+      view: 0,
       switchIndex: null,
       inspectorOpen: false
     };

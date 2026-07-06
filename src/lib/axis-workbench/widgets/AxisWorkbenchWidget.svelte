@@ -17,7 +17,7 @@
   } from '../gridView';
   import { axisFcWorkbenchController, type AxisFcControllerSnapshot } from '../fc/fcWorkbenchController';
   import { axisFcWorkbenchRuntime } from '../fc/fcWorkbenchRuntime';
-  import type { AxisFcModelLike } from '../fc/fcWorkbenchData';
+  import { axisFcDeviceForSwitchCount, type AxisFcModelLike } from '../fc/fcWorkbenchData';
   import {
     AXIS_FC_DEVICES,
     axisFcLayoutChipLabel,
@@ -87,7 +87,14 @@
   const fcLayout = $derived(Math.max(0, Math.min(fcLayoutCount - 1, fcSel.layout)));
   const fcView = $derived(Math.max(0, Math.min(fcViewCount - 1, fcSel.view)));
   const fcSwitch = $derived(fcSel.switchIndex ?? 0);
-  const fcDevice = $derived(readAxisFcDevice(widget.state?.device));
+  // With a live FC model the device chip mirrors the connected unit's switch count
+  // (04-fc-and-grid.md §3.1/§5 — the selector is display-only then); widget state
+  // only drives it while no model is loaded.
+  const fcDevice = $derived(
+    fcModel?.switches != null
+      ? readAxisFcDevice(axisFcDeviceForSwitchCount(fcModel.switches))
+      : readAxisFcDevice(widget.state?.device)
+  );
   const mapDots = $derived(
     kind === 'gridMap'
       ? axisGridMapDots(
