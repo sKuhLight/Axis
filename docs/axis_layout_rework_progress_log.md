@@ -207,7 +207,22 @@ menuPositionFromPointer + edit chrome during V13b.
   backups seam (registerWorkbenchBackupProvider moved there) + import/export
   + bottom-sheet; TARGET dropdowns gone (contextual placement: panels→main,
   widgets→top.right, drag places precisely); feature-keep verified per view.
-- V13c/d, V13e/f, V13g/h agents in flight; V13b queued after V13g/h (same files).
+- V13c+d LANDED (`3840fd1`): rail hover controls removed (reorder/hide stay on
+  the entry context menu; drag-handle keyboard arrow-reorder was lost — menu
+  covers it), rest-state entries square (WorkbenchHost CSS), History clock +
+  AX avatar rail WIDGETS retired (nav-entry set unchanged; Axis Cloud ◈ = the
+  account entry; History still library-re-addable) + pruneAxisRetiredRailWidgets
+  on every normalize path; PB nav entry now add-or-focuses axis.presetBrowser
+  (region left), overlay stays for legacy shell, active tint = docked OR overlay.
+- V13g+h LANDED (`db29c83`): group drag-out was broken SINCE THE PORT (grab
+  surface suppressed for grouped members + widget.move never cleared groupId) —
+  members grab again, widget.move detaches partial moves (detachPartialGroupMembers,
+  whole-group grip moves stay intact, <2-member groups dissolve); bottom-bar
+  drops missed because the centered footer flex shrank the zone to content
+  height (elementFromPoint fell through to the dock path) — bar zones stretch.
+  NOTE for visual pass: in-place reorder WITHIN a group resolves as detach+
+  regroup (design reference has no distinct gesture); zoom hotfix uninvolved.
+- V13e/f agent in flight; V13b agent launched after V13g/h landed (same files).
 
 **Original round-13 worklist — operator visual pass round 2 (2026-07-06 ~20:35).
 Screenshots:
