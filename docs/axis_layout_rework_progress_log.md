@@ -192,7 +192,21 @@ colW/cellH/gap/mapMode.
 regressions (the suspected region-collapse was the live ForgeFX backend restoring
 the operator's own synced layout over test boots; specs now intercept the backend
 doc for determinism).
-**Round 12 (final buildable remainders) — IN FLIGHT (3 opus):** T30 layout
+**ROUNDS 11+12 ALL LANDED — THE BUILDABLE PLAN IS EXHAUSTED.**
+Suite: unit 662/662, e2e 17/17 chromium (+ firefox green per agent run), check 0.
+- `c37240e` R11 storage: bak1..3 rotation + Restore UI (drawer provider seam),
+  measured persist trim (repair off hot path, 150ms cache coalesce + pagehide
+  flush, cloud 1500ms), rev/updatedAt + stale-write keep-newer-and-backup toast.
+- `5c54c95` T30 layout undo/redo (in-memory ring, ribbon + edit-scoped keys).
+- `f12b80e` pages contentMode (design flag near-vestigial in source; faithful
+  narrow rendering: sides → openers/overlay, top/main/bottom inline, edit=fixed).
+- `42ccd18` packages.ts deep interior re-mint (last T02-class hole) + regression.
+- `26cd377`+`83142ec` e2e realigned to rounds 9-12 chrome; corrupt-doc spec drains
+  the new write debounce; NO product regressions found.
+REMAINING = operator-dependent only: visual pass/T31 (+nav-id reconciliation),
+hardware batch (T27, phone T02, FC device, iOS, swipe feel), Layout Profiles
+(BUILD TOGETHER), T35 audit (last).
+Original round-12 worklist: T30 layout
 undo/redo (in-memory ring in the controller, ribbon buttons + edit-mode
 shortcuts, NEVER persisted), pages contentMode rendering (spec-verified from
 01-shell.md; fixed default unchanged), packages.ts deep re-key (close the T02
