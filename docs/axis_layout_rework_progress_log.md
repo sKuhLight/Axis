@@ -123,6 +123,15 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
+**Round 4 (operator report, ~15:00) — LANDED (`eda0074`):** gridbar chips (Full/Map/
+Auto + S/M/L) missing and no map/mobile auto-stepping in the operator's hand-built
+layout. Cause: the grid controls are per-layout WIDGETS — a layout that never had
+them loses both the chips and (since the grid view derives from them) all stepping.
+Fixed: Signal Grid panel falls back to auto+M when no control widgets exist, and
+normalization seeds gridMode/blockSize into the gridbar of any grid-bearing layout
+that carries neither (idempotent; hidden-by-user respected). Verified headless via
+scripts/workbench-visual-smoke.mjs that a fresh document renders the gridbar.
+
 **Round 3 (post-screenshot-2) — LANDED:**
 - `0b9963d` PB cloud presence views (live counts via cloud.stateOf/browseEntries,
   honest signed-out state) + SAVED FILTERS (monolith store reused: axs.pb.saved +
