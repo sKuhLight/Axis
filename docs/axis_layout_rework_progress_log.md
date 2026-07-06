@@ -272,6 +272,15 @@ the group, no insertion indicator).**
   insertion point); rearranging WITHIN a group needs the same position feedback.
   (Round-13 note said in-group reorder = detach+regroup with no distinct
   gesture — operator expects visible in-group placement, so build it.)
+- V14a+b LANDED (`8ac45d7`): members = bare transparent grab layers, group
+  module carries THE dashed accent border (edit mode; full accent on hover-
+  drag); drag-over-group previews a widget-sized dashed placeholder at the
+  midpoint-computed insertion index (pure groupInsertion.ts, ±8/4px hit area);
+  in-group insert + same-group reorder go through widget.group w/ memberOrder
+  (NEVER widget.move → no detach), pull-out stays detachPartialGroupMembers,
+  cross-group = detachFromOtherGroups; group-create = design center-28% band
+  (was any-proximity). 17 new tests. Deferred cosmetic: grip stays V13's
+  in-flow left column (design floats a ⠿ chip top-left).
 - V14c **bottom-nav mode leaves the rail visible**: with "Use Bottom Navigation"
   on, the full sidebar rail still renders — the rail must hide when bottom nav
   is active.
