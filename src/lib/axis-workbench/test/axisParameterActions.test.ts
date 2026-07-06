@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyWorkbenchDocument, createWorkbenchController, selectActiveLayout, type WorkbenchParameterSource } from '../../workbench';
-import { AXIS_PIN_SELECTED_PARAMETERS_ACTION, createAxisPinSelectedParametersAction } from '../axisParameterActions';
+import {
+  createEmptyWorkbenchDocument,
+  createWorkbenchController,
+  selectActiveLayout,
+  serializeWorkbenchParameterSource,
+  type WorkbenchParameterSource
+} from '../../workbench';
+import {
+  AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION,
+  AXIS_PIN_SELECTED_PARAMETERS_ACTION,
+  createAxisParameterSourceEdgeDropAction,
+  createAxisPinSelectedParametersAction
+} from '../axisParameterActions';
 import { AXIS_PARAM_CONTROL_BINDING } from '../axisWorkbenchBindings';
 
 const source = (id: string, label: string): WorkbenchParameterSource => ({
@@ -76,6 +87,39 @@ describe('Axis parameter Workbench actions', () => {
     const action = createAxisPinSelectedParametersAction(() => []);
 
     await action.run({ controller, source: 'menu' });
+
+    expect(Object.values(selectActiveLayout(controller.document)!.panels)).toHaveLength(0);
+  });
+
+  it('creates an Axis custom panel from a serialized parameter edge drop', async () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const action = createAxisParameterSourceEdgeDropAction();
+
+    expect(action.id).toBe(AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION);
+    await action.run({
+      controller,
+      source: 'host',
+      args: {
+        source: serializeWorkbenchParameterSource(source('7', 'Treble')),
+        region: 'left'
+      }
+    });
+
+    const layout = selectActiveLayout(controller.document)!;
+    const panel = Object.values(layout.panels).find((item) => item.type === 'axis.customPanel');
+    const widgets = Object.values(layout.widgets);
+
+    expect(layout.dock.root.left?.kind).toBe('tabs');
+    expect(panel?.title).toBe('Treble');
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.binding?.target.paramId).toBe(7);
+  });
+
+  it('ignores malformed serialized parameter edge drops', async () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const action = createAxisParameterSourceEdgeDropAction();
+
+    await action.run({ controller, source: 'host', args: { source: '{ nope', region: 'left' } });
 
     expect(Object.values(selectActiveLayout(controller.document)!.panels)).toHaveLength(0);
   });

@@ -12,7 +12,13 @@
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
   import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
-  import { getOptionalWorkbenchContext } from './workbench';
+  import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
+  import {
+    WORKBENCH_PARAMETER_SOURCE_MIME,
+    getOptionalWorkbenchContext,
+    serializeWorkbenchParameterSource,
+    type WorkbenchParameterSource
+  } from './workbench';
 
   let {
     slug = '',
@@ -847,6 +853,27 @@
     return !!c && c.id >= 0 && (c.kind === 'cont' || c.kind === 'toggle' || c.kind === 'select');
   }
 
+  function parameterSourceForControl(c: Ctl): WorkbenchParameterSource | null {
+    if (!pinnable(c)) return null;
+    return axisParameterSourceFromEditorParamId(
+      {
+        selected: editor.selected,
+        params: editor.params,
+        enums: editor.enums
+      },
+      c.id
+    );
+  }
+
+  function onWorkbenchParameterDragStart(event: DragEvent, c: Ctl) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    const source = parameterSourceForControl(c);
+    if (!source || !event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(WORKBENCH_PARAMETER_SOURCE_MIME, serializeWorkbenchParameterSource(source));
+    event.dataTransfer.setData('text/plain', source.label);
+  }
+
   async function pinControlToWorkbench(c: Ctl) {
     if (!workbenchCanPin || !workbench || !pinnable(c)) return;
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
@@ -962,7 +989,15 @@
     <div class="results">
       {#each matches as c (c.key)}
         {@const view = viewOf(c)}
-        <div class="restile" class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')} class:nobg={c.kind === 'action'}>
+        <div
+          class="restile"
+          class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')}
+          class:nobg={c.kind === 'action'}
+          role="group"
+          aria-label={c.label}
+          draggable={workbenchCanPin && pinnable(c)}
+          ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
+        >
           {#if c.kind === 'cont' && view === 'knob'}
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
             <div class="dialwrap" style:width="60px" style:height="60px"
@@ -1087,6 +1122,8 @@
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq'}
               class:dragging={drag?.id === w.id}
+              draggable={workbenchCanPin && pinnable(c) && !editMode}
+              ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
               onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0) showParamHelp(c.id, c.label); }}
               onmouseleave={clearParamHelp}

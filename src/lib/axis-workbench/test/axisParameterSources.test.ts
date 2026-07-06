@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCustomPanelFromParameterSourcesCommands, createEmptyWorkbenchDocument } from '../../workbench';
 import {
   axisParameterSourceFromEnumParam,
+  axisParameterSourceFromEditorParamId,
   axisParameterSourceFromNamedParam,
   axisParameterSourcesFromEditorView
 } from '../axisParameterSources';
@@ -76,6 +77,18 @@ describe('Axis parameter source adapter', () => {
     });
 
     expect(sources.map((source) => source.id)).toEqual(['axis.param.20.1', 'axis.param.20.2']);
+  });
+
+  it('creates a single drag source from a selected editor param id', () => {
+    const view = {
+      selected: { effectId: 20, display: 'Delay 1' },
+      params: [{ id: 1, name: 'Mix', value: 25, norm: 0.25 }],
+      enums: [{ id: 2, name: 'Type', value: 1, options: [] }]
+    };
+
+    expect(axisParameterSourceFromEditorParamId(view, 1)?.binding.target.paramId).toBe(1);
+    expect(axisParameterSourceFromEditorParamId(view, 2)?.binding.target.paramId).toBe(2);
+    expect(axisParameterSourceFromEditorParamId(view, 99)).toBeNull();
   });
 
   it('feeds generic custom panel insertion commands', () => {

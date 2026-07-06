@@ -63,6 +63,18 @@
     return runtimeSnapshot.labelText[`${side}Label:${data.selectedConfig}`] ?? '';
   }
 
+  function functionsForSide(side: AxisFcSide) {
+    const model = runtimeSnapshot.model;
+    const category = fieldValue(`${side}Category`);
+    const direct = model?.functions?.[String(category)] ?? [];
+    return direct.length ? direct : Object.values(model?.functions ?? {}).flat();
+  }
+
+  function selectedFunctionForSide(side: AxisFcSide) {
+    const value = fieldValue(`${side}Function`);
+    return functionsForSide(side).find((fn) => fn.ord === value) ?? null;
+  }
+
   function numberFromInput(event: Event) {
     return +(event.currentTarget as HTMLInputElement | HTMLSelectElement).value;
   }
@@ -82,6 +94,14 @@
       <span>Foot Controller</span>
       <strong>{part}</strong>
     </header>
+
+    {#if data.ready}
+      <div class="axis-fc-status">
+        <span>{data.mode}</span>
+        <span>{data.configs.length} cfg</span>
+        <span>{data.selectedConfig}</span>
+      </div>
+    {/if}
 
     {#if runtimeSnapshot.error}
       <div class="axis-part-empty">
@@ -112,6 +132,11 @@
         {/if}
       </div>
     {:else if part === 'board'}
+      <div class="axis-board-summary">
+        <span>Layout {data.selectedLayout + 1}</span>
+        <strong>View {data.selectedView + 1}</strong>
+        <em>{data.switches.length || data.configs.length} switches</em>
+      </div>
       {#if data.views.length > 1}
         <div class="axis-view-row">
           {#each data.views as view}
@@ -144,6 +169,7 @@
         <strong>{part.toUpperCase()} side</strong>
         <span>Switch {data.selectedSwitch == null ? 'none' : data.selectedSwitch + 1} · Config {data.selectedConfig}</span>
         {#if side}
+          {@const selectedFunction = selectedFunctionForSide(part)}
           <dl>
             <div><dt>Categories</dt><dd>{side.categoryCount}</dd></div>
             <div><dt>Functions</dt><dd>{side.functionCount}</dd></div>
@@ -166,15 +192,40 @@
             </label>
             <label>
               <span>Function</span>
-              <input type="number" value={fieldValue(`${part}Function`)} onchange={(event) => axisFcWorkbenchRuntime.writeField(`${part}Function`, numberFromInput(event), data.selectedConfig)} />
+              {#if functionsForSide(part).length}
+                <select value={fieldValue(`${part}Function`)} onchange={(event) => axisFcWorkbenchRuntime.writeField(`${part}Function`, numberFromInput(event), data.selectedConfig)}>
+                  {#each functionsForSide(part) as fn (fn.ord)}
+                    <option value={fn.ord}>{fn.name}</option>
+                  {/each}
+                </select>
+              {:else}
+                <input type="number" value={fieldValue(`${part}Function`)} onchange={(event) => axisFcWorkbenchRuntime.writeField(`${part}Function`, numberFromInput(event), data.selectedConfig)} />
+              {/if}
             </label>
+            {#if runtimeSnapshot.model?.labelModes}
+              <label>
+                <span>Display</span>
+                <select value={fieldValue(`${part}Display`)} onchange={(event) => axisFcWorkbenchRuntime.writeField(`${part}Display`, numberFromInput(event), data.selectedConfig)}>
+                  <option value="" disabled>—</option>
+                  {#each Object.entries(runtimeSnapshot.model.labelModes) as [value, label] (value)}
+                    <option value={value}>{label}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
+            {#if selectedFunction}
+              <div class="axis-function-hint">
+                <strong>{selectedFunction.name}</strong>
+                <span>{selectedFunction.slots.length} value slot{selectedFunction.slots.length === 1 ? '' : 's'}</span>
+              </div>
+            {/if}
             <label>
               <span>Custom Label</span>
               <input maxlength={runtimeSnapshot.model?.labelLen ?? undefined} value={labelValue(part)} onchange={(event) => axisFcWorkbenchRuntime.writeLabel(part, textFromInput(event), data.selectedConfig)} />
             </label>
             {#each Array(side.slotCount) as _, index}
               <label>
-                <span>Value {index + 1}</span>
+                <span>{selectedFunction?.slots[index]?.role ?? `Value ${index + 1}`}</span>
                 <input type="number" value={slotValue(part, index)} onchange={(event) => axisFcWorkbenchRuntime.writeSlot(part, index, numberFromInput(event), data.selectedConfig)} />
               </label>
             {/each}
@@ -206,6 +257,12 @@
         {#if runtimeSnapshot.present[data.selectedConfig]}
           <em class="axis-present">Configured on unit</em>
         {/if}
+        <dl>
+          <div><dt>Tap category</dt><dd>{fieldValue('tapCategory') || '—'}</dd></div>
+          <div><dt>Tap function</dt><dd>{fieldValue('tapFunction') || '—'}</dd></div>
+          <div><dt>Hold category</dt><dd>{fieldValue('holdCategory') || '—'}</dd></div>
+          <div><dt>Hold function</dt><dd>{fieldValue('holdFunction') || '—'}</dd></div>
+        </dl>
         <div class="axis-side-switch">
           <button type="button" class:active={snapshot.side === 'tap'} onclick={() => selectSide('tap')}>Tap</button>
           <button type="button" class:active={snapshot.side === 'hold'} onclick={() => selectSide('hold')}>Hold</button>
@@ -251,6 +308,47 @@
   }
   header strong {
     color: var(--accent);
+  }
+  .axis-fc-status,
+  .axis-board-summary {
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    gap: 8px;
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+    border-radius: 8px;
+    padding: 0 10px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
+  }
+  .axis-fc-status span,
+  .axis-board-summary span,
+  .axis-board-summary em {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--textdim);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .axis-fc-status span:first-child,
+  .axis-board-summary strong {
+    color: var(--accent);
+  }
+  .axis-board-summary strong {
+    min-width: 0;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 900 12px/1 var(--font-mono);
+    text-transform: uppercase;
+  }
+  .axis-board-summary em {
+    text-align: right;
+    font-style: normal;
   }
   .axis-side-switch {
     display: grid;
@@ -350,6 +448,32 @@
   .axis-edit-fields {
     display: grid;
     gap: 9px;
+  }
+  .axis-function-hint {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+    border-radius: 8px;
+    padding: 0 9px;
+    background: color-mix(in srgb, var(--accent) 6%, var(--bg2));
+  }
+  .axis-function-hint strong,
+  .axis-function-hint span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .axis-function-hint strong {
+    color: var(--text);
+    font-size: 12px;
+  }
+  .axis-function-hint span {
+    color: var(--textdim);
+    font-size: 11px;
   }
   label {
     display: grid;

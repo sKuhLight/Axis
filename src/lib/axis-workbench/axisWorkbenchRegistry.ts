@@ -13,7 +13,7 @@ import AxisFcPartPanel from './panels/fc/AxisFcPartPanel.svelte';
 import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowserPartPanel.svelte';
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
-import { createAxisPinSelectedParametersAction } from './axisParameterActions';
+import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
   AXIS_WORKBENCH_FC_PANEL_TYPES,
@@ -75,5 +75,6 @@ registry.registerAction({ id: 'axis.openScenes', run: async () => (await axisEdi
 registry.registerAction({ id: 'axis.openLive', run: async () => (await axisEditor()).showToast('Live — coming soon', '#35c9d6') });
 registry.registerAction({ id: 'axis.openSetup', run: async () => (await axisEditor()).showToast('Setup — coming soon', '#35c9d6') });
 registry.registerAction(createAxisPinSelectedParametersAction());
+registry.registerAction(createAxisParameterSourceEdgeDropAction());
 
 export const axisWorkbenchRegistry = registry;

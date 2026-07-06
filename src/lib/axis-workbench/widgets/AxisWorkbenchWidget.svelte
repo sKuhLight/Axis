@@ -5,7 +5,8 @@
 
   let {
     widget,
-    size
+    size,
+    editMode = false
   }: {
     widget: WidgetInstance;
     size: WidgetSize;
@@ -34,8 +35,29 @@
   const paramBlock = $derived(readString(paramTarget.block) ?? readString(widget.state?.block) ?? 'Block');
   const paramLabel = $derived(readString(paramTarget.param) ?? readString(paramTarget.label) ?? readString(widget.state?.label) ?? 'Parameter');
   const paramColor = $derived(readString(widget.state?.color) ?? 'var(--accent)');
+  const paramEffectId = $derived(readNumber(paramTarget.effectId) ?? readNumber(paramTarget.eid));
+  const paramId = $derived(readNumber(paramTarget.paramId) ?? readNumber(paramTarget.pid));
+  const paramNamed = $derived(
+    paramEffectId != null && editor.selected?.effectId === paramEffectId && paramId != null
+      ? editor.params.find((param) => param.id === paramId)
+      : undefined
+  );
+  const paramEnum = $derived(
+    paramEffectId != null && editor.selected?.effectId === paramEffectId && paramId != null
+      ? editor.enums.find((param) => param.id === paramId)
+      : undefined
+  );
   const paramPreview = $derived(readNumber(widget.state?.previewValue));
-  const paramDash = $derived(`${Math.max(0, Math.min(56.5, ((paramPreview ?? 50) / 100) * 56.5)).toFixed(1)} 150`);
+  const paramNorm = $derived(paramNamed?.norm ?? (paramPreview != null ? Math.max(0, Math.min(1, paramPreview / 100)) : undefined));
+  const paramValueText = $derived.by(() => {
+    if (paramNamed) {
+      const raw = typeof paramNamed.value === 'number' ? formatParamNumber(paramNamed.value) : '--';
+      return `${raw}${paramNamed.unit ? ` ${paramNamed.unit}` : ''}`;
+    }
+    if (paramEnum) return paramEnum.options.find((option) => option.value === paramEnum.value)?.label ?? String(paramEnum.value);
+    return paramPreview == null ? '--' : String(Math.round(paramPreview));
+  });
+  const paramDash = $derived(`${Math.max(0, Math.min(56.5, ((paramNorm ?? 0.5)) * 56.5)).toFixed(1)} 150`);
 
   function openWidget() {
     if (kind === 'preset') editor.presetOpen = true;
@@ -66,6 +88,57 @@
 
   function readNumber(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  function clamp01(value: number): number {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function formatParamNumber(value: number): string {
+    if (!Number.isFinite(value)) return '--';
+    if (Math.abs(value) >= 100) return value.toFixed(0);
+    if (Math.abs(value) >= 10) return value.toFixed(1);
+    return value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  function nudgeParam(delta: number) {
+    if (editMode) return;
+    if (paramNamed) {
+      editor.setParam(paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
+      return;
+    }
+    if (paramEnum) {
+      const index = paramEnum.options.findIndex((option) => option.value === paramEnum.value);
+      const next = paramEnum.options[Math.max(0, Math.min(paramEnum.options.length - 1, index + Math.sign(delta)))];
+      if (next) editor.setEnum(paramEnum, next.value);
+    }
+  }
+
+  function paramPointerDown(event: PointerEvent) {
+    if (editMode || !paramNamed || event.button !== 0) return;
+    event.preventDefault();
+    const startY = event.clientY;
+    const startNorm = paramNamed.norm ?? 0;
+    const onMove = (move: PointerEvent) => {
+      editor.setParam(paramNamed, clamp01(startNorm + (startY - move.clientY) / 180));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function paramWheel(event: WheelEvent) {
+    if (editMode || !paramNamed) return;
+    event.preventDefault();
+    nudgeParam(event.deltaY < 0 ? 0.015 : -0.015);
+  }
+
+  function paramClick() {
+    if (editMode) return;
+    if (paramEnum) nudgeParam(1);
   }
 </script>
 
@@ -142,14 +215,23 @@
     {#if !mini}<button class="step" type="button">+</button>{/if}
   </div>
 {:else if kind === 'paramControl'}
-  <button class="axis-widget param" data-size={size} type="button" title={`${paramBlock} · ${paramLabel}`}>
+  <button
+    class="axis-widget param"
+    class:writable={!!paramNamed || !!paramEnum}
+    data-size={size}
+    type="button"
+    title={`${paramBlock} · ${paramLabel}${paramNamed ? ' · drag or wheel to edit' : paramEnum ? ' · click to cycle' : ''}`}
+    onpointerdown={paramPointerDown}
+    onwheel={paramWheel}
+    onclick={paramClick}
+  >
     <span class="param-ring" style:--param-color={paramColor} style:--param-dash={paramDash}>
       <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
         <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
       </svg>
     </span>
-    <span class="mono strong">{paramPreview == null ? '--' : Math.round(paramPreview)}</span>
+    <span class="mono strong">{paramValueText}</span>
     {#if expanded}<span class="mono token">{paramLabel}</span>{/if}
   </button>
 {:else if kind === 'tempo'}
@@ -454,6 +536,12 @@
   }
   .param {
     position: relative;
+  }
+  .param.writable {
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  }
+  .param.writable:hover {
+    border-color: var(--accent);
   }
   .param-ring {
     width: 24px;

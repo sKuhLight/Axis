@@ -95,6 +95,19 @@ export function axisParameterSourcesFromEditorView(view: AxisParameterSourceEdit
   ];
 }
 
+export function axisParameterSourceFromEditorParamId(
+  view: AxisParameterSourceEditorView,
+  paramId: number
+): WorkbenchParameterSource | null {
+  const selected = view.selected;
+  if (!selected) return null;
+  const block = selected.display ?? 'Block';
+  const named = view.params.find((param) => param.id === paramId);
+  if (named) return axisParameterSourceFromNamedParam({ effectId: selected.effectId, block, param: named });
+  const enumParam = view.enums.find((param) => param.id === paramId);
+  return enumParam ? axisParameterSourceFromEnumParam({ effectId: selected.effectId, block, param: enumParam }) : null;
+}
+
 export async function axisParameterSourcesFromCurrentEditor(): Promise<WorkbenchParameterSource[]> {
   const { editor } = await import('../editor.svelte');
   return axisParameterSourcesFromEditorView({
