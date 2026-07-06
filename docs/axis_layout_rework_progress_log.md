@@ -132,9 +132,10 @@ agents):**
   instead of switching to the production PAGED grid — render the paged path pane-
   driven on desktop (real mobile via editor.isMobile unchanged). Files: SignalGrid,
   gridView, grid panel.
-- W2 chrome: top.right zone right-aligned in edit mode but drifts center in normal
-  mode; top.center placement off; widget edit-mode button chrome deforms the chips.
-  Files: WorkbenchHost/WidgetZone/WidgetHost/WidgetGroupHost CSS.
+- W2 chrome: FIXED (`32357ca`). Root cause: 3-col topbar grid + zones render only
+  when non-empty → auto-flow put top.right in the center column in normal mode.
+  Zones pinned to explicit columns; edit chrome floats above chips (no accent fill,
+  no clipping). Needs operator eyes (no live screenshot possible headless).
 Operator note: batch instructed with Opus per usage budget (~20% left).
 
 **Round 4 (operator report, ~15:00) — LANDED (`eda0074`):** gridbar chips (Full/Map/
