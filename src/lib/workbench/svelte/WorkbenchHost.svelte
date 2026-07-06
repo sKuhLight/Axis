@@ -6,6 +6,8 @@
   import EditRibbon from './EditRibbon.svelte';
   import DragLayer from './DragLayer.svelte';
   import WorkbenchToasts from './WorkbenchToasts.svelte';
+  import { selectVisibleWidgetsByZone } from '../core';
+  import { shouldRenderRail, shouldRenderRailNav } from './navigation';
   import type { WorkbenchController } from './controller.svelte';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, workbenchTokenDefaultsCss, type WorkbenchTheme } from './theme';
@@ -31,19 +33,32 @@
   // bottom-zone widgets. `side` (default) keeps it in the vertical left rail.
   const navMode = $derived(layout?.navigation.mode ?? 'side');
   const topZones = ['top.left', 'top.center', 'top.right'];
+  // V14c — Rail render rule (design §9): "Rail is visible when navMode==='side'
+  // OR rail-zone widgets exist OR edit mode." In `bottom` mode the nav moves to
+  // the bottom bar, so the rail must NOT render *for nav* — but any rail-zone
+  // widget it still carries (the connection-status widget, seeded on the rail by
+  // the Axis default doc) keeps it alive as a widget-only strip. When there are
+  // no rail widgets and we're not editing, `bottom` mode drops the rail entirely
+  // (fixes "the full sidebar is always visible in bottom mode").
+  const hasRailWidgets = $derived(selectVisibleWidgetsByZone($controller.document, 'rail').length > 0);
+  const showRail = $derived(
+    shouldRenderRail({ mode: navMode, hasRailWidgets, editMode: $controller.editMode })
+  );
+  const showRailNav = $derived(shouldRenderRailNav(navMode));
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
   // The `--aw-*` token defaults live once in theme.ts; inject them here (before
   // the host theme's overrides so the host still wins). This is the single
   // source of truth — the component no longer redeclares any hex literal.
   const rootStyle = $derived([workbenchTokenDefaultsCss(), workbenchThemeStyle(theme)].filter(Boolean).join(' '));
   let navDrawerOpen = $state(false);
-  // The <760px hamburger drawer is a `side`-mode affordance only. In bottom mode
-  // the nav is always reachable in the bottom bar, so the drawer/scrim/menu are
-  // suppressed (matches design §9 `railOverlay = … && navMode!=="bottom"`).
-  const showMobileDrawer = $derived(navMode !== 'bottom');
+  // The <760px hamburger drawer is a `side`-mode affordance only (design §9:
+  // `railOverlay = (mobVP || isMobile) && navMode!=="bottom"`). In bottom mode the
+  // nav is always reachable in the bottom bar (V14d), so the drawer/scrim/menu are
+  // suppressed. It only makes sense while the rail actually carries the nav.
+  const showMobileDrawer = $derived(showRailNav);
   $effect(() => {
-    // Keep the drawer from getting stuck open if the mode flips to bottom.
-    if (navMode === 'bottom' && navDrawerOpen) navDrawerOpen = false;
+    // Keep the drawer from getting stuck open if the rail stops carrying the nav.
+    if (!showRailNav && navDrawerOpen) navDrawerOpen = false;
   });
 
   // Viewport observation lives in the svelte layer: watch the shell width and let
@@ -119,12 +134,15 @@
       </button>
     {/if}
 
+    {#if showRail}
     <aside
       class="aw-rail"
       class:open={navDrawerOpen}
       class:aw-sheet={isPhone && navDrawerOpen}
       class:aw-rail-expanded={railExpanded}
+      class:aw-rail-widgets-only={!showRailNav}
       data-zone-shell="rail"
+      data-rail-nav={showRailNav ? 'true' : 'false'}
       onpointerenter={railEnter}
       onpointerleave={railLeave}
       onfocusin={railFocusIn}
@@ -144,12 +162,13 @@
         <div class="aw-mark" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
-        {#if navMode !== 'bottom'}
+        {#if showRailNav}
           <NavigationHost />
         {/if}
         <WidgetZone zone="rail" />
       </div>
     </aside>
+    {/if}
 
     <main class="aw-frame">
       <header class="aw-topbar">
@@ -476,6 +495,21 @@
     min-width: 0;
   }
 
+  /* V14c — widgets-only rail (bottom-nav mode, rail kept alive only by rail-zone
+     widgets such as the connection status). It has no nav, so it never expands on
+     hover; it stays a slim fixed strip (design §9: 64px when the rail exists only
+     for rail widgets). */
+  .aw-rail.aw-rail-widgets-only {
+    width: calc(var(--aw-rail-w-widgets, 64px) + var(--aw-safe-left, 0px));
+  }
+  .aw-rail.aw-rail-widgets-only.aw-rail-expanded .aw-rail-inner {
+    width: 100%;
+    z-index: auto;
+    overflow: hidden;
+    box-shadow: none;
+    border-right: 1px solid transparent;
+  }
+
   @media (max-width: 760px) {
     .aw-root {
       flex-direction: row;
@@ -504,6 +538,38 @@
     }
     .aw-rail.open {
       transform: translateY(0);
+    }
+    /* V14c/V14d — a widgets-only rail (bottom-nav mode) has no nav and no
+       hamburger to open it, so it must NOT become a hidden bottom sheet on phone.
+       Keep it as a slim static left strip so the connection widget stays visible
+       and reachable, with the persistent bottom-nav bar below. */
+    .aw-rail.aw-rail-widgets-only {
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      top: auto;
+      z-index: auto;
+      width: calc(var(--aw-rail-w-widgets, 64px) + var(--aw-safe-left, 0px));
+      max-height: none;
+      height: auto;
+      border: 0;
+      border-right: 1px solid var(--aw-border);
+      border-radius: 0;
+      box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.025);
+      transform: none;
+      transition: none;
+    }
+    .aw-rail.aw-rail-widgets-only .aw-rail-inner {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      flex-direction: column;
+      padding: calc(10px + var(--aw-safe-top, 0px)) 8px calc(12px + var(--aw-safe-bottom, 0px)) calc(8px + var(--aw-safe-left, 0px));
+      overflow: hidden;
+    }
+    .aw-rail.aw-rail-widgets-only .aw-sheet-grip {
+      display: none;
     }
     /* On phone the rail is a bottom sheet — the inner layer stops being a
        resting-width overlay and simply fills the sheet (static flow, scrolls). */
