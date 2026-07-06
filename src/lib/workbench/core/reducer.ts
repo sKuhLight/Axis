@@ -108,6 +108,16 @@ function removePanelFromDock(layout: WorkbenchLayout, panelId: string): boolean 
   return removed;
 }
 
+// Run `finder` against each region root and return the first defined match. Every dock lookup
+// (tab stack by id/panel, split by id) shares this "walk all region roots, first hit wins" shape.
+function findAcrossRegions<T>(layout: WorkbenchLayout, finder: (node: DockNode | null) => T | undefined): T | undefined {
+  for (const node of Object.values(layout.dock.root)) {
+    const found = finder(node);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 function findTabStackByPanel(node: DockNode | null, panelId: string): TabStackDockNode | undefined {
   if (!node) return undefined;
   if (node.kind === 'tabs') return node.panelIds.includes(panelId) ? node : undefined;
@@ -151,11 +161,9 @@ function appendPanelToRegion(layout: WorkbenchLayout, panelId: string, region: D
 }
 
 function insertPanelIntoTab(layout: WorkbenchLayout, panelId: string, target: Extract<DockTarget, { kind: 'tab' }>): InsertResult {
-  let stack: TabStackDockNode | undefined;
-  for (const node of Object.values(layout.dock.root)) {
-    stack = target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined;
-    if (stack) break;
-  }
+  const stack = findAcrossRegions(layout, (node) =>
+    target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined
+  );
   if (!stack) return { success: false, code: 'missing-target', message: 'Target tab stack was not found.' };
   const panelIds = stack.panelIds.filter((id) => id !== panelId);
   const index = Math.max(0, Math.min(target.index ?? panelIds.length, panelIds.length));
@@ -366,9 +374,7 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
     }
     case 'panel.activate': {
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
-      const stack = Object.values(layout.dock.root)
-        .map((node) => findTabStackByPanel(node, command.panelId))
-        .find((found): found is TabStackDockNode => !!found);
+      const stack = findAcrossRegions(layout, (node) => findTabStackByPanel(node, command.panelId));
       if (!stack) return fail(doc, 'missing-target', `Panel ${command.panelId} is not in a tab stack.`);
       stack.activePanelId = command.panelId;
       return ok(next);
@@ -422,11 +428,7 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       return ok(next);
     }
     case 'split.resize': {
-      let split: SplitDockNode | undefined;
-      for (const node of Object.values(layout.dock.root)) {
-        split = findSplitById(node, command.splitId);
-        if (split) break;
-      }
+      const split = findAcrossRegions(layout, (node) => findSplitById(node, command.splitId));
       if (!split) return fail(doc, 'missing-split', `Split ${command.splitId} does not exist.`);
       split.ratio = normalizeRatios(command.ratio, split.children.length);
       return ok(next);
