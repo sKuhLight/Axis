@@ -74,6 +74,34 @@ describe('Preset Browser Workbench data view', () => {
     });
   });
 
+  it('feeds all three columns of the composed full panel in one pass (sources | list | detail)', () => {
+    // §"full": the docked panel renders sources + list + detail from a single data view. Guard that a
+    // single call yields non-empty content for every column so the full body is never blank.
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      sourceId: 'all',
+      selectedEntryId: 'dev:1'
+    });
+
+    expect(view.sources.find((source) => source.id === 'all')?.count).toBe(3); // sources column
+    expect(view.visibleEntries.length).toBe(3); // list column
+    expect(view.order).toEqual(view.visibleEntries.map((entry) => entry.id)); // shift-click order (§4.4)
+    expect(view.selectedEntry?.id).toBe('dev:1'); // detail column
+  });
+
+  it('narrows the list column by conditions while keeping the selection resolvable', () => {
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      sourceId: 'all',
+      selectedEntryId: 'file:ambient',
+      conditions: [{ kind: 'block', block: 'reverb', params: [] }]
+    });
+
+    // only the reverb-carrying preset remains visible, but the detail column can still resolve any entry.
+    expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient']);
+    expect(view.selectedEntry?.id).toBe('file:ambient');
+  });
+
   it('uses filtered entries for list content while resolving detail from all entries', () => {
     const view = createAxisPresetBrowserDataView({
       entries,
