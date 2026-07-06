@@ -988,7 +988,18 @@ class EditorStore {
   applyDeviceEvent = (e: DeviceEvent) => {
     switch (e.type) {
       case 'tempo': this.bpm = e.bpm; break;
-      case 'scene': this.scene = e.index + 1; break;
+      case 'scene': {
+        // Move the badge immediately, then reload: a scene switch reselects per-scene block bypass,
+        // per-scene channel, and per-scene param values — none of which the badge alone reflects. Reuse
+        // the `changed` debounce so a footswitch scene sweep coalesces into one grid + open-block refresh.
+        this.scene = e.index + 1;
+        if (this.#eventReload) clearTimeout(this.#eventReload);
+        this.#eventReload = setTimeout(async () => {
+          await this.load();
+          if (this.selKey) await this.#loadParams();
+        }, 250);
+        break;
+      }
       case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
       case 'cpu': this.cpu = e.percent; break;
       case 'meters': this.levels = { out1L: e.out1L, out1R: e.out1R, out2L: e.out2L, out2R: e.out2R }; break;
