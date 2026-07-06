@@ -73,7 +73,7 @@
     padding: 0 14px;
     border: 1px solid color-mix(in srgb, var(--aw-accent) 44%, var(--aw-border));
     border-radius: 22px;
-    background: #101d1e;
+    background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-bg-2));
     color: var(--aw-accent);
     cursor: pointer;
     pointer-events: auto;
@@ -90,9 +90,9 @@
     max-width: none;
     padding: 11px 16px;
     border: 0;
-    border-bottom: 1px solid #1a3a3c;
+    border-bottom: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
     border-radius: 0;
-    background: #0b1516;
+    background: color-mix(in srgb, var(--aw-accent) 4%, var(--aw-bg));
     flex-wrap: wrap;
     pointer-events: auto;
     box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22);
@@ -107,10 +107,10 @@
   .aw-edit-ribbon .aw-edit-action {
     height: 30px;
     padding: 0 13px;
-    border-color: #234d4f;
+    border-color: color-mix(in srgb, var(--aw-accent) 32%, var(--aw-border));
     border-radius: 8px;
-    background: #101d1e;
-    color: #4fd1dc;
+    background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-bg-2));
+    color: var(--aw-accent);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
