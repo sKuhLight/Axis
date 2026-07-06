@@ -7,6 +7,7 @@
   import { createPanelTemplateFromPanel } from './library';
   import { PANEL_REGION_MOVE_OPTIONS } from './moveAlternatives';
   import { dockTargetLabel, panelDropCommand, pointerDistance, splitIntentFromRect, type PanelDropIntent, type WorkbenchRect } from './drag';
+  import { enqueueToast } from './toasts';
 
   let {
     stack,
@@ -64,7 +65,12 @@
 
   function savePanelTemplate(panel: PanelInstance) {
     const template = createPanelTemplateFromPanel($controller.document, panel.id);
-    if (template) controller.dispatch({ type: 'library.panel.save', template });
+    if (!template) return;
+    controller.dispatch({ type: 'library.panel.save', template });
+    // Generic (app-agnostic) confirmation: the panel title is generic document
+    // data, so this message carries no Axis-specific vocabulary.
+    const title = panel.title ?? panel.type;
+    enqueueToast({ text: `Saved "${title}" to library` });
   }
 
   function openHeaderMenu(panelId: string, event: MouseEvent) {
