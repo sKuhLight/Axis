@@ -11,6 +11,7 @@ import AxisPlaceholderPanel from './panels/AxisPlaceholderPanel.svelte';
 import AxisPresetBrowserPanel from './panels/AxisPresetBrowserPanel.svelte';
 import AxisSignalGridPanel from './panels/AxisSignalGridPanel.svelte';
 import AxisVirtualScreenPanel from './panels/AxisVirtualScreenPanel.svelte';
+import AxisBlockEditorModifierPanel from './panels/block-editor/AxisBlockEditorModifierPanel.svelte';
 import AxisFcPartPanel from './panels/fc/AxisFcPartPanel.svelte';
 import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowserPartPanel.svelte';
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
@@ -20,6 +21,7 @@ import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParameter
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
+  AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES,
   AXIS_WORKBENCH_FC_PANEL_TYPES,
   AXIS_WORKBENCH_NAVIGATION_IDS,
   AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES,
@@ -58,6 +60,11 @@ AXIS_WORKBENCH_FC_PANEL_TYPES.forEach((type) =>
     type,
     component: type === 'axis.fc' ? AxisFcPanel : AxisFcPartPanel
   })
+);
+
+// 'axis.blockEditor' itself is a base panel type (registered above) — register only the parts.
+AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES.filter((type) => type !== 'axis.blockEditor').forEach((type) =>
+  registry.registerPanel({ type, component: AxisBlockEditorModifierPanel })
 );
 AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, component: AxisWorkbenchWidget }));
 

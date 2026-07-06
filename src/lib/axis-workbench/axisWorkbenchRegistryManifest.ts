@@ -1,3 +1,4 @@
+import { AXIS_BLOCK_EDITOR_PARTS, axisBlockEditorPanelType } from './blockEditor/types';
 import { AXIS_FC_PARTS, axisFcPanelType } from './fc/types';
 import { AXIS_PRESET_BROWSER_PARTS, axisPresetBrowserPanelType } from './presetBrowser/types';
 import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axisParameterActions';
@@ -17,6 +18,7 @@ export const AXIS_WORKBENCH_BASE_PANEL_TYPES = [
 
 export const AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES = AXIS_PRESET_BROWSER_PARTS.map(axisPresetBrowserPanelType);
 export const AXIS_WORKBENCH_FC_PANEL_TYPES = AXIS_FC_PARTS.map(axisFcPanelType);
+export const AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES = AXIS_BLOCK_EDITOR_PARTS.map(axisBlockEditorPanelType);
 
 export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.logo',
