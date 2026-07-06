@@ -533,6 +533,80 @@ describe('reduceWorkbenchDocument — widgets', () => {
     expect(layout(moved.next).widgets['widget.a'].zone).toBe('top.right');
   });
 
+  // V14b: an explicit `memberOrder` pins the resulting member sequence — this is
+  // how a POSITIONAL in-group insert and an in-group REORDER are expressed at the
+  // command level (both `widget.group`, so neither detaches).
+  it('honours an explicit memberOrder for a positional in-group insert', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.c', 'top.left', 2), zone: 'top.left' }).next;
+    // Group a+b, then insert c BETWEEN them (memberOrder a,c,b).
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b'], groupId: 'group.a' }).next;
+    const inserted = reduceWorkbenchDocument(next, {
+      type: 'widget.group',
+      groupId: 'group.a',
+      widgetIds: ['widget.a', 'widget.c', 'widget.b'],
+      memberOrder: ['widget.a', 'widget.c', 'widget.b']
+    });
+
+    expect(inserted.success).toBe(true);
+    expect(layout(inserted.next).widgetGroups['group.a'].widgetIds).toEqual(['widget.a', 'widget.c', 'widget.b']);
+    expect(layout(inserted.next).widgets['widget.c'].groupId).toBe('group.a');
+  });
+
+  // V14b: a same-group reorder is `widget.group` with the existing members in a
+  // new order — it does NOT detach any member (that is the pull-OUT path).
+  it('reorders members within a group without detaching (same-group drag)', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.c', 'top.left', 2), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b', 'widget.c'], groupId: 'group.a' }).next;
+
+    // Drag c to the front → order c,a,b.
+    const reordered = reduceWorkbenchDocument(next, {
+      type: 'widget.group',
+      groupId: 'group.a',
+      widgetIds: ['widget.c', 'widget.a', 'widget.b'],
+      memberOrder: ['widget.c', 'widget.a', 'widget.b']
+    });
+
+    expect(reordered.success).toBe(true);
+    expect(layout(reordered.next).widgetGroups['group.a'].widgetIds).toEqual(['widget.c', 'widget.a', 'widget.b']);
+    // Every member stays grouped — nothing detached.
+    for (const id of ['widget.a', 'widget.b', 'widget.c']) {
+      expect(layout(reordered.next).widgets[id].groupId).toBe('group.a');
+    }
+    // Zone order reflects the new member sequence.
+    const orders = ['widget.c', 'widget.a', 'widget.b'].map((id) => layout(reordered.next).widgets[id].order);
+    expect(orders).toEqual([...orders].sort((x, y) => x - y));
+  });
+
+  // V14b: moving a member from group X into group Y detaches it from X (and
+  // dissolves X if it drops below two members) while landing in Y at the index.
+  it('moves a member from one group into another and detaches the source group', () => {
+    let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.c', 'top.right', 0), zone: 'top.right' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.d', 'top.right', 1), zone: 'top.right' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.b'], groupId: 'group.a' }).next;
+    next = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.c', 'widget.d'], groupId: 'group.b' }).next;
+
+    // Drop b into group.b between c and d.
+    const moved = reduceWorkbenchDocument(next, {
+      type: 'widget.group',
+      groupId: 'group.b',
+      widgetIds: ['widget.c', 'widget.b', 'widget.d'],
+      memberOrder: ['widget.c', 'widget.b', 'widget.d']
+    });
+
+    expect(moved.success).toBe(true);
+    expect(layout(moved.next).widgets['widget.b'].groupId).toBe('group.b');
+    expect(layout(moved.next).widgetGroups['group.b'].widgetIds).toEqual(['widget.c', 'widget.b', 'widget.d']);
+    // group.a dropped below two members → dissolved; widget.a is now loose.
+    expect(layout(moved.next).widgetGroups['group.a']).toBeUndefined();
+    expect(layout(moved.next).widgets['widget.a'].groupId).toBeNull();
+  });
+
   it('ungroups widgets', () => {
     let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
     next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;

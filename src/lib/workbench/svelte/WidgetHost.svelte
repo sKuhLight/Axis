@@ -14,7 +14,8 @@
   import { onMount } from 'svelte';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
-  import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
+  import { pointerDistance, widgetDropCommand, widgetDropIndex, rectContainsPointer, type WorkbenchRect } from './drag';
+  import { groupInsertIndex, groupHitArea, groupPlaceholderRect } from './groupInsertion';
   import { createWidgetTemplateFromWidget } from './library';
   import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
 
@@ -106,25 +107,69 @@
     menuOpen = true;
   }
 
-  function groupCommandFor(target: WidgetInstance): WorkbenchCommand | null {
+  // Measured member rects for a group, in member order, excluding the widget
+  // being dragged (it renders `display:none` while dragged, so its slot must not
+  // count toward the insertion math — design `draggingId`).
+  function memberRectsOf(groupEl: HTMLElement, groupWidgetIds: string[]): { id: string; rect: WorkbenchRect }[] {
+    return groupWidgetIds
+      .filter((id) => id !== widget.id)
+      .map((id) => {
+        const el = groupEl.querySelector<HTMLElement>(`[data-widget="${CSS.escape(id)}"]`);
+        return el ? { id, rect: rectOf(el) } : null;
+      })
+      .filter((entry): entry is { id: string; rect: WorkbenchRect } => !!entry);
+  }
+
+  // Resolve an in-group insert (or same-group reorder) for the dragged widget at
+  // a pointer. Returns the target group, the computed insertion index (design
+  // `_gsnap` midpoint snapshot), the resulting member sequence, and a
+  // widget-sized placeholder rect (design `indStyle`). The group hit-area is the
+  // module rect expanded ±8px/±4px (03-groups §3), so a near-miss still previews
+  // the insert rather than falling through to a plain zone drop.
+  function groupInsertAt(
+    x: number,
+    y: number,
+    ghost: { width: number; height: number }
+  ): { groupId: string; index: number; memberOrder: string[]; zone: string; placeholderRect: WorkbenchRect | null } | null {
     const layout = $controller.activeLayout;
-    if (!layout || target.id === widget.id || target.locked) return null;
-    if (target.groupId && target.groupId === widget.groupId) return null;
+    if (!layout) return null;
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const groupEl = el?.closest<HTMLElement>('[data-widget-group]');
+    const groupId = groupEl?.dataset.widgetGroup;
+    if (!groupEl || !groupId) return null;
+    const group = layout.widgetGroups[groupId];
+    if (!group || group.locked) return null;
+    // A same-group drag stays a REORDER; a foreign/loose widget is an INSERT.
+    // Either way the module hit-area is expanded so the whole strip previews.
+    if (!rectContainsPointer(groupHitArea(rectOf(groupEl)), { x, y })) return null;
 
-    const targetGroup = target.groupId ? layout.widgetGroups[target.groupId] : undefined;
-    if (targetGroup?.locked) return null;
-    if (targetGroup) {
-      const widgetIds = [...targetGroup.widgetIds.filter((id) => id !== widget.id), widget.id];
-      const anchor = targetGroup.widgetIds.map((id) => layout.widgets[id]).filter(Boolean).sort((a, b) => a.order - b.order)[0];
-      return {
-        type: 'widget.group',
-        groupId: targetGroup.id,
-        widgetIds,
-        zone: anchor?.zone ?? target.zone,
-        index: anchor?.order ?? target.order
-      };
-    }
+    const membersWithRects = memberRectsOf(groupEl, group.widgetIds);
+    const index = groupInsertIndex({ x, y }, membersWithRects.map((m) => m.rect), 'horizontal');
+    const remaining = membersWithRects.map((m) => m.id);
+    const memberOrder = [...remaining.slice(0, index), widget.id, ...remaining.slice(index)];
+    const placeholderRect = groupPlaceholderRect(index, membersWithRects.map((m) => m.rect), ghost);
+    const anchor = group.widgetIds.map((id) => layout.widgets[id]).filter(Boolean).sort((a, b) => a.order - b.order)[0];
+    return { groupId, index, memberOrder, zone: anchor?.zone ?? widget.zone, placeholderRect };
+  }
 
+  // Create a fresh group by dropping onto a LOOSE widget's centre band (design
+  // create rule: pointer inside the target's middle 28% width). Outside that
+  // band the drop is a plain zone insert next to it, not a group.
+  function groupCreateAt(x: number, y: number): WorkbenchCommand | null {
+    const layout = $controller.activeLayout;
+    if (!layout || widget.groupId) return null;
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    // Never create a group from a widget already inside a group module here —
+    // that path is handled as an insert by `groupInsertAt`.
+    if (el?.closest<HTMLElement>('[data-widget-group]')) return null;
+    const widgetEl = el?.closest<HTMLElement>('[data-widget-host]');
+    const targetId = widgetEl?.dataset.widget;
+    if (!widgetEl || !targetId || targetId === widget.id) return null;
+    const target = layout.widgets[targetId];
+    if (!target || target.locked || target.groupId) return null;
+    // Centre 28% band (0.36 insets) of the target's width (design create rule).
+    const r = widgetEl.getBoundingClientRect();
+    if (x < r.left + r.width * 0.36 || x > r.right - r.width * 0.36) return null;
     return {
       type: 'widget.group',
       widgetIds: [target.id, widget.id],
@@ -133,51 +178,47 @@
     };
   }
 
-  function groupCommandAt(x: number, y: number): WorkbenchCommand | null {
-    const layout = $controller.activeLayout;
-    if (!layout || widget.groupId) return null;
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const groupEl = el?.closest<HTMLElement>('[data-widget-group]');
-    const groupId = groupEl?.dataset.widgetGroup;
-    if (groupId) {
-      const group = layout.widgetGroups[groupId];
-      if (!group || group.locked || group.widgetIds.includes(widget.id)) return null;
-      const anchor = group.widgetIds.map((id) => layout.widgets[id]).filter(Boolean).sort((a, b) => a.order - b.order)[0];
-      return {
-        type: 'widget.group',
-        groupId,
-        widgetIds: [...group.widgetIds, widget.id],
-        zone: anchor?.zone ?? widget.zone,
-        index: anchor?.order ?? widget.order
-      };
-    }
-
-    const widgetEl = el?.closest<HTMLElement>('[data-widget-host]');
-    const targetId = widgetEl?.dataset.widget;
-    const target = targetId ? layout.widgets[targetId] : undefined;
-    return target ? groupCommandFor(target) : null;
-  }
-
   function rectOf(el: Element): WorkbenchRect {
     const rect = el.getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }
 
+  // The dragged unit's own rect drives the widget-sized in-group placeholder
+  // (design `indStyle` = drag.w/drag.h). Falls back to a sensible member size.
+  function ghostSize(): { width: number; height: number } {
+    const r = hostEl?.getBoundingClientRect();
+    return { width: r?.width || 90, height: r?.height || 38 };
+  }
+
   function widgetPreviewAt(x: number, y: number): {
     rect: WorkbenchRect;
-    kind: 'zone' | 'insert' | 'group';
+    kind: 'zone' | 'insert' | 'group' | 'placeholder';
     orientation?: 'horizontal' | 'vertical';
     label?: string;
   } | null {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const groupEl = el?.closest<HTMLElement>('[data-widget-group]');
-    if (!widget.groupId && groupEl?.dataset.widgetGroup) return { rect: rectOf(groupEl), kind: 'group', label: 'Group widgets' };
-
-    const targetWidgetEl = el?.closest<HTMLElement>('[data-widget-host]');
-    if (!widget.groupId && targetWidgetEl?.dataset.widget && targetWidgetEl.dataset.widget !== widget.id) {
-      return { rect: rectOf(targetWidgetEl), kind: 'group', label: 'Group widgets' };
+    // In-group insert / same-group reorder: a widget-sized dashed placeholder at
+    // the computed index (design `indStyle`), previewing exactly where the drop
+    // lands between members. Takes priority over the coarse group highlight.
+    const insert = groupInsertAt(x, y, ghostSize());
+    if (insert) {
+      const label = insert.groupId === widget.groupId ? 'Reorder in group' : 'Place in group';
+      const fallback = document.querySelector(`[data-widget-group="${CSS.escape(insert.groupId)}"]`);
+      return {
+        rect: insert.placeholderRect ?? (fallback ? rectOf(fallback) : rectOf(document.body)),
+        kind: 'placeholder',
+        orientation: 'horizontal',
+        label
+      };
     }
 
+    // Dropping onto a loose widget's centre band creates a new group.
+    if (groupCreateAt(x, y)) {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      const targetWidgetEl = el?.closest<HTMLElement>('[data-widget-host]');
+      if (targetWidgetEl) return { rect: rectOf(targetWidgetEl), kind: 'group', label: 'Group widgets' };
+    }
+
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
     const zoneEl = el?.closest<HTMLElement>('[data-zone]');
     if (!zoneEl?.dataset.zone) return null;
     const zone = zoneEl.dataset.zone;
@@ -235,6 +276,37 @@
     return { zone, index };
   }
 
+  // Single source of truth for what a drop at (x,y) does. Priority (design
+  // §7): in-group insert/reorder (widget-sized placeholder) → group-create on a
+  // loose widget's centre band → plain zone insert → new-panel workspace edge.
+  // The pull-OUT case is just a plain zone drop that resolves to a different
+  // zone than the member's group; the reducer's `detachPartialGroupMembers`
+  // handles the detach (regression-tested).
+  function resolveDropAt(x: number, y: number): { command: WorkbenchCommand } | { edgeDrop: { region: DockRegionId } } | null {
+    const insert = groupInsertAt(x, y, ghostSize());
+    if (insert) {
+      // Same-group drop = reorder (no detach); foreign/loose = insert. Both are
+      // `widget.group` with an explicit member sequence, so neither routes
+      // through `widget.move` / detach.
+      return {
+        command: {
+          type: 'widget.group',
+          groupId: insert.groupId,
+          widgetIds: insert.memberOrder,
+          memberOrder: insert.memberOrder,
+          zone: insert.zone as WidgetInstance['zone'],
+          index: undefined
+        }
+      };
+    }
+    const groupCreate = groupCreateAt(x, y);
+    if (groupCreate) return { command: groupCreate };
+    const target = widgetDropAt(x, y);
+    if (target) return { command: widgetDropCommand([widget.id], target) };
+    const edge = workspaceEdgeDropAt(x, y);
+    return edge ? { edgeDrop: { region: edge.region } } : null;
+  }
+
   function dragPointerDown(e: PointerEvent) {
     if (!$controller.editMode || widget.locked || e.button !== 0) return;
     const startedAt = { x: e.clientX, y: e.clientY };
@@ -244,16 +316,14 @@
       const pointer = { x: ev.clientX, y: ev.clientY };
       if (!dragging && pointerDistance(startedAt, pointer) < 5) return;
       dragging = true;
-      const groupCommand = groupCommandAt(pointer.x, pointer.y);
-      const target = widgetDropAt(pointer.x, pointer.y);
       const preview = widgetPreviewAt(pointer.x, pointer.y);
-      const edgeDrop = !groupCommand && !target ? workspaceEdgeDropAt(pointer.x, pointer.y) : null;
+      const edgeDrop = !preview ? workspaceEdgeDropAt(pointer.x, pointer.y) : null;
       controller.setDrag({
         kind: 'widget',
         widgetIds: [widget.id],
         startedAt,
         pointer,
-        targetLabel: groupCommand ? 'Group widgets' : target ? target.zone : edgeDrop ? `New panel in ${edgeDrop.region}` : undefined,
+        targetLabel: preview?.label ?? (edgeDrop ? `New panel in ${edgeDrop.region}` : undefined),
         previewRect: preview?.rect ?? edgeDrop?.rect,
         previewKind: preview?.kind ?? (edgeDrop ? 'zone' : undefined),
         previewOrientation: preview?.orientation
@@ -264,17 +334,14 @@
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       if (dragging) {
-        const groupCommand = groupCommandAt(ev.clientX, ev.clientY);
-        const target = widgetDropAt(ev.clientX, ev.clientY);
-        const edgeDrop = !groupCommand && !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
-        if (groupCommand) controller.dispatch(groupCommand);
-        else if (target) controller.dispatch(widgetDropCommand([widget.id], target));
-        else if (edgeDrop) {
+        const resolved = resolveDropAt(ev.clientX, ev.clientY);
+        if (resolved && 'command' in resolved) controller.dispatch(resolved.command);
+        else if (resolved && 'edgeDrop' in resolved) {
           controller.dispatchMany(
             createCustomPanelFromWidgetsCommands($controller.document, {
               widgetIds: [widget.id],
               title: 'Custom Panel',
-              region: edgeDrop.region
+              region: resolved.edgeDrop.region
             })
           );
         }
@@ -564,11 +631,19 @@
     outline-offset: 3px;
     background: transparent;
   }
-  /* A grouped member's grab surface hugs the member (no negative offset) so it
-     doesn't bleed over its neighbours inside the shared group module. */
+  /* A grouped member's grab surface is a bare, borderless grab layer (design
+     `memberOverlay`: transparent, inset:0, cursor:grab). The GROUP module draws
+     the single dashed unit border in edit mode — members must NOT each carry the
+     loose-widget dashed outline (V14a: that duplicated chrome is what made a
+     group read as a row of separate widgets). A faint hover tint marks which
+     member is grabbed without adding a per-member box. */
   .aw-widget-drag-surface.member {
-    outline-offset: -1px;
+    outline: none;
+    outline-offset: 0;
     border-radius: 8px;
+  }
+  .aw-widget-drag-surface.member:hover {
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
   }
   .aw-widget-edit button {
     width: 18px;

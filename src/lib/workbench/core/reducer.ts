@@ -303,6 +303,34 @@ function detachPartialGroupMembers(layout: WorkbenchLayout, widgetIds: string[])
   }
 }
 
+// Remove the given widgets from any group OTHER than `targetGroupId` they still
+// belong to (used when `widget.group` folds a member out of one group and into
+// another). A source group left with fewer than two members dissolves, matching
+// `detachPartialGroupMembers`.
+function detachFromOtherGroups(layout: WorkbenchLayout, widgetIds: string[], targetGroupId: string): void {
+  const moving = new Set(widgetIds);
+  const touchedGroups = new Set<string>();
+  for (const widgetId of widgetIds) {
+    const widget = layout.widgets[widgetId];
+    const groupId = widget?.groupId;
+    if (!widget || !groupId || groupId === targetGroupId) continue;
+    const group = layout.widgetGroups[groupId];
+    if (!group || group.locked) continue;
+    group.widgetIds = group.widgetIds.filter((id) => id !== widgetId);
+    touchedGroups.add(groupId);
+  }
+  for (const groupId of touchedGroups) {
+    const group = layout.widgetGroups[groupId];
+    if (!group) continue;
+    if (group.widgetIds.length < 2) {
+      for (const id of group.widgetIds) {
+        if (layout.widgets[id]?.groupId === groupId && !moving.has(id)) layout.widgets[id].groupId = null;
+      }
+      delete layout.widgetGroups[groupId];
+    }
+  }
+}
+
 function moveZoneWidgets(layout: WorkbenchLayout, fromZone: WidgetZoneId, toZone: WidgetZoneId): void {
   layout.zones[toZone] ??= {
     id: toZone,
@@ -521,10 +549,23 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       const existingGroup = layout.widgetGroups[groupId];
       if (existingGroup?.locked) return fail(doc, 'locked-widget-group', `Widget group ${groupId} is locked and cannot be changed.`);
       const zone = command.zone ?? layout.widgets[widgetIds[0]].zone;
-      const orderedIds = widgetIds
+      // An explicit `memberOrder` (V14b positional insert / in-group reorder)
+      // pins the member sequence verbatim, restricted to the ids actually being
+      // grouped so a stale entry can't slip in; anything missing from it falls
+      // back to the current-order default so the set is always complete.
+      const idSet = new Set(widgetIds);
+      const pinned = (command.memberOrder ?? []).filter((id) => idSet.has(id));
+      const byOrder = widgetIds
         .map((id) => layout.widgets[id])
         .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
         .map((widget) => widget.id);
+      const orderedIds = pinned.length
+        ? [...pinned, ...byOrder.filter((id) => !pinned.includes(id))]
+        : byOrder;
+      // Detach members that are arriving from a DIFFERENT group (V14b: dropping a
+      // member from group X into group Y) so the source group doesn't keep a
+      // dangling id; dissolve any source group that falls below two members.
+      detachFromOtherGroups(layout, orderedIds, groupId);
       orderedIds.forEach((widgetId) => {
         layout.widgets[widgetId].groupId = groupId;
       });

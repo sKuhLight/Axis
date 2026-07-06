@@ -29,7 +29,10 @@ export type WorkbenchDragState =
       startedAt: WorkbenchPointer;
       targetLabel?: string;
       previewRect?: WorkbenchRect;
-      previewKind?: 'zone' | 'insert' | 'group';
+      // `placeholder` = the widget-sized dashed slot spliced into a group at the
+      // computed insert index (design `indStyle`). `insert` stays the thin
+      // zone-gap line; `group` the coarse whole-module highlight.
+      previewKind?: 'zone' | 'insert' | 'group' | 'placeholder';
       previewOrientation?: 'horizontal' | 'vertical';
     };
 
