@@ -159,7 +159,13 @@ colW/cellH/gap/mapMode.
 **Round 7 COMPLETE. Round 8:** R8a T21+T23 LANDED (`0b4116f`) — all four safe-area
 insets mapped + consumed edge-by-edge; phone bottom sheets (nav/dock/library) with
 tested swipe-to-close (≥96px / ≥0.55px/ms, scroll-intent cancel), guards green.
-R8b T26 Playwright E2E still IN FLIGHT (e2e/ + package.json only).
+R8b T26 LANDED (`595a482`) — 9 specs / 34 tests green on chromium+firefox
+(`npm run test:e2e`; viewport pinned 1440×900 — <1366 activates the tablet
+profile). **ENTIRE P2 BACKLOG COMPLETE.** Unit suite 528/528 + E2E 34/34.
+Remaining: T31 operator visual pass + fix round, P3 (T27 cross-block param
+writes, T29 layout import/export UI, T30 layout undo/redo), TabStack/
+WorkbenchHost token externalization, Layout Profiles (WITH OPERATOR), T35
+migration audit (last).
 
 **Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
 - `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
