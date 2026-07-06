@@ -6,11 +6,13 @@
   import type { Cell } from './grid';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
+  import { resolveAxisGridMetrics, type AxisGridView } from './axis-workbench/gridView';
 
-  // optional grid-view override (workbench gridbar): 'auto' fits to the pane with tilePx as the size
-  // cap, 'full' fixes tiles at tilePx and scrolls. The old shell renders <SignalGrid /> without it →
-  // stock fit behavior. Desktop only; mobile keeps its own column-density paging.
-  let { view = null }: { view?: { mode: 'auto' | 'full'; tilePx: number } | null } = $props();
+  // optional grid-view override (workbench gridbar). 'full' fixes tiles at the block-size px and
+  // scrolls; 'map' pins the glyph minimap; 'auto' fits to the pane and steps full → map as the pane
+  // shrinks (04-fc-and-grid.md §2.2). The old shell renders <SignalGrid /> without it → stock fit
+  // behavior. Desktop only; mobile keeps its own column-density paging.
+  let { view = null }: { view?: AxisGridView | null } = $props();
 
   // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
   // dark mode, softly lightened (dark family-tint ink) in light mode.
@@ -44,11 +46,21 @@
   const rows = $derived(editor.layout.rows || 4);
   const mob = $derived(editor.isMobile);
   const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
-  const gap = $derived(mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : 26);
   // available grid area = the gridwrap CONTENT box (measured). It's flex-sized + overflow:hidden, so it
   // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
   let availW = $state(1);
   let availH = $state(1);
+  // ── workbench pane-relative resolution (04-fc-and-grid.md §2.2) ──
+  // Only when a gridbar view is supplied and we're on desktop. Auto steps full → map by the pane rect;
+  // 'full'/'map' pin their mode. (Auto's <620px "mobile" tier degrades to map on desktop — the true
+  // mobile paging path stays gated on editor.isMobile so its pinch/pager chrome is unaffected.)
+  const metrics = $derived(
+    !mob && view ? resolveAxisGridMetrics(view, availW > 1 ? availW : 0, availH > 1 ? availH : 0) : null
+  );
+  const mapMode = $derived(metrics?.mode === 'map'); // desktop glyph minimap (§2.5)
+  const gap = $derived(
+    mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : mapMode ? 7 : metrics ? metrics.fullGap : 26
+  );
   const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
   const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
   const MAX_TILE = 150; // desktop: never let a tile grow past this — a full-screen 12-col row must not
@@ -56,17 +68,19 @@
   // Mobile fills the page width exactly (clean paging). Desktop fits BOTH axes as a square-ish tile and
   // caps the size, so on a wide/fullscreen window the grid stays a comfortable size and centers rather
   // than spanning edge-to-edge.
-  const fixedTile = $derived(!mob && view?.mode === 'full'); // fixed-size tiles, grid scrolls in the pane
+  const fixedTile = $derived(!mob && metrics?.mode === 'full'); // fixed-size tiles, grid scrolls in the pane
+  // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140 (·colCapH), else legacy MAX_TILE.
+  const tileCap = $derived(metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE));
   const colW = $derived.by(() => {
-    if (fixedTile) return view!.tilePx;
-    if (availW <= 1) return mob ? 88 : 96;
+    if (fixedTile) return Math.min(view!.tilePx, metrics!.fullColMax);
+    if (availW <= 1) return mob ? 88 : mapMode ? 30 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
     const fillW = (availW - (hCols - 1) * gap) / hCols;
     if (mob) return Math.max(24, fillW);
     // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ the size cap.
     const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
-    return Math.max(24, Math.min(fillW, fitH / ASPECT, view?.tilePx ?? MAX_TILE));
+    return Math.max(mapMode ? 24 : 24, Math.min(fillW, fitH / ASPECT, tileCap));
   });
   const cellH = $derived.by(() => {
     const sq = colW * ASPECT;
@@ -78,7 +92,8 @@
   const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
   const pageShift = $derived(visCols * (colW + gap));
   const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
-  const showType = $derived(colW >= 56); // progressive disclosure
+  // map mode strips the type line, dots, label (§2.5); otherwise progressive disclosure by width.
+  const showType = $derived(!mapMode && colW >= 56);
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -556,7 +571,7 @@
         {/if}
       </svg>
 
-      <div class="grid" style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
+      <div class="grid" class:map={mapMode} style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
         {#each Array(rows) as _, r}
           {#each Array(cols) as _, c}
             {@const cell = cellAt.get(`${r},${c}`)}
@@ -583,35 +598,37 @@
                 onmouseenter={() => showBlockHelp(cell)}
                 onmouseleave={clearBlockHelp}
               >
-                {#if meter}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
+                {#if meter && !mapMode}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
                 {#if cell.bypassed}<span class="hatch"></span>{/if}
-                {#if swipeHud && swipeHud.key === `${r},${c}`}
+                {#if swipeHud && swipeHud.key === `${r},${c}` && !mapMode}
                   <div class="swhud">
                     <div class="sh-val mono">{fmtNumber(swipeHud.m)}{#if paramUnit(swipeHud.m)}<span class="sh-unit">{paramUnit(swipeHud.m)}</span>{/if}</div>
                     <div class="sh-name">{swipeHud.m.name}</div>
                   </div>
                 {/if}
                 <span class="glyph">{cat.glyph}</span>
-                <span class="b-label">{label}</span>
-                {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
-                {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
-                {#if cell.pack}
-                  <button
-                    class="bypdot"
-                    class:on={!cell.bypassed}
-                    title="On / Off"
-                    aria-label="Toggle bypass"
-                    onpointerdown={(e) => e.stopPropagation()}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      editor.toggleBypass(cell);
-                    }}
-                  ><span class="bypdot-i"></span></button>
-                {/if}
-                {#if meter && meter.count > 0}
-                  <span class="dots">
-                    {#each Array(meter.count) as _, di (di)}<span class="dot" class:on={di === meter.active}></span>{/each}
-                  </span>
+                {#if !mapMode}
+                  <span class="b-label">{label}</span>
+                  {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
+                  {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
+                  {#if cell.pack}
+                    <button
+                      class="bypdot"
+                      class:on={!cell.bypassed}
+                      title="On / Off"
+                      aria-label="Toggle bypass"
+                      onpointerdown={(e) => e.stopPropagation()}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        editor.toggleBypass(cell);
+                      }}
+                    ><span class="bypdot-i"></span></button>
+                  {/if}
+                  {#if meter && meter.count > 0}
+                    <span class="dots">
+                      {#each Array(meter.count) as _, di (di)}<span class="dot" class:on={di === meter.active}></span>{/each}
+                    </span>
+                  {/if}
                 {/if}
                 {#if c < cols - 1 && cell.pack !== 'Output'}
                   <button
@@ -1105,6 +1122,32 @@
   .port.sel {
     background: var(--accent);
     box-shadow: 0 0 9px rgba(53, 201, 214, 0.6);
+  }
+
+  /* map mode (§2.5): clean glyph minimap — bigger glyph, smaller ports, dim dashed empties */
+  .grid.map .glyph {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .grid.map .port {
+    width: 11px;
+    height: 11px;
+    right: -5px;
+    margin-top: -5px;
+    border-width: 2px;
+  }
+  .grid.map .empty {
+    border: 1px dashed var(--border2);
+  }
+  .grid.map .empty .plus {
+    display: block;
+    font-size: 12px;
+    font-weight: 300;
+    color: var(--textmuted);
+    opacity: 0.45;
+  }
+  .grid.map .empty .restdot {
+    display: none;
   }
 
   .empty {
