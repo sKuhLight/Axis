@@ -319,6 +319,11 @@ function hideNavigation(layout: WorkbenchLayout, entryId: string): InsertResult 
   return { success: true };
 }
 
+function findSingletonConflict(layout: WorkbenchLayout, panel: PanelInstance): PanelInstance | undefined {
+  if (!panel.singletonKey) return undefined;
+  return Object.values(layout.panels).find((candidate) => candidate.id !== panel.id && candidate.singletonKey === panel.singletonKey);
+}
+
 function layoutReferencedByProfile(doc: WorkbenchDocument, layoutId: string): boolean {
   return Object.values(doc.profiles).some((profile) => profile.layoutId === layoutId);
 }
@@ -331,6 +336,8 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
   switch (command.type) {
     case 'panel.add': {
       if (layout.panels[command.panel.id]) return fail(doc, 'duplicate-id', `Panel ${command.panel.id} already exists.`);
+      const conflict = findSingletonConflict(layout, command.panel);
+      if (conflict) return fail(doc, 'duplicate-singleton', `Panel singleton ${command.panel.singletonKey} already exists as ${conflict.id}.`);
       layout.panels[command.panel.id] = { ...command.panel };
       const result = insertPanel(layout, command.panel.id, command.target, command.region);
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not add panel.');
@@ -372,6 +379,8 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       if (command.targetPanelId && command.targetPanelId === panelId) return fail(doc, 'invalid-command', 'A panel cannot be split beside itself.');
       if (command.panel) {
         if (layout.panels[command.panel.id]) return fail(doc, 'duplicate-id', `Panel ${command.panel.id} already exists.`);
+        const conflict = findSingletonConflict(layout, command.panel);
+        if (conflict) return fail(doc, 'duplicate-singleton', `Panel singleton ${command.panel.singletonKey} already exists as ${conflict.id}.`);
         layout.panels[command.panel.id] = { ...command.panel };
       } else if (!layout.panels[panelId]) {
         return fail(doc, 'missing-panel', `Panel ${panelId} does not exist.`);
@@ -390,7 +399,9 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
     case 'panel.rename': {
       const panel = layout.panels[command.panelId];
       if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
-      panel.title = command.title;
+      const title = command.title.trim();
+      if (!title) return fail(doc, 'invalid-command', 'Panel title cannot be empty.');
+      panel.title = title;
       return ok(next);
     }
     case 'panel.collapse': {
@@ -449,6 +460,7 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
     case 'widget.resize': {
       const widget = layout.widgets[command.widgetId];
       if (!widget) return fail(doc, 'missing-widget', `Widget ${command.widgetId} does not exist.`);
+      if (widget.locked) return fail(doc, 'locked-widget', `Widget ${command.widgetId} is locked and cannot be resized.`);
       widget.size = command.size;
       return ok(next);
     }
@@ -534,6 +546,7 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       if (!entry) return fail(doc, 'missing-navigation', `Navigation entry ${command.entryId} does not exist.`);
       entry.hidden = false;
       if (!layout.navigation.order.includes(command.entryId)) layout.navigation.order.push(command.entryId);
+      // Showing always succeeds (unhide + ensure in order); the optional reorder is skipped for fixed entries.
       if (entry.fixedSlot && entry.fixedSlot !== 'none' && !navigationFixedMoveAllowed(entry)) return ok(next);
       const result = moveNavigation(layout, command.entryId, command.index ?? layout.navigation.order.indexOf(command.entryId));
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not show navigation entry.');

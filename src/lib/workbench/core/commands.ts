@@ -18,6 +18,7 @@ export type WorkbenchErrorCode =
   | 'active-layout-missing'
   | 'active-profile-missing'
   | 'duplicate-id'
+  | 'duplicate-singleton'
   | 'invalid-command'
   | 'invalid-region'
   | 'locked-navigation'

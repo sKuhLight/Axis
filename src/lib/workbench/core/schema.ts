@@ -78,6 +78,7 @@ export interface PanelInstance {
   id: string;
   type: string;
   title?: string;
+  /** Panels sharing a singletonKey are mutually exclusive per layout: `panel.add`/`panel.split` reject duplicates and repair removes them. */
   singletonKey?: string;
   locked?: boolean;
   closable?: boolean;
