@@ -123,6 +123,20 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
+**Round 5 (operator report ~15:24, final batch of the session) — IN FLIGHT (2 opus
+agents):**
+- W1 grid: (a) auto mode shows a scrollbar on large panes — suspect V1's pane-host
+  rect gives the resolver more chrome allowance than §2.2's baked-in padV(58/34) →
+  colCapH overflows the real content box; invariant to enforce: auto/map NEVER
+  scrollbar, only 'full' pans. (b) below the mobile threshold the grid shrinks tiny
+  instead of switching to the production PAGED grid — render the paged path pane-
+  driven on desktop (real mobile via editor.isMobile unchanged). Files: SignalGrid,
+  gridView, grid panel.
+- W2 chrome: top.right zone right-aligned in edit mode but drifts center in normal
+  mode; top.center placement off; widget edit-mode button chrome deforms the chips.
+  Files: WorkbenchHost/WidgetZone/WidgetHost/WidgetGroupHost CSS.
+Operator note: batch instructed with Opus per usage budget (~20% left).
+
 **Round 4 (operator report, ~15:00) — LANDED (`eda0074`):** gridbar chips (Full/Map/
 Auto + S/M/L) missing and no map/mobile auto-stepping in the operator's hand-built
 layout. Cause: the grid controls are per-layout WIDGETS — a layout that never had
