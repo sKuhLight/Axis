@@ -11,6 +11,30 @@ import {
 /** Profile ids seeded from the tablet / mobile presets. */
 export const AXIS_TABLET_PROFILE_ID = 'axis.profile.tablet';
 export const AXIS_MOBILE_PROFILE_ID = 'axis.profile.mobile';
+/** The default desktop profile id (created by `createAxisWorkbenchDefaultDocument`). */
+export const AXIS_DESKTOP_PROFILE_ID = 'axis.profile.desktop';
+
+/** Axis device-profile ids in display order, for a PROFILE switcher. */
+export const AXIS_PROFILE_IDS = [
+  AXIS_DESKTOP_PROFILE_ID,
+  AXIS_TABLET_PROFILE_ID,
+  AXIS_MOBILE_PROFILE_ID
+] as const;
+
+/**
+ * Manually pin the active Axis device profile (PROFILE switcher). Persists the
+ * choice as the document override so it survives reloads and wins over the
+ * viewport resolver until cleared. Pass `null` to clear the override and hand
+ * control back to the viewport-based resolver; supply the current viewport
+ * `width` so clearing re-resolves against the live viewport.
+ */
+export function setAxisProfileOverride(
+  controller: WorkbenchController,
+  profileId: string | null,
+  width?: number
+): void {
+  controller.setProfileOverride(profileId, width);
+}
 
 const SEED_PROFILE_ID: Record<(typeof AXIS_PROFILE_SEED_KINDS)[number], string> = {
   tablet: AXIS_TABLET_PROFILE_ID,

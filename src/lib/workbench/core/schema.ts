@@ -22,6 +22,14 @@ export interface WorkbenchDocument {
   layouts: Record<string, WorkbenchLayout>;
   panelLibrary: Record<string, PanelTemplate>;
   widgetLibrary: Record<string, WidgetTemplate>;
+  /**
+   * Explicit user profile choice that pins the active profile regardless of the
+   * viewport class (e.g. a PROFILE switcher). When set to a profile that exists,
+   * the profile resolver always returns it; clearing it (undefined) hands control
+   * back to viewport-based resolution. Optional + repair-safe: a dangling id is
+   * simply ignored by `resolveProfileForViewport`.
+   */
+  profileOverrideId?: string;
   metadata?: JsonObject;
 }
 

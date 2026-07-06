@@ -27,10 +27,26 @@
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
   const rootStyle = $derived(workbenchThemeStyle(theme));
   let navDrawerOpen = $state(false);
+
+  // Viewport observation lives in the svelte layer: watch the shell width and let
+  // the controller switch the active profile when the viewport class changes. The
+  // resolver never mutates layout contents — it only picks a profile id, and the
+  // controller dispatches `profile.activate` solely when the resolved id differs.
+  let rootEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const el = rootEl;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const resolve = () => controller.resolveProfileForWidth(el.clientWidth);
+    resolve();
+    const observer = new ResizeObserver(resolve);
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 </script>
 
 <WorkbenchProvider {controller} {registry}>
   <div
+    bind:this={rootEl}
     class={rootClass}
     class:aw-editing={$controller.editMode}
     class:aw-dragging-panel={$controller.drag?.kind === 'panel'}
