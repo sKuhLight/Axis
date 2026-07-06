@@ -1,8 +1,10 @@
 import {
   reduceWorkbenchDocument,
   repairWorkbenchDocument,
+  resolveProfileForViewport,
   selectActiveLayout,
   selectActiveProfile,
+  selectProfileOverride,
   type BindingRef,
   type JsonObject,
   type WorkbenchCommand,
@@ -136,6 +138,57 @@ export class WorkbenchController {
       results,
       error
     };
+  }
+
+  /** The currently-persisted, still-valid user profile override id (or undefined). */
+  get profileOverride(): string | undefined {
+    return selectProfileOverride(this.document);
+  }
+
+  /**
+   * Resolve the profile that matches the given viewport width (honouring any user
+   * override) and, **only when it differs from the active profile**, dispatch
+   * `profile.activate`. Never writes layout contents — a resize swaps the active
+   * profile id, it does not mutate the layout the user is on.
+   *
+   * Returns `true` when the active profile changed.
+   */
+  resolveProfileForWidth(width: number): boolean {
+    const targetId = resolveProfileForViewport(this.document, {
+      width,
+      userOverride: this.profileOverride
+    });
+    if (targetId === this.document.activeProfileId) return false;
+    if (!this.document.profiles[targetId]) return false;
+    return this.dispatch({ type: 'profile.activate', profileId: targetId }).success;
+  }
+
+  /**
+   * Set (or clear, with `null`) the explicit user profile override and immediately
+   * activate the resolved profile. Persists `profileOverrideId` on the document so
+   * the choice survives reloads. When an override names a real profile it wins over
+   * viewport resolution until cleared. Pass the current viewport `width` so the
+   * cleared case re-resolves against the viewport instead of holding a stale id.
+   */
+  setProfileOverride(profileId: string | null, width?: number): void {
+    const next = repairWorkbenchDocument(this.document);
+    if (profileId && next.profiles[profileId]) {
+      next.profileOverrideId = profileId;
+    } else {
+      delete next.profileOverrideId;
+    }
+    this.document = next;
+    this.#onChange?.(this.document);
+
+    const resolved = resolveProfileForViewport(this.document, {
+      width: width ?? Number.POSITIVE_INFINITY,
+      userOverride: this.document.profileOverrideId ?? null
+    });
+    if (resolved !== this.document.activeProfileId && this.document.profiles[resolved]) {
+      this.dispatch({ type: 'profile.activate', profileId: resolved });
+      return;
+    }
+    this.#emit();
   }
 
   resolveBinding<T = unknown>(
