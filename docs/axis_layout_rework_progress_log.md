@@ -14,12 +14,12 @@
 3. Verify green before starting: `npm run check` (0 errors) and `npx vitest run` must pass.
 4. Update this log (Landed + Next queue) after every landed step.
 
-## Current state — 2026-07-06 ~13:20
+## Current state — 2026-07-06 ~14:00
 
-- Branch `layout-rework`, working tree **clean**, `npm run check` 0 errors,
-  vitest **223/223** across 41 files.
-- All four tasks interrupted by the 2026-07-06 morning token cutoff were recovered
-  (partial work salvaged from the tree + stopped-agent transcripts) and are committed.
+- **IMPLEMENTATION QUEUE COMPLETE.** Branch `layout-rework`, tree clean,
+  `npm run check` 0 errors, vitest **320/320** across 47 files.
+- Everything below the Landed table is committed; what remains is the operator's
+  batched visual/hardware check (list below) and whatever it surfaces.
 
 ## Landed (chronological, this branch)
 
@@ -36,6 +36,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `c050ca5` | **T13** | Six layout presets as data (`axisWorkbenchLayoutPresets.ts`) + apply/seed/copy actions; LAYOUT tabs in the edit ribbon (`AxisLayoutPresetPicker` via a new type-agnostic ribbon-extras snippet); tablet/mobile profiles seeded at boot; shared panel roster extracted from defaults. Deferred: PROFILE switcher UI, toasts, pages contentMode rendering. |
 | `f2ce99f` | **FC parity** | FC part panels at 04-fc-and-grid.md §1/§3 parity: renderVals part gating + grid render part, board hero/switch-tile anatomy, layouts strip, typed per-slot card editors; fcDevice widget mirrors connected switch count. Deferred: hardware device switching + layout rename (no decoded addresses), AUTO LED chip, mobile sheet animations (full-shell concern). |
 | `c3609df` | auto-fit | Generic estW auto-fit (`workbench/core/widgetFit.ts`): joint fit ×0.62, keep-set shedding in document order, 44px chip reserve; Axis estW table + keep-set (preset/save) via registry sizing provider (`widgets/widgetEstWidths.ts`); top zones fit jointly (fitGroup), gaps 12/10/8; manual density = ceiling; edit mode never sheds. |
 | `8310758` | T33 (2/2) | Registered `axis.blockEditor.modifier` → `AxisBlockEditorModifierPanel` (manifest + registry). |
@@ -61,6 +62,9 @@
 - FC parity: board tiles (LED bar/badges/T-H rows/selection ring), layouts strip,
   part gating per part type, per-slot editors write correctly, grid part mounts
   SignalGrid, fcDevice chip matches the connected unit.
+- T13: LAYOUT tabs apply each preset correctly (dock arrangement + widgets + nav),
+  rightW survives preset switches, tablet/mobile profiles activate at their
+  breakpoints, applying presets repeatedly doesn't corrupt the document.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -73,8 +77,15 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **T13** — layout presets (spec: `01-shell.md`). IN FLIGHT — last implementation task.
-2. Operator's batched visual check over everything (P0: phone T02 check).
+1. **Operator's batched visual check** — the full checklist is the Verification debt
+   section above. Suggested order: desktop browser smoke on :5173 first (needs ForgeFX
+   on :5056), then narrow-window auto-fit stepping, then the phone T02 check (stale
+   persisted layout!), then FC panels against the connected device.
+2. Fix round for whatever the visual check surfaces.
+3. Later/parity backlog (from agent reports): T31 file-by-file DC visual pass incl.
+   nav-id reconciliation, PROFILE switcher UI, workbench toast surface, pages
+   contentMode rendering, T12 P1/P2 row anatomy + context menus, T16 remaining
+   tokenization.
 
 ## Session conventions (from the operator)
 
