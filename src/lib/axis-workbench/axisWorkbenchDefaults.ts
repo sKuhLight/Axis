@@ -80,13 +80,27 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   };
 
   layout.panels = {
-    'axis.signalGrid': panel('axis.signalGrid', 'axis.signalGrid', 'Signal Grid', { locked: true, closable: false }),
-    'axis.blockEditor': panel('axis.blockEditor', 'axis.blockEditor', 'Block Editor'),
-    'axis.history': panel('axis.history', 'axis.history', 'History'),
-    'axis.presetBrowser': panel('axis.presetBrowser', 'axis.presetBrowser', 'Preset Browser'),
-    'axis.fc': panel('axis.fc', 'axis.fc', 'Footswitches'),
-    'axis.account': panel('axis.account', 'axis.account', 'Axis Account', { locked: true, closable: false }),
-    'axis.deviceTools': panel('axis.deviceTools', 'axis.deviceTools', 'Device Tools'),
+    'axis.signalGrid': panel('axis.signalGrid', 'axis.signalGrid', 'Signal Grid', {
+      locked: true,
+      closable: false,
+      singletonKey: 'axis.signalGrid'
+    }),
+    'axis.blockEditor': panel('axis.blockEditor', 'axis.blockEditor', 'Block Editor', {
+      singletonKey: 'axis.blockEditor'
+    }),
+    'axis.history': panel('axis.history', 'axis.history', 'History', { singletonKey: 'axis.history' }),
+    'axis.presetBrowser': panel('axis.presetBrowser', 'axis.presetBrowser', 'Preset Browser', {
+      singletonKey: 'axis.presetBrowser'
+    }),
+    'axis.fc': panel('axis.fc', 'axis.fc', 'Footswitches', { singletonKey: 'axis.fc' }),
+    'axis.account': panel('axis.account', 'axis.account', 'Axis Account', {
+      locked: true,
+      closable: false,
+      singletonKey: 'axis.account'
+    }),
+    'axis.deviceTools': panel('axis.deviceTools', 'axis.deviceTools', 'Device Tools', {
+      singletonKey: 'axis.deviceTools'
+    }),
     'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel')
   };
 
