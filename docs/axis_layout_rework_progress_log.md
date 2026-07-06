@@ -192,6 +192,42 @@ colW/cellH/gap/mapMode.
 regressions (the suspected region-collapse was the live ForgeFX backend restoring
 the operator's own synced layout over test boots; specs now intercept the backend
 doc for determinism).
+**ROUND 13 WORKLIST — operator visual pass round 2 (2026-07-06 ~20:35), NOT
+STARTED (usage limit) — this is the next session's fix round. Screenshots:
+~/Bilder/Bildschirmfotos/Bildschirmfoto_20260706_203127.png (light-theme library
+drawer), _202758.png (edit mode, red circles = misplaced edit buttons), _203359.png
+(nav rail).**
+- V13a **Library drawer UX redesign**: Panels AND Widgets ribbon buttons open the
+  SAME cluttered drawer (backups + saved layouts + target selects + saved panels
+  all stacked) — "a UX nightmare". Split into purpose-built views: Panels button →
+  panel browser only; Widgets → widget browser only; Layouts → layouts/backups/
+  import-export. Clean list design, no target dropdowns exposed at top level.
+- V13b **edit-mode buttons misplaced (every theme)**: the floating ⋯/×/grip
+  clusters sit wrongly (overlap top-bar widgets, gridbar chips, rail entries —
+  see red circles). Rework edit-chrome placement so buttons anchor cleanly to
+  their widget/unit at all sizes.
+- V13c **rail hover controls**: remove the per-entry hover buttons (drag/hide/menu)
+  from the nav rail entirely — ugly there; rail entries must also be QUADRATIC
+  (first entry renders non-square). Also REMOVE from the rail: the History entry
+  (not needed) and the AX avatar below — "Axis Cloud" is the single account entry.
+- V13d **Preset Browser reopen**: once the docked PB panel is closed there is NO
+  way to reopen it (nav 'Preset Browser' opens the old overlay; only a layout
+  reload restores it). Nav entry must dock/focus the panel (add-or-focus like
+  Setup/Scenes do).
+- V13e **PB search parity (feature-keep violation)**: the docked PB is missing the
+  production search's AUTOCOMPLETE + the "Filters" block under the query bar
+  (add filters via UI w/ autocomplete instead of advanced typing). Port from the
+  monolith (PresetBrowser.svelte).
+- V13f **PB detail/preview parity**: the right detail pane lost production
+  features — per-block parameter listing (shows exactly what every param is set
+  to) and drag-a-block-parameter-into-filters. Port from the monolith.
+- V13g **widget group regression**: grabbing any widget inside a group to pull it
+  out / reorder no longer works (worked before — likely broken by an edit-chrome
+  or WidgetZone/Host rework round).
+- V13h **bottom BAR drop regression**: widgets can no longer be dropped into the
+  bottom widget BAR (only the bottom dock region accepts) — restore the bar as a
+  drop target.
+
 **ROUNDS 11+12 ALL LANDED — THE BUILDABLE PLAN IS EXHAUSTED.**
 Suite: unit 662/662, e2e 17/17 chromium (+ firefox green per agent run), check 0.
 - `c37240e` R11 storage: bak1..3 rotation + Restore UI (drawer provider seam),
