@@ -10,7 +10,12 @@ import type {
   WorkbenchDocument
 } from '../workbench/core/schema';
 
-const panel = (id: string, type: string, title: string, extra: Partial<PanelInstance> = {}): PanelInstance => ({
+export const axisPanel = (
+  id: string,
+  type: string,
+  title: string,
+  extra: Partial<PanelInstance> = {}
+): PanelInstance => ({
   id,
   type,
   title,
@@ -18,6 +23,41 @@ const panel = (id: string, type: string, title: string, extra: Partial<PanelInst
   collapsible: true,
   ...extra
 });
+
+const panel = axisPanel;
+
+/**
+ * The canonical Axis panel roster (singleton keys + locked flags). Shared by the
+ * default document and every layout preset so a preset never re-mints a panel id
+ * that could collide with an existing one and every panel keeps its singleton
+ * key. Returns a fresh object each call (safe to mutate per layout).
+ */
+export function createAxisWorkbenchPanels(): Record<string, PanelInstance> {
+  return {
+    'axis.signalGrid': panel('axis.signalGrid', 'axis.signalGrid', 'Signal Grid', {
+      locked: true,
+      closable: false,
+      singletonKey: 'axis.signalGrid'
+    }),
+    'axis.blockEditor': panel('axis.blockEditor', 'axis.blockEditor', 'Block Editor', {
+      singletonKey: 'axis.blockEditor'
+    }),
+    'axis.history': panel('axis.history', 'axis.history', 'History', { singletonKey: 'axis.history' }),
+    'axis.presetBrowser': panel('axis.presetBrowser', 'axis.presetBrowser', 'Preset Browser', {
+      singletonKey: 'axis.presetBrowser'
+    }),
+    'axis.fc': panel('axis.fc', 'axis.fc', 'Footswitches', { singletonKey: 'axis.fc' }),
+    'axis.account': panel('axis.account', 'axis.account', 'Axis Account', {
+      locked: true,
+      closable: false,
+      singletonKey: 'axis.account'
+    }),
+    'axis.deviceTools': panel('axis.deviceTools', 'axis.deviceTools', 'Device Tools', {
+      singletonKey: 'axis.deviceTools'
+    }),
+    'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel')
+  };
+}
 
 const widget = (
   id: string,
@@ -79,30 +119,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     }
   };
 
-  layout.panels = {
-    'axis.signalGrid': panel('axis.signalGrid', 'axis.signalGrid', 'Signal Grid', {
-      locked: true,
-      closable: false,
-      singletonKey: 'axis.signalGrid'
-    }),
-    'axis.blockEditor': panel('axis.blockEditor', 'axis.blockEditor', 'Block Editor', {
-      singletonKey: 'axis.blockEditor'
-    }),
-    'axis.history': panel('axis.history', 'axis.history', 'History', { singletonKey: 'axis.history' }),
-    'axis.presetBrowser': panel('axis.presetBrowser', 'axis.presetBrowser', 'Preset Browser', {
-      singletonKey: 'axis.presetBrowser'
-    }),
-    'axis.fc': panel('axis.fc', 'axis.fc', 'Footswitches', { singletonKey: 'axis.fc' }),
-    'axis.account': panel('axis.account', 'axis.account', 'Axis Account', {
-      locked: true,
-      closable: false,
-      singletonKey: 'axis.account'
-    }),
-    'axis.deviceTools': panel('axis.deviceTools', 'axis.deviceTools', 'Device Tools', {
-      singletonKey: 'axis.deviceTools'
-    }),
-    'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel')
-  };
+  layout.panels = createAxisWorkbenchPanels();
 
   layout.dock.root.main = tabs('axis.tabs.main', ['axis.signalGrid']);
   layout.dock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor', 'axis.fc'], 'axis.blockEditor');

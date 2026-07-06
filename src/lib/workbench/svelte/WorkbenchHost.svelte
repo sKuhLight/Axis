@@ -8,15 +8,18 @@
   import type { WorkbenchController } from './controller.svelte';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, type WorkbenchTheme } from './theme';
+  import type { Snippet } from 'svelte';
 
   let {
     controller,
     registry,
-    theme
+    theme,
+    ribbonExtras
   }: {
     controller: WorkbenchController;
     registry: WorkbenchRenderRegistry;
     theme?: WorkbenchTheme;
+    ribbonExtras?: Snippet;
   } = $props();
 
   const layout = $derived($controller.activeLayout);
@@ -71,7 +74,7 @@
       <WidgetZone zone="floating" floating />
     {/if}
 
-    <EditRibbon />
+    <EditRibbon extras={ribbonExtras} />
     <DragLayer />
   </div>
 </WorkbenchProvider>
