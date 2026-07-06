@@ -39,6 +39,9 @@
 
 ## Verification debt (needs hardware / a device or browser session)
 
+> Operator decision 2026-07-06: visual checks happen **once, in one batch, after all
+> implementation tasks are finished** — keep appending items here, don't block on them.
+
 - **T02 phone fix**: reproduce only with a *stale persisted layout* + fresh session — a clean
   profile won't show it. Verify on the actual phone before closing T02 in the plan.
 - Grid map/auto stepping, meter toggle, FC widgets, PB split panes: visually verified only
