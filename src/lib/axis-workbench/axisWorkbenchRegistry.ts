@@ -7,13 +7,16 @@ import AxisCustomPanel from './panels/AxisCustomPanel.svelte';
 import AxisDockActionPanel from './panels/AxisDockActionPanel.svelte';
 import AxisFcPanel from './panels/AxisFcPanel.svelte';
 import AxisHistoryDockPanel from './panels/AxisHistoryDockPanel.svelte';
+import AxisPlaceholderPanel from './panels/AxisPlaceholderPanel.svelte';
 import AxisPresetBrowserPanel from './panels/AxisPresetBrowserPanel.svelte';
 import AxisSignalGridPanel from './panels/AxisSignalGridPanel.svelte';
+import AxisVirtualScreenPanel from './panels/AxisVirtualScreenPanel.svelte';
 import AxisFcPartPanel from './panels/fc/AxisFcPartPanel.svelte';
 import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowserPartPanel.svelte';
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
+import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
   AXIS_WORKBENCH_FC_PANEL_TYPES,
@@ -36,6 +39,8 @@ AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) => {
     type === 'axis.fc' ? AxisFcPanel :
     type === 'axis.history' ? AxisHistoryDockPanel :
     type === 'axis.customPanel' ? AxisCustomPanel :
+    type === 'axis.virtualScreen' ? AxisVirtualScreenPanel :
+    type === 'axis.placeholder' ? AxisPlaceholderPanel :
     AxisDockActionPanel;
   registry.registerPanel({ type, component });
 });
@@ -71,9 +76,60 @@ registry.registerAction({
   }
 });
 registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('account') });
-registry.registerAction({ id: 'axis.openScenes', run: async () => (await axisEditor()).showToast('Scenes — coming soon', '#35c9d6') });
-registry.registerAction({ id: 'axis.openLive', run: async () => (await axisEditor()).showToast('Live — coming soon', '#35c9d6') });
-registry.registerAction({ id: 'axis.openSetup', run: async () => (await axisEditor()).showToast('Setup — coming soon', '#35c9d6') });
+registry.registerAction({ id: 'axis.openTheme', run: async () => { (await axisEditor()).themeOpen = true; } });
+// Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
+// Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels
+// until their editors are ported.
+registry.registerAction(
+  createAxisNavigationPanelAction({
+    actionId: 'axis.openSetup',
+    panelId: 'axis.setup',
+    panelType: 'axis.virtualScreen',
+    title: 'Setup',
+    region: 'main',
+    state: { slug: 'global' }
+  })
+);
+registry.registerAction(
+  createAxisNavigationPanelAction({
+    actionId: 'axis.openControllers',
+    panelId: 'axis.controllers',
+    panelType: 'axis.virtualScreen',
+    title: 'Controllers',
+    region: 'main',
+    state: { slug: 'controllers' }
+  })
+);
+registry.registerAction(
+  createAxisNavigationPanelAction({
+    actionId: 'axis.openScenes',
+    panelId: 'axis.scenes',
+    panelType: 'axis.placeholder',
+    title: 'Scenes',
+    region: 'main',
+    state: {
+      glyph: '◪',
+      heading: 'Scenes',
+      description: 'Scene snapshots, per-scene bypass and level rides dock here in a later phase.',
+      meta: 'Meanwhile · switch scenes from the Scenes widget in the top bar'
+    }
+  })
+);
+registry.registerAction(
+  createAxisNavigationPanelAction({
+    actionId: 'axis.openLive',
+    panelId: 'axis.live',
+    panelType: 'axis.placeholder',
+    title: 'Live',
+    region: 'main',
+    state: {
+      glyph: '⏺',
+      heading: 'Live',
+      description: 'The performance / setlist view docks here in a later phase.',
+      meta: 'Meanwhile · use the Footswitches editor for live control'
+    }
+  })
+);
 registry.registerAction(createAxisPinSelectedParametersAction());
 registry.registerAction(createAxisParameterSourceEdgeDropAction());
 

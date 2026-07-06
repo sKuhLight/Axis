@@ -27,7 +27,9 @@ describe('Axis Workbench integration contracts', () => {
       'axis.history',
       'axis.account',
       'axis.deviceTools',
-      'axis.customPanel'
+      'axis.customPanel',
+      'axis.virtualScreen',
+      'axis.placeholder'
     ]);
 
     expect(AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES).toEqual(AXIS_PRESET_BROWSER_PARTS.map(axisPresetBrowserPanelType));
@@ -55,13 +57,27 @@ describe('Axis Workbench integration contracts', () => {
       'axis.fcDevice',
       'axis.fcLayouts',
       'axis.fcSwitchView',
-      'axis.paramControl'
+      'axis.paramControl',
+      'axis.hint',
+      'axis.legal'
     ]);
 
-    expect(AXIS_WORKBENCH_NAVIGATION_IDS).toEqual(['grid', 'library', 'fc', 'scenes', 'live', 'setup', 'account']);
+    expect(AXIS_WORKBENCH_NAVIGATION_IDS).toEqual([
+      'grid',
+      'library',
+      'fc',
+      'controllers',
+      'scenes',
+      'live',
+      'setup',
+      'theme',
+      'account'
+    ]);
 
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.pinSelectedParameters');
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openGrid');
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openFc');
+    expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openControllers');
+    expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openTheme');
   });
 });
