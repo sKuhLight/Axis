@@ -13,7 +13,7 @@
 <div class="axis-pane-fill">
   {#if barVisible}
     <div class="axis-gridbar">
-      <WidgetZone zone="gridbar" variant="bar" emptyLabel="Grid Bar" />
+      <WidgetZone zone="gridbar" variant="bar" emptyLabel="Grid Bar" fitGap={8} />
     </div>
   {/if}
   <SignalGrid {view} />

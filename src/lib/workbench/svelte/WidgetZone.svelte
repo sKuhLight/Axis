@@ -2,9 +2,16 @@
   import WidgetHost from './WidgetHost.svelte';
   import WidgetGroupHost from './WidgetGroupHost.svelte';
   import { getWorkbenchContext } from './context';
-  import { selectVisibleWidgetsByZone, type JsonObject } from '../core';
+  import {
+    fitWidgetInWidth,
+    fitZone,
+    selectVisibleWidgetsByZone,
+    type JsonObject,
+    type WidgetFitDescriptor,
+    type WidgetInstance,
+    type WidgetSize
+  } from '../core';
   import { onMount } from 'svelte';
-  import { pickWidgetSize } from './sizing';
   import { labelFromWorkbenchType } from './library';
 
   type WidgetUnit = { groupId?: string; widgetIds: string[] };
@@ -14,6 +21,13 @@
     floating = false,
     variant = 'bar',
     emptyLabel,
+    // `fitGroup` = the set of zones fitted jointly against a shared container
+    // width (design §8: `tl+tc+tr` decide one size together). When set, the
+    // shared width is measured from `zoneEl.parentElement` (their common bar).
+    fitGroup,
+    // Per-zone gap used both by the CSS layout and the fit estimate. Design §8:
+    // top zones 12px, bottom 10px, gridbar 8px.
+    fitGap = 12,
     gridColumns = 4,
     gridRowHeight = 42,
     gridGap = 8
@@ -22,20 +36,38 @@
     floating?: boolean;
     variant?: 'bar' | 'panel' | 'grid';
     emptyLabel?: string;
+    fitGroup?: string[];
+    fitGap?: number;
     gridColumns?: number;
     gridRowHeight?: number;
     gridGap?: number;
   } = $props();
 
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   let zoneEl = $state<HTMLElement | null>(null);
   let zoneWidth = $state(0);
+  let groupWidth = $state(0);
   let overflowOpen = $state(false);
   const widgets = $derived(selectVisibleWidgetsByZone($controller.document, zone));
-  const units = $derived.by(() => {
+  const units = $derived(unitsForZone(widgets));
+  const visible = $derived(units.length > 0 || $controller.editMode);
+  const vertical = $derived(zone === 'rail');
+  // Bar zones auto-fit + shed into the `⋯` overflow. Panel/grid/rail/float do not.
+  const fitEnabled = $derived(variant === 'bar' && !floating && !vertical);
+
+  // Design estW for a widget type via the app-provided sizing table
+  // (workbench holds no widget-type knowledge). Fallback = flat 120.
+  function estWidthOf(type: string): number {
+    return registry.widgetSizing?.estWidth(type) ?? 120;
+  }
+  function isKeepType(type: string): boolean {
+    return registry.widgetSizing?.isKeep?.(type) ?? false;
+  }
+
+  function unitsForZone(source: WidgetInstance[]): WidgetUnit[] {
     const out: WidgetUnit[] = [];
     const seenGroups = new Set<string>();
-    for (const widget of widgets) {
+    for (const widget of source) {
       if (widget.groupId) {
         if (seenGroups.has(widget.groupId)) continue;
         const group = $controller.activeLayout?.widgetGroups[widget.groupId];
@@ -46,49 +78,63 @@
       }
     }
     return out;
+  }
+
+  function unitDescriptor(unit: WidgetUnit): WidgetFitDescriptor {
+    const layout = $controller.activeLayout;
+    const members = unit.widgetIds.map((id) => layout?.widgets[id]).filter(Boolean) as WidgetInstance[];
+    const estW = members.reduce((total, widget) => total + estWidthOf(widget.type), 0) || 120;
+    // Keep-protected if any member is in the app keep-set OR is locked.
+    const keep = members.some((widget) => widget.locked || isKeepType(widget.type));
+    return { key: unitKey(unit), estW, keep };
+  }
+
+  // Descriptors across the whole fit group (or this zone alone). Group members
+  // fit jointly, so one decision + one overflow set drives every group zone.
+  const groupDescriptors = $derived.by<WidgetFitDescriptor[]>(() => {
+    if (!fitEnabled) return [];
+    const zones = fitGroup && fitGroup.length ? fitGroup : [zone];
+    const out: WidgetFitDescriptor[] = [];
+    for (const z of zones) {
+      const zoneWidgets = z === zone ? widgets : selectVisibleWidgetsByZone($controller.document, z);
+      for (const unit of unitsForZone(zoneWidgets)) out.push(unitDescriptor(unit));
+    }
+    return out;
   });
-  const visible = $derived(units.length > 0 || $controller.editMode);
-  const vertical = $derived(zone === 'rail');
-  const overflowEnabled = $derived(
-    variant === 'bar' &&
-      !floating &&
-      !vertical &&
-      !$controller.editMode &&
-      (zone.startsWith('top.') || zone === 'bottom' || zone === 'gridbar')
-  );
-  const overflowKeys = $derived.by(() => {
-    if (!overflowEnabled || units.length < 3 || zoneWidth < 150) return new Set<string>();
-    const minUnitWidth = zone === 'top.right' ? 46 : 58;
-    const slots = Math.max(1, Math.floor((zoneWidth - 48) / (minUnitWidth + 6)));
-    const overflowCount = Math.max(0, units.length - slots);
-    if (!overflowCount) return new Set<string>();
-    return new Set(
-      [...units]
-        .sort((a, b) => unitPriority(a) - unitPriority(b) || units.indexOf(b) - units.indexOf(a))
-        .slice(0, overflowCount)
-        .map(unitKey)
-    );
+
+  const availWidth = $derived(fitGroup && fitGroup.length ? groupWidth : zoneWidth);
+
+  // Joint fit + shedding (design `_fit` / `_overflow`, 01-shell §8). Overflow
+  // shedding only applies outside edit mode (design: overflowed widgets stay
+  // visible with a red dashed outline while editing).
+  const fitResult = $derived.by(() => {
+    if (!fitEnabled || availWidth <= 0) return { size: 'default' as WidgetSize, overflow: new Set<string>() };
+    const result = fitZone(groupDescriptors, availWidth, fitGap);
+    if ($controller.editMode) return { size: result.size, overflow: new Set<string>() };
+    return result;
   });
+  const zoneSize = $derived(fitResult.size);
+  const overflowKeys = $derived(fitResult.overflow);
+
   const renderedUnits = $derived(units.filter((unit) => !overflowKeys.has(unitKey(unit))));
   const overflowUnits = $derived(units.filter((unit) => overflowKeys.has(unitKey(unit))));
-  const itemWidth = $derived(
-    variant === 'grid'
-      ? 96
-      : vertical ? 52 : Math.max(44, (zoneWidth - Math.max(0, renderedUnits.length - 1) * 6) / Math.max(1, renderedUnits.length))
-  );
+
+  // Manual density is a ceiling; auto-fit shrinks below it (design mkW). The
+  // WidgetHost caps `forcedSize` by the widget's own manual size, so returning
+  // the raw auto-fit here is correct.
+  //   - bar zones: the joint zone-level size (one tier for all fitted units)
+  //   - panel zones: per-widget width fit (design mkW: estW <= availW-24 …)
+  function forcedSizeFor(unit: WidgetUnit): WidgetSize | undefined {
+    if (fitEnabled) return zoneSize;
+    if (variant === 'panel' && zoneWidth > 0) {
+      const est = unitDescriptor(unit).estW;
+      return fitWidgetInWidth(est, zoneWidth - 24);
+    }
+    return undefined;
+  }
 
   function unitKey(unit: WidgetUnit): string {
     return unit.groupId ?? unit.widgetIds[0] ?? 'unit';
-  }
-
-  function unitPriority(unit: WidgetUnit): number {
-    const layout = $controller.activeLayout;
-    const widgets = unit.widgetIds.map((id) => layout?.widgets[id]).filter(Boolean);
-    if (widgets.some((widget) => widget?.locked)) return 100;
-    const priorities = widgets
-      .map((widget) => widget?.state?.overflowPriority ?? widget?.state?.priority)
-      .filter((priority): priority is number => typeof priority === 'number');
-    return priorities.length ? Math.max(...priorities) : 30;
   }
 
   function unitLabel(unit: WidgetUnit): string {
@@ -132,12 +178,15 @@
 
   onMount(() => {
     if (!zoneEl) return;
+    const groupEl = fitGroup && fitGroup.length ? zoneEl.parentElement : null;
     const measure = () => {
       if (zoneEl) zoneWidth = zoneEl.clientWidth;
+      if (groupEl) groupWidth = groupEl.clientWidth;
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(zoneEl);
+    if (groupEl) ro.observe(groupEl);
     return () => ro.disconnect();
   });
 </script>
@@ -169,11 +218,11 @@
         </div>
       {:else}
         {#if unit.groupId}
-          <WidgetGroupHost groupId={unit.groupId} />
+          <WidgetGroupHost groupId={unit.groupId} forcedSize={forcedSizeFor(unit)} />
         {:else}
           {@const widget = $controller.activeLayout?.widgets[unit.widgetIds[0]]}
           {#if widget}
-            <WidgetHost {widget} forcedSize={pickWidgetSize(itemWidth, widget.size)} />
+            <WidgetHost {widget} forcedSize={forcedSizeFor(unit)} />
           {/if}
         {/if}
       {/if}

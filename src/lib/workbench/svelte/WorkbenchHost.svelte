@@ -20,6 +20,7 @@
   } = $props();
 
   const layout = $derived($controller.activeLayout);
+  const topZones = ['top.left', 'top.center', 'top.right'];
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
   const rootStyle = $derived(workbenchThemeStyle(theme));
   let navDrawerOpen = $state(false);
@@ -53,15 +54,16 @@
 
     <main class="aw-frame">
       <header class="aw-topbar">
-        <WidgetZone zone="top.left" />
-        <WidgetZone zone="top.center" />
-        <WidgetZone zone="top.right" />
+        <!-- Design §8: tl+tc+tr fit jointly against the shared top-bar width (12px gap). -->
+        <WidgetZone zone="top.left" fitGroup={topZones} fitGap={12} />
+        <WidgetZone zone="top.center" fitGroup={topZones} fitGap={12} />
+        <WidgetZone zone="top.right" fitGroup={topZones} fitGap={12} />
       </header>
 
       <DockWorkspace />
 
       <footer class="aw-bottombar">
-        <WidgetZone zone="bottom" />
+        <WidgetZone zone="bottom" fitGap={10} />
       </footer>
     </main>
 

@@ -15,6 +15,7 @@ import AxisFcPartPanel from './panels/fc/AxisFcPartPanel.svelte';
 import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowserPartPanel.svelte';
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
+import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import {
@@ -58,8 +59,11 @@ AXIS_WORKBENCH_FC_PANEL_TYPES.forEach((type) =>
     component: type === 'axis.fc' ? AxisFcPanel : AxisFcPartPanel
   })
 );
-
 AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, component: AxisWorkbenchWidget }));
+
+// Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table
+// + keep-set. The generic layer stays widget-type agnostic.
+registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
   registry.registerNavigation({ id, component: AxisWorkbenchNavigationEntry })
