@@ -18,8 +18,8 @@
 
 - Delivery-queue wave complete (tree clean, check 0 errors, vitest 320/320); operator
   asked "fully done?" → audit against the plan's full T-table found 3 unclaimed P1s.
-- **P1 completion wave**: T11 LANDED (`e9dc38b`); T14 profile resolver and T15 touch
-  parameter pinning still in flight.
+- **P1 completion wave**: T11 (`e9dc38b`) + T14 (`2280082`) LANDED; T15 touch
+  parameter pinning still in flight — last implementation agent.
 - Still open after this wave: T31 (= operator visual pass + fixes), P2 backlog
   (T16 rest/T17–T23, T24 polish, T26 E2E), P3 (T27–T30), recorded deferrals
   (PROFILE switcher UI, toasts, pages contentMode, T12 row anatomy/menus).
@@ -39,6 +39,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `2280082` | **T14** | Viewport profile resolver: pure `resolveProfileForViewport` (override > exact breakpoint > hold current), phone <760 / tablet <1366, persisted `profileOverrideId`, ResizeObserver in WorkbenchHost, `setAxisProfileOverride` API for the future PROFILE switcher. |
 | `e9dc38b` | **T11** | paramControl binding states (pure `paramWidgetState.ts` resolver): live / readonly (dimmed + lock badge + click-opens-block via `editor.openCell`) / missing (amber dashed no-op); never "missing" before the preset roster loads. |
 | `c050ca5` | **T13** | Six layout presets as data (`axisWorkbenchLayoutPresets.ts`) + apply/seed/copy actions; LAYOUT tabs in the edit ribbon (`AxisLayoutPresetPicker` via a new type-agnostic ribbon-extras snippet); tablet/mobile profiles seeded at boot; shared panel roster extracted from defaults. Deferred: PROFILE switcher UI, toasts, pages contentMode rendering. |
 | `f2ce99f` | **FC parity** | FC part panels at 04-fc-and-grid.md §1/§3 parity: renderVals part gating + grid render part, board hero/switch-tile anatomy, layouts strip, typed per-slot card editors; fcDevice widget mirrors connected switch count. Deferred: hardware device switching + layout rename (no decoded addresses), AUTO LED chip, mobile sheet animations (full-shell concern). |
@@ -66,6 +67,8 @@
 - FC parity: board tiles (LED bar/badges/T-H rows/selection ring), layouts strip,
   part gating per part type, per-slot editors write correctly, grid part mounts
   SignalGrid, fcDevice chip matches the connected unit.
+- T14: resizing across 760/1366 switches profile (and back), manual override wins
+  and survives reload, layouts never change from a resize alone.
 - T11: read-only param widget dims + shows lock, click opens the bound block,
   missing state appears when the block is deleted from the preset.
 - T13: LAYOUT tabs apply each preset correctly (dock arrangement + widgets + nav),
