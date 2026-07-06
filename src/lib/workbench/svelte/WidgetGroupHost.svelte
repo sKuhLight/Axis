@@ -3,16 +3,66 @@
   import { getWorkbenchContext } from './context';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
-  import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
+  import {
+    pointerDistance,
+    widgetDropCommand,
+    widgetDropIndex,
+    widgetIndexForUnitIndex,
+    zoneUnitWidgetCounts,
+    type WorkbenchRect
+  } from './drag';
   import { createWidgetTemplateFromGroup } from './library';
   import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
-  import { createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize } from '../core';
+  import {
+    createCustomPanelFromWidgetsCommands,
+    selectVisibleWidgetsByZone,
+    type DockRegionId,
+    type WidgetInstance,
+    type WidgetSize
+  } from '../core';
 
   let { groupId, forcedSize }: { groupId: string; forcedSize?: WidgetSize } = $props();
   const { controller } = getWorkbenchContext();
   const group = $derived($controller.activeLayout?.widgetGroups[groupId]);
+  let groupEl = $state<HTMLElement | null>(null);
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+
+  // ── Drag-state derivations (V14 follow-up: in-flow slot + origin lift) ──
+  const drag = $derived($controller.drag);
+  const draggingIds = $derived(drag?.kind === 'widget' ? drag.widgetIds : []);
+  // Whole-group drag lifts the entire module out of the flow (design zone-unit
+  // `display:none` while dragging) — the group travels as the DragLayer ghost
+  // and the zone closes the freed space.
+  const lifted = $derived(!!group && group.widgetIds.length > 0 && group.widgetIds.every((id) => draggingIds.includes(id)));
+  // In-flow insertion slot (design AxisGroup `indIndex`): while a compatible
+  // widget drag hovers this group, a REAL dashed spacer is spliced into the
+  // module's flex flow at the live index — members physically move apart so the
+  // preview shows the true post-drop layout (V14 follow-up: no overlay rect).
+  const slotIndex = $derived(
+    drag?.kind === 'widget' && group && drag.groupInsert?.groupId === group.id ? drag.groupInsert.index : -1
+  );
+  // Slot = the dragged unit's own size (design `phW/phH` = drag.w/h; layout px).
+  const slotSize = $derived(drag?.kind === 'widget' && drag.size ? drag.size : { width: 120, height: 38 });
+  // Design AxisGroup renderVals port: showInd/showDiv computed against the
+  // VISIBLE member sequence (a lifted dragged member is display:none and must
+  // neither count for the slot index nor leave a dangling divider). The divider
+  // at the slot position is suppressed — the slot replaces it.
+  const memberRows = $derived.by(() => {
+    if (!group) return [] as { id: string; showInd: boolean; showDiv: boolean }[];
+    let visible = 0;
+    return group.widgetIds.map((id) => {
+      if (draggingIds.includes(id)) return { id, showInd: false, showDiv: false };
+      const row = { id, showInd: slotIndex === visible, showDiv: visible > 0 && slotIndex !== visible };
+      visible += 1;
+      return row;
+    });
+  });
+  // Slot after the last member (design `endInd`: indIndex === members.length).
+  const endInd = $derived.by(() => {
+    if (!group || slotIndex < 0) return false;
+    return slotIndex >= group.widgetIds.filter((id) => !draggingIds.includes(id)).length;
+  });
 
   const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
     ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
@@ -67,58 +117,32 @@
     if (template) controller.dispatch({ type: 'library.widget.save', template });
   }
 
-  function widgetDropAt(x: number, y: number) {
-    if (!group) return null;
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    const zoneEl = el?.closest<HTMLElement>('[data-zone]');
-    const zone = zoneEl?.dataset.zone;
-    if (!zone) return null;
-    const orientation: 'horizontal' | 'vertical' = zone === 'rail' ? 'vertical' : 'horizontal';
-    const itemEls = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-widget-host], [data-widget-group]')).filter((item) => {
+  // Top-level zone units under a zone element: loose widget hosts + group
+  // modules, in DOM order. Nested member hosts and this group itself (lifted
+  // while dragging) are excluded, so the UNIT index aligns with the zone's
+  // visible flow — the same index the zone's in-flow gap renders against.
+  function zoneUnitEls(zoneEl: HTMLElement): HTMLElement[] {
+    if (!group) return [];
+    return Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-widget-host], [data-widget-group]')).filter((item) => {
       if (item.dataset.widgetGroup === group.id) return false;
-      const widgetId = item.dataset.widget;
-      return !widgetId || !group.widgetIds.includes(widgetId);
+      if (item.dataset.widget != null && item.closest('[data-widget-group]')) return false;
+      return !item.dataset.widget || !group.widgetIds.includes(item.dataset.widget);
     });
-    const itemRects = itemEls.map((item) => {
-      const rect = item.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-    });
-    return { zone, index: widgetDropIndex({ x, y }, itemRects, orientation) };
   }
 
-  function rectOf(el: Element): WorkbenchRect {
-    const rect = el.getBoundingClientRect();
-    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-  }
-
-  function widgetPreviewAt(x: number, y: number): {
-    rect: WorkbenchRect;
-    kind: 'zone' | 'insert';
-    orientation: 'horizontal' | 'vertical';
-    label: string;
-  } | null {
+  function widgetDropAt(x: number, y: number) {
     if (!group) return null;
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
     const zoneEl = el?.closest<HTMLElement>('[data-zone]');
     const zone = zoneEl?.dataset.zone;
     if (!zone || !zoneEl) return null;
     const orientation: 'horizontal' | 'vertical' = zone === 'rail' ? 'vertical' : 'horizontal';
-    const target = widgetDropAt(x, y);
-    if (!target) return { rect: rectOf(zoneEl), kind: 'zone' as const, orientation, label: zone };
-    const itemEls = Array.from(zoneEl.querySelectorAll<HTMLElement>('[data-widget-host], [data-widget-group]')).filter((item) => {
-      if (item.dataset.widgetGroup === group.id) return false;
-      const widgetId = item.dataset.widget;
-      return !widgetId || !group.widgetIds.includes(widgetId);
-    });
-    const ref = itemEls[Math.min(target.index ?? 0, Math.max(0, itemEls.length - 1))];
-    if (!ref || itemEls.length === 0) return { rect: rectOf(zoneEl), kind: 'zone' as const, orientation, label: zone };
-    const rect = ref.getBoundingClientRect();
-    const before = (target.index ?? 0) < itemEls.length;
-    const line =
-      orientation === 'vertical'
-        ? { left: rect.left, top: before ? rect.top - 4 : rect.bottom + 4, width: rect.width, height: 2 }
-        : { left: before ? rect.left - 4 : rect.right + 4, top: rect.top, width: 2, height: rect.height };
-    return { rect: line, kind: 'insert' as const, orientation, label: zone };
+    return { zone, index: widgetDropIndex({ x, y }, zoneUnitEls(zoneEl).map(rectOf), orientation) };
+  }
+
+  function rectOf(el: Element): WorkbenchRect {
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }
 
   function workspaceEdgeDropAt(x: number, y: number): { region: DockRegionId; rect: WorkbenchRect } | null {
@@ -140,24 +164,32 @@
   function dragPointerDown(e: PointerEvent) {
     if (!$controller.editMode || !group || group.locked || e.button !== 0) return;
     const startedAt = { x: e.clientX, y: e.clientY };
+    // Origin rect captured at pointerdown, BEFORE the module lifts to
+    // display:none (design startDrag drag.w/h + offx/offy). `size` is layout px
+    // (in-flow slot sizing); `grabOffset` is visual px (ghost anchoring).
+    const originRect = groupEl?.getBoundingClientRect();
+    const size = groupEl
+      ? { width: groupEl.offsetWidth || 150, height: groupEl.offsetHeight || 38 }
+      : { width: 150, height: 38 };
+    const grabOffset = originRect ? { x: e.clientX - originRect.left, y: e.clientY - originRect.top } : { x: 75, y: 19 };
     let dragging = false;
 
     const onMove = (ev: PointerEvent) => {
       const pointer = { x: ev.clientX, y: ev.clientY };
       if (!dragging && pointerDistance(startedAt, pointer) < 5) return;
       dragging = true;
+      // Setting the drag state lifts the module (display:none) on the NEXT
+      // flush; the first tick measures pre-lift geometry and self-corrects one
+      // pointermove later (design startDrag → pointermove ordering).
+      const base = { kind: 'widget' as const, widgetIds: group.widgetIds, startedAt, pointer, size, grabOffset };
       const target = widgetDropAt(pointer.x, pointer.y);
-      const preview = widgetPreviewAt(pointer.x, pointer.y);
       const edgeDrop = !target ? workspaceEdgeDropAt(pointer.x, pointer.y) : null;
       controller.setDrag({
-        kind: 'widget',
-        widgetIds: group.widgetIds,
-        startedAt,
-        pointer,
+        ...base,
         targetLabel: target ? target.zone : edgeDrop ? `New panel in ${edgeDrop.region}` : undefined,
-        previewRect: preview?.rect ?? edgeDrop?.rect,
-        previewKind: preview?.kind ?? (edgeDrop ? 'zone' : undefined),
-        previewOrientation: preview?.orientation
+        previewRect: edgeDrop?.rect,
+        previewKind: edgeDrop ? 'zone' : undefined,
+        zoneInsert: target ? { zone: target.zone, index: target.index } : undefined
       });
     };
 
@@ -167,8 +199,14 @@
       if (dragging && group) {
         const target = widgetDropAt(ev.clientX, ev.clientY);
         const edgeDrop = !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
-        if (target) controller.dispatch(widgetDropCommand(group.widgetIds, target));
-        else if (edgeDrop) {
+        if (target) {
+          // Unit index → widget-order index against the zone minus this group's
+          // own members (matching the reducer's `placeWidgets` exclusion).
+          const counts = zoneUnitWidgetCounts(selectVisibleWidgetsByZone($controller.document, target.zone), group.widgetIds);
+          controller.dispatch(
+            widgetDropCommand(group.widgetIds, { zone: target.zone, index: widgetIndexForUnitIndex(counts, target.index) })
+          );
+        } else if (edgeDrop) {
           controller.dispatchMany(
             createCustomPanelFromWidgetsCommands($controller.document, {
               widgetIds: group.widgetIds,
@@ -218,7 +256,15 @@
 </script>
 
 {#if group}
-  <div class="aw-widget-group" data-widget-group={group.id} role="group" oncontextmenu={openMenu}>
+  <div
+    bind:this={groupEl}
+    class="aw-widget-group"
+    class:lifted
+    class:insert-target={slotIndex >= 0}
+    data-widget-group={group.id}
+    role="group"
+    oncontextmenu={openMenu}
+  >
     {#if $controller.editMode && !group.locked}
       <!-- Whole-group grip is in-flow (a stretched column at the module's left
            edge — design AxisGroup grip), so it never escapes the module box. -->
@@ -236,13 +282,23 @@
         <button class="aw-group-edit-btn" type="button" title="Group actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
       </div>
     {/if}
-    {#each group.widgetIds as widgetId, index (widgetId)}
-      {@const widget = $controller.activeLayout?.widgets[widgetId]}
+    <!-- Members with the design AxisGroup flow: the insertion slot is a REAL
+         in-flow spacer spliced between members at the live index (members move
+         apart to make room — V14 follow-up), the divider at that index is
+         suppressed, and a dragged member is lifted out of the flow. -->
+    {#each memberRows as row (row.id)}
+      {@const widget = $controller.activeLayout?.widgets[row.id]}
       {#if widget}
-        {#if index > 0}<span class="aw-widget-divider"></span>{/if}
+        {#if row.showInd}
+          <span class="aw-group-slot" style="width:{slotSize.width}px; height:{slotSize.height}px;" data-drag-slot aria-hidden="true"></span>
+        {/if}
+        {#if row.showDiv}<span class="aw-widget-divider"></span>{/if}
         <WidgetHost {widget} {forcedSize} />
       {/if}
     {/each}
+    {#if endInd}
+      <span class="aw-group-slot" style="width:{slotSize.width}px; height:{slotSize.height}px;" data-drag-slot aria-hidden="true"></span>
+    {/if}
   </div>
 {/if}
 
@@ -273,11 +329,30 @@
     border-style: dashed;
     border-color: color-mix(in srgb, var(--aw-accent) 55%, var(--aw-border));
   }
-  /* Hover-during-drag: while a drag hovers a group, the border swaps to full
-     accent (design border-color swap from --aw-border to --aw-accent when an
-     insert index is active). */
-  :global(.aw-root.aw-dragging-widget) .aw-widget-group:hover {
+  /* Insert-active: while a drag targets this group (an insert index is live —
+     design border-color swap from --aw-border to --aw-accent on indIndex>=0),
+     the whole module border goes full accent. State-driven, not :hover — the
+     hit-area is expanded ±8/±4 beyond the module box. */
+  .aw-widget-group.insert-target {
     border-color: var(--aw-accent);
+    border-style: solid;
+  }
+  /* Whole-group drag lifts the module out of the flow (design zone-unit
+     display:none while dragging); it travels as the DragLayer ghost. */
+  .aw-widget-group.lifted {
+    display: none;
+  }
+  /* In-flow insertion slot (design AxisGroup indStyle: widget-sized, radius 9,
+     1.5px dashed accent, accent-tinted fill, flex:none, margin 0 2px). A real
+     flex child — inserting it is what pushes the members apart. */
+  .aw-group-slot {
+    flex: none;
+    margin: 0 2px;
+    border: 1.5px dashed var(--aw-accent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    box-sizing: border-box;
+    max-height: 100%;
   }
   .aw-group-grip {
     align-self: stretch;

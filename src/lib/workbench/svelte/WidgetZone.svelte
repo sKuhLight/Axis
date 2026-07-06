@@ -119,6 +119,40 @@
   const renderedUnits = $derived(units.filter((unit) => !overflowKeys.has(unitKey(unit))));
   const overflowUnits = $derived(units.filter((unit) => overflowKeys.has(unitKey(unit))));
 
+  // ── In-flow drop gap (V14 follow-up; design shell `isGap` unit) ──────────
+  // While a widget drag targets this zone, a REAL dashed spacer element is
+  // spliced into the zone's flow at the live unit index — neighbours physically
+  // move apart so the preview shows the true post-drop layout (no overlay
+  // rect). Suppressed while the drag targets a group (design `!drag.overGroup`).
+  const drag = $derived($controller.drag);
+  const dragIdSet = $derived(drag?.kind === 'widget' ? new Set(drag.widgetIds) : null);
+  // A unit is "lifted" when EVERY widget in it is being dragged (loose widget,
+  // or whole-group drag). It stays mounted (display:none via its own host) but
+  // must be skipped when mapping the visible slot index to a render position.
+  function unitLifted(unit: WidgetUnit): boolean {
+    return !!dragIdSet && unit.widgetIds.length > 0 && unit.widgetIds.every((id) => dragIdSet.has(id));
+  }
+  const zoneSlot = $derived.by(() => {
+    if (!drag || drag.kind !== 'widget' || drag.groupInsert || drag.zoneInsert?.zone !== zone) return null;
+    return {
+      index: drag.zoneInsert.index,
+      width: drag.size?.width ?? 120,
+      height: drag.size?.height ?? 38
+    };
+  });
+  // Position of the slot within `renderedUnits` (the slot index counts VISIBLE
+  // units only; design splices at `overIndex`, appending past the end).
+  const slotPos = $derived.by(() => {
+    if (!zoneSlot) return -1;
+    let visible = 0;
+    for (let i = 0; i < renderedUnits.length; i++) {
+      if (unitLifted(renderedUnits[i])) continue;
+      if (visible === zoneSlot.index) return i;
+      visible += 1;
+    }
+    return renderedUnits.length;
+  });
+
   // Manual density is a ceiling; auto-fit shrinks below it (design mkW). The
   // WidgetHost caps `forcedSize` by the widget's own manual size, so returning
   // the raw auto-fit here is correct.
@@ -198,13 +232,24 @@
     class:panel={variant === 'panel'}
     class:grid={variant === 'grid'}
     class:overflow-open={overflowOpen}
+    class:drop-target={!!zoneSlot}
     bind:this={zoneEl}
     data-zone={zone}
     style:--aw-zone-grid-columns={gridColumns}
     style:--aw-zone-grid-row-height={`${gridRowHeight}px`}
     style:--aw-zone-grid-gap={`${gridGap}px`}
   >
-    {#each renderedUnits as unit (unit.groupId ?? unit.widgetIds[0])}
+    {#each renderedUnits as unit, unitPos (unit.groupId ?? unit.widgetIds[0])}
+      {#if slotPos === unitPos && zoneSlot}
+        <!-- In-flow drop gap (design `isGap`): a real flex child at the live
+             insert index — inserting it pushes the neighbouring units apart. -->
+        <span
+          class="aw-zone-slot"
+          data-drag-slot
+          aria-hidden="true"
+          style="width:{vertical ? '88%' : `${zoneSlot.width}px`}; height:{zoneSlot.height}px;"
+        ></span>
+      {/if}
       {#if variant === 'grid'}
         <div class="aw-widget-grid-cell" style={gridCellStyle(unit)}>
           {#if unit.groupId}
@@ -227,6 +272,14 @@
         {/if}
       {/if}
     {/each}
+    {#if zoneSlot && slotPos >= renderedUnits.length}
+      <span
+        class="aw-zone-slot"
+        data-drag-slot
+        aria-hidden="true"
+        style="width:{vertical ? '88%' : `${zoneSlot.width}px`}; height:{zoneSlot.height}px;"
+      ></span>
+    {/if}
     {#if overflowUnits.length}
       <button class="aw-overflow-chip" type="button" title="Hidden — not enough space" onclick={() => (overflowOpen = !overflowOpen)}>
         ⋯ {overflowUnits.length}
@@ -248,7 +301,7 @@
         </div>
       {/if}
     {/if}
-    {#if !units.length && (variant !== 'bar' || $controller.editMode)}
+    {#if !units.length && !zoneSlot && (variant !== 'bar' || $controller.editMode)}
       <!-- Design §2.2: empty custom panels always show the dashed drag hint;
            bar zones only surface it while editing. -->
       <span class="aw-zone-empty" class:body={variant !== 'bar'}>
@@ -387,6 +440,21 @@
     outline: 1px dashed color-mix(in srgb, var(--aw-accent) 34%, transparent);
     outline-offset: 3px;
     border-radius: 10px;
+  }
+  /* Hovered drop zone gets a faint accent wash (design `hl` background tint on
+     the drag-over zone) so the target strip reads at a glance. */
+  .aw-widget-zone.drop-target {
+    background: color-mix(in srgb, var(--aw-accent) 7%, transparent);
+  }
+  /* In-flow drop gap (design shell `isGap`: ghost-sized, radius 9, 1.5px dashed
+     accent, accent fill at .10 alpha, flex:none). A real flex/grid child — its
+     presence is what opens the gap between units. */
+  .aw-zone-slot {
+    flex: none;
+    box-sizing: border-box;
+    border: 1.5px dashed var(--aw-accent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
   }
   :global(.aw-root.aw-dragging-widget) .aw-widget-zone.panel {
     outline-offset: -3px;

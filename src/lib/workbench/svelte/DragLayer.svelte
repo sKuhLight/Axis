@@ -1,13 +1,39 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
+  import type { WorkbenchCommand } from '../core';
 
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   const drag = $derived($controller.drag);
-  // Valid/invalid drop intent reuses the existing signal: while a drag is active,
-  // a populated `previewRect` means the pointer is over an accepting target. No
-  // preview rect ⇒ nothing here will accept the drop, so the drag reads as
-  // rejected (design language: danger-tinted, not-allowed cursor).
-  const invalid = $derived(!!drag && !drag.previewRect);
+  // Valid/invalid drop intent: while a drag is active, an accepting target is
+  // signalled either by an overlay `previewRect` (group-create, edge drop) or by
+  // an IN-FLOW insertion target (`zoneInsert`/`groupInsert` — V14 follow-up: the
+  // slot elements render inside the zone/group flow, not in this layer). Neither
+  // ⇒ nothing will accept the drop, so the drag reads as rejected (design
+  // language: danger-tinted, not-allowed cursor).
+  const invalid = $derived(
+    !!drag && !drag.previewRect && !(drag.kind === 'widget' && (drag.zoneInsert || drag.groupInsert))
+  );
+
+  // Full-size travelling ghost (design shell `<div ref=ghostRef><AxisWidget
+  // w=ghostW/></div>` at `fixed; left:px-offx; top:py-offy; opacity:.5;
+  // scale(1.03)`): the REAL widget component renders in a chrome chip that
+  // follows the pointer, anchored at the grab offset. The origin is lifted
+  // (display:none), so this ghost is what the operator sees travelling. For a
+  // group drag the first member stands in for the unit (design ghostW).
+  const ghost = $derived.by(() => {
+    if (!drag || drag.kind !== 'widget') return null;
+    const widget = $controller.activeLayout?.widgets[drag.widgetIds[0]];
+    if (!widget) return null;
+    const Component = registry.widget(widget.type);
+    if (!Component) return null;
+    return {
+      widget,
+      Component,
+      size: drag.size ?? { width: 120, height: 38 },
+      grabOffset: drag.grabOffset ?? { x: 12, y: 12 }
+    };
+  });
+  const ghostDispatch = (_command: WorkbenchCommand) => {};
 
   let layerEl = $state<HTMLElement | null>(null);
   // An ancestor CSS `zoom` (the Axis UI-scale setting applies one on <html>) puts
@@ -34,7 +60,6 @@
         class:tab={drag.kind === 'panel' && drag.previewKind === 'tab'}
         class:split={drag.kind === 'panel' && drag.previewKind === 'split'}
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
-        class:placeholder={drag.kind === 'widget' && drag.previewKind === 'placeholder'}
         class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
         style="
           left:{drag.previewRect.left / zoom}px;
@@ -44,7 +69,28 @@
         "
       ></div>
     {/if}
-    <div class="aw-drag-ghost" class:invalid style="transform:translate({(drag.pointer.x + 10) / zoom}px, {(drag.pointer.y + 10) / zoom}px)">
+    {#if ghost}
+      {@const GhostWidget = ghost.Component}
+      <!-- The dragged widget itself travels with the pointer (design ghost:
+           full AxisWidget render, half-opaque, slightly scaled, accent chrome),
+           anchored where it was grabbed. Inert — pointer-events:none layer. -->
+      <div
+        class="aw-drag-widget-ghost"
+        class:invalid
+        style="transform:translate({(drag.pointer.x - ghost.grabOffset.x) / zoom}px, {(drag.pointer.y - ghost.grabOffset.y) / zoom}px) scale(1.03)"
+      >
+        <div style="width:{ghost.size.width}px;">
+          <GhostWidget widget={ghost.widget} size={ghost.widget.size ?? 'default'} dispatch={ghostDispatch} editMode={false} />
+        </div>
+      </div>
+    {/if}
+    <div
+      class="aw-drag-ghost"
+      class:invalid
+      style="transform:translate({(drag.pointer.x + 10) / zoom}px, {ghost
+        ? (drag.pointer.y - ghost.grabOffset.y) / zoom + ghost.size.height + 12
+        : (drag.pointer.y + 10) / zoom}px)"
+    >
       {#if drag.kind === 'panel'}
         <span class="aw-drag-kind">Panel</span>
       {:else}
@@ -146,14 +192,26 @@
     border-style: solid;
     background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
   }
-  /* In-group insert slot (design AxisGroup `indStyle`): a widget-sized dashed
-     box spliced at the computed member index, previewing exactly where the drop
-     lands between members. Distinct from the thin `.insert` zone-gap line. */
-  .aw-drop-preview.placeholder {
-    border: 1.5px dashed var(--aw-accent);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
-    box-shadow: none;
+  /* Full-size travelling widget ghost (design ghostStyle: fixed, half-opaque,
+     scale 1.03, accent border, radius 11, padding 6px 8px, deep shadow). The
+     in-flow insertion slots render inside the zones/groups themselves — this
+     layer only carries the moving widget + the target chip. */
+  .aw-drag-widget-ghost {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    transform-origin: top left;
+    padding: 6px 8px;
+    border: 1px solid var(--aw-accent);
+    border-radius: 11px;
+    background: var(--aw-bg-2);
+    opacity: 0.5;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+  .aw-drag-widget-ghost.invalid {
+    border-color: var(--aw-danger);
   }
   @keyframes awPreviewIn {
     from { opacity: 0; transform: scale(0.992); }
