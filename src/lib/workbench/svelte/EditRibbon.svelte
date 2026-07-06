@@ -67,7 +67,7 @@
 <style>
   .aw-edit-ribbon {
     position: absolute;
-    left: 14px;
+    left: calc(14px + var(--aw-safe-left, 0px));
     bottom: calc(14px + var(--aw-safe-bottom, 0px));
     z-index: 30;
     display: flex;

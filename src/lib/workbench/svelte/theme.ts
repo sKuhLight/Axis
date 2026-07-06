@@ -37,7 +37,14 @@ export const WORKBENCH_TOKEN_DEFAULTS: Record<`--aw-${string}`, string> = {
   '--aw-amber': '#f5a623',
   '--aw-danger': '#d6543f',
   '--aw-font-ui': 'system-ui, sans-serif',
-  '--aw-font-mono': 'ui-monospace, monospace'
+  '--aw-font-mono': 'ui-monospace, monospace',
+  // T21: safe-area insets (notch / home-indicator). Neutral 0px in the generic
+  // layer; a host theme (e.g. axisWorkbenchTheme) maps these onto the platform's
+  // real `env(safe-area-inset-*)` values so the shell respects device chrome.
+  '--aw-safe-top': '0px',
+  '--aw-safe-right': '0px',
+  '--aw-safe-bottom': '0px',
+  '--aw-safe-left': '0px'
 };
 
 /**

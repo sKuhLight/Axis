@@ -11,6 +11,7 @@
   } from '../core';
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
+  import { bottomSheetSwipe } from './bottomSheet';
   import {
     instantiatePanelTemplateCommands,
     instantiateWidgetTemplateCommands,
@@ -18,6 +19,19 @@
   } from './library';
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
+
+  // T23: phone flag (matches the 760px breakpoint) — the drawer presents as a
+  // bottom sheet with swipe-to-close below phone width, a right-edge drawer above.
+  let isPhone = $state(false);
+  let scrollEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(max-width: 760px)');
+    const sync = () => (isPhone = mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
 
   const { controller } = getWorkbenchContext();
   const layout = $derived(selectActiveLayout($controller.document));
@@ -78,13 +92,21 @@
 
 {#if open}
   <button class="aw-lib-scrim" type="button" aria-label="Close library" onclick={onClose}></button>
-  <aside class="aw-lib-drawer" aria-label="Widget Library" use:focusTrap={{ onClose }}>
+  <aside
+    class="aw-lib-drawer"
+    class:aw-sheet={isPhone}
+    aria-label="Widget Library"
+    use:focusTrap={{ onClose }}
+    use:bottomSheetSwipe={{ enabled: isPhone, onClose, scrollContainer: () => scrollEl }}
+  >
+    <!-- T23: grab bar for the phone bottom-sheet presentation (CSS-hidden on desktop). -->
+    <div class="aw-lib-grip" aria-hidden="true"></div>
     <header class="aw-lib-head">
       <span>Widget Library</span>
       <button type="button" class="aw-lib-close" title="Close" aria-label="Close library" data-autofocus onclick={onClose}>×</button>
     </header>
 
-    <div class="aw-lib-scroll">
+    <div class="aw-lib-scroll" bind:this={scrollEl}>
       <section class="aw-lib-section">
         <h2>Target</h2>
         <div class="aw-lib-targets">
@@ -262,12 +284,51 @@
     z-index: 131;
     width: 336px;
     max-width: 90vw;
+    /* T21: right-edge drawer clears the landscape right + vertical insets. */
+    padding-right: var(--aw-safe-right, 0px);
+    padding-top: var(--aw-safe-top, 0px);
+    padding-bottom: var(--aw-safe-bottom, 0px);
     display: flex;
     flex-direction: column;
     background: color-mix(in srgb, var(--aw-accent) 3%, var(--aw-bg-2));
     border-left: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
     box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5);
     animation: awLibSlide 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .aw-lib-grip {
+    display: none;
+  }
+  /* T23: below phone width the library becomes a bottom sheet — full width,
+     rounded top, grab bar, slides up. Swipe the sheet down (when the list is
+     scrolled to the top) to close. Slide via keyframe animation (this component
+     is not geometry-guarded, but keeping it consistent with the dock sheets). */
+  @media (max-width: 760px) {
+    .aw-lib-drawer {
+      top: auto;
+      right: var(--aw-safe-right, 0px);
+      left: var(--aw-safe-left, 0px);
+      bottom: 0;
+      width: auto;
+      max-width: none;
+      max-height: min(86vh, calc(100vh - 32px - var(--aw-safe-top, 0px)));
+      padding-right: 0;
+      padding-top: 0;
+      border-left: 0;
+      border-top: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 -14px 46px rgba(0, 0, 0, 0.5);
+      animation: awLibSheetUp 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .aw-lib-grip {
+      flex: none;
+      align-self: center;
+      width: 40px;
+      height: 4px;
+      margin: 8px 0 2px;
+      border-radius: 3px;
+      display: block;
+      background: var(--aw-border-3);
+    }
   }
   .aw-lib-head {
     flex: none;
@@ -476,5 +537,9 @@
   @keyframes awLibSlide {
     from { transform: translateX(100%); }
     to { transform: translateX(0); }
+  }
+  @keyframes awLibSheetUp {
+    from { transform: translateY(calc(100% + 24px)); }
+    to { transform: translateY(0); }
   }
 </style>
