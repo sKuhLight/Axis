@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0c0c0e;--bg2:#0e0e10;--surface:#141417;--surface2:#1c1c21;--border:#26262c;--border2:#2a2a31;--border3:#3a3a44;--text:#e9e9ee;--text2:#cfcfd6;--textdim:#9a9aa3;--textfaint:#6e6e78;--textmuted:#56565e;--accent:#35c9d6;--accentdim:#2fb0c9;--accentbright:#4fd1dc;--accentink:#06181a;--font-ui:'Hanken Grotesk',system-ui,sans-serif;--font-mono:'JetBrains Mono',ui-monospace,monospace;}
+:root{--bg:#0c0c0e;--bg2:#0e0e10;--surface:#141417;--surface2:#1c1c21;--border:#26262c;--border2:#2a2a31;--border3:#3a3a44;--text:#e9e9ee;--text2:#cfcfd6;--textdim:#9a9aa3;--textfaint:#8a8a94;--textmuted:#56565e;--accent:#35c9d6;--accentdim:#2fb0c9;--accentbright:#4fd1dc;--accentink:#06181a;--font-ui:'Hanken Grotesk',system-ui,sans-serif;--font-mono:'JetBrains Mono',ui-monospace,monospace;}
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; background:var(--bg); overscroll-behavior:none; }
   ::selection{ background:var(--accent); color:var(--accentink); }
@@ -29,7 +29,7 @@
 </style>
 </helmet>
 
-<div ref="{{ rootRef }}" onContextMenu="{{ onRootCtx }}" style="position:absolute; inset:0; display:flex; flex-direction:row; background:var(--bg); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden; -webkit-touch-callout:none;">
+<div ref="{{ rootRef }}" onContextMenu="{{ onRootCtx }}" style="position:absolute; inset:0; display:flex; flex-direction:row; background:var(--bg2); color:var(--text); font-family:var(--font-ui),system-ui,sans-serif; overflow:hidden; -webkit-touch-callout:none;">
 
   <!-- ===================== LEFT RAIL ===================== -->
   <sc-if value="{{ showFull }}" hint-placeholder-val="{{ true }}">
@@ -275,7 +275,7 @@
 
   <!-- ===================== FC CONTROLLERS ===================== -->
   <sc-if value="{{ isFc }}" hint-placeholder-val="{{ false }}">
-  <div data-screen-label="FC Controllers" style="flex:1; min-height:0; display:flex; flex-direction:column; background:var(--bg); overflow:hidden;">
+  <div data-screen-label="FC Controllers" style="flex:1; min-height:0; display:flex; flex-direction:column; background:transparent; overflow:hidden;">
 
     <sc-if value="{{ fcShowBoard }}" hint-placeholder-val="{{ true }}">
     <!-- header strip -->
@@ -1826,7 +1826,7 @@ class Component extends DCLogic {
 
   // ===================== THEME ENGINE =====================
   PALETTES = {
-    dark:  {bg:'#0c0c0e',bg2:'#0e0e10',surface:'#141417',surface2:'#1c1c21',border:'#26262c',border2:'#2a2a31',border3:'#3a3a44',text:'#e9e9ee',text2:'#cfcfd6',textdim:'#9a9aa3',textfaint:'#6e6e78',textmuted:'#56565e'},
+    dark:  {bg:'#0c0c0e',bg2:'#0e0e10',surface:'#141417',surface2:'#1c1c21',border:'#26262c',border2:'#2a2a31',border3:'#3a3a44',text:'#e9e9ee',text2:'#cfcfd6',textdim:'#9a9aa3',textfaint:'#8a8a94',textmuted:'#56565e'},
     light: {bg:'#e9ebf0',bg2:'#dfe1e8',surface:'#ffffff',surface2:'#f1f2f6',border:'#e0e2ea',border2:'#cfd2dc',border3:'#b4b8c6',text:'#181a20',text2:'#3d4048',textdim:'#5e626e',textfaint:'#8a8e9c',textmuted:'#a7abb8'}
   };
   ACCENT_SWATCHES = ['#35c9d6','#4f6bed','#9b8cf0','#f5a623','#33c46b','#e5588f'];
@@ -2246,7 +2246,7 @@ class Component extends DCLogic {
     if(act==="remove"){ this.removeBlock(idx); return; }
   };
   toggleBypassAt(idx){ const c=this.state.grid[idx]; if(!c||!c.catId||c.catId==="in"||c.catId==="out") return; const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=Object.assign({},c,{bypassed:!c.bypassed}); this.setState({grid}, ()=>this.histRecord((grid[idx].bypassed?"Bypassed ":"Engaged ")+this.blockLabel(c), before)); this.showToast(grid[idx].bypassed?"Bypassed":"Engaged", grid[idx].bypassed?"#d6543f":"#5fc46b"); }
-  removeBlock(idx){ const c=this.state.grid[idx]; if(!c) return; const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:(this.state.selected===idx&&this.isMobile())?false:this.state.editorOpen}, ()=>this.histRecord("Removed "+this.blockLabel(c), before)); this.showToast("Removed "+this.blockLabel(c),"#d6543f"); }
+  removeBlock(idx){ const c=this.state.grid[idx]; if(!c) return; const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=null; const routes={}; Object.keys(this.state.routes).forEach(k=>{ if(+k===idx) return; const list=this.state.routes[k].filter(x=>x!==idx); if(list.length) routes[k]=list; }); this.setState({grid,routes,editorOpen:(this.state.selected===idx&&this.isMobile())?false:this.state.editorOpen}, ()=>this.histRecord("Removed "+this.blockLabel(c), before)); this.showToast("Removed "+this.blockLabel(c)+" · ⌘Z to undo","#d6543f"); }
   copyBlock(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return; this.setState({ clip:{ block:Object.assign({},c), cfg:this.blockCfgSnap(idx) } }); this.showToast("Copied "+this.blockLabel(c),this.tk.accent); }
   pasteInto(idx){ const clip=this.state.clip; if(!clip){ this.showToast("Clipboard empty","#d6543f"); return; } const before=this.histSnap(); const grid=this.state.grid.slice(); grid[idx]=Object.assign({},clip.block,{bypassed:false}); const knobs=Object.assign({},this.state.knobs); Object.keys(clip.cfg.knobs||{}).forEach(sub=>{ knobs["k:"+idx+":"+sub]=clip.cfg.knobs[sub]; }); this.setState({grid,knobs,selected:idx,editorOpen:true,editorH:this.state.editorOpen?this.state.editorH:this.computeDockH()}, ()=>this.histRecord("Pasted "+this.blockLabel(clip.block), before)); this.showToast("Pasted "+this.blockLabel(clip.block),this.tk.accent); }
   duplicateBlock(idx){ const c=this.state.grid[idx]; if(!c||!c.catId) return; const dst=this.firstEmpty(); if(dst==null){ this.showToast("Grid is full","#d6543f"); return; } const before=this.histSnap(); const grid=this.state.grid.slice(); grid[dst]=Object.assign({},c,{bypassed:false}); const cfg=this.blockCfgSnap(idx); const knobs=Object.assign({},this.state.knobs); Object.keys(cfg.knobs||{}).forEach(sub=>{ knobs["k:"+dst+":"+sub]=cfg.knobs[sub]; }); this.setState({grid,knobs,selected:dst,editorOpen:true,editorH:this.state.editorOpen?this.state.editorH:this.computeDockH(),_placed:dst}, ()=>this.histRecord("Duplicated "+this.blockLabel(c), before)); setTimeout(()=>this.setState({_placed:null}),360); this.showToast("Duplicated "+this.blockLabel(c),this.tk.accent); }
@@ -2506,21 +2506,22 @@ class Component extends DCLogic {
       boardGridStyle:{ display:"grid", gridTemplateColumns:"repeat("+boardCols+",1fr)", gap:mob?10:14, maxWidth:boardCols<=3?620:1060, margin:"0 auto", width:"100%" },
       bodyStyle:{ flex:1, minHeight:0, display:"flex", flexDirection:mob?"column":"row" },
       stripStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"11px 14px", borderBottom:"1px solid "+this.tk.surface2+"", overflowX:"auto" },
-      barStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"10px 18px", borderTop:"1px solid "+this.tk.surface2+"", background:this.tk.bg, overflowX:"auto" },
+      barStyle:{ flex:"none", display:"flex", alignItems:"center", gap:8, padding:"10px 18px", borderTop:"1px solid "+this.tk.surface2+"", background:"transparent", overflowX:"auto" },
       boardStyle:{ flex: mob?"none":"0 3 auto", minWidth:0, minHeight:mob?"auto":96, overflowY:"auto", padding:mob?"16px 14px 24px":"16px 20px 14px" },
       inspShow,
       inspStyle: mob ? { position:"fixed", left:0, right:0, bottom:0, maxHeight:"84vh", display:"flex", flexDirection:"column", background:"linear-gradient(180deg,"+this.tk.surface+",#0e0e11)", borderTop:"1px solid "+this.tk.border+"", borderTopLeftRadius:20, borderTopRightRadius:20, boxShadow:"0 -10px 44px rgba(0,0,0,.55)", zIndex:160, animation:"axsSheet .26s cubic-bezier(.2,.8,.3,1)" }
                      : { flex:"1 1 0%", minHeight:300, display:"flex", flexDirection:"column", borderTop:"1px solid "+this.tk.surface2+"", background:this.tk.bg2 },
       inspBodyStyle: mob ? { flex:1, minHeight:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:18, padding:"16px 18px 26px" }
-                         : { flex:1, minHeight:0, display:"flex" },
+                         : { flex:1, minHeight:0, overflowY:"auto", display:"flex", flexWrap:"wrap", alignContent:"flex-start", gap:0, padding:0 },
       identityStyle: mob ? { display:"flex", flexDirection:"column", gap:16 }
-                         : { width:266, flex:"none", overflowY:"auto", padding:"14px 16px", borderRight:"1px solid "+this.tk.surface2+"", display:"flex", flexDirection:"column", gap:14 },
+                         : (this.fcPart==="led" ? { flex:1, minWidth:0, display:"flex", flexDirection:"column", gap:14, padding:"16px 18px", maxWidth:560 }
+                         : { flex:"1 1 250px", minWidth:240, display:"flex", flexDirection:"column", gap:14, padding:"16px 18px" }),
       scrimStyle: mob ? { position:"fixed", inset:0, background:"rgba(6,6,8,.55)", backdropFilter:"blur(2px)", zIndex:159, animation:"axsOverlay .14s ease" } : null,
       onCloseInsp:this.onFcCloseInsp,
       sw:{ index:si, num:si+1, label:sw.label, placeholder:this.fcAutoLabel(sw.tap), custom:sw.custom,
            labelMode:sw.labelMode, labelModes, showCustom:sw.labelMode==="custom",
            colorList, onColor:this.onFcColor, onLabel:this.onFcLabel, onLabelMode:this.onFcLabelMode, onCustom:this.onFcCustom,
-           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.show = (!this.fcPart || this.fcPart==="inspector" || this.fcPart===a.which); a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:this.tk.bg2, border:"1px solid #1e1e24", borderRadius:14 } : { flex:1, minWidth:0, overflowY:"auto", padding:"14px 16px", display:"flex", flexDirection:"column", gap:10, borderRight: (idx===0 && (!this.fcPart||this.fcPart==="inspector"))?"1px solid "+this.tk.surface2+"":"none" }; return a; }) },
+           actions:[ this.fcActionView("tap",sw.tap), this.fcActionView("hold",sw.hold) ].map((a,idx)=>{ a.show = (!this.fcPart || this.fcPart==="inspector" || this.fcPart===a.which); a.cardStyle = mob ? { display:"flex", flexDirection:"column", gap:12, padding:15, background:this.tk.bg2, border:"1px solid #1e1e24", borderRadius:14 } : ((this.fcPart==="tap"||this.fcPart==="hold") ? { display:"flex", flexDirection:"column", gap:10, padding:"16px 18px" } : { flex:"1 1 300px", minWidth:290, display:"flex", flexDirection:"column", gap:10, padding:"16px 18px", borderLeft:"1px solid "+this.tk.surface2 }); return a; }) },
       onCat:this.onFcCat, onFn:this.onFcFn, onScene:this.onFcScene, onChannel:this.onFcChannel, onBlock:this.onFcBlock,
       onLayoutTo:this.onFcLayoutTo, onWrap:this.onFcWrap, onPreset:this.onFcPreset, onLimit:this.onFcLimit
     };
@@ -2582,8 +2583,8 @@ class Component extends DCLogic {
     this._dense = denseGrid;
     const showType = gMob ? colW>=56 : (!gpMap && gpSize>=1);
     const gridScrollStyle=gMob
-      ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"radial-gradient(120% 120% at 50% 0%,"+this.tk.surface+","+this.tk.bg+" 70%)", WebkitOverflowScrolling:"touch" }
-      : { flex:1, minHeight:0, overflow:"auto", padding:(gpMap?"14px 16px":"26px 22px"), background:"radial-gradient(120% 120% at 50% 0%,"+this.tk.surface+","+this.tk.bg+" 70%)", WebkitOverflowScrolling:"touch" };
+      ? { flex:1, minHeight:0, overflowX:"hidden", overflowY:"auto", padding:"14px 12px", background:"transparent", WebkitOverflowScrolling:"touch" }
+      : { flex:1, minHeight:0, overflow:"auto", padding:(gpMap?"14px 16px":"26px 22px"), background:"transparent", WebkitOverflowScrolling:"touch" };
     // clip wrapper: exactly one page wide, centered — guarantees no next-page block bleeds past the edge
     const gridClipStyle=gMob
       ? { position:"relative", width:pageW+"px", maxWidth:"100%", marginLeft:"auto", marginRight:"auto", overflow:"hidden" }
