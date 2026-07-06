@@ -27,6 +27,7 @@
     readAxisFcDevice,
     type AxisFcDevice
   } from './widgetControls';
+  import { resolveParamWidgetState } from './paramWidgetState';
 
   let {
     widget,
@@ -122,6 +123,37 @@
   );
   const paramPreview = $derived(readNumber(widget.state?.previewValue));
   const paramNorm = $derived(paramNamed?.norm ?? (paramPreview != null ? Math.max(0, Math.min(1, paramPreview / 100)) : undefined));
+  // effectIds present in the current preset grid — undefined until a preset is loaded
+  // so we never falsely flag a bound block as "missing" during a cold boot.
+  const paramPresetIds = $derived(
+    editor.preset
+      ? new Set([...editor.layout.cells, ...editor.layout.shunts].map((cell) => cell.effectId))
+      : undefined
+  );
+  // Explicit binding state: live (block open, read/write), readonly (block exists
+  // but isn't open — click to open), missing (block not in this preset).
+  const paramState = $derived(
+    resolveParamWidgetState({
+      boundEffectId: paramEffectId,
+      openEffectId: editor.selected?.effectId,
+      presetEffectIds: paramPresetIds
+    })
+  );
+  const paramLive = $derived(paramState === 'live');
+  const paramReadonly = $derived(paramState === 'readonly');
+  const paramMissing = $derived(paramState === 'missing');
+  // Which grid cell the binding points at (used to open it when read-only).
+  const paramCell = $derived(
+    paramEffectId == null
+      ? undefined
+      : [...editor.layout.cells, ...editor.layout.shunts].find((cell) => cell.effectId === paramEffectId)
+  );
+  const paramTip = $derived.by(() => {
+    const head = `${paramBlock} · ${paramLabel}`;
+    if (paramLive) return paramNamed ? `${head} · drag or wheel to edit` : paramEnum ? `${head} · click to cycle` : head;
+    if (paramReadonly) return paramCell ? `${head} · read-only · click to open block` : head;
+    return `${head} · block not in this preset`;
+  });
   const paramValueText = $derived.by(() => {
     if (paramNamed) {
       const raw = typeof paramNamed.value === 'number' ? formatParamNumber(paramNamed.value) : '--';
@@ -233,9 +265,19 @@
     nudgeParam(event.deltaY < 0 ? 0.015 : -0.015);
   }
 
+  function openParamBlock() {
+    if (editMode || !paramCell) return;
+    void editor.openCell(paramCell);
+  }
+
   function paramClick() {
     if (editMode) return;
-    if (paramEnum) nudgeParam(1);
+    // read-only: a click opens the bound block so the widget becomes live
+    if (paramReadonly) {
+      openParamBlock();
+      return;
+    }
+    if (paramLive && paramEnum) nudgeParam(1);
   }
 </script>
 
@@ -360,10 +402,14 @@
 {:else if kind === 'paramControl'}
   <button
     class="axis-widget param"
-    class:writable={!!paramNamed || !!paramEnum}
+    class:writable={paramLive && (!!paramNamed || !!paramEnum)}
+    class:readonly={paramReadonly}
+    class:missing={paramMissing}
     data-size={size}
+    data-param-state={paramState}
     type="button"
-    title={`${paramBlock} · ${paramLabel}${paramNamed ? ' · drag or wheel to edit' : paramEnum ? ' · click to cycle' : ''}`}
+    disabled={!editMode && paramMissing}
+    title={paramTip}
     onpointerdown={paramPointerDown}
     onwheel={paramWheel}
     onclick={paramClick}
@@ -373,8 +419,22 @@
         <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
         <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
       </svg>
+      {#if paramReadonly}
+        <!-- lock affordance: this binding is a read-only preview until its block is opened -->
+        <svg class="param-badge lock" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+          <rect x="2.5" y="5" width="7" height="5.2" rx="1" fill="currentColor"></rect>
+          <path d="M4 5 V3.6 a2 2 0 0 1 4 0 V5" fill="none" stroke="currentColor" stroke-width="1.2"></path>
+        </svg>
+      {:else if paramMissing}
+        <!-- missing: the bound block isn't in the current preset -->
+        <svg class="param-badge warn" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M6 1.5 L11 10.5 H1 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path>
+          <path d="M6 5 V7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path>
+          <circle cx="6" cy="9" r="0.7" fill="currentColor"></circle>
+        </svg>
+      {/if}
     </span>
-    <span class="mono strong">{paramValueText}</span>
+    <span class="mono strong">{paramMissing ? '--' : paramValueText}</span>
     {#if expanded}<span class="mono token">{paramLabel}</span>{/if}
   </button>
 {:else if kind === 'tempo'}
@@ -822,7 +882,46 @@
   .param.writable:hover {
     border-color: var(--accent);
   }
+  /* read-only: block exists but isn't open — dimmed, lock badge, click opens it */
+  .param.readonly {
+    border-style: dashed;
+    border-color: var(--aw-border-2, var(--border2));
+  }
+  .param.readonly .param-ring svg:first-child,
+  .param.readonly .strong {
+    opacity: 0.55;
+  }
+  .param.readonly:hover {
+    border-color: var(--aw-border-3, var(--border3));
+  }
+  .param.readonly:hover .param-ring svg:first-child,
+  .param.readonly:hover .strong {
+    opacity: 0.78;
+  }
+  /* missing: bound block not in this preset — inert, warning badge */
+  .param.missing {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
+    cursor: default;
+  }
+  .param.missing .param-ring svg:first-child,
+  .param.missing .strong,
+  .param.missing .token {
+    opacity: 0.4;
+  }
+  .param-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+  }
+  .param-badge.lock {
+    color: var(--aw-text-muted, var(--textmuted));
+  }
+  .param-badge.warn {
+    color: var(--amber, #f5a623);
+  }
   .param-ring {
+    position: relative;
     width: 24px;
     height: 24px;
     flex: none;
