@@ -156,6 +156,21 @@ colW/cellH/gap/mapMode.
   focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
   state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
   mobile sheets → T21/T23).
+**Round 9 (operator visual pass ~19:06, T31 findings) — IN FLIGHT (4 opus):**
+- R9a grid gating: workbench grid must NOT gate on editor.isMobile (<1366 old-shell
+  boundary kills all grid modes on smaller windows); pane/profile tiers only when a
+  view is active; explicit Map chip always renders map.
+- R9b shell chrome: themed scrollbars everywhere (tokens); bottom bar NEVER
+  h-scrolls (operator rule); Customize INTO the bottom bar leftmost; drop the
+  reserved hamburger gap in bottom-nav mode; desktop rail = icon-only, expands on
+  hover to show labels; FINISH tokenization (WorkbenchHost/TabStack → theme.ts
+  defaults, drop guard tolerance).
+- R9c dock openers: LEFT opener missing; RIGHT opener must overlay the actual
+  right-region panels (sheet was consuming the whole screen).
+- R9d mobile block flow (operator design): phone + block tapped → block editor
+  ~75% bottom, grid in map above under top bar; minimized → mobile col layout.
+Operator confirmed tokenization incomplete — folded into R9b.
+
 **Round 7 COMPLETE. Round 8:** R8a T21+T23 LANDED (`0b4116f`) — all four safe-area
 insets mapped + consumed edge-by-edge; phone bottom sheets (nav/dock/library) with
 tested swipe-to-close (≥96px / ≥0.55px/ms, scroll-intent cancel), guards green.
