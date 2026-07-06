@@ -8,10 +8,26 @@
   // preview rect ⇒ nothing here will accept the drop, so the drag reads as
   // rejected (design language: danger-tinted, not-allowed cursor).
   const invalid = $derived(!!drag && !drag.previewRect);
+
+  let layerEl = $state<HTMLElement | null>(null);
+  // An ancestor CSS `zoom` (the Axis UI-scale setting applies one on <html>) puts
+  // this layer's own px units in LAYOUT space while pointer coords and
+  // getBoundingClientRect values are VISUAL — rendering visual values inside the
+  // zoomed subtree double-applies the factor, so preview + ghost drift and scale,
+  // growing with distance from the origin. Hit-testing is untouched (visual vs
+  // visual); only the rendering needs compensation. Self-calibrating: the layer
+  // spans the viewport, so its visual/layout width ratio IS the cumulative
+  // effective zoom. Identity (1) with no zoom; one gBCR per drag update.
+  const zoom = $derived.by(() => {
+    void drag;
+    if (!layerEl || !layerEl.offsetWidth) return 1;
+    const visual = layerEl.getBoundingClientRect().width;
+    return visual > 0 ? visual / layerEl.offsetWidth : 1;
+  });
 </script>
 
 {#if drag}
-  <div class="aw-drag-layer" class:invalid>
+  <div class="aw-drag-layer" class:invalid bind:this={layerEl}>
     {#if drag.previewRect}
       <div
         class="aw-drop-preview"
@@ -20,14 +36,14 @@
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
         class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
         style="
-          left:{drag.previewRect.left}px;
-          top:{drag.previewRect.top}px;
-          width:{drag.previewRect.width}px;
-          height:{drag.previewRect.height}px;
+          left:{drag.previewRect.left / zoom}px;
+          top:{drag.previewRect.top / zoom}px;
+          width:{drag.previewRect.width / zoom}px;
+          height:{drag.previewRect.height / zoom}px;
         "
       ></div>
     {/if}
-    <div class="aw-drag-ghost" class:invalid style="transform:translate({drag.pointer.x + 10}px, {drag.pointer.y + 10}px)">
+    <div class="aw-drag-ghost" class:invalid style="transform:translate({(drag.pointer.x + 10) / zoom}px, {(drag.pointer.y + 10) / zoom}px)">
       {#if drag.kind === 'panel'}
         <span class="aw-drag-kind">Panel</span>
       {:else}
