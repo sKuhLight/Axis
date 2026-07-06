@@ -43,8 +43,12 @@
   }
 </script>
 
-<div class="aw-edit-ribbon" class:active={$controller.editMode}>
-  {#if $controller.editMode}
+<!-- Directive 3: the collapsed Customize control now lives inside the bottom bar
+     (WorkbenchHost renders it, leftmost, in both nav modes). This component is
+     the EXPANDED edit ribbon only — an overlay that appears while editing. It
+     renders nothing when not in edit mode. -->
+{#if $controller.editMode}
+  <div class="aw-edit-ribbon active">
     <span class="aw-edit-label">Edit Layout</span>
     {#if extras}{@render extras()}{/if}
     <button class="aw-edit-action" type="button" title="Show dockable panels" onclick={openLibrary}>▤ Panels</button>
@@ -54,69 +58,48 @@
     {#if $controller.lastResult?.error}
       <span class="aw-edit-error">{$controller.lastResult.error.message}</span>
     {/if}
-  {/if}
-  <button class="aw-edit-toggle" type="button" onclick={toggleEdit}>
-    {#if !$controller.editMode}<span class="aw-edit-toggle-glyph" aria-hidden="true">◆</span>{/if}
-    {$controller.editMode ? 'Done' : 'Customize'}
-  </button>
-</div>
+    <button class="aw-edit-toggle" type="button" onclick={toggleEdit}>Done</button>
+  </div>
+{/if}
 
 <WorkbenchLibraryDrawer open={libraryOpen && $controller.editMode} onClose={() => (libraryOpen = false)} />
 <WorkbenchLayoutDrawer open={layoutsOpen && $controller.editMode} onClose={() => (layoutsOpen = false)} />
 
 <style>
+  /* Directive 3: the collapsed Customize control lives in the bottom bar now.
+     This ribbon is only ever the EXPANDED overlay (always `.active`) — a
+     top-anchored strip below the topbar spanning from the rail to the right
+     edge. */
   .aw-edit-ribbon {
     position: absolute;
-    left: calc(14px + var(--aw-safe-left, 0px));
-    bottom: calc(14px + var(--aw-safe-bottom, 0px));
     z-index: 30;
     display: flex;
     align-items: center;
     gap: 9px;
     pointer-events: none;
   }
-  /* Design 01-shell §5: bottom-left Customize pill — h34, radius 9, accent ink
-     on a dark accent fill, subtle accent border. */
   .aw-edit-ribbon button {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    height: 34px;
-    padding: 0 14px;
-    border: 1px solid color-mix(in srgb, var(--aw-accent) 34%, var(--aw-border));
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--aw-accent) 12%, var(--aw-bg-2));
-    color: color-mix(in srgb, var(--aw-accent) 82%, white);
     cursor: pointer;
     pointer-events: auto;
-    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
     font: 700 12px/1 var(--aw-font-ui);
   }
-  .aw-edit-ribbon button:hover {
-    border-color: var(--aw-accent);
-  }
-  /* T18: keyboard focus ring on every ribbon button (Customize + edit actions).
-     focus-visible only, tokenized — pointer clicks show no outline. */
+  /* T18: keyboard focus ring on every ribbon button. focus-visible only. */
   .aw-edit-ribbon button:focus-visible {
     outline: 2px solid var(--aw-accent);
     outline-offset: 2px;
   }
-  .aw-edit-toggle-glyph {
-    font-size: 11px;
-    line-height: 1;
-  }
   .aw-edit-ribbon.active {
-    left: var(--rail-w, 66px);
+    left: var(--aw-rail-w, 58px);
     right: 0;
     top: calc(58px + var(--aw-safe-top, 0px));
-    bottom: auto;
     min-height: 52px;
     height: auto;
     max-width: none;
     padding: 11px 16px;
-    border: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
-    border-radius: 0;
     background: color-mix(in srgb, var(--aw-accent) 4%, var(--aw-bg));
     flex-wrap: wrap;
     pointer-events: auto;

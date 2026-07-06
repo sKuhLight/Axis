@@ -25,14 +25,10 @@ const SVELTE_DIR = join(HERE, '..');
 const HEX_COLOR = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g;
 const STYLE_BLOCK = /<style[^>]*>([\s\S]*?)<\/style>/gi;
 
-// TODO(T16): these components are owned by another agent and still carry hex
-// literals. Remove each tolerance once that agent tokenizes the file. The main
-// session has the exact replacement lines from the T16 report.
-//   - WorkbenchHost.svelte: the `--aw-*` token defaults (~lines 100-114, now
-//     mirrored in theme.ts WORKBENCH_TOKEN_DEFAULTS) + the logo dot `#4f6bed`
-//     (~line 167).
-//   - TabStack.svelte: tab chrome colors (~lines 299/320/332/333/359).
-const TOLERATED = new Set(['WorkbenchHost.svelte', 'TabStack.svelte']);
+// The guard now enforces the WHOLE generic renderer with NO tolerance:
+// WorkbenchHost consumes theme.ts `workbenchTokenDefaultsCss()` (no inline hex
+// defaults) and TabStack's tab chrome is fully tokenized. Any new hex literal in
+// a `workbench/svelte/*.svelte` <style> block fails the suite.
 
 function styleCssOf(source: string): string {
   const blocks: string[] = [];
@@ -50,17 +46,9 @@ describe('T16 · generic renderer uses --aw-* tokens, not hex colors', () => {
   });
 
   for (const file of files) {
-    const testName = TOLERATED.has(file)
-      ? `${file} (tolerated — see TODO)`
-      : file;
-
-    it(testName, () => {
+    it(file, () => {
       const css = styleCssOf(readFileSync(join(SVELTE_DIR, file), 'utf8'));
       const hits = css.match(HEX_COLOR) ?? [];
-      if (TOLERATED.has(file)) {
-        // Do not fail while the other agent owns this file; just document status.
-        return;
-      }
       expect(hits, `${file} has hardcoded hex color(s): ${hits.join(', ')} — use var(--aw-*) tokens`).toEqual([]);
     });
   }
