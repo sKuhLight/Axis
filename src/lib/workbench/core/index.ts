@@ -1,6 +1,7 @@
 export * from './commands';
 export * from './customPanels';
 export * from './defaults';
+export * from './floating';
 export * from './ids';
 export * from './invariants';
 export * from './migrations';

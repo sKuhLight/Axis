@@ -1,6 +1,17 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
-  import { capWidgetSize, createCustomPanelFromWidgetsCommands, type DockRegionId, type WidgetInstance, type WidgetSize, type WorkbenchCommand } from '../core';
+  import {
+    capWidgetSize,
+    clampFloatingPosition,
+    createCustomPanelFromWidgetsCommands,
+    healFloatingRect,
+    raiseFloatingOrder,
+    type DockRegionId,
+    type WidgetInstance,
+    type WidgetSize,
+    type WorkbenchCommand
+  } from '../core';
+  import { onMount } from 'svelte';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { pointerDistance, widgetDropCommand, widgetDropIndex, type WorkbenchRect } from './drag';
@@ -293,23 +304,151 @@
       index: nextOrderedIndex(currentIndex, direction as -1 | 1, siblings.length)
     });
   }
+
+  // ── Floating widgets (design 01-shell §4/§7) ────────────────────────────
+  // Floating chips reposition freely over the content, stack by `order`, and
+  // never get lost offscreen. Positions persist in `widget.floatingRect` via
+  // `widget.move`. Repositioning is pointer-based (no HTML5 DnD) and available
+  // whether or not edit mode is on, since a floater has no bar to grab from.
+  let hostEl = $state<HTMLElement | null>(null);
+  const isFloating = $derived(widget.zone === 'floating');
+
+  // Container = the floating zone element (inset:0 over the root); its client
+  // box is the clamp viewport. Falls back to the widget's parent.
+  function floatingViewport(): { width: number; height: number } {
+    const zoneEl = hostEl?.closest<HTMLElement>('[data-zone="floating"]') ?? hostEl?.parentElement;
+    if (!zoneEl) return { width: 0, height: 0 };
+    return { width: zoneEl.clientWidth, height: zoneEl.clientHeight };
+  }
+
+  function floatingSize(): { width: number; height: number } {
+    if (!hostEl) return { width: 150, height: 40 };
+    return { width: hostEl.offsetWidth || 150, height: hostEl.offsetHeight || 40 };
+  }
+
+  // Raise this floater above its siblings (deterministic order bump). Pure
+  // resolution in core/floating.ts; returns null when already topmost.
+  function raiseFloating() {
+    const widgets = Object.values($controller.activeLayout?.widgets ?? {});
+    const order = raiseFloatingOrder(widgets, widget.id);
+    if (order == null) return;
+    controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', index: order });
+  }
+
+  function floatingPointerDown(e: PointerEvent) {
+    if (!isFloating || widget.locked || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    raiseFloating();
+
+    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    const startedAt = { x: e.clientX, y: e.clientY };
+    let dragging = false;
+    let pending: { x: number; y: number } = { x: origin.x, y: origin.y };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging && pointerDistance(startedAt, { x: ev.clientX, y: ev.clientY }) < 4) return;
+      dragging = true;
+      const raw = { x: origin.x + (ev.clientX - startedAt.x), y: origin.y + (ev.clientY - startedAt.y) };
+      pending = clampFloatingPosition(raw, floatingSize(), floatingViewport());
+      // Live feedback without a dispatch per frame — write directly to the node
+      // (top/left are untransitioned, so no geometry-transition restart loop).
+      if (hostEl) {
+        hostEl.style.left = `${pending.x}px`;
+        hostEl.style.top = `${pending.y}px`;
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!dragging) return;
+      // Persist the clamped position on drag end.
+      controller.dispatch({
+        type: 'widget.move',
+        widgetIds: [widget.id],
+        zone: 'floating',
+        floatingRect: { ...(widget.floatingRect ?? {}), x: pending.x, y: pending.y }
+      });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // Self-heal: on mount and on viewport/zone resize, re-clamp a persisted
+  // position so a floater saved offscreen (e.g. after the window shrank)
+  // reappears with a grabbable strip in view.
+  function healFloatingIntoView() {
+    if (!isFloating || !widget.floatingRect || !hostEl) return;
+    const healed = healFloatingRect(widget.floatingRect, floatingSize(), floatingViewport());
+    if (!healed) return;
+    controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', floatingRect: healed });
+  }
+
+  // Keyboard reposition for the floating grip: arrows nudge by a step (Shift =
+  // coarse), clamped + persisted like a drag end.
+  function moveFloatingByKey(e: KeyboardEvent) {
+    if (!isFloating || widget.locked) return;
+    const step = e.shiftKey ? 16 : 4;
+    const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+    const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+    if (!dx && !dy) return;
+    e.preventDefault();
+    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    const next = clampFloatingPosition({ x: origin.x + dx, y: origin.y + dy }, floatingSize(), floatingViewport());
+    controller.dispatch({
+      type: 'widget.move',
+      widgetIds: [widget.id],
+      zone: 'floating',
+      floatingRect: { ...(widget.floatingRect ?? {}), x: next.x, y: next.y }
+    });
+  }
+
+  onMount(() => {
+    if (!isFloating) return;
+    // Defer to let the widget measure its own size before the first heal.
+    const raf = requestAnimationFrame(healFloatingIntoView);
+    const zoneEl = hostEl?.closest<HTMLElement>('[data-zone="floating"]') ?? hostEl?.parentElement ?? null;
+    const ro = zoneEl ? new ResizeObserver(() => healFloatingIntoView()) : null;
+    if (zoneEl && ro) ro.observe(zoneEl);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  });
 </script>
 
 <div
+  bind:this={hostEl}
   class="aw-widget-host"
-  class:floating={widget.zone === 'floating'}
+  class:floating={isFloating}
   data-widget-host
   data-widget={widget.id}
   data-widget-type={widget.type}
   data-size={size}
   role="group"
-  style={widget.zone === 'floating' && widget.floatingRect ? `left:${widget.floatingRect.x}px; top:${widget.floatingRect.y}px;` : ''}
+  style={isFloating && widget.floatingRect ? `left:${widget.floatingRect.x}px; top:${widget.floatingRect.y}px; z-index:${50 + widget.order};` : ''}
+  onpointerdowncapture={isFloating ? () => raiseFloating() : undefined}
   oncontextmenu={openMenu}
 >
+  {#if isFloating && !widget.locked}
+    <!-- Persistent grab handle across the top of the chip: floaters have no bar
+         to grab from, so they reposition whether or not edit mode is on
+         (design §7 free move). Inner widget controls stay interactive. -->
+    <button
+      class="aw-widget-float-grip"
+      type="button"
+      title="Move widget"
+      aria-label="Move widget"
+      onpointerdown={floatingPointerDown}
+      onkeydown={moveFloatingByKey}
+    >⠿</button>
+  {/if}
   {#if Component}
     <Component widget={widget} {size} dispatch={(command: WorkbenchCommand) => controller.dispatch(command)} editMode={$controller.editMode} />
   {/if}
-  {#if $controller.editMode && !widget.locked && !widget.groupId}
+  {#if $controller.editMode && !widget.locked && !widget.groupId && !isFloating}
     <div class="aw-widget-drag-surface" role="button" tabindex="0" aria-label="Move widget" onpointerdown={dragPointerDown} onkeydown={moveByKey}></div>
   {/if}
   {#if $controller.editMode && !widget.locked && !widget.groupId}
@@ -333,6 +472,48 @@
   .aw-widget-host.floating {
     position: absolute;
     pointer-events: auto;
+    /* Design §7.4: floating chip wrap — padding 6, radius 11, subtle shell. No
+       geometry transitions on top/left (a ResizeObserver heal loop would
+       restart them mid-flight). */
+    padding: 6px;
+    border-radius: 11px;
+    background: var(--aw-bg-2);
+    border: 1px solid var(--aw-border);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+  :global(.aw-root.aw-editing) .aw-widget-host.floating {
+    border-color: color-mix(in srgb, var(--aw-accent) 45%, var(--aw-border));
+  }
+  /* Drag handle strip across the top of the floating chip. Grabbable whether
+     or not edit mode is on; inner widget controls remain interactive. */
+  .aw-widget-float-grip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 11px 11px 0 0;
+    background: transparent;
+    color: var(--aw-text-faint);
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.2em;
+    cursor: grab;
+    touch-action: none;
+    opacity: 0;
+  }
+  .aw-widget-host.floating:hover .aw-widget-float-grip,
+  .aw-widget-float-grip:focus-visible {
+    opacity: 1;
+  }
+  .aw-widget-float-grip:active {
+    cursor: grabbing;
   }
   /* Edit chrome floats above the widget (design 01-shell §5) — it must never
      take layout space or tint the chip, so the widget keeps its normal
