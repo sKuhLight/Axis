@@ -141,10 +141,14 @@ colW/cellH/gap/mapMode.
 - R7b T19 floating widgets: LANDED (`ae9bb33`) — grip strip drag + arrow nudge,
   raise-on-pointer-down (order-derived z), clamp/self-heal (core/floating.ts,
   16 tests), positions persist via widget.move floatingRect.
-- R7c T24 FC polish: itemized affordance checklist vs FcEditor + 04 §1/§3/§5,
-  close or explicitly defer each; hardware-verify items appended below.
-Wave 2 after these (file conflicts): T21 safe-areas, T23 bottom-sheet drawers,
-T26 Playwright E2E.
+- R7c T24 FC polish: LANDED (`20b50e4`) — 14-item checklist: 7 closed (hover/
+  focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
+  state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
+  mobile sheets → T21/T23).
+**Round 7 COMPLETE. Wave 2 IN FLIGHT (2 opus):** R8a T21+T23 mobile chrome
+(safe-area insets --axis-safe-*→--aw-safe-* through Host/DockWorkspace + phone
+bottom-sheet drawers w/ swipe-to-close); R8b T26 Playwright E2E suite for the
+gated shell (dock/widgets/nav/custom panels/persistence reload).
 
 **Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
 - `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
