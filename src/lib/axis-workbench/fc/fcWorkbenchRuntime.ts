@@ -64,7 +64,10 @@ export class AxisFcWorkbenchRuntime {
       layout: selection.layout,
       view: selection.view,
       switchIndex: selection.switchIndex,
-      side: selection.side
+      side: selection.side,
+      edits: this.#snapshot.edits,
+      labelText: this.#snapshot.labelText,
+      present: this.#snapshot.present
     });
   }
 
