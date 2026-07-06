@@ -16,13 +16,12 @@
 
 ## Current state — 2026-07-06 ~14:00
 
-- Delivery-queue wave complete (tree clean, check 0 errors, vitest 320/320); operator
-  asked "fully done?" → audit against the plan's full T-table found 3 unclaimed P1s.
-- **P1 completion wave**: T11 (`e9dc38b`) + T14 (`2280082`) LANDED; T15 touch
-  parameter pinning still in flight — last implementation agent.
-- Still open after this wave: T31 (= operator visual pass + fixes), P2 backlog
-  (T16 rest/T17–T23, T24 polish, T26 E2E), P3 (T27–T30), recorded deferrals
-  (PROFILE switcher UI, toasts, pages contentMode, T12 row anatomy/menus).
+- **ALL P0 + P1 IMPLEMENTATION TASKS COMPLETE** (T11/T14/T15 closed the audit gaps).
+  Tree clean, `npm run check` 0 errors, vitest **354/354** across 52 files.
+- Open: **T31** = the operator's batched visual pass (checklist below) + its fix
+  round; P2 backlog (T16 rest/T17–T23, T24 polish, T26 E2E), P3 (T27–T30), and the
+  recorded deferrals (PROFILE switcher UI, toast surface, pages contentMode
+  rendering, T12 row anatomy/context menus).
 
 ## Landed (chronological, this branch)
 
@@ -39,6 +38,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `9a6617c` | **T15** | Touch parameter pinning: ~500ms long-press (8px move cancel, touch/pen only) or right-click opens a ContextMenu pin sheet (existing custom panels + New); routes through the same pin action as drag, extended with optional panelId append. ⌖ button/drag/modifier logic unchanged. |
 | `2280082` | **T14** | Viewport profile resolver: pure `resolveProfileForViewport` (override > exact breakpoint > hold current), phone <760 / tablet <1366, persisted `profileOverrideId`, ResizeObserver in WorkbenchHost, `setAxisProfileOverride` API for the future PROFILE switcher. |
 | `e9dc38b` | **T11** | paramControl binding states (pure `paramWidgetState.ts` resolver): live / readonly (dimmed + lock badge + click-opens-block via `editor.openCell`) / missing (amber dashed no-op); never "missing" before the preset roster loads. |
 | `c050ca5` | **T13** | Six layout presets as data (`axisWorkbenchLayoutPresets.ts`) + apply/seed/copy actions; LAYOUT tabs in the edit ribbon (`AxisLayoutPresetPicker` via a new type-agnostic ribbon-extras snippet); tablet/mobile profiles seeded at boot; shared panel roster extracted from defaults. Deferred: PROFILE switcher UI, toasts, pages contentMode rendering. |
@@ -67,6 +67,9 @@
 - FC parity: board tiles (LED bar/badges/T-H rows/selection ring), layouts strip,
   part gating per part type, per-slot editors write correctly, grid part mounts
   SignalGrid, fcDevice chip matches the connected unit.
+- T15: long-press a knob on a touch device opens the pin menu (verify it does NOT
+  fire during value drags — flagged by the implementing agent), right-click works
+  with a mouse, pinning into an existing panel lands in the right zone.
 - T14: resizing across 760/1366 switches profile (and back), manual override wins
   and survives reload, layouts never change from a resize alone.
 - T11: read-only param widget dims + shows lock, click opens the bound block,
@@ -86,13 +89,12 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **P1 completion wave** — T11/T14/T15 (in flight, see Current state).
-2. **Operator's batched visual check** — the full checklist is the Verification debt
+1. **Operator's batched visual check** — the full checklist is the Verification debt
    section above. Suggested order: desktop browser smoke on :5173 first (needs ForgeFX
    on :5056), then narrow-window auto-fit stepping, then the phone T02 check (stale
    persisted layout!), then FC panels against the connected device.
-3. Fix round for whatever the visual check surfaces.
-4. Later/parity backlog (from agent reports): T31 file-by-file DC visual pass incl.
+2. Fix round for whatever the visual check surfaces.
+3. Later/parity backlog (from agent reports): T31 file-by-file DC visual pass incl.
    nav-id reconciliation, PROFILE switcher UI, workbench toast surface, pages
    contentMode rendering, T12 P1/P2 row anatomy + context menus, T16 remaining
    tokenization.
