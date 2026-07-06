@@ -1,9 +1,13 @@
 <script lang="ts">
   import {
+    DEFAULT_WIDGET_ZONES,
+    DOCK_REGION_IDS,
     selectActiveLayout,
     selectHiddenWidgets,
+    type DockRegionId,
     type NavigationEntryState,
-    type WidgetInstance
+    type WidgetInstance,
+    type WidgetZoneId
   } from '../core';
   import { getWorkbenchContext } from './context';
   import {
@@ -32,6 +36,8 @@
   let renamingKind = $state<'panel' | 'widget' | null>(null);
   let renamingTemplateId = $state<string | null>(null);
   let renameDraft = $state('');
+  let targetRegion = $state<DockRegionId>('main');
+  let targetZone = $state<WidgetZoneId>('top.right');
 
   function widgetTitle(widget: WidgetInstance): string {
     return widget.state?.label && typeof widget.state.label === 'string' ? widget.state.label : labelFromWorkbenchType(widget.type);
@@ -78,6 +84,28 @@
     </header>
 
     <div class="aw-lib-scroll">
+      <section class="aw-lib-section">
+        <h2>Target</h2>
+        <div class="aw-lib-targets">
+          <label>
+            <span>Panels</span>
+            <select bind:value={targetRegion}>
+              {#each DOCK_REGION_IDS as region}
+                <option value={region}>{region}</option>
+              {/each}
+            </select>
+          </label>
+          <label>
+            <span>Widgets</span>
+            <select bind:value={targetZone}>
+              {#each DEFAULT_WIDGET_ZONES.filter((zone) => zone !== 'hidden') as zone}
+                <option value={zone}>{zone}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      </section>
+
       {#if panelTemplates.length || widgetTemplates.length}
         <section class="aw-lib-section">
           <h2>Saved · Tap To Load</h2>
@@ -98,7 +126,7 @@
                   <button
                     class="aw-lib-load"
                     type="button"
-                    onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: 'main' }))}
+                    onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: targetRegion }))}
                   >
                     Load
                   </button>
@@ -132,7 +160,7 @@
                   <button
                     class="aw-lib-load"
                     type="button"
-                    onclick={() => controller.dispatchMany(instantiateWidgetTemplateCommands($controller.document, template, { zone: 'top.right' }))}
+                    onclick={() => controller.dispatchMany(instantiateWidgetTemplateCommands($controller.document, template, { zone: targetZone }))}
                   >
                     Load
                   </button>
@@ -162,7 +190,7 @@
               class="aw-lib-row add"
               type="button"
               title={widgetTitle(widget)}
-              onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'top.right' })}
+              onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: targetZone })}
             >
               <span class="aw-lib-ico">＋</span>
               <span>{widgetTitle(widget)}</span>
@@ -292,6 +320,33 @@
     font: 800 9px/1 var(--aw-font-mono);
     letter-spacing: 0.14em;
     text-transform: uppercase;
+  }
+  .aw-lib-targets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .aw-lib-targets label {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .aw-lib-targets span {
+    color: var(--aw-text-faint, #768385);
+    font: 800 9px/1 var(--aw-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .aw-lib-targets select {
+    width: 100%;
+    height: 30px;
+    min-width: 0;
+    border: 1px solid #1b3b3d;
+    border-radius: 8px;
+    background: #091011;
+    color: #e8f6f6;
+    font: 700 11px/1 var(--aw-font-mono);
   }
   .aw-lib-list {
     display: flex;

@@ -9,6 +9,9 @@ import type {
 } from './schema';
 import type { DockTarget, WorkbenchCommand } from './commands';
 
+export const WORKBENCH_PARAMETER_SOURCE_MIME = 'application/x-workbench-parameter-source+json';
+export const WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION = 'workbench.parameterSource.edgeDrop';
+
 export interface WorkbenchParameterSource {
   id: string;
   label: string;
@@ -16,6 +19,44 @@ export interface WorkbenchParameterSource {
   preferredWidgetType?: string;
   defaultSize?: WidgetSize;
   state?: JsonObject;
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isBindingRef(value: unknown): value is BindingRef {
+  return isJsonObject(value) &&
+    typeof value.kind === 'string' &&
+    typeof value.version === 'number' &&
+    isJsonObject(value.target);
+}
+
+function isWidgetSize(value: unknown): value is WidgetSize {
+  return value === 'default' || value === 'compact' || value === 'mini';
+}
+
+export function serializeWorkbenchParameterSource(source: WorkbenchParameterSource): string {
+  return JSON.stringify(source);
+}
+
+export function parseWorkbenchParameterSource(value: string): WorkbenchParameterSource | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isJsonObject(parsed) || typeof parsed.id !== 'string' || typeof parsed.label !== 'string' || !isBindingRef(parsed.binding)) {
+      return null;
+    }
+    return {
+      id: parsed.id,
+      label: parsed.label,
+      binding: parsed.binding,
+      preferredWidgetType: typeof parsed.preferredWidgetType === 'string' ? parsed.preferredWidgetType : undefined,
+      defaultSize: isWidgetSize(parsed.defaultSize) ? parsed.defaultSize : undefined,
+      state: isJsonObject(parsed.state) ? parsed.state : undefined
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface AddParameterWidgetOptions {

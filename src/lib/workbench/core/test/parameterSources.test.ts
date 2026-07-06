@@ -4,8 +4,10 @@ import {
   createEmptyWorkbenchDocument,
   createParameterWidgetCommand,
   createParameterWidgetsForZoneCommands,
+  parseWorkbenchParameterSource,
   reduceWorkbenchDocument,
   selectActiveLayout,
+  serializeWorkbenchParameterSource,
   type WorkbenchParameterSource
 } from '../index';
 
@@ -70,9 +72,25 @@ describe('Workbench parameter source helpers', () => {
 
     expect(commands.map((command) => command.type)).toEqual(['zone.ensure', 'panel.add', 'widget.add', 'widget.add']);
     expect(layout.panels['panel.params']).toBeDefined();
+    expect(layout.panels['panel.params'].state).toMatchObject({
+      acceptsParameters: true,
+      grid: { columns: 4, rowHeight: 42, gap: 8 }
+    });
     expect(layout.zones['panel:panel.params']).toBeDefined();
     expect(Object.values(layout.widgets).map((widget) => widget.zone)).toEqual(['panel:panel.params', 'panel:panel.params']);
     expect(Object.values(layout.widgets).map((widget) => widget.binding?.target.id)).toEqual(['gain', 'level']);
+  });
+
+  it('serializes and validates parameter source drag payloads', () => {
+    const payload = serializeWorkbenchParameterSource(source('gain', 'Gain'));
+    expect(parseWorkbenchParameterSource(payload)).toMatchObject({
+      id: 'gain',
+      label: 'Gain',
+      preferredWidgetType: 'test.parameter',
+      binding: { kind: 'test.binding', version: 1, target: { id: 'gain' } }
+    });
+    expect(parseWorkbenchParameterSource('{ nope')).toBeNull();
+    expect(parseWorkbenchParameterSource(JSON.stringify({ id: 'bad', label: 'Bad' }))).toBeNull();
   });
 
   it('does not include live values unless caller explicitly adds them', () => {

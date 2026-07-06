@@ -1,10 +1,11 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
   import { selectVisibleNavigationEntries, type WorkbenchCommand } from '../core';
-  import { createMissingActionPanelCommand } from './actions';
+  import { createFailedActionPanelCommand, createMissingActionPanelCommand } from './actions';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { pointerDistance, widgetDropIndex } from './drag';
+  import { nextOrderedIndex } from './moveAlternatives';
   import { canHideNavigationEntry, canMoveNavigationEntry, navigationEntryIndex } from './navigation';
 
   const { controller, registry } = getWorkbenchContext();
@@ -93,17 +94,39 @@
     window.addEventListener('pointerup', onUp);
   }
 
-  function runNavigation(entry: (typeof entries)[number]): void {
+  function moveEntryByKey(entryId: string, e: KeyboardEvent) {
+    if (!$controller.editMode) return;
+    const direction = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0;
+    if (!direction) return;
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry || !canMoveNavigationEntry(entry)) return;
+    const currentIndex = navigationEntryIndex(entries, entryId);
+    if (currentIndex < 0) return;
+    e.preventDefault();
+    controller.dispatch({
+      type: 'navigation.move',
+      entryId,
+      index: nextOrderedIndex(currentIndex, direction as -1 | 1, entries.length)
+    });
+  }
+
+  async function runNavigation(entry: (typeof entries)[number]): Promise<void> {
     const target = entry.target;
     if (!target) return;
-    const handled = registry.runAction(target.command, {
+    const result = await registry.runActionResult(target.command, {
       controller,
       source: 'navigation',
       entry,
       args: target.args
     });
-    if (!handled) {
+    if (!result.handled) {
       controller.dispatch(createMissingActionPanelCommand($controller.document, target.command, { title: entry.label ?? target.command }));
+    } else if (!result.success) {
+      controller.dispatch(
+        createFailedActionPanelCommand($controller.document, target.command, result.error.message, {
+          title: `${entry.label ?? target.command} Error`
+        })
+      );
     }
   }
 
@@ -144,7 +167,14 @@
           editMode={$controller.editMode}
         />
         {#if $controller.editMode && canMoveNavigationEntry(entry)}
-          <div class="aw-nav-drag" role="button" tabindex="0" aria-label="Move navigation entry" onpointerdown={(e) => dragDown(entry.id, e)}></div>
+          <div
+            class="aw-nav-drag"
+            role="button"
+            tabindex="0"
+            aria-label="Move navigation entry"
+            onpointerdown={(e) => dragDown(entry.id, e)}
+            onkeydown={(e) => moveEntryByKey(entry.id, e)}
+          ></div>
           <button class="aw-nav-hide" type="button" title="Hide navigation entry" onclick={() => controller.dispatch({ type: 'navigation.hide', entryId: entry.id })}>×</button>
         {/if}
         <button

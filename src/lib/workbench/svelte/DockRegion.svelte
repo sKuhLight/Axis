@@ -3,7 +3,15 @@
   import { getWorkbenchContext } from './context';
   import type { DockRegionId } from '../core';
 
-  let { region }: { region: DockRegionId } = $props();
+  let {
+    region,
+    mobileInlineHidden = false,
+    overlay = false
+  }: {
+    region: DockRegionId;
+    mobileInlineHidden?: boolean;
+    overlay?: boolean;
+  } = $props();
   const { controller } = getWorkbenchContext();
   const layout = $derived($controller.activeLayout);
   const node = $derived(layout?.dock.root[region] ?? null);
@@ -13,6 +21,7 @@
   const horizontalRegion = $derived(region === 'top' || region === 'bottom');
 
   const regionStyle = $derived.by(() => {
+    if (overlay) return '';
     if (region === 'main') return '';
     const px = state?.sizePx;
     if (!px || state?.collapsed) return '';
@@ -49,6 +58,8 @@
     class="aw-region aw-region-{region}"
     class:collapsed={state?.collapsed}
     class:empty
+    class:mobile-inline-hidden={mobileInlineHidden}
+    class:overlay
     data-region={region}
     style={regionStyle}
   >
@@ -56,7 +67,7 @@
       <button class="aw-region-strip" type="button" onclick={toggleCollapse}>{region}</button>
     {:else if node}
       <DockNodeView {node} {region} />
-      {#if region !== 'main'}
+      {#if region !== 'main' && !overlay}
         <button class="aw-region-collapse" type="button" title="Collapse {region}" onclick={toggleCollapse}>−</button>
         <div class="aw-region-resize" role="separator" onpointerdown={resizeDown}></div>
       {/if}
@@ -73,6 +84,12 @@
     min-height: 0;
     overflow: hidden;
     background: var(--aw-bg);
+  }
+  .aw-region.overlay {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    background: var(--aw-bg-2);
   }
   .aw-region-main {
     flex: 1;
@@ -180,5 +197,32 @@
     font: 700 9px/1 var(--aw-font-mono);
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+  :global(.aw-root.aw-dragging-panel) .aw-region:not(.collapsed)::after {
+    content: attr(data-region);
+    position: absolute;
+    inset: 8px;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 44%, transparent);
+    border-radius: 12px;
+    color: color-mix(in srgb, var(--aw-accent) 78%, white);
+    background: color-mix(in srgb, var(--aw-accent) 7%, transparent);
+    pointer-events: none;
+    font: 800 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  @media (max-width: 760px) {
+    .aw-region.mobile-inline-hidden {
+      display: none;
+    }
+    .aw-region-bottom {
+      max-height: 90%;
+    }
+    .aw-region-main {
+      min-height: 90px;
+    }
   }
 </style>

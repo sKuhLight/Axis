@@ -4,6 +4,7 @@
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { createPanelTemplateFromPanel } from './library';
+  import { PANEL_REGION_MOVE_OPTIONS } from './moveAlternatives';
 
   let { panel }: { panel: PanelInstance } = $props();
   const { controller, registry } = getWorkbenchContext();
@@ -18,9 +19,17 @@
       disabled: panel.collapsible === false,
       run: () => controller.dispatch({ type: 'panel.collapse', panelId: panel.id, collapsed: !panel.collapsed })
     },
+    ...PANEL_REGION_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
+      id: `move-${option.id}`,
+      label: option.label,
+      separatorBefore: index === 0,
+      disabled: !$controller.editMode || panel.locked,
+      run: () => controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: option.id } })
+    })),
     {
       id: 'save',
       label: 'Save To Library',
+      separatorBefore: true,
       disabled: !$controller.editMode || panel.locked,
       run: savePanelTemplate
     },

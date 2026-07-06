@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyWorkbenchDocument, reduceWorkbenchDocument } from '../../core';
-import { createMissingActionPanelCommand } from '../actions';
+import { createFailedActionPanelCommand, createMissingActionPanelCommand } from '../actions';
 
 describe('workbench action helpers', () => {
   it('creates collision-safe fallback panel commands for missing actions', () => {
@@ -35,6 +35,25 @@ describe('workbench action helpers', () => {
         id: 'workbench.missingAction.open-strange-action',
         state: { command: 'open strange/action' }
       }
+    });
+  });
+
+  it('creates failure panels with command and error details', () => {
+    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    const command = createFailedActionPanelCommand(doc, 'test.failAction', 'Device refused the operation', { title: 'Failure' });
+
+    expect(command).toMatchObject({
+      type: 'panel.add',
+      panel: {
+        id: 'workbench.failedAction.test.failAction',
+        type: 'workbench.failedAction',
+        title: 'Failure',
+        state: {
+          command: 'test.failAction',
+          message: 'Device refused the operation'
+        }
+      },
+      region: 'main'
     });
   });
 });

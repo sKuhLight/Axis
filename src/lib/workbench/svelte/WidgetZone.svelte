@@ -2,7 +2,7 @@
   import WidgetHost from './WidgetHost.svelte';
   import WidgetGroupHost from './WidgetGroupHost.svelte';
   import { getWorkbenchContext } from './context';
-  import { selectVisibleWidgetsByZone } from '../core';
+  import { selectVisibleWidgetsByZone, type JsonObject } from '../core';
   import { onMount } from 'svelte';
   import { pickWidgetSize } from './sizing';
   import { labelFromWorkbenchType } from './library';
@@ -13,12 +13,18 @@
     zone,
     floating = false,
     variant = 'bar',
-    emptyLabel
+    emptyLabel,
+    gridColumns = 4,
+    gridRowHeight = 42,
+    gridGap = 8
   }: {
     zone: string;
     floating?: boolean;
-    variant?: 'bar' | 'panel';
+    variant?: 'bar' | 'panel' | 'grid';
     emptyLabel?: string;
+    gridColumns?: number;
+    gridRowHeight?: number;
+    gridGap?: number;
   } = $props();
 
   const { controller } = getWorkbenchContext();
@@ -66,7 +72,9 @@
   const renderedUnits = $derived(units.filter((unit) => !overflowKeys.has(unitKey(unit))));
   const overflowUnits = $derived(units.filter((unit) => overflowKeys.has(unitKey(unit))));
   const itemWidth = $derived(
-    vertical ? 52 : Math.max(44, (zoneWidth - Math.max(0, renderedUnits.length - 1) * 6) / Math.max(1, renderedUnits.length))
+    variant === 'grid'
+      ? 96
+      : vertical ? 52 : Math.max(44, (zoneWidth - Math.max(0, renderedUnits.length - 1) * 6) / Math.max(1, renderedUnits.length))
   );
 
   function unitKey(unit: WidgetUnit): string {
@@ -96,6 +104,32 @@
     return widget ? labelFromWorkbenchType(widget.type) : unit.widgetIds[0] ?? 'Widget';
   }
 
+  function readPlacementObject(value: unknown): JsonObject | null {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
+  }
+
+  function readPlacementNumber(value: unknown, min = 1): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.round(value)) : null;
+  }
+
+  function gridCellStyle(unit: WidgetUnit): string {
+    const layout = $controller.activeLayout;
+    const widget = layout?.widgets[unit.widgetIds[0]];
+    const placement = readPlacementObject(widget?.state?.grid) ?? readPlacementObject(widget?.state?.placement);
+    if (!placement) return '';
+
+    const column = readPlacementNumber(placement.column) ?? (readPlacementNumber(placement.x, 0) != null ? readPlacementNumber(placement.x, 0)! + 1 : null);
+    const row = readPlacementNumber(placement.row) ?? (readPlacementNumber(placement.y, 0) != null ? readPlacementNumber(placement.y, 0)! + 1 : null);
+    const colSpan = readPlacementNumber(placement.colSpan ?? placement.w);
+    const rowSpan = readPlacementNumber(placement.rowSpan ?? placement.h);
+    const rules: string[] = [];
+    if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
+    else if (colSpan != null) rules.push(`grid-column: span ${colSpan}`);
+    if (row != null) rules.push(`grid-row: ${row} / span ${rowSpan ?? 1}`);
+    else if (rowSpan != null) rules.push(`grid-row: span ${rowSpan}`);
+    return rules.join('; ');
+  }
+
   onMount(() => {
     if (!zoneEl) return;
     const measure = () => {
@@ -113,17 +147,34 @@
     class="aw-widget-zone"
     class:floating
     class:panel={variant === 'panel'}
+    class:grid={variant === 'grid'}
     class:overflow-open={overflowOpen}
     bind:this={zoneEl}
     data-zone={zone}
+    style:--aw-zone-grid-columns={gridColumns}
+    style:--aw-zone-grid-row-height={`${gridRowHeight}px`}
+    style:--aw-zone-grid-gap={`${gridGap}px`}
   >
     {#each renderedUnits as unit (unit.groupId ?? unit.widgetIds[0])}
-      {#if unit.groupId}
-        <WidgetGroupHost groupId={unit.groupId} />
+      {#if variant === 'grid'}
+        <div class="aw-widget-grid-cell" style={gridCellStyle(unit)}>
+          {#if unit.groupId}
+            <WidgetGroupHost groupId={unit.groupId} />
+          {:else}
+            {@const widget = $controller.activeLayout?.widgets[unit.widgetIds[0]]}
+            {#if widget}
+              <WidgetHost {widget} />
+            {/if}
+          {/if}
+        </div>
       {:else}
-        {@const widget = $controller.activeLayout?.widgets[unit.widgetIds[0]]}
-        {#if widget}
-          <WidgetHost {widget} forcedSize={pickWidgetSize(itemWidth, widget.size)} />
+        {#if unit.groupId}
+          <WidgetGroupHost groupId={unit.groupId} />
+        {:else}
+          {@const widget = $controller.activeLayout?.widgets[unit.widgetIds[0]]}
+          {#if widget}
+            <WidgetHost {widget} forcedSize={pickWidgetSize(itemWidth, widget.size)} />
+          {/if}
         {/if}
       {/if}
     {/each}
@@ -195,6 +246,28 @@
     gap: 8px;
     overflow: auto;
   }
+  .aw-widget-zone.grid {
+    width: 100%;
+    min-height: 100%;
+    display: grid;
+    grid-template-columns: repeat(var(--aw-zone-grid-columns), minmax(0, 1fr));
+    grid-auto-rows: var(--aw-zone-grid-row-height);
+    gap: var(--aw-zone-grid-gap);
+    align-items: stretch;
+    align-content: flex-start;
+    overflow: auto;
+    padding: 1px;
+  }
+  .aw-widget-grid-cell {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+  }
+  .aw-widget-grid-cell :global(.aw-widget-host),
+  .aw-widget-grid-cell :global(.axis-widget) {
+    width: 100%;
+  }
   .aw-zone-empty {
     min-width: 72px;
     height: 30px;
@@ -213,6 +286,24 @@
     min-height: 116px;
     height: auto;
     border-radius: 11px;
+  }
+  .aw-widget-zone.grid .aw-zone-empty {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 116px;
+    height: auto;
+    border-radius: 11px;
+  }
+  :global(.aw-root.aw-dragging-widget) .aw-widget-zone {
+    outline: 1px dashed color-mix(in srgb, var(--aw-accent) 34%, transparent);
+    outline-offset: 3px;
+    border-radius: 10px;
+  }
+  :global(.aw-root.aw-dragging-widget) .aw-widget-zone.panel {
+    outline-offset: -3px;
+  }
+  :global(.aw-root.aw-dragging-widget) .aw-widget-zone.grid {
+    outline-offset: -3px;
   }
   .aw-overflow-chip {
     height: 30px;

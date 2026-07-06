@@ -34,3 +34,23 @@ export function createMissingActionPanelCommand(
     region: options.region ?? 'main'
   };
 }
+
+export function createFailedActionPanelCommand(
+  doc: WorkbenchDocument,
+  command: string,
+  message: string,
+  options: { title?: string; region?: DockRegionId } = {}
+): WorkbenchCommand {
+  const safeCommand = cleanActionId(command);
+  const id = uniquePanelId(`workbench.failedAction.${safeCommand}`, doc);
+  return {
+    type: 'panel.add',
+    panel: {
+      id,
+      type: 'workbench.failedAction',
+      title: options.title ?? `${command} failed`,
+      state: { command, message }
+    },
+    region: options.region ?? 'main'
+  };
+}
