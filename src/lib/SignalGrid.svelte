@@ -136,10 +136,20 @@
     innerH = ir.height;
   }
 
+  // Observe the grid inner element reactively: it lives behind the `status === 'loading'`
+  // branch, so it does NOT exist at mount time — a mount-time `observe(innerEl)` attaches to
+  // nothing and cable endpoints then never re-measure when the pane resizes (stale cables).
+  $effect(() => {
+    const el = innerEl;
+    if (!el) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  });
+
   onMount(() => {
     measure();
-    const ro = new ResizeObserver(() => measure());
-    if (innerEl) ro.observe(innerEl);
     // measure the available grid area from the viewport's content box (stable — see availW/availH note)
     const wro = new ResizeObserver((entries) => {
       const cr = entries[entries.length - 1]?.contentRect;
@@ -164,7 +174,6 @@
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
-      ro.disconnect();
       wro.disconnect();
       pro.disconnect();
       window.removeEventListener('resize', onResize);
@@ -180,6 +189,13 @@
     void editor.editorH;
     void editor.vw;
     void editor.mobCols;
+    // tile geometry: a workbench PANE resize never touches the editor signals above
+    // (editor.vw is the window width) — it reaches the DOM as new colW/cellH/gap, so
+    // track those directly or cables keep their pre-resize endpoints.
+    void colW;
+    void cellH;
+    void gap;
+    void mapMode;
     requestAnimationFrame(() => {
       measure();
       requestAnimationFrame(measure);
