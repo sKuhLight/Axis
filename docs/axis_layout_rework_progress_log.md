@@ -170,7 +170,13 @@ colW/cellH/gap/mapMode.
   focus/stepper bounds via axisFcSlotBounds/tooltips/board reading chip/no-switch
   state/+N flat badge), 4 already present, 3 honest deferrals (rename, AUTO LED,
   mobile sheets → T21/T23).
-**Round 9 (operator visual pass ~19:06, T31 findings) — IN FLIGHT (4 opus):**
+**Round 9 — ALL FOUR LANDED** (`9b1848b` grid gating, `4d6ef07` shell chrome +
+tokens DONE incl. guard tolerance removed, `8532cff` full-height side regions +
+side-overlay drawers, `32175ad` phone block flow). Unit 565/565.
+E2E fallout: 14/17 chromium failures after the intentional chrome changes
+(in-bar Customize, icon-only rail, row-major regions) — realignment agent IN
+FLIGHT (e2e/** only; instructed to flag real regressions, not paper over).
+Original worklist:
 - R9a grid gating: workbench grid must NOT gate on editor.isMobile (<1366 old-shell
   boundary kills all grid modes on smaller windows); pane/profile tiers only when a
   view is active; explicit Map chip always renders map.
