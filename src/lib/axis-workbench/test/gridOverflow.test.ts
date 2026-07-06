@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { AXIS_BLOCK_TILE_PX, resolveAxisGridMetrics, type AxisBlockSize, type AxisGridMode } from '../gridView';
+import {
+  AXIS_BLOCK_TILE_PX,
+  resolveAxisGridMetrics,
+  resolveAxisGridPresentation,
+  type AxisBlockSize,
+  type AxisGridMode
+} from '../gridView';
 
 // ── SignalGrid tile-fit model (mirrors SignalGrid.svelte colW/cellH derivations) ──────────────────
 // The scrollbar bug (04-fc-and-grid.md §2.2 invariant: auto/map NEVER scrollbar; only 'full' pans) was
@@ -110,6 +116,44 @@ describe('grid no-overflow invariant (auto/map never scrollbar)', () => {
     const g = renderGrid(view('full', 'M'), 1400, 900);
     expect(g.fixedTile).toBe(true);
     expect(g.gridW).toBeGreaterThan(g.availW); // fixed tiles → wider than the pane → panning scroll
+  });
+});
+
+describe('1333px window (old-shell isMobile=true) — workbench view ignores it', () => {
+  // Regression guard for the T31 finding: on a 1333px-wide window editor.isMobile is true (<1366). Before
+  // the fix SignalGrid gated the ENTIRE workbench view path on !isMobile, so any window under 1366 lost
+  // metrics/map/full/auto and fell into the legacy pager — ignoring the GRID Map chip. The pane inside such
+  // a window is comfortably ~950px, so the presentation must be a real full/map render, not the pager.
+  const PANE_W = 950;
+  const PANE_H = 520;
+
+  it('Map chip renders the map (not the legacy pager) at a 1333px window', () => {
+    const mode = resolveAxisGridMetrics(view('map', 'M'), PANE_W, PANE_H).mode;
+    const p = resolveAxisGridPresentation({ view: view('map', 'M'), metricsMode: mode, isMobile: true });
+    expect(p.mapMode).toBe(true);
+    expect(p.paged).toBe(false);
+    // and the map still fits its viewport (no overflow) at this pane
+    const g = renderGrid(view('map', 'M'), PANE_W, PANE_H);
+    expect(g.gridW).toBeLessThanOrEqual(g.availW + 0.5);
+    expect(g.gridH).toBeLessThanOrEqual(g.availH + 0.5);
+  });
+
+  it('Auto renders full or map by the pane (never legacy-mob) at a 1333px window', () => {
+    const mode = resolveAxisGridMetrics(view('auto', 'M'), PANE_W, PANE_H).mode;
+    expect(mode === 'full' || mode === 'map').toBe(true);
+    const p = resolveAxisGridPresentation({ view: view('auto', 'M'), metricsMode: mode, isMobile: true });
+    expect(p.paged).toBe(false);
+    const g = renderGrid(view('auto', 'M'), PANE_W, PANE_H);
+    expect(g.fixedTile).toBe(false); // auto never scrolls
+    expect(g.gridW).toBeLessThanOrEqual(g.availW + 0.5);
+    expect(g.gridH).toBeLessThanOrEqual(g.availH + 0.5);
+  });
+
+  it('explicit Map at a tiny pane stays map even with isMobile true', () => {
+    const mode = resolveAxisGridMetrics(view('map', 'M'), 400, 300).mode;
+    const p = resolveAxisGridPresentation({ view: view('map', 'M'), metricsMode: mode, isMobile: true });
+    expect(p.mapMode).toBe(true);
+    expect(p.paged).toBe(false);
   });
 });
 

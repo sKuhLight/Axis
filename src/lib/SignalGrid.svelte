@@ -6,7 +6,7 @@
   import type { Cell } from './grid';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
-  import { resolveAxisGridMetrics, type AxisGridView } from './axis-workbench/gridView';
+  import { resolveAxisGridMetrics, resolveAxisGridPresentation, type AxisGridView } from './axis-workbench/gridView';
 
   // optional grid-view override (workbench gridbar). 'full' fixes tiles at the block-size px and
   // scrolls; 'map' pins the glyph minimap; 'auto' fits to the pane and steps full → map as the pane
@@ -58,30 +58,42 @@
   let paneW = $state(1);
   let paneH = $state(1);
   // ── workbench pane-relative resolution (04-fc-and-grid.md §2.2) ──
-  // Only when a gridbar view is supplied and we're on desktop. Auto steps full → map by the pane rect;
-  // 'full'/'map' pin their mode. (Auto's <620px "mobile" tier degrades to map on desktop — the true
-  // mobile paging path stays gated on editor.isMobile so its pinch/pager chrome is unaffected.)
+  // Whenever a gridbar view is supplied the presentation derives ONLY from the pane metrics — NEVER from
+  // editor.isMobile (the old <1366 shell boundary, which would otherwise strip metrics/map/full off any
+  // window under 1366 and collapse the workbench into the legacy pager). 'map'/'full' pin their mode at any
+  // pane size (the user explicitly chose the chip); auto steps full → map → mobile by the pane rect. The
+  // old shell (view == null) keeps its window-driven behavior via `mob`.
   const metrics = $derived(
-    !mob && view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
+    view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
   );
-  // Workbench mobile TIER: a docked grid pane narrower than the design's mobile threshold (<620px)
-  // renders the REAL paged presentation (page-width columns, page dots/arrows, swipe paging) instead
-  // of degrading to shrunk map tiles. Driven by the PANE, not the window — so it must NOT read
-  // editor.isMobile (the window may be a wide desktop). `paged` is the union: either the true mobile
-  // shell OR a workbench pane in the mobile tier. `paneMobile` is the workbench-only slice (view active,
-  // desktop window, pane below threshold); its column density + page live in pane-local state below so
-  // editor.mobCols/gridPage (the real-mobile state) stay untouched.
-  const paneMobile = $derived(!mob && !!view && metrics?.mode === 'mobile');
-  const paged = $derived(mob || paneMobile);
+  // Workbench mobile TIER: a docked grid pane narrower than the design's mobile threshold (<620px) renders
+  // the REAL paged presentation (page-width columns, page dots/arrows, swipe paging) instead of degrading
+  // to shrunk map tiles. Driven purely by the PANE, not the window — so it must NOT read editor.isMobile
+  // (the window may be a narrow desktop with a wide grid pane, OR a wide desktop with a narrow one). Only
+  // AUTO reaches the mobile tier; an explicit 'map'/'full' chip pins its mode even at a tiny pane. Its
+  // column density + page live in pane-local state below so editor.mobCols/gridPage (the real-mobile shell
+  // state) stay untouched.
+  // Presentation flags (paged / paneMobile / mapMode / fixedTile) come from the shared resolver so the
+  // component and its tests can't drift. View active ⇒ every flag keys off the pane metrics; old shell ⇒
+  // `mob` (editor.isMobile) drives paging. The resolver enforces that `mob` is never consulted with a view.
+  const present = $derived(
+    resolveAxisGridPresentation({ view, metricsMode: metrics?.mode ?? null, isMobile: mob })
+  );
+  const paneMobile = $derived(present.paneMobile);
+  const paged = $derived(present.paged);
   // pane-local paging state for the workbench mobile tier (never touches the editor's real-mobile state).
   // Column density defaults to the design's mobile default (6 cols, 04-fc-and-grid.md §2.2 `S.mobCols||6`).
   let paneCols = $state(6);
   let panePage = $state(0);
   const paneColsCl = $derived(Math.max(3, Math.min(12, paneCols)));
   const panePageCount = $derived(Math.ceil(12 / paneColsCl));
-  // unified column density, sourced from the editor for real mobile, pane-local for the workbench tier
-  const visCols = $derived(paneMobile ? paneColsCl : mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
-  const mapMode = $derived(metrics?.mode === 'map' && !paneMobile); // desktop glyph minimap (§2.5)
+  // unified column density: pane-local for the workbench mobile tier, the editor's real-mobile state for the
+  // old shell, else the full 12. The editor.mobCols branch is old-shell only (view == null) — a workbench
+  // view never reads the window's real-mobile density.
+  const visCols = $derived(
+    paneMobile ? paneColsCl : !view && mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12
+  );
+  const mapMode = $derived(present.mapMode); // desktop glyph minimap (§2.5)
   const gap = $derived(
     paged ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : mapMode ? 7 : metrics ? metrics.fullGap : 26
   );
@@ -97,7 +109,7 @@
   // (fullColMax), so the 12-col width routinely exceeds the pane and .viewport.free's overflow:auto
   // shows a scrollbar. The design invariant is that only 'full' scrolls; auto/map must always fit. So
   // auto-resolved-full falls through to the fit-both-axes path below (centers, never scrolls).
-  const fixedTile = $derived(!paged && view?.mode === 'full' && metrics?.mode === 'full');
+  const fixedTile = $derived(present.fixedTile);
   // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140 (·colCapH), else legacy MAX_TILE.
   const tileCap = $derived(metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE));
   const colW = $derived.by(() => {

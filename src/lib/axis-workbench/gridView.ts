@@ -133,6 +133,50 @@ export function resolveAxisGridMetrics(
   return { mode, sizeMin, fullGap, fullMin, fullMinH, colCapH, mapColMax, fullColMax };
 }
 
+// ── presentation gating (SignalGrid.svelte) ───────────────────────────────────────
+// The single source of truth for HOW the grid renders, so the component and its tests agree. The critical
+// rule: when a workbench `view` is supplied the presentation derives ONLY from the pane metrics — NEVER
+// from the old shell's window-width flag (editor.isMobile, <1366). Feeding isMobile in here is exactly the
+// 1333px-window bug: a sub-1366 window (isMobile=true) with a wide grid pane would lose map/full/auto and
+// collapse into the legacy pager, ignoring the GRID Map chip. The old shell (view == null) keeps its
+// window-driven behavior.
+export type AxisGridPresentation = 'full' | 'map' | 'paged';
+
+export interface AxisGridPresentationInput {
+  /** the active workbench view, or null for the old shell */
+  view: Pick<AxisGridView, 'mode' | 'size'> | null;
+  /** resolved pane metrics when a view is active (null for the old shell) */
+  metricsMode: AxisResolvedGridMode | null;
+  /** old-shell real-mobile window flag (editor.isMobile); consulted ONLY when view == null */
+  isMobile: boolean;
+}
+
+export interface AxisGridPresentationResult {
+  /** legacy page-a-column-band presentation (page arrows/dots, swipe/pinch) */
+  paged: boolean;
+  /** the workbench mobile TIER: a docked pane below the 620px threshold under an AUTO view */
+  paneMobile: boolean;
+  /** the desktop glyph minimap (§2.5) */
+  mapMode: boolean;
+  /** fixed-size tiles that pan in a scrolling pane — only the explicit 'full' chip */
+  fixedTile: boolean;
+}
+
+/**
+ * Resolve the SignalGrid presentation flags. View-active branches key ONLY off `metricsMode`
+ * (pane-derived); `isMobile` is consulted solely on the old-shell (view == null) path.
+ */
+export function resolveAxisGridPresentation(input: AxisGridPresentationInput): AxisGridPresentationResult {
+  const { view, metricsMode, isMobile } = input;
+  // AUTO-only: an explicit 'map'/'full' chip pins its mode even at a tiny pane (metricsMode already
+  // reflects the chip, so this only fires when the pane genuinely stepped down under auto).
+  const paneMobile = !!view && metricsMode === 'mobile';
+  const paged = view ? paneMobile : isMobile;
+  const mapMode = metricsMode === 'map' && !paneMobile;
+  const fixedTile = !paged && view?.mode === 'full' && metricsMode === 'full';
+  return { paged, paneMobile, mapMode, fixedTile };
+}
+
 /** Derive the grid view from the placed control widgets; null (= stock behavior) when neither is visible. */
 export function axisGridViewFromWidgets(widgets: WidgetInstance[]): AxisGridView | null {
   const modeWidget = widgets.find((widget) => widget.type === 'axis.gridMode' && widget.zone !== 'hidden');
