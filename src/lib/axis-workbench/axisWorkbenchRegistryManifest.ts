@@ -10,7 +10,9 @@ export const AXIS_WORKBENCH_BASE_PANEL_TYPES = [
   'axis.history',
   'axis.account',
   'axis.deviceTools',
-  'axis.customPanel'
+  'axis.customPanel',
+  'axis.virtualScreen',
+  'axis.placeholder'
 ] as const;
 
 export const AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES = AXIS_PRESET_BROWSER_PARTS.map(axisPresetBrowserPanelType);
@@ -38,18 +40,32 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.fcDevice',
   'axis.fcLayouts',
   'axis.fcSwitchView',
-  'axis.paramControl'
+  'axis.paramControl',
+  'axis.hint',
+  'axis.legal'
 ] as const;
 
-export const AXIS_WORKBENCH_NAVIGATION_IDS = ['grid', 'library', 'fc', 'scenes', 'live', 'setup', 'account'] as const;
+export const AXIS_WORKBENCH_NAVIGATION_IDS = [
+  'grid',
+  'library',
+  'fc',
+  'controllers',
+  'scenes',
+  'live',
+  'setup',
+  'theme',
+  'account'
+] as const;
 
 export const AXIS_WORKBENCH_ACTION_IDS = [
   'axis.openGrid',
   'axis.openPresetBrowser',
   'axis.openFc',
   'axis.openAccount',
+  'axis.openControllers',
   'axis.openScenes',
   'axis.openLive',
   'axis.openSetup',
+  'axis.openTheme',
   AXIS_PIN_SELECTED_PARAMETERS_ACTION
 ] as const;

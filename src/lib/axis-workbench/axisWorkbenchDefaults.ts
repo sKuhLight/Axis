@@ -131,23 +131,28 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     }),
     'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 2, { size: 'compact', state: widgetState(90) }),
     'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0, { state: { mode: 'auto' } }),
-    'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1, { state: { size: 'M' } })
+    'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1, { state: { size: 'M' } }),
+    // Bottom utility bar (StatusBar parity, T10): left = hover-hint ticker, right = Ko-fi / imprint.
+    'axis.widget.hint': widget('axis.widget.hint', 'axis.hint', 'bottom', 0, { state: widgetState(20) }),
+    'axis.widget.legal': widget('axis.widget.legal', 'axis.legal', 'bottom', 1, { state: widgetState(90) })
   };
 
   layout.navigation.entries = {
     grid: nav('grid', 'Grid', 'axis.openGrid'),
     library: nav('library', 'Preset Browser', 'axis.openPresetBrowser'),
     fc: nav('fc', 'Footswitches', 'axis.openFc'),
+    controllers: nav('controllers', 'Controllers', 'axis.openControllers'),
     scenes: nav('scenes', 'Scenes', 'axis.openScenes'),
     live: nav('live', 'Live', 'axis.openLive'),
     setup: nav('setup', 'Setup', 'axis.openSetup'),
+    theme: nav('theme', 'Theme', 'axis.openTheme'),
     account: nav('account', 'Axis Cloud', 'axis.openAccount', {
       locked: true,
       fixedSlot: 'rail.footer',
       hidden: false
     })
   };
-  layout.navigation.order = ['grid', 'library', 'fc', 'scenes', 'live', 'setup', 'account'];
+  layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'theme', 'account'];
   layout.navigation.mode = 'side';
 
   doc.panelLibrary = {

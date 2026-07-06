@@ -1,6 +1,8 @@
 <script lang="ts">
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
+  import { LEGAL, openExternal } from '../../legal';
+  import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
   import {
     AXIS_GRID_MODES,
@@ -53,6 +55,18 @@
   const sceneCount = $derived(Math.max(1, editor.sceneCount || 8));
   const activeScene = $derived(Math.max(1, Math.min(sceneCount, editor.scene || 1)));
   const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
+  // Bottom-bar status hint (parity with the old StatusBar left slot): the hover-hint for the
+  // control under the cursor, falling back to the selection / connection state.
+  const hintText = $derived(
+    editor.hint ??
+      (editor.selected
+        ? editor.selected.display
+        : editor.conn.state === 'online'
+          ? 'Ready'
+          : editor.conn.state === 'offline'
+            ? 'Device offline'
+            : 'Connecting…')
+  );
   const gridMode = $derived(readAxisGridMode(widget.state?.mode));
   const blockSize = $derived(readAxisBlockSize(widget.state?.size));
   const isFcKind = $derived(kind === 'fcDevice' || kind === 'fcLayouts' || kind === 'fcSwitchView');
@@ -517,6 +531,20 @@
     {#if expanded}<span class="mono token">METER</span>{/if}
     {#if notMini}<span class="mono meter-state">{editor.meteringOn ? 'ON' : 'OFF'}</span>{/if}
   </button>
+{:else if kind === 'hint'}
+  <div class="axis-widget hint" data-size={size} title={hintText}>
+    <span class="mono hint-text">{hintText}</span>
+  </div>
+{:else if kind === 'legal'}
+  <div class="axis-widget legal" data-size={size}>
+    <button class="kofi" type="button" title="Support Axis development on Ko-fi" onclick={() => openExternal(KOFI_URL)}>☕{#if notMini}<span> Support on Ko-fi</span>{/if}</button>
+    {#if expanded}
+      <span class="sep" aria-hidden="true"></span>
+      <span class="cr">{COPYRIGHT}</span>
+    {/if}
+    <span class="sep" aria-hidden="true"></span>
+    <button class="lnk" type="button" onclick={() => openExternal(LEGAL.imprint)}>Imprint</button>
+  </div>
 {:else}
   <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title={kind}>
     <span class="glyph">{kind === 'tuner' ? '♪' : kind === 'undoRedo' ? '↶' : '•'}</span>
@@ -880,5 +908,60 @@
   .meter-toggle:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+  .hint {
+    flex: 1;
+    min-width: 0;
+    max-width: 420px;
+    justify-content: flex-start;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+  }
+  .hint-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--textdim);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .legal {
+    gap: 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--textdim);
+    cursor: default;
+  }
+  .legal .kofi {
+    background: none;
+    color: var(--blue, #13c3ff);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .legal .kofi:hover {
+    filter: brightness(1.12);
+  }
+  .legal .lnk {
+    background: none;
+    color: var(--textdim);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .legal .lnk:hover {
+    color: var(--text2);
+  }
+  .legal .cr {
+    color: var(--textmuted);
+    font-size: 11px;
+  }
+  .legal .sep {
+    width: 3px;
+    height: 3px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--border3);
   }
 </style>
