@@ -192,6 +192,14 @@ colW/cellH/gap/mapMode.
 regressions (the suspected region-collapse was the live ForgeFX backend restoring
 the operator's own synced layout over test boots; specs now intercept the backend
 doc for determinism).
+**HOTFIX (landed + pushed): drag-and-drop offset** — the Axis UI-scale CSS zoom
+double-applied inside the fixed drag layer (preview/ghost drift ∝ zoom × distance).
+DragLayer now self-calibrates via its visual/layout width ratio; probe-verified
+exact at zoom 0.9 and identity at 100%. NOTE for V13 chrome work: any OTHER
+fixed/overlay surface that renders getBoundingClientRect values (edit buttons?
+context menu positioning?) may have the same bug when UI scale ≠ 100% — check
+menuPositionFromPointer + edit chrome during V13b.
+
 **ROUND 13 WORKLIST — operator visual pass round 2 (2026-07-06 ~20:35), NOT
 STARTED (usage limit) — this is the next session's fix round. Screenshots:
 ~/Bilder/Bildschirmfotos/Bildschirmfoto_20260706_203127.png (light-theme library
