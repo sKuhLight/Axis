@@ -4,6 +4,11 @@
   import WorkbenchLibraryDrawer from './WorkbenchLibraryDrawer.svelte';
   import { createCustomPanelCommands } from '../core';
   import { instantiatePanelTemplateCommands } from './library';
+  import type { Snippet } from 'svelte';
+
+  // App-specific ribbon extras (e.g. Axis LAYOUT/PROFILE preset tabs). The
+  // generic ribbon stays widget-type agnostic; the host injects a snippet.
+  let { extras }: { extras?: Snippet } = $props();
 
   const { controller } = getWorkbenchContext();
   let libraryOpen = $state(false);
@@ -41,6 +46,7 @@
 <div class="aw-edit-ribbon" class:active={$controller.editMode}>
   {#if $controller.editMode}
     <span class="aw-edit-label">Edit Layout</span>
+    {#if extras}{@render extras()}{/if}
     <button class="aw-edit-action" type="button" title="Show dockable panels" onclick={openLibrary}>▤ Panels</button>
     <button class="aw-edit-action" type="button" title="Insert custom panel" onclick={addCustomPanel}>＋ Panel</button>
     <button class="aw-edit-action" type="button" title="Open widget library" onclick={openLibrary}>▤ Widgets</button>
