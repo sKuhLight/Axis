@@ -123,16 +123,19 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
-**Round 6 (final push, operator: "use all remaining budget") — IN FLIGHT (3 opus):**
-- R6a T16/T17/T20: hex→token sweep in EditRibbon/WidgetZone/LibraryDrawer + no-hex
-  guard test, Axis var fallbacks → theme adapter, invalid-drop preview styling
-  (DragLayer/drag.ts). WorkbenchHost hex line handed to R6c.
-- R6b T28: reducer tab-stack finder extraction + conservative repair dedupe
-  (invariants refactor may be skipped — behavior-neutral is the acceptance).
-- R6c T22: bottom navigation mode — schema 'bottom' + renderer (NavigationHost/
-  WorkbenchHost) consuming layout.navigation.mode (presets already store it),
-  active tint works in both modes, phone drawer preserved.
-If cut off: check each agent's report, review diffs, commit per chunk as before.
+**Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
+- `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
+  (WorkbenchHost/TabStack tolerated w/ TODOs — remove tolerance when their defaults
+  externalize to theme.ts WORKBENCH_TOKEN_DEFAULTS), invalid-drop danger ghost +
+  ⊘ No drop badge.
+- `8e307d2` T28: findAcrossRegions extraction in the reducer; invariants dedupe
+  correctly skipped (crash-fix traversals don't collapse cleanly).
+- `eaf83c3` T22: bottom navigation mode rendered (schema/repair already existed);
+  hamburger drawer suppressed in bottom mode per §9; --aw-accent-indigo token.
+Remaining backlog after this session: T31 operator visual pass + fix round, T18
+focus mgmt, T19 floating widgets, T21 safe-areas, T23 bottom sheets, T24 FC polish
+checklist, T26 Playwright E2E, T27/T29/T30 P3s, TabStack/WorkbenchHost token
+externalization, Layout Profiles (BUILD WITH OPERATOR), T35 migration audit (last).
 
 **Round 5 (operator report ~15:24, final batch of the session) — IN FLIGHT (2 opus
 agents):**
