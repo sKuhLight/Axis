@@ -270,6 +270,14 @@
     align-items: center;
     gap: 6px;
     overflow: hidden;
+    /* Fill the cross-axis of the bar that hosts us (top bar / bottom bar are
+       `align-items: center`, which would otherwise shrink this section to its
+       content height and leave a dead strip of bar above/below that is NOT a
+       `[data-zone]` — so widget-drop hit-testing (elementFromPoint →
+       closest('[data-zone]')) misses the bar entirely). Stretching the section
+       makes the whole visible bar strip a drop target; inner content stays
+       vertically centred via this element's own `align-items: center`. */
+    align-self: stretch;
   }
   .aw-widget-zone.overflow-open {
     overflow: visible;

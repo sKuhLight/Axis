@@ -103,6 +103,35 @@ export function widgetDropIndex(pointer: WorkbenchPointer, itemRects: WorkbenchR
   return index === -1 ? itemRects.length : index;
 }
 
+export function rectContainsPointer(rect: WorkbenchRect, pointer: WorkbenchPointer): boolean {
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    pointer.x >= rect.left &&
+    pointer.x <= rect.left + rect.width &&
+    pointer.y >= rect.top &&
+    pointer.y <= rect.top + rect.height
+  );
+}
+
+/**
+ * Resolve which widget zone a pointer is over, given each candidate zone's client
+ * rect. This mirrors the DOM path (`elementFromPoint(...).closest('[data-zone]')`)
+ * as a pure, testable decision: a zone is only reachable if its rect actually
+ * covers the pointer. A bar zone that shrank to its content height (leaving a
+ * dead strip of un-zoned bar above/below) will NOT contain a pointer aimed at
+ * that strip — which is exactly the V13h bottom-bar drop regression. The zone
+ * section must stretch to fill its bar for the whole visible strip to hit-test.
+ * Later entries win ties so a more specific/last-painted zone takes precedence.
+ */
+export function zoneAtPointer(zones: { zone: WidgetZoneId; rect: WorkbenchRect }[], pointer: WorkbenchPointer): WidgetZoneId | null {
+  let found: WidgetZoneId | null = null;
+  for (const candidate of zones) {
+    if (rectContainsPointer(candidate.rect, pointer)) found = candidate.zone;
+  }
+  return found;
+}
+
 export function dockTargetLabel(intent: PanelDropIntent): string {
   if (intent.kind === 'tab') return 'Tab panel';
   if (intent.kind === 'split') return `Split ${intent.position}`;

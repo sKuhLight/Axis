@@ -448,8 +448,19 @@
   {#if Component}
     <Component widget={widget} {size} dispatch={(command: WorkbenchCommand) => controller.dispatch(command)} editMode={$controller.editMode} />
   {/if}
-  {#if $controller.editMode && !widget.locked && !widget.groupId && !isFloating}
-    <div class="aw-widget-drag-surface" role="button" tabindex="0" aria-label="Move widget" onpointerdown={dragPointerDown} onkeydown={moveByKey}></div>
+  {#if $controller.editMode && !widget.locked && !isFloating}
+    <!-- The grab surface is present for standalone AND grouped widgets: grabbing
+         a grouped member drags it out of (or reorders it against) the group. The
+         whole-group grip lives on WidgetGroupHost. -->
+    <div
+      class="aw-widget-drag-surface"
+      class:member={!!widget.groupId}
+      role="button"
+      tabindex="0"
+      aria-label={widget.groupId ? 'Move widget out of group' : 'Move widget'}
+      onpointerdown={dragPointerDown}
+      onkeydown={moveByKey}
+    ></div>
   {/if}
   {#if $controller.editMode && !widget.locked && !widget.groupId}
     <div class="aw-widget-edit">
@@ -538,6 +549,12 @@
     outline: 1px dashed color-mix(in srgb, var(--aw-accent) 40%, transparent);
     outline-offset: 3px;
     background: transparent;
+  }
+  /* A grouped member's grab surface hugs the member (no negative offset) so it
+     doesn't bleed over its neighbours inside the shared group module. */
+  .aw-widget-drag-surface.member {
+    outline-offset: -1px;
+    border-radius: 8px;
   }
   .aw-widget-edit button {
     width: 20px;

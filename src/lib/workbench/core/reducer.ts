@@ -272,6 +272,37 @@ function placeWidgets(layout: WorkbenchLayout, widgetIds: string[], zone: Widget
     });
 }
 
+// Detach any moved widget from its group unless its ENTIRE group is being moved
+// together (whole-group relocation via the group grip). A member dragged out on
+// its own leaves the group; a group left with fewer than two members dissolves.
+function detachPartialGroupMembers(layout: WorkbenchLayout, widgetIds: string[]): void {
+  const moving = new Set(widgetIds);
+  const touchedGroups = new Set<string>();
+  for (const widgetId of widgetIds) {
+    const widget = layout.widgets[widgetId];
+    const groupId = widget?.groupId;
+    if (!widget || !groupId) continue;
+    const group = layout.widgetGroups[groupId];
+    if (!group || group.locked) continue;
+    // Whole group moving together — keep it intact.
+    if (group.widgetIds.every((id) => moving.has(id))) continue;
+    widget.groupId = null;
+    group.widgetIds = group.widgetIds.filter((id) => id !== widgetId);
+    touchedGroups.add(groupId);
+  }
+  // Dissolve any group that no longer holds at least two members.
+  for (const groupId of touchedGroups) {
+    const group = layout.widgetGroups[groupId];
+    if (!group) continue;
+    if (group.widgetIds.length < 2) {
+      for (const id of group.widgetIds) {
+        if (layout.widgets[id]?.groupId === groupId) layout.widgets[id].groupId = null;
+      }
+      delete layout.widgetGroups[groupId];
+    }
+  }
+}
+
 function moveZoneWidgets(layout: WorkbenchLayout, fromZone: WidgetZoneId, toZone: WidgetZoneId): void {
   layout.zones[toZone] ??= {
     id: toZone,
@@ -443,6 +474,11 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       for (const widgetId of command.widgetIds) {
         if (!layout.widgets[widgetId]) return fail(doc, 'missing-widget', `Widget ${widgetId} does not exist.`);
       }
+      // Dragging a widget OUT of its group (a partial move — the whole group is
+      // not being relocated together) detaches it from that group; a group that
+      // drops below two members dissolves. Moving every member of a group at once
+      // (the group grip) keeps the group intact.
+      detachPartialGroupMembers(layout, command.widgetIds);
       placeWidgets(layout, command.widgetIds, command.zone, command.index, command.floatingRect);
       return ok(next);
     }
