@@ -36,6 +36,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `b031b68` | **T33** | Docked `be-part="modifier"` part: shared `ModifierEditorCore` (flyout/dock variants, overlay unchanged), typed `blockEditorModifierController`, ControlSurface ∿-badge ownership rule. **Registry registration PENDING** — apply the one-liners from the T33 agent report after the auto-fit task frees the registry files (manifest: export `AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES` from `blockEditor/types`; registry: register `axis.blockEditor.modifier` → `AxisBlockEditorModifierPanel`). |
 | `6b224d4` | **T09/T10** | Live nav targets (Setup/Controllers → docked VirtualScreen; Scenes/Live → placeholder panels; add-or-focus semantics in `axisWorkbenchNavigationActions.ts`), Theme nav entry, bottom-zone hint ticker + legal widgets. Nav-id reconciliation deferred to T31. |
 
 ## Verification debt (needs hardware / a device or browser session)
@@ -49,6 +50,8 @@
   via tests; browser smoke (Claude-in-Chrome on :5173) still pending.
 - T09/T10: nav entries dock/focus the right panels, placeholder styling, hint ticker,
   legal links (Ko-fi/imprint open externally), theme entry opens the theme dialog.
+- T33: flyout still behaves identically in the old shell; docked modifier part
+  targets from the ∿ badge; Clear chip; knob formats (ms=v*5, slope, signed offset).
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -63,9 +66,8 @@
 
 1. **Generic estW auto-fit port** — estW × 0.62 joint-fit + keep-set shedding into
    `WidgetZone`/sizing (spec: `01-shell.md`/`02-widgets.md` auto-fit section). IN FLIGHT.
-2. **T33** — `be-part="modifier"` panel (spec: `05-block-editor.md`). IN FLIGHT; its
-   registry registration is boundary-blocked → main session applies the reported
-   one-liners on review.
+2. **T33 registry registration** — small follow-up once the auto-fit task lands
+   (exact edits recorded in the Landed row above / T33 agent report).
 3. **FC part visual parity** (spec: `04-fc-and-grid.md` §1). IN FLIGHT (restarted once:
    a stray "haiku" message derailed the first run — instructed to disregard).
 4. **T13** — layout presets, driven by the six extracted preset kinds
