@@ -74,9 +74,19 @@
   and survives reload, layouts never change from a resize alone.
 - T11: read-only param widget dims + shows lock, click opens the bound block,
   missing state appears when the block is deleted from the preset.
+- T18: keyboard-only session — Customize → Tab ribbon → open menu/drawer →
+  arrows/Tab inside → Escape restores focus to opener; mobile drawers Escape-close.
+- T19: floater grip drag + arrow nudge, raise on click, drag offscreen then shrink
+  window → self-heals into view; persists across reload.
 - T13: LAYOUT tabs apply each preset correctly (dock arrangement + widgets + nav),
   rightW survives preset switches, tablet/mobile profiles activate at their
   breakpoints, applying presets repeatedly doesn't corrupt the document.
+- T24 FC polish (R7c): hover states + `:focus-visible` rings render on FC tiles/
+  layout+view chips/category+function chips/scene+channel minis/steppers/swatches/
+  side-toggle; card steppers dim + disable at range bounds; every FC control shows
+  a tooltip; board header shows `reading…` during live read; inspector-part with no
+  selection shows the "No switch selected" hint; flat-config strip shows the "+N more"
+  overflow badge past 64. Verify visually + a keyboard-only tab through the inspector.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -124,8 +134,10 @@ old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
 **Round 7 (new session, fresh budget) — IN FLIGHT (3 opus):**
-- R7a T18 focus management: focusTrap.ts utility, trap/restore + Escape for
-  ContextMenu/drawers/mobile nav, :focus-visible across chrome (tokens only).
+- R7a T18 focus management: LANDED (`6e05671`) — focusTrap action (capture/trap/
+  Escape/restore, 19 tests), ContextMenu roving arrows, drawers trapped,
+  :focus-visible rings across chrome. Keyboard-only edit-mode pass → verification
+  debt (no jsdom; live focus movement is manual).
 - R7b T19 floating widgets: LANDED (`ae9bb33`) — grip strip drag + arrow nudge,
   raise-on-pointer-down (order-derived z), clamp/self-heal (core/floating.ts,
   16 tests), positions persist via widget.move floatingRect.
