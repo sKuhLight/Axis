@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupHitArea, groupInsertIndex, groupPlaceholderRect } from '../groupInsertion';
+import { groupHitArea, groupInsertIndex } from '../groupInsertion';
 import type { WorkbenchRect } from '../drag';
 
 // Three members in a horizontal group, each 90×38, 4px apart:
@@ -65,42 +65,27 @@ describe('groupHitArea — module rect expanded ±8/±4 (design 03-groups §3)',
   });
 });
 
-describe('groupPlaceholderRect — widget-sized dashed slot (design indStyle)', () => {
-  const ghost = { width: 90, height: 38 };
-
-  it('sits before the first member for index 0', () => {
-    const rect = groupPlaceholderRect(0, members, ghost)!;
-    // Left of A (100) by gap(4)+width(90).
-    expect(rect.left).toBe(100 - 4 - 90);
-    expect(rect.width).toBe(90);
-    expect(rect.height).toBe(38);
+// Reflow stability of the in-flow slot (V14 follow-up): the index is measured
+// against member rects that EXCLUDE the spliced slot element. Opening the gap
+// only ever pushes members AWAY from the pointer, so re-measuring after the
+// reflow yields the same index — no snapshot needed, no oscillation.
+describe('groupInsertIndex — stable under slot-induced reflow', () => {
+  it('keeps the index after members shift right to make room at that index', () => {
+    // Pointer between A and B → index 1.
+    const pointer = { x: 200, y: 60 };
+    expect(groupInsertIndex(pointer, members)).toBe(1);
+    // Slot (90+4 wide) spliced before B pushes B and C right by 94.
+    const reflowed: WorkbenchRect[] = [
+      members[0],
+      { ...members[1], left: members[1].left + 94 },
+      { ...members[2], left: members[2].left + 94 }
+    ];
+    expect(groupInsertIndex(pointer, reflowed)).toBe(1);
   });
 
-  it('sits after the last member for the append index', () => {
-    const rect = groupPlaceholderRect(3, members, ghost)!;
-    // Right of C (288+90) by gap(4).
-    expect(rect.left).toBe(288 + 90 + 4);
-  });
-
-  it('centres on the gap between two members for an interior index', () => {
-    const rect = groupPlaceholderRect(1, members, ghost)!;
-    // Gap midpoint between A.right(190) and B.left(194) = 192; slot centred there.
-    expect(rect.left).toBe(192 - 90 / 2);
-  });
-
-  it('uses the ghost size verbatim', () => {
-    const rect = groupPlaceholderRect(1, members, { width: 120, height: 34 })!;
-    expect(rect.width).toBe(120);
-    expect(rect.height).toBe(34);
-  });
-
-  it('falls back to a sane slot size when the ghost has no measured rect', () => {
-    const rect = groupPlaceholderRect(1, members, { width: 0, height: 0 })!;
-    expect(rect.width).toBe(90);
-    expect(rect.height).toBe(38);
-  });
-
-  it('returns null for an empty group (nothing to anchor against)', () => {
-    expect(groupPlaceholderRect(0, [], ghost)).toBeNull();
+  it('keeps the append index when nothing moves for an end-of-group gap', () => {
+    const pointer = { x: 400, y: 60 };
+    expect(groupInsertIndex(pointer, members)).toBe(3);
+    expect(groupInsertIndex(pointer, members)).toBe(3);
   });
 });

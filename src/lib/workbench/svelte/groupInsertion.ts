@@ -42,53 +42,10 @@ export function groupHitArea(moduleRect: WorkbenchRect, padX = 8, padY = 4): Wor
   };
 }
 
-/**
- * Compute the widget-sized dashed placeholder rect for an in-group insert at
- * `index` (design `indStyle`: a **ghost-sized** slot, not a thin line). The slot
- * sits *before* member[index], or after the last member when `index ===
- * members.length`. Its position follows the neighbouring member's rect; its size
- * is the dragged unit's own rect (`ghost`) so the preview reads as "the widget
- * lands here" (03-groups §3).
- *
- * Returns null when there is nothing to anchor against (empty group).
- */
-export function groupPlaceholderRect(
-  index: number,
-  memberRects: WorkbenchRect[],
-  ghost: { width: number; height: number },
-  gap = 4
-): WorkbenchRect | null {
-  const width = ghost.width > 0 ? ghost.width : 90;
-  const height = ghost.height > 0 ? ghost.height : 38;
-  if (memberRects.length === 0) return null;
-
-  if (index <= 0) {
-    const first = memberRects[0];
-    return {
-      left: first.left - gap - width,
-      top: first.top + first.height / 2 - height / 2,
-      width,
-      height
-    };
-  }
-  if (index >= memberRects.length) {
-    const last = memberRects[memberRects.length - 1];
-    return {
-      left: last.left + last.width + gap,
-      top: last.top + last.height / 2 - height / 2,
-      width,
-      height
-    };
-  }
-  // Between member[index-1] and member[index]: centre the slot on the gap
-  // midpoint so it reads as "here, between these two".
-  const before = memberRects[index - 1];
-  const after = memberRects[index];
-  const mid = (before.left + before.width + after.left) / 2;
-  return {
-    left: mid - width / 2,
-    top: after.top + after.height / 2 - height / 2,
-    width,
-    height
-  };
-}
+// NOTE (V14 follow-up): the first pass painted an overlay placeholder rect from
+// here into DragLayer — it drew ON TOP of members without moving them apart. The
+// design instead splices a REAL spacer element into the group's / zone's flex
+// flow (AxisGroup `indStyle` span, shell `isGap` div) so neighbours physically
+// reflow. The overlay helper was removed; the in-flow slots in
+// WidgetGroupHost/WidgetZone are driven by `drag.groupInsert` /
+// `drag.zoneInsert` plus the index math above.

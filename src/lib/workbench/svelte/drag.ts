@@ -29,11 +29,25 @@ export type WorkbenchDragState =
       startedAt: WorkbenchPointer;
       targetLabel?: string;
       previewRect?: WorkbenchRect;
-      // `placeholder` = the widget-sized dashed slot spliced into a group at the
-      // computed insert index (design `indStyle`). `insert` stays the thin
-      // zone-gap line; `group` the coarse whole-module highlight.
-      previewKind?: 'zone' | 'insert' | 'group' | 'placeholder';
+      // Overlay previews (DragLayer rects): `group` = whole-target highlight for
+      // group CREATE; `zone` = workspace-edge new-panel region. Positional
+      // inserts do NOT use overlay rects — they render IN-FLOW via
+      // `zoneInsert`/`groupInsert` below so neighbours actually reflow.
+      previewKind?: 'zone' | 'insert' | 'group';
       previewOrientation?: 'horizontal' | 'vertical';
+      // Origin rect size + pointer grab offset, captured at drag start (design
+      // `drag.w/h` + `offx/offy`). Sizes the in-flow slots and anchors the
+      // full-size drag ghost under the pointer. Visual (client-rect) px.
+      size?: { width: number; height: number };
+      grabOffset?: { x: number; y: number };
+      // IN-FLOW insertion targets (design `overZone/overIndex` and
+      // `overGroup/overGroupIndex`): the hovered zone splices a real dashed
+      // spacer element at `index` (UNIT index among visible units, dragged unit
+      // excluded); the hovered group splices the slot between members at
+      // `index`. Mutually exclusive — a group hover suppresses the zone gap
+      // (design `!drag.overGroup && !drag.overUnit`).
+      zoneInsert?: { zone: string; index: number };
+      groupInsert?: { groupId: string; index: number };
     };
 
 export type PanelDropIntent =
@@ -104,6 +118,66 @@ export function widgetDropIndex(pointer: WorkbenchPointer, itemRects: WorkbenchR
     return coord < midpoint;
   });
   return index === -1 ? itemRects.length : index;
+}
+
+/**
+ * Collapse a zone's ordered widget list into UNIT widget-counts: consecutive
+ * widgets sharing a `groupId` form one unit (the group module); everything else
+ * is a single-widget unit. `excludeIds` (the dragged widgets) are removed first
+ * — a fully-excluded unit disappears, a partially-excluded group just counts
+ * fewer members. The result aligns 1:1 with the zone's rendered top-level units
+ * (design `buildZone` raw-run grouping).
+ */
+export function zoneUnitWidgetCounts(
+  widgets: { id: string; groupId?: string | null }[],
+  excludeIds: Iterable<string> = []
+): number[] {
+  const excluded = new Set(excludeIds);
+  const counts: number[] = [];
+  const groupSlot = new Map<string, number>();
+  for (const widget of widgets) {
+    if (excluded.has(widget.id)) continue;
+    if (widget.groupId) {
+      const slot = groupSlot.get(widget.groupId);
+      if (slot != null) counts[slot] += 1;
+      else {
+        groupSlot.set(widget.groupId, counts.length);
+        counts.push(1);
+      }
+    } else {
+      counts.push(1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Convert a UNIT insertion index (what the pointer hit-test over top-level zone
+ * units yields, and where the in-flow gap renders) into the WIDGET-order index
+ * the `widget.move` reducer expects: the number of widgets in every unit before
+ * the insertion point (a 3-member group counts 3).
+ */
+export function widgetIndexForUnitIndex(unitWidgetCounts: number[], unitIndex: number): number {
+  let widgets = 0;
+  const end = Math.max(0, Math.min(unitIndex, unitWidgetCounts.length));
+  for (let i = 0; i < end; i++) widgets += unitWidgetCounts[i];
+  return widgets;
+}
+
+/**
+ * Widget-order index that keeps a re-placed block ANCHORED where it currently
+ * sits (design: "whole zone re-numbered with the group block anchored where it
+ * currently sits"). The reducer's `placeWidgets` splices the moved ids into the
+ * zone's remaining widgets at this index — so the anchor is the count of
+ * non-moving widgets ordered before the block's first member.
+ */
+export function anchoredWidgetIndex(
+  zoneWidgets: { id: string; order: number }[],
+  movingIds: Iterable<string>,
+  anchorOrder: number
+): number {
+  const moving = new Set(movingIds);
+  return zoneWidgets.filter((widget) => !moving.has(widget.id) && widget.order < anchorOrder).length;
 }
 
 export function rectContainsPointer(rect: WorkbenchRect, pointer: WorkbenchPointer): boolean {
