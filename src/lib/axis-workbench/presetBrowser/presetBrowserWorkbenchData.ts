@@ -50,7 +50,11 @@ export interface AxisPresetBrowserDataView {
   visibleEntries: AxisPresetBrowserEntrySummary[];
   selectedEntry: AxisPresetBrowserEntrySummary | null;
   activeSourceId: AxisPresetBrowserSourceId;
+  /** Ordered list of visible entry ids — the display order shift-click range uses (§4.4). */
+  order: string[];
 }
+
+export type AxisPresetBrowserSortMode = 'num' | 'name' | 'cpu';
 
 export interface AxisPresetBrowserDataInput {
   entries: AxisPresetBrowserLibEntryLike[];
@@ -58,7 +62,15 @@ export interface AxisPresetBrowserDataInput {
   sourceId?: AxisPresetBrowserSourceId | null;
   selectedEntryId?: string | null;
   tagsOf?: (entryId: string) => string[];
+  /** Advanced/simple query conditions to filter the visible list (§2, §4.1). */
+  conditions?: AxisPbCond[];
+  /** Simple-mode free text applied on top of conditions. */
+  simpleQuery?: string;
+  /** Result ordering (§4.1). Defaults to preset number. */
+  sort?: AxisPresetBrowserSortMode;
 }
+
+import { matchEntryFromSummary, matchPreset, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 
 const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'cloud'];
 
@@ -94,9 +106,18 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     .sort((a, b) => sourceSortIndex(a) - sourceSortIndex(b) || axisPresetBrowserSourceLabel(a).localeCompare(axisPresetBrowserSourceLabel(b)))
     .map((id) => ({ id, label: axisPresetBrowserSourceLabel(id), count: counts.get(id) ?? 0 }));
 
-  const visibleEntries = activeSourceId === 'all'
+  const bySource = activeSourceId === 'all'
     ? filteredEntries
     : filteredEntries.filter((entry) => entry.sourceId === activeSourceId);
+
+  const conditions = input.conditions ?? [];
+  const simpleQuery = (input.simpleQuery ?? '').trim();
+  const queried = conditions.length || simpleQuery
+    ? bySource.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery))
+    : bySource;
+
+  const visibleEntries = sortEntries(queried, input.sort ?? 'num');
+  const order = visibleEntries.map((entry) => entry.id);
   const selectedEntry = entries.find((entry) => entry.id === input.selectedEntryId) ?? null;
 
   return {
@@ -104,8 +125,25 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     entries,
     visibleEntries,
     selectedEntry,
-    activeSourceId
+    activeSourceId,
+    order
   };
+}
+
+function sortEntries(
+  entries: AxisPresetBrowserEntrySummary[],
+  sort: AxisPresetBrowserSortMode
+): AxisPresetBrowserEntrySummary[] {
+  const list = entries.slice();
+  if (sort === 'name') {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sort === 'cpu') {
+    // higher CPU first — summary-level estimate mirrors query.estimateCpu (blockCount-derived).
+    list.sort((a, b) => b.blockCount - a.blockCount);
+  } else {
+    list.sort((a, b) => (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY));
+  }
+  return list;
 }
 
 function normalizeEntry(entry: AxisPresetBrowserLibEntryLike, tagsOf?: (entryId: string) => string[]): AxisPresetBrowserEntrySummary {
