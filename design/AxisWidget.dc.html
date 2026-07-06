@@ -23,14 +23,14 @@
   <!-- PRESET -->
   <sc-if value="{{ isPreset }}" hint-placeholder-val="{{ true }}">
     <div style="{{ box }}">
-      <span onClick="{{ presetPrev }}" title="Previous preset" style="{{ presetArrow }}" style-hover="color:#e9e9ee;">‹</span>
+      <span onClick="{{ presetPrev }}" onPointerDown="{{ presetPrevHold }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" title="Previous preset (hold to scan)" style="{{ presetArrow }}" style-hover="color:#e9e9ee;">‹</span>
       <div onClick="{{ presetPick }}" style="display:flex; align-items:center; gap:9px; cursor:pointer; min-width:0;" style-hover="opacity:.85;">
         <span style="{{ label }}">PRE</span>
         <span style="font:700 14px/1 'JetBrains Mono',monospace; color:#f5a623;">{{ presetNum }}</span>
         <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="font-size:13px; font-weight:600; color:#e9e9ee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">{{ presetName }}</span></sc-if>
         <span style="font-size:10px; color:#56565e;">▾</span>
       </div>
-      <span onClick="{{ presetNext }}" title="Next preset" style="{{ presetArrow }}" style-hover="color:#e9e9ee;">›</span>
+      <span onClick="{{ presetNext }}" onPointerDown="{{ presetNextHold }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" title="Next preset (hold to scan)" style="{{ presetArrow }}" style-hover="color:#e9e9ee;">›</span>
     </div>
   </sc-if>
 
@@ -90,9 +90,9 @@
 
   <!-- SAVE -->
   <sc-if value="{{ isSave }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ save }}" style="{{ box }}" style-hover="{{ boxHover }}">
-      <span style="width:8px; height:8px; border-radius:50%; background:#f5a623; box-shadow:0 0 7px #f5a623;"></span>
-      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="color:#f5c878; font:700 13px/1 'Hanken Grotesk',sans-serif;">Save</span></sc-if>
+    <div onClick="{{ save }}" title="{{ saveTip }}" style="{{ box }}" style-hover="{{ boxHover }}">
+      <span style="{{ saveDot }}"></span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="{{ saveLabelStyle }}">{{ saveLabel }}</span></sc-if>
     </div>
   </sc-if>
 
@@ -132,9 +132,9 @@
 
   <!-- CONNECTION -->
   <sc-if value="{{ isConn }}" hint-placeholder-val="{{ false }}">
-    <div title="Connected · AX-3 FW 1.4.0" style="{{ box }}">
-      <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
-      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="{{ label }}">AX-3 · FW1.4</span></sc-if>
+    <div onClick="{{ connClick }}" title="{{ connTip }}" style="{{ box }}" style-hover="{{ boxHover }}">
+      <span style="{{ connDot }}"></span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="{{ label }}">{{ connLabel }}</span></sc-if>
     </div>
   </sc-if>
 
@@ -193,9 +193,9 @@
   <sc-if value="{{ isBlockSize }}" hint-placeholder-val="{{ false }}">
     <div style="{{ box }}">
       <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span style="{{ label }}">SIZE</span></sc-if>
-      <div onClick="{{ sizeLess }}" title="Bigger blocks" style="{{ stepBtn }}">−</div>
+      <div onClick="{{ sizeLess }}" onPointerDown="{{ sizeLessHold }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" title="Bigger blocks (hold)" style="{{ stepBtn }}">−</div>
       <span style="font:700 12px/1 'JetBrains Mono',monospace; color:#e9e9ee; min-width:12px; text-align:center;">{{ blockSizeLabel }}</span>
-      <div onClick="{{ sizeMore }}" title="Smaller blocks" style="{{ stepBtn }}">+</div>
+      <div onClick="{{ sizeMore }}" onPointerDown="{{ sizeMoreHold }}" onPointerUp="{{ holdStop }}" onPointerLeave="{{ holdStop }}" title="Smaller blocks (hold)" style="{{ stepBtn }}">+</div>
     </div>
   </sc-if>
 
@@ -216,6 +216,10 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:420,&quot;height&quot;:60}}">
 class Component extends DCLogic {
+  componentDidMount(){ this._winUp=()=>this._clearHold(); if(typeof window!=="undefined") window.addEventListener("pointerup", this._winUp); }
+  componentWillUnmount(){ this._clearHold(); if(typeof window!=="undefined" && this._winUp) window.removeEventListener("pointerup", this._winUp); }
+  _clearHold(){ if(this._holdT){ clearTimeout(this._holdT); this._holdT=null; } if(this._holdI){ clearInterval(this._holdI); this._holdI=null; } }
+  _mkHold(fn){ const self=this; return function(e){ if(!fn) return; if(e&&e.button===2) return; self._clearHold(); self._holdT=setTimeout(function(){ self._holdI=setInterval(function(){ fn(); }, 100); }, 380); }; }
   renderVals(){
     const w = this.props.w || {};
     const d = this.props.data || {};
@@ -244,7 +248,7 @@ class Component extends DCLogic {
       ? `width:${H+4}px; height:${H}px; display:flex; align-items:center; justify-content:center; background:transparent; cursor:pointer;`
       : `width:${H}px; height:${H}px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:#141417; border:1px solid #2a2a31; cursor:pointer;`;
     const boxHover = grouped ? "background:#17171c;" : "border-color:#3a3a44;";
-    const label = "font:600 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.12em; flex:none;";
+    const label = "font:600 10px/1 'JetBrains Mono',monospace; color:#8a8a94; letter-spacing:.1em; flex:none;";
     const arrowL = grouped
       ? `width:26px; height:${H}px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa3; font-size:15px; background:transparent;`
       : `width:32px; height:${H}px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#9a9aa3; font-size:15px; background:#141417; border:1px solid #2a2a31; border-radius:9px 4px 4px 9px;`;
@@ -278,6 +282,15 @@ class Component extends DCLogic {
 
     const cpu = d.cpu==null?38:d.cpu;
     const cpuColor = cpu>75?"#d6543f":cpu>55?"#f5a623":"#35c9d6";
+    const dirty = !!d.dirty;
+    const saveDot = `width:8px; height:8px; border-radius:50%; flex:none; ${dirty?"background:#f5a623; box-shadow:0 0 7px #f5a623;":"background:#2fa15f; box-shadow:0 0 6px rgba(47,161,95,.6);"}`;
+    const saveLabel = dirty?"Save\u2009*":"Saved";
+    const saveLabelStyle = `font:700 13px/1 'Hanken Grotesk',sans-serif; color:${dirty?"#f5c878":"#7fae7f"};`;
+    const saveTip = dirty?"Unsaved changes \u00b7 \u2318S to save":"All changes saved";
+    const connState = d.connState||"connected";
+    const connMap = { connected:{c:"#33c46b",lbl:"AX-3 \u00b7 FW1.4",tip:"Connected \u00b7 AX-3 FW 1.4.0"}, syncing:{c:"#35c9d6",lbl:"Syncing\u2026",tip:"Syncing with cloud\u2026"}, pending:{c:"#f5a623",lbl:"Writing\u2026",tip:"Writing to device\u2026"}, disconnected:{c:"#d6543f",lbl:"Reconnect",tip:"Device disconnected \u00b7 tap to reconnect"} };
+    const connCfg = connMap[connState]||connMap.connected;
+    const connDot = `width:9px; height:9px; border-radius:50%; flex:none; background:${connCfg.c}; box-shadow:0 0 8px ${connCfg.c};`;
     const mapDots = (d.mapCells || Array.from({length:18}, (_,i)=>[3,4,8,9,10,14].includes(i))).map(on=>({ style:`width:3px; height:3px; border-radius:1px; background:${on?"#35c9d6":"#2a2a31"};` }));
 
     const pv = w.value==null?50:w.value;
@@ -310,12 +323,18 @@ class Component extends DCLogic {
       paramColor:pcolor, paramDash:pdash, paramValLabel:Math.round(pv), paramSub:(w.label||"Param"), paramTitle:(w.block||"")+" · "+(w.label||""),
       paramTap:()=>{ if(bus.paramTap) bus.paramTap(w.block); },
       presetPrev:bus.presetPrev||noop, presetNext:bus.presetNext||noop, presetPick:bus.presetPick||noop,
+      holdStop:()=>this._clearHold(),
+      presetPrevHold:this._mkHold(bus.presetPrev), presetNextHold:this._mkHold(bus.presetNext),
+      sizeLessHold:this._mkHold(bus.sizeLess), sizeMoreHold:this._mkHold(bus.sizeMore),
       onScene:(e)=>{ if(!bus.onScene) return; const n=+e.currentTarget.dataset.n; bus.onScene(mini ? (active%8)+1 : n); },
       onView:(e)=>{ if(!bus.setView) return; bus.setView(mini ? (view==="basic"?"advanced":"basic") : e.currentTarget.dataset.v); },
       onGridMode:(e)=>{ if(!bus.setGridMode) return; if(mini){ const ord=["full","map","auto"]; bus.setGridMode(ord[(ord.indexOf(gmCur)+1)%3]); } else bus.setGridMode(e.currentTarget.dataset.m); },
       sizeLess:bus.sizeLess||noop, sizeMore:bus.sizeMore||noop,
       addBlock:bus.addBlock||noop, tuner:bus.tuner||noop, tempo:bus.tempo||noop, save:bus.save||noop,
-      search:bus.search||noop, history:bus.history||noop, map:bus.map||noop, undo:bus.undo||noop, redo:bus.redo||noop, account:bus.account||noop
+      search:bus.search||noop, history:bus.history||noop, map:bus.map||noop, undo:bus.undo||noop, redo:bus.redo||noop, account:bus.account||noop,
+      saveDot, saveLabel, saveLabelStyle, saveTip,
+      connDot, connLabel:connCfg.lbl, connTip:connCfg.tip,
+      connClick:()=>{ if(connState==="disconnected"){ if(bus.reconnect) bus.reconnect(); } else if(bus.account){ bus.account(); } }
     };
   }
 }
