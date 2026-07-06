@@ -121,12 +121,13 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
 
   layout.panels = createAxisWorkbenchPanels();
 
+  // Minimal first-contact layout (operator decision 2026-07-06): just the grid and
+  // the block editor — the two things a new user needs — so the start screen never
+  // overwhelms. Everything else (FC, history, preset browser, …) stays registered
+  // and reachable via nav / the panel library; richer arrangements are the LAYOUT
+  // presets' job.
   layout.dock.root.main = tabs('axis.tabs.main', ['axis.signalGrid']);
-  layout.dock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor', 'axis.fc'], 'axis.blockEditor');
-  layout.dock.root.right = tabs('axis.tabs.right', ['axis.history']);
-  layout.dock.root.left = tabs('axis.tabs.left', ['axis.presetBrowser']);
-  layout.dock.regions.left.sizePx = 320;
-  layout.dock.regions.right.sizePx = 340;
+  layout.dock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor']);
   layout.dock.regions.bottom.sizePx = 360;
 
   layout.widgets = {
