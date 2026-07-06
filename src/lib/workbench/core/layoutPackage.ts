@@ -219,6 +219,33 @@ export function remintLayout(layout: WorkbenchLayout): WorkbenchLayout {
   };
 }
 
+/**
+ * Deep-clone a layout re-minting every **interior** id (dock nodes, panels, widgets,
+ * groups, `panel:` zone refs, tab-stack `panelIds`) so it cannot collide with any id
+ * already live in a target document — but keep a caller-supplied top-level `layoutId`
+ * rather than minting a fresh one. This is the collision-safe core of {@link remintLayout}
+ * exposed for the command-based import path (`packages.ts`), which owns its own top-level
+ * id policy (`.copyN` de-dup / explicit id / overwrite) and only needs the interior fixed.
+ *
+ * Reserves the source ids first so a later `createWorkbenchId` never reproduces them.
+ */
+export function remintLayoutInteriorIds(layout: WorkbenchLayout, layoutId: string): WorkbenchLayout {
+  reserveWorkbenchIds(collectLayoutIds(layout));
+  const { panels, widgets, widgetGroups, panelIdMap } = remapLayoutBits(layout.panels, layout.widgets, layout.widgetGroups);
+  const root = Object.fromEntries(
+    Object.entries(layout.dock.root).map(([region, node]) => [region, remapDockNode(node, panelIdMap)])
+  ) as WorkbenchLayout['dock']['root'];
+
+  return {
+    ...clone(layout),
+    id: layoutId,
+    dock: { regions: clone(layout.dock.regions), root },
+    panels,
+    widgets,
+    widgetGroups
+  };
+}
+
 /** Deep-clone a panel template with every interior id (template, panels, widgets, groups, dock) re-minted. */
 export function remintPanelTemplate(template: PanelTemplate): PanelTemplate {
   reserveWorkbenchIds(collectPanelTemplateIds(template));
