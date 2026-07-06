@@ -202,6 +202,21 @@
     box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.025);
   }
 
+  /* Pin each top zone to its own grid column so alignment stays stable no
+     matter which zones are present. Without this, an omitted zone (empty +
+     not editing) lets the remaining zones auto-flow into the wrong cells —
+     e.g. an empty center collapses and top.right slides into the middle
+     `auto` column instead of the right `1fr` column. */
+  .aw-topbar > :global([data-zone='top.left']) {
+    grid-column: 1;
+  }
+  .aw-topbar > :global([data-zone='top.center']) {
+    grid-column: 2;
+  }
+  .aw-topbar > :global([data-zone='top.right']) {
+    grid-column: 3;
+  }
+
   .aw-bottombar {
     min-height: calc(38px + var(--aw-safe-bottom, 0px));
     padding: 4px 12px var(--aw-safe-bottom, 0px);
