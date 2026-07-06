@@ -316,6 +316,11 @@
     gap: 12px;
     padding: 0 12px;
     text-align: left;
+    /* Same height as the rest-state square: hover/focus expansion must never
+       shift entries vertically, or a press that triggers the expansion moves
+       the button out from under the pointer mid-click and the click never
+       fires on it (mousedown target ≠ mouseup target). */
+    height: calc(var(--aw-rail-w, 58px) - 16px);
   }
   .aw-rail.aw-rail-expanded :global(.axis-nav-entry .lbl) {
     max-width: none;
