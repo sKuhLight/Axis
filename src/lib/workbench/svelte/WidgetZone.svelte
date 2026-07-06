@@ -248,8 +248,15 @@
         </div>
       {/if}
     {/if}
-    {#if !units.length && $controller.editMode}
-      <span class="aw-zone-empty">{emptyLabel ?? zone}</span>
+    {#if !units.length && (variant !== 'bar' || $controller.editMode)}
+      <!-- Design §2.2: empty custom panels always show the dashed drag hint;
+           bar zones only surface it while editing. -->
+      <span class="aw-zone-empty" class:body={variant !== 'bar'}>
+        {#if variant !== 'bar'}
+          <b>Empty Panel</b>
+          <i>{emptyLabel ?? 'drag widgets & params here'}</i>
+        {:else}{emptyLabel ?? zone}{/if}
+      </span>
     {/if}
   </section>
 {/if}
@@ -330,7 +337,8 @@
     font: 700 9px/1 var(--aw-font-mono);
     letter-spacing: 0.12em;
   }
-  .aw-widget-zone.panel .aw-zone-empty {
+  .aw-widget-zone.panel .aw-zone-empty,
+  .aw-widget-zone.grid .aw-zone-empty {
     width: 100%;
     min-height: 116px;
     height: auto;
@@ -338,10 +346,27 @@
   }
   .aw-widget-zone.grid .aw-zone-empty {
     grid-column: 1 / -1;
-    width: 100%;
-    min-height: 116px;
-    height: auto;
-    border-radius: 11px;
+  }
+  /* Design §2.2 empty-custom-panel hint: dashed box, two mono lines, faint. */
+  .aw-zone-empty.body {
+    flex-direction: column;
+    gap: 7px;
+    text-transform: none;
+    letter-spacing: 0.12em;
+    color: var(--aw-text-faint);
+    background: color-mix(in srgb, var(--aw-surface) 20%, transparent);
+    border-color: color-mix(in srgb, var(--aw-border-2) 70%, transparent);
+  }
+  .aw-zone-empty.body b {
+    color: color-mix(in srgb, var(--aw-text-muted) 90%, var(--aw-text));
+    font: 800 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .aw-zone-empty.body i {
+    font: 600 10px/1.6 var(--aw-font-mono);
+    font-style: normal;
+    letter-spacing: 0.1em;
   }
   :global(.aw-root.aw-dragging-widget) .aw-widget-zone {
     outline: 1px dashed color-mix(in srgb, var(--aw-accent) 34%, transparent);

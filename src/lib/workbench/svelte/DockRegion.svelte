@@ -142,7 +142,7 @@
   }
   .aw-region-collapse {
     position: absolute;
-    top: 6px;
+    bottom: 6px;
     right: 6px;
     z-index: 5;
     width: 22px;

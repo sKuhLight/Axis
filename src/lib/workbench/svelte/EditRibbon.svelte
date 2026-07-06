@@ -56,6 +56,7 @@
     {/if}
   {/if}
   <button class="aw-edit-toggle" type="button" onclick={toggleEdit}>
+    {#if !$controller.editMode}<span class="aw-edit-toggle-glyph" aria-hidden="true">◆</span>{/if}
     {$controller.editMode ? 'Done' : 'Customize'}
   </button>
 </div>
@@ -74,17 +75,29 @@
     gap: 9px;
     pointer-events: none;
   }
+  /* Design 01-shell §5: bottom-left Customize pill — h34, radius 9, accent ink
+     on a dark accent fill, subtle accent border. */
   .aw-edit-ribbon button {
-    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
     padding: 0 14px;
-    border: 1px solid color-mix(in srgb, var(--aw-accent) 44%, var(--aw-border));
-    border-radius: 22px;
-    background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-bg-2));
-    color: var(--aw-accent);
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 34%, var(--aw-border));
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--aw-accent) 12%, var(--aw-bg-2));
+    color: color-mix(in srgb, var(--aw-accent) 82%, white);
     cursor: pointer;
     pointer-events: auto;
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-    font: 800 13px/1 var(--aw-font-ui);
+    font: 700 12px/1 var(--aw-font-ui);
+  }
+  .aw-edit-ribbon button:hover {
+    border-color: var(--aw-accent);
+  }
+  .aw-edit-toggle-glyph {
+    font-size: 11px;
+    line-height: 1;
   }
   .aw-edit-ribbon.active {
     left: var(--rail-w, 66px);
