@@ -23,10 +23,22 @@
   } = $props();
 
   const layout = $derived($controller.activeLayout);
+  // Design 01-shell §9: `navMode:"bottom"` moves the nav out of the left rail and
+  // into the bottom bar (horizontal row of icon+label items), divided from the
+  // bottom-zone widgets. `side` (default) keeps it in the vertical left rail.
+  const navMode = $derived(layout?.navigation.mode ?? 'side');
   const topZones = ['top.left', 'top.center', 'top.right'];
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
   const rootStyle = $derived(workbenchThemeStyle(theme));
   let navDrawerOpen = $state(false);
+  // The <760px hamburger drawer is a `side`-mode affordance only. In bottom mode
+  // the nav is always reachable in the bottom bar, so the drawer/scrim/menu are
+  // suppressed (matches design §9 `railOverlay = … && navMode!=="bottom"`).
+  const showMobileDrawer = $derived(navMode !== 'bottom');
+  $effect(() => {
+    // Keep the drawer from getting stuck open if the mode flips to bottom.
+    if (navMode === 'bottom' && navDrawerOpen) navDrawerOpen = false;
+  });
 
   // Viewport observation lives in the svelte layer: watch the shell width and let
   // the controller switch the active profile when the viewport class changes. The
@@ -51,13 +63,14 @@
     class:aw-editing={$controller.editMode}
     class:aw-dragging-panel={$controller.drag?.kind === 'panel'}
     class:aw-dragging-widget={$controller.drag?.kind === 'widget'}
+    class:aw-nav-bottom={navMode === 'bottom'}
     style={rootStyle}
   >
-    {#if navDrawerOpen}
+    {#if showMobileDrawer && navDrawerOpen}
       <button class="aw-mobile-nav-scrim" type="button" aria-label="Close navigation" onclick={() => (navDrawerOpen = false)}></button>
     {/if}
 
-    {#if !navDrawerOpen}
+    {#if showMobileDrawer && !navDrawerOpen}
       <button class="aw-mobile-menu" type="button" title="Menu" aria-label="Open navigation" onclick={() => (navDrawerOpen = true)}>
         <span></span><span></span><span></span>
       </button>
@@ -67,7 +80,9 @@
       <div class="aw-mark" aria-hidden="true">
         <span></span><span></span><span></span>
       </div>
-      <NavigationHost />
+      {#if navMode !== 'bottom'}
+        <NavigationHost />
+      {/if}
       <WidgetZone zone="rail" />
     </aside>
 
@@ -82,6 +97,13 @@
       <DockWorkspace />
 
       <footer class="aw-bottombar">
+        {#if navMode === 'bottom'}
+          <!-- Bottom-nav mode: nav row sits to the left of the bottom-zone widgets,
+               divided by a 1px separator (design §9). -->
+          <div class="aw-bottom-nav" data-zone-shell="bottom-nav">
+            <NavigationHost />
+          </div>
+        {/if}
         <WidgetZone zone="bottom" fitGap={10} />
       </footer>
     </main>
@@ -110,6 +132,7 @@
     --aw-text-faint: var(--textfaint, #6e6e78);
     --aw-accent: var(--accent, #35c9d6);
     --aw-accent-ink: var(--accentink, #0a1416);
+    --aw-accent-indigo: var(--accent-indigo, #4f6bed);
     --aw-amber: var(--amber, #f5a623);
     --aw-danger: var(--danger, #d6543f);
     --aw-font-ui: var(--font-ui, system-ui, sans-serif);
@@ -164,7 +187,7 @@
     transform: translate(-9px, -7px);
   }
   .aw-mark span:nth-child(2) {
-    background: #4f6bed;
+    background: var(--aw-accent-indigo);
     transform: translate(9px, -7px);
   }
   .aw-mark span:nth-child(3) {
@@ -221,6 +244,29 @@
     min-height: calc(38px + var(--aw-safe-bottom, 0px));
     padding: 4px 12px var(--aw-safe-bottom, 0px);
     border-top: 1px solid var(--aw-border);
+  }
+
+  /* Bottom-nav mode (design §9): the bottom bar becomes a flex row — the nav
+     block on the left, a 1px divider, then the bottom-zone widgets. The nav
+     itself lays its entries out horizontally (52×44, radius 10) via the
+     `[data-nav-mode='bottom']` rules inside NavigationHost. */
+  .aw-root.aw-nav-bottom .aw-bottombar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    min-height: calc(52px + var(--aw-safe-bottom, 0px));
+  }
+  .aw-bottom-nav {
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding-right: 12px;
+    border-right: 1px solid var(--aw-border);
+  }
+  .aw-root.aw-nav-bottom .aw-bottombar > :global([data-zone='bottom']) {
+    flex: 1;
+    min-width: 0;
   }
 
   @media (max-width: 760px) {

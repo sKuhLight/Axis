@@ -527,6 +527,21 @@ describe('reduceWorkbenchDocument — navigation', () => {
     expect(hidden.success).toBe(false);
     expect(hidden.error?.code).toBe('locked-navigation');
   });
+
+  it('switches the navigation mode to bottom', () => {
+    const switched = reduceWorkbenchDocument(withNav(), { type: 'navigation.mode', mode: 'bottom' });
+
+    expect(switched.success).toBe(true);
+    expect(layout(switched.next).navigation.mode).toBe('bottom');
+  });
+
+  it('switches the navigation mode back to side', () => {
+    const toBottom = reduceWorkbenchDocument(withNav(), { type: 'navigation.mode', mode: 'bottom' }).next;
+    const toSide = reduceWorkbenchDocument(toBottom, { type: 'navigation.mode', mode: 'side' });
+
+    expect(toSide.success).toBe(true);
+    expect(layout(toSide.next).navigation.mode).toBe('side');
+  });
 });
 
 describe('reduceWorkbenchDocument — profiles', () => {
