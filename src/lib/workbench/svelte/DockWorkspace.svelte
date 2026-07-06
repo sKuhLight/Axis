@@ -3,6 +3,7 @@
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
+  import { sideSwipe } from './sideSwipe';
   import {
     WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -29,6 +30,10 @@
   function hasRegion(region: DockRegionId): boolean {
     return !!layout?.dock.root[region];
   }
+
+  // R9c: LEFT/RIGHT dock drawers present as side overlays (partial-width panels
+  // sliding in from their edge); TOP/BOTTOM keep the bottom-sheet presentation.
+  const sideDrawer = $derived(mobileDock === 'left' || mobileDock === 'right');
 
   function toggleMobileDock(region: DockRegionId): void {
     mobileDock = mobileDock === region ? null : region;
@@ -87,13 +92,13 @@
   ondragleave={onParameterDragLeave}
   ondrop={onParameterDrop}
 >
-  <DockRegion region="top" mobileInlineHidden />
-  <div class="aw-workspace-mid">
-    <DockRegion region="left" mobileInlineHidden />
+  <DockRegion region="left" mobileInlineHidden />
+  <div class="aw-workspace-center">
+    <DockRegion region="top" mobileInlineHidden />
     <DockRegion region="main" />
-    <DockRegion region="right" mobileInlineHidden />
+    <DockRegion region="bottom" />
   </div>
-  <DockRegion region="bottom" />
+  <DockRegion region="right" mobileInlineHidden />
 
   {#if hasRegion('left') && mobileDock !== 'left'}
     <button class="aw-mobile-dock-indicator left" type="button" title="Open left dock" onclick={() => toggleMobileDock('left')}>◧ Left</button>
@@ -107,18 +112,38 @@
 
   {#if mobileDock}
     <button class="aw-mobile-dock-scrim" type="button" aria-label="Close dock drawer" onclick={() => (mobileDock = null)}></button>
-    <div
-      class="aw-mobile-dock-drawer {mobileDock}"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${mobileDock} dock`}
-      use:focusTrap={{ onClose: () => (mobileDock = null) }}
-      use:bottomSheetSwipe={{ enabled: isPhone, onClose: () => (mobileDock = null) }}
-    >
-      <!-- T23: grab bar for the phone bottom-sheet presentation. -->
-      <div class="aw-dock-sheet-grip" aria-hidden="true"></div>
-      <DockRegion region={mobileDock} overlay />
-    </div>
+    {#if sideDrawer}
+      <!-- R9c: LEFT/RIGHT present as partial-width side overlays that slide in
+           from their edge and close on a horizontal swipe toward that edge. -->
+      <div
+        class="aw-mobile-dock-drawer side {mobileDock}"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mobileDock} dock`}
+        use:focusTrap={{ onClose: () => (mobileDock = null) }}
+        use:sideSwipe={{
+          side: mobileDock === 'left' ? 'left' : 'right',
+          enabled: isPhone,
+          onClose: () => (mobileDock = null)
+        }}
+      >
+        <DockRegion region={mobileDock} overlay />
+      </div>
+    {:else}
+      <!-- TOP/BOTTOM keep the T23 bottom-sheet presentation (grab bar, slide up,
+           vertical swipe-to-close). -->
+      <div
+        class="aw-mobile-dock-drawer sheet {mobileDock}"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mobileDock} dock`}
+        use:focusTrap={{ onClose: () => (mobileDock = null) }}
+        use:bottomSheetSwipe={{ enabled: isPhone, onClose: () => (mobileDock = null) }}
+      >
+        <div class="aw-dock-sheet-grip" aria-hidden="true"></div>
+        <DockRegion region={mobileDock} overlay />
+      </div>
+    {/if}
   {/if}
 
   {#if edgeDropRegion}
@@ -129,23 +154,27 @@
 </section>
 
 <style>
+  /* R9d: LEFT and RIGHT regions run the FULL height of the workspace; TOP, MAIN
+     and BOTTOM stack in the center column between them. So the workspace is a ROW
+     (left | center | right) and the center is a COLUMN (top / main / bottom). */
   .aw-workspace {
     flex: 1;
     min-width: 0;
     min-height: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     position: relative;
     overflow: hidden;
     background:
       linear-gradient(rgba(255, 255, 255, 0.015), transparent 120px),
       var(--aw-bg);
   }
-  .aw-workspace-mid {
+  .aw-workspace-center {
     flex: 1;
     min-width: 0;
     min-height: 0;
     display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
   .aw-mobile-dock-indicator,
@@ -265,19 +294,13 @@
       backdrop-filter: blur(2px);
       animation: awDockFadeIn 0.16s ease;
     }
-    /* T23: all three dock drawers present as bottom sheets on phone — full
-       width, pinned to the bottom edge, rounded top, grab bar, slide up. The
-       slide uses a keyframe `animation` (not a `transition`) so the geometry
-       guard stays satisfied; swipe-to-close drives transform via JS. Safe-area
-       insets keep the sheet clear of the notch/home-indicator/landscape edges. */
+    /* Shared drawer host defaults. TOP/BOTTOM present as bottom sheets; LEFT/
+       RIGHT present as side overlays (see the .side rules below). The slide uses
+       a keyframe `animation` (not a `transition`) so the geometry guard stays
+       satisfied; swipe-to-close drives transform via JS. Safe-area insets keep
+       the surface clear of the notch/home-indicator/landscape edges. */
     .aw-mobile-dock-drawer {
       position: absolute;
-      left: var(--aw-safe-left, 0px);
-      right: var(--aw-safe-right, 0px);
-      bottom: 0;
-      top: auto;
-      width: auto;
-      max-height: min(90%, calc(100% - 40px - var(--aw-safe-top, 0px)));
       z-index: 180;
       display: flex;
       flex-direction: column;
@@ -285,10 +308,43 @@
       min-height: 0;
       overflow: hidden;
       background: var(--aw-bg-2);
+    }
+    /* R9c: TOP/BOTTOM bottom sheet — full width, pinned to the bottom edge,
+       rounded top, grab bar, slide up. */
+    .aw-mobile-dock-drawer.sheet {
+      left: var(--aw-safe-left, 0px);
+      right: var(--aw-safe-right, 0px);
+      bottom: 0;
+      top: auto;
+      width: auto;
+      max-height: min(90%, calc(100% - 40px - var(--aw-safe-top, 0px)));
       border-radius: 18px 18px 0 0;
       padding-bottom: var(--aw-safe-bottom, 0px);
       box-shadow: 0 -14px 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
       animation: awDockSheetUp 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    /* R9c: LEFT/RIGHT side overlay — partial-width panel under the top bar, full
+       remaining height, anchored to its edge. Slides in horizontally; horizontal
+       swipe toward the edge closes it. */
+    .aw-mobile-dock-drawer.side {
+      top: var(--aw-safe-top, 0px);
+      bottom: 0;
+      width: min(85%, 360px);
+      padding-bottom: var(--aw-safe-bottom, 0px);
+    }
+    .aw-mobile-dock-drawer.side.right {
+      right: var(--aw-safe-right, 0px);
+      left: auto;
+      border-radius: 16px 0 0 16px;
+      box-shadow: -14px 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      animation: awDockSideRight 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .aw-mobile-dock-drawer.side.left {
+      left: var(--aw-safe-left, 0px);
+      right: auto;
+      border-radius: 0 16px 16px 0;
+      box-shadow: 14px 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      animation: awDockSideLeft 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
     }
     .aw-dock-sheet-grip {
       flex: none;
@@ -308,5 +364,13 @@
   @keyframes awDockSheetUp {
     from { transform: translateY(calc(100% + 24px)); }
     to { transform: translateY(0); }
+  }
+  @keyframes awDockSideRight {
+    from { transform: translateX(calc(100% + 24px)); }
+    to { transform: translateX(0); }
+  }
+  @keyframes awDockSideLeft {
+    from { transform: translateX(calc(-100% - 24px)); }
+    to { transform: translateX(0); }
   }
 </style>

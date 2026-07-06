@@ -98,6 +98,20 @@
   still close; reopening after a swipe-close animates cleanly (no stuck offscreen
   sheet). Desktop (>760px) presentation must be unchanged (rail docked left, library
   drawer from the right edge).
+- **R9d mobile block flow (phone profile only)**: on a phone (<760, mobile profile
+  active) tap a grid block → the block editor (bottom region) expands to ~75% of the
+  window height and the grid above flips to MAP mode (map chip appears in the gridbar,
+  glyph minimap renders under the top bar). Tap the **Minimize** chip at the top of the
+  block editor → it collapses back to the mobile column layout (bottom returns to its
+  prior size, grid returns to auto, gridMode chip hides again), block stays selected so
+  quick actions remain reachable; re-tapping the block re-expands. Verify: (a) manually
+  drag the bottom divider while expanded — the flow must NOT snap it back on the next
+  tick, and minimizing keeps the user's size; (b) desktop/tablet profiles show ZERO
+  change (no expand, no minimize chip, grid mode untouched); (c) switching profile away
+  from phone while expanded restores the layout once. Command-wise: enter =
+  region.resize(bottom,~75%) + widget.move(gridMode hidden→gridbar) + widget.state(map);
+  leave = region.resize(prev) + widget.state(prevMode) + widget.hide(gridMode). All go
+  through the controller so persistence/undo stay coherent.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -169,6 +183,35 @@ colW/cellH/gap/mapMode.
   right-region panels (sheet was consuming the whole screen). EXTENDED mid-flight
   (operator): region hierarchy → LEFT|RIGHT full height, TOP/MAIN/BOTTOM stacked
   between them (was top/bottom full-width).
+  **DONE (this round):** LEFT/RIGHT dock drawers now present as partial-width
+  SIDE OVERLAYS (≈85% / max 360px, full height under the top bar, safe-area
+  aware) sliding in from their edge via keyframe `animation`; TOP/BOTTOM keep the
+  bottom-sheet presentation (grab bar, slide up). New `sideSwipe.ts` action +
+  helper (mirrors the tested bottomSheet state machine, direction-parameterised):
+  right overlay closes on rightward swipe, left on leftward; 16 unit tests.
+  bottomSheet.ts untouched (13 tests still green). LEFT opener already existed
+  (gated on `hasRegion('left')`, symmetric to RIGHT — was simply absent because
+  the boot layout has no left region). Region hierarchy restructured: workspace is
+  now a ROW `left | center(top/main/bottom) | right` so LEFT/RIGHT run full
+  workspace height; top/bottom sizePx now applies within the center column
+  (left/right widths unchanged). Panel drop hit-testing is DOM-rect based
+  (`closest('[data-region]')` + getBoundingClientRect) so it adapts to the
+  reorder automatically; the parameter edge-drop map (regionFromPointer,
+  percentage edges) is direction-agnostic and unchanged; no geometry transitions
+  (slide-in = animation, swipe = JS style prop). Files: DockWorkspace.svelte,
+  sideSwipe.ts + test. `npm run check` 0 errors; vitest 64 files / 556 tests
+  green; paneGeometryTransitions + noHexColors guards pass.
+  **HARDWARE-VERIFY (phone, <760px):** open RIGHT opener → panel slides in from
+  the right as a partial-width overlay (NOT full screen), right-region panels
+  fully interactive inside; swipe right past ~96px OR a fast rightward flick
+  closes it, a slow short drag snaps back; scrim tap + Escape still close; LEFT
+  opener (when the left region has panels) mirrors from the left, closes on a
+  leftward swipe. Verify overlay slide-in feel + swipe direction on a real touch
+  device; confirm openers don't overlap the bottom bar or each other in portrait
+  + landscape (safe-area insets). Also verify the new full-height LEFT/RIGHT
+  columns + center top/main/bottom stack render + resize correctly on desktop
+  with a hand-built multi-region layout, and panel drag-into-region still targets
+  the right zones.
 - R9d mobile block flow (operator design): phone + block tapped → block editor
   ~75% bottom, grid in map above under top bar; minimized → mobile col layout.
 Operator confirmed tokenization incomplete — folded into R9b.
