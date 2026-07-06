@@ -169,15 +169,25 @@
   .aw-nav-entry[data-fixed='rail.footer'] {
     margin-top: auto;
   }
+  /* Phone: the SIDE-mode nav lives in the bottom-sheet rail and lays out as a
+     horizontal row of full-size icon+label entries. This must NOT touch the
+     bottom-nav-mode row — that stays icon-only and never scrolls (Directive 2 /
+     V14d), so it is explicitly excluded via `:not([data-nav-mode='bottom'])`. */
   @media (max-width: 760px) {
-    .aw-nav {
+    .aw-nav:not([data-nav-mode='bottom']) {
       flex: 1;
       flex-direction: row;
       overflow-x: auto;
     }
-    .aw-nav-entry {
+    .aw-nav:not([data-nav-mode='bottom']) .aw-nav-entry {
       width: 56px;
       flex: none;
+    }
+    /* V14d — bottom-nav on phone: persistent, icon-only, no horizontal scroll.
+       Entries shrink flexibly so a handful always fit the bar width; the label is
+       already hidden by the bottom-mode rule above (carried by title/aria). */
+    .aw-nav[data-nav-mode='bottom'] {
+      flex: 1 1 auto;
     }
   }
 </style>

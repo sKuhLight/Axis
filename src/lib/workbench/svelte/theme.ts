@@ -58,7 +58,11 @@ export const WORKBENCH_TOKEN_DEFAULTS: Record<`--aw-${string}`, string> = {
   // absolutely-positioned overlay (no dock reflow — geometry guard safe).
   '--aw-widget-h': '38px',
   '--aw-rail-w': '58px',
-  '--aw-rail-w-expanded': '200px'
+  '--aw-rail-w-expanded': '200px',
+  // V14c: when the rail exists only for rail-zone widgets (bottom-nav mode, no
+  // nav), it stays a slim non-expanding strip (design §9: "64px when the rail
+  // exists only for rail widgets").
+  '--aw-rail-w-widgets': '64px'
 };
 
 /**

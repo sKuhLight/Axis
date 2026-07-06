@@ -31,6 +31,7 @@
   class:active
   type="button"
   aria-current={active ? 'page' : undefined}
+  aria-label={entry.label ?? entry.id}
   onclick={runAction}
   title={entry.label ?? entry.id}
 >
