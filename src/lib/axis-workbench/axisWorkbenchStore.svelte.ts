@@ -15,6 +15,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
+import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
 export { AXIS_WORKBENCH_CACHE_KEY };
@@ -53,7 +54,29 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // gridMode/blockSize seeded into their gridbar (hand-built layouts, sparse presets).
   // Also strip rail widgets retired in V13c (History widget + "AX" account avatar)
   // so pre-V13c persisted docs don't leave ghosts on the rail.
-  return pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(migrateWorkbenchDocument(input)));
+  return ensureAxisMobileBottomNav(pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(migrateWorkbenchDocument(input))));
+}
+
+/**
+ * One-shot migration (V14d): the mobile profile's default navigation is the
+ * persistent bottom bar — the hamburger + bottom-sheet drawer pattern is a
+ * side-mode affordance and the wrong default on phones. Freshly seeded mobile
+ * profiles get `navMode: 'bottom'` from the preset; this flips a persisted
+ * pre-V14d mobile profile from 'side' to 'bottom' exactly once, marked in the
+ * doc metadata so a user who deliberately switches back to side navigation on
+ * mobile is never overridden again.
+ */
+const AXIS_MOBILE_BOTTOM_NAV_MARKER = 'axisMobileBottomNav';
+
+export function ensureAxisMobileBottomNav(doc: WorkbenchDocument): WorkbenchDocument {
+  if (doc.metadata?.[AXIS_MOBILE_BOTTOM_NAV_MARKER]) return doc;
+  const mobileProfile = doc.profiles?.[AXIS_MOBILE_PROFILE_ID];
+  const layout = mobileProfile ? doc.layouts?.[mobileProfile.layoutId] : undefined;
+  if (layout?.navigation && layout.navigation.mode === 'side') {
+    layout.navigation.mode = 'bottom';
+  }
+  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_MOBILE_BOTTOM_NAV_MARKER]: 'v1' };
+  return doc;
 }
 
 function cacheLoad(): WorkbenchDocument {
