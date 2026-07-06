@@ -1,3 +1,37 @@
+<script lang="ts" module>
+  /**
+   * App-provided backup seam. The drawer is generic — it cannot know where (or
+   * whether) the host keeps document backups. A host that has them registers a
+   * provider here (module singleton, the same seam shape as toasts.ts) and the
+   * drawer grows a "Backups" section. Chosen over threading a prop from the
+   * host shell because the drawer is instantiated by EditRibbon inside the
+   * generic renderer — a prop would have to travel WorkbenchHost → EditRibbon →
+   * drawer for one optional integration.
+   */
+  export interface WorkbenchBackupEntry {
+    /** 1-based generation slot (1 = newest). */
+    slot: number;
+    /** Host revision counter carried by the backup (0 when unknown). */
+    rev: number;
+    /** ISO timestamp of the backup's last change, when known. */
+    updatedAt: string | null;
+    /** Number of layouts inside the backup. */
+    layoutCount: number;
+  }
+
+  export interface WorkbenchBackupProvider {
+    list(): WorkbenchBackupEntry[];
+    /** Restore a generation; returns false when the slot is empty/unreadable. */
+    restore(slot: number): boolean;
+  }
+
+  let workbenchBackupProvider: WorkbenchBackupProvider | null = null;
+
+  export function registerWorkbenchBackupProvider(provider: WorkbenchBackupProvider | null): void {
+    workbenchBackupProvider = provider;
+  }
+</script>
+
 <script lang="ts">
   import {
     DEFAULT_WIDGET_ZONES,
@@ -149,6 +183,36 @@
     setStatus('error', asLayout.error.message); // toast candidate
   }
 
+  // Backups (app-provided seam above): the list is re-read every time the
+  // drawer opens; restore is a two-step inline confirm.
+  let backups = $state<WorkbenchBackupEntry[]>([]);
+  let confirmBackupSlot = $state<number | null>(null);
+  $effect(() => {
+    if (!open) return;
+    backups = workbenchBackupProvider?.list() ?? [];
+    confirmBackupSlot = null;
+  });
+
+  function backupTimestamp(entry: WorkbenchBackupEntry): string {
+    if (!entry.updatedAt) return 'Unknown time';
+    const parsed = new Date(entry.updatedAt);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
+  }
+
+  function restoreBackup(entry: WorkbenchBackupEntry): void {
+    if (!workbenchBackupProvider) return;
+    let restored = false;
+    try {
+      restored = workbenchBackupProvider.restore(entry.slot);
+    } catch {
+      restored = false;
+    }
+    confirmBackupSlot = null;
+    if (restored) setStatus('ok', `Restored backup ${entry.slot}.`); // toast candidate
+    else setStatus('error', `Backup ${entry.slot} could not be restored.`); // toast candidate
+    backups = workbenchBackupProvider.list();
+  }
+
   function widgetTitle(widget: WidgetInstance): string {
     return widget.state?.label && typeof widget.state.label === 'string' ? widget.state.label : labelFromWorkbenchType(widget.type);
   }
@@ -222,6 +286,34 @@
           <p class="aw-lib-status" class:error={status.tone === 'error'} role="status">{status.message}</p>
         {/if}
       </section>
+
+      {#if backups.length}
+        <section class="aw-lib-section">
+          <h2>Backups</h2>
+          <div class="aw-lib-list">
+            {#each backups as entry (entry.slot)}
+              <div class="aw-lib-row saved" title={`Backup generation ${entry.slot}`}>
+                <span class="aw-lib-ico">⧗</span>
+                <span>{backupTimestamp(entry)}</span>
+                <i>{entry.layoutCount} {entry.layoutCount === 1 ? 'layout' : 'layouts'}</i>
+                {#if confirmBackupSlot === entry.slot}
+                  <button class="aw-lib-save" type="button" onclick={() => restoreBackup(entry)}>Confirm</button>
+                  <button type="button" onclick={() => (confirmBackupSlot = null)}>Cancel</button>
+                {:else}
+                  <button
+                    class="aw-lib-load"
+                    type="button"
+                    title="Replace the current document with this backup (the current one is backed up first)"
+                    onclick={() => (confirmBackupSlot = entry.slot)}
+                  >
+                    Restore
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
       {#if savedLayouts.length}
         <section class="aw-lib-section">

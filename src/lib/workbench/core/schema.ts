@@ -31,6 +31,20 @@ export interface WorkbenchDocument {
    */
   profileOverrideId?: string;
   metadata?: JsonObject;
+  /**
+   * Monotonic persist revision (≥1 when present). The host bumps it on every
+   * persisted change and uses it for stale-write protection: an incoming doc
+   * whose `rev` is lower than the one already held must not silently overwrite
+   * it. Optional + repair-safe: docs without `rev` count as revision 0 and are
+   * never treated as newer. Migration drops non-numeric/non-positive values.
+   */
+  rev?: number;
+  /**
+   * ISO-8601 timestamp of the last persisted change (informational — e.g. for
+   * labelling backup generations). `rev`, not `updatedAt`, decides staleness.
+   * Optional + repair-safe; migration drops non-string values.
+   */
+  updatedAt?: string;
 }
 
 export interface WorkbenchProfile {

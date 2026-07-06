@@ -44,6 +44,33 @@ describe('migrateWorkbenchDocument', () => {
     expect(layout(migrated).zones.hidden).toBeDefined();
   });
 
+  it('preserves valid persist stamps (rev + updatedAt)', () => {
+    const current = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    current.rev = 42;
+    current.updatedAt = '2026-07-06T10:00:00.000Z';
+
+    const migrated = migrateWorkbenchDocument(current);
+
+    expect(migrated.rev).toBe(42);
+    expect(migrated.updatedAt).toBe('2026-07-06T10:00:00.000Z');
+  });
+
+  it('drops invalid persist stamps (docs without a rev are never treated as newer)', () => {
+    const base = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+
+    for (const rev of ['7', Number.NaN, Number.POSITIVE_INFINITY, -1, 0]) {
+      const migrated = migrateWorkbenchDocument({ ...base, rev, updatedAt: 12345 });
+      expect(migrated.rev, `rev ${String(rev)}`).toBeUndefined();
+      expect(migrated.updatedAt).toBeUndefined();
+      expect('rev' in migrated, `rev key for ${String(rev)}`).toBe(false);
+    }
+  });
+
+  it('floors fractional revs', () => {
+    const base = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    expect(migrateWorkbenchDocument({ ...base, rev: 7.9 }).rev).toBe(7);
+  });
+
   it('preserves unknown state fields', () => {
     const current = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
     layout(current).panels.panel = { id: 'panel', type: 'unknown.panel', state: { custom: 'panel-state' } };

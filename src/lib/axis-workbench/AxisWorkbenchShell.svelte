@@ -1,9 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
+  import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLibraryDrawer.svelte';
   import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
   import AxisProfileSwitcher from './AxisProfileSwitcher.svelte';
-  import { axisWorkbenchController, axisWorkbenchInit } from './axisWorkbenchStore.svelte';
+  import {
+    axisWorkbenchController,
+    axisWorkbenchInit,
+    axisWorkbenchListBackups,
+    axisWorkbenchRestoreBackup
+  } from './axisWorkbenchStore.svelte';
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
   import { seedAxisProfiles } from './axisWorkbenchLayoutActions';
@@ -17,6 +23,15 @@
   // Ensure the tablet/mobile profiles exist (seeded from their presets) so the
   // profile switcher always has a layout to show. Idempotent.
   seedAxisProfiles(axisWorkbenchController);
+
+  // Bridge the Axis-side rolling backups into the generic library drawer's
+  // "Backups" section (module-singleton seam exported by the drawer, same
+  // pattern as toasts.ts — least ceremony vs threading a prop through
+  // WorkbenchHost → EditRibbon for one optional integration). Idempotent.
+  registerWorkbenchBackupProvider({
+    list: axisWorkbenchListBackups,
+    restore: axisWorkbenchRestoreBackup
+  });
 
   onMount(() => {
     void axisWorkbenchInit();

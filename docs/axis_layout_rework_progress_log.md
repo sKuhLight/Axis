@@ -219,15 +219,56 @@ collision class via layoutPackage machinery + regression test).
   `Ctrl/Cmd+Shift+Z`/`Ctrl+Y` mounted via `$effect` ONLY while editMode is on,
   bailing when focus is in input/textarea/contentEditable, `preventDefault +
   stopPropagation` so the app device-history shortcut never double-fires.
+- **pages contentMode rendering DONE (uncommitted, main-session review pending).
+  check 0 errors, vitest 662/662 (+10 new contentMode), chromium e2e 17/17.**
+  Spec finding: in `Axis Layout System.dc.html` the only live wiring of
+  `contentMode` is `showStub = !presetPage && contentMode==="pages" && section!=="grid"`
+  (line 1412) feeding `showGrid`/`showStub`/`presetPage` — but those are exported to
+  renderVals and **NEVER consumed in the template** (the template always renders the
+  full `computeDock` pane surface). So contentMode has NO region-hiding effect in the
+  design itself; `onNav` docks sections into `main` identically in both modes.
+  Faithful port (respecting §11 "left/right become overlay drawers … Bottom stays
+  inline" + the §3/§11 "one full-page section" intent): pages mode drops the inline
+  LEFT/RIGHT regions (they become edge openers + side overlay, now at ANY width since
+  Stage is pages-mode on desktop), keeping TOP/MAIN/BOTTOM inline so the grid + the
+  R9d phone block-editor (bottom) stay visible. New pure `workbench/svelte/
+  contentMode.ts` (`resolveContentMode` repair-safe unknown→fixed,
+  `effectiveContentMode`, `isPagesLayout`) + 10 tests. Edit mode forces
+  effective=fixed (rearrange all regions). Zero change to fixed default; old shell
+  untouched. DockWorkspace gated on `pagesMode`; `pages-opener`/`pages-active` CSS
+  re-enable openers/scrim/side overlay outside the 760px query. NOTE for operator: I
+  did NOT hide side/bottom regions wholesale — that would break the mobile profile
+  (pages mode) which docks the block editor bottom; the spec's own mobile rule keeps
+  bottom inline.
 After round 11+12: ONLY operator-dependent work remains (visual pass/T31 incl.
 nav-id reconciliation, hardware batch incl. T27, Layout Profiles TOGETHER, T35).
-Still in flight: **Round 11 storage hardening**
-(operator-approved, one opus agent; restarted once after a startup misfire):
-(1) rolling local backups bak1..3 + Restore in the library drawer, (2) persist-
-cost measurement then trimming (drop per-change repair / coalesce cache writes /
-pagehide flush — only what numbers justify), (3) rev+updatedAt stamping with
-stale-write protection (older incoming docs get backed up, never silently
-clobber) + cloud debounce 400→1500ms. schemaVersion stays 1.
+**Round 11 storage hardening — DONE (uncommitted, main-session review pending).
+check 0 errors, vitest 662/662 (incl. round-12 T30 work in the same tree).**
+- **(2) Measured first** (`test/axisWorkbenchPersistCost.test.ts`, numbers printed
+  on every run): realistic doc (6 layouts × 30 widgets + 10+10 templates, ~101 KB)
+  = repair 0.99ms + stringify 0.26ms + set 0.32ms ≈ **1.3ms/dispatch**; 10× stress
+  (~564 KB) ≈ **7.3ms/dispatch**, repair ≈ 75% of it. Justified: persist() no longer
+  repairs (the reducer deep-clones + maintains invariants per dispatch; repair still
+  guards load/adopt/restore), localStorage write coalesced on a 150ms trailing
+  debounce, cloud push 400→1500ms, and a pagehide/visibilitychange-hidden flush
+  writes both immediately so no edit is lost on tab close.
+- **(1) Rolling backups**: new `axis-workbench/axisWorkbenchBackups.ts` —
+  `axs.workbench.doc.bak1..3`, session-start rotation before any write, generation
+  burned only when content differs from bak1 with rev/updatedAt stripped; injectable
+  StorageLike (node-env testable). Store APIs `axisWorkbenchListBackups()` /
+  `axisWorkbenchRestoreBackup(slot)` (stashes the current doc first, adopts via
+  normalize/repair, re-persists at `max(currentRev, backupRev)+1`). Drawer UI:
+  "Backups" section (timestamp + layout count + two-step inline Restore) via a
+  generic `registerWorkbenchBackupProvider` module seam exported from
+  `WorkbenchLibraryDrawer.svelte` (<script module>, toasts.ts pattern — chosen over
+  threading a prop WorkbenchHost→EditRibbon); AxisWorkbenchShell registers it.
+- **(3) rev/updatedAt** optional on WorkbenchDocument (schemaVersion stays 1);
+  migration drops invalid stamps (no rev ≡ rev 0, never newer); persist stamps
+  `rev+1` + ISO time. `axisWorkbenchApplyRemote` rejects lower-rev incoming docs:
+  keeps the newer one, stashes the older copy as a backup generation, warns via
+  `enqueueToast`, and schedules a cloud push so the source converges (ties adopt
+  incoming = old behavior for unstamped docs). 20 new tests (backups module 12,
+  store rev/stale 4, migrations stamps 3, persist-cost 1).
 After this wave the board is ONLY: operator verification, Layout Profiles
 (TOGETHER), hardware-gated items, T35 audit.
 
