@@ -47,31 +47,17 @@ test.describe('Bottom navigation mode', () => {
     await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(1);
   });
 
-  test('phone + bottom mode: the bottom nav is persistent — no hamburger', async ({ page }) => {
-    // The design's mobile profile seeds `navMode:'side'` (hamburger drawer), so
-    // phone does NOT force bottom nav — but WHEN bottom mode is active on the
-    // phone profile it must be persistent (V14d). Shrink to phone width so the
-    // phone profile activates, then flip THAT profile to bottom nav via the
-    // hamburger drawer's entry context menu.
+  test('phone boots into a persistent bottom nav — no hamburger (V14d default)', async ({ page }) => {
+    // V14d: the Axis mobile profile seeds `navMode:'bottom'` (and a one-shot
+    // migration flips persisted pre-V14d docs), so a phone boots straight into
+    // the persistent bottom bar — no hamburger, no flyout.
     await bootCleanWorkbench(page);
     await page.setViewportSize({ width: 390, height: 780 });
 
-    // Phone defaults to side mode → hamburger present (design §9/§11).
-    await expect(page.locator('.aw-mobile-menu')).toBeVisible();
-
-    // Open the drawer, right-click an entry, choose "Use Bottom Navigation".
-    await page.locator('.aw-mobile-menu').click();
-    const railEntry = page.locator('.aw-rail nav.aw-nav [data-nav-entry="grid"]');
-    await expect(railEntry).toBeVisible();
-    // Dispatch the contextmenu directly (phone overlays can intercept a synthetic
-    // right-click at a computed point; the event on the element is unambiguous).
-    await railEntry.dispatchEvent('contextmenu');
-    await page.getByRole('menuitem', { name: 'Use Bottom Navigation' }).click();
-
-    // Wait for the phone profile to enter bottom mode.
+    // The phone profile activates in bottom mode out of the box.
     await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(1);
 
-    // No hamburger and no scrim in bottom mode — the nav is always in the bar (V14d).
+    // No hamburger and no scrim — the nav is always in the bar (V14d).
     await expect(page.locator('.aw-mobile-menu')).toHaveCount(0);
     await expect(page.locator('.aw-mobile-nav-scrim')).toHaveCount(0);
 
@@ -87,5 +73,14 @@ test.describe('Bottom navigation mode', () => {
     await expect(
       page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"] .axis-nav-entry .ic')
     ).toBeVisible();
+
+    // Side mode stays reachable: switching restores the hamburger drawer path.
+    const bottomEntry = page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"]');
+    // Dispatch the contextmenu directly (phone overlays can intercept a synthetic
+    // right-click at a computed point; the event on the element is unambiguous).
+    await bottomEntry.dispatchEvent('contextmenu');
+    await page.getByRole('menuitem', { name: 'Use Side Navigation' }).click();
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
+    await expect(page.locator('.aw-mobile-menu')).toBeVisible();
   });
 });

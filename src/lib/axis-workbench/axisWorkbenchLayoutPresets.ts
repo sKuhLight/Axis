@@ -240,7 +240,9 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
     }
   },
   mobile: {
-    navMode: 'side',
+    // V14d: phones get the persistent bottom nav bar by default — the hamburger
+    // + drawer is a side-mode affordance and the wrong default at phone width.
+    navMode: 'bottom',
     contentMode: 'pages',
     presetMode: 'page',
     editorMode: 'drawer',
