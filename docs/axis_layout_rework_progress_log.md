@@ -188,8 +188,18 @@ colW/cellH/gap/mapMode.
   re-key flagged as follow-up).
 - `0eb1c2b` R10d PB row anatomy + owner-gated context menus (real actions only;
   222px swipe stack deferred, long-press covers touch).
-Still in flight: E2E realignment (e2e/** only, relaunched after a process-exit
-interruption — partial spec edits preserved) AND **Round 11 storage hardening**
+**E2E realignment LANDED (`26cd377`)** — 34/34 both browsers; NO product
+regressions (the suspected region-collapse was the live ForgeFX backend restoring
+the operator's own synced layout over test boots; specs now intercept the backend
+doc for determinism).
+**Round 12 (final buildable remainders) — IN FLIGHT (3 opus):** T30 layout
+undo/redo (in-memory ring in the controller, ribbon buttons + edit-mode
+shortcuts, NEVER persisted), pages contentMode rendering (spec-verified from
+01-shell.md; fixed default unchanged), packages.ts deep re-key (close the T02
+collision class via layoutPackage machinery + regression test).
+After round 11+12: ONLY operator-dependent work remains (visual pass/T31 incl.
+nav-id reconciliation, hardware batch incl. T27, Layout Profiles TOGETHER, T35).
+Still in flight: **Round 11 storage hardening**
 (operator-approved, one opus agent; restarted once after a startup misfire):
 (1) rolling local backups bak1..3 + Restore in the library drawer, (2) persist-
 cost measurement then trimming (drop per-change repair / coalesce cache writes /
