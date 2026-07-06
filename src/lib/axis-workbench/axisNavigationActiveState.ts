@@ -9,11 +9,13 @@ import type { WorkbenchDocument } from '../workbench';
  *
  * The signal is split by how each nav entry surfaces its content:
  *  - `grid` opens the Signal Grid panel in `main` (controller/document state);
- *  - `controllers`/`scenes`/`setup`/`live` dock a panel and become active when
- *    that panel is the active tab of its stack (document state);
- *  - `library` (Preset Browser), `fc` (Footswitches), `theme`, `account` open an
- *    overlay/rail screen whose open-state lives on the editor store — those are
- *    passed in via {@link AxisNavigationActiveSnapshot} so this stays pure.
+ *  - `library` (Preset Browser)/`controllers`/`scenes`/`setup`/`live` dock a
+ *    panel and become active when that panel is the active tab of its stack
+ *    (document state); `library` additionally tints for the legacy overlay
+ *    (editor.inLibrary) surfaced outside the workbench shell;
+ *  - `fc` (Footswitches), `theme`, `account` open an overlay/rail screen whose
+ *    open-state lives on the editor store — those are passed in via
+ *    {@link AxisNavigationActiveSnapshot} so this stays pure.
  *
  * Any entry not covered here resolves to inactive (untinted).
  */
@@ -31,6 +33,7 @@ export interface AxisNavigationActiveSnapshot {
 /** Panel id docked by each panel-backed nav entry (see axisWorkbenchNavigationActions registrations). */
 const PANEL_BACKED_ENTRIES: Record<string, string> = {
   grid: 'axis.signalGrid',
+  library: 'axis.presetBrowser',
   controllers: 'axis.controllers',
   scenes: 'axis.scenes',
   setup: 'axis.setup',
@@ -65,7 +68,11 @@ export function isAxisNavigationEntryActive(
 ): boolean {
   switch (entryId) {
     case 'library':
-      return snapshot.libraryOpen;
+      // V13d: the Preset Browser nav entry now docks/focuses a workbench panel,
+      // so its active tint follows that panel being the active tab. The legacy
+      // overlay (editor.inLibrary, still used outside the workbench shell) keeps
+      // tinting it too so the signal stays correct wherever PB is surfaced.
+      return snapshot.libraryOpen || isActiveTab(doc, PANEL_BACKED_ENTRIES.library);
     case 'fc':
       return snapshot.virtualSlug === 'fc';
     case 'theme':

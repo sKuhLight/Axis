@@ -141,13 +141,10 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) }),
     'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.right', 6, { state: widgetState(95) }),
     'axis.widget.search': widget('axis.widget.search', 'axis.search', 'hidden', 0),
-    'axis.widget.history': widget('axis.widget.history', 'axis.history', 'rail', 0, { size: 'compact' }),
-    'axis.widget.account': widget('axis.widget.account', 'axis.account', 'rail', 1, {
-      size: 'compact',
-      locked: true,
-      state: widgetState(90, { fixedSlot: 'rail.footer' })
-    }),
-    'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 2, { size: 'compact', state: widgetState(90) }),
+    // V13c: the rail no longer carries a History widget (History is reachable as a
+    // dock panel) nor the "AX" account avatar (the 'account' nav entry / Axis Cloud
+    // is the single account entry). Only the connection status remains on the rail.
+    'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 0, { size: 'compact', state: widgetState(90) }),
     'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0, { state: { mode: 'auto' } }),
     'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1, { state: { size: 'M' } }),
     // Bottom utility bar (StatusBar parity, T10): left = hover-hint ticker, right = Ko-fi / imprint.
@@ -187,7 +184,12 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
       layout.widgets['axis.widget.gridMode'],
       layout.widgets['axis.widget.blockSize']
     ]),
-    'axis.library.widget.history': widgetTemplate('axis.library.widget.history', 'History', [layout.widgets['axis.widget.history']]),
+    // The History widget is no longer seeded onto the rail (V13c), but it stays
+    // available from the widget library so a user can re-add it anywhere. Define
+    // it inline since it no longer has a default rail instance to source from.
+    'axis.library.widget.history': widgetTemplate('axis.library.widget.history', 'History', [
+      widget('axis.widget.history', 'axis.history', 'rail', 0, { size: 'compact' })
+    ]),
     'axis.library.widget.preset': widgetTemplate('axis.library.widget.preset', 'Preset', [
       layout.widgets['axis.widget.preset'],
       layout.widgets['axis.widget.scenes']
@@ -233,6 +235,30 @@ function widgetTemplate(id: string, title: string, sources: WidgetInstance[]): W
  * touch a layout that has either widget anywhere (including 'hidden' — that is
  * an explicit user choice).
  */
+/**
+ * Rail widget ids retired by V13c (History widget + the "AX" account avatar).
+ * They are stripped from *every* layout on load/adopt/restore so a persisted
+ * document minted before V13c doesn't keep painting the removed rail entries.
+ * Removing the instance is enough — the reducer/repair already prunes any
+ * dangling group/order references, and the widget types stay registered so the
+ * History widget can still be re-added from the widget library.
+ */
+const AXIS_RETIRED_RAIL_WIDGET_IDS = ['axis.widget.history', 'axis.widget.account'] as const;
+
+/** Drop retired rail widget instances (V13c) from a (possibly persisted) document. Idempotent. */
+export function pruneAxisRetiredRailWidgets(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
+    for (const id of AXIS_RETIRED_RAIL_WIDGET_IDS) {
+      const instance = layout.widgets[id];
+      // Only strip the retired *rail* seeds — never touch a same-id widget a user
+      // deliberately placed elsewhere (e.g. History docked into another zone).
+      if (instance && instance.zone === 'rail') delete layout.widgets[id];
+    }
+  }
+  return doc;
+}
+
 export function ensureAxisGridControlWidgets(doc: WorkbenchDocument): WorkbenchDocument {
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object') continue;

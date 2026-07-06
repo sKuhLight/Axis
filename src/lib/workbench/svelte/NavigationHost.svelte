@@ -4,8 +4,6 @@
   import { createFailedActionPanelCommand, createMissingActionPanelCommand } from './actions';
   import ContextMenu from './ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
-  import { pointerDistance, widgetDropIndex } from './drag';
-  import { nextOrderedIndex } from './moveAlternatives';
   import { canHideNavigationEntry, canMoveNavigationEntry, navigationEntryIndex } from './navigation';
 
   const { controller, registry } = getWorkbenchContext();
@@ -19,7 +17,6 @@
     void $controller; // track controller/document changes
     return entries.find((entry) => registry.isNavigationEntryActive(entry.id))?.id ?? null;
   });
-  let draggingEntry = $state<string | null>(null);
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
   let menuEntryId = $state<string | null>(null);
@@ -65,60 +62,6 @@
     ];
   });
 
-  function navDropIndex(x: number, y: number, entryId: string): number {
-    const nav = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-aw-nav]');
-    if (!nav) return entries.findIndex((entry) => entry.id === entryId);
-    const vertical = nav.dataset.navMode !== 'bottom';
-    const itemEls = Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-entry]')).filter((item) => item.dataset.navEntry !== entryId);
-    const itemRects = itemEls.map((item) => {
-      const rect = item.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-    });
-    return widgetDropIndex({ x, y }, itemRects, vertical ? 'vertical' : 'horizontal');
-  }
-
-  function dragDown(entryId: string, e: PointerEvent) {
-    if (!$controller.editMode || e.button !== 0) return;
-    const startedAt = { x: e.clientX, y: e.clientY };
-    let dragging = false;
-
-    const onMove = (ev: PointerEvent) => {
-      const pointer = { x: ev.clientX, y: ev.clientY };
-      if (!dragging && pointerDistance(startedAt, pointer) < 5) return;
-      dragging = true;
-      draggingEntry = entryId;
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (dragging) {
-        controller.dispatch({ type: 'navigation.move', entryId, index: navDropIndex(ev.clientX, ev.clientY, entryId) });
-      }
-      draggingEntry = null;
-    };
-
-    e.preventDefault();
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  }
-
-  function moveEntryByKey(entryId: string, e: KeyboardEvent) {
-    if (!$controller.editMode) return;
-    const direction = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : 0;
-    if (!direction) return;
-    const entry = entries.find((item) => item.id === entryId);
-    if (!entry || !canMoveNavigationEntry(entry)) return;
-    const currentIndex = navigationEntryIndex(entries, entryId);
-    if (currentIndex < 0) return;
-    e.preventDefault();
-    controller.dispatch({
-      type: 'navigation.move',
-      entryId,
-      index: nextOrderedIndex(currentIndex, direction as -1 | 1, entries.length)
-    });
-  }
-
   async function runNavigation(entry: (typeof entries)[number]): Promise<void> {
     const target = entry.target;
     if (!target) return;
@@ -146,24 +89,18 @@
     menuPosition = menuPositionFromPointer(event);
     menuOpen = true;
   }
-
-  function openButtonMenu(entry: (typeof entries)[number], event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    menuEntryId = entry.id;
-    menuPosition = { x: rect.right - 8, y: rect.bottom + 6 };
-    menuOpen = true;
-  }
 </script>
 
 <nav class="aw-nav" data-aw-nav data-nav-mode={$controller.activeLayout?.navigation.mode ?? 'side'}>
   {#each entries as entry (entry.id)}
     {@const Component = registry.navigation(entry.id)}
     {#if Component}
+      <!-- V13c: the rail carries no per-entry hover controls (drag/hide/menu
+           buttons). Reorder / hide / nav-mode remain reachable via the entry's
+           right-click context menu (openMenu below), which is the single path
+           now. -->
       <div
         class="aw-nav-entry"
-        class:dragging={draggingEntry === entry.id}
         class:active={activeEntryId === entry.id}
         data-nav-entry={entry.id}
         data-nav-active={activeEntryId === entry.id ? 'true' : undefined}
@@ -178,25 +115,6 @@
           runAction={() => runNavigation(entry)}
           editMode={$controller.editMode}
         />
-        {#if $controller.editMode && canMoveNavigationEntry(entry)}
-          <div
-            class="aw-nav-drag"
-            role="button"
-            tabindex="0"
-            aria-label="Move navigation entry"
-            onpointerdown={(e) => dragDown(entry.id, e)}
-            onkeydown={(e) => moveEntryByKey(entry.id, e)}
-          ></div>
-          <button class="aw-nav-hide" type="button" title="Hide navigation entry" onclick={() => controller.dispatch({ type: 'navigation.hide', entryId: entry.id })}>×</button>
-        {/if}
-        <button
-          class="aw-nav-menu"
-          type="button"
-          title="Navigation actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen && menuEntryId === entry.id}
-          onclick={(event) => openButtonMenu(entry, event)}
-        >⋯</button>
       </div>
     {/if}
   {/each}
@@ -248,74 +166,8 @@
     position: relative;
     min-width: 0;
   }
-  .aw-nav-entry.dragging {
-    opacity: 0.38;
-  }
   .aw-nav-entry[data-fixed='rail.footer'] {
     margin-top: auto;
-  }
-  .aw-nav-drag {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    border-radius: 9px;
-    outline: 1px dashed color-mix(in srgb, var(--aw-accent) 40%, transparent);
-    outline-offset: 2px;
-    cursor: grab;
-  }
-  .aw-nav-hide {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    z-index: 4;
-    width: 17px;
-    height: 17px;
-    border: 1px solid var(--aw-border);
-    border-radius: 50%;
-    background: var(--aw-surface);
-    color: var(--aw-text-muted);
-    cursor: pointer;
-    font-size: 10px;
-  }
-  .aw-nav-menu {
-    position: absolute;
-    right: -5px;
-    bottom: -5px;
-    z-index: 4;
-    width: 17px;
-    height: 17px;
-    border: 1px solid var(--aw-border);
-    border-radius: 50%;
-    background: var(--aw-surface);
-    color: var(--aw-text-muted);
-    cursor: pointer;
-    font-size: 10px;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .aw-nav-entry:hover .aw-nav-menu,
-  .aw-nav-entry:focus-within .aw-nav-menu,
-  :global(.aw-root.aw-editing) .aw-nav-menu {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .aw-nav-menu:hover {
-    color: var(--aw-text);
-    border-color: var(--aw-accent);
-  }
-  /* T18: keyboard focus ring for the per-entry nav controls (drag handle, hide,
-     menu). focus-visible only, accent token. The menu/hide affordances also
-     become visible when focused so a keyboard user can reach them. */
-  .aw-nav-entry:focus-within .aw-nav-menu,
-  .aw-nav-menu:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .aw-nav-drag:focus-visible,
-  .aw-nav-hide:focus-visible,
-  .aw-nav-menu:focus-visible {
-    outline: 2px solid var(--aw-accent);
-    outline-offset: 2px;
   }
   @media (max-width: 760px) {
     .aw-nav {
