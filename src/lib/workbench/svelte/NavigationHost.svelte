@@ -10,6 +10,15 @@
 
   const { controller, registry } = getWorkbenchContext();
   const entries = $derived(selectVisibleNavigationEntries($controller.document));
+  // Active-section tint (01-shell.md §9). The app registers a navigation-state
+  // provider on the registry (renderRegistry `registerNavigationState`); we read
+  // it here inside a $derived so it re-resolves whenever the document — or any
+  // reactive source the provider reads (editor runes) — changes. Keyed by entry
+  // id; entries with no provider (or no active concept) resolve to false.
+  const activeEntryId = $derived.by<string | null>(() => {
+    void $controller; // track controller/document changes
+    return entries.find((entry) => registry.isNavigationEntryActive(entry.id))?.id ?? null;
+  });
   let draggingEntry = $state<string | null>(null);
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
@@ -155,13 +164,16 @@
       <div
         class="aw-nav-entry"
         class:dragging={draggingEntry === entry.id}
+        class:active={activeEntryId === entry.id}
         data-nav-entry={entry.id}
+        data-nav-active={activeEntryId === entry.id ? 'true' : undefined}
         data-fixed={entry.fixedSlot ?? 'none'}
         role="group"
         oncontextmenu={(event) => openMenu(entry, event)}
       >
         <Component
           entry={entry}
+          active={activeEntryId === entry.id}
           dispatch={(command: WorkbenchCommand) => controller.dispatch(command)}
           runAction={() => runNavigation(entry)}
           editMode={$controller.editMode}

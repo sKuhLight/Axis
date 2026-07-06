@@ -60,12 +60,26 @@ export interface WorkbenchWidgetSizingProvider {
   isKeep?: (type: string) => boolean;
 }
 
+/**
+ * App-provided resolution of which navigation entry is currently "active" — the
+ * one whose content section is in front (01-shell.md §9: active = current content
+ * section). The generic layer holds no notion of app sections, so the app
+ * registers this seam (mirrors `registerWidgetSizing`). NavigationHost tints the
+ * entry `isActive` returns true for. This is transient UI state, so it lives here
+ * (a render-time provider) and never mutates the document/schema.
+ */
+export interface WorkbenchNavigationStateProvider {
+  /** Whether the given navigation entry id is the active section right now. */
+  isActive: (entryId: string) => boolean;
+}
+
 export class WorkbenchRenderRegistry {
   #panels = new Map<string, WorkbenchPanelComponent>();
   #widgets = new Map<string, WorkbenchWidgetComponent>();
   #navigation = new Map<string, WorkbenchNavigationComponent>();
   #actions = new Map<string, WorkbenchActionHandler['run']>();
   #widgetSizing: WorkbenchWidgetSizingProvider | null = null;
+  #navigationState: WorkbenchNavigationStateProvider | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
   constructor(
@@ -96,6 +110,19 @@ export class WorkbenchRenderRegistry {
 
   get widgetSizing(): WorkbenchWidgetSizingProvider | null {
     return this.#widgetSizing;
+  }
+
+  registerNavigationState(provider: WorkbenchNavigationStateProvider): void {
+    this.#navigationState = provider;
+  }
+
+  get navigationState(): WorkbenchNavigationStateProvider | null {
+    return this.#navigationState;
+  }
+
+  /** Whether a nav entry is the active section. False when no provider is registered. */
+  isNavigationEntryActive(entryId: string): boolean {
+    return this.#navigationState?.isActive(entryId) ?? false;
   }
 
   panel(type: string): WorkbenchPanelComponent | undefined {

@@ -28,6 +28,7 @@
     type AxisFcDevice
   } from './widgetControls';
   import { resolveParamWidgetState } from './paramWidgetState';
+  import { isSaveDirty } from './saveDirtyState';
 
   let {
     widget,
@@ -68,6 +69,9 @@
             ? 'Device offline'
             : 'Connecting…')
   );
+  // Save chip dirty state (02-widgets.md): unsaved in-app edits since the last
+  // Save → accent "Save"; otherwise green "Saved". Derived from read-only history.
+  const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
   const gridMode = $derived(readAxisGridMode(widget.state?.mode));
   const blockSize = $derived(readAxisBlockSize(widget.state?.size));
   const isFcKind = $derived(kind === 'fcDevice' || kind === 'fcLayouts' || kind === 'fcSwitchView');
@@ -465,9 +469,16 @@
     </svg>
   </button>
 {:else if kind === 'save'}
-  <button class="axis-widget save" data-size={size} type="button" onclick={openWidget} title="Save">
+  <button
+    class="axis-widget save"
+    class:dirty={saveDirty}
+    data-size={size}
+    type="button"
+    onclick={openWidget}
+    title={saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}
+  >
     <span class="save-dot"></span>
-    {#if expanded}<span>Save</span>{/if}
+    {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
   </button>
 {:else if kind === 'addBlock'}
   <button class="axis-widget add" data-size={size} type="button" onclick={openWidget} title="Add block">
@@ -809,8 +820,20 @@
     color: var(--amber);
     background: var(--amber);
   }
+  /* Clean = green "Saved" (green dot + ink); dirty = amber "Save" (02-widgets.md). */
   .save {
-    color: #f5c878;
+    color: var(--ok, #33c46b);
+  }
+  .save .save-dot {
+    color: var(--ok, #33c46b);
+    background: var(--ok, #33c46b);
+  }
+  .save.dirty {
+    color: var(--amber, #f5a623);
+  }
+  .save.dirty .save-dot {
+    color: var(--amber, #f5a623);
+    background: var(--amber, #f5a623);
   }
   .square {
     width: 38px;

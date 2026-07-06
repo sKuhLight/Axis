@@ -3,12 +3,14 @@
 
   let {
     entry,
-    runAction
+    runAction,
+    active = false
   }: {
     entry: NavigationEntryState;
     dispatch: (command: WorkbenchCommand) => void;
     runAction: () => void;
     editMode: boolean;
+    active?: boolean;
   } = $props();
 
   const glyphs: Record<string, string> = {
@@ -23,7 +25,15 @@
 
 </script>
 
-<button class="axis-nav-entry" class:account={entry.id === 'account'} type="button" onclick={runAction} title={entry.label ?? entry.id}>
+<button
+  class="axis-nav-entry"
+  class:account={entry.id === 'account'}
+  class:active
+  type="button"
+  aria-current={active ? 'page' : undefined}
+  onclick={runAction}
+  title={entry.label ?? entry.id}
+>
   <span class="ic">{glyphs[entry.id] ?? '•'}</span>
   <span class="lbl">{entry.label ?? entry.id}</span>
 </button>
@@ -48,6 +58,17 @@
   .axis-nav-entry:hover {
     color: var(--text);
     background: var(--surface2);
+  }
+  /* Design 01-shell §9: active rail item = accent ink + subtle bg tint + border.
+     The wrapper already reserves a transparent 1px border for this. */
+  .axis-nav-entry.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+  .axis-nav-entry.active:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
   }
   .axis-nav-entry.account {
     color: var(--accent);
