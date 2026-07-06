@@ -16,10 +16,14 @@
 
 ## Current state — 2026-07-06 ~14:00
 
-- **IMPLEMENTATION QUEUE COMPLETE.** Branch `layout-rework`, tree clean,
-  `npm run check` 0 errors, vitest **320/320** across 47 files.
-- Everything below the Landed table is committed; what remains is the operator's
-  batched visual/hardware check (list below) and whatever it surfaces.
+- Delivery-queue wave complete (tree clean, check 0 errors, vitest 320/320); operator
+  asked "fully done?" → audit against the plan's full T-table found 3 unclaimed P1s.
+- **P1 completion wave IN FLIGHT** (3 parallel agents): T11 param-widget closed-block
+  UX, T14 profile resolver (viewport → profile.activate, override precedence),
+  T15 touch parameter pinning (long-press menu reusing the drop action layer).
+- Still open after this wave: T31 (= operator visual pass + fixes), P2 backlog
+  (T16 rest/T17–T23, T24 polish, T26 E2E), P3 (T27–T30), recorded deferrals
+  (PROFILE switcher UI, toasts, pages contentMode, T12 row anatomy/menus).
 
 ## Landed (chronological, this branch)
 
@@ -77,12 +81,13 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **Operator's batched visual check** — the full checklist is the Verification debt
+1. **P1 completion wave** — T11/T14/T15 (in flight, see Current state).
+2. **Operator's batched visual check** — the full checklist is the Verification debt
    section above. Suggested order: desktop browser smoke on :5173 first (needs ForgeFX
    on :5056), then narrow-window auto-fit stepping, then the phone T02 check (stale
    persisted layout!), then FC panels against the connected device.
-2. Fix round for whatever the visual check surfaces.
-3. Later/parity backlog (from agent reports): T31 file-by-file DC visual pass incl.
+3. Fix round for whatever the visual check surfaces.
+4. Later/parity backlog (from agent reports): T31 file-by-file DC visual pass incl.
    nav-id reconciliation, PROFILE switcher UI, workbench toast surface, pages
    contentMode rendering, T12 P1/P2 row anatomy + context menus, T16 remaining
    tokenization.
