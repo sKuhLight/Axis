@@ -36,6 +36,7 @@
 | `a51e07a` | **T07/T08** | Five design widgets (logo, gridMap dots, fcDevice/fcLayouts/fcSwitchView bound to live FC controller) + `axis.meterToggle` (→ `editor.meteringOn`/`canMeterBlocks`); mini tap-to-cycle + 380/100ms hold-to-repeat (`widgets/widgetControls.ts`). |
 | `e86661a` | **T12** | Preset-browser split-pane parity: 14-row soft cap + expander, list-part query bar (advanced↔simple conversion, sort, filter chips), quick tags, owner rank rule `list<detail<sources<full` (typed replacement for `__PBBus.owner()`), verbatim query-grammar port (`presetBrowser/presetBrowserWorkbenchQuery.ts`). |
 | T34 | landed earlier inside T01/T03 series | Geometry-transition guard |
+| `f2ce99f` | **FC parity** | FC part panels at 04-fc-and-grid.md §1/§3 parity: renderVals part gating + grid render part, board hero/switch-tile anatomy, layouts strip, typed per-slot card editors; fcDevice widget mirrors connected switch count. Deferred: hardware device switching + layout rename (no decoded addresses), AUTO LED chip, mobile sheet animations (full-shell concern). |
 | `c3609df` | auto-fit | Generic estW auto-fit (`workbench/core/widgetFit.ts`): joint fit ×0.62, keep-set shedding in document order, 44px chip reserve; Axis estW table + keep-set (preset/save) via registry sizing provider (`widgets/widgetEstWidths.ts`); top zones fit jointly (fitGroup), gaps 12/10/8; manual density = ceiling; edit mode never sheds. |
 | `8310758` | T33 (2/2) | Registered `axis.blockEditor.modifier` → `AxisBlockEditorModifierPanel` (manifest + registry). |
 | `b031b68` | **T33** | Docked `be-part="modifier"` part: shared `ModifierEditorCore` (flyout/dock variants, overlay unchanged), typed `blockEditorModifierController`, ControlSurface ∿-badge ownership rule. Registration followed in `8310758`. |
@@ -57,6 +58,9 @@
 - auto-fit: top bar steps default→compact→mini as the window narrows; shed widgets
   land in the ⋯ chip (preset+save never shed); edit mode shows everything; bottom
   hint still flexes; gridbar widgets fit at 8px gaps.
+- FC parity: board tiles (LED bar/badges/T-H rows/selection ring), layouts strip,
+  part gating per part type, per-slot editors write correctly, grid part mounts
+  SignalGrid, fcDevice chip matches the connected unit.
 
 ## Deliberately deferred (documented in commits / agent reports)
 
@@ -69,12 +73,8 @@
 
 ## Next queue (in order; sequential where files conflict)
 
-1. **FC part visual parity** (spec: `04-fc-and-grid.md` §1). IN FLIGHT (restarted once:
-   a stray "haiku" message derailed the first run — instructed to disregard).
-2. **T13** — layout presets, driven by the six extracted preset kinds
-   (default/stage/studio/compact + tablet/mobile, spec: `01-shell.md`). Waits for the
-   roster to settle (after 1–3).
-3. Operator's batched visual check over everything (P0: phone T02 check).
+1. **T13** — layout presets (spec: `01-shell.md`). IN FLIGHT — last implementation task.
+2. Operator's batched visual check over everything (P0: phone T02 check).
 
 ## Session conventions (from the operator)
 
