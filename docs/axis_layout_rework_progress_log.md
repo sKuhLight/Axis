@@ -123,6 +123,17 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
+**Round 7 (new session, fresh budget) — IN FLIGHT (3 opus):**
+- R7a T18 focus management: focusTrap.ts utility, trap/restore + Escape for
+  ContextMenu/drawers/mobile nav, :focus-visible across chrome (tokens only).
+- R7b T19 floating widgets: pointer drag-to-reposition (state-persisted x/y),
+  z-raise on interact, viewport clamping + offscreen self-heal, no geometry
+  transitions.
+- R7c T24 FC polish: itemized affordance checklist vs FcEditor + 04 §1/§3/§5,
+  close or explicitly defer each; hardware-verify items appended below.
+Wave 2 after these (file conflicts): T21 safe-areas, T23 bottom-sheet drawers,
+T26 Playwright E2E.
+
 **Round 6 (final push) — ALL LANDED. Suite 479/479, check 0 errors, tree clean.**
 - `9a3969a` T16/T17/T20: overflow-menu hex→tokens, noHexColors guard test
   (WorkbenchHost/TabStack tolerated w/ TODOs — remove tolerance when their defaults
