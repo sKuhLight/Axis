@@ -1,6 +1,7 @@
 import { parseAxisPresetBrowserPart, type AxisPresetBrowserPart, type AxisPresetBrowserSelection } from './types';
 import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
 import { condsToQuery, parseQuery, toAdvancedText, toSimpleConds, type AxisPbCond } from './presetBrowserWorkbenchQuery';
+import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
 
 export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu';
 
@@ -15,6 +16,10 @@ export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSe
   query: string; // advanced typed query
   simpleQ: string; // simple free text
   conditions: AxisPbCond[]; // simple-mode chips
+  // cloud-presence view (§3) — the sources sidebar's LIBRARY selection, shared across parts.
+  presenceView: AxisPbPresenceView;
+  // saved-filter inline-name affordance (§3.3) — the "Save filter" flow's open/name state.
+  saving: boolean;
   // list part (§4)
   sort: AxisPresetBrowserSort;
   showAllRows: boolean;
@@ -43,6 +48,8 @@ export class AxisPresetBrowserWorkbenchController {
     query: '',
     simpleQ: '',
     conditions: [],
+    presenceView: 'all',
+    saving: false,
     sort: 'num',
     showAllRows: false,
     marked: {},
@@ -175,7 +182,7 @@ export class AxisPresetBrowserWorkbenchController {
 
   // Apply a saved-filter query string: switch to advanced and load its text (§3.3).
   applyQueryText(text: string): void {
-    this.#snapshot = { ...this.#snapshot, advanced: true, query: text, conditions: [] };
+    this.#snapshot = { ...this.#snapshot, advanced: true, query: text, conditions: [], saving: false };
     this.#emit();
   }
 
@@ -188,6 +195,31 @@ export class AxisPresetBrowserWorkbenchController {
     if (this.#snapshot.advanced) this.#snapshot = { ...this.#snapshot, query: condsToQuery(next) };
     else this.#snapshot = { ...this.#snapshot, conditions: next, simpleQ: '' };
     this.#emit();
+  }
+
+  // ===================== cloud-presence view (§3) =====================
+
+  // Select a LIBRARY view (All presets / On this device / In cloud / …). Shared across parts so the list
+  // filters and the sources highlight stay in lockstep.
+  setPresenceView(view: AxisPbPresenceView): void {
+    this.#snapshot = { ...this.#snapshot, presenceView: view };
+    this.#emit();
+  }
+
+  // ===================== saved filters (§3.3) =====================
+
+  // Open/close the inline "name this filter" input in the sources sidebar (triggered by the query bar's
+  // "Save filter" button). The list of saved filters itself is persisted via the shared saved-filters
+  // store (localStorage["axs.pb.saved"] + config mirror), not held in this shared snapshot.
+  setSaving(saving: boolean): void {
+    this.#snapshot = { ...this.#snapshot, saving };
+    this.#emit();
+  }
+
+  // The current query text to save — advanced text as-is, or the serialized simple conditions (§3.3),
+  // matching the monolith's commitSave().
+  currentQueryText(): string {
+    return this.#snapshot.advanced ? this.#snapshot.query : condsToQuery(this.#snapshot.conditions);
   }
 
   // ===================== list part (§4) =====================

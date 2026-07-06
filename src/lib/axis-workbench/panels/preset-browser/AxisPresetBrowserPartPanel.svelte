@@ -1,12 +1,26 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { library } from '../../../library.svelte';
+  import { editor } from '../../../editor.svelte';
+  import { cloud, browseEntries } from '../../../cloud.svelte';
+  import type { SyncState } from '../../../types';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
   import {
     createAxisPresetBrowserDataView,
-    type AxisPresetBrowserEntrySummary
+    type AxisPresetBrowserEntrySummary,
+    type AxisPresetBrowserLibEntryLike
   } from '../../presetBrowser/presetBrowserWorkbenchData';
+  import { presenceViewsForAuth } from '../../presetBrowser/presetBrowserWorkbenchPresence';
+  import {
+    loadSavedFilters,
+    persistSavedFilters,
+    addSavedFilter,
+    removeSavedFilter,
+    isSavedFilterActive,
+    savedFilterDotColor,
+    type AxisPbSavedFilter
+  } from '../../presetBrowser/presetBrowserWorkbenchSavedFilters';
   import {
     axisPresetBrowserPartFromPanelType,
     parseAxisPresetBrowserPart,
@@ -39,16 +53,65 @@
     void snapshot; // re-derive on any snapshot change
     return axisPresetBrowserWorkbenchController.activeConditions;
   });
+  // Cloud is live only when the engine has cloud enabled AND the user is signed in (mirrors the monolith's
+  // `cloudOn`, PresetBrowser.svelte). Signed out → base library only + honest 'none' sync state (no dead
+  // cloud rows); signed in → device library + cloud-only presets merged (browseEntries) so cloud-only rigs
+  // are browseable, and each entry's sync state resolves through the reactive cloud store.
+  const cloudOn = $derived(editor.cloud.enabled && !!editor.cloud.user);
+  const baseEntries = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
+    void cloud.index; // re-derive when the cloud index refreshes
+    return (cloudOn ? browseEntries() : library.entries) as AxisPresetBrowserLibEntryLike[];
+  });
+  function syncStateOf(entry: AxisPresetBrowserLibEntryLike): SyncState {
+    if (!cloudOn) return 'none';
+    if (entry.id.startsWith('cloud:')) return 'cloudOnly';
+    // dev: entries came from a device scan — they ARE on the unit even without a comparable CRC; never let
+    // those read as cloud-only (verbatim rule from the monolith syncStateOf).
+    return cloud.stateOf(
+      entry.summary.number ?? -1,
+      entry.summary.crc ?? undefined,
+      entry.id.startsWith('dev:') || entry.summary.crc != null
+    );
+  }
+  const presenceViews = $derived(presenceViewsForAuth(cloudOn));
   const data = $derived(createAxisPresetBrowserDataView({
-    entries: library.entries,
-    filteredEntries: library.filtered,
+    entries: baseEntries,
+    // When a presence view is active, filter over the full base set (the presence predicate needs the
+    // cloud-only rows too); otherwise reuse the library's pre-filtered list.
+    filteredEntries: snapshot.presenceView === 'all' && !cloudOn ? library.filtered : baseEntries,
     sourceId: snapshot.sourceId,
     selectedEntryId: snapshot.entryId,
     tagsOf: library.tagsOf,
     conditions: activeConditions,
     simpleQuery: snapshot.advanced ? '' : snapshot.simpleQ,
-    sort: snapshot.sort
+    sort: snapshot.sort,
+    syncStateOf,
+    presenceView: snapshot.presenceView,
+    presenceViews
   }));
+
+  // Saved filters — shared list (localStorage["axs.pb.saved"] + config mirror), reused from the monolith.
+  let savedFilters = $state<AxisPbSavedFilter[]>(loadSavedFilters());
+  let saveName = $state('');
+  function commitSaveFilter() {
+    const name = saveName.trim();
+    if (!name) {
+      axisPresetBrowserWorkbenchController.setSaving(false);
+      saveName = '';
+      return;
+    }
+    savedFilters = addSavedFilter(savedFilters, name, axisPresetBrowserWorkbenchController.currentQueryText());
+    persistSavedFilters(savedFilters);
+    axisPresetBrowserWorkbenchController.setSaving(false);
+    saveName = '';
+  }
+  function deleteSavedFilter(id: string) {
+    savedFilters = removeSavedFilter(savedFilters, id);
+    persistSavedFilters(savedFilters);
+  }
+  function applySavedFilter(filter: AxisPbSavedFilter) {
+    axisPresetBrowserWorkbenchController.applyQueryText(filter.query);
+  }
   // 14-row soft cap + "Show all" expander (§4.1).
   const rowCap = $derived(applyRowCap(data.visibleEntries, snapshot.showAllRows));
   const activeTags = $derived(
@@ -117,6 +180,33 @@
     <strong>{data.entries.length}</strong>
     <span>indexed presets</span>
   </div>
+
+  <!-- §3 LIBRARY: cloud-presence views with live counts. Selecting one filters the list exactly like the
+       monolith's equivalent (In cloud / Cloud only / Not backed up / Needs upload / Needs update). Cloud
+       views only render signed-in; signed-out we surface an honest "Sign in for cloud sync" row. -->
+  <header class="section-head"><span>Library</span></header>
+  <div class="axis-part-list views-list">
+    {#each data.presenceViews as view}
+      <button
+        type="button"
+        class="view-row"
+        class:active={data.activePresenceView === view.id}
+        onclick={() => axisPresetBrowserWorkbenchController.setPresenceView(view.id)}
+      >
+        <span class="view-glyph" style:color={view.color} aria-hidden="true">{view.glyph}</span>
+        <strong>{view.label}</strong>
+        <em>{view.count}</em>
+      </button>
+    {/each}
+    {#if !cloudOn}
+      <div class="cloud-signin" title="Cloud sync views appear once you sign in">
+        <span aria-hidden="true">☁</span>
+        <span>Sign in for cloud sync</span>
+      </div>
+    {/if}
+  </div>
+
+  <header class="section-head"><span>Sources</span></header>
   <div class="axis-part-list">
     {#each data.sources as source}
       <button type="button" class:active={data.activeSourceId === source.id} onclick={() => selectSource(source.id)}>
@@ -127,6 +217,45 @@
         <em>{source.count}</em>
       </button>
     {/each}
+  </div>
+
+  <!-- §3.3 SAVED FILTERS: name + query subtitle + active highlight (parsed-query equality) + delete ×.
+       Applying one loads its query via applyQueryText. Persisted to the shared axs.pb.saved store. -->
+  <header class="section-head saved-head">
+    <span>Saved filters</span>
+    <em>{savedFilters.length}</em>
+  </header>
+  {#if snapshot.saving}
+    <div class="save-in">
+      <input
+        type="text"
+        bind:value={saveName}
+        placeholder="Name this filter…"
+        spellcheck="false"
+        onkeydown={(e) => {
+          if (e.key === 'Enter') commitSaveFilter();
+          else if (e.key === 'Escape') axisPresetBrowserWorkbenchController.setSaving(false);
+        }}
+      />
+    </div>
+  {/if}
+  <div class="saved-list">
+    {#each savedFilters as filter (filter.id)}
+      {@const active = isSavedFilterActive(filter, activeConditions)}
+      <div class="sv" class:active>
+        <button type="button" class="sv-main" onclick={() => applySavedFilter(filter)}>
+          <span class="sv-dot" style:background={savedFilterDotColor(filter)}></span>
+          <span class="sv-txt">
+            <strong>{filter.name}</strong>
+            <small>{filter.query || '(empty)'}</small>
+          </span>
+        </button>
+        <button type="button" class="sv-x" title="Delete filter" onclick={() => deleteSavedFilter(filter.id)}>×</button>
+      </div>
+    {/each}
+    {#if !savedFilters.length}
+      <div class="empty-s">No saved filters yet. Build a query and hit Save filter.</div>
+    {/if}
   </div>
 
   <header class="section-head"><span>Quick tags</span></header>
@@ -179,6 +308,16 @@
         <button type="button" class:on={snapshot.sort === 'name'} onclick={() => axisPresetBrowserWorkbenchController.setSort('name')}>A-Z</button>
         <button type="button" class:on={snapshot.sort === 'cpu'} onclick={() => axisPresetBrowserWorkbenchController.setSort('cpu')}>CPU</button>
       </div>
+      <!-- §2.2/§3.3 Save filter → opens the inline name input in the sources sidebar. -->
+      <button
+        type="button"
+        class="save-filter"
+        class:on={snapshot.saving}
+        title="Save the current query as a filter"
+        onclick={() => axisPresetBrowserWorkbenchController.setSaving(!snapshot.saving)}
+      >
+        ☆ Save filter
+      </button>
     </div>
     {#if activeConditions.length}
       <div class="chips-row">
@@ -710,6 +849,152 @@
   /* section head + quick tags (§3) */
   .section-head {
     margin-top: 4px;
+  }
+  .section-head.saved-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .section-head em {
+    color: var(--textdim);
+    font-style: normal;
+    font: 800 10px/1 var(--font-mono);
+  }
+
+  /* §3 presence views (LIBRARY list) */
+  .views-list button.view-row {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 0 10px;
+    text-transform: none;
+  }
+  .view-glyph {
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+  }
+  .view-row strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 700 12.5px/1 var(--font-ui);
+  }
+  .view-row.active {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    color: var(--accent);
+  }
+  .view-row.active strong {
+    color: var(--accent);
+  }
+  .cloud-signin {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--textdim);
+    font: 600 11px/1.2 var(--font-mono);
+  }
+
+  /* §3.3 saved filters */
+  .save-in input {
+    width: 100%;
+    height: 32px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--text);
+    padding: 0 10px;
+    font: 500 12px/1 var(--font-mono);
+    outline: none;
+  }
+  .saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .sv {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .sv-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: auto;
+    min-height: 38px;
+    padding: 6px 10px;
+    text-transform: none;
+  }
+  .sv.active .sv-main {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .sv-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--textdim);
+  }
+  .sv-txt {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+  .sv-txt strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 700 12.5px/1 var(--font-ui);
+  }
+  .sv.active .sv-txt strong {
+    color: var(--accent);
+  }
+  .sv-txt small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--textdim);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 500 9.5px/1.2 var(--font-mono);
+  }
+  .sv-x {
+    width: 28px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    color: var(--textdim);
+    font-size: 15px;
+    text-transform: none;
+  }
+  .empty-s {
+    padding: 8px 10px;
+    color: var(--textdim);
+    font: 500 11px/1.3 var(--font-mono);
+  }
+  .save-filter {
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    text-transform: none;
+    font: 700 11px/1 var(--font-mono);
+  }
+  .save-filter.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accentink, var(--bg));
   }
   .quick-tags {
     display: flex;
