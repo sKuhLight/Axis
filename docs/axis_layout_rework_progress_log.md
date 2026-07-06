@@ -118,10 +118,13 @@ get built later, together with the operator — do not pre-build them.
 
 ### Visual fix round — worklist (from the screenshot delta)
 
-- **V1 grid tiles**: current renders tiny ~30px circle glyphs with dashed empties on
-  a large pane; design shows sizable rounded-square colored tiles with glyph+label.
-  Suspect the new pane-relative metrics (availW/availH measurement or map/auto
-  stepping) shrink tiles wrongly; plus tile shape/label parity vs design. IN FLIGHT.
+- **V1 grid tiles**: FIXED (`9e72a93`). Root cause: mode resolution was fed the
+  padding-stripped viewport content box, double-counting pane chrome (the §2.2
+  constants bake it in) → auto collapsed into the glyph minimap (~30px cells) on
+  comfortable panes. Now measures the gridwrap border-box (design gpW/gpH). Tile
+  anatomy already matched — no CSS changes. NOTE for the operator: on a SHORT grid
+  pane (≈<400px for SIZE M) auto→map is BY DESIGN; use a taller pane or SIZE S for
+  full labeled tiles.
 - **V2 preset browser blank**: the docked Preset Browser panel renders an empty body;
   design shows sources-with-counts, saved filters, query bar, rich rows. IN FLIGHT.
 - **V3 chrome + widget styling**: design's compact pill panel headers vs our full tab
