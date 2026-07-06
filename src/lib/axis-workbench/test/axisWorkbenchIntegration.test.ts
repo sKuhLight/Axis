@@ -42,6 +42,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.tuner',
       'axis.tempo',
       'axis.cpu',
+      'axis.meterToggle',
       'axis.save',
       'axis.search',
       'axis.history',
