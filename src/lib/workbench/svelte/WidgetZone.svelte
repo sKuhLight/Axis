@@ -416,9 +416,9 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    border: 1px solid #1a3a3c;
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 22%, var(--aw-border));
     border-radius: 12px;
-    background: #0c1213;
+    background: color-mix(in srgb, var(--aw-accent) 4%, var(--aw-bg));
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
   }
   .aw-widget-zone:not([data-zone='top.right']) .aw-overflow-menu {
@@ -466,10 +466,10 @@
   }
   .aw-overflow-customize {
     height: 32px;
-    border: 1px solid #234d4f;
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 34%, var(--aw-border));
     border-radius: 8px;
-    background: #101d1e;
-    color: #4fd1dc;
+    background: color-mix(in srgb, var(--aw-accent) 10%, var(--aw-bg-2));
+    color: var(--aw-accent);
     cursor: pointer;
     font: 700 12px/1 var(--aw-font-ui);
   }

@@ -3,10 +3,15 @@
 
   const { controller } = getWorkbenchContext();
   const drag = $derived($controller.drag);
+  // Valid/invalid drop intent reuses the existing signal: while a drag is active,
+  // a populated `previewRect` means the pointer is over an accepting target. No
+  // preview rect ⇒ nothing here will accept the drop, so the drag reads as
+  // rejected (design language: danger-tinted, not-allowed cursor).
+  const invalid = $derived(!!drag && !drag.previewRect);
 </script>
 
 {#if drag}
-  <div class="aw-drag-layer">
+  <div class="aw-drag-layer" class:invalid>
     {#if drag.previewRect}
       <div
         class="aw-drop-preview"
@@ -22,13 +27,17 @@
         "
       ></div>
     {/if}
-    <div class="aw-drag-ghost" style="transform:translate({drag.pointer.x + 10}px, {drag.pointer.y + 10}px)">
+    <div class="aw-drag-ghost" class:invalid style="transform:translate({drag.pointer.x + 10}px, {drag.pointer.y + 10}px)">
       {#if drag.kind === 'panel'}
         <span class="aw-drag-kind">Panel</span>
       {:else}
         <span class="aw-drag-kind">Widget</span>
       {/if}
-      {#if drag.targetLabel}<span class="aw-drag-target">{drag.targetLabel}</span>{/if}
+      {#if invalid}
+        <span class="aw-drag-target reject" aria-hidden="true">⊘ No drop</span>
+      {:else if drag.targetLabel}
+        <span class="aw-drag-target">{drag.targetLabel}</span>
+      {/if}
     </div>
   </div>
 {/if}
@@ -38,6 +47,17 @@
     position: fixed;
     inset: 0;
     z-index: 1000;
+    pointer-events: none;
+  }
+  /* Viewport-edge danger frame while no target accepts the drop. Kept
+     pointer-events:none — the drag hit-tests via elementFromPoint, so the
+     overlay must never shadow the real drop targets. */
+  .aw-drag-layer.invalid::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 2px dashed color-mix(in srgb, var(--aw-danger) 55%, transparent);
+    border-radius: 14px;
     pointer-events: none;
   }
   .aw-drag-ghost {
@@ -58,13 +78,26 @@
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
     font: 800 11px/1 var(--aw-font-ui);
   }
+  /* No accepting target under the pointer: recolor the ghost to danger and flag
+     the cursor as not-allowed so the rejected drop reads at a glance. */
+  .aw-drag-ghost.invalid {
+    border-color: var(--aw-danger);
+    background: color-mix(in srgb, var(--aw-danger) 18%, var(--aw-bg-2));
+    cursor: not-allowed;
+  }
   .aw-drag-kind {
     color: var(--aw-text);
+  }
+  .aw-drag-ghost.invalid .aw-drag-kind {
+    color: color-mix(in srgb, var(--aw-danger) 60%, var(--aw-text));
   }
   .aw-drag-target {
     color: var(--aw-accent);
     font: 700 10px/1 var(--aw-font-mono);
     text-transform: uppercase;
+  }
+  .aw-drag-target.reject {
+    color: var(--aw-danger);
   }
   .aw-drop-preview {
     position: fixed;
