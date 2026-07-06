@@ -5,6 +5,7 @@
   import NavigationHost from './NavigationHost.svelte';
   import EditRibbon from './EditRibbon.svelte';
   import DragLayer from './DragLayer.svelte';
+  import WorkbenchToasts from './WorkbenchToasts.svelte';
   import type { WorkbenchController } from './controller.svelte';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, workbenchTokenDefaultsCss, type WorkbenchTheme } from './theme';
@@ -193,6 +194,7 @@
 
     <EditRibbon extras={ribbonExtras} />
     <DragLayer />
+    <WorkbenchToasts />
   </div>
 </WorkbenchProvider>
 
