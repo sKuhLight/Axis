@@ -2,6 +2,9 @@ import { test, expect } from '@playwright/test';
 import { bootCleanWorkbench } from './support/workbench';
 
 test.describe('Gridbar widgets', () => {
+  // On the canonical default layout Signal Grid is the sole (and active) main tab,
+  // so its pane toolbar — the gridbar (GRID Full/Map/Auto + SIZE stepper) — mounts
+  // straight away with no extra tab activation.
   test('grid-mode chips are visible and clicking Map switches the active mode', async ({ page }) => {
     await bootCleanWorkbench(page);
 
