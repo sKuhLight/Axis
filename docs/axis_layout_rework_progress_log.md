@@ -127,8 +127,12 @@ get built later, together with the operator — do not pre-build them.
   full labeled tiles.
 - **V2 preset browser blank**: the docked Preset Browser panel renders an empty body;
   design shows sources-with-counts, saved filters, query bar, rich rows. IN FLIGHT.
-- **V3 chrome + widget styling**: design's compact pill panel headers vs our full tab
-  bars; widget chip styling (mono tokens, tight paddings), Customize FAB. IN FLIGHT.
+- **V3 chrome + widget styling**: FIXED (`0cc30cd`). Single 36px pane header
+  (grip + tab pills + mini actions + context menu) in TabStack, PanelHost body-only;
+  bg-2 pane bodies + hairline; always-on EMPTY PANEL hint; Customize FAB + rail
+  metrics to spec. Widget chips already matched. Deferred: rail active-section tint
+  (needs generic nav 'active' concept), Saved-chip dirty-state wiring (no editor
+  dirty flag), consolidate region-collapse vs pane-collapse buttons.
 - Top-bar widget roster differences in Current.png may be the operator's stale
   persisted layout — revisit after V1–V3 with the operator (ties into Layout
   Profiles later; do not auto-migrate now).
