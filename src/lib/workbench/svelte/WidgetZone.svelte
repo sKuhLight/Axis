@@ -275,6 +275,12 @@
     overflow: visible;
     z-index: 42;
   }
+  /* In edit mode the per-widget edit chrome floats outside the chip (negative
+     offsets); bar zones must not clip it. Panel/grid zones keep their own
+     scroll/overflow. */
+  :global(.aw-root.aw-editing) .aw-widget-zone:not(.panel):not(.grid) {
+    overflow: visible;
+  }
   .aw-widget-zone[data-zone='top.right'] {
     justify-content: flex-end;
   }

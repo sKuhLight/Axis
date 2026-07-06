@@ -334,13 +334,16 @@
     position: absolute;
     pointer-events: auto;
   }
+  /* Edit chrome floats above the widget (design 01-shell §5) — it must never
+     take layout space or tint the chip, so the widget keeps its normal
+     proportions in edit mode. */
   .aw-widget-edit {
     position: absolute;
-    top: -8px;
-    right: -8px;
-    z-index: 6;
+    top: -13px;
+    right: -12px;
+    z-index: 8;
     display: flex;
-    gap: 2px;
+    gap: 3px;
   }
   .aw-widget-drag-surface {
     position: absolute;
@@ -348,22 +351,28 @@
     z-index: 5;
     cursor: grab;
     border-radius: 10px;
-    outline: 1px dashed color-mix(in srgb, var(--aw-accent) 44%, transparent);
+    /* Subtle dashed outline sitting just outside the chip — no background fill
+       (design overlay is a transparent grab layer, the dashed outline marks
+       the unit). offset keeps it clear of the widget's own border. */
+    outline: 1px dashed color-mix(in srgb, var(--aw-accent) 40%, transparent);
     outline-offset: 3px;
-    background: color-mix(in srgb, var(--aw-accent) 5%, transparent);
-  }
-  .aw-widget-edit {
-    z-index: 7;
+    background: transparent;
   }
   .aw-widget-edit button {
-    width: 18px;
-    height: 18px;
-    border: 1px solid var(--aw-border);
-    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    border: 1px solid var(--aw-border-3);
+    border-radius: 7px;
     background: var(--aw-surface-2);
     color: var(--aw-text-muted);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
   }
   .aw-widget-edit button:hover {
     color: var(--aw-text);

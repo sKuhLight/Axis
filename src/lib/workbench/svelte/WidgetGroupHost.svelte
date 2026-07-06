@@ -270,38 +270,35 @@
   .aw-group-grip:hover {
     color: var(--aw-accent);
   }
-  .aw-group-ungroup {
-    position: absolute;
-    top: -9px;
-    right: 13px;
-    z-index: 8;
-    width: 18px;
-    height: 18px;
-    border: 1px solid var(--aw-border);
-    border-radius: 6px;
-    background: var(--aw-surface-2);
-    color: var(--aw-text-muted);
-    font-size: 10px;
-    cursor: pointer;
-  }
-  .aw-group-ungroup:hover {
-    color: var(--aw-text);
-    border-color: var(--aw-accent);
-  }
+  /* Group edit buttons float above the module (design 01-shell §5) so they
+     never collide with the grouped widget chips. */
+  .aw-group-ungroup,
   .aw-group-menu {
     position: absolute;
-    top: -9px;
-    right: -8px;
+    top: -13px;
     z-index: 8;
-    width: 18px;
-    height: 18px;
-    border: 1px solid var(--aw-border);
-    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    border: 1px solid var(--aw-border-3);
+    border-radius: 7px;
     background: var(--aw-surface-2);
     color: var(--aw-text-muted);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
   }
+  .aw-group-ungroup {
+    right: 15px;
+  }
+  .aw-group-menu {
+    right: -12px;
+  }
+  .aw-group-ungroup:hover,
   .aw-group-menu:hover {
     color: var(--aw-text);
     border-color: var(--aw-accent);
