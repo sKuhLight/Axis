@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
   import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
+  import AxisProfileSwitcher from './AxisProfileSwitcher.svelte';
   import { axisWorkbenchController, axisWorkbenchInit } from './axisWorkbenchStore.svelte';
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
@@ -54,6 +55,7 @@
 </script>
 
 {#snippet ribbonExtras()}
+  <AxisProfileSwitcher />
   <AxisLayoutPresetPicker />
 {/snippet}
 

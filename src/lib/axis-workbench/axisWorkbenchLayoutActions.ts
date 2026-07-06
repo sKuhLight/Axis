@@ -1,5 +1,5 @@
 import { createWorkbenchId, type WorkbenchCommandResult, type WorkbenchDocument, type WorkbenchProfile } from '../workbench/core';
-import type { WorkbenchController } from '../workbench';
+import { enqueueToast, type WorkbenchController } from '../workbench';
 import {
   AXIS_PROFILE_SEED_KINDS,
   axisLayoutPresetLabel,
@@ -20,6 +20,64 @@ export const AXIS_PROFILE_IDS = [
   AXIS_TABLET_PROFILE_ID,
   AXIS_MOBILE_PROFILE_ID
 ] as const;
+
+/** Short display labels for the PROFILE segmented control (design §5). */
+export const AXIS_PROFILE_LABELS: Record<(typeof AXIS_PROFILE_IDS)[number], string> = {
+  [AXIS_DESKTOP_PROFILE_ID]: 'Desktop',
+  [AXIS_TABLET_PROFILE_ID]: 'Tablet',
+  [AXIS_MOBILE_PROFILE_ID]: 'Mobile'
+};
+
+/** One chip in the PROFILE switcher. */
+export interface AxisProfileSwitcherChip {
+  /** Profile id this chip pins when clicked. */
+  id: string;
+  /** Human label (Desktop / Tablet / Mobile). */
+  label: string;
+  /**
+   * True when this profile is the *pinned* override (always wins over viewport) —
+   * a solid, filled active state.
+   */
+  pinned: boolean;
+  /**
+   * True when this profile is the one the viewport resolver landed on while in
+   * Auto mode (no override). Shown as a lighter "resolved" hint so the user can
+   * see which profile Auto picked without it reading as a manual pin.
+   */
+  autoActive: boolean;
+}
+
+/** Full derived state for the PROFILE segmented control. */
+export interface AxisProfileSwitcherState {
+  chips: AxisProfileSwitcherChip[];
+  /** True when no override is pinned — the "Auto" affordance is the active one. */
+  autoMode: boolean;
+}
+
+/**
+ * Pure derivation for the PROFILE switcher UI.
+ *
+ * `overrideId` is the persisted, still-valid pin (`controller.profileOverride`);
+ * `activeProfileId` is the currently-resolved active profile
+ * (`controller.document.activeProfileId`). When an override is pinned exactly one
+ * chip is `pinned` (and `autoMode` is false); when nothing is pinned, `autoMode`
+ * is true and the chip matching the resolved active profile is `autoActive` so the
+ * viewport's choice is still visible without reading as a manual pin.
+ */
+export function resolveAxisProfileSwitcherState(
+  overrideId: string | null | undefined,
+  activeProfileId: string
+): AxisProfileSwitcherState {
+  const pinned = overrideId ?? undefined;
+  const autoMode = !pinned;
+  const chips = AXIS_PROFILE_IDS.map((id) => ({
+    id,
+    label: AXIS_PROFILE_LABELS[id],
+    pinned: !!pinned && pinned === id,
+    autoActive: autoMode && activeProfileId === id
+  }));
+  return { chips, autoMode };
+}
 
 /**
  * Manually pin the active Axis device profile (PROFILE switcher). Persists the
@@ -89,6 +147,10 @@ export function applyAxisLayoutPreset(
     { type: 'profile.setLayout', profileId: activeProfileId, layoutId: layout.id }
   ]);
   if (!batch.success) return { success: false, error: batch.error };
+  // Transient confirmation (design shows `Applied "<Kind>" layout`). Fired from
+  // the action layer so every caller (AxisLayoutPresetPicker, future PROFILE
+  // switcher) gets it for free — no per-call-site enqueue needed.
+  enqueueToast({ text: `Applied "${axisLayoutPresetLabel(kind)}" layout` });
   return { success: true, layoutId: layout.id };
 }
 
@@ -145,6 +207,7 @@ export function copyAxisLayoutToProfile(
     { type: 'profile.setLayout', profileId: targetProfileId, layoutId: clone.id }
   ]);
   if (!batch.success) return { success: false, error: batch.error };
+  enqueueToast({ text: `Copied layout to ${target.label}` });
   return { success: true, layoutId: clone.id };
 }
 
