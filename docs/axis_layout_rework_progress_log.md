@@ -200,8 +200,17 @@ fixed/overlay surface that renders getBoundingClientRect values (edit buttons?
 context menu positioning?) may have the same bug when UI scale ≠ 100% — check
 menuPositionFromPointer + edit chrome during V13b.
 
-**ROUND 13 WORKLIST — operator visual pass round 2 (2026-07-06 ~20:35), NOT
-STARTED (usage limit) — this is the next session's fix round. Screenshots:
+**ROUND 13 — IN FLIGHT (session 2026-07-06 evening). Baseline was green
+(check 0, vitest 662/662). Landed so far:**
+- V13a LANDED (`f8f942e`): drawer split into Panels/Widgets/Layouts views —
+  LibraryDrawer takes `view` prop (panels|widgets), LayoutDrawer absorbed
+  backups seam (registerWorkbenchBackupProvider moved there) + import/export
+  + bottom-sheet; TARGET dropdowns gone (contextual placement: panels→main,
+  widgets→top.right, drag places precisely); feature-keep verified per view.
+- V13c/d, V13e/f, V13g/h agents in flight; V13b queued after V13g/h (same files).
+
+**Original round-13 worklist — operator visual pass round 2 (2026-07-06 ~20:35).
+Screenshots:
 ~/Bilder/Bildschirmfotos/Bildschirmfoto_20260706_203127.png (light-theme library
 drawer), _202758.png (edit mode, red circles = misplaced edit buttons), _203359.png
 (nav rail).**
