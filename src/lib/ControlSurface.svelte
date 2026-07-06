@@ -19,6 +19,7 @@
     serializeWorkbenchParameterSource,
     type WorkbenchParameterSource
   } from './workbench';
+  import { axisBlockEditorModifierController } from './axis-workbench/blockEditor/blockEditorModifierController';
 
   let {
     slug = '',
@@ -129,9 +130,25 @@
   let modTargetParam = $state<number | null>(null);
   function openMod(c: Ctl) {
     if (editMode) return;
+    const targetEid = editor.selected?.effectId ?? null;
+    const blockName = editor.selected?.display ?? 'Block';
+    // Modifier-ownership rule (design §1, 05-block-editor.md): when a docked `be-part="modifier"`
+    // panel is mounted, the ∿ badge targets THAT panel via the shared controller instead of opening
+    // the in-editor flyout. Only fall back to the overlay flyout when no docked panel exists.
+    if (axisBlockEditorModifierController.modPartMounted) {
+      axisBlockEditorModifierController.targetParameter({
+        label: c.label,
+        block: blockName,
+        targetEffectId: targetEid,
+        targetParam: c.id,
+        slot: 1
+      });
+      editor.showToast(`∿ ${c.label} → Modifier panel`, '#f5a623');
+      return;
+    }
     modLabel = c.label;
     modTargetParam = c.id;
-    modTargetEid = editor.selected?.effectId ?? null;
+    modTargetEid = targetEid;
     modOpen = true;
   }
   let editingKey = $state<string | null>(null);
