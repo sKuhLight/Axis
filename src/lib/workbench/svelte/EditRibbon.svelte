@@ -32,6 +32,38 @@
     layoutsOpen = true;
   }
 
+  function undoLayout() {
+    controller.undoLayout();
+  }
+
+  function redoLayout() {
+    controller.redoLayout();
+  }
+
+  // Layout undo/redo keyboard shortcuts — ONLY while editing, and ONLY when focus
+  // is not inside a text field. We stopPropagation + preventDefault so the app's
+  // device-history handler (Ctrl/Cmd+Z on the same window) never also fires. When
+  // not editing, this listener is not mounted at all, so the device shortcuts win.
+  $effect(() => {
+    if (!$controller.editMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      const isUndo = key === 'z' && !e.shiftKey;
+      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      if (!isUndo && !isRedo) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (isUndo) controller.undoLayout();
+      else controller.redoLayout();
+    };
+    // Capture phase so we intercept before the app-level document listener.
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
   function addCustomPanel() {
     const template = Object.values($controller.document.panelLibrary).find((item) =>
       item.id.toLowerCase().includes('custom') || item.title.toLowerCase().includes('custom')
@@ -51,6 +83,20 @@
   <div class="aw-edit-ribbon active">
     <span class="aw-edit-label">Edit Layout</span>
     {#if extras}{@render extras()}{/if}
+    <button
+      class="aw-edit-action"
+      type="button"
+      title="Undo layout change (Ctrl/Cmd+Z)"
+      aria-label="Undo layout change"
+      disabled={!$controller.canUndoLayout}
+      onclick={undoLayout}>↶ Undo</button>
+    <button
+      class="aw-edit-action"
+      type="button"
+      title="Redo layout change (Ctrl/Cmd+Shift+Z)"
+      aria-label="Redo layout change"
+      disabled={!$controller.canRedoLayout}
+      onclick={redoLayout}>↷ Redo</button>
     <button class="aw-edit-action" type="button" title="Show dockable panels" onclick={openLibrary}>▤ Panels</button>
     <button class="aw-edit-action" type="button" title="Insert custom panel" onclick={addCustomPanel}>＋ Panel</button>
     <button class="aw-edit-action" type="button" title="Open widget library" onclick={openLibrary}>▤ Widgets</button>
@@ -125,9 +171,13 @@
     box-shadow: none;
     font-size: 12px;
   }
-  .aw-edit-ribbon .aw-edit-action:hover {
+  .aw-edit-ribbon .aw-edit-action:hover:not(:disabled) {
     color: var(--aw-text);
     border-color: var(--aw-accent);
+  }
+  .aw-edit-ribbon .aw-edit-action:disabled {
+    cursor: default;
+    opacity: 0.42;
   }
   .aw-edit-error {
     min-width: 0;

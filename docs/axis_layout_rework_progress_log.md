@@ -197,6 +197,28 @@ undo/redo (in-memory ring in the controller, ribbon buttons + edit-mode
 shortcuts, NEVER persisted), pages contentMode rendering (spec-verified from
 01-shell.md; fixed default unchanged), packages.ts deep re-key (close the T02
 collision class via layoutPackage machinery + regression test).
+- **T30 DONE (uncommitted, main-session review pending). check 0 errors, vitest
+  662/662 (+30 new: 16 layoutHistory + 14 controller).** New
+  `workbench/svelte/layoutHistory.ts` = injectable-clock snapshot ring (depth 50,
+  coalesce 450ms), Axis-neutral (frameworkBoundary guard passes). Controller owns
+  one `LayoutHistory`: seeded in ctor, `record()` after each successful `dispatch`,
+  `recordBatch()` after `dispatchMany` (one step per user action, never coalesces),
+  `reset()` on external `setDocument`. Public API `undoLayout()/redoLayout()/
+  canUndoLayout/canRedoLayout` — reactive through `#emit()`. Restore routes through
+  `setDocument` under a `#restoringLayout` guard so repair runs but the ring is NOT
+  re-baselined (redo future preserved). Undo state lives only on the controller
+  instance — never on the document, never persisted/synced (proven by a test:
+  a controller with history serialises byte-identical to one without).
+  **Exclusion table:** EXCLUDE `panel.activate` + `profile.activate` (pure
+  focus/viewport-driven). INCLUDE everything else structural. COALESCE per-target:
+  `split.resize`/`region.resize` (drag streams), `widget.move` (order-independent
+  set nudge/drag), `widget.resize`, `widget.state` (grid-mode/block-size hold
+  repeat — meaningful, so kept but collapsed). `panel.add` etc. = null key (always
+  standalone). UI: Undo/Redo buttons in the EXPANDED EditRibbon (tokens only,
+  disabled bound to canUndo/canRedo) + capture-phase `Ctrl/Cmd+Z` /
+  `Ctrl/Cmd+Shift+Z`/`Ctrl+Y` mounted via `$effect` ONLY while editMode is on,
+  bailing when focus is in input/textarea/contentEditable, `preventDefault +
+  stopPropagation` so the app device-history shortcut never double-fires.
 After round 11+12: ONLY operator-dependent work remains (visual pass/T31 incl.
 nav-id reconciliation, hardware batch incl. T27, Layout Profiles TOGETHER, T35).
 Still in flight: **Round 11 storage hardening**

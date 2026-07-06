@@ -161,6 +161,119 @@ describe('WorkbenchController', () => {
     expect(controller.document.activeProfileId).toBe('profile.desktop');
   });
 
+  it('undoes and redoes layout dispatches through setDocument, in memory only', () => {
+    let clock = 1000;
+    const persisted: string[] = [];
+    const controller = createWorkbenchController(
+      createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }),
+      {
+        onChange: (doc) => persisted.push(Object.keys(doc.layouts['layout.test'].panels).join(',') || '-'),
+        layoutHistory: { env: { now: () => clock } }
+      }
+    );
+
+    expect(controller.canUndoLayout).toBe(false);
+    expect(controller.canRedoLayout).toBe(false);
+
+    clock = 2000;
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+    clock = 3000;
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.b'), region: 'main' });
+
+    expect(controller.canUndoLayout).toBe(true);
+    expect(Object.keys(controller.activeLayout!.panels).sort()).toEqual(['panel.a', 'panel.b']);
+
+    // Undo removes panel.b, restoring through setDocument (which repairs + persists).
+    expect(controller.undoLayout()).toBe(true);
+    expect(Object.keys(controller.activeLayout!.panels)).toEqual(['panel.a']);
+    expect(controller.canRedoLayout).toBe(true);
+
+    // Undo again → empty.
+    expect(controller.undoLayout()).toBe(true);
+    expect(Object.keys(controller.activeLayout!.panels)).toEqual([]);
+    expect(controller.canUndoLayout).toBe(false);
+    expect(controller.undoLayout()).toBe(false);
+
+    // Redo re-adds them.
+    expect(controller.redoLayout()).toBe(true);
+    expect(Object.keys(controller.activeLayout!.panels)).toEqual(['panel.a']);
+    expect(controller.redoLayout()).toBe(true);
+    expect(Object.keys(controller.activeLayout!.panels).sort()).toEqual(['panel.a', 'panel.b']);
+    expect(controller.canRedoLayout).toBe(false);
+
+    // The restore path notifies onChange (persist) each time, so the layout is
+    // saved — but the document itself never gained a history field.
+    expect('layoutHistory' in controller.document).toBe(false);
+    expect(persisted.length).toBeGreaterThan(0);
+  });
+
+  it('coalesces a rapid same-type stream into one undo step', () => {
+    let clock = 1000;
+    const controller = createWorkbenchController(
+      createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }),
+      { layoutHistory: { env: { now: () => clock }, coalesceWindowMs: 400 } }
+    );
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+
+    // A continuous grid-mode / block-size hold stream on one widget.
+    controller.dispatch({
+      type: 'widget.add',
+      zone: 'top.right',
+      widget: { id: 'w1', type: 't', zone: 'top.right', order: 0, size: 'default' }
+    });
+    clock = 2000;
+    controller.dispatch({ type: 'widget.state', widgetId: 'w1', state: { v: 1 } });
+    clock = 2050;
+    controller.dispatch({ type: 'widget.state', widgetId: 'w1', state: { v: 2 } });
+    clock = 2100;
+    controller.dispatch({ type: 'widget.state', widgetId: 'w1', state: { v: 3 } });
+
+    // The three widget.state writes collapse into ONE undo step.
+    expect(controller.undoLayout()).toBe(true);
+    const w = controller.activeLayout!.widgets['w1'];
+    expect(w.state).toBeUndefined(); // back to before the stream
+  });
+
+  it('a fresh dispatch after undo truncates the redo future', () => {
+    const controller = createWorkbenchController(
+      createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }),
+      { layoutHistory: { env: { now: () => 0 }, coalesceWindowMs: 0 } }
+    );
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.b'), region: 'main' });
+    controller.undoLayout();
+    expect(controller.canRedoLayout).toBe(true);
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.c'), region: 'main' });
+    expect(controller.canRedoLayout).toBe(false);
+  });
+
+  it('re-baselines the ring on an external setDocument (no stale undo)', () => {
+    const controller = createWorkbenchController(
+      createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' })
+    );
+    controller.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+    expect(controller.canUndoLayout).toBe(true);
+
+    controller.setDocument(createEmptyWorkbenchDocument({ profileId: 'profile.fresh', layoutId: 'layout.fresh' }));
+    expect(controller.canUndoLayout).toBe(false);
+    expect(controller.canRedoLayout).toBe(false);
+  });
+
+  it('having a layout history does not change what the document persists', () => {
+    const seedDoc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    const withHistory = createWorkbenchController(JSON.parse(JSON.stringify(seedDoc)));
+    const plain = createWorkbenchController(JSON.parse(JSON.stringify(seedDoc)));
+
+    withHistory.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+    withHistory.undoLayout(); // exercise the ring, then land back at baseline
+
+    plain.dispatch({ type: 'panel.add', panel: panel('panel.a'), region: 'main' });
+    plain.dispatch({ type: 'panel.close', panelId: 'panel.a' }); // land back at baseline the plain way
+
+    // Both documents serialise identically — the ring left no trace on the doc.
+    expect(JSON.stringify(withHistory.document)).toBe(JSON.stringify(plain.document));
+  });
+
   it('resolves widget bindings through the active controller document', async () => {
     const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
 
