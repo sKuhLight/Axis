@@ -36,11 +36,37 @@
   } from '../../presetBrowser/presetBrowserWorkbenchRuntime';
   import { createAxisPresetBrowserWorkbenchHost } from '../../presetBrowser/presetBrowserWorkbenchHost';
   import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
-  import {
-    AXIS_PB_QUICK_TAGS,
-    condsToQuery
-  } from '../../presetBrowser/presetBrowserWorkbenchQuery';
+  import { AXIS_PB_QUICK_TAGS } from '../../presetBrowser/presetBrowserWorkbenchQuery';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
+  import { tick } from 'svelte';
+  import {
+    specsBySlug,
+    type SpecLibEntry
+  } from '../../presetBrowser/presetBrowserWorkbenchSpecs';
+  import {
+    buildAutocompleteContext,
+    suggest,
+    applyAcceptance,
+    tidyQuery,
+    type AxisPbAcItem
+  } from '../../presetBrowser/presetBrowserWorkbenchAutocomplete';
+  import {
+    buildFiltersContext,
+    pickerItems as buildPickerItems,
+    applyPick,
+    addCondFromPayload,
+    chipDescriptor,
+    type AxisPbPickerKind,
+    type AxisPbPickerCtx,
+    type AxisPbDragPayload
+  } from '../../presetBrowser/presetBrowserWorkbenchFilters';
+  import {
+    buildDetailBlockCards,
+    encodeDragPayload,
+    parseDragPayload,
+    AXIS_PB_DND_MIME,
+    type DetailBlock
+  } from '../../presetBrowser/presetBrowserWorkbenchParams';
   import {
     buildAxisPbMenuActions,
     toWorkbenchMenuItems,
@@ -128,6 +154,151 @@
   );
   const isOwner = $derived(snapshot.owner === part);
   const selectedDetail = $derived(snapshot.entryId ? runtimeSnapshot.details[snapshot.entryId] : null);
+
+  // ── V13e/V13f shared vocabulary ─────────────────────────────────────────────────────────────
+  // Filter specs (which blocks/params can be filtered, and their enum/numeric domains) are derived from
+  // the SAME decoded blocks the monolith uses — library.paramsOf via the runtime host reaches the real
+  // library store here, so autocomplete + the Filters block + detail param matching are FULL parity, not
+  // a summary-only fallback. The summary block slugs + model names seed the Type enum before params hydrate.
+  const specLibEntries = $derived.by<SpecLibEntry[]>(() => {
+    void library.entries;
+    return baseEntries.map((e) => {
+      const raw = e as unknown as Parameters<typeof library.paramsOf>[0];
+      const blocks = (library.paramsOf(raw) as DetailBlock[] | null) ?? null;
+      const models: Record<string, string[]> = { ...(e.summary.models ?? {}) };
+      return {
+        summaryBlockSlugs: (e.summary.blocks ?? []).map((b) => (b.slug ?? '').toLowerCase()).filter(Boolean),
+        models,
+        blocks: blocks as SpecLibEntry['blocks']
+      };
+    });
+  });
+  const pbSpecs = $derived(specsBySlug(specLibEntries));
+  const acContext = $derived(buildAutocompleteContext(specLibEntries, pbSpecs, library.allTags));
+  const filtersContext = $derived(buildFiltersContext(specLibEntries, pbSpecs, library.allTags));
+
+  // ── V13e autocomplete (advanced query bar) ──────────────────────────────────────────────────
+  let queryEl: HTMLInputElement | undefined = $state();
+  let caret = $state(0);
+  let acOpen = $state(false);
+  let acItems = $state<AxisPbAcItem[]>([]);
+  let acIndex = $state(0);
+  let acLabel = $state('');
+  function recomputeAc() {
+    if (!snapshot.advanced) { acOpen = false; return; }
+    const c = queryEl?.selectionStart ?? caret;
+    const r = suggest(acContext, queryEl?.value ?? snapshot.query, c);
+    acItems = r.items; acLabel = r.label; acIndex = 0; acOpen = true;
+  }
+  const closeAc = () => { acOpen = false; };
+  function onQueryInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    caret = el.selectionStart ?? el.value.length;
+    if (snapshot.advanced) { axisPresetBrowserWorkbenchController.setQuery(el.value); recomputeAc(); }
+    else axisPresetBrowserWorkbenchController.setSimpleQuery(el.value);
+  }
+  function onQuerySelect(e: Event) {
+    const el = e.target as HTMLInputElement;
+    caret = el.selectionStart ?? 0;
+    if ('key' in e && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes((e as KeyboardEvent).key)) return;
+    if (snapshot.advanced && acOpen) recomputeAc();
+  }
+  function onQueryKey(e: KeyboardEvent) {
+    if (!snapshot.advanced) return;
+    if (!acOpen) { if (e.key === 'ArrowDown') recomputeAc(); return; }
+    const n = acItems.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(n - 1, acIndex + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); acIndex = Math.max(0, acIndex - 1); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { if (n) { e.preventDefault(); void acceptAc(acIndex); } }
+    else if (e.key === 'Escape') { e.preventDefault(); acOpen = false; }
+  }
+  async function acceptAc(i: number) {
+    const item = acItems[i];
+    if (!item || !queryEl) return;
+    const res = applyAcceptance(item, queryEl.value, caret);
+    if (res.closed) { closeAc(); return; }
+    axisPresetBrowserWorkbenchController.setQuery(res.text);
+    caret = res.caret;
+    await tick();
+    queryEl.focus();
+    try { queryEl.setSelectionRange(res.caret, res.caret); } catch { /* */ }
+    recomputeAc();
+  }
+  function onQueryBlur() {
+    setTimeout(() => {
+      closeAc();
+      picker = null;
+      if (snapshot.advanced) axisPresetBrowserWorkbenchController.setQuery(tidyQuery(snapshot.query));
+    }, 130);
+  }
+
+  // ── V13e Filters builder-chips + pickers ────────────────────────────────────────────────────
+  const chipDescriptors = $derived(activeConditions.map((c) => ({ cond: c, desc: chipDescriptor(c) })));
+  type PickerState = { kind: AxisPbPickerKind; ctx: AxisPbPickerCtx; x: number; y: number };
+  let picker = $state<PickerState | null>(null);
+  let pickerSearch = $state('');
+  let pickerHi = $state(0);
+  let lastAnchor: HTMLElement | null = null;
+  const pickerList = $derived(picker ? buildPickerItems(filtersContext, picker.kind, picker.ctx, pickerSearch) : []);
+  function openPicker(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, el: HTMLElement) {
+    const r = el.getBoundingClientRect();
+    picker = { kind, ctx, x: Math.min(Math.max(12, r.left), window.innerWidth - 312), y: r.bottom + 6 };
+    pickerSearch = ''; pickerHi = 0;
+  }
+  function pickerPick(v: string) {
+    if (!picker) return;
+    const res = applyPick(filtersContext, picker.kind, picker.ctx, v);
+    if (res.type === 'chain') { openPickerKind(res.kind, res.ctx); return; }
+    if (res.type === 'edit') { axisPresetBrowserWorkbenchController.editConds(res.edit); }
+    picker = null;
+  }
+  function openPickerKind(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx) { if (lastAnchor) openPicker(kind, ctx, lastAnchor); }
+  function onAddFilter(e: MouseEvent) { e.stopPropagation(); lastAnchor = e.currentTarget as HTMLElement; openPicker('addfilter', {}, lastAnchor); }
+  function onAddParam(e: MouseEvent, ci: number, block: string) { e.stopPropagation(); lastAnchor = e.currentTarget as HTMLElement; openPicker('param', { block, ci }, lastAnchor); }
+  function onPickerKey(e: KeyboardEvent) {
+    const items = pickerList;
+    if (e.key === 'ArrowDown') { e.preventDefault(); pickerHi = Math.min(items.length - 1, pickerHi + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); pickerHi = Math.max(0, pickerHi - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (items[pickerHi]) pickerPick(items[pickerHi].v); }
+    else if (e.key === 'Escape') picker = null;
+  }
+  function removeCondAt(ci: number) { axisPresetBrowserWorkbenchController.editConds((cc) => cc.splice(ci, 1)); }
+  function removeParamAt(ci: number, pi: number) {
+    axisPresetBrowserWorkbenchController.editConds((cc) => { const t = cc[ci]; if (t?.kind === 'block') t.params.splice(pi, 1); });
+  }
+
+  // ── V13e/V13f drag param/block into the Filters row ─────────────────────────────────────────
+  let dragOver = $state(false);
+  function startDrag(e: DragEvent, payload: AxisPbDragPayload) {
+    e.dataTransfer?.setData(AXIS_PB_DND_MIME, encodeDragPayload(payload));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+  }
+  function addPayload(p: AxisPbDragPayload) {
+    axisPresetBrowserWorkbenchController.editConds((c) => addCondFromPayload(c, p));
+  }
+  function onFiltersDrop(e: DragEvent) {
+    e.preventDefault();
+    dragOver = false;
+    const p = parseDragPayload(e.dataTransfer?.getData(AXIS_PB_DND_MIME));
+    if (p) addPayload(p);
+  }
+
+  // ── V13f detail block-parameter listing ─────────────────────────────────────────────────────
+  // Reaches the SAME decoded blocks the monolith lists (library.paramsOf). When the selected entry has no
+  // params hydrated yet, the "Load params" button triggers hydration via the runtime detail loader.
+  const selectedDecodedBlocks = $derived.by<DetailBlock[] | null>(() => {
+    const sel = data.selectedEntry;
+    if (!sel) return null;
+    const raw = baseEntries.find((e) => e.id === sel.id);
+    if (!raw) return null;
+    void runtimeSnapshot.details; // re-derive after hydrateParams populates the cache
+    return (library.paramsOf(raw as unknown as Parameters<typeof library.paramsOf>[0]) as DetailBlock[] | null) ?? null;
+  });
+  const detailBlockCards = $derived(
+    selectedDecodedBlocks
+      ? buildDetailBlockCards(selectedDecodedBlocks, activeConditions, snapshot.focusedBlockEffectId)
+      : null
+  );
 
   onMount(() => {
     return bindAxisRuntimeHost({
@@ -386,20 +557,55 @@
 
 {#snippet listTopBar()}
   <div class="query-bar">
-    <div class="query-input">
+    <div class="query-input" class:focus={acOpen && snapshot.advanced}>
       <span class="magnifier" aria-hidden="true">⌕</span>
-      <input
-        type="text"
-        spellcheck="false"
-        placeholder={snapshot.advanced ? 'AMP(TYPE=5153)  +  tag:Lead' : 'Search presets, tags, amps…'}
-        value={snapshot.advanced ? snapshot.query : snapshot.simpleQ}
-        oninput={(e) =>
-          snapshot.advanced
-            ? axisPresetBrowserWorkbenchController.setQuery((e.currentTarget as HTMLInputElement).value)
-            : axisPresetBrowserWorkbenchController.setSimpleQuery((e.currentTarget as HTMLInputElement).value)}
-      />
+      {#if snapshot.advanced}
+        <!-- V13e: advanced mode gets the caret-aware autocomplete engine -->
+        <input
+          bind:this={queryEl}
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="AMP(Type=5153, Gain>7)  +  REVERB(Mix>30)  +  tag:Lead"
+          value={snapshot.query}
+          oninput={onQueryInput}
+          onkeydown={onQueryKey}
+          onfocus={recomputeAc}
+          onblur={onQueryBlur}
+          onclick={onQuerySelect}
+          onkeyup={onQuerySelect}
+        />
+      {:else}
+        <input
+          type="text"
+          spellcheck="false"
+          placeholder="Search presets, tags, amps, params…"
+          value={snapshot.simpleQ}
+          oninput={onQueryInput}
+        />
+      {/if}
       {#if (snapshot.advanced ? snapshot.query : snapshot.simpleQ)}
         <button type="button" class="clear-btn" title="Clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>×</button>
+      {/if}
+      {#if acOpen && snapshot.advanced}
+        <!-- V13e autocomplete dropdown (§2.4) -->
+        <div class="ac">
+          {#if acLabel}<div class="ac-ctx">{acLabel}</div>{/if}
+          {#each acItems as a, i}
+            <button
+              type="button"
+              class="ac-item"
+              class:hi={i === acIndex}
+              onmousedown={(e) => { e.preventDefault(); void acceptAc(i); }}
+              onmouseenter={() => (acIndex = i)}
+            >
+              <span class="ac-dot" style:background={a.dot ? a.color : 'transparent'} style:border={a.dot ? 'none' : `1px solid ${a.color}`}></span>
+              <span class="ac-l">{a.label}</span><span class="ac-sp"></span><span class="ac-h">{a.hint}</span>
+            </button>
+          {/each}
+          {#if !acItems.length}<div class="ac-empty">No matches — keep typing</div>{/if}
+          <div class="ac-foot"><span>↑↓ move</span><span>↵ insert</span><span>esc close</span></div>
+        </div>
       {/if}
     </div>
     <div class="query-controls">
@@ -428,14 +634,42 @@
         ☆ Save filter
       </button>
     </div>
-    {#if activeConditions.length}
-      <div class="chips-row">
-        {#each activeConditions as cond}
-          <span class="chip">{condsToQuery([cond])}</span>
-        {/each}
-        <button type="button" class="chip-clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>
-      </div>
-    {/if}
+    <!-- V13e FILTERS builder-chips row (§2.5) — also a drop target for params/blocks dragged from detail -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="filters-row"
+      class:dragover={dragOver}
+      role="group"
+      ondragenter={(e) => { e.preventDefault(); dragOver = true; }}
+      ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+      ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) dragOver = false; }}
+      ondrop={onFiltersDrop}
+    >
+      <span class="filters-lbl">FILTERS</span>
+      {#if dragOver}<span class="drop-hint">drop to add filter</span>{/if}
+      {#each chipDescriptors as item, ci}
+        <div class="fchip">
+          {#if item.desc.kind === 'block'}
+            <button type="button" class="fchip-head blk" style:--c={item.desc.color} onclick={(e) => onAddParam(e, ci, item.desc.kind === 'block' ? item.desc.block : '')} title="Add a parameter condition">
+              <span class="fdot" style:background={item.desc.color}></span>{item.desc.label}
+            </button>
+            {#each item.desc.params as p, pi}
+              <span class="fparam">{p.name} {p.glyph} {p.val}<button type="button" class="fpx" onclick={() => removeParamAt(ci, pi)}>×</button></span>
+            {/each}
+            <button type="button" class="faddp" onclick={(e) => onAddParam(e, ci, item.desc.kind === 'block' ? item.desc.block : '')}>+ param</button>
+          {:else}
+            <span class="fchip-head">
+              <span class="fdot" style:background={item.desc.color}></span>{item.desc.text}
+            </span>
+          {/if}
+          <button type="button" class="fcx" onclick={() => removeCondAt(ci)}>×</button>
+        </div>
+      {/each}
+      <button type="button" class="faddf" onclick={onAddFilter}><span class="plus">+</span> Add filter</button>
+      {#if !activeConditions.length}<span class="filters-hint">{snapshot.advanced ? 'Type a query above, or add filters →' : 'Add block, parameter & tag filters →'}</span>{/if}
+      <span class="fsp"></span>
+      {#if activeConditions.length}<button type="button" class="fclrall" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>{/if}
+    </div>
   </div>
 {/snippet}
 
@@ -618,6 +852,59 @@
         </div>
       {/if}
 
+      <!-- V13f BLOCK PARAMETERS (§"detail" step 4): every param of every non-IO block with its value.
+           Drag or double-click a block header / param cell to add it to the FILTERS row. Cells matched
+           by an active block-param condition are highlighted. Reaches the same decoded blocks as the
+           monolith via library.paramsOf; when unhydrated, "Load params" pulls them through the runtime. -->
+      <div class="d-blocks">
+        <div class="d-blocks-lbl">BLOCK PARAMETERS</div>
+        {#if !selectedDecodedBlocks}
+          <div class="d-blocks-empty">
+            Full params not loaded for this preset.
+            <button type="button" class="link" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
+              {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Loading…' : 'Load params'}
+            </button>
+          </div>
+        {:else if detailBlockCards && detailBlockCards.length}
+          {#each detailBlockCards as card}
+            <div class="d-blk">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="d-blk-h"
+                draggable="true"
+                ondragstart={(e) => startDrag(e, card.blockPayload)}
+                ondblclick={() => addPayload(card.blockPayload)}
+                title="Drag or double-click to filter by this block"
+              >
+                <span class="fdot" style:background={card.color}></span>
+                <span class="d-blk-n">{card.category}{card.title ? ` · ${card.title}` : ''}</span>
+                <span class="fsp"></span>
+                <span class="d-blk-grip">⠿</span>
+                <span class="d-blk-i">{card.instanceLabel}</span>
+              </div>
+              <div class="d-blk-grid">
+                {#each card.cells as cell}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div
+                    class="d-pr"
+                    class:hit={cell.hit}
+                    draggable="true"
+                    ondragstart={(e) => startDrag(e, cell.payload)}
+                    ondblclick={() => addPayload(cell.payload)}
+                    title="Drag or double-click to filter on this param"
+                  >
+                    <span class="d-pk">{cell.key}</span>
+                    <span class="d-pv">{cell.value}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        {:else}
+          <div class="d-blocks-empty">No filterable block parameters in this preset.</div>
+        {/if}
+      </div>
+
       {#if runtimeSnapshot.error && isOwner}
         <!-- shared runtime error renders only on the overlay-owner part (§1) so split layouts
              don't duplicate the banner across sources/list/detail. -->
@@ -667,6 +954,40 @@
      cross-panel. -->
 {#if isOwner}
   <ContextMenu open={menuOpen} position={menuPos} items={menuItems} label="Preset actions" onClose={() => (menuOpen = false)} />
+{/if}
+
+<!-- V13e add-filter / param / value picker popover (§2.5, §4.4). Local to the instance that owns the query
+     bar (list/full); anchored in viewport coords. A window click closes it. -->
+<svelte:window onclick={() => { if (picker) picker = null; }} ondragend={() => (dragOver = false)} />
+{#if picker}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="pk-pop"
+    style:left={picker.x + 'px'}
+    style:top={picker.y + 'px'}
+    role="dialog"
+    tabindex="-1"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={onPickerKey}
+  >
+    <div class="pk-h">
+      <div class="pk-lbl">{picker.kind === 'addfilter' ? 'Add a filter' : picker.kind === 'tag' ? 'Pick a tag' : picker.kind === 'param' ? 'Pick a parameter' : 'Pick a value'}</div>
+      <div class="pk-search">
+        <span aria-hidden="true">⌕</span>
+        <!-- svelte-ignore a11y_autofocus -->
+        <input bind:value={pickerSearch} onkeydown={onPickerKey} placeholder="Search…" spellcheck="false" autocomplete="off" autofocus />
+      </div>
+    </div>
+    <div class="pk-list">
+      {#each pickerList as it, i}
+        <button type="button" class="pk-item" class:hi={i === pickerHi} onclick={() => pickerPick(it.v)} onmouseenter={() => (pickerHi = i)}>
+          {#if it.dot}<span class="fdot" style:background={it.color}></span>{/if}
+          <span class="pk-l">{it.label}</span><span class="fsp"></span><span class="pk-s">{it.sub}</span>
+        </button>
+      {/each}
+      {#if !pickerList.length}<div class="pk-empty">No matches</div>{/if}
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -1094,28 +1415,371 @@
     background: var(--accent);
     color: var(--accentink, var(--bg));
   }
-  .chips-row {
+  /* V13e autocomplete dropdown (§2.4) */
+  .query-input.focus {
+    border-color: var(--accent);
+  }
+  .ac {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 40;
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border2, var(--border));
+    border-radius: 13px;
+    background: var(--surface, var(--bg2));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    padding: 5px;
+  }
+  .ac-ctx {
+    padding: 5px 9px 4px;
+    color: var(--textdim);
+    font: 800 9px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .ac-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text2);
+    text-transform: none;
+  }
+  .ac-item.hi {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .ac-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 3px;
+  }
+  .ac-l {
+    color: var(--text);
+    font: 500 13px/1 var(--font-mono);
+  }
+  .ac-sp,
+  .fsp {
+    flex: 1;
+  }
+  .ac-h {
+    color: var(--textdim);
+    font: 500 10px/1 var(--font-mono);
+  }
+  .ac-empty,
+  .pk-empty {
+    padding: 10px;
+    color: var(--textdim);
+    font: 500 11px/1.3 var(--font-mono);
+    text-align: center;
+  }
+  .ac-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 9px 3px;
+    color: var(--textdim);
+    font: 600 9px/1 var(--font-mono);
+  }
+
+  /* V13e FILTERS builder-chips row (§2.5) */
+  .filters-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg2) 60%, var(--bg));
   }
-  .chip {
+  .filters-row.dragover {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg2));
+  }
+  .filters-lbl {
+    color: var(--textdim);
+    font: 800 9px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+  }
+  .drop-hint {
+    color: var(--accent);
+    font: 700 10px/1 var(--font-mono);
+  }
+  .fchip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px 3px 6px;
     border: 1px solid var(--border2, var(--border));
-    border-radius: 7px;
-    padding: 4px 8px;
-    background: var(--surface2, var(--bg2));
+    border-radius: 8px;
+    background: var(--bg2);
+  }
+  .fchip-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text2);
+    font: 700 11px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .fchip-head.blk {
+    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+    background: color-mix(in srgb, var(--c) 15%, transparent);
+    color: var(--c);
+  }
+  .fdot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 3px;
+  }
+  .fparam {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 7px;
+    border-radius: 6px;
+    background: var(--surface2, color-mix(in srgb, var(--accent) 8%, var(--bg)));
     color: var(--text2);
     font: 600 11px/1 var(--font-mono);
   }
-  .chip-clear {
+  .fpx,
+  .fcx {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--textdim);
+    font-size: 13px;
+  }
+  .fcx {
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .faddp {
+    height: 22px;
+    padding: 0 7px;
+    border: 1px dashed var(--border2, var(--border));
+    border-radius: 6px;
+    background: transparent;
+    color: var(--textdim);
+    font: 600 10px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .faddf {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--bg2);
+    color: var(--text2);
+    font: 700 11px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .faddf .plus {
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .filters-hint {
+    color: var(--textdim);
+    font: 500 10.5px/1.2 var(--font-mono);
+  }
+  .fclrall {
     height: 24px;
     padding: 0 8px;
     border-radius: 7px;
     color: var(--textdim);
     font-size: 11px;
     text-transform: none;
-    margin-left: auto;
+  }
+
+  /* V13e picker popover (§2.5, §4.4) */
+  .pk-pop {
+    position: fixed;
+    z-index: 60;
+    width: 300px;
+    max-width: calc(100vw - 24px);
+    border: 1px solid var(--border2, var(--border));
+    border-radius: 12px;
+    background: var(--surface, var(--bg2));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+  .pk-h {
+    display: grid;
+    gap: 7px;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pk-lbl {
+    color: var(--textdim);
+    font: 800 9px/1 var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .pk-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--textdim);
+  }
+  .pk-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: 500 12px/1 var(--font-mono);
+    outline: none;
+  }
+  .pk-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .pk-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text2);
+    text-transform: none;
+  }
+  .pk-item.hi {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .pk-l {
+    color: var(--text);
+    font: 500 13px/1 var(--font-mono);
+  }
+  .pk-s {
+    color: var(--textdim);
+    font: 500 10px/1 var(--font-mono);
+  }
+
+  /* V13f BLOCK PARAMETERS listing (detail §4) */
+  .d-blocks {
+    display: grid;
+    gap: 8px;
+  }
+  .d-blocks-lbl {
+    color: var(--textdim);
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .d-blocks-empty {
+    padding: 8px 10px;
+    color: var(--textdim);
+    font: 500 11px/1.4 var(--font-mono);
+  }
+  .d-blocks-empty .link {
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: 700 11px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .d-blk {
+    border: 1px solid var(--surface2, var(--border));
+    border-radius: 12px;
+    background: var(--bg2);
+    overflow: hidden;
+  }
+  .d-blk-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: grab;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .d-blk-n {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font: 700 12px/1 var(--font-mono);
+  }
+  .d-blk-grip {
+    color: var(--textdim);
+    font-size: 11px;
+  }
+  .d-blk-i {
+    color: var(--textdim);
+    font: 600 10px/1 var(--font-mono);
+  }
+  .d-blk-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    background: var(--surface2, var(--border));
+  }
+  .d-pr {
+    flex: 1 1 calc(50% - 1px);
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 7px 9px;
+    background: var(--bg2);
+    cursor: grab;
+  }
+  .d-pr.hit {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg2));
+  }
+  .d-pk {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--textdim);
+    font: 500 9px/1 var(--font-mono);
+  }
+  .d-pv {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font: 700 12.5px/1 var(--font-mono);
+  }
+  .d-pr.hit .d-pv {
+    color: var(--accent);
   }
 
   /* section head + quick tags (§3) */

@@ -171,6 +171,24 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
+  // Edit the active conditions in place, then persist back into whichever mode is live (§2.5, verbatim
+  // from the monolith `editConds`). Advanced mode re-serializes to the typed query text; simple mode
+  // writes the chip list. Used by the FILTERS builder-chips, pickers, quick tags, and drag-into-filters.
+  editConds(fn: (conds: AxisPbCond[]) => void): void {
+    if (this.#snapshot.advanced) {
+      const c = parseQuery(this.#snapshot.query);
+      fn(c);
+      this.#snapshot = { ...this.#snapshot, query: condsToQuery(c) };
+    } else {
+      const c = this.#snapshot.conditions.map((x) =>
+        x.kind === 'block' ? { ...x, params: x.params.map((p) => ({ ...p })) } : { ...x }
+      );
+      fn(c);
+      this.#snapshot = { ...this.#snapshot, conditions: c };
+    }
+    this.#emit();
+  }
+
   // Toggle advanced ↔ simple and convert the current state across the boundary (§2.1).
   toggleAdvanced(): void {
     const s = this.#snapshot;

@@ -29,6 +29,23 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     expect(c.activeConditions).toEqual([]);
   });
 
+  it('editConds re-serializes to the query in advanced mode', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('AMP');
+    c.editConds((conds) => {
+      const blk = conds.find((x) => x.kind === 'block');
+      if (blk && blk.kind === 'block') blk.params.push({ name: 'GAIN', op: '>', val: '7' });
+    });
+    expect(c.snapshot.query).toBe('AMP(GAIN>7)');
+  });
+
+  it('editConds writes the chip list in simple mode', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.toggleAdvanced(); // -> simple
+    c.editConds((conds) => conds.push({ kind: 'tag', val: 'Lead' }));
+    expect(c.snapshot.conditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
+  });
+
   it('marks a range in display order for shift-click', () => {
     const c = new AxisPresetBrowserWorkbenchController();
     const order = ['a', 'b', 'c', 'd'];
