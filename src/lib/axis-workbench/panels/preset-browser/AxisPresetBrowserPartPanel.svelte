@@ -22,6 +22,11 @@
     type AxisPresetBrowserRuntimeSnapshot
   } from '../../presetBrowser/presetBrowserWorkbenchRuntime';
   import { createAxisPresetBrowserWorkbenchHost } from '../../presetBrowser/presetBrowserWorkbenchHost';
+  import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
+  import {
+    AXIS_PB_QUICK_TAGS,
+    condsToQuery
+  } from '../../presetBrowser/presetBrowserWorkbenchQuery';
 
   let { panel }: { panel: PanelInstance } = $props();
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
@@ -30,13 +35,27 @@
   const part = $derived<AxisPresetBrowserPart>(
     parseAxisPresetBrowserPart(panel.state?.part, axisPresetBrowserPartFromPanelType(panel.type))
   );
+  // Live conditions the query filters by (advanced typed query, or simple chips + typed text).
+  const activeConditions = $derived.by(() => {
+    void snapshot; // re-derive on any snapshot change
+    return axisPresetBrowserWorkbenchController.activeConditions;
+  });
   const data = $derived(createAxisPresetBrowserDataView({
     entries: library.entries,
     filteredEntries: library.filtered,
     sourceId: snapshot.sourceId,
     selectedEntryId: snapshot.entryId,
-    tagsOf: library.tagsOf
+    tagsOf: library.tagsOf,
+    conditions: activeConditions,
+    simpleQuery: snapshot.advanced ? '' : snapshot.simpleQ,
+    sort: snapshot.sort
   }));
+  // 14-row soft cap + "Show all" expander (§4.1).
+  const rowCap = $derived(applyRowCap(data.visibleEntries, snapshot.showAllRows));
+  const activeTags = $derived(
+    new Set(activeConditions.filter((c) => c.kind === 'tag').map((c) => c.val.toLowerCase()))
+  );
+  const isOwner = $derived(snapshot.owner === part);
   const selectedDetail = $derived(snapshot.entryId ? runtimeSnapshot.details[snapshot.entryId] : null);
 
   onMount(() => {
@@ -47,11 +66,24 @@
     });
   });
 
+  // Register this part for overlay-owner election (§1); unregister on unmount.
+  $effect(() => axisPresetBrowserWorkbenchController.registerPart(part));
+
   $effect(() => {
     axisPresetBrowserWorkbenchController.setPart(part);
   });
 
   $effect(() => axisPresetBrowserWorkbenchController.subscribe((next) => (snapshot = next)));
+
+  function onRowClick(entry: AxisPresetBrowserEntrySummary, event: MouseEvent) {
+    if (event.metaKey || event.ctrlKey) {
+      axisPresetBrowserWorkbenchController.toggleMark(entry.id);
+    } else if (event.shiftKey) {
+      axisPresetBrowserWorkbenchController.markRange(data.order, entry.id);
+    } else {
+      selectEntry(entry);
+    }
+  }
 
   $effect(() => {
     if (part !== 'detail' || !snapshot.entryId || snapshot.entryId === lastDetailEntryId) return;
@@ -105,24 +137,95 @@
           </button>
         {/each}
       </div>
+
+      <header class="section-head"><span>Quick tags</span></header>
+      <div class="quick-tags">
+        {#each AXIS_PB_QUICK_TAGS as tag}
+          {@const on = activeTags.has(tag.label.toLowerCase())}
+          <button
+            type="button"
+            class="quick-tag"
+            class:on
+            style:--tag-col={tag.color}
+            onclick={() => axisPresetBrowserWorkbenchController.toggleTag(tag.label)}
+          >
+            {tag.label}
+          </button>
+        {/each}
+      </div>
     {:else if part === 'list'}
-      {#if data.visibleEntries.length}
-        <div class="axis-list-summary">
-          <span>{data.visibleEntries.length} presets</span>
-          <strong>{data.sources.find((source) => source.id === data.activeSourceId)?.label ?? data.activeSourceId}</strong>
+      <div class="query-bar">
+        <div class="query-input">
+          <span class="magnifier" aria-hidden="true">⌕</span>
+          <input
+            type="text"
+            spellcheck="false"
+            placeholder={snapshot.advanced ? 'AMP(TYPE=5153)  +  tag:Lead' : 'Search presets, tags, amps…'}
+            value={snapshot.advanced ? snapshot.query : snapshot.simpleQ}
+            oninput={(e) =>
+              snapshot.advanced
+                ? axisPresetBrowserWorkbenchController.setQuery((e.currentTarget as HTMLInputElement).value)
+                : axisPresetBrowserWorkbenchController.setSimpleQuery((e.currentTarget as HTMLInputElement).value)}
+          />
+          {#if (snapshot.advanced ? snapshot.query : snapshot.simpleQ)}
+            <button type="button" class="clear-btn" title="Clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>×</button>
+          {/if}
         </div>
-        <div class="axis-preset-list" role="listbox" aria-label="Preset list">
-          {#each data.visibleEntries.slice(0, 120) as entry}
+        <div class="query-controls">
+          <button
+            type="button"
+            class="adv-toggle"
+            class:on={snapshot.advanced}
+            onclick={() => axisPresetBrowserWorkbenchController.toggleAdvanced()}
+            title="Toggle advanced query"
+          >
+            <i></i>{snapshot.advanced ? 'Advanced' : 'Simple'}
+          </button>
+          <div class="sort-seg" role="group" aria-label="Sort">
+            <button type="button" class:on={snapshot.sort === 'num'} onclick={() => axisPresetBrowserWorkbenchController.setSort('num')}>#</button>
+            <button type="button" class:on={snapshot.sort === 'name'} onclick={() => axisPresetBrowserWorkbenchController.setSort('name')}>A-Z</button>
+            <button type="button" class:on={snapshot.sort === 'cpu'} onclick={() => axisPresetBrowserWorkbenchController.setSort('cpu')}>CPU</button>
+          </div>
+        </div>
+        {#if activeConditions.length}
+          <div class="chips-row">
+            {#each activeConditions as cond}
+              <span class="chip">{condsToQuery([cond])}</span>
+            {/each}
+            <button type="button" class="chip-clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if part === 'list'}
+      {#if data.visibleEntries.length}
+        {@const markedCount = Object.keys(snapshot.marked).length}
+        {#if markedCount}
+          <div class="select-head">
+            <span>{markedCount} selected</span>
+            <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
+          </div>
+        {:else}
+          <div class="axis-list-summary">
+            <span>{rowCap.totalRows} presets</span>
+            <strong>{data.sources.find((source) => source.id === data.activeSourceId)?.label ?? data.activeSourceId}</strong>
+          </div>
+        {/if}
+        <div class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
+          {#each rowCap.rows as entry}
             <button
               type="button"
               class:active={snapshot.entryId === entry.id}
+              class:marked={snapshot.marked[entry.id]}
               class:fav={entry.fav}
-              onclick={() => selectEntry(entry)}
+              onclick={(e) => onRowClick(entry, e)}
               ondblclick={() => loadEntry(entry)}
               role="option"
               aria-selected={snapshot.entryId === entry.id}
             >
-              <span class="preset-number">{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
+              <span class="checkbox" class:on={snapshot.marked[entry.id]}>{snapshot.marked[entry.id] ? '✓' : ''}</span>
+              <span class="preset-number" class:sel={snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
               <span class="preset-main">
                 <strong>{entry.name}</strong>
                 <small>{entry.model || `${entry.blockCount} blocks`}</small>
@@ -134,10 +237,15 @@
             </button>
           {/each}
         </div>
+        {#if rowCap.capped}
+          <button type="button" class="show-all" onclick={() => axisPresetBrowserWorkbenchController.setShowAllRows(true)}>
+            Show all {rowCap.totalRows} presets
+          </button>
+        {/if}
       {:else}
         <div class="axis-part-empty">
-          <strong>{data.sources.find((source) => source.id === data.activeSourceId)?.label ?? data.activeSourceId}</strong>
-          <span>No presets in this source</span>
+          <strong>No presets match this filter</strong>
+          <span>Loosen a parameter range or remove a block condition.</span>
         </div>
       {/if}
     {:else if part === 'detail'}
@@ -204,7 +312,9 @@
             </div>
           {/if}
 
-          {#if runtimeSnapshot.error}
+          {#if runtimeSnapshot.error && isOwner}
+            <!-- shared runtime error renders only on the overlay-owner part (§1) so split layouts
+                 don't duplicate the banner across sources/list/detail. -->
             <p class="runtime-error">{runtimeSnapshot.error}</p>
           {/if}
         </article>
@@ -381,6 +491,196 @@
   }
   .axis-preset-list button.fav .preset-number {
     color: var(--accent);
+  }
+  .axis-preset-list button {
+    grid-template-columns: 18px 40px minmax(0, 1fr) auto;
+  }
+  .axis-preset-list button.active,
+  .axis-preset-list button.marked {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg2));
+  }
+  .checkbox {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border3, var(--border));
+    border-radius: 5px;
+    color: var(--bg);
+    font: 700 11px/1 var(--font-mono);
+  }
+  .checkbox.on {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .preset-number.sel {
+    color: #f5a623;
+  }
+
+  /* query bar (§2) */
+  .query-bar {
+    display: grid;
+    gap: 8px;
+  }
+  .query-input {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 40px;
+    border: 1px solid var(--border2, var(--border));
+    border-radius: 12px;
+    background: var(--bg2);
+    padding: 0 8px 0 30px;
+  }
+  .magnifier {
+    position: absolute;
+    left: 10px;
+    color: var(--textdim);
+    font-size: 15px;
+  }
+  .query-input input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: 500 13px/1 var(--font-mono);
+    outline: none;
+  }
+  .clear-btn {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--textdim);
+    font-size: 15px;
+  }
+  .query-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .adv-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    text-transform: none;
+  }
+  .adv-toggle i {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--textdim);
+  }
+  .adv-toggle.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accentink, var(--bg));
+  }
+  .adv-toggle.on i {
+    background: var(--accentink, var(--bg));
+  }
+  .sort-seg {
+    display: flex;
+    gap: 4px;
+  }
+  .sort-seg button {
+    height: 28px;
+    padding: 0 9px;
+    border-radius: 7px;
+    font: 700 11px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .sort-seg button.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accentink, var(--bg));
+  }
+  .chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .chip {
+    border: 1px solid var(--border2, var(--border));
+    border-radius: 7px;
+    padding: 4px 8px;
+    background: var(--surface2, var(--bg2));
+    color: var(--text2);
+    font: 600 11px/1 var(--font-mono);
+  }
+  .chip-clear {
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: var(--textdim);
+    font-size: 11px;
+    text-transform: none;
+    margin-left: auto;
+  }
+
+  /* section head + quick tags (§3) */
+  .section-head {
+    margin-top: 4px;
+  }
+  .quick-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .quick-tag {
+    height: auto;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--tag-col) 33%, transparent);
+    background: color-mix(in srgb, var(--tag-col) 14%, transparent);
+    color: var(--tag-col);
+    font: 700 11px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .quick-tag.on {
+    background: var(--tag-col);
+    color: var(--bg);
+  }
+
+  /* selection header + expander (§4) */
+  .select-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 11px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent);
+    font: 700 11px/1 var(--font-mono);
+    text-transform: uppercase;
+  }
+  .select-head button {
+    height: 28px;
+    padding: 0 10px;
+    text-transform: none;
+  }
+  .show-all {
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--surface, var(--bg2));
+    color: var(--text2);
+    text-align: center;
+    text-transform: none;
+    font: 700 12px/1 var(--font-ui);
   }
   .axis-preset-detail {
     display: grid;
