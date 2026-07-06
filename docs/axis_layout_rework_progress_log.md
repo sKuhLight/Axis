@@ -123,6 +123,16 @@ observer attached before the grid element existed; re-measure effect only tracke
 old-shell window signals). Inner element now observed reactively + effect tracks
 colW/cellH/gap/mapMode.
 
+**Round 3 (post-screenshot-2) — LANDED:**
+- `0b9963d` PB cloud presence views (live counts via cloud.stateOf/browseEntries,
+  honest signed-out state) + SAVED FILTERS (monolith store reused: axs.pb.saved +
+  forgefx config mirror) + save-filter affordance.
+- `f2ff1cf` nav-rail active-section tint (generic registerNavigationState seam;
+  overlay entries + docked panels resolved live) + save-chip dirty state from the
+  public history runes (amber Save / green Saved). CAVEAT: hardware-only knob turns
+  don't mark dirty — needs a device edited-buffer flag via ForgeFX
+  (editor.presetEdited) to take precedence when it exists (candidate ForgeFX task).
+
 ### Visual fix round — worklist (from the screenshot delta) — ALL THREE LANDED
 
 - **V1 grid tiles**: FIXED (`9e72a93`). Root cause: mode resolution was fed the
