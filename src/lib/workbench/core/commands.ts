@@ -2,6 +2,7 @@ import type {
   DockAxis,
   DockRegionId,
   FloatingRect,
+  JsonObject,
   PanelInstance,
   PanelTemplate,
   WidgetInstance,
@@ -85,6 +86,7 @@ export type WorkbenchCommand =
   | { type: 'widget.move'; widgetIds: string[]; zone: WidgetZoneId; index?: number; floatingRect?: FloatingRect }
   | { type: 'widget.hide'; widgetIds: string[] }
   | { type: 'widget.resize'; widgetId: string; size: WidgetSize }
+  | { type: 'widget.state'; widgetId: string; state: JsonObject }
   | { type: 'widget.group'; widgetIds: string[]; groupId?: string; zone?: WidgetZoneId; index?: number }
   | { type: 'widget.ungroup'; groupId: string }
   | { type: 'zone.ensure'; zone: WidgetZoneState }

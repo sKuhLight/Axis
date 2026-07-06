@@ -423,6 +423,22 @@ describe('reduceWorkbenchDocument — widgets', () => {
     expect(layout(resized.next).widgets['widget.a'].size).toBe('default');
   });
 
+  it('merges widget state patches, even for locked widgets', () => {
+    const first = reduceWorkbenchDocument(doc(), {
+      type: 'widget.add',
+      widget: widget('widget.a', 'top.left', 0, { locked: true, state: { mode: 'auto', keep: 1 } }),
+      zone: 'top.left'
+    }).next;
+    const patched = reduceWorkbenchDocument(first, { type: 'widget.state', widgetId: 'widget.a', state: { mode: 'full' } });
+    const missing = reduceWorkbenchDocument(first, { type: 'widget.state', widgetId: 'missing', state: { mode: 'full' } });
+
+    expect(patched.success).toBe(true);
+    expect(layout(patched.next).widgets['widget.a'].state).toEqual({ mode: 'full', keep: 1 });
+    expect(layout(first).widgets['widget.a'].state).toEqual({ mode: 'auto', keep: 1 });
+    expect(missing.success).toBe(false);
+    expect(missing.error?.code).toBe('missing-widget');
+  });
+
   it('groups widgets', () => {
     let next = reduceWorkbenchDocument(doc(), { type: 'widget.add', widget: widget('widget.a', 'top.left', 0), zone: 'top.left' }).next;
     next = reduceWorkbenchDocument(next, { type: 'widget.add', widget: widget('widget.b', 'top.left', 1), zone: 'top.left' }).next;

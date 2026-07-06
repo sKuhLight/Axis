@@ -2,10 +2,20 @@
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
+  import {
+    AXIS_GRID_MODES,
+    cycleAxisBlockSize,
+    readAxisBlockSize,
+    readAxisGridMode,
+    stepAxisBlockSize,
+    type AxisBlockSize,
+    type AxisGridMode
+  } from '../gridView';
 
   let {
     widget,
     size,
+    dispatch,
     editMode = false
   }: {
     widget: WidgetInstance;
@@ -29,8 +39,8 @@
   const sceneCount = $derived(Math.max(1, editor.sceneCount || 8));
   const activeScene = $derived(Math.max(1, Math.min(sceneCount, editor.scene || 1)));
   const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
-  const gridMode = $derived((widget.state?.mode as string | undefined) ?? 'auto');
-  const blockSize = $derived((widget.state?.size as string | undefined) ?? 'M');
+  const gridMode = $derived(readAxisGridMode(widget.state?.mode));
+  const blockSize = $derived(readAxisBlockSize(widget.state?.size));
   const paramTarget = $derived(widget.binding?.target ?? {});
   const paramBlock = $derived(readString(paramTarget.block) ?? readString(widget.state?.block) ?? 'Block');
   const paramLabel = $derived(readString(paramTarget.param) ?? readString(paramTarget.label) ?? readString(widget.state?.label) ?? 'Parameter');
@@ -72,6 +82,14 @@
     else if (kind === 'account') editor.openAxis('account');
     else if (kind === 'connection') editor.openPorts();
     else if (kind === 'undoRedo') void history.undo();
+  }
+
+  function setGridMode(mode: AxisGridMode) {
+    dispatch({ type: 'widget.state', widgetId: widget.id, state: { mode } });
+  }
+
+  function setBlockSize(next: AxisBlockSize) {
+    dispatch({ type: 'widget.state', widgetId: widget.id, state: { size: next } });
   }
 
   function presetStep(delta: number) {
@@ -200,9 +218,17 @@
   <div class="axis-widget chips" data-size={size}>
     {#if expanded}<span class="mono token">GRID</span>{/if}
     <div class="chip-row">
-      {#each ['full', 'map', 'auto'] as mode}
+      {#each AXIS_GRID_MODES as mode}
         {#if !mini || mode === gridMode}
-          <button class="pill-chip" class:on={mode === gridMode || mini} type="button">{mode === 'full' ? 'Full' : mode === 'map' ? 'Map' : 'Auto'}</button>
+          <button
+            class="pill-chip"
+            class:on={mode === gridMode || mini}
+            type="button"
+            title={mode === 'full' ? 'Blocks at the chosen size — grid pans' : 'Fit blocks to the pane'}
+            onclick={() => setGridMode(mini ? (gridMode === 'full' ? 'auto' : 'full') : mode)}
+          >
+            {mode === 'full' ? 'Full' : 'Auto'}
+          </button>
         {/if}
       {/each}
     </div>
@@ -210,9 +236,13 @@
 {:else if kind === 'blockSize'}
   <div class="axis-widget block-size" data-size={size}>
     {#if expanded}<span class="mono token">SIZE</span>{/if}
-    {#if !mini}<button class="step" type="button">−</button>{/if}
-    <span class="mono strong">{blockSize}</span>
-    {#if !mini}<button class="step" type="button">+</button>{/if}
+    {#if mini}
+      <button class="mono strong size-cycle" type="button" title="Cycle block size" onclick={() => setBlockSize(cycleAxisBlockSize(blockSize))}>{blockSize}</button>
+    {:else}
+      <button class="step" type="button" title="Smaller blocks" disabled={blockSize === 'S'} onclick={() => setBlockSize(stepAxisBlockSize(blockSize, -1))}>−</button>
+      <span class="mono strong">{blockSize}</span>
+      <button class="step" type="button" title="Bigger blocks" disabled={blockSize === 'L'} onclick={() => setBlockSize(stepAxisBlockSize(blockSize, 1))}>+</button>
+    {/if}
   </div>
 {:else if kind === 'paramControl'}
   <button
@@ -533,6 +563,15 @@
     cursor: pointer;
     font-size: 15px;
     font-weight: 700;
+  }
+  .step:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .size-cycle {
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
   }
   .param {
     position: relative;
