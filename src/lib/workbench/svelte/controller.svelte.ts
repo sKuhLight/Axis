@@ -20,10 +20,13 @@ import {
   type WorkbenchBindingResult
 } from '../bindings';
 import type { WorkbenchDragState } from './drag';
+import { LayoutHistory, type LayoutHistoryOptions } from './layoutHistory';
 
 export interface WorkbenchControllerOptions {
   onChange?: (doc: WorkbenchDocument) => void;
   bindingRegistry?: WorkbenchBindingRegistry;
+  /** Tuning for the in-memory layout undo/redo ring (depth / coalesce / clock). */
+  layoutHistory?: LayoutHistoryOptions;
 }
 
 export interface SetWorkbenchDocumentOptions {
@@ -49,11 +52,21 @@ export class WorkbenchController {
   #onChange?: (doc: WorkbenchDocument) => void;
   #bindingRegistry: WorkbenchBindingRegistry;
   #subscribers = new Set<(controller: WorkbenchController) => void>();
+  /**
+   * In-memory layout undo/redo ring. Snapshots the document around dispatches;
+   * NEVER persisted (see layoutHistory.ts). Separate from any host-level
+   * content/edit history — the two never entangle.
+   */
+  #layoutHistory: LayoutHistory;
+  /** When true, a `setDocument` is a history RESTORE and must not reset the ring. */
+  #restoringLayout = false;
 
   constructor(document: WorkbenchDocument, options: WorkbenchControllerOptions = {}) {
     this.document = repairWorkbenchDocument(document);
     this.#onChange = options.onChange;
     this.#bindingRegistry = options.bindingRegistry ?? createWorkbenchBindingRegistry();
+    this.#layoutHistory = new LayoutHistory(options.layoutHistory);
+    this.#layoutHistory.seed(this.document);
   }
 
   get activeProfile(): WorkbenchProfile | undefined {
@@ -70,6 +83,11 @@ export class WorkbenchController {
 
   setDocument(document: WorkbenchDocument, options: SetWorkbenchDocumentOptions = {}): void {
     this.document = repairWorkbenchDocument(document);
+    // An external document swap (adopt cache / remote / import) re-baselines the
+    // undo ring so it never restores a stale layout. A history RESTORE (undo/redo)
+    // routes through here too but must keep the ring intact — the #restoringLayout
+    // guard skips the reset in that case.
+    if (!this.#restoringLayout) this.#layoutHistory.reset(this.document);
     if (options.notify !== false) this.#onChange?.(this.document);
     this.#emit();
   }
@@ -101,6 +119,7 @@ export class WorkbenchController {
     this.lastResult = result;
     if (result.success) {
       this.document = result.next;
+      this.#layoutHistory.record(command, this.document);
       this.#onChange?.(this.document);
     }
     this.#emit();
@@ -127,6 +146,8 @@ export class WorkbenchController {
 
     if (changed) {
       this.document = next;
+      // A batch is one user action → one undo step (never coalesces).
+      this.#layoutHistory.recordBatch(commands, this.document);
       this.#onChange?.(this.document);
     }
     this.#emit();
@@ -138,6 +159,48 @@ export class WorkbenchController {
       results,
       error
     };
+  }
+
+  // ── Layout undo/redo (in-memory only; see layoutHistory.ts) ──────────────
+
+  /** True when there is a prior layout snapshot to restore. Reactive via #emit. */
+  get canUndoLayout(): boolean {
+    return this.#layoutHistory.canUndo;
+  }
+
+  /** True when a redo target exists ahead of the cursor. Reactive via #emit. */
+  get canRedoLayout(): boolean {
+    return this.#layoutHistory.canRedo;
+  }
+
+  /**
+   * Restore the previous layout snapshot. Goes through the normal `setDocument`
+   * path (so the document is repaired and persisted) but WITHOUT re-capturing —
+   * the ring cursor moves, the redo future is preserved. No-op when nothing to
+   * undo. Returns `true` if a snapshot was restored.
+   */
+  undoLayout(): boolean {
+    const snapshot = this.#layoutHistory.undo();
+    if (!snapshot) return false;
+    this.#restoreLayoutSnapshot(snapshot);
+    return true;
+  }
+
+  /** Restore the next (redo) layout snapshot. Mirror of {@link undoLayout}. */
+  redoLayout(): boolean {
+    const snapshot = this.#layoutHistory.redo();
+    if (!snapshot) return false;
+    this.#restoreLayoutSnapshot(snapshot);
+    return true;
+  }
+
+  #restoreLayoutSnapshot(snapshot: WorkbenchDocument): void {
+    this.#restoringLayout = true;
+    try {
+      this.setDocument(snapshot);
+    } finally {
+      this.#restoringLayout = false;
+    }
   }
 
   /** The currently-persisted, still-valid user profile override id (or undefined). */
