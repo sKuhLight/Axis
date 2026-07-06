@@ -16,9 +16,16 @@
   import {
     WORKBENCH_PARAMETER_SOURCE_MIME,
     getOptionalWorkbenchContext,
+    menuPositionFromPointer,
     serializeWorkbenchParameterSource,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition,
     type WorkbenchParameterSource
   } from './workbench';
+  import ContextMenu from './workbench/svelte/ContextMenu.svelte';
+  import { longPress } from './axis-workbench/longPress';
+  import { buildAxisPinMenuItems } from './axis-workbench/pinMenu';
+  import type { AxisPinTarget } from './axis-workbench/pinTargets';
   import { axisBlockEditorModifierController } from './axis-workbench/blockEditor/blockEditorModifierController';
 
   let {
@@ -891,17 +898,54 @@
     event.dataTransfer.setData('text/plain', source.label);
   }
 
-  async function pinControlToWorkbench(c: Ctl) {
+  async function pinControlToWorkbench(c: Ctl, target?: AxisPinTarget) {
     if (!workbenchCanPin || !workbench || !pinnable(c)) return;
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
-      source: 'host',
+      source: 'menu',
       args: {
         paramId: c.id,
-        title: c.label
+        title: c.label,
+        ...(target?.panelId ? { panelId: target.panelId } : {})
       }
     });
-    if (result.success) editor.showToast(`Pinned ${c.label}`, '#35c9d6');
+    if (result.success) {
+      const where = target?.panelId ? ` to ${target.label}` : '';
+      editor.showToast(`Pinned ${c.label}${where}`, '#35c9d6');
+    }
+  }
+
+  // ── touch / context-menu pin path (HTML5 drag doesn't work on touch) ──
+  let pinMenuOpen = $state(false);
+  let pinMenuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  let pinMenuCtl = $state<Ctl | null>(null);
+
+  const pinMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    if (!pinMenuOpen || !workbench || !pinMenuCtl) return [];
+    const c = pinMenuCtl;
+    return buildAxisPinMenuItems(workbench.controller.document, (target) => void pinControlToWorkbench(c, target));
+  });
+
+  function openPinMenuAt(c: Ctl, pos: WorkbenchMenuPosition) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    pinMenuCtl = c;
+    pinMenuPos = pos;
+    pinMenuOpen = true;
+  }
+
+  function onPinContextMenu(event: MouseEvent, c: Ctl) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    event.preventDefault();
+    openPinMenuAt(c, menuPositionFromPointer(event));
+  }
+
+  function onPinLongPress(c: Ctl, detail: { x: number; y: number }) {
+    openPinMenuAt(c, detail);
+  }
+
+  function closePinMenu() {
+    pinMenuOpen = false;
+    pinMenuCtl = null;
   }
 
   function pagePinIds(): number[] {
@@ -1014,6 +1058,8 @@
           aria-label={c.label}
           draggable={workbenchCanPin && pinnable(c)}
           ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
+          oncontextmenu={(e) => onPinContextMenu(e, c)}
+          use:longPress={{ onLongPress: (d) => onPinLongPress(c, d) }}
         >
           {#if c.kind === 'cont' && view === 'knob'}
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
@@ -1141,6 +1187,8 @@
               class:dragging={drag?.id === w.id}
               draggable={workbenchCanPin && pinnable(c) && !editMode}
               ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
+              oncontextmenu={(e) => { if (!editMode) onPinContextMenu(e, c); }}
+              use:longPress={{ onLongPress: (d) => { if (!editMode) onPinLongPress(c, d); } }}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
               onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0) showParamHelp(c.id, c.label); }}
               onmouseleave={clearParamHelp}
@@ -1354,6 +1402,11 @@
 
 <!-- modifier editor flyout (opened from a control's ∿ badge) -->
 <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
+
+<!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to HTML5 drag -->
+{#if workbenchCanPin}
+  <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
+{/if}
 
 <style>
   .modbadge {

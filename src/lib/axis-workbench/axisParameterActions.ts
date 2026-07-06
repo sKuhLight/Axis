@@ -1,10 +1,15 @@
 import {
   WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
   createCustomPanelFromParameterSourcesCommands,
+  createParameterWidgetsForZoneCommands,
   isDockRegionId,
+  panelWidgetZoneId,
   parseWorkbenchParameterSource,
+  selectActiveLayout,
+  selectVisibleWidgetsByZone,
   type JsonObject,
   type WorkbenchActionHandler,
+  type WorkbenchController,
   type WorkbenchParameterSource
 } from '../workbench';
 import { axisParameterSourcesFromCurrentEditor } from './axisParameterSources';
@@ -25,6 +30,16 @@ function numericParamId(value: unknown): number | null {
 
 function sourceParamId(source: WorkbenchParameterSource): number | null {
   return numericParamId(source.binding.target.paramId);
+}
+
+function panelIdFromArgs(args: JsonObject | undefined): string | null {
+  const value = args?.panelId;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function isAxisCustomPanel(controller: WorkbenchController, panelId: string): boolean {
+  const layout = selectActiveLayout(controller.document);
+  return layout?.panels[panelId]?.type === 'axis.customPanel';
 }
 
 function paramIdsFromArgs(args: JsonObject | undefined): number[] | null {
@@ -61,6 +76,20 @@ export function createAxisPinSelectedParametersAction(
       const limit = typeof args?.limit === 'number' && Number.isFinite(args.limit) ? Math.max(1, Math.floor(args.limit)) : undefined;
       const sources = limit ? filteredSources.slice(0, limit) : filteredSources;
       if (!sources.length) return;
+
+      // When a target custom panel is named (touch/context-menu path), append the
+      // sources into it instead of creating a new panel — mirrors the drag drop
+      // onto an existing AxisCustomPanel. Falls back to new-panel creation if the
+      // named panel isn't a live custom panel.
+      const panelId = panelIdFromArgs(args);
+      if (panelId && isAxisCustomPanel(controller, panelId)) {
+        const zone = panelWidgetZoneId(panelId);
+        const startIndex = selectVisibleWidgetsByZone(controller.document, zone).length;
+        controller.dispatchMany(
+          createParameterWidgetsForZoneCommands(controller.document, sources, { zone, index: startIndex })
+        );
+        return;
+      }
 
       controller.dispatchMany(
         createCustomPanelFromParameterSourcesCommands(controller.document, sources, {
