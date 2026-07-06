@@ -19,6 +19,9 @@ import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
 import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
+import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
+import { editor } from '../editor.svelte';
+import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
   AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES,
@@ -71,6 +74,21 @@ AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, co
 // Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table
 // + keep-set. The generic layer stays widget-type agnostic.
 registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
+
+// Active-section tint (01-shell.md §9). Resolve which nav entry is in front from
+// live Axis state: docked panels (grid/controllers/scenes/setup/live) from the
+// workbench document, overlay/rail screens (library/fc/theme/account) from the
+// editor store. NavigationHost reads this inside a reactive $derived, so the
+// editor runes / document reads below are tracked and the tint stays live.
+registry.registerNavigationState({
+  isActive: (entryId) =>
+    isAxisNavigationEntryActive(axisWorkbenchController.document, {
+      libraryOpen: editor.inLibrary,
+      virtualSlug: editor.virtual?.slug ?? null,
+      themeOpen: editor.themeOpen,
+      accountOpen: editor.axisOpen
+    }, entryId)
+});
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
   registry.registerNavigation({ id, component: AxisWorkbenchNavigationEntry })

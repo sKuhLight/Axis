@@ -21,6 +21,17 @@ describe('WorkbenchRenderRegistry', () => {
     expect(registry.navigation('missing.nav')).toBe(fallback);
   });
 
+  it('resolves the active navigation entry via the registered provider', () => {
+    const registry = createWorkbenchRenderRegistry();
+    // No provider registered → nothing is active.
+    expect(registry.isNavigationEntryActive('grid')).toBe(false);
+    expect(registry.navigationState).toBeNull();
+
+    registry.registerNavigationState({ isActive: (id) => id === 'grid' });
+    expect(registry.isNavigationEntryActive('grid')).toBe(true);
+    expect(registry.isNavigationEntryActive('fc')).toBe(false);
+  });
+
   it('registers and runs host action handlers', () => {
     const registry = createWorkbenchRenderRegistry();
     const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
