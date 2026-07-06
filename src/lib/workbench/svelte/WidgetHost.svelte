@@ -463,10 +463,17 @@
     ></div>
   {/if}
   {#if $controller.editMode && !widget.locked && !widget.groupId}
-    <div class="aw-widget-edit">
-      <button type="button" title="Cycle size" onclick={cycleSize}>↕</button>
+    <!-- Edit chrome is INSET into the widget's own top-right corner (never a
+         negative offset that escapes the box into a neighbour or the workbench
+         chrome — see V13b). It sits above the drag surface (z-index) so the
+         buttons stay clickable, and collapses to a single ⋯ at compact/mini so
+         the cluster never has to shrink below tap size. -->
+    <div class="aw-widget-edit" data-density={size}>
+      {#if size === 'default'}
+        <button type="button" title="Cycle size" onclick={cycleSize}>↕</button>
+        <button type="button" title="Hide widget" onclick={() => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })}>×</button>
+      {/if}
       <button type="button" title="Widget actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
-      <button type="button" title="Hide widget" onclick={() => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })}>×</button>
     </div>
   {/if}
 </div>
@@ -526,16 +533,23 @@
   .aw-widget-float-grip:active {
     cursor: grabbing;
   }
-  /* Edit chrome floats above the widget (design 01-shell §5) — it must never
-     take layout space or tint the chip, so the widget keeps its normal
-     proportions in edit mode. */
+  /* Edit chrome is INSET into the widget's own top-right corner (design 01-shell
+     §5 anchors affordances to their unit; V13b: no negative offsets that escape
+     the box into a neighbouring widget or the workbench chrome). It overlays the
+     widget without taking layout space, so the chip keeps its normal proportions
+     in edit mode. A subtle backdrop keeps the glyphs legible over widget content,
+     and z-index sits above the drag surface so the buttons stay clickable. */
   .aw-widget-edit {
     position: absolute;
-    top: -13px;
-    right: -12px;
-    z-index: 8;
+    top: 2px;
+    right: 2px;
+    z-index: 9;
     display: flex;
-    gap: 3px;
+    gap: 2px;
+    padding: 1px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--aw-bg-2) 78%, transparent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   }
   .aw-widget-drag-surface {
     position: absolute;
@@ -557,20 +571,27 @@
     border-radius: 8px;
   }
   .aw-widget-edit button {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     line-height: 1;
     border: 1px solid var(--aw-border-3);
-    border-radius: 7px;
+    border-radius: 6px;
     background: var(--aw-surface-2);
     color: var(--aw-text-muted);
     font-size: 11px;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  }
+  /* Compact/mini widgets are short: the cluster collapses to a lone ⋯ that still
+     meets tap size, kept fully inside the shorter box. */
+  .aw-widget-edit[data-density='compact'] button,
+  .aw-widget-edit[data-density='mini'] button {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
   }
   .aw-widget-edit button:hover {
     color: var(--aw-text);

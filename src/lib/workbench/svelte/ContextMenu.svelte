@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { clampMenuPosition, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
+  import { effectiveZoom, resolveMenuPlacement, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { focusTrap, focusableWithin, nextFocusIndex } from './focusTrap';
 
   let {
@@ -18,6 +18,11 @@
   } = $props();
 
   let menuEl = $state<HTMLElement | null>(null);
+  // `position:fixed; inset:0` viewport-spanning probe: its visual/layout width
+  // ratio is the cumulative ancestor CSS zoom (see contextMenu.ts). Used to
+  // convert the visual-space clamped position into the layout-space left/top a
+  // fixed element inside a zoomed subtree positions in. Identity at 100% scale.
+  let scrimEl = $state<HTMLElement | null>(null);
   let left = $state(0);
   let top = $state(0);
 
@@ -66,15 +71,21 @@
 
   $effect(() => {
     if (!open) return;
-    left = position.x;
-    top = position.y;
+    // First paint: place at the raw pointer position divided by the current best
+    // zoom estimate so a zoomed menu doesn't flash at the wrong spot before the
+    // post-tick measure refines it.
+    const preZoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
+    left = position.x / preZoom;
+    top = position.y / preZoom;
     void tick().then(() => {
       if (!menuEl) return;
       const rect = menuEl.getBoundingClientRect();
-      const next = clampMenuPosition(
+      const zoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
+      const next = resolveMenuPlacement(
         position,
         { width: window.innerWidth, height: window.innerHeight },
-        { width: rect.width, height: rect.height }
+        { width: rect.width, height: rect.height },
+        zoom
       );
       left = next.x;
       top = next.y;
@@ -83,7 +94,7 @@
 </script>
 
 {#if open}
-  <button class="aw-menu-scrim" type="button" aria-label="Close menu" onclick={onClose}></button>
+  <button class="aw-menu-scrim" type="button" aria-label="Close menu" bind:this={scrimEl} onclick={onClose}></button>
   <div
     class="aw-context-menu"
     bind:this={menuEl}

@@ -283,9 +283,10 @@
     overflow: visible;
     z-index: 42;
   }
-  /* In edit mode the per-widget edit chrome floats outside the chip (negative
-     offsets); bar zones must not clip it. Panel/grid zones keep their own
-     scroll/overflow. */
+  /* In edit mode a widget's drag-surface dashed outline sits just outside the
+     chip (outline-offset); bar zones must not clip it. The button clusters
+     themselves are inset (V13b) and stay inside the chip. Panel/grid zones keep
+     their own scroll/overflow. */
   :global(.aw-root.aw-editing) .aw-widget-zone:not(.panel):not(.grid) {
     overflow: visible;
   }

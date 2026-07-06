@@ -220,16 +220,21 @@
 {#if group}
   <div class="aw-widget-group" data-widget-group={group.id} role="group" oncontextmenu={openMenu}>
     {#if $controller.editMode && !group.locked}
+      <!-- Whole-group grip is in-flow (a stretched column at the module's left
+           edge — design AxisGroup grip), so it never escapes the module box. -->
       <button class="aw-group-grip" type="button" title="Move group" onpointerdown={dragPointerDown} onkeydown={moveByKey}>⋮</button>
-      <button
-        class="aw-group-ungroup"
-        type="button"
-        title="Ungroup widgets"
-        onclick={() => controller.dispatch({ type: 'widget.ungroup', groupId: group.id })}
-      >
-        ⧉
-      </button>
-      <button class="aw-group-menu" type="button" title="Group actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
+      <!-- Group edit chrome is INSET into the module's top-right corner (V13b: no
+           negative offsets that bleed over the neighbouring unit or the workbench
+           chrome). -->
+      <div class="aw-group-edit">
+        <button
+          class="aw-group-edit-btn"
+          type="button"
+          title="Ungroup widgets"
+          onclick={() => controller.dispatch({ type: 'widget.ungroup', groupId: group.id })}
+        >⧉</button>
+        <button class="aw-group-edit-btn" type="button" title="Group actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
+      </div>
     {/if}
     {#each group.widgetIds as widgetId, index (widgetId)}
       {@const widget = $controller.activeLayout?.widgets[widgetId]}
@@ -270,36 +275,38 @@
   .aw-group-grip:hover {
     color: var(--aw-accent);
   }
-  /* Group edit buttons float above the module (design 01-shell §5) so they
-     never collide with the grouped widget chips. */
-  .aw-group-ungroup,
-  .aw-group-menu {
+  /* Group edit chrome is INSET into the module's own top-right corner (design
+     01-shell §5 anchors affordances to their unit; V13b: no negative offsets
+     that escape the module into the neighbouring unit or the workbench chrome).
+     A subtle backdrop keeps the glyphs legible over the grouped chips. */
+  .aw-group-edit {
     position: absolute;
-    top: -13px;
-    z-index: 8;
-    width: 20px;
-    height: 20px;
+    top: 2px;
+    right: 2px;
+    z-index: 9;
+    display: flex;
+    gap: 2px;
+    padding: 1px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--aw-bg-2) 78%, transparent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  }
+  .aw-group-edit-btn {
+    width: 18px;
+    height: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     line-height: 1;
     border: 1px solid var(--aw-border-3);
-    border-radius: 7px;
+    border-radius: 6px;
     background: var(--aw-surface-2);
     color: var(--aw-text-muted);
     font-size: 11px;
     cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
   }
-  .aw-group-ungroup {
-    right: 15px;
-  }
-  .aw-group-menu {
-    right: -12px;
-  }
-  .aw-group-ungroup:hover,
-  .aw-group-menu:hover {
+  .aw-group-edit-btn:hover {
     color: var(--aw-text);
     border-color: var(--aw-accent);
   }
