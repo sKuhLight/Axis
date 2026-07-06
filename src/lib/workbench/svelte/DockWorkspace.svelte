@@ -1,6 +1,7 @@
 <script lang="ts">
   import DockRegion from './DockRegion.svelte';
   import { getWorkbenchContext } from './context';
+  import { focusTrap } from './focusTrap';
   import {
     WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
     WORKBENCH_PARAMETER_SOURCE_MIME,
@@ -93,7 +94,13 @@
 
   {#if mobileDock}
     <button class="aw-mobile-dock-scrim" type="button" aria-label="Close dock drawer" onclick={() => (mobileDock = null)}></button>
-    <div class="aw-mobile-dock-drawer {mobileDock}">
+    <div
+      class="aw-mobile-dock-drawer {mobileDock}"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${mobileDock} dock`}
+      use:focusTrap={{ onClose: () => (mobileDock = null) }}
+    >
       <DockRegion region={mobileDock} overlay />
     </div>
   {/if}
@@ -199,6 +206,11 @@
     }
     .aw-mobile-dock-indicator:hover {
       border-color: var(--aw-accent);
+    }
+    /* T18: keyboard focus ring for the dock drawer openers (focus-visible only). */
+    .aw-mobile-dock-indicator:focus-visible {
+      outline: 2px solid var(--aw-accent);
+      outline-offset: 2px;
     }
     .aw-mobile-dock-indicator.left {
       left: 10px;

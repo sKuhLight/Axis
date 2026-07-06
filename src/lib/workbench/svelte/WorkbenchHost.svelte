@@ -8,6 +8,7 @@
   import type { WorkbenchController } from './controller.svelte';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, type WorkbenchTheme } from './theme';
+  import { focusTrap } from './focusTrap';
   import type { Snippet } from 'svelte';
 
   let {
@@ -76,7 +77,12 @@
       </button>
     {/if}
 
-    <aside class="aw-rail" class:open={navDrawerOpen} data-zone-shell="rail">
+    <aside
+      class="aw-rail"
+      class:open={navDrawerOpen}
+      data-zone-shell="rail"
+      use:focusTrap={{ enabled: showMobileDrawer && navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
+    >
       <div class="aw-mark" aria-hidden="true">
         <span></span><span></span><span></span>
       </div>
@@ -150,6 +156,14 @@
     background: var(--aw-bg);
     color: var(--aw-text);
     font-family: var(--aw-font-ui);
+  }
+
+  /* T18: keyboard focus ring for the shell's own chrome (hamburger + scrims).
+     focus-visible only, so pointer interaction shows no outline. Tokenized. */
+  .aw-mobile-menu:focus-visible,
+  .aw-mobile-nav-scrim:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
   }
 
   .aw-rail {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { clampMenuPosition, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
+  import { focusTrap, focusableWithin, nextFocusIndex } from './focusTrap';
 
   let {
     open,
@@ -26,8 +27,41 @@
     onClose();
   }
 
-  function closeOnEscape(event: KeyboardEvent) {
-    if (open && event.key === 'Escape') onClose();
+  // Roving arrow-key navigation between the (enabled) menu items — the platform
+  // convention for a `role="menu"`. Tab-trap + Escape + focus-restore come from
+  // `use:focusTrap`; here we add ↑/↓/Home/End and Enter/Space activation.
+  function moveFocus(delta: number) {
+    if (!menuEl) return;
+    const items = focusableWithin(menuEl);
+    if (items.length === 0) return;
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const next = nextFocusIndex(current, items.length, delta);
+    items[next]?.focus();
+  }
+
+  function menuKeydown(event: KeyboardEvent) {
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        moveFocus(1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        moveFocus(-1);
+        break;
+      case 'Home': {
+        event.preventDefault();
+        const first = focusableWithin(menuEl!)[0];
+        first?.focus();
+        break;
+      }
+      case 'End': {
+        event.preventDefault();
+        const all = focusableWithin(menuEl!);
+        all[all.length - 1]?.focus();
+        break;
+      }
+    }
   }
 
   $effect(() => {
@@ -44,21 +78,20 @@
       );
       left = next.x;
       top = next.y;
-      menuEl.focus();
     });
   });
 </script>
-
-<svelte:window onkeydown={closeOnEscape} />
 
 {#if open}
   <button class="aw-menu-scrim" type="button" aria-label="Close menu" onclick={onClose}></button>
   <div
     class="aw-context-menu"
     bind:this={menuEl}
+    use:focusTrap={{ onClose }}
     role="menu"
     aria-label={label}
     tabindex="-1"
+    onkeydown={menuKeydown}
     style={`left:${left}px; top:${top}px;`}
   >
     {#each items as item (item.id)}
@@ -114,11 +147,15 @@
     text-align: left;
     font: 700 12px/1 var(--aw-font-ui);
   }
-  .aw-menu-item:hover,
+  .aw-menu-item:hover {
+    background: color-mix(in srgb, var(--aw-accent) 12%, transparent);
+    color: var(--aw-text);
+  }
   .aw-menu-item:focus-visible {
     background: color-mix(in srgb, var(--aw-accent) 12%, transparent);
     color: var(--aw-text);
-    outline: none;
+    outline: 2px solid var(--aw-accent);
+    outline-offset: -2px;
   }
   .aw-menu-item:disabled {
     opacity: 0.42;

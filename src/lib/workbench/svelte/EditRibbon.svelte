@@ -95,6 +95,12 @@
   .aw-edit-ribbon button:hover {
     border-color: var(--aw-accent);
   }
+  /* T18: keyboard focus ring on every ribbon button (Customize + edit actions).
+     focus-visible only, tokenized — pointer clicks show no outline. */
+  .aw-edit-ribbon button:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
+  }
   .aw-edit-toggle-glyph {
     font-size: 11px;
     line-height: 1;
