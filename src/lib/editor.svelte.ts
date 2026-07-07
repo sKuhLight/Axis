@@ -983,21 +983,38 @@ class EditorStore {
     }
   };
   #eventReload: ReturnType<typeof setTimeout> | null = null;
+  /** Reflect a scene change WITHOUT a full preset reload. A scene switch never changes the grid
+   *  STRUCTURE (block placement/routing is preset-level) — only per-block bypass / active channel /
+   *  channel-linked params. So re-apply just the cheap bypass+channel (one fn-0x13 read via
+   *  /preset/scene-state) onto the EXISTING layout, and re-read only the currently-open block. Keeps
+   *  scene changes snappy and off the heavy preset-dump path (a full dump right after a scene switch
+   *  hits the device mid-rebuild → truncated → 503 crash). Devices without the endpoint (501) fall
+   *  back to a full load(). */
+  #refreshScene = async () => {
+    const st = await forgefx.sceneState().catch(() => null);
+    if (!st || !Array.isArray(st)) { await this.load(); return; } // no lightweight path → full reload
+    const byId = new Map(st.map((b) => [b.effectId, b]));
+    const apply = (c: Cell): Cell => {
+      const s = byId.get(c.effectId);
+      return s ? { ...c, bypassed: s.bypassed ?? undefined, channel: s.channel ?? undefined } : c;
+    };
+    this.layout = { ...this.layout, cells: this.layout.cells.map(apply), shunts: this.layout.shunts.map(apply) };
+    if (this.selKey) await this.#loadParams(); // open block's params are per-channel → re-read it
+  };
+  /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
+   *  into one lightweight refresh). */
+  #scheduleSceneReload = (settleMs = 120) => {
+    if (this.#eventReload) clearTimeout(this.#eventReload);
+    this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
+  };
   /** Apply one live device event — from SSE (local) or the remote relay channel. Drives cross-UI sync:
    *  another window / the remote / the device itself changed something, so this UI follows. */
   applyDeviceEvent = (e: DeviceEvent) => {
     switch (e.type) {
       case 'tempo': this.bpm = e.bpm; break;
       case 'scene': {
-        // Move the badge immediately, then reload: a scene switch reselects per-scene block bypass,
-        // per-scene channel, and per-scene param values — none of which the badge alone reflects. Reuse
-        // the `changed` debounce so a footswitch scene sweep coalesces into one grid + open-block refresh.
-        this.scene = e.index + 1;
-        if (this.#eventReload) clearTimeout(this.#eventReload);
-        this.#eventReload = setTimeout(async () => {
-          await this.load();
-          if (this.selKey) await this.#loadParams();
-        }, 250);
+        this.scene = e.index + 1; // badge immediately, then lightweight reflect (no full preset dump)
+        this.#scheduleSceneReload();
         break;
       }
       case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
@@ -1635,8 +1652,9 @@ class EditorStore {
       // API v2: the unified POST /scene switches every device; legacy v1 AM4 uses its own route.
       await (!this.isV2 && this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
       history.record({ kind: 'scene', from: prev, to: ui });
-      await this.load();
-      if (this.selKey) await this.#loadParams();
+      // Lightweight reflect (no full preset dump) — same path as a footswitch scene change; coalesces
+      // with the scene SSE echo. Reflects bypass/channel + re-reads the open block, snappy & crash-free.
+      this.#scheduleSceneReload();
     } catch {
       this.scene = prev;
     }
