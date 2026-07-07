@@ -427,6 +427,7 @@ export type DeviceEvent =
   // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
   // `changed` = a structural change (grid/preset) → reload.
   | { type: 'param'; effectId: number; paramId: number; norm: number }
+  | { type: 'blockState'; effectId?: number }
   | { type: 'changed'; scope: 'grid' | 'preset' }
   // A shared Axis config doc (layouts / swipe quick-actions / tags / surface arrange …) was written by
   // another UI — apply it live so both directions stay in sync without a reload. `origin` = the writer's
