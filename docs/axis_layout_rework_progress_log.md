@@ -688,3 +688,18 @@ Opus subagents (feature-flow audit → 3 parallel tracks), Fable verified/commit
   → Axis sequence with per-repo Plane items and verification gates).
 - **ADR-0002** + root CLAUDE.md pointer (local-only, 3-line addition).
 - **Verified**: check + vitest exit 0; privacy scan clean on all committables.
+
+## Scene-change reflection fix (merged from fix/lightweight-scene-reflect, 2026-07-07)
+
+Merged the scene-change bugfix into layout-rework (pairs with ForgeFX
+tooling/claude-code-baseline). A device/app scene change no longer does a full
+preset dump (which crashed mid-scene-switch → /preset/grid 503 + congestion);
+it reflects via the lightweight `/preset/scene-state` (bypass/channel) + open-block
+re-read. Also: `getScene` -1 on a failed read (no 2↔1 badge flicker) and the
+current-slot content-check relaxed 11s→60s (less serial polling).
+
+- **Files**: `src/lib/editor.svelte.ts` (`#refreshScene`, scene handler + selectScene
+  routed through it), `src/lib/forgefx.ts` (`sceneState()` client).
+- **Deferred**: per-channel tile block-type reflection (the original ask) — attempted
+  then reverted (broke channel changes); to be revisited as an offline task, not on-rig.
+- **Verified**: `npm run check` 0/0 (1116 files); `npm test` 746/746.
