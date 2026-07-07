@@ -1067,7 +1067,7 @@ class EditorStore {
   #syncTelemetry = async () => {
     if (!this.isV2 && this.isAm4) return; // legacy: gen-3 scene/tempo frames; the AM4 ignores them → 5s timeouts that clog the queue
     try {
-      if (this.sceneCount > 0) this.scene = (await forgefx.getScene()).index + 1;
+      if (this.sceneCount > 0) { const si = (await forgefx.getScene()).index; if (si >= 0) this.scene = si + 1; } // ignore a failed read (-1)
       if (this.hasTempo) this.bpm = (await forgefx.getTempo()).bpm;
     } catch {
       /* */
