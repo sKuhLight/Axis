@@ -645,3 +645,27 @@ scripts/workbench-visual-smoke.mjs that a fresh document renders the gridbar.
   reviews diffs, runs check+tests, and commits in logical chunks.
 - Commits: `<scope>: <imperative>`, author `sKuhLight`, **no AI attribution** (CLAUDE.md).
 - Update this log after **every** landed step.
+
+## 2026-07-07 — Claude Code baseline + workbench expansion tooling (AXIS-1)
+
+Applied the family-wide Claude Code baseline (CLAUDE-CODE-OPTIMIERUNG.md) on this
+branch, plus workbench-specific scaffolding tooling. Opus subagents implemented
+(audit → 4 parallel tracks), Fable verified and committed. Tracked in Plane
+(AXIS-1, Done).
+
+- **Committable**: `.claude/settings.json` (allow/ask/deny; e2e/electron/mobile
+  ask-gated; build-output writes denied) + `guard-bash.sh` (env reads, force-push,
+  build-output redirects, commits on main blocked; feature-branch commits pass);
+  `reviewer` + `test-runner` + `workbench-reviewer` agents; `/plan-feature`,
+  `/new-widget`, `/new-panel`, `/new-runtime-adapter` commands;
+  `src/lib/axis-workbench/CLAUDE.md` (framework guide: two-layer split, recipes,
+  testing/theming conventions, app-coupling edges for the future extraction);
+  `docs/decisions/` ADR template + ADR-0001.
+- **Local-only**: root CLAUDE.md refreshed (workbench section, commands, gotchas;
+  Plane section preserved); RE-dir deny rules merged into `.claude/settings.local.json`.
+- **Gitignore fix**: `CLAUDE.md` pattern root-anchored (`/CLAUDE.md`) so the nested
+  framework guide commits; this surfaced `design/CLAUDE.md`, which is now explicitly
+  re-ignored (operator to decide its fate later).
+- **Verified**: `npm run check` + `npm test` exit 0; hook exit-code matrix (env
+  read 2, force-push 2, build redirect 2, commit on layout-rework 0); privacy scan
+  of all committable files clean (no RE dirs, tracker URL/UUIDs, identity).
