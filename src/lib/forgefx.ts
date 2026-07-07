@@ -210,6 +210,9 @@ export const forgefx = {
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),
+  /** LIGHTWEIGHT per-block bypass+channel (no preset dump) — for reflecting a scene change without a
+   *  full reload. 501 on devices without it (caller falls back to load()). */
+  sceneState: () => req<{ effectId: number; bypassed: boolean | null; channel: string | null }[]>('/preset/scene-state'),
   selectPreset: (number: number) =>
     req<{ ok: boolean; number: number }>('/preset/select', {
       method: 'POST',
