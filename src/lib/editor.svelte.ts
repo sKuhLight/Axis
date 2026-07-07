@@ -1207,11 +1207,12 @@ class EditorStore {
         this.#contentCheckAt = Date.now();
       } else if (this.status === 'offline') {
         await this.load();
-      } else if (n >= 0 && library.cacheBuilt && Date.now() - this.#contentCheckAt > 11000) {
-        // Same slot number, but its stored content can change under us (e.g. FM3-Edit overwrote
-        // this slot while the unit stayed on it). Number-gated detection misses that, so re-decode
-        // the current slot periodically. refreshSlot is CRC-gated — an unchanged preset is a cheap
-        // no-op (no cache write, no UI churn).
+      } else if (n >= 0 && library.cacheBuilt && Date.now() - this.#contentCheckAt > 60000) {
+        // Same slot number, but its stored content could change under us (e.g. another editor overwrote
+        // this slot while the unit stayed on it). This is a RARE safety net — device-side edits are
+        // already pushed via ForgeFX's edit-watch (SSE 'changed'/'param'), and a slot switch is caught
+        // by the number change above. refreshSlot re-dumps the whole preset, so keep it INFREQUENT
+        // (every 60s, not 11s) to stay off the serial link; CRC-gated so an unchanged preset writes nothing.
         this.#contentCheckAt = Date.now();
         library.refreshSlot(n);
       }
