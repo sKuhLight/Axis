@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(npm test)",
+      "Bash(npm run check)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run test:workbench-visual)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx playwright test:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(npm run desktop:build:*)",
+      "Bash(npm run electron:*)",
+      "Bash(npm run mobile:*)",
+      "Bash(npm run build:mobile:*)",
+      "Bash(npx cap:*)",
+      "Bash(gh release:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(git push --force:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Edit(build/**)",
+      "Write(build/**)",
+      "Edit(.svelte-kit/**)",
+      "Write(.svelte-kit/**)",
+      "Edit(dist-desktop/**)",
+      "Write(dist-desktop/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
