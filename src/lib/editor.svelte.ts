@@ -1003,7 +1003,13 @@ class EditorStore {
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
    *  into one lightweight refresh). */
-  #scheduleSceneReload = (settleMs = 120) => {
+  #scheduleSceneReload = (settleMs = 250) => {
+    if (this.#eventReload) clearTimeout(this.#eventReload);
+    this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
+  };
+  /** Debounce block-state reflection after channel changes; FM3-Edit waits a shorter settle window
+   *  before re-reading the affected block. */
+  #scheduleBlockStateReload = (settleMs = 120) => {
     if (this.#eventReload) clearTimeout(this.#eventReload);
     this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
   };
@@ -1020,6 +1026,10 @@ class EditorStore {
       case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
       case 'cpu': this.cpu = e.percent; break;
       case 'meters': this.levels = { out1L: e.out1L, out1R: e.out1R, out2L: e.out2L, out2R: e.out2R }; break;
+      case 'blockState': {
+        this.#scheduleBlockStateReload();
+        break;
+      }
       case 'param': {
         // another UI moved a knob — reflect it live if that block is open (cheap: update the arc)
         if (this.selected?.effectId === e.effectId) {
@@ -1298,7 +1308,14 @@ class EditorStore {
       this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
-        const m = this.meters[c.effectId];
+        const fallback = this.params[0];
+        const m = this.meters[c.effectId] ?? {
+          defaultId: fallback?.id ?? -1,
+          defaultName: fallback?.name ?? '',
+          typeName: '',
+          vals: {} as Record<number, MeterVal>
+        };
+        if (r.type?.name) m.typeName = r.type.name;
         if (m) {
           for (const p of this.params)
             if (p.id != null && (p.id === m.defaultId || this.swipeFor(this.slugOf(c)).some((x) => x.id === p.id)))
@@ -1377,7 +1394,7 @@ class EditorStore {
     try {
       await forgefx.setChannel(c.effectId, ch);
       if (prev) history.record({ kind: 'channel', eid: c.effectId, block: c.display, from: prev, to: ch });
-      await this.#loadParams();
+      this.#scheduleBlockStateReload();
     } catch {
       c.channel = prev;
     }
