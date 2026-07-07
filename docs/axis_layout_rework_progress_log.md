@@ -669,3 +669,22 @@ branch, plus workbench-specific scaffolding tooling. Opus subagents implemented
 - **Verified**: `npm run check` + `npm test` exit 0; hook exit-code matrix (env
   read 2, force-push 2, build redirect 2, commit on layout-rework 0); privacy scan
   of all committable files clean (no RE dirs, tracker URL/UUIDs, identity).
+
+## 2026-07-07 — App-level feature-implementation tooling (AXIS-2)
+
+Follow-up to AXIS-1: the workbench got scaffolding but the app layer had none.
+Opus subagents (feature-flow audit → 3 parallel tracks), Fable verified/committed.
+
+- **`src/lib/CLAUDE.md`** (committable, 162 lines): app-layer guide — forgefx.ts
+  client pattern (req<T>, ForgeError, TransportMode trap), hand-mirrored types.ts
+  contract + drift failure mode, EditorStore idioms (capability gates, optimistic
+  write→revert, poll guards, #eventReload reuse), modal pattern, dual-shell
+  decision table (modal/embedded → both shells free; chrome → mirror; preset
+  browser → manual mirror), DeviceCaps-first gating, testing reality, pitfalls,
+  cross-repo chain.
+- **Commands**: `/implement-feature` (disciplined loop: Plane item → placement →
+  conventions checklist → tests → verify → log/close), `/new-endpoint` (4-step
+  types→client→store→gate recipe), `/cross-repo-feature` (forgefx-midi → ForgeFX
+  → Axis sequence with per-repo Plane items and verification gates).
+- **ADR-0002** + root CLAUDE.md pointer (local-only, 3-line addition).
+- **Verified**: check + vitest exit 0; privacy scan clean on all committables.
