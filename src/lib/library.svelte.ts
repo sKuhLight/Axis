@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { forgefx, isRemote } from './forgefx';
 import { isRemoteBuild } from './cloudBrowser';
+import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
@@ -278,6 +279,7 @@ class LibraryStore {
       const dev = await forgefx.device().catch(() => null);
       const caps = dev?.capabilities;
       const v2 = (dev?.apiVersion ?? 1) >= 2;
+      if (caps?.cabIrs) await refreshCabIrsCache().catch(() => {});
       const nameScan = v2 ? !!caps?.presets?.canScanNames && !caps?.presets?.canDeepScan : dev?.modelByte === '0x15';
       if (nameScan) {
         // API v2: unified GET /preset/locations; legacy v1 fallback: the AM4's own scan route.
