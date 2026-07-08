@@ -1047,16 +1047,6 @@ class EditorStore {
         }
         break;
       }
-      case 'blockState': {
-        if (e.effectId == null || this.selected?.effectId === e.effectId) {
-          if (this.#eventReload) clearTimeout(this.#eventReload);
-          this.#eventReload = setTimeout(async () => {
-            await this.load();
-            if (this.selKey) await this.#loadParams();
-          }, 180);
-        }
-        break;
-      }
       case 'changed': {
         // structural change elsewhere (block placed/removed, preset switched, or a device-side edit the
         // unit doesn't push — AM4 front-panel / AM4-Edit) — reload, debounced so a burst coalesces into
