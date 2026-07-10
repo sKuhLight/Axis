@@ -4,14 +4,29 @@ Notable changes per release, for Axis and its bundled ForgeFX engine. Newest fir
 
 ## 0.8.6-beta — 2026-07-10
 
+Consolidates everything since 0.8.4-beta (the interim 0.8.5-beta build shipped without its own
+notes, so its changes are folded in here).
+
 ### Added
 - **Axe-Fx Standard / Ultra (gen-1) support.** The original Axe-Fx is now selectable as a device
   (read-only for now): Axis reads the preset name and the effect grid straight from the unit.
   *(Decoded from the published gen-1 spec; not yet confirmed on real hardware.)*
-- **VP4 — scene names & signal chain.** The VP4 now shows its four scene names and the real 4-slot
-  chain (read from the preset structure in one shot), not just bare numbers.
+- **AM4 — per-block channel (A/B/C/D) switching.** You can now switch the channel of **any** AM4
+  block from Axis (the A/B/C/D buttons), not just read the one the device is on — every block, not
+  only amp/drive/reverb/delay.
 - **AM4 — scene names & CRC check on backup/decode.** Backing up or decoding an AM4 preset now
   surfaces the four scene names and a CRC ✓/✗ integrity indicator.
+- **VP4 — scene names & signal chain.** The VP4 now shows its four scene names and the real 4-slot
+  chain (read from the preset structure in one shot), not just bare numbers.
+- **Cab shown per slot.** A cab block's Type button now shows the loaded cabinet instead of a
+  generic "Browse cabinet library".
+
+### Changed
+- **Faster cabinet picker.** The cab / IR picker now loads from a cache instead of re-reading the
+  device every time it opens.
+- **Lighter scene changes.** Switching scenes (on the device or in Axis) now refreshes through a
+  lightweight scene-state read instead of a full preset re-dump — quicker, and it avoids the reload
+  storms that could stall a scene change on heavier presets.
 
 ### Fixed
 - **FM3, FM9 & Axe-Fx III — type/count selectors now send the right value.** Parameters like Chorus
@@ -20,6 +35,10 @@ Notable changes per release, for Axis and its bundled ForgeFX engine. Newest fir
 - **AM4 — MIDI-config values read correctly.** Scene-select / CC-assignment and per-scene MIDI
   registers previously read back as 0; they now show the real number, and an unassigned assignment
   reads as **None**.
+- **Cab reads the right channel (gen-3).** The cabinet readout could show channel A's cabinet even
+  when another channel was active; it now reads the active channel.
+- **Scene badge no longer flickers.** A failed scene read no longer bounces the scene number back
+  and forth.
 
 ## 0.8.4-beta — 2026-07-07
 
