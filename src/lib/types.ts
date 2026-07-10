@@ -223,10 +223,23 @@ export interface Am4Backup {
   code: string | null;
   name: string;
   bytes: number[];
+  /** ADDITIVE (opt-in container decode alongside the opaque `bytes`): the four plaintext scene names. */
+  sceneNames?: string[];
+  /** ADDITIVE: whether the dump's stored CRC validated. */
+  crcValid?: boolean;
 }
 export interface Am4Decode {
   count: number;
-  presets: { index: number; location: number | null; code: string | null; name: string }[];
+  presets: {
+    index: number;
+    location: number | null;
+    code: string | null;
+    name: string;
+    /** ADDITIVE (opt-in): the four plaintext scene names of this preset. */
+    sceneNames?: string[];
+    /** ADDITIVE: whether this preset's stored CRC validated. */
+    crcValid?: boolean;
+  }[];
 }
 export type Am4FirmwareResult =
   | { valid: true; messages: number; blocks: number; headerTag: number[]; finalizeTag: number[] }
@@ -244,6 +257,10 @@ export interface PresetBackup {
   code: string | null;
   name: string;
   bytes: number[];
+  /** ADDITIVE (opt-in container decode alongside the opaque `bytes`; AM4): plaintext scene names. */
+  sceneNames?: string[];
+  /** ADDITIVE: whether the dump's stored CRC validated. */
+  crcValid?: boolean;
 }
 /** POST /firmware/validate result (caps firmwareValidate) — same shape as the AM4 validator. */
 export type FirmwareValidateResult = Am4FirmwareResult;
@@ -577,12 +594,14 @@ export interface PresetGrid {
   cols: number;
   scenes: string[];
   cells: GridCell[];
+  /** ADDITIVE (API v2): how the grid was read. Currently always 'dump' (whole-preset read). */
+  source?: 'dump';
 }
 
 // connection picker (serial + MIDI ports)
 export type ConnPick = { transport: 'serial' | 'midi'; id: string; inId?: string; outId?: string };
 /** Manual device-profile override (Axis "Connection & Device"). 'auto' = detect. */
-export type ProfileKey = 'auto' | 'fm3' | 'fm9' | 'axe3' | 'am4' | 'axe2' | 'vp4';
+export type ProfileKey = 'auto' | 'fm3' | 'fm9' | 'axe3' | 'am4' | 'axe2' | 'vp4' | 'gen1';
 export interface ConnInfo extends ConnPick {
   label: string;
   fractal: boolean;
