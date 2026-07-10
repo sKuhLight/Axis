@@ -20,7 +20,7 @@
   let msg = $state('');
   let msgAccent = $state('#8fbf7f');
   let backupLoc = $state<number | ''>(''); // '' = active edit buffer
-  let decoded = $state<{ index: number; code: string | null; name: string }[] | null>(null);
+  let decoded = $state<{ index: number; code: string | null; name: string; crcValid?: boolean; scenes?: string[] }[] | null>(null);
   let fw = $state<string>('');
   let modModel = $state<ModView | null>(null);
   let modOpen = $state(false);
@@ -59,7 +59,10 @@
       const r = legacyAm4 ? await forgefx.am4BackupPreset(loc) : await forgefx.presetBackup(loc);
       const label = r.code ?? (r.location != null ? String(r.location) : 'active');
       download(`${editor.conn.device ?? 'preset'}-${label}-${(r.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`, r.bytes);
-      say(`Backed up ${label} — "${r.name || '(unnamed)'}" (${r.bytes.length} B) → downloaded`);
+      // ADDITIVE (opt-in): surface the decoded CRC-validity flag + scene names when the server returns them.
+      const crc = r.crcValid === undefined ? '' : r.crcValid ? ' · CRC ✓' : ' · CRC ✗';
+      const scn = r.sceneNames?.length ? ` · scenes: ${r.sceneNames.join(', ')}` : '';
+      say(`Backed up ${label} — "${r.name || '(unnamed)'}" (${r.bytes.length} B)${crc}${scn} → downloaded`);
     } catch (e) { say('Backup failed: ' + (e as Error).message, false); }
     finally { busy = false; }
   }
@@ -84,12 +87,12 @@
       const bytes = await fileBytes(f);
       const r: SyxDecodeResult = legacyAm4 ? { model: 'am4', ...(await forgefx.am4DecodeSyx(bytes)) } : await forgefx.decodeSyxBytes(bytes);
       if ('presets' in r) {
-        // AM4-style multi-preset bank: location codes + names
-        decoded = r.presets.map((p) => ({ index: p.index, code: p.code, name: p.name }));
+        // AM4-style multi-preset bank: location codes + names (+ opt-in scene names / CRC validity)
+        decoded = r.presets.map((p) => ({ index: p.index, code: p.code, name: p.name, crcValid: p.crcValid, scenes: p.sceneNames }));
         say(`Decoded ${r.count} preset(s) from "${f.name}"`);
       } else {
-        // gen-3 preset summary: one preset — name + its blocks
-        decoded = [{ index: 0, code: r.model, name: `${r.name || '(unnamed)'} · ${r.blocks.length} blocks${r.blocks.length ? ' — ' + r.blocks.map((b) => b.name).join(', ') : ''}` }];
+        // gen-3 preset summary: one preset — name + its blocks (crcValid + scenes come from the summary)
+        decoded = [{ index: 0, code: r.model, name: `${r.name || '(unnamed)'} · ${r.blocks.length} blocks${r.blocks.length ? ' — ' + r.blocks.map((b) => b.name).join(', ') : ''}`, crcValid: r.crcValid, scenes: r.scenes }];
         say(`Decoded "${f.name}" (${r.model})`);
       }
     } catch (err) { say('Decode failed: ' + (err as Error).message, false); }
@@ -188,7 +191,12 @@
         {#if decoded}
           <div class="list">
             {#each decoded as p (p.index)}
-              <div class="prow"><span class="code mono">{p.code ?? '—'}</span><span class="nm">{p.name || '(unnamed)'}</span></div>
+              <div class="prow">
+                <span class="code mono">{p.code ?? '—'}</span>
+                <span class="nm">{p.name || '(unnamed)'}</span>
+                {#if p.crcValid !== undefined}<span class="crc mono" class:bad={!p.crcValid} title={p.crcValid ? 'CRC valid' : 'CRC invalid'}>{p.crcValid ? 'CRC ✓' : 'CRC ✗'}</span>{/if}
+                {#if p.scenes?.length}<span class="scn mono" title="Scene names">{p.scenes.join(' · ')}</span>{/if}
+              </div>
             {/each}
           </div>
         {/if}
@@ -251,6 +259,10 @@
   .list { margin-top: 8px; max-height: 240px; overflow: auto; border: 1px solid var(--line, #2a2b30); border-radius: 6px; }
   .prow { display: flex; gap: 12px; padding: 4px 10px; font-size: 12px; border-bottom: 1px solid var(--line, #232428); }
   .code { opacity: 0.6; min-width: 34px; }
+  .nm { flex: 1; }
+  .crc { color: #8fbf7f; opacity: 0.85; font-size: 11px; }
+  .crc.bad { color: #ff6b6b; }
+  .scn { opacity: 0.5; font-size: 11px; }
   .fwres { margin-top: 8px; font-size: 12px; opacity: 0.9; }
   .disc { background: none; border: none; color: inherit; font-size: 13px; padding: 0; cursor: pointer; }
   .note { font-size: 11px; opacity: 0.6; margin: 6px 0; }
