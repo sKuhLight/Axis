@@ -2,6 +2,25 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.5-beta — 2026-07-10
+
+### Added
+- **Axe-Fx Standard / Ultra (gen-1) support.** The original Axe-Fx is now selectable as a device
+  (read-only for now): Axis reads the preset name and the effect grid straight from the unit.
+  *(Decoded from the published gen-1 spec; not yet confirmed on real hardware.)*
+- **VP4 — scene names & signal chain.** The VP4 now shows its four scene names and the real 4-slot
+  chain (read from the preset structure in one shot), not just bare numbers.
+- **AM4 — scene names & CRC check on backup/decode.** Backing up or decoding an AM4 preset now
+  surfaces the four scene names and a CRC ✓/✗ integrity indicator.
+
+### Fixed
+- **FM3, FM9 & Axe-Fx III — type/count selectors now send the right value.** Parameters like Chorus
+  *Voices*, Cabinet *Type*, Reverb *Number of Springs* and other model/count selectors were sent as
+  continuous knob values, which stored the wrong setting. They now send the correct discrete value.
+- **AM4 — MIDI-config values read correctly.** Scene-select / CC-assignment and per-scene MIDI
+  registers previously read back as 0; they now show the real number, and an unassigned assignment
+  reads as **None**.
+
 ## 0.8.4-beta — 2026-07-07
 
 ### Added
