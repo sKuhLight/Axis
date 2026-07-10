@@ -2,7 +2,7 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
-## 0.8.5-beta — 2026-07-10
+## 0.8.6-beta — 2026-07-10
 
 ### Added
 - **Axe-Fx Standard / Ultra (gen-1) support.** The original Axe-Fx is now selectable as a device
