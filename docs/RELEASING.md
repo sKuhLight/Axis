@@ -110,3 +110,38 @@ All five Axis workflows check out Axis into `path: Axis`, then call
 + forgefx-midi siblings, set up Node, build codec (+ server)". `use-lock 'true'` pins from
 `stack.lock.json` (release builds); `use-lock 'false'` tracks default-branch HEAD (CI + site).
 It outputs the resolved refs and the actual checked-out SHAs for release stamping.
+
+---
+
+## Automation
+
+The ripple between stages is automated; humans review PRs and decide what becomes a release.
+
+- **version-guard** (`ci.yml`, every repo) rejects any non-docs PR that doesn't bump its
+  package version above the base branch (docs-only PRs pass). Compare rule: numeric
+  `major.minor.patch`, and on an equal triple a prerelease (`-beta`) ranks below its release;
+  head must be strictly greater. Fix: `npm version X.Y.Z --no-git-tag-version` (bumps the
+  lockfile too).
+- **`codec-released` → ForgeFX `codec-bump.yml`** — a forgefx-midi release opens a PR in
+  ForgeFX bumping `stack.lock.json → forgefx-midi.ref`. Merge = adopt; whether ForgeFX also
+  releases is a human call (wire/API/catalog change → release; internal-only → pin rides along).
+- **`server-released` → Axis `stack-bump.yml`** — **publishing** a ForgeFX release (drafts
+  don't count) opens a PR here bumping `ForgeFX.ref` to the released tag AND `forgefx-midi.ref`
+  to the codec ref ForgeFX shipped against. **Invariant: the two pins move together — Axis
+  never pins a codec newer than the one ForgeFX shipped.** Merge these PRs instead of
+  hand-editing `stack.lock.json`.
+- **`release-prep.yml`** (Axis, `workflow_dispatch`) is the **recommended way to start an Axis
+  release**: enter a version → it bumps `package.json` + lock, seeds a `## <version> — <date>`
+  CHANGELOG section from the commits since the last tag, and opens a `release/<version>` PR.
+  Edit the CHANGELOG wording in the PR, confirm the `stack.lock.json` pins, merge, then tag
+  `vX.Y.Z-beta` to build the draft release. Publish the draft after smoke-testing (publishing
+  arms electron-updater).
+- **Axis release decision rule:** cut a release when a server/codec change is **user-visible in
+  the app**; infra-only changes just let the pins ride along the next release.
+
+Auto-PR token: the ripple/prep workflows use `${{ secrets.STACK_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}`.
+A PAT makes the auto-PR's own CI run; with the `GITHUB_TOKEN` fallback the PR is still created
+but its CI must be triggered manually (close/reopen the PR).
+
+CI everywhere still integrates against **default-branch HEAD**; only tag/mobile builds use the
+pinned `stack.lock.json` refs.
