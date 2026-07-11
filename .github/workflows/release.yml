@@ -1,7 +1,22 @@
 name: release
 
-# Tag a version (e.g. v0.1.0-beta) to build the bundled Axis + ForgeFX desktop app for
-# Windows, macOS, and Linux, and attach the installers to a DRAFT GitHub release to publish.
+# Tag a version (e.g. v0.8.8-beta) to build the bundled Axis + ForgeFX desktop app for
+# Windows, macOS, and Linux and attach the installers to a GitHub release.
+#
+# Three jobs run in order:
+#   gate    — full test gate (unit + check) against the PINNED sibling stack (stack.lock.json).
+#   draft   — creates the release ONCE as a DRAFT, with CHANGELOG-derived notes + a
+#             "Shipped stack" stamp of the exact codec/server SHAs the gate built.
+#   desktop — matrix build; each OS uploads its installers to the existing draft (files only,
+#             never touching the name/body).
+#
+# The release STAYS A DRAFT. Publishing is a deliberate manual step after smoke-testing an
+# installer — and only publishing arms electron-updater's latest*.yml auto-update feed.
+# (draft-first fixes the old race where three matrix jobs each created/published the release,
+# sometimes publishing before any installer existed.)
+#
+# Release builds PIN the siblings via stack.lock.json (use-lock 'true') so an installer is
+# reproducible; bump those refs as part of the release checklist (see docs/RELEASING.md).
 on:
   push:
     tags: ['v*']
@@ -10,8 +25,83 @@ permissions:
   contents: write
 
 jobs:
+  gate:
+    name: test gate (unit + build)
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # gate only checks/tests — no Electron binary needed
+    outputs:
+      forgefx-ref: ${{ steps.stack.outputs.forgefx-ref }}
+      midi-ref: ${{ steps.stack.outputs.midi-ref }}
+      forgefx-sha: ${{ steps.stack.outputs.forgefx-sha }}
+      midi-sha: ${{ steps.stack.outputs.midi-sha }}
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          path: Axis
+      - name: Build sibling stack (codec + server, pinned)
+        id: stack
+        uses: ./Axis/.github/actions/build-stack
+        with:
+          use-lock: 'true'
+      - name: Axis check + unit tests
+        working-directory: Axis
+        run: |
+          npm ci
+          npm run check
+          npm test
+
+  draft:
+    name: create draft release
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          path: Axis
+      # Build the release body from the CHANGELOG section matching this tag (per-release notes,
+      # not a static template), then append a "Shipped stack" footer stamping the exact codec +
+      # server SHAs the gate built. Falls back to a generic line if no CHANGELOG section is found.
+      - name: Assemble release notes
+        shell: bash
+        env:
+          FORGEFX_SHA: ${{ needs.gate.outputs.forgefx-sha }}
+          MIDI_SHA: ${{ needs.gate.outputs.midi-sha }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v hdr="## $VERSION" '
+            /^## / { if (seen) exit; if (index($0, hdr) == 1) { seen = 1; next } }
+            seen { print }
+          ' Axis/CHANGELOG.md > notes-body.md
+          {
+            echo "**Axis $GITHUB_REF_NAME** — community beta. A standalone editor for Fractal devices that bundles the ForgeFX engine — one install, no setup."
+            echo
+            if [ -s notes-body.md ]; then cat notes-body.md; else echo "_See the commit history for changes in this build._"; fi
+            echo
+            echo "### Shipped stack"
+            echo
+            echo "- Axis: \`$GITHUB_REF_NAME\`"
+            echo "- ForgeFX: \`${FORGEFX_SHA:-default branch HEAD}\`"
+            echo "- forgefx-midi: \`${MIDI_SHA:-default branch HEAD}\`"
+            echo
+            echo "---"
+            echo "Independent, third-party software. Not affiliated with Fractal Audio Systems. Use at your own risk — see DISCLAIMER.md. Always back up your presets."
+          } > release-notes.md
+          cat release-notes.md
+      # Create the release exactly ONCE, as a draft. The desktop matrix below only uploads
+      # files to it — so name/body are set here and never clobbered by a matrix job.
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Axis ${{ github.ref_name }}
+          body_path: release-notes.md
+
   desktop:
     name: desktop (${{ matrix.os }})
+    needs: draft
     strategy:
       fail-fast: false
       matrix:
@@ -22,39 +112,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: Axis
-      - name: Checkout ForgeFX (bundled engine)
-        uses: actions/checkout@v4
+      - name: Build sibling stack (codec + server, pinned)
+        uses: ./Axis/.github/actions/build-stack
         with:
-          repository: sKuhLight/ForgeFX
-          path: ForgeFX
-      # the server links the codec as file:../../forgefx-midi — check it out as the sibling
-      # the link expects and build it (its package exports point at dist/)
-      - name: Checkout forgefx-midi (codec package)
-        uses: actions/checkout@v4
-        with:
-          repository: sKuhLight/forgefx-midi
-          path: forgefx-midi
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+          use-lock: 'true'
+          build-server: 'true'
 
-      - name: Build forgefx-midi (codec)
-        working-directory: forgefx-midi
-        shell: bash
-        run: |
-          npm ci
-          npm run build
-
-      # Build ForgeFX (the bundled server) and keep only production deps for shipping. npm links
-      # forgefx-midi as a SYMLINK pointing outside the bundle — electron-builder must ship real
-      # files, so the symlink is replaced with a plain copy (dist + catalog + package.json; the
-      # codec has zero runtime deps).
-      - name: Build ForgeFX server
+      # electron-builder must ship real files, but npm links forgefx-midi as a SYMLINK pointing
+      # outside the bundle. After keeping only production deps, replace the symlink with a plain
+      # copy (dist + catalog + package.json; the codec has zero runtime deps).
+      - name: De-vendor forgefx-midi for packaging
         working-directory: ForgeFX/server
         shell: bash
         run: |
-          npm ci
-          npm run build
           npm prune --omit=dev
           rm -rf node_modules/forgefx-midi
           mkdir -p node_modules/forgefx-midi
@@ -65,6 +135,7 @@ jobs:
       # Keys are publishable (client-safe); they live in CI secrets, never in source.
       - name: Inject ForgeFX production env
         working-directory: ForgeFX/server
+        shell: bash
         run: |
           {
             echo "AXIS_CLOUD=1"
@@ -99,32 +170,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --publish never
 
-      # Build the release body from the CHANGELOG section matching this tag (per-release notes,
-      # not a static template). Falls back to a generic line if no section is found.
-      - name: Assemble release notes
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk -v hdr="## $VERSION" '
-            /^## / { if (seen) exit; if (index($0, hdr) == 1) { seen = 1; next } }
-            seen { print }
-          ' Axis/CHANGELOG.md > notes-body.md
-          {
-            echo "**Axis $GITHUB_REF_NAME** — community beta. A standalone editor for Fractal devices that bundles the ForgeFX engine — one install, no setup."
-            echo
-            if [ -s notes-body.md ]; then cat notes-body.md; else echo "_See the commit history for changes in this build._"; fi
-            echo
-            echo "---"
-            echo "Independent, third-party software. Not affiliated with Fractal Audio Systems. Use at your own risk — see DISCLAIMER.md. Always back up your presets."
-          } > release-notes.md
-          cat release-notes.md
-
-      - name: Upload installers to release
+      # Attach this OS's installers to the DRAFT release created by the `draft` job. Files only:
+      # NO name/body here or a matrix job would overwrite the draft's assembled notes.
+      - name: Upload installers to the draft release
         uses: softprops/action-gh-release@v2
         with:
-          draft: false
-          name: Axis ${{ github.ref_name }}
-          body_path: release-notes.md
+          draft: true
           files: |
             Axis/dist-desktop/*.AppImage
             Axis/dist-desktop/*.deb
