@@ -3,8 +3,14 @@ name: ci
 # Axis consumes forgefx-server as a sibling workspace link (package.json:
 # "forgefx-server": "file:../ForgeFX/server"), which in turn links forgefx-midi
 # (file:../../forgefx-midi) — the Browser Direct runtime is bundled from source.
-# So the job checks out all three repos side by side under the workspace and
-# builds the linked packages first (their exports point at dist/).
+# The shared ./Axis/.github/actions/build-stack composite action checks out all
+# three repos side by side and builds the linked packages first (their exports
+# point at dist/). CI tracks each sibling's default-branch HEAD (use-lock false)
+# so we get latest-against-latest integration signal.
+#
+# CI now runs the vitest unit suite in addition to typecheck + build. The
+# Playwright e2e suite (38 runs, viewport-sensitive) stays LOCAL — it's too
+# expensive for every push.
 on:
   push:
     branches: [main]
@@ -13,44 +19,84 @@ on:
 
 jobs:
   build:
-    name: typecheck & build
+    name: typecheck, test & build
     runs-on: ubuntu-latest
     env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # web check/build doesn't need the Electron binary
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1 # web check/test/build doesn't need the Electron binary
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           path: Axis
-      - uses: actions/checkout@v5
+      - name: Build sibling stack (codec + server)
+        uses: ./Axis/.github/actions/build-stack
         with:
-          repository: sKuhLight/forgefx-midi
-          path: forgefx-midi
-      - uses: actions/checkout@v5
-        with:
-          repository: sKuhLight/ForgeFX
-          path: ForgeFX
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            Axis/package-lock.json
-            ForgeFX/server/package-lock.json
-            forgefx-midi/package-lock.json
-      - name: Build forgefx-midi (codec package)
-        working-directory: forgefx-midi
-        run: |
-          npm ci
-          npm run build
-      - name: Build forgefx-server (runtime package)
-        working-directory: ForgeFX/server
-        run: |
-          npm ci
-          npm run build
-      - name: Axis typecheck + build
+          use-lock: 'false'
+      - name: Axis typecheck, unit test + build
         working-directory: Axis
         run: |
           npm ci
           npx svelte-kit sync
           npx svelte-check --tsconfig ./tsconfig.json
+          npm test
           npm run build
+
+  # Enforce a version bump on every non-docs PR (release tags are cut off package.json;
+  # a stale version silently re-ships the same release). PR-only — nothing else has a base
+  # branch to diff. Docs-only PRs (nothing but *.md changed) are waved through. Compare rule:
+  # numeric major.minor.patch, and on an equal triple a prerelease (-beta) ranks BELOW its
+  # release; head must be > base.
+  version-guard:
+    name: version bump guard (PRs)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require a version bump (unless docs-only)
+        env:
+          PKG: package.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          # fetch-depth 0 isn't needed — fetch just the base ref, one commit deep. HEAD is the
+          # PR MERGE commit, so a plain two-commit tree diff vs the base tip IS the PR delta
+          # (a three-dot diff would need a merge base, which shallow fetches don't have).
+          git fetch origin "$GITHUB_BASE_REF" --depth=1
+          CHANGED="$(git diff --name-only "origin/$GITHUB_BASE_REF" HEAD)"
+          echo "Changed files:"; echo "$CHANGED"
+          NON_MD="$(echo "$CHANGED" | grep -vE '\.md$' || true)"
+          if [ -z "$NON_MD" ]; then
+            echo "docs-only PR — version bump not required." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          HEAD_VER="$(node -p "require('./$PKG').version")"
+          BASE_VER="$(git show "origin/$GITHUB_BASE_REF:$PKG" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")"
+          echo "Base $PKG version: $BASE_VER"
+          echo "Head $PKG version: $HEAD_VER"
+          HEAD_VER="$HEAD_VER" BASE_VER="$BASE_VER" PKG="$PKG" node -e '
+            const parse = v => {
+              const [core, pre = ""] = String(v).split("-");
+              return { nums: core.split(".").map(Number), pre };
+            };
+            const cmp = (a, b) => {
+              const pa = parse(a), pb = parse(b);
+              for (let i = 0; i < 3; i++) {
+                const d = (pa.nums[i] || 0) - (pb.nums[i] || 0);
+                if (d) return d < 0 ? -1 : 1;
+              }
+              if (pa.pre === pb.pre) return 0;
+              if (pa.pre === "") return 1;   // a release outranks a prerelease of the same triple
+              if (pb.pre === "") return -1;
+              return pa.pre < pb.pre ? -1 : (pa.pre > pb.pre ? 1 : 0);
+            };
+            const head = process.env.HEAD_VER, base = process.env.BASE_VER, pkg = process.env.PKG;
+            if (cmp(head, base) > 0) {
+              console.log(`OK: ${head} > ${base}`);
+            } else {
+              console.error(`Version not bumped: head ${head} is not greater than base ${base}.`);
+              console.error(`Fix: run \`npm version X.Y.Z --no-git-tag-version\` (this also bumps package-lock.json) and commit.`);
+              process.exit(1);
+            }
+          '
