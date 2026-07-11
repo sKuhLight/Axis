@@ -20,3 +20,6 @@ CLAUDE.md
 
 # Design reference screenshots (large PNGs, not needed in the repo)
 design/screenshots/
+
+# Session git worktrees (per-session scratch checkouts — keep other sessions' status clean)
+.wt-*/
