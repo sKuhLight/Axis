@@ -2,6 +2,15 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.8.7-beta — 2026-07-11
+
+### Fixed
+- **AM4 block channels (A/B/C/D) now reflect the unit.** Switching a block's channel — in Axis,
+  on the front panel, or in AM4-Edit — is now shown correctly in Axis, along with that channel's own
+  settings (e.g. a per-channel reverb type). Previously Axis stayed on channel A, and channel switches
+  made on the unit didn't appear. *(Decoded from device captures; if a channel readback looks off on
+  your AM4, please report it.)*
+
 ## 0.8.6-beta — 2026-07-10
 
 Consolidates everything since 0.8.4-beta (the interim 0.8.5-beta build shipped without its own
