@@ -66,9 +66,11 @@ jobs:
           git fetch origin "$GITHUB_BASE_REF" --depth=1
           CHANGED="$(git diff --name-only "origin/$GITHUB_BASE_REF" HEAD)"
           echo "Changed files:"; echo "$CHANGED"
-          NON_MD="$(echo "$CHANGED" | grep -vE '\.md$' || true)"
-          if [ -z "$NON_MD" ]; then
-            echo "docs-only PR — version bump not required." | tee -a "$GITHUB_STEP_SUMMARY"
+          # Exempt: docs (*.md) and stack.lock.json — pin-bump auto-PRs (stack-bump.yml)
+          # intentionally move only the pins; the version bumps with the RELEASE that ships them.
+          NON_EXEMPT="$(echo "$CHANGED" | grep -vE '(\.md|^stack\.lock\.json)$' || true)"
+          if [ -z "$NON_EXEMPT" ]; then
+            echo "docs/pin-only PR — version bump not required." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           HEAD_VER="$(node -p "require('./$PKG').version")"
