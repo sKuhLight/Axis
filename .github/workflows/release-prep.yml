@@ -1,0 +1,117 @@
+name: release-prep
+
+# Start an Axis release from a single dispatch (the RECOMMENDED way — see docs/RELEASING.md).
+# Given a version, this bumps package.json + lock, seeds a CHANGELOG section from the commits
+# since the last tag, and opens a release/<version> PR carrying the release checklist. You edit
+# the CHANGELOG wording in the PR, merge, then tag vX.Y.Z-beta to run the draft release build.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 0.8.8-beta (no leading v).'
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prep:
+    name: prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Axis
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full history + tags to seed the notes from the last tag
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Fail early on a malformed version or a tag that already exists — cheaper than a
+      # rejected PR later.
+      - name: Validate version + tag
+        id: guard
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$'; then
+            echo "::error::Invalid version '$VERSION' — expected e.g. 0.8.8-beta."
+            exit 1
+          fi
+          if git tag -l "v$VERSION" | grep -q .; then
+            echo "::error::Tag v$VERSION already exists."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version (package.json + lock)
+        env:
+          VERSION: ${{ steps.guard.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      # Seed a CHANGELOG section from the commit subjects since the last tag. This is a SEED to
+      # hand-edit in the PR — release.yml awk-extracts this section verbatim at tag time, so the
+      # header MUST stay `## <version> — <date>`. Inserted after the intro, before the first
+      # existing `## ` heading.
+      - name: Seed CHANGELOG section
+        env:
+          VERSION: ${{ steps.guard.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATE="$(date -u +%Y-%m-%d)"
+          PREV="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then
+            SUBJECTS="$(git log "$PREV..HEAD" --pretty='- %s')"
+          else
+            SUBJECTS="$(git log HEAD --pretty='- %s')"
+          fi
+          {
+            echo "## $VERSION — $DATE"
+            echo
+            echo "### Changed"
+            echo
+            echo "$SUBJECTS"
+            echo
+          } > section.md
+          awk '
+            /^## / && !inserted { while ((getline line < "section.md") > 0) print line; inserted = 1 }
+            { print }
+          ' CHANGELOG.md > CHANGELOG.md.tmp
+          mv CHANGELOG.md.tmp CHANGELOG.md
+          rm -f section.md
+
+      # A PAT (STACK_DISPATCH_TOKEN) makes the PR's own CI run; with the fallback GITHUB_TOKEN
+      # the PR is still created but its CI must be kicked manually (close/reopen). Commits
+      # authored as the maintainer, no AI attribution.
+      - name: Open release PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.STACK_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: release/${{ steps.guard.outputs.version }}
+          author: sKuhLight <sKuhLight@users.noreply.github.com>
+          committer: sKuhLight <sKuhLight@users.noreply.github.com>
+          commit-message: "release: ${{ steps.guard.outputs.version }}"
+          title: "release: ${{ steps.guard.outputs.version }}"
+          body: |
+            ## Release ${{ steps.guard.outputs.version }}
+
+            Version bumped (package.json + lock) and a CHANGELOG section seeded from the commits
+            since the last tag.
+
+            ### Checklist before merging
+            - [ ] Edit the seeded `## ${{ steps.guard.outputs.version }} — <date>` CHANGELOG
+                  section into real release notes (the tag build awk-extracts it verbatim).
+            - [ ] Verify `stack.lock.json` pins are the intended released ForgeFX + forgefx-midi
+                  refs (usually already bumped by an earlier `stack-bump` PR).
+            - [ ] Merge this PR.
+
+            ### After merging
+            1. Tag it: `git tag v${{ steps.guard.outputs.version }} && git push --tags`.
+            2. The tag build runs the gate, then produces a **DRAFT** GitHub release with the
+               Win/macOS/Linux installers attached.
+            3. Smoke-test an installer.
+            4. **Publish** the draft — publishing is what arms electron-updater's auto-update feed.

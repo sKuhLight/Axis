@@ -1,0 +1,132 @@
+name: stack-bump
+
+# The ForgeFX → Axis ripple (stage 2 → stage 3). When a ForgeFX release is PUBLISHED it fires
+# a `server-released` repository_dispatch; this opens a PR bumping Axis's stack.lock.json to
+# that server tag AND the codec ref ForgeFX shipped against.
+#
+# INVARIANT: Axis must NEVER pin a forgefx-midi newer than the one ForgeFX shipped. The two
+# pins move together, sourced from ForgeFX's own stack.lock.json (payload `codec_ref`). So the
+# codec pin is only updated when the payload carries a non-empty codec_ref; otherwise the
+# existing codec pin is left untouched.
+#
+# Can also be run manually (workflow_dispatch) with explicit refs, or empty refs to resolve
+# each repo's default-branch HEAD.
+on:
+  repository_dispatch:
+    types: [server-released]
+  workflow_dispatch:
+    inputs:
+      forgefx-ref:
+        description: 'ForgeFX tag/SHA to pin. Empty = resolve sKuhLight/ForgeFX default-branch HEAD.'
+        required: false
+        default: ''
+      midi-ref:
+        description: 'forgefx-midi tag/SHA to pin. Empty = resolve sKuhLight/forgefx-midi default-branch HEAD.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: bump ForgeFX + forgefx-midi pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine target refs
+        id: target
+        env:
+          MANUAL_FORGEFX: ${{ github.event.inputs.forgefx-ref }}
+          MANUAL_MIDI: ${{ github.event.inputs.midi-ref }}
+          PAYLOAD_TAG: ${{ github.event.client_payload.tag }}
+          PAYLOAD_CODEC: ${{ github.event.client_payload.codec_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ForgeFX ref: manual input > dispatch tag > default-branch HEAD.
+          FORGEFX_REF="$MANUAL_FORGEFX"
+          # explicit if — a bare `[ test ] && cmd` whose test is false would trip set -e
+          if [ -z "$FORGEFX_REF" ]; then FORGEFX_REF="$PAYLOAD_TAG"; fi
+          if [ -z "$FORGEFX_REF" ]; then
+            FORGEFX_REF="$(git ls-remote https://github.com/sKuhLight/ForgeFX.git HEAD | awk '{print $1}')"
+          fi
+          if [ -z "$FORGEFX_REF" ]; then
+            echo "::error::Could not determine a ForgeFX ref to pin."
+            exit 1
+          fi
+          # Codec ref: manual input > dispatch codec_ref. On a manual run with no input we resolve
+          # default-branch HEAD; on a dispatch with an EMPTY codec_ref we leave the pin as-is
+          # (invariant: never move the codec pin past what ForgeFX shipped).
+          MIDI_REF="$MANUAL_MIDI"
+          if [ -z "$MIDI_REF" ]; then MIDI_REF="$PAYLOAD_CODEC"; fi
+          if [ -z "$MIDI_REF" ] && [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            MIDI_REF="$(git ls-remote https://github.com/sKuhLight/forgefx-midi.git HEAD | awk '{print $1}')"
+          fi
+          echo "ForgeFX ref:      $FORGEFX_REF"
+          echo "forgefx-midi ref: ${MIDI_REF:-<unchanged>}"
+          echo "forgefx-ref=$FORGEFX_REF" >> "$GITHUB_OUTPUT"
+          echo "midi-ref=$MIDI_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Update stack.lock.json pins
+        id: pin
+        env:
+          FORGEFX_REF: ${{ steps.target.outputs.forgefx-ref }}
+          MIDI_REF: ${{ steps.target.outputs.midi-ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq --arg ref "$FORGEFX_REF" '.ForgeFX.ref = $ref' stack.lock.json > stack.lock.json.tmp
+          mv stack.lock.json.tmp stack.lock.json
+          if [ -n "$MIDI_REF" ]; then
+            jq --arg ref "$MIDI_REF" '.["forgefx-midi"].ref = $ref' stack.lock.json > stack.lock.json.tmp
+            mv stack.lock.json.tmp stack.lock.json
+          else
+            echo "No codec ref supplied — leaving forgefx-midi pin unchanged (invariant: never newer than ForgeFX shipped)."
+          fi
+          if git diff --quiet -- stack.lock.json; then
+            echo "pins already current — nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A PAT (STACK_DISPATCH_TOKEN) makes the auto-PR's OWN CI run; with the fallback
+      # GITHUB_TOKEN the PR is still created, but its CI must be triggered manually
+      # (close/reopen the PR). Commits authored as the maintainer, no AI attribution.
+      - name: Open stack-bump PR
+        if: steps.pin.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.STACK_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: bump/stack-${{ steps.target.outputs.forgefx-ref }}
+          author: sKuhLight <sKuhLight@users.noreply.github.com>
+          committer: sKuhLight <sKuhLight@users.noreply.github.com>
+          commit-message: "stack: bump ForgeFX pin to ${{ steps.target.outputs.forgefx-ref }} (+ matching forgefx-midi pin)"
+          title: "stack: bump ForgeFX pin to ${{ steps.target.outputs.forgefx-ref }} (+ matching forgefx-midi pin)"
+          body: |
+            ## Stack pin bump
+
+            ForgeFX published a release; this bumps Axis's pinned ForgeFX ref **and** the
+            matching forgefx-midi ref it shipped against. CI validates Axis against the new
+            pins on tag/mobile builds (CI + axisapp.live still track default-branch HEAD).
+
+            | field | value |
+            |---|---|
+            | ForgeFX released tag | `${{ github.event.client_payload.tag || 'n/a (manual)' }}` |
+            | server version | `${{ github.event.client_payload.server_version || 'n/a' }}` |
+            | codec ref shipped with it | `${{ github.event.client_payload.codec_ref || 'n/a (pin unchanged)' }}` |
+            | ForgeFX pin → | `${{ steps.target.outputs.forgefx-ref }}` |
+            | forgefx-midi pin → | `${{ steps.target.outputs.midi-ref || 'unchanged' }}` |
+
+            > Invariant: the two pins move together — Axis never pins a codec newer than the
+            > one ForgeFX shipped.
+
+            ### Decision (yours, on this PR)
+            - **Merge** = adopt the pins.
+            - **Cut an Axis release too?** Cut one when the server change is **user-visible in
+              the app**; infra-only changes just let the pins ride along the next release
+              (see `docs/RELEASING.md`).
