@@ -38,7 +38,7 @@
     labelFromWorkbenchType
   } from './library';
   import { startPanelDragOut, startWidgetDragOut } from './libraryDrag';
-  import { widgetDropIndex } from './drag';
+  import { startListReorder } from './listReorderDrag';
 
   let {
     open,
@@ -212,44 +212,54 @@
     setStatus('ok', 'Custom panel added to this page.'); // toast candidate
   }
 
-  // ── Page reorder by drag (R17 / AXIS-26 — replaces the ▲▼ buttons) ────────
-  // Grab a page row's handle and drag it up/down; the grabbed row is highlighted
-  // while dragging and reorders to where it is dropped (index resolved against
-  // the row midpoints at drop time — computing once avoids the mid-drag feedback
-  // loop that comes from moving the row the pointer is measuring against).
+  // ── Page reorder by drag (R18 / AXIS-29 — the shared list-reorder drag) ────
+  // Grab a page row's handle and drag it up/down. Routed through the generic
+  // `startListReorder` primitive, so it rides the SAME machinery as every other
+  // drag: a DragLayer ghost (a clone of the real row, anchored at the grab
+  // offset) travels with the pointer, an in-flow dashed slot is spliced into the
+  // list where it will land, and the .aw-dragging-list body class lights up.
   // Disabled while a search filter is active (the visible order isn't canonical).
-  let reorderingPageId = $state<string | null>(null);
-  function pageReorderDown(page: WorkbenchPage, event: PointerEvent) {
-    if (!!q || event.button !== 0 || pages.length <= 1) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startedAt = { x: event.clientX, y: event.clientY };
-    let dragging = false;
+  const drag = $derived($controller.drag);
+  const reorderingPageId = $derived(drag?.kind === 'list' && drag.listId === 'pages' ? drag.itemId : null);
+  // Insert index among the NON-dragged visible rows (what the slot renders against).
+  const pageSlotIndex = $derived(
+    drag?.kind === 'list' && drag.listInsert?.listId === 'pages' ? drag.listInsert.index : -1
+  );
+  // Slot height mirrors the lifted row's footprint so the flow stays neutral.
+  const pageSlotHeight = $derived(drag?.kind === 'list' ? drag.size?.height ?? 44 : 44);
+  // Position in `filteredPages` to render the slot BEFORE, skipping the lifted row
+  // (mirrors WidgetZone's `slotPos`); past-the-end renders after the last row.
+  const pageSlotPos = $derived.by(() => {
+    if (pageSlotIndex < 0) return -1;
+    let visible = 0;
+    for (let i = 0; i < filteredPages.length; i++) {
+      if (filteredPages[i].id === reorderingPageId) continue;
+      if (visible === pageSlotIndex) return i;
+      visible += 1;
+    }
+    return filteredPages.length;
+  });
 
-    const onMove = (ev: PointerEvent) => {
-      if (!dragging && Math.hypot(ev.clientX - startedAt.x, ev.clientY - startedAt.y) < 5) return;
-      dragging = true;
-      reorderingPageId = page.id;
-      ev.preventDefault();
-    };
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      reorderingPageId = null;
-      if (!dragging) return;
-      const rects = Array.from(document.querySelectorAll<HTMLElement>('.aw-lib-row.page')).map((row) => {
-        const r = row.getBoundingClientRect();
-        return { left: r.left, top: r.top, width: r.width, height: r.height };
-      });
-      // Insertion index among the visible rows, adjusted for the dragged row's
-      // own removal to get the canonical destination index in `pageOrder`.
-      const insert = widgetDropIndex({ x: ev.clientX, y: ev.clientY }, rects, 'vertical');
-      const current = pages.findIndex((p) => p.id === page.id);
-      const dest = insert > current ? insert - 1 : insert;
-      if (dest >= 0 && dest < pages.length && dest !== current) controller.movePage(page.id, dest);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+  function pageReorderDown(page: WorkbenchPage, event: PointerEvent) {
+    if (!!q || pages.length <= 1) return;
+    const row = (event.currentTarget as HTMLElement).closest<HTMLElement>('.aw-lib-row.page');
+    if (!row) return;
+    event.stopPropagation();
+    startListReorder({
+      controller,
+      event,
+      listId: 'pages',
+      itemId: page.id,
+      item: row,
+      orientation: 'vertical',
+      targetLabel: page.label,
+      // All page rows in canonical (DOM) order; the primitive excludes the lifted
+      // one from the hit-test. No search filter is active during a reorder.
+      items: () => Array.from(document.querySelectorAll<HTMLElement>('.aw-lib-row.page')),
+      commit: (toIndex) => {
+        controller.movePage(page.id, toIndex);
+      }
+    });
   }
 
   // ── Drag-OUT: drag a saved panel / widget row onto the layout (AXIS-26) ────
@@ -360,11 +370,17 @@
             <button class="aw-lib-add-page" type="button" onclick={addPage}>＋ Add Page</button>
           </div>
           <div class="aw-lib-list">
-            {#each filteredPages as page (page.id)}
+            {#each filteredPages as page, pagePos (page.id)}
+              {#if pageSlotPos === pagePos}
+                <!-- In-flow drop slot (same dashed-spacer semantics as WidgetZone):
+                     a real list child at the live insert index, so neighbours
+                     reflow to show the true post-drop position. -->
+                <div class="aw-lib-slot" data-drag-slot aria-hidden="true" style="height:{pageSlotHeight}px;"></div>
+              {/if}
               <div
                 class="aw-lib-row page"
                 class:active={page.id === activePageId}
-                class:reordering={reorderingPageId === page.id}
+                class:aw-lifted={reorderingPageId === page.id}
                 title={page.label}
               >
                 {#if renaming?.kind === 'page' && renaming.id === page.id}
@@ -385,20 +401,25 @@
                     <span class="aw-lib-page-label">{page.label}</span>
                   </button>
                   <i>{page.id === activePageId ? 'active' : 'open'}</i>
-                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${page.label}`} aria-label={`Rename ${page.label}`} onclick={() => startRename('page', page.id, page.label)}>{@render iconPencil()}</button>
-                  <button
-                    class="aw-lib-icon-btn danger"
-                    type="button"
-                    disabled={pages.length <= 1}
-                    title={pages.length <= 1 ? 'The last page cannot be deleted' : `Delete ${page.label}`}
-                    aria-label={`Delete ${page.label}`}
-                    onclick={() => deletePage(page)}
-                  >{@render iconTrash()}</button>
+                  <span class="aw-lib-actions">
+                    <button class="aw-lib-icon-btn" type="button" title={`Rename ${page.label}`} aria-label={`Rename ${page.label}`} onclick={() => startRename('page', page.id, page.label)}>{@render iconPencil()}</button>
+                    <button
+                      class="aw-lib-icon-btn danger"
+                      type="button"
+                      disabled={pages.length <= 1}
+                      title={pages.length <= 1 ? 'The last page cannot be deleted' : `Delete ${page.label}`}
+                      aria-label={`Delete ${page.label}`}
+                      onclick={() => deletePage(page)}
+                    >{@render iconTrash()}</button>
+                  </span>
                 {/if}
               </div>
             {:else}
               <p class="aw-lib-empty">{q ? 'No pages match your search.' : 'No pages yet.'}</p>
             {/each}
+            {#if pageSlotPos >= filteredPages.length && pageSlotPos >= 0}
+              <div class="aw-lib-slot" data-drag-slot aria-hidden="true" style="height:{pageSlotHeight}px;"></div>
+            {/if}
           </div>
         </section>
 
@@ -427,15 +448,17 @@
                     <span class="aw-lib-label">{template.title}</span>
                     <i>{Object.keys(template.panels).length} {Object.keys(template.panels).length === 1 ? 'panel' : 'panels'}</i>
                   </button>
-                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('panel', template.id, template.title)}>{@render iconPencil()}</button>
-                  <button class="aw-lib-icon-btn" type="button" title={`Export ${template.title}`} aria-label={`Export ${template.title}`} onclick={() => exportPanelTemplate(template.id, template.title)}>{@render iconExport()}</button>
-                  <button
-                    class="aw-lib-icon-btn danger"
-                    type="button"
-                    title={`Delete ${template.title}`}
-                    aria-label={`Delete ${template.title}`}
-                    onclick={() => controller.dispatch({ type: 'library.panel.delete', templateId: template.id })}
-                  >{@render iconTrash()}</button>
+                  <span class="aw-lib-actions">
+                    <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('panel', template.id, template.title)}>{@render iconPencil()}</button>
+                    <button class="aw-lib-icon-btn" type="button" title={`Export ${template.title}`} aria-label={`Export ${template.title}`} onclick={() => exportPanelTemplate(template.id, template.title)}>{@render iconExport()}</button>
+                    <button
+                      class="aw-lib-icon-btn danger"
+                      type="button"
+                      title={`Delete ${template.title}`}
+                      aria-label={`Delete ${template.title}`}
+                      onclick={() => controller.dispatch({ type: 'library.panel.delete', templateId: template.id })}
+                    >{@render iconTrash()}</button>
+                  </span>
                 {/if}
               </div>
             {:else}
@@ -474,8 +497,10 @@
                     <span class="aw-lib-label">{template.title}</span>
                     <i>{Object.keys(template.widgets).length} {Object.keys(template.widgets).length === 1 ? 'widget' : 'widgets'}</i>
                   </button>
-                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('widget', template.id, template.title)}>{@render iconPencil()}</button>
-                  <button class="aw-lib-icon-btn danger" type="button" title={`Delete ${template.title}`} aria-label={`Delete ${template.title}`} onclick={() => controller.dispatch({ type: 'library.widget.delete', templateId: template.id })}>{@render iconTrash()}</button>
+                  <span class="aw-lib-actions">
+                    <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('widget', template.id, template.title)}>{@render iconPencil()}</button>
+                    <button class="aw-lib-icon-btn danger" type="button" title={`Delete ${template.title}`} aria-label={`Delete ${template.title}`} onclick={() => controller.dispatch({ type: 'library.widget.delete', templateId: template.id })}>{@render iconTrash()}</button>
+                  </span>
                 {/if}
               </div>
             {:else}
@@ -713,13 +738,13 @@
   }
   .aw-lib-row {
     min-width: 0;
-    min-height: 42px;
+    min-height: 48px;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 11px 12px;
     border: 1px solid var(--aw-border-2);
-    border-radius: 9px;
+    border-radius: 10px;
     background: var(--aw-surface);
     color: var(--aw-text-2);
     cursor: pointer;
@@ -779,7 +804,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: 13px;
+    line-height: 1.35;
     font-weight: 800;
   }
   /* R17 (AXIS-26): the row body is a single grab button (icon + name + meta) that
@@ -822,7 +848,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: 13px;
+    line-height: 1.35;
     font-weight: 700;
     color: var(--aw-text-2);
   }
@@ -882,23 +909,45 @@
     opacity: 0.4;
     cursor: default;
   }
-  /* Page being dragged: lift it with an accent frame so the reorder reads. */
-  .aw-lib-row.page.reordering {
-    border-color: var(--aw-accent);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    opacity: 0.92;
+  /* Right-aligned action column: a fixed-width slot sized for the widest cluster
+     (rename + export + delete) so the icons line up at the SAME x on every row
+     and across every view — never trailing directly behind the variable-width
+     name/meta. Rows with fewer icons right-align within it (delete always far
+     right). The flex:1 body absorbs the leftover width + the meta `<i>`. */
+  .aw-lib-actions {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    width: 102px;
+  }
+  /* Page being dragged: lifted out of the flow entirely — the DragLayer ghost
+     (clone of the row) travels, and the in-flow slot marks where it lands. */
+  .aw-lib-row.page.aw-lifted {
+    display: none;
+  }
+  /* In-flow drop slot for the page reorder (same dashed-spacer language as the
+     WidgetZone `.aw-zone-slot`): a real list child, so neighbours reflow. */
+  .aw-lib-slot {
+    flex: none;
+    box-sizing: border-box;
+    border: 1.5px dashed var(--aw-accent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
   }
   .aw-lib-row:disabled {
     opacity: 0.48;
     cursor: default;
   }
-  .aw-lib-row > span:not(.aw-lib-ico):not(.aw-lib-dot) {
+  .aw-lib-row > span:not(.aw-lib-ico):not(.aw-lib-dot):not(.aw-lib-actions) {
     min-width: 0;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: 13px;
+    line-height: 1.35;
     font-weight: 700;
   }
   .aw-lib-row i {
@@ -918,8 +967,16 @@
     cursor: pointer;
     font: 800 10px/1 var(--aw-font-ui);
   }
+  /* Scoped over the generic `.aw-lib-row button` (0,1,1) — which forces flex:none
+     AND paints a bordered chip — so the page name is a PLAIN label that owns the
+     row width: no chip background/border (AXIS-29 #2), and the body expands so the
+     meta + icon column pin to the row's right edge instead of trailing the name
+     (AXIS-29 #3). Mirrors the `.aw-lib-grab` treatment on panel/widget rows. */
   .aw-lib-row button.aw-lib-page-open {
+    flex: 1;
     min-width: 0;
+    border: 0;
+    background: transparent;
   }
   .aw-lib-row button:hover:not(:disabled) {
     color: var(--aw-text);

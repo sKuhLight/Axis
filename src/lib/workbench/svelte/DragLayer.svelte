@@ -10,9 +10,36 @@
   // slot elements render inside the zone/group flow, not in this layer). Neither
   // ⇒ nothing will accept the drop, so the drag reads as rejected (design
   // language: danger-tinted, not-allowed cursor).
+  // `previewRect` overlay is panel/widget-only (list drags feed back via the
+  // in-flow slot instead, like widget positional inserts).
+  const previewRect = $derived(drag && drag.kind !== 'list' ? drag.previewRect : undefined);
   const invalid = $derived(
-    !!drag && !drag.previewRect && !(drag.kind === 'widget' && (drag.zoneInsert || drag.groupInsert))
+    !!drag &&
+      !previewRect &&
+      !(drag.kind === 'widget' && (drag.zoneInsert || drag.groupInsert)) &&
+      !(drag.kind === 'list' && drag.listInsert)
   );
+
+  // Generic list-reorder ghost: the primitive captured a static CLONE of the
+  // grabbed row (design ghost = the real element at the grab offset). The
+  // framework needs no knowledge of the row's markup — this action just mounts
+  // whatever node the caller cloned. Svelte's scoped-style attributes ride along
+  // on the clone, so it renders styled here.
+  const listGhost = $derived(drag?.kind === 'list' ? drag : null);
+  function mountClone(node: HTMLElement, el: HTMLElement | undefined) {
+    let current: HTMLElement | null = null;
+    const set = (next: HTMLElement | undefined) => {
+      if (current === next) return;
+      if (current) current.remove();
+      current = next ?? null;
+      if (current) node.appendChild(current);
+    };
+    set(el);
+    return {
+      update: (next: HTMLElement | undefined) => set(next),
+      destroy: () => set(undefined)
+    };
+  }
 
   // Full-size travelling ghost (design shell `<div ref=ghostRef><AxisWidget
   // w=ghostW/></div>` at `fixed; left:px-offx; top:py-offy; opacity:.5;
@@ -54,7 +81,7 @@
 
 {#if drag}
   <div class="aw-drag-layer" class:invalid bind:this={layerEl}>
-    {#if drag.previewRect}
+    {#if previewRect}
       <div
         class="aw-drop-preview"
         class:tab={drag.kind === 'panel' && drag.previewKind === 'tab'}
@@ -62,10 +89,10 @@
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
         class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
         style="
-          left:{drag.previewRect.left / zoom}px;
-          top:{drag.previewRect.top / zoom}px;
-          width:{drag.previewRect.width / zoom}px;
-          height:{drag.previewRect.height / zoom}px;
+          left:{previewRect.left / zoom}px;
+          top:{previewRect.top / zoom}px;
+          width:{previewRect.width / zoom}px;
+          height:{previewRect.height / zoom}px;
         "
       ></div>
     {/if}
@@ -84,6 +111,18 @@
         </div>
       </div>
     {/if}
+    {#if listGhost && listGhost.ghostEl}
+      {@const grab = listGhost.grabOffset ?? { x: 12, y: 12 }}
+      <!-- List-reorder ghost: the cloned row travels with the pointer, anchored
+           where it was grabbed (same model as the widget ghost, but the node is
+           whatever the caller cloned). Inert — the layer is pointer-events:none. -->
+      <div
+        class="aw-drag-list-ghost"
+        class:invalid
+        style="transform:translate({(drag.pointer.x - grab.x) / zoom}px, {(drag.pointer.y - grab.y) / zoom}px) scale(1.02); width:{(listGhost.size?.width ?? 240)}px;"
+        use:mountClone={listGhost.ghostEl}
+      ></div>
+    {/if}
     <div
       class="aw-drag-ghost"
       class:invalid
@@ -93,6 +132,8 @@
     >
       {#if drag.kind === 'panel'}
         <span class="aw-drag-kind">Panel</span>
+      {:else if drag.kind === 'list'}
+        <span class="aw-drag-kind">Reorder</span>
       {:else}
         <span class="aw-drag-kind">Widget</span>
       {/if}
@@ -211,6 +252,24 @@
     pointer-events: none;
   }
   .aw-drag-widget-ghost.invalid {
+    border-color: var(--aw-danger);
+  }
+  /* Generic list-reorder ghost: the cloned row, lifted (half-opaque, slight
+     scale, accent frame + shadow) and anchored at the grab offset. The clone
+     carries its own (tokenised) styling; this wrapper only lifts it. */
+  .aw-drag-list-ghost {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    transform-origin: top left;
+    border: 1px solid var(--aw-accent);
+    border-radius: 10px;
+    opacity: 0.85;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+  .aw-drag-list-ghost.invalid {
     border-color: var(--aw-danger);
   }
   @keyframes awPreviewIn {

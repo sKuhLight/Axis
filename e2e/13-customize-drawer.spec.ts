@@ -51,7 +51,7 @@ test.describe('Customize drawer', () => {
     await expect(rows).toHaveCount(before + 1);
   });
 
-  test('reorder pages by dragging the grip (R17 replaces the ▲▼ buttons)', async ({ page }) => {
+  test('reorder pages via the shared list-reorder drag (R18 unifies the machinery)', async ({ page }) => {
     await bootCleanWorkbench(page);
     await openPages(page);
 
@@ -69,10 +69,21 @@ test.describe('Customize drawer', () => {
     await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
     await page.mouse.down();
     await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2 + 8);
-    await page.mouse.move(thirdRow.x + thirdRow.width / 2, thirdRow.y + thirdRow.height * 0.75, { steps: 10 });
+    await page.mouse.move(thirdRow.x + thirdRow.width / 2, thirdRow.y + thirdRow.height * 0.5, { steps: 10 });
+
+    // Mid-drag the page reorder rides the SAME machinery as every other drag:
+    // the body carries the .aw-dragging-list class, the DragLayer shows the
+    // ghost (a clone of the grabbed row), and an in-flow dashed slot is spliced
+    // into the list where the page will land.
+    await expect(page.locator('.aw-root.aw-dragging-list')).toHaveCount(1);
+    await expect(page.locator('.aw-drag-list-ghost')).toBeVisible();
+    await expect(page.locator('.aw-lib-slot[data-drag-slot]')).toBeVisible();
+
+    await page.mouse.move(thirdRow.x + thirdRow.width / 2, thirdRow.y + thirdRow.height * 0.75, { steps: 4 });
     await page.mouse.up();
 
-    // The page that was first is no longer first (it moved down the list).
+    // Drag cleared and the page that was first is no longer first.
+    await expect(page.locator('.aw-root.aw-dragging-list')).toHaveCount(0);
     await expect(labels.first()).not.toHaveText(firstBefore ?? '');
   });
 

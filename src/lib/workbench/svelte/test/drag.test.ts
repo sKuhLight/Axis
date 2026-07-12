@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   anchoredWidgetIndex,
+  listReorderInsertIndex,
   panelDropCommand,
   rectContainsPointer,
   splitIntentFromRect,
@@ -47,6 +48,38 @@ describe('Workbench drag helpers', () => {
     expect(widgetDropIndex({ x: 10, y: 10 }, rects, 'horizontal')).toBe(0);
     expect(widgetDropIndex({ x: 55, y: 10 }, rects, 'horizontal')).toBe(1);
     expect(widgetDropIndex({ x: 130, y: 10 }, rects, 'horizontal')).toBe(2);
+  });
+
+  describe('listReorderInsertIndex (shared list-reorder drag, R18)', () => {
+    // Four stacked rows (vertical list); midpoints at y = 20, 60, 100, 140.
+    const rows = [
+      { left: 0, top: 0, width: 200, height: 40 },
+      { left: 0, top: 40, width: 200, height: 40 },
+      { left: 0, top: 80, width: 200, height: 40 },
+      { left: 0, top: 120, width: 200, height: 40 }
+    ];
+
+    it('excludes the dragged row and returns the destination among the survivors', () => {
+      // Drag row 0; survivors are rows 1..3 (midpoints 60/100/140). A pointer
+      // just past the (old) third row's midpoint lands at survivor index 2 — the
+      // exact index a filter-then-splice `page.move` consumes.
+      expect(listReorderInsertIndex({ x: 10, y: 105 }, rows, 0, 'vertical')).toBe(2);
+      // Dropping back near the top keeps it first.
+      expect(listReorderInsertIndex({ x: 10, y: 10 }, rows, 0, 'vertical')).toBe(0);
+      // Past the last midpoint appends to the end of the survivors.
+      expect(listReorderInsertIndex({ x: 10, y: 200 }, rows, 0, 'vertical')).toBe(3);
+    });
+
+    it('identity move: dragging a row over its own slot returns its current index', () => {
+      // Drag row 1 (top 40). Survivors midpoints: row0=20, row2=100, row3=140.
+      // A pointer inside row 1's old band (y≈60) is below row0's midpoint and
+      // above row2's → survivor index 1, i.e. the same slot (no-op).
+      expect(listReorderInsertIndex({ x: 10, y: 60 }, rows, 1, 'vertical')).toBe(1);
+    });
+
+    it('with no dragged row (index < 0) hit-tests against every rect', () => {
+      expect(listReorderInsertIndex({ x: 10, y: 105 }, rows, -1, 'vertical')).toBe(3);
+    });
   });
 
   it('maps widget drop intents to reducer commands', () => {

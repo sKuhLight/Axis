@@ -29,19 +29,17 @@ import {
 } from '../core';
 import type { WorkbenchController } from './controller.svelte';
 import {
-  pointerDistance,
   widgetDropIndex,
   widgetIndexForUnitIndex,
   zoneUnitWidgetCounts,
   type WorkbenchRect
 } from './drag';
+import { beginPointerDrag } from './dragSession';
 
 /** A widget id no live widget can hold — marks the drag as a not-yet-created item. */
 const DRAG_OUT_WIDGET_ID = '__aw-drag-out__';
 /** A panel id no live panel can hold. */
 const DRAG_OUT_PANEL_ID = '__aw-drag-out__';
-
-const DRAG_THRESHOLD = 5;
 
 function rectOf(el: Element): WorkbenchRect {
   const r = el.getBoundingClientRect();
@@ -106,43 +104,31 @@ export function startWidgetDragOut(options: WidgetDragOutOptions): void {
   if (!controller.editMode || event.button !== 0) return;
   const size = options.size ?? { width: 150, height: 40 };
   const startedAt = { x: event.clientX, y: event.clientY };
-  let dragging = false;
 
-  const onMove = (ev: PointerEvent) => {
-    const pointer = { x: ev.clientX, y: ev.clientY };
-    if (!dragging && pointerDistance(startedAt, pointer) < DRAG_THRESHOLD) return;
-    if (!dragging) {
-      dragging = true;
-      options.onActivate?.();
+  beginPointerDrag({
+    event,
+    onActivate: options.onActivate,
+    onMove: (pointer) => {
+      const drop = resolveWidgetDrop(controller, pointer.x, pointer.y);
+      controller.setDrag({
+        kind: 'widget',
+        widgetIds: [DRAG_OUT_WIDGET_ID],
+        startedAt,
+        pointer,
+        size,
+        targetLabel: drop ? drop.zone : undefined,
+        zoneInsert: drop ? { zone: drop.zone, index: drop.unitIndex } : undefined
+      });
+    },
+    onDrop: (pointer) => {
+      const drop = resolveWidgetDrop(controller, pointer.x, pointer.y);
+      if (drop) {
+        const commands = commit({ zone: drop.zone, index: drop.widgetIndex });
+        if (commands && commands.length) controller.dispatchMany(commands);
+      }
+      controller.setDrag(null);
     }
-    ev.preventDefault();
-    const drop = resolveWidgetDrop(controller, pointer.x, pointer.y);
-    controller.setDrag({
-      kind: 'widget',
-      widgetIds: [DRAG_OUT_WIDGET_ID],
-      startedAt,
-      pointer,
-      size,
-      targetLabel: drop ? drop.zone : undefined,
-      zoneInsert: drop ? { zone: drop.zone, index: drop.unitIndex } : undefined
-    });
-  };
-
-  const onUp = (ev: PointerEvent) => {
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    if (!dragging) return;
-    const drop = resolveWidgetDrop(controller, ev.clientX, ev.clientY);
-    if (drop) {
-      const commands = commit({ zone: drop.zone, index: drop.widgetIndex });
-      if (commands && commands.length) controller.dispatchMany(commands);
-    }
-    controller.setDrag(null);
-  };
-
-  event.preventDefault();
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
+  });
 }
 
 export interface PanelDragOutOptions {
@@ -158,41 +144,29 @@ export function startPanelDragOut(options: PanelDragOutOptions): void {
   const { controller, event, commit } = options;
   if (!controller.editMode || event.button !== 0) return;
   const startedAt = { x: event.clientX, y: event.clientY };
-  let dragging = false;
 
-  const onMove = (ev: PointerEvent) => {
-    const pointer = { x: ev.clientX, y: ev.clientY };
-    if (!dragging && pointerDistance(startedAt, pointer) < DRAG_THRESHOLD) return;
-    if (!dragging) {
-      dragging = true;
-      options.onActivate?.();
+  beginPointerDrag({
+    event,
+    onActivate: options.onActivate,
+    onMove: (pointer) => {
+      const drop = resolveRegionDrop(pointer.x, pointer.y);
+      controller.setDrag({
+        kind: 'panel',
+        panelId: DRAG_OUT_PANEL_ID,
+        startedAt,
+        pointer,
+        targetLabel: drop ? `Dock ${drop.region}` : undefined,
+        previewRect: drop?.rect,
+        previewKind: drop ? 'region' : undefined
+      });
+    },
+    onDrop: (pointer) => {
+      const drop = resolveRegionDrop(pointer.x, pointer.y);
+      if (drop) {
+        const commands = commit({ region: drop.region });
+        if (commands && commands.length) controller.dispatchMany(commands);
+      }
+      controller.setDrag(null);
     }
-    ev.preventDefault();
-    const drop = resolveRegionDrop(pointer.x, pointer.y);
-    controller.setDrag({
-      kind: 'panel',
-      panelId: DRAG_OUT_PANEL_ID,
-      startedAt,
-      pointer,
-      targetLabel: drop ? `Dock ${drop.region}` : undefined,
-      previewRect: drop?.rect,
-      previewKind: drop ? 'region' : undefined
-    });
-  };
-
-  const onUp = (ev: PointerEvent) => {
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    if (!dragging) return;
-    const drop = resolveRegionDrop(ev.clientX, ev.clientY);
-    if (drop) {
-      const commands = commit({ region: drop.region });
-      if (commands && commands.length) controller.dispatchMany(commands);
-    }
-    controller.setDrag(null);
-  };
-
-  event.preventDefault();
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
+  });
 }

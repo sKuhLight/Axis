@@ -1166,3 +1166,99 @@ restores full-size rendering of the active profile.
 - Widget-template drag-out supports zone drops; workspace-edge "new panel from a
   dragged widget" (WidgetHost has it for live widgets) isn't wired for drag-out.
 - **Committed** ROUND 17 on `layout-rework` (v0.8.13-beta); main-session live verify on fresh servers: row names untruncated everywhere, pencil/trash icon actions + drag grips present, mobile preview = real 400×820 centered frame w/ phone UI, desktop restore OK. Known pre-existing: firefox 06-persistence flake (fails on base 03d041c too) → AXIS-28.
+
+## ROUND 18 — Drawer drag unification + row anatomy (operator review 2026-07-12)
+
+Operator review of round 17 (AXIS-29):
+1. Page drag&drop in the drawer FEELS DIFFERENT from every other drag in the
+   app. That contradicts the axis-workbench framework goal — interactions get
+   built ONCE. Page reorder must ride the same shared machinery (DragLayer
+   ghost at grab offset + in-flow dashed slot), extracted/generalized, not a
+   bespoke second implementation.
+2. The name chips in Pages/Widgets rows (background + border) look squeezed —
+   label needs breathing room (or drop the chip look).
+3. Pencil/trash icons trail directly behind the name, ragged per row — they
+   belong in a consistent right-aligned column, same position on every row.
+
+## ROUND 18 — implementation (2026-07-12, Agent 5)
+
+Base 5524669 on `layout-rework`. Uncommitted; main session reviews + commits.
+
+**Plan (before coding):**
+1. *Unify page reorder onto the shared drag machinery.* The R17 page reorder was
+   a bespoke session (no DragLayer ghost, drop-time-only index). Route it through
+   the SAME `controller.drag` state the widget/zone drags use, so the DragLayer
+   ghost + in-flow dashed slot + 5px threshold all light up identically.
+   - `drag.ts`: new `kind:'list'` drag variant (listId/itemId/size/grabOffset/
+     ghostEl/orientation/listInsert), shared `DRAG_THRESHOLD` const, pure
+     `listReorderInsertIndex` (hit-test EXCLUDING the dragged item → the exact
+     index `page.move` filter-then-splice wants).
+   - New `dragSession.ts` `beginPointerDrag` — the extracted pointer-session core
+     (threshold → activate → move → drop), used by BOTH `libraryDrag.ts` (drag-out)
+     and the new `listReorderDrag.ts` (`startListReorder`, clones the grabbed row
+     for a generic DragLayer ghost).
+   - `DragLayer.svelte`: render a generic cloned-node ghost for `kind:'list'`.
+   - `WorkbenchLibraryDrawer.svelte`: page reorder via `startListReorder`; splice
+     the in-flow dashed slot into the page list flow (mirrors WidgetZone `zoneSlot`).
+   - `WorkbenchHost.svelte`: `class:aw-dragging-list`.
+2. *Row anatomy* — give labels breathing room, right-align icon column identically
+   across Pages/Widgets/Layouts (grid the row so the action column has a fixed x).
+3. Keep search / drag-out / icon actions / rename / preview working.
+
+**Done — what shipped:**
+
+*Task 1 — unified drag.* New generic list-reorder primitive, sharing the SAME
+machinery as every other drag:
+- `drag.ts`: `kind:'list'` drag variant + shared `DRAG_THRESHOLD` (5) + pure
+  `listReorderInsertIndex` (hit-test EXCLUDING the dragged row → the exact index
+  `page.move` filter-then-splice wants). +3 unit cases in `test/drag.test.ts`.
+- `dragSession.ts` (NEW): `beginPointerDrag` — the pointer-session core (threshold
+  → activate → stream moves → drop/tap), extracted from the drag-out code. Now
+  used by BOTH `libraryDrag.ts` (`startWidgetDragOut`/`startPanelDragOut`,
+  refactored onto it — behaviour unchanged, guarded by the drag-out e2e) AND the
+  new primitive. (WidgetHost's in-layout widget drag stays inline — it interleaves
+  group/zone/edge hit-tests mid-move — but uses the same `DRAG_THRESHOLD` +
+  `pointerDistance` + the same `controller.drag` DragLayer/slot pipeline.)
+- `listReorderDrag.ts` (NEW): `startListReorder` — clones the grabbed row for a
+  generic DragLayer ghost, drives `controller.drag` with `listInsert`, commits via
+  `movePage`.
+- `DragLayer.svelte`: renders a generic cloned-node ghost (Svelte action mounts
+  the clone; scoped-style attrs ride along so it renders styled) for `kind:'list'`,
+  anchored at the grab offset like the widget ghost; "Reorder" chip.
+- `WorkbenchLibraryDrawer.svelte`: page reorder now calls `startListReorder`; the
+  in-flow dashed `.aw-lib-slot` is spliced into the page list (mirrors WidgetZone
+  `zoneSlot`/`slotPos`), the dragged row lifts (`display:none`). Slot height ==
+  lifted row height keeps the flow neutral (no measure-feedback loop → live
+  hit-testing, unlike R17's drop-time-only index).
+- `WorkbenchHost.svelte`: `class:aw-dragging-list`.
+
+*Task 2 — row anatomy.* Root cause of the "squeezed chip" + ragged icons: the
+generic `.aw-lib-row button` rule (0,1,1) beat `.aw-lib-page-open`'s own
+`border:0/background/flex` (0,1,0), so the page name sat in a bordered chip AND
+the body never expanded → meta + icons trailed the name. Fixed by scoping
+`.aw-lib-row button.aw-lib-page-open` (0,2,1): plain label, flex:1. Icon actions
+wrapped in a fixed-width (`102px`) right-aligned `.aw-lib-actions` /
+`.aw-lib-row-actions` column so rename/export/delete sit at the SAME x on every
+row across Pages/Widgets/Layouts (delete always far-right). Layout drawer widened
+336→348 to match. Rows: min-height 42→48, label 12.5→13px, more padding.
+
+**Gates (all green):** `npm run check` 0 errors / 0 warnings (1127 files);
+`npm test` **824** (was 821; +3 `listReorderInsertIndex`); `npm run test:e2e`
+**72/72** on BOTH browsers this run (incl. the firefox 06-persistence
+"rearrangement survives a reload" flake — passed here; still AXIS-28, not ours).
+`13-customize-drawer` page-reorder case rewritten to assert the shared path
+(`.aw-root.aw-dragging-list` + `.aw-drag-list-ghost` + `.aw-lib-slot`). Live
+:5173 visual verify (fresh tab, non-mutating): Pages rows = plain labels, aligned
+icon column matching the panel rows, breathing room. Uncommitted; main session
+reviews + commits + bumps.
+
+**Open follow-ups (Backlog candidates):**
+- `dragSession.ts` has no unit test (needs DOM/PointerEvent — vitest is node-env);
+  covered by the drag-out + page-reorder e2e instead.
+- WidgetHost's in-layout widget drag was intentionally NOT folded onto
+  `beginPointerDrag` (mid-move hit-test interleaving) — a future pass could
+  generalise `beginPointerDrag` with an `onMove`-returns-state shape and adopt it
+  there too for full single-source drag lifecycle.
+- The list-reorder primitive is only wired to the page list today; the hidden-nav
+  / saved-template lists still reorder by their existing means (they don't reorder).
+- **Committed** ROUND 18 on `layout-rework` (v0.8.14-beta); live verify: plain labels (no chip border), icon column at identical x across all rows, 7 page grips; unified drag path e2e-asserted (aw-dragging-list + generic ghost + in-flow slot).
