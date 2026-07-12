@@ -1650,3 +1650,95 @@ round-20 no-clipping property (ghost fully rendered).
   passed (83 files); `npm run test:e2e` 87 passed, 1 failed = the known
   firefox `06-persistence` flake (AXIS-28) only. No commit / no version bump.
 - **Committed+pushed** ROUND 22 on `layout-rework` (v0.8.18-beta).
+
+## ROUND 23 — Grid cable routing UX (operator review 2026-07-12, AXIS-35)
+
+Operator findings (screenshot: …Cab→PEQ 1 …gap… PEQ 2 …gap… GEQ→Reverb):
+1. Cable drag should span MULTIPLE columns: dragging from PEQ 1's output
+   all the way to GEQ connects the whole path — blocks along the row get
+   chained, empty cells get auto-filled with shunts. One drag, not one per
+   adjacent pair.
+2. Dropping a block onto an existing SHUNT replaces the shunt and wires the
+   block in on both sides — no manual shunt removal first.
+CONSTRAINT: implementation/tests against the mocked backend only — never
+route-write to the live FM3 from tests; operator verifies on the rig.
+
+### Findings (Agent 10, explore pass)
+
+Routing architecture (all in the monolith Signal Grid, embeds into workbench too):
+- **Grid model** (`grid.ts`): `Cell { row,col,kind:'block'|'shunt',effectId,fromRows[] }`.
+  `fromRows` = rows of the PREVIOUS column that feed this cell → a cable is
+  `(srcRow,srcCol) → (destRow,srcCol+1)` iff dest.fromRows includes srcRow.
+  Cables are ALWAYS between adjacent columns; a signal across empty columns needs
+  a SHUNT (routing pass-through cell, `effectId >= caps.shuntBase`, gen-3 = 1024)
+  in each gap so an adjacent-column cable chain can carry it.
+- **forgefx mutations** (`forgefx.ts`): `placeCell(row,col,blockId)` (1-indexed),
+  `clearCell(row,col)` (= place blockId 0), `cable(srcRow,srcCol,destRow,connect)`
+  (destCol implied = srcCol+1). `editor.#W = n=>n+1` converts 0-idx layout → 1-idx API.
+- **Existing `editor.connect(src,destRow,destCol)`** already spans multiple columns
+  and lays a UNIQUE-instance shunt per gap (FM-Edit requires unique shunt ids or the
+  device dedupes). BUT it ERRORED ("Clear the cells in between") when an intermediate
+  cell held a BLOCK — the operator wants those blocks CHAINED instead. Straight run
+  along src.row; final hop bends to destRow (diagonal). Records a composite history
+  step (undoable as one logical op).
+- **`editor.move(src,row,col)`**: same-col preserves wires (re-cable), cross-col drops
+  them (device default). Occupied targets rejected in SignalGrid `up()` with
+  "Cell occupied" — this is where drop-on-shunt was blocked.
+- **`editor.place(row,col,blockId,label)`**: add-block flow (palette → CommandPalette
+  → `editor.place`). Only reachable from EMPTY cells today (shunt tap = remove).
+- **Undo/redo** (`history.svelte.ts`): `recordComposite(label, ops[])` — ops executed
+  forward, undone as inverses in reverse. `remove` op carries `inRows/outRows` so undo
+  restores a cleared cell WITH its cables. This is exactly the machinery to batch a
+  shunt-replace / multi-cable connect as ONE undoable step.
+- **e2e reality**: the dev `:5056` backend is the operator's LIVE FM3. e2e MUST
+  intercept `/api/preset/grid/**` (+ /device, /preset, /preset/blocks) so no write
+  reaches the rig; browser sanity on :5173 stays read-only.
+
+### Path algorithm chosen
+- **planConnect** (pure, `gridRouting.ts`): straight run along src.row from src.col+1
+  to destCol-1: empty cell → alloc+place shunt; existing block on src.row → CHAIN
+  through it (no shunt, no error); existing shunt → reuse. Destination empty → place
+  shunt. Then chain adjacent cables along src.row, final hop bends to destRow.
+  Cross-row = shunts on src.row until destCol-1, single diagonal cable on the last hop
+  (predictable; matches the pre-existing bend semantics). Blocks strictly off src.row
+  in intermediate columns are left untouched (shunt routes around them on src.row).
+- **planReplaceShunt** (pure): target holds a shunt → capture its inputs (shunt.fromRows)
+  and outputs (col+1 cells fed from it); ops = [remove src (move only, carries its own
+  wires for undo), remove shunt (carries shunt wires for undo), place block, re-cable
+  inputs, re-cable outputs]. Preserves the shunt's exact topology onto the block. One
+  composite step.
+
+### Implementation (Agent 10, done)
+Files changed:
+- **`src/lib/gridRouting.ts`** (NEW) — pure `planConnect` + `planReplaceShunt` (RouteCell in →
+  ops + preview data out). Type-only `HistoryOp` import so it stays node-testable.
+- **`src/lib/gridRouting.test.ts`** (NEW) — 10 unit tests (gaps→shunts, chain-through-block,
+  cross-row bend, occupied dest, unique shunt-id allocation, shunt-replace move/place/reject).
+- **`src/lib/editor.svelte.ts`** — `connect()` now delegates to `planConnect` (chains blocks
+  instead of erroring); new `replaceShunt()` + `#runOp` forward-executor + `get shuntBase`;
+  `place()` and `move()` detect a shunt target and route through `replaceShunt`. All mutations go
+  through the SAME forgefx calls + `history.recordComposite` → one undoable logical step each.
+- **`src/lib/SignalGrid.svelte`** — drag preview: `dragTarget` tracked on pointermove; a `$derived`
+  `connectPreview` (reuses `planConnect`) draws every planned cable + highlights new-shunt cells;
+  `moveReplaceTarget` highlights a hovered shunt during a block-move; `up()` now lets a block DROP
+  onto a shunt (only a real block target is still rejected as "Cell occupied").
+- **`e2e/support/gridMock.ts`** (NEW) — in-memory ForgeFX backend: serves a synthetic 4×6 grid,
+  captures `/preset/grid/cell` + `/preset/grid/cable` writes, aborts the SSE stream. Nothing reaches
+  the live :5056 FM3.
+- **`e2e/16-grid-routing.spec.ts`** (NEW) — both flows driven by pointer against the mock, asserting
+  the exact captured mutations + the mid-drag preview.
+
+Undo/batching: each flow records ONE `recordComposite` step; `remove` ops carry `inRows/outRows`
+so undo restores cleared cells (shunt or moved block) WITH their cables — undo/redo is one gesture.
+
+Gates (all green): `npm run check` 0 errors/0 warnings · `npm test` 844 passed (84 files, +10 new)
+· `npm run test:e2e` 91 passed / 1 failed = ONLY the known firefox 06-persistence flake (AXIS-28,
+unrelated: workbench-chrome persistence, untouched here); the 4 new routing runs (2 specs × chromium
++ firefox) all pass.
+
+Needs rig verification (operator): drag-connect and drop-on-shunt were validated ONLY against the
+mock. On the real FM3, confirm (a) chaining through an intermediate block wires output→input as the
+device expects, (b) a placeCell over a just-cleared shunt cell adopts the re-issued cables cleanly,
+and (c) the unique shunt-instance allocation still avoids the device dedupe on longer runs. Browser
+sanity on :5173 was kept READ-ONLY (no live drops).
+- **Committed+pushed** ROUND 23 on `layout-rework` (v0.8.19-beta). Rig-verify list (chain-through wiring, placeCell over cleared shunt, shunt-instance dedupe on long runs) in AXIS-35.

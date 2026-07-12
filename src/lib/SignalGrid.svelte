@@ -4,6 +4,7 @@
   import { catFor, shade } from './catalog';
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
+  import { planConnect } from './gridRouting';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
   import { resolveAxisGridMetrics, resolveAxisGridPresentation, type AxisGridView } from './axis-workbench/gridView';
@@ -306,6 +307,44 @@
 
   let hoverCable = $state<string | null>(null);
 
+  // ── drag routing preview ──
+  // The cell the pointer is currently over during a port-drag (connect) or block-move. Drives the
+  // full-path preview so the user sees what a drop commits (cells that will be created + cables wired).
+  let dragTarget = $state<{ row: number; col: number } | null>(null);
+
+  // Geometry for any cell — measured rect when it exists in the DOM, else synthetic from the grid
+  // metrics (a preview shunt doesn't exist yet). Inner-local coords, matching `rects` + the SVG space.
+  function cellGeom(r: number, c: number): { left: number; right: number; cx: number; cy: number } {
+    const hit = rects[`${r},${c}`];
+    if (hit) return hit;
+    const left = c * (colW + gap);
+    return { left, right: left + colW, cx: left + colW / 2, cy: r * (cellH + gap) + cellH / 2 };
+  }
+
+  // Preview of a multi-column connect drag: reuses the SAME pure planner the editor commits, so the
+  // highlighted path is exactly what a drop creates. Null when there's no valid forward target yet
+  // (the freehand dashed cable to the pointer is shown instead).
+  const connectPreview = $derived.by(() => {
+    if (!connectSrc || !dragTarget) return null;
+    const t = dragTarget;
+    if (t.row === connectSrc.row && t.col === connectSrc.col) return null;
+    const plan = planConnect(editor.layout.cells, editor.layout.shunts, connectSrc, t.row, t.col, editor.shuntBase);
+    if (!plan.ok) return null;
+    const paths = plan.cables.map((seg) => {
+      const s = cellGeom(seg.srcRow, seg.srcCol);
+      const d = cellGeom(seg.destRow, seg.srcCol + 1);
+      return cableD(s.right, s.cy, d.left, d.cy);
+    });
+    return { paths, shunts: plan.newShunts };
+  });
+
+  // During a block-move, the shunt cell the pointer is over will be REPLACED on drop — highlight it.
+  const moveReplaceTarget = $derived.by(() => {
+    if (!moveMode || !dragTarget) return null;
+    const c = cellAt.get(`${dragTarget.row},${dragTarget.col}`);
+    return c?.kind === 'shunt' && moveCell !== c ? { row: c.row, col: c.col } : null;
+  });
+
   // Cable "signal flow": driven by the live output level, but rAF-advanced with a SMOOTHED velocity
   // (not by swapping CSS animation-duration — that restarts the keyframe every level change and stutters,
   // and the level itself jitters). We ease a velocity toward the level-derived target each frame and step
@@ -422,11 +461,13 @@
       if (moveMode) {
         movePos = { x: e.clientX, y: e.clientY };
         overBin = !!document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-bin]');
+        dragTarget = cellFromPoint(e.clientX, e.clientY);
         return;
       }
       if (connectSrc && innerEl) {
         const ir = innerEl.getBoundingClientRect();
         linkTo = { x: e.clientX - ir.left, y: e.clientY - ir.top };
+        dragTarget = cellFromPoint(e.clientX, e.clientY);
         return;
       }
       if (gesture) {
@@ -466,6 +507,7 @@
         const src = connectSrc;
         connectSrc = null;
         linkTo = null;
+        dragTarget = null;
         document.body.style.cursor = '';
         // a barely-moved pointerup on the port = a TAP → arm link mode (tap-to-connect: pick the
         // destination with a second tap, on this grid or on the Grid Map — survives page swipes).
@@ -486,14 +528,18 @@
         } else {
           const tgt = cellFromPoint(e.clientX, e.clientY);
           if (tgt && (tgt.row !== src.row || tgt.col !== src.col)) {
-            // move anywhere empty; same-col keeps wires, cross-col lets them drop (device default)
-            if (cellAt.get(`${tgt.row},${tgt.col}`)) editor.showToast('Cell occupied', '#d6543f');
+            // move anywhere empty; same-col keeps wires, cross-col lets them drop (device default).
+            // A SHUNT target is replaced in place (its cables move onto the block) via editor.move →
+            // replaceShunt; only a real BLOCK target is rejected as occupied.
+            const occ = cellAt.get(`${tgt.row},${tgt.col}`);
+            if (occ?.kind === 'block') editor.showToast('Cell occupied', '#d6543f');
             else editor.move(src, tgt.row, tgt.col);
           }
         }
         moveMode = false;
         moveCell = null;
         gesture = null;
+        dragTarget = null;
         return;
       }
       if (gesture) {
@@ -669,11 +715,24 @@
             {/if}
           </g>
         {/each}
-        {#if linkTo && connectSrc}
+        {#if connectPreview}
+          <!-- full planned path: every cable + new shunt cell a drop will create -->
+          {#each connectPreview.paths as d (d)}
+            <path class="cbl-preview" d={d} fill="none" stroke="#35c9d6" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="7 5" />
+          {/each}
+          {#each connectPreview.shunts as s (`${s.row},${s.col}`)}
+            {@const g = cellGeom(s.row, s.col)}
+            <rect class="shunt-preview" x={g.left} y={g.cy - cellH / 2} width={colW} height={cellH} rx="8" fill="rgba(53,201,214,0.12)" stroke="#35c9d6" stroke-width="1.6" stroke-dasharray="5 4" />
+          {/each}
+        {:else if linkTo && connectSrc}
           {@const s = rects[`${connectSrc.row},${connectSrc.col}`]}
           {#if s}
             <path d={cableD(s.right, s.cy, linkTo.x, linkTo.y)} fill="none" stroke="#35c9d6" stroke-width="2.5" stroke-dasharray="6 5" />
           {/if}
+        {/if}
+        {#if moveReplaceTarget}
+          {@const g = cellGeom(moveReplaceTarget.row, moveReplaceTarget.col)}
+          <rect class="shunt-preview" x={g.left} y={g.cy - cellH / 2} width={colW} height={cellH} rx="8" fill="rgba(53,201,214,0.14)" stroke="#35c9d6" stroke-width="2" stroke-dasharray="5 4" />
         {/if}
       </svg>
 
