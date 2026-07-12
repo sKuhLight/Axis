@@ -943,3 +943,108 @@ first-run popups.
   signature (silent sync loop, no error, gone after reloads with zero code change)
   is the stale-HMR-graph class, which no in-repo gate can catch.
 - **Committed** Axis binding half + pages e2e as follow-up commit on `layout-rework` (v0.8.11-beta); PB↔Grid round-trip re-verified in the operator tab after the HMR-freeze investigation.
+
+## ROUND 16 — Customize UX rework (operator directives 2026-07-12)
+
+**Layout-model decision (answers the open T13 question):** pages stay freely
+creatable/deletable — the seeds don't lock the user in. Each page can carry its
+own layout; saved layouts live in ONE shared layout store and are applied
+per page. The prepared "big" layouts are the profiles. (Operator, verbatim
+intent: "Jede Page kann sein eigenes Layout haben, Layouts kommen aus dem
+gleichen Layout-Store; die großen Layouts sind als Profile vorbereitet.")
+
+**Directive A (AXIS-24):** the Customize right-drawer content (Pages /
+Widgets / Layouts views) is "grausam und unsortiert". Rework it after the
+design/*.dc.html pattern (search + clean organization) but visually ELEVATED
+to match the rest of the current UI — not a 1:1 copy. Layouts view becomes
+page-scoped apply/save from the shared store.
+
+**Directive B (AXIS-25):** the per-widget size buttons and close X in
+customize mode are mispositioned and too small. Replace with a click/tap-
+opened menu BELOW the widget carrying size/close/settings; groups get the
+same menu incl. group settings/save → touch-friendly by construction.
+
+## ROUND 16 — implementation (2026-07-12, Agent 3)
+
+Both directives implemented on `layout-rework` (base dae0fe5 + 8bfcc32).
+Uncommitted; main session reviews + commits + bumps. Gates all green:
+`npm run check` **0 errors / 0 warnings** (1124 files); `npm test` **820**
+(was 806 pre-round: +14 net — framework page-layout/page.move + snapshot +
+controller wrappers + contextMenu helper); `npm run test:e2e` **64/64**
+(was 50 — +14: new `12-widget-menu` 4×2 + `13-customize-drawer` 3×2).
+
+### Directive A (AXIS-24) — Customize drawer rework + page-layout store
+
+**Framework (page layouts as a shared, page-scoped store):**
+- `core/schema.ts`: new `WorkbenchPageLayout { id, label, page, panels, createdAt? }`
+  (a self-contained page dock + the panels it references); `WorkbenchDocument`
+  gains a required `pageLayouts: Record<string, WorkbenchPageLayout>` (the ONE
+  shared store — distinct from `layouts`, which stays the per-profile "big"
+  layouts). Migration/defaults/repair default it to `{}`; `repairPageLayouts`
+  drops structurally-unsound entries.
+- Commands (`commands.ts` + `reducer.ts`): `page.move` (reorder a page in
+  `pageOrder`; new `syncPageNavigationOrder` keeps the page-bound nav entries in
+  the same sequence while non-page entries stay anchored) and the store quartet
+  `pageLayout.save` / `.rename` / `.delete` / `.apply`. `apply` re-mints the
+  stored page onto the TARGET page (default: active) via the existing
+  `remintWorkbenchPage`, keeping the target's identity (id/label/icon/metadata +
+  its bound nav entry) and dropping the target's prior panels — the applied dock
+  never shares ids with anything live. New error code `missing-page-layout`.
+- Package I/O (`core/layoutPackage.ts`): `PAGE_LAYOUT_PACKAGE_KIND` +
+  `exportPageLayoutPackage` / `importPageLayoutPackage` (import re-mints interior
+  + top-level ids so a round-trip into the source doc is collision-free).
+- Svelte: `svelte/layouts.ts` `createPageLayoutSnapshot(doc)` (snapshot the
+  active page's dock + referenced panels); `controller.svelte.ts` wrappers
+  `movePage`, `get pageLayouts`, `savePageLayout` / `applyPageLayout` /
+  `renamePageLayout` / `deletePageLayout`.
+- Tests: `core/test/pageLayouts.test.ts` (page.move nav-sync, store CRUD,
+  apply fresh-id + dock-replace, package round-trip); +cases in
+  `svelte/test/layouts.test.ts` and `controller.test.ts`.
+
+**Drawer IA (the three views, searchable, elevated with app tokens):** the Edit
+ribbon views are now **Pages / Widgets / Layouts** (`◳ Pages`, `⧉ Widgets`,
+`⤓ Layouts`; `＋ Panel` quick-insert kept). Each drawer gets a magnifier
+search field (design library pattern) that filters every section live.
+- **Pages** (`WorkbenchLibraryDrawer view="pages"`, absorbs the old Panels
+  browser — panels belong to a page): section *Pages* (per-row go-to / inline
+  rename / ▲▼ reorder via `movePage` / delete, `＋ Add Page`) + section *Add
+  Panel · To This Page* (saved panel templates Add/Rename/Export/Delete,
+  `＋ Custom Panel`, hidden-nav restore).
+- **Widgets** (`view="widgets"`): Saved Widgets / Hidden·Tap To Add / On Your
+  Layout·Tap To Hide — all search-filtered.
+- **Layouts** (`WorkbenchLayoutDrawer`, now page-scoped): *Save This Page As
+  Layout* → shared store; Import .json / Export This Page (page-layout package;
+  older whole-layout/panel packages still import for compatibility); a hint that
+  the big pre-built layouts live under the ribbon Profile/Layout tabs; *Saved
+  Page Layouts* (Apply to active page / Rename / Export / Delete) + the
+  app-provided *Backups* section (unchanged, feature-keep).
+- Feature-keep: whole-layout `layout.*` commands + the ribbon
+  Profile/Layout preset tabs are untouched — only the drawer's *content* moved
+  to page scope.
+
+### Directive B (AXIS-25) — touch-friendly widget/group menu (via subagent)
+
+Removed the inset `.aw-widget-edit` cluster (↕ size / × hide / ⋯) from
+`WidgetHost.svelte` and the `.aw-group-edit` cluster from `WidgetGroupHost.svelte`.
+A plain tap on a widget/group (no drag) now opens a menu anchored BELOW the unit
+(`menuPositionBelowRect` in `contextMenu.ts`, clamped via the existing
+`resolveMenuPlacement`); press-and-move still drags (reuses the 5px-threshold
+`dragging` flag — menu opens only on the `!dragging` pointerup branch), Enter/
+Space open via keyboard, right-click still opens at pointer. Widget menu = sizes
+→ move-to → Save To Library → **Remove Widget** (danger). Group menu = move-to →
+**Save Group To Library** → Ungroup → **Remove Group**. `touch-action: none` on
+the drag surfaces/grip keeps taps reliable on touch; ContextMenu's scrim + focus
+trap give outside-click / Escape dismissal. New `e2e/12-widget-menu.spec.ts`.
+
+### Open follow-ups (Backlog candidates)
+- No per-widget *custom* settings exist today, so the menu's "settings" surface
+  is size + placement + save + remove (noted in code); if a widget later gains
+  real settings, extend the menu items.
+- Widget hidden-shelf has no category metadata, so the Widgets view groups by
+  the existing three sections (Saved / Hidden / Placed) rather than the design's
+  per-category sub-groups — add categories to the manifest to enable that.
+- `page.move` reorders only pages that HAVE a bound nav entry (the generic seed
+  first page has none; all Axis seed pages do, so it's a non-issue in-app).
+- Operator/visual pass (AXIS-22) should sanity-check the drawer density + the
+  tap-menu feel on the live FM3 rig (phone + bottom-nav especially).
+- **Committed** ROUND 16 (drawer rework + widget tap menu) on `layout-rework` (v0.8.12-beta); main-session live verify: drawer Pages/Layouts views + live search + below-widget menu + scrim dismissal all confirmed in the operator tab (fresh dev servers; find/read_page miss the drawer aside — a11y landmark note). FM3 serial died a SECOND time today (USB re-enum 14:48) → FORGEFX-22 confirmed recurring; server restarted.

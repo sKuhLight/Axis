@@ -2,7 +2,12 @@
   import WidgetHost from './WidgetHost.svelte';
   import { getWorkbenchContext } from './context';
   import ContextMenu from './ContextMenu.svelte';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
+  import {
+    menuPositionBelowRect,
+    menuPositionFromPointer,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition
+  } from './contextMenu';
   import {
     pointerDistance,
     widgetDropCommand,
@@ -90,9 +95,20 @@
     {
       id: 'ungroup',
       label: 'Ungroup Widgets',
-      separatorBefore: true,
       disabled: !group || group.locked,
       run: () => group && controller.dispatch({ type: 'widget.ungroup', groupId: group.id })
+    },
+    // The group's "settings" surface is placement (move-to), save, and ungroup —
+    // the group carries no size control today (members keep their own sizes), so
+    // nothing else is wired. This explicit danger item replaces the removed inset
+    // chrome: it hides every member, so the whole group leaves the layout.
+    {
+      id: 'remove',
+      label: 'Remove Group',
+      separatorBefore: true,
+      danger: true,
+      disabled: !group || group.locked,
+      run: () => group && controller.dispatch({ type: 'widget.hide', widgetIds: group.widgetIds })
     }
   ]);
 
@@ -103,12 +119,25 @@
     menuOpen = true;
   }
 
-  function openButtonMenu(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    menuPosition = { x: rect.right - 8, y: rect.bottom + 6 };
+  // Open the group menu anchored BELOW the whole module (R16b: touch-friendly
+  // menu replaces the inset ungroup/⋯ buttons). Anchored on the module rect so
+  // it drops under the entire group, not under the grip alone.
+  function openMenuBelowGroup() {
+    if (!groupEl) return;
+    const rect = groupEl.getBoundingClientRect();
+    menuPosition = menuPositionBelowRect(rect);
     menuOpen = true;
+  }
+
+  // Grip keyboard affordance: Enter/Space opens the group menu; arrows reorder
+  // the whole module via `moveByKey`.
+  function gripKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openMenuBelowGroup();
+      return;
+    }
+    moveByKey(e);
   }
 
   function saveGroupTemplate() {
@@ -196,6 +225,11 @@
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      if (!dragging) {
+        // A tap on the grip (no drag) opens the group menu below the module.
+        openMenuBelowGroup();
+        return;
+      }
       if (dragging && group) {
         const target = widgetDropAt(ev.clientX, ev.clientY);
         const edgeDrop = !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
@@ -267,20 +301,20 @@
   >
     {#if $controller.editMode && !group.locked}
       <!-- Whole-group grip is in-flow (a stretched column at the module's left
-           edge — design AxisGroup grip), so it never escapes the module box. -->
-      <button class="aw-group-grip" type="button" title="Move group" onpointerdown={dragPointerDown} onkeydown={moveByKey}>⋮</button>
-      <!-- Group edit chrome is INSET into the module's top-right corner (V13b: no
-           negative offsets that bleed over the neighbouring unit or the workbench
-           chrome). -->
-      <div class="aw-group-edit">
-        <button
-          class="aw-group-edit-btn"
-          type="button"
-          title="Ungroup widgets"
-          onclick={() => controller.dispatch({ type: 'widget.ungroup', groupId: group.id })}
-        >⧉</button>
-        <button class="aw-group-edit-btn" type="button" title="Group actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
-      </div>
+           edge — design AxisGroup grip), so it never escapes the module box. It
+           is both the drag handle and the menu affordance: a tap opens the group
+           menu below the module, a drag moves the whole group (R16b — the inset
+           ungroup/⋯ buttons are gone). -->
+      <button
+        class="aw-group-grip"
+        type="button"
+        title="Group actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label="Group actions (drag to move group)"
+        onpointerdown={dragPointerDown}
+        onkeydown={gripKeydown}
+      >⋮</button>
     {/if}
     <!-- Members with the design AxisGroup flow: the insertion slot is a REAL
          in-flow spacer spliced between members at the live index (members move
@@ -362,45 +396,13 @@
     background: transparent;
     color: var(--aw-text-muted);
     cursor: grab;
+    /* Touch: none so a tap fires pointerup without the browser claiming the
+       gesture — tap opens the menu, drag moves the group. */
+    touch-action: none;
     font-size: 13px;
   }
   .aw-group-grip:hover {
     color: var(--aw-accent);
-  }
-  /* Group edit chrome is INSET into the module's own top-right corner (design
-     01-shell §5 anchors affordances to their unit; V13b: no negative offsets
-     that escape the module into the neighbouring unit or the workbench chrome).
-     A subtle backdrop keeps the glyphs legible over the grouped chips. */
-  .aw-group-edit {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 9;
-    display: flex;
-    gap: 2px;
-    padding: 1px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--aw-bg-2) 78%, transparent);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  }
-  .aw-group-edit-btn {
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    line-height: 1;
-    border: 1px solid var(--aw-border-3);
-    border-radius: 6px;
-    background: var(--aw-surface-2);
-    color: var(--aw-text-muted);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .aw-group-edit-btn:hover {
-    color: var(--aw-text);
-    border-color: var(--aw-accent);
   }
   .aw-widget-divider {
     width: 1px;

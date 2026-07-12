@@ -1,4 +1,13 @@
-import { selectActiveLayout, type WorkbenchLayout, type WorkbenchDocument } from '../core';
+import {
+  createWorkbenchId,
+  panelIdsInPageDock,
+  selectActiveLayout,
+  selectActivePage,
+  type PanelInstance,
+  type WorkbenchLayout,
+  type WorkbenchDocument,
+  type WorkbenchPageLayout
+} from '../core';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -21,6 +30,32 @@ export function createLayoutSnapshot(
     ...clone(active),
     id,
     label: options.label ?? `${active.label} Copy`
+  };
+}
+
+/**
+ * Snapshot the ACTIVE page's dock (and the panel instances it references) into a
+ * self-contained {@link WorkbenchPageLayout} for the shared page-layout store.
+ * Returns null when there is no active page. Backs the Layouts drawer's "Save
+ * this page" action; the stored template's interior ids are re-minted at apply.
+ */
+export function createPageLayoutSnapshot(
+  doc: WorkbenchDocument,
+  options: { id?: string; label?: string } = {}
+): WorkbenchPageLayout | null {
+  const page = selectActivePage(doc);
+  const layout = selectActiveLayout(doc);
+  if (!page || !layout) return null;
+  const panels: Record<string, PanelInstance> = {};
+  for (const panelId of panelIdsInPageDock(page)) {
+    if (layout.panels[panelId]) panels[panelId] = clone(layout.panels[panelId]);
+  }
+  return {
+    id: options.id ?? createWorkbenchId('pageLayout'),
+    label: options.label ?? `${page.label} Layout`,
+    page: clone(page),
+    panels,
+    createdAt: new Date().toISOString()
   };
 }
 

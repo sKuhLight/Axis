@@ -13,8 +13,10 @@ test.describe('Edit mode', () => {
 
     // The ribbon shows the EDIT LAYOUT label + the edit actions.
     await expect(page.locator('.aw-edit-label')).toHaveText(/EDIT LAYOUT/i);
-    await expect(page.getByRole('button', { name: /Panels/ }).first()).toBeVisible();
+    // R16: the ribbon views are Pages / Widgets / Layouts.
+    await expect(page.getByRole('button', { name: /Pages/ }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Widgets/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Layouts/ })).toBeVisible();
 
     // Done exits and the ribbon collapses back to the Customize FAB.
     await exitEditMode(page);

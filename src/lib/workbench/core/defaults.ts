@@ -114,6 +114,7 @@ export function createEmptyWorkbenchDocument(options: EmptyWorkbenchDocumentOpti
     layouts: { [layoutId]: layout },
     panelLibrary: {},
     widgetLibrary: {},
+    pageLayouts: {},
     metadata: options.metadata ?? {}
   };
 }

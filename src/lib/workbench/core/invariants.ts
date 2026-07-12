@@ -19,7 +19,8 @@ import {
   type WidgetInstance,
   type WorkbenchDocument,
   type WorkbenchLayout,
-  type WorkbenchPage
+  type WorkbenchPage,
+  type WorkbenchPageLayout
 } from './schema';
 
 export type WorkbenchValidationSeverity = 'error' | 'warning';
@@ -52,6 +53,33 @@ export function cloneWorkbenchDocument<T extends JsonValue | WorkbenchDocument>(
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Keep only structurally-sound saved page layouts (id/label strings + a page
+ * with a dock + a panels record). Interior ids are inert until apply re-mints
+ * them, so we only need shape validation here, not deep dock repair. A bad or
+ * missing store degrades to {}.
+ */
+function repairPageLayouts(
+  store: Record<string, WorkbenchPageLayout> | undefined
+): Record<string, WorkbenchPageLayout> {
+  if (!isRecord(store)) return {};
+  const next: Record<string, WorkbenchPageLayout> = {};
+  for (const [id, entry] of Object.entries(store)) {
+    if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id) continue;
+    const page = entry.page;
+    if (!isRecord(page) || !isRecord(page.dock)) continue;
+    const label = typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : id;
+    next[id] = {
+      id: entry.id,
+      label,
+      page: page as unknown as WorkbenchPage,
+      panels: isRecord(entry.panels) ? (entry.panels as WorkbenchPageLayout['panels']) : {},
+      ...(typeof entry.createdAt === 'string' ? { createdAt: entry.createdAt } : {})
+    };
+  }
+  return next;
+}
 
 export function isJsonSerializable(value: unknown, seen = new Set<unknown>()): boolean {
   if (value == null) return true;
@@ -499,6 +527,7 @@ export function repairWorkbenchDocument(doc: WorkbenchDocument): WorkbenchDocume
   next.layouts = next.layouts ?? {};
   next.panelLibrary = next.panelLibrary ?? {};
   next.widgetLibrary = next.widgetLibrary ?? {};
+  next.pageLayouts = repairPageLayouts(next.pageLayouts);
 
   if (!next.profiles[next.activeProfileId]) {
     const firstProfile = Object.values(next.profiles)[0];

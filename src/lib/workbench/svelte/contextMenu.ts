@@ -17,6 +17,19 @@ export function menuPositionFromPointer(event: PointerEvent | MouseEvent): Workb
   return { x: event.clientX, y: event.clientY };
 }
 
+// Anchor a menu BELOW a unit (a widget host or group module) rather than at the
+// pointer: x aligns with the unit's left edge, y sits a small gap under its
+// bottom edge. Pure geometry — the emitted position is still fed through
+// `resolveMenuPlacement` (via ContextMenu) so it clamps to the viewport and
+// de-zooms, which is what keeps a below-anchored menu on-screen on a short phone
+// viewport (it flips up against the bottom margin instead of overflowing).
+export function menuPositionBelowRect(
+  rect: { left: number; bottom: number },
+  gap = 6
+): WorkbenchMenuPosition {
+  return { x: rect.left, y: rect.bottom + gap };
+}
+
 export function clampMenuPosition(
   position: WorkbenchMenuPosition,
   viewport: { width: number; height: number },

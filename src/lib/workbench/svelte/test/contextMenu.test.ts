@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampMenuPosition, effectiveZoom, resolveMenuPlacement } from '../contextMenu';
+import { clampMenuPosition, effectiveZoom, menuPositionBelowRect, resolveMenuPlacement } from '../contextMenu';
 
 describe('context menu helpers', () => {
   it('keeps menus inside the viewport with a small margin', () => {
@@ -10,6 +10,28 @@ describe('context menu helpers', () => {
     expect(clampMenuPosition({ x: -20, y: -10 }, { width: 400, height: 300 }, { width: 120, height: 80 })).toEqual({
       x: 8,
       y: 8
+    });
+  });
+});
+
+describe('menuPositionBelowRect', () => {
+  it('aligns x to the left edge and drops y a default gap below the bottom edge', () => {
+    expect(menuPositionBelowRect({ left: 120, bottom: 240 })).toEqual({ x: 120, y: 246 });
+  });
+
+  it('honours a custom gap', () => {
+    expect(menuPositionBelowRect({ left: 40, bottom: 80 }, 12)).toEqual({ x: 40, y: 92 });
+  });
+
+  it('composes with clampMenuPosition to stay on a short viewport (menu flips against the bottom margin)', () => {
+    // A unit near the bottom of a phone viewport: the raw below-anchor would
+    // overflow, so clamping pins it to the bottom margin (viewport - menu - 8).
+    const viewport = { width: 390, height: 640 };
+    const menu = { width: 200, height: 180 };
+    const below = menuPositionBelowRect({ left: 24, bottom: 620 });
+    expect(clampMenuPosition(below, viewport, menu)).toEqual({
+      x: 24,
+      y: viewport.height - menu.height - 8
     });
   });
 });

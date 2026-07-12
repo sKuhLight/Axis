@@ -14,6 +14,7 @@ import type {
   WorkbenchDocument,
   WorkbenchLayout,
   WorkbenchPage,
+  WorkbenchPageLayout,
   WorkbenchProfile
 } from './schema';
 
@@ -31,6 +32,7 @@ export type WorkbenchErrorCode =
   | 'missing-layout'
   | 'missing-navigation'
   | 'missing-page'
+  | 'missing-page-layout'
   | 'missing-panel'
   | 'missing-profile'
   | 'missing-split'
@@ -129,6 +131,17 @@ export type WorkbenchCommand =
   // page.duplicate deep-copies the page with freshly minted dock-node ids and
   // panel-instance ids, inserts it after the source, and binds a new nav entry.
   | { type: 'page.duplicate'; pageId: string; newPageId?: string; label?: string }
+  // page.move reorders a page within pageOrder and keeps the page-bound
+  // navigation entries in the same sequence (non-page nav entries stay anchored).
+  | { type: 'page.move'; pageId: string; index: number }
+  // ── Page layouts (shared document-level store) ───────────────────────────
+  // pageLayout.save stores a self-contained page snapshot; .apply re-mints it
+  // onto the target page (default: active page), replacing that page's dock and
+  // panels; .rename/.delete manage the store.
+  | { type: 'pageLayout.save'; pageLayout: WorkbenchPageLayout }
+  | { type: 'pageLayout.rename'; pageLayoutId: string; label: string }
+  | { type: 'pageLayout.delete'; pageLayoutId: string }
+  | { type: 'pageLayout.apply'; pageLayoutId: string; pageId?: string }
   | { type: 'navigation.move'; entryId: string; index: number }
   | { type: 'navigation.hide'; entryId: string }
   | { type: 'navigation.show'; entryId: string; index?: number }

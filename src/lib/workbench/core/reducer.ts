@@ -12,7 +12,8 @@ import type {
   WidgetZoneId,
   WorkbenchDocument,
   WorkbenchLayout,
-  WorkbenchPage
+  WorkbenchPage,
+  WorkbenchPageLayout
 } from './schema';
 import { DEFAULT_WIDGET_ZONES, isDockRegionId } from './schema';
 import { createWorkbenchId } from './ids';
@@ -449,6 +450,27 @@ function insertNavigationEntry(layout: WorkbenchLayout, entry: NavigationEntrySt
   layout.navigation.order = order;
 }
 
+/**
+ * Re-order the page-bound navigation entries so they follow `pageOrder`, while
+ * leaving every non-page entry (Theme/Cloud actions, hidden restores) anchored
+ * in its current slot. Backs `page.move`: the visible nav IS the pages, so a
+ * page reorder must reorder its menu entries too. Each page-bound slot in
+ * `navigation.order` is filled, in place, with the next entry from the
+ * page-order sequence — a 1:1 replacement (repair guarantees every page-bound
+ * entry's page exists).
+ */
+function syncPageNavigationOrder(layout: WorkbenchLayout): void {
+  const desired: string[] = [];
+  for (const pageId of layout.pageOrder) {
+    for (const entry of navigationEntriesForPage(layout, pageId)) desired.push(entry.id);
+  }
+  const isPageBound = (id: string): boolean => !!layout.navigation.entries[id]?.pageId;
+  let cursor = 0;
+  layout.navigation.order = layout.navigation.order.map((id) =>
+    isPageBound(id) && cursor < desired.length ? desired[cursor++] : id
+  );
+}
+
 export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: WorkbenchCommand): WorkbenchCommandResult {
   const next = cloneWorkbenchDocument(doc);
   const layout = activeLayout(next);
@@ -641,6 +663,66 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
         defaultPageNavigationEntry(layout, copy),
         sourceEntryIndex < 0 ? undefined : sourceEntryIndex + 1
       );
+      return ok(next);
+    }
+    case 'page.move': {
+      if (!layout.pages[command.pageId]) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      const order = layout.pageOrder.filter((id) => id !== command.pageId);
+      order.splice(Math.max(0, Math.min(command.index, order.length)), 0, command.pageId);
+      layout.pageOrder = order;
+      syncPageNavigationOrder(layout);
+      return ok(next);
+    }
+    case 'pageLayout.save': {
+      const pageLayout = command.pageLayout;
+      if (!pageLayout || typeof pageLayout.id !== 'string' || !pageLayout.id) {
+        return fail(doc, 'invalid-command', 'pageLayout.save needs a page layout with an id.');
+      }
+      next.pageLayouts = next.pageLayouts ?? {};
+      const label = typeof pageLayout.label === 'string' && pageLayout.label.trim() ? pageLayout.label.trim() : pageLayout.id;
+      next.pageLayouts[pageLayout.id] = { ...pageLayout, label, panels: pageLayout.panels ?? {} };
+      return ok(next);
+    }
+    case 'pageLayout.rename': {
+      next.pageLayouts = next.pageLayouts ?? {};
+      const stored = next.pageLayouts[command.pageLayoutId];
+      if (!stored) return fail(doc, 'missing-page-layout', `Page layout ${command.pageLayoutId} does not exist.`);
+      const label = command.label.trim();
+      if (!label) return fail(doc, 'invalid-command', 'Page layout label cannot be empty.');
+      stored.label = label;
+      return ok(next);
+    }
+    case 'pageLayout.delete': {
+      next.pageLayouts = next.pageLayouts ?? {};
+      if (!next.pageLayouts[command.pageLayoutId]) {
+        return fail(doc, 'missing-page-layout', `Page layout ${command.pageLayoutId} does not exist.`);
+      }
+      delete next.pageLayouts[command.pageLayoutId];
+      return ok(next);
+    }
+    case 'pageLayout.apply': {
+      next.pageLayouts = next.pageLayouts ?? {};
+      const stored = next.pageLayouts[command.pageLayoutId];
+      if (!stored) return fail(doc, 'missing-page-layout', `Page layout ${command.pageLayoutId} does not exist.`);
+      const targetId = command.pageId ?? layout.activePageId;
+      const target = layout.pages[targetId];
+      if (!target) return fail(doc, 'missing-page', `Page ${targetId} does not exist.`);
+      // The target page keeps its identity (id/label/icon/metadata + its bound
+      // nav entry); only its dock + panels are replaced by a re-minted copy of
+      // the stored layout, so the applied dock never shares ids with anything
+      // live. Drop the target's current panels (and their owned widgets) first.
+      for (const panelId of panelIdsInPageDock(target)) {
+        removePanelOwnedWidgets(layout, panelId);
+        delete layout.panels[panelId];
+      }
+      const { page: reminted, panels: remintedPanels } = remintWorkbenchPage(stored.page, stored.panels ?? {}, {
+        pageId: target.id,
+        label: target.label
+      });
+      reminted.icon = target.icon;
+      reminted.metadata = target.metadata;
+      for (const panel of Object.values(remintedPanels)) layout.panels[panel.id] = panel;
+      layout.pages[target.id] = reminted;
       return ok(next);
     }
     case 'widget.add': {

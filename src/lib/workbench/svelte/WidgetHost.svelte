@@ -14,7 +14,12 @@
   } from '../core';
   import { onMount } from 'svelte';
   import ContextMenu from './ContextMenu.svelte';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
+  import {
+    menuPositionBelowRect,
+    menuPositionFromPointer,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition
+  } from './contextMenu';
   import {
     anchoredWidgetIndex,
     pointerDistance,
@@ -89,13 +94,20 @@
       separatorBefore: true,
       disabled: widget.locked,
       run: saveWidgetTemplate
+    },
+    // The widget's "settings" surface is exactly the items above — size,
+    // placement (move-to), and save. No widget type exposes per-widget custom
+    // settings today, so there is nothing else to wire here. This explicit
+    // danger item is the replacement for the removed inset × close button.
+    {
+      id: 'remove',
+      label: 'Remove Widget',
+      separatorBefore: true,
+      danger: true,
+      disabled: widget.locked,
+      run: () => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })
     }
   ]);
-
-  function cycleSize() {
-    const next = size === 'default' ? 'compact' : size === 'compact' ? 'mini' : 'default';
-    controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: next });
-  }
 
   function saveWidgetTemplate() {
     const template = createWidgetTemplateFromWidget($controller.document, widget.id);
@@ -109,12 +121,26 @@
     menuOpen = true;
   }
 
-  function openButtonMenu(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    menuPosition = { x: rect.right - 8, y: rect.bottom + 6 };
+  // Open the widget menu anchored BELOW the widget host (design R16b: a
+  // touch-friendly menu replaces the tiny inset size/close buttons). The anchor
+  // is the host's live rect; ContextMenu clamps + de-zooms it, so a widget near
+  // the bottom edge still gets an on-screen menu.
+  function openMenuBelowHost() {
+    if (!hostEl) return;
+    const rect = hostEl.getBoundingClientRect();
+    menuPosition = menuPositionBelowRect(rect);
     menuOpen = true;
+  }
+
+  // Keyboard affordance on the drag surface (role="button"): Enter/Space opens
+  // the same below-widget menu. Arrow keys still reorder via `moveByKey`.
+  function surfaceKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openMenuBelowHost();
+      return;
+    }
+    moveByKey(e);
   }
 
   // Measured member rects for a group, in member order, excluding the widget
@@ -362,6 +388,10 @@
           );
         }
         controller.setDrag(null);
+      } else {
+        // A tap that never crossed the drag threshold opens the widget menu
+        // below the host (touch-friendly replacement for the inset buttons).
+        openMenuBelowHost();
       }
     };
 
@@ -445,7 +475,12 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      if (!dragging) return;
+      if (!dragging) {
+        // A tap on the grip (no reposition) opens the widget menu — floating
+        // chips have no drag surface, so the grip is their menu affordance too.
+        if ($controller.editMode) openMenuBelowHost();
+        return;
+      }
       // Persist the clamped position on drag end.
       controller.dispatch({
         type: 'widget.move',
@@ -546,29 +581,20 @@
     <!-- The grab surface is present for standalone AND grouped widgets: grabbing
          a grouped member drags it out of (or reorders it against) the group. The
          whole-group grip lives on WidgetGroupHost. -->
+    <!-- Tap (no drag) opens the widget menu below the host; drag reorders/moves.
+         The single gesture is disambiguated by the 5px threshold in
+         `dragPointerDown` (R16b: the inset size/close/⋯ buttons are gone). -->
     <div
       class="aw-widget-drag-surface"
       class:member={!!widget.groupId}
       role="button"
       tabindex="0"
-      aria-label={widget.groupId ? 'Move widget out of group' : 'Move widget'}
+      aria-haspopup="menu"
+      aria-expanded={menuOpen}
+      aria-label={widget.groupId ? 'Widget actions (drag to move out of group)' : 'Widget actions (drag to move)'}
       onpointerdown={dragPointerDown}
-      onkeydown={moveByKey}
+      onkeydown={surfaceKeydown}
     ></div>
-  {/if}
-  {#if $controller.editMode && !widget.locked && !widget.groupId}
-    <!-- Edit chrome is INSET into the widget's own top-right corner (never a
-         negative offset that escapes the box into a neighbour or the workbench
-         chrome — see V13b). It sits above the drag surface (z-index) so the
-         buttons stay clickable, and collapses to a single ⋯ at compact/mini so
-         the cluster never has to shrink below tap size. -->
-    <div class="aw-widget-edit" data-density={size}>
-      {#if size === 'default'}
-        <button type="button" title="Cycle size" onclick={cycleSize}>↕</button>
-        <button type="button" title="Hide widget" onclick={() => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })}>×</button>
-      {/if}
-      <button type="button" title="Widget actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={openButtonMenu}>⋯</button>
-    </div>
   {/if}
 </div>
 
@@ -633,29 +659,15 @@
   .aw-widget-float-grip:active {
     cursor: grabbing;
   }
-  /* Edit chrome is INSET into the widget's own top-right corner (design 01-shell
-     §5 anchors affordances to their unit; V13b: no negative offsets that escape
-     the box into a neighbouring widget or the workbench chrome). It overlays the
-     widget without taking layout space, so the chip keeps its normal proportions
-     in edit mode. A subtle backdrop keeps the glyphs legible over widget content,
-     and z-index sits above the drag surface so the buttons stay clickable. */
-  .aw-widget-edit {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    z-index: 9;
-    display: flex;
-    gap: 2px;
-    padding: 1px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--aw-bg-2) 78%, transparent);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  }
   .aw-widget-drag-surface {
     position: absolute;
     inset: 0;
     z-index: 5;
     cursor: grab;
+    /* Touch: none so a tap fires pointerup without the browser claiming the
+       gesture for scroll/pan — the tap-vs-drag disambiguation needs the full
+       pointer sequence on touch devices. */
+    touch-action: none;
     border-radius: 10px;
     /* Subtle dashed outline sitting just outside the chip — no background fill
        (design overlay is a transparent grab layer, the dashed outline marks
@@ -677,32 +689,5 @@
   }
   .aw-widget-drag-surface.member:hover {
     background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
-  }
-  .aw-widget-edit button {
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    line-height: 1;
-    border: 1px solid var(--aw-border-3);
-    border-radius: 6px;
-    background: var(--aw-surface-2);
-    color: var(--aw-text-muted);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  /* Compact/mini widgets are short: the cluster collapses to a lone ⋯ that still
-     meets tap size, kept fully inside the shorter box. */
-  .aw-widget-edit[data-density='compact'] button,
-  .aw-widget-edit[data-density='mini'] button {
-    width: 16px;
-    height: 16px;
-    font-size: 10px;
-  }
-  .aw-widget-edit button:hover {
-    color: var(--aw-text);
-    border-color: var(--aw-accent);
   }
 </style>

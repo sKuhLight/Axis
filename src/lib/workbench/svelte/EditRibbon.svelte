@@ -12,9 +12,11 @@
 
   const { controller } = getWorkbenchContext();
   // V13a: the old single "library" drawer is split into purpose-built views.
-  // `libraryView` selects which browser the shared drawer renders; a null value
-  // means it is closed. Layouts open their own drawer.
-  let libraryView = $state<'panels' | 'widgets' | null>(null);
+  // R16 (AXIS-24): the views are now Pages / Widgets / Layouts. `libraryView`
+  // selects which browser the shared drawer renders (Pages absorbs the old
+  // panel browser — panels belong to a page); null means it is closed. Layouts
+  // open their own drawer.
+  let libraryView = $state<'pages' | 'widgets' | null>(null);
   let layoutsOpen = $state(false);
 
   function toggleEdit() {
@@ -25,9 +27,9 @@
     controller.toggleEditMode();
   }
 
-  function openPanels() {
+  function openPages() {
     layoutsOpen = false;
-    libraryView = 'panels';
+    libraryView = 'pages';
   }
 
   function openWidgets() {
@@ -105,10 +107,10 @@
       aria-label="Redo layout change"
       disabled={!$controller.canRedoLayout}
       onclick={redoLayout}>↷ Redo</button>
-    <button class="aw-edit-action" type="button" title="Browse and add panels" onclick={openPanels}>▤ Panels</button>
-    <button class="aw-edit-action" type="button" title="Insert custom panel" onclick={addCustomPanel}>＋ Panel</button>
-    <button class="aw-edit-action" type="button" title="Browse and add widgets" onclick={openWidgets}>▤ Widgets</button>
-    <button class="aw-edit-action" type="button" title="Saved layouts, backups, import/export" onclick={openLayouts}>▤ Layouts</button>
+    <button class="aw-edit-action" type="button" title="Manage pages and add panels" onclick={openPages}>◳ Pages</button>
+    <button class="aw-edit-action" type="button" title="Insert custom panel on this page" onclick={addCustomPanel}>＋ Panel</button>
+    <button class="aw-edit-action" type="button" title="Browse and add widgets" onclick={openWidgets}>⧉ Widgets</button>
+    <button class="aw-edit-action" type="button" title="Saved page layouts, backups, import/export" onclick={openLayouts}>⤓ Layouts</button>
     {#if $controller.lastResult?.error}
       <span class="aw-edit-error">{$controller.lastResult.error.message}</span>
     {/if}
@@ -118,7 +120,7 @@
 
 <WorkbenchLibraryDrawer
   open={libraryView !== null && $controller.editMode}
-  view={libraryView ?? 'panels'}
+  view={libraryView ?? 'pages'}
   onClose={() => (libraryView = null)}
 />
 <WorkbenchLayoutDrawer open={layoutsOpen && $controller.editMode} onClose={() => (layoutsOpen = false)} />
