@@ -6,7 +6,7 @@
   import EditRibbon from './EditRibbon.svelte';
   import DragLayer from './DragLayer.svelte';
   import WorkbenchToasts from './WorkbenchToasts.svelte';
-  import { selectVisibleWidgetsByZone } from '../core';
+  import { previewFrameForClass, selectVisibleWidgetsByZone, type ViewportClass } from '../core';
   import { shouldRenderRail, shouldRenderRailNav } from './navigation';
   import type { WorkbenchController } from './controller.svelte';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
@@ -46,6 +46,27 @@
   );
   const showRailNav = $derived(shouldRenderRailNav(navMode));
   const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
+  // AXIS-27 (R17): while EDITING with a device profile PINNED (override set), the
+  // whole editing surface shrinks to that profile's real device size — a
+  // centered, letterboxed in-window preview frame (design `frameStyle`), no
+  // window resize. Auto (no override) and Desktop pin stay full-size, and leaving
+  // edit mode always restores full-size rendering of the active profile. The
+  // frame is a real smaller viewport (never a transform/scale) so the shell's own
+  // ResizeObserver re-resolves the profile against it and drags/menus keep their
+  // 1:1 coordinates. Because the pin wins the resolver, measuring the frame never
+  // fights the pin.
+  const previewFrame = $derived.by(() => {
+    if (!$controller.editMode) return null;
+    const overrideId = $controller.profileOverride;
+    if (!overrideId) return null;
+    const breakpoint = ($controller.document.profiles[overrideId]?.breakpoint ?? 'desktop') as ViewportClass;
+    return previewFrameForClass(breakpoint);
+  });
+  const previewVars = $derived(
+    previewFrame
+      ? `--aw-preview-w:${previewFrame.width}px; --aw-preview-h:${previewFrame.height}px; --aw-preview-radius:${previewFrame.radius}px;`
+      : ''
+  );
   // The `--aw-*` token defaults live once in theme.ts; inject them here (before
   // the host theme's overrides so the host still wins). This is the single
   // source of truth — the component no longer redeclares any hex literal.
@@ -115,6 +136,7 @@
 </script>
 
 <WorkbenchProvider {controller} {registry}>
+  <div class="aw-viewport" class:aw-preview={!!previewFrame} style={previewVars}>
   <div
     bind:this={rootEl}
     class={rootClass}
@@ -215,6 +237,7 @@
     <DragLayer />
     <WorkbenchToasts />
   </div>
+  </div>
 </WorkbenchProvider>
 
 <style>
@@ -252,8 +275,26 @@
     background: transparent;
   }
 
-  .aw-root {
+  /* AXIS-27: the viewport wrapper is the fixed full-window surface. At rest it is
+     transparent and the root fills it (identical to the pre-R17 fixed root). In
+     PREVIEW it becomes a dark letterbox backdrop that centers a device-sized
+     frame (the root). */
+  .aw-viewport {
     position: fixed;
+    inset: 0;
+  }
+  .aw-viewport.aw-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Design shell backdrop: a near-black letterbox, darker than the app bg,
+       kept tokenized (no hex literal). */
+    background: color-mix(in srgb, black 66%, var(--aw-bg));
+    padding: 2vmin;
+  }
+
+  .aw-root {
+    position: absolute;
     inset: 0;
     display: flex;
     min-width: 0;
@@ -262,6 +303,20 @@
     background: var(--aw-bg);
     color: var(--aw-text);
     font-family: var(--aw-font-ui);
+  }
+  /* The pinned-profile preview canvas: a real, smaller viewport (no scale) —
+     centered, letterboxed, device-rounded, with a lifted device shadow. Its own
+     ResizeObserver re-resolves the profile against this width. */
+  .aw-viewport.aw-preview .aw-root {
+    position: relative;
+    inset: auto;
+    width: var(--aw-preview-w, 1024px);
+    height: var(--aw-preview-h, 760px);
+    max-width: 96vw;
+    max-height: 96vh;
+    border: 1px solid var(--aw-border-3);
+    border-radius: var(--aw-preview-radius, 18px);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   }
 
   /* T18: keyboard focus ring for the shell's own chrome (hamburger + scrims).

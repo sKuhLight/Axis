@@ -3,6 +3,7 @@ import { createEmptyWorkbenchDocument } from '../defaults';
 import {
   VIEWPORT_BREAKPOINTS,
   classifyViewportWidth,
+  previewFrameForClass,
   resolveProfileForViewport,
   selectProfileOverride
 } from '../profiles';
@@ -21,6 +22,22 @@ function docWithProfiles(): WorkbenchDocument {
   doc.profiles[phone.id] = phone;
   return doc;
 }
+
+describe('previewFrameForClass', () => {
+  it('returns real device-canvas sizes for tablet and phone, null for desktop', () => {
+    expect(previewFrameForClass('desktop')).toBeNull();
+    const tablet = previewFrameForClass('tablet');
+    expect(tablet).toEqual({ width: 1024, height: 760, radius: 18 });
+    const phone = previewFrameForClass('phone');
+    expect(phone).toEqual({ width: 400, height: 820, radius: 28 });
+    // Phone is narrower than the phone breakpoint so the shell's ResizeObserver
+    // re-classifies the frame as a phone (chrome + isPhone flip together).
+    expect(phone!.width).toBeLessThan(VIEWPORT_BREAKPOINTS.phone);
+    // Tablet sits inside the tablet band (>= phone, < desktop).
+    expect(tablet!.width).toBeGreaterThanOrEqual(VIEWPORT_BREAKPOINTS.phone);
+    expect(tablet!.width).toBeLessThan(VIEWPORT_BREAKPOINTS.tablet);
+  });
+});
 
 describe('classifyViewportWidth', () => {
   it('maps widths to device classes at the documented thresholds', () => {

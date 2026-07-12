@@ -1048,3 +1048,121 @@ trap give outside-click / Escape dismissal. New `e2e/12-widget-menu.spec.ts`.
 - Operator/visual pass (AXIS-22) should sanity-check the drawer density + the
   tap-menu feel on the live FM3 rig (phone + bottom-nav especially).
 - **Committed** ROUND 16 (drawer rework + widget tap menu) on `layout-rework` (v0.8.12-beta); main-session live verify: drawer Pages/Layouts views + live search + below-widget menu + scrim dismissal all confirmed in the operator tab (fresh dev servers; find/read_page miss the drawer aside — a11y landmark note). FM3 serial died a SECOND time today (USB re-enum 14:48) → FORGEFX-22 confirmed recurring; server restarted.
+
+## ROUND 17 — Drawer polish + profile preview (operator review 2026-07-12, screenshots)
+
+Operator reviewed the round-16 drawer live. Verdict: search is there but it
+still looks bad, and NAMES ARE MISSING across the board — saved panel rows
+show only "1 panel" + buttons (template name absent), saved widget rows
+truncate to "G…"/"Hi…"/"Pr…"; action buttons overflow the drawer's right
+edge. Most buttons are redundant.
+
+**Directive A (AXIS-26):** every row shows its real, untruncated name.
+Replace the button rows: page order changes via DRAG & DROP; delete = trash
+icon, rename = pencil icon (drop Open/▲▼/Rename/Delete text buttons).
+Panels and widgets get DRAGGED out of the drawer and DROPPED into the
+layout where wanted instead of Add buttons.
+
+**Directive B (AXIS-27):** the edit-mode profile switcher should behave like
+the design files: pinning Tablet/Mobile adapts the WHOLE page so the editing
+surface really is tablet/mobile sized (in-window preview viewport, no window
+resize). Design behavior = spec.
+
+## ROUND 17 — implementation (2026-07-12, Agent 4)
+
+Both directives implemented on `layout-rework` (base 03d041c). Uncommitted; main
+session reviews + commits + bumps.
+
+### Task A (AXIS-26) — drawer polish
+
+**Row anatomy (names + no clipped actions).** Every drawer row is now
+`[grab/label — flex] [meta] [icon actions]`. The label (`.aw-lib-label`, flex:1,
+min-width:0, ellipsis-as-last-resort) owns the free width, so panel rows show the
+real template name (not just "1 panel") and widget rows show the full name (not
+"G…"). The text button clusters (Add/Open/▲▼/Rename/Export/Delete) that overflowed
+the drawer's right edge are gone — rename = pencil icon, export = download icon,
+delete = trash icon (`.aw-lib-icon-btn`, 30px squares; danger tint on delete).
+Same treatment applied to WorkbenchLayoutDrawer's saved-layout rows (Apply stays a
+text button — it's the primary verb). Icons are inline SVG snippets
+(`iconPencil`/`iconTrash`/`iconExport`/`iconGrip`), tokenized (no hex).
+- **Specificity trap fixed:** the generic `.aw-lib-row button { min-width:54px;
+  flex:none }` (0,1,1) beat single-class overrides — the grip rendered 54px wide
+  and pushed the row off the drawer's right edge. All grab/grip/icon rules are now
+  scoped `.aw-lib-row button.<class>` (0,2,1) so they win.
+
+**Pages reorder by drag** (replaces the ▲▼ buttons): a grip handle
+(`.aw-lib-drag-grip`) per page row; drag it and the page moves to where it's
+dropped. Drop index resolves against the page-row midpoints at pointer-up via the
+unit-tested `widgetDropIndex` (computed once at drop — not live — to avoid the
+feedback loop of moving the row you're measuring against), then `movePage`.
+Disabled while a search filter is active. Grabbed row is accent-framed
+(`.reordering`).
+
+**Widget / panel DRAG-OUT** (design `startLibDrag`→`activateLibDrag`), new shared
+module `workbench/svelte/libraryDrag.ts`:
+- `startWidgetDragOut` / `startPanelDragOut` are create-ON-DROP pointer sessions:
+  nothing is instantiated until the pointer is released over a valid target, so a
+  cancelled drag leaves NO orphan. They drive `controller.drag` (sentinel
+  `__aw-drag-out__` id) so the SAME visual machinery lights up — `.aw-dragging-*`
+  classes, WidgetZone's in-flow `zoneInsert` slot, DockRegion outlines, the
+  DragLayer target chip (the travelling widget ghost is absent — no instance yet).
+- Hit-testing mirrors WidgetHost.widgetDropAt / TabStack region resolution
+  (elementFromPoint → closest `[data-zone]` / `[data-region]`); unit→widget index
+  conversion delegates to the unit-tested `drag.ts` helpers.
+- The drawer AUTO-COLLAPSES the instant a drag activates (design closes `libOpen`);
+  the window-level listeners survive the unmount. Plain tap stays as the
+  add-to-default fallback (row onclick). Applied to: saved panel templates (drop →
+  dock region), saved widget templates (drop → widget zone; multi-widget templates
+  place all), and hidden widgets (drop → move out of hidden).
+- Feature-keep: rename/delete/export + import/export + tap-to-add all retained.
+
+### Task B (AXIS-27) — edit-mode profile preview
+
+Pinning Tablet/Mobile in the edit ribbon shrinks the WHOLE editing surface to that
+profile's real device size — a centered, letterboxed in-window frame, no window
+resize (design `frameStyle`). Auto/Desktop pin = full size; leaving edit mode
+restores full-size rendering of the active profile.
+- Generic pure helper `previewFrameForClass(cls)` (`workbench/core/profiles.ts`):
+  tablet 1024×760 r18, phone 400×820 r28, desktop `null`.
+- `WorkbenchHost` wraps `.aw-root` in a `.aw-viewport` backdrop; when editing with
+  a tablet/phone profile PINNED, the viewport becomes a dark letterbox and the
+  root becomes a fixed-size, device-rounded frame. It's a REAL smaller viewport
+  (never a CSS transform/scale) so the shell's own ResizeObserver re-resolves the
+  profile against the frame width (the pin wins the resolver, so measuring never
+  fights it) and drags/menus keep 1:1 coords — the round-13 de-zoom bug class only
+  bites under an ancestor scale, which this deliberately avoids. `isPhone` flips at
+  the 400px frame, so mobile preview gets phone chrome. Verified drag-out + widget
+  menu inside the mobile frame (e2e drag-out spec runs at desktop; preview drag was
+  spot-checked).
+
+### Tests
+- Unit: +`previewFrameForClass` case in `core/test/profileResolver.test.ts`.
+- e2e: `13-customize-drawer` +2 (page-reorder drag, hidden-widget drag-out onto
+  the top bar asserting placement + auto-collapse); new `14-profile-preview`
+  (Mobile frame < 500px + Auto restores; Tablet frame ~1024 + Done restores).
+- **Known e2e gotcha (documented in-spec):** the drawer's 0.22s slide-in must
+  settle before reading `boundingBox()` (which doesn't auto-wait for a stable
+  position) — hover the target first.
+
+- **Verified:** `npm run check` 0 errors / 0 warnings (1125 files); `npm test`
+  **821** (was 820; +1 preview-frame case); `npm run test:e2e` **71/72** — the one
+  failure (`06-persistence` › "a rearrangement survives a reload", firefox only) is
+  **PRE-EXISTING**: it reproduces on the base commit 03d041c with my changes
+  stashed, so it is an environmental/firefox persistence flake against the live-FM3
+  backend, NOT a regression from this round. All new/changed specs pass on both
+  browsers (13-customize-drawer +2, 14-profile-preview ×2). Live spot-check on
+  :5173 (non-mutating): the Pages drawer shows full untruncated names + grip +
+  pencil/export/trash icon actions with nothing clipped.
+
+### Open follow-ups (Backlog candidates)
+- The phone-specific CSS affordances (bottom-sheet nav, hamburger, topbar padding)
+  key on the WINDOW `@media (max-width:760px)`, not the preview frame, so a mobile
+  preview on a wide window uses the mobile-profile LAYOUT (nav-bottom etc.) but not
+  those window-media affordances. A fuller fix is container queries / a preview
+  class gate.
+- Drawers + ContextMenu are `position:fixed` (window), so inside a preview frame
+  they attach to the window edges, not the frame edges (functional, minor visual
+  mismatch vs the design which renders the lib sheet inside the frame).
+- Widget-template drag-out supports zone drops; workspace-edge "new panel from a
+  dragged widget" (WidgetHost has it for live widgets) isn't wired for drag-out.
+- **Committed** ROUND 17 on `layout-rework` (v0.8.13-beta); main-session live verify on fresh servers: row names untruncated everywhere, pencil/trash icon actions + drag grips present, mobile preview = real 400×820 centered frame w/ phone UI, desktop restore OK. Known pre-existing: firefox 06-persistence flake (fails on base 03d041c too) → AXIS-28.
