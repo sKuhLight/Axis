@@ -39,17 +39,75 @@ export interface EnumParam {
   options: { value: number; label: string }[];
 }
 
-/** One control on a device-authentic editor page: a display label bound to a paramId. */
+/** Editor widget kind for a layout control (from the official editor's per-control renderer).
+ *  `unknown` = the source layout had no recognized widget (legacy/migrated data) — render with the
+ *  catalog's own heuristic so it degrades to the pre-v2 behaviour. */
+export type LayoutWidget =
+  | 'knob'
+  | 'toggle'
+  | 'slider'
+  | 'dropdown'
+  | 'graph'
+  | 'spacer'
+  | 'button'
+  | 'meter'
+  | 'label'
+  | 'readout'
+  | 'unknown';
+
+/** A layout control that binds to a DIFFERENT block than the one being edited (rendered live via the
+ *  pinned-param hydration when `paramId` resolves; display-only otherwise). */
+export interface LayoutCrossBlock {
+  /** Effect id of the block that owns the parameter. */
+  effect: number;
+  family: string;
+  paramName: string | null;
+  paramId: number | null;
+}
+
+/** Fine placement metadata from the editor grid (stored, not yet rendered — later polish pass). */
+export interface LayoutPlacement {
+  col?: number;
+  offsetX?: number;
+  offsetY?: number;
+  positionExact?: boolean;
+}
+
+/** One control on a device-authentic editor page: a display label + widget kind bound to a paramId. */
 export interface LayoutControl {
   label: string;
-  paramName: string;
+  paramName: string | null;
   paramId: number | null;
-  col?: number;
+  widget: LayoutWidget;
+  /** The source editor's raw widget token (e.g. `dropdown1`, `meterGainVert`, `btnBypass`). */
+  rawWidget?: string;
+  placement?: LayoutPlacement;
+  crossBlock?: LayoutCrossBlock;
+  fw?: unknown;
 }
-/** Device-authentic UI layout for a block/virtual effect: editor pages (tabs) → controls. */
+/** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
+export interface LayoutRow {
+  /** Editor section tag (e.g. `parameters`, `mixer`) — informational. */
+  section?: string;
+  controls: LayoutControl[];
+}
+/** One editor page (rendered as a tab): a title + its rows. */
+export interface LayoutPage {
+  name: string;
+  pageNum?: number;
+  fw?: unknown;
+  rows: LayoutRow[];
+}
+/** Device-authentic UI layout for a block/virtual effect. The server has ALREADY selected the variant
+ *  matching the block's current type, so `pages` are the arrangement to render as-is. */
 export interface DeviceLayout {
   editorName?: string;
-  pages: { name: string; controls: LayoutControl[] }[];
+  family: string;
+  variantName?: string;
+  variantValue?: string | null;
+  fw?: unknown;
+  pinned?: unknown;
+  pages: LayoutPage[];
 }
 
 export interface BlockParams {

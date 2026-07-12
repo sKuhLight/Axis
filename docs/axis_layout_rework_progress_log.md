@@ -1742,3 +1742,94 @@ device expects, (b) a placeCell over a just-cleared shunt cell adopts the re-iss
 and (c) the unique shunt-instance allocation still avoids the device dedupe on longer runs. Browser
 sanity on :5173 was kept READ-ONLY (no live drops).
 - **Committed+pushed** ROUND 23 on `layout-rework` (v0.8.19-beta). Rig-verify list (chain-through wiring, placeCell over cleared shunt, shunt-instance dedupe on long runs) in AXIS-35.
+
+## ROUND 24 — ControlSurface renders editor-true DeviceLayout v2 (AXIS-36, Layer 3)
+
+Cross-repo Layer 3: the ForgeFX feature branch on :5056 now serves a v2 layout per block
+(`layout = { editorName?, family, variantName, variantValue, fw?, pinned?, pages:[{ name, pageNum?, fw?,
+rows:[{ section?, controls:[{ label, paramName|null, paramId|null, widget, rawWidget?, placement?,
+crossBlock?, fw? }] }] }] }`) and advertises `caps.editorLayouts:true`. The variant is chosen
+server-side by the block's current type. This round makes the ControlSurface "Default" board consume it.
+
+### Board-model extension chosen
+`SurfaceWidget` (formerly the inline `Widget`) gains an optional **`row?: number`** = the source layout
+row index; `SurfaceBoard` gains **`variantSig?: string`** (served-variant fingerprint). Both types moved
+out of `ControlSurface.svelte` into the new pure module so the builder is node-testable. Free-arranged
+(user) boards never set `row`, so they keep the existing gravity-packed free grid untouched — the
+row-preserving path only engages when `widgets.some(w => w.row != null)`.
+
+### Widget-view mapping (conservative — zero FM3 regression)
+Every control first resolves to its live catalog entry by `paramId` (`k<id>` knob / `e<id>` enum); the
+entry's own kind/default view is the baseline, and the layout's `widget` only REFINES the view. So a
+control the migrated data left as `unknown` renders exactly as pre-v2.
+
+| layout `widget` | resolves to | surface view |
+|---|---|---|
+| `knob` | live cont param | `knob` |
+| `slider` | live cont param | `slider` |
+| `number`/`readout` (cont) | live cont param | `number` |
+| `dropdown` | live enum (>2 opts) | `select` |
+| `toggle` | live enum (≤2 opts) | `switch` |
+| `button` (enum) | live enum (≤2 opts) | `button` |
+| `button` + bypass token (no live param) | `bypass` catalog entry | `action` |
+| `meter` (no live param) | `meter` catalog entry (only if block reports a monitor) | `meter` |
+| `graph`/`label` (no live param, EQ block) | `eq` catalog entry | `eq` |
+| `unknown` / anything unmapped | catalog default | catalog default (knob/select/toggle) |
+| `spacer` | — | gap: advances the row cursor, draws nothing |
+| unresolved dropdown / label / null-param (non-EQ) | — | gap (same as pre-v2 silent-skip, keeps alignment) |
+
+Row layout: within a page, controls place left→right (x += widget width; a control overflowing the
+remaining cols wraps onto a new grid line); each source layout row starts on a fresh grid line below the
+tallest widget of the previous row. Pages become tabs (duplicate names suffixed `Gate` / `Gate 2` — the
+real FM3 INPUT block ships three pages all named "Gate"). Unreferenced catalog controls sweep onto a
+trailing "More" page. Responsive narrow-width reflow uses `packRows` (row-preserving) for device boards,
+the existing `packInto` for free boards.
+
+### Re-seed on type change (variant)
+`layoutVariantSig(layout)` = `family|variantName|variantValue|editorName|pageCount|controlCount`. The
+built Default board stamps it; `reconcile` carries it through persistence; `loadProfileBoard` re-seeds
+the **Default** profile from the current layout whenever the saved board's sig ≠ the live sig (a type
+change flips the served variant → new sig → reseed). `variantSig` is also folded into the board-load
+`$effect` signature (kept before `surfRev` so the existing `revChanged` `.pop()` still reads surfRev), so
+a variant change re-runs the load. Blank/custom profiles have their own storage and are never reseeded.
+
+### Cross-block + placement (scoped)
+`LayoutCrossBlock` and `LayoutPlacement` are typed; cross-block controls with a live `paramId` are meant
+to bind via the round-20 pinned machinery (`registerPinnedBlock`/`pinnedView`), else display-only. The
+live FM3 layouts carry **no** crossBlock or placement data today, so the render path for them is not yet
+wired — `placement` offsets are stored+ignored (documented later-polish, matches AXIS-36 acceptance) and
+cross-block falls through to the display-only/gap path. **Follow-up when a device emits crossBlock
+controls: wire the pinned-hydration render in the surface** (candidate AXIS backlog item).
+
+### Files changed
+- **`src/lib/types.ts`** — replaced v1 `LayoutControl`/`DeviceLayout` with the v2 shape
+  (`LayoutWidget`, `LayoutCrossBlock`, `LayoutPlacement`, `LayoutControl`, `LayoutRow`, `LayoutPage`,
+  `DeviceLayout` with `family`/`variantName`/`variantValue`/`fw`/`pinned`).
+- **`src/lib/deviceLayoutBoard.ts`** (NEW, pure/UI-free) — `buildDeviceLayoutBoard(layout, catalog, cols)`,
+  `layoutVariantSig`, `packRows`, plus the `SurfaceWidget`/`SurfaceBoard`/`BoardCtl` types.
+- **`src/lib/deviceLayoutBoard.test.ts`** (NEW) — 11 unit tests (row placement, spacer gap, widget→view
+  mapping, `unknown` no-regression, meter/bypass drop-when-absent, overflow wrap, dup slot, duplicate page
+  names, More sweep, null-return, variantSig, packRows reflow).
+- **`src/lib/ControlSurface.svelte`** — `Widget`/`Board` now alias the module types; `layoutBoard()`
+  delegates to `buildDeviceLayoutBoard`; removed the inline v1 `keyForParam`/page walk; added `variantSig`
+  derived, the Default re-seed in `loadProfileBoard`, variantSig in the load effect sig, `reconcile`
+  carries variantSig, and row-aware `viewWidgets` via `packRows`.
+- **`e2e/17-device-layout.spec.ts`** (NEW) — mocks a single Drive block whose params carry a v2 layout
+  (no write reaches the live :5056), taps it, and asserts the surface mounts, the layout page becomes a
+  "Drive" tab, knob labels render, dropdown→`.selfield` + slider→`.slbl`, and row 0 (Gain) sits above
+  row 1 (Level). Note: forgefx.ts needed no change — the layout rides the existing `BlockParams` DTO.
+
+### FM3 no-regression evidence
+The catalog-first resolution means any control whose `widget` is `unknown` (or unmapped) uses the SAME
+catalog entry + default view as before; spacers/unresolved controls become gaps exactly like the pre-v2
+silent-skip. Unit test `unknown/unmapped widgets fall back to the catalog default` locks this. Verified
+against the live FM3 INPUT block shape (`/preset/blocks/37/params`): knobs 0/1/2/3/5→knob, enums 4/9→
+select, meter 8→meter (when a monitor exists), bypass 6→action, the 4 spacers push the Gain meter to the
+right, and the three same-named "Gate" pages become `Gate`/`Gate 2`/`Gate 3`.
+
+### Gates
+`npm run check` 0 errors / 0 warnings · `npm test` **855 passed** (85 files, +11 new) · `npm run test:e2e`
+new spec passes chromium + firefox in isolation; full-suite result recorded at commit time (known flake:
+firefox 06-persistence = AXIS-28, unrelated). Version bump to 0.8.20-beta + commit are the main session's.
+NEVER wrote a param value to the live FM3; dev servers on :5173/:5056 left running.
+- **Committed+pushed** ROUND 24 on `layout-rework` (v0.8.20-beta) — chain complete: codec 753ba45 (v0.3.13) → ForgeFX a4030c6 (v0.6.6-beta, dev :5056 runs this branch) → Axis. Operator sees editor-true Default boards on next block open.

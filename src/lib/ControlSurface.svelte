@@ -11,6 +11,7 @@
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
+  import { buildDeviceLayoutBoard, layoutVariantSig, packRows, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
   import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
   import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
   import {
@@ -46,8 +47,10 @@
 
   type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
-  type Widget = { id: string; key: string; x: number; y: number; w: number; h: number; view: string };
-  type Board = { pageOrder: string[]; page: string; boards: Record<string, Widget[]> };
+  // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
+  // device-authentic Default board can preserve the editor's rows through responsive re-pack).
+  type Widget = SurfaceWidget;
+  type Board = SurfaceBoard;
 
   // ── live control catalog (rebuilt from the device params; widgets reference these by key) ──
   const knobById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
@@ -225,8 +228,17 @@
   // cell = exactly the width split across the shown columns, so the board ALWAYS fills the width
   // (fewer cols = bigger tiles). Min keeps tiles legible; the col count drops before tiles get tiny.
   const cell = $derived(Math.max(isMobile ? 60 : 48, Math.floor((containerW - (displayCols - 1) * GAP) / displayCols)));
-  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses
-  const viewWidgets = $derived(!editMode && displayCols < cols ? packInto(widgets, displayCols, 256) : widgets);
+  // a device-authentic Default board tags its widgets with a source `row`; the free-arranged boards don't
+  const rowGrouped = $derived(widgets.some((w) => w.row != null));
+  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses.
+  // Row-grouped (device) boards reflow row-by-row so the editor's rows survive; free boards gravity-pack.
+  const viewWidgets = $derived(
+    !editMode && displayCols < cols
+      ? rowGrouped
+        ? packRows(widgets, displayCols)
+        : packInto(widgets, displayCols, 256)
+      : widgets
+  );
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   const effCompact = $derived(compact || isMobile);
@@ -268,7 +280,15 @@
   function loadProfileBoard(s: string, prof: string): Board {
     try {
       const raw = surfGet(bKey(s, prof));
-      if (raw) return reconcile(JSON.parse(raw));
+      if (raw) {
+        const saved = reconcile(JSON.parse(raw));
+        // The Default board is device-authentic: when the served layout variant differs from the one it
+        // was seeded against (a type change, or a first load after this feature landed), re-seed it from
+        // the current layout instead of restoring the stale arrangement. Blank/custom profiles keep their
+        // saved board regardless. An empty `variantSig` means "no device layout" — nothing to re-seed to.
+        if (prof === 'Default' && variantSig && saved.variantSig !== variantSig) return seedFor('Default');
+        return saved;
+      }
       if (prof === 'Default') {
         const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem(LEGACY_KEY(s)) : null; // carry a pre-profile board into Default
         if (legacy) return reconcile(JSON.parse(legacy));
@@ -346,57 +366,17 @@
   }
 
   const mk = (c: Ctl): Widget => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view });
-  // catalog key for a layout control's paramId (cont → k<id>, enum → e<id>); null if not on this device
-  function keyForParam(pid: number | null): string | null {
-    if (pid == null) return null;
-    if (knobById.has(pid)) return `k${pid}`;
-    if (enumById.has(pid)) return `e${pid}`;
-    return null;
-  }
-  // Device-authentic Default layout: one page per editor page, controls in the editor's order with the
-  // editor's labels. Positions are gravity-packed into the grid (NOT the editor's absolute columns —
-  // those assume a far wider canvas and read as sparse/overlapping here). Anything the layout doesn't
-  // reference gets swept onto a trailing "More" page so nothing is lost.
+  // Fingerprint of the served layout variant (family/variant/type-selected pages). The variant is chosen
+  // server-side by the block's current type, so a type change yields a different sig → the Default board
+  // re-seeds (below); user-arranged profiles keep their own storage and are untouched.
+  const variantSig = $derived(layoutVariantSig(editor.blockLayout));
+  // Device-authentic Default layout (v2): pages become tabs; inside a page, controls flow left→right per
+  // row and rows flow top→bottom (widgets carry their source `row` for row-preserving reflow). Widget
+  // types map to views (knob/slider/dropdown/toggle/meter/bypass); unmapped/`unknown` controls fall back
+  // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
+  // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    const lay = editor.blockLayout;
-    if (!lay?.pages?.length) return null;
-    const boards: Record<string, Widget[]> = {};
-    const pageOrder: string[] = [];
-    // Page names are the keys of the `{#each pageOrder (pg)}` block, so they MUST be unique — a device
-    // layout can repeat a name (e.g. Delay ships its own "More" page, which also collides with the
-    // catch-all below) and a duplicate key is a fatal `each_key_duplicate`. Suffix any repeat.
-    const usedNames = new Set<string>();
-    const uniqName = (n: string): string => {
-      const base = n || 'Page';
-      let name = base;
-      for (let i = 2; usedNames.has(name); i++) name = `${base} ${i}`;
-      usedNames.add(name);
-      return name;
-    };
-    for (const pg of lay.pages) {
-      const ws: Widget[] = [];
-      const seen = new Set<string>();
-      for (const ctl of pg.controls) {
-        const key = keyForParam(ctl.paramId);
-        const cat = key ? catByKey.get(key) : undefined;
-        if (!cat || seen.has(key!)) continue; // skip unknown params + dupes (a param listed twice)
-        seen.add(key!);
-        ws.push(mk(cat));
-      }
-      if (!ws.length) continue;
-      const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
-      boards[name] = packList(ws); // tidy left→right, top→bottom in editor order
-      pageOrder.push(name);
-    }
-    if (!pageOrder.length) return null;
-    const placed = new Set(pageOrder.flatMap((p) => boards[p]!.map((w) => w.key)));
-    const rest = catalog.filter((c) => !placed.has(c.key));
-    if (rest.length) {
-      const name = uniqName('More');
-      boards[name] = packList(rest.map(mk));
-      pageOrder.push(name);
-    }
-    return { pageOrder, page: pageOrder[0]!, boards };
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -427,14 +407,17 @@
       boards[pg] = ws;
     }
     const page = b.pageOrder.includes(b.page) ? b.page : b.pageOrder[0] ?? 'Main';
-    return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards };
+    return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards, variantSig: b.variantSig };
   }
 
   // load a slug's board (storage → reconcile, else default) when it first appears, the catalog changes, OR a
   // live config push from another UI bumps surfRev() (host↔remote arrange sync).
   let loadedSig = '';
   $effect(() => {
-    const sig = slug + '|' + catalog.map((c) => c.key).join(',') + '|' + surfRev();
+    // variantSig is pipe-joined but surfRev stays the LAST segment, so the revChanged `.pop()` below is
+    // still the surfRev — a served-layout variant change (type switch) now also re-runs this load, which
+    // re-seeds the Default board via loadProfileBoard's variant check.
+    const sig = slug + '|' + catalog.map((c) => c.key).join(',') + '|' + variantSig + '|' + surfRev();
     if (!slug || catalog.length <= 1 || sig === loadedSig) return;
     const revChanged = loadedSig.split('|').pop() !== String(surfRev());
     loadedSig = sig;
