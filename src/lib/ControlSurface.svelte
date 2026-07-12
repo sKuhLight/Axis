@@ -896,6 +896,32 @@
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(WORKBENCH_PARAMETER_SOURCE_MIME, serializeWorkbenchParameterSource(source));
     event.dataTransfer.setData('text/plain', source.label);
+    setFullTileDragImage(event);
+  }
+
+  // The browser's default drag image is a snapshot of the dragged node clipped to
+  // whatever of it is on-screen — inside the scrolling control grid that clipped
+  // the ghost to a fraction of the tile (T20 bug #1: "the dotted outline doesn't
+  // wrap the whole tile"). Clone the tile off-screen at its full box and hand THAT
+  // to setDragImage so the ghost always wraps the complete control being dragged.
+  function setFullTileDragImage(event: DragEvent) {
+    const tile = event.currentTarget as HTMLElement | null;
+    if (!tile || typeof event.dataTransfer?.setDragImage !== 'function') return;
+    const rect = tile.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const clone = tile.cloneNode(true) as HTMLElement;
+    clone.style.position = 'fixed';
+    clone.style.top = '-10000px';
+    clone.style.left = '-10000px';
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.margin = '0';
+    clone.style.pointerEvents = 'none';
+    clone.style.opacity = '1';
+    document.body.appendChild(clone);
+    event.dataTransfer.setDragImage(clone, event.clientX - rect.left, event.clientY - rect.top);
+    // The spec snapshots the element synchronously; remove it once the drag has grabbed it.
+    setTimeout(() => clone.remove(), 0);
   }
 
   async function pinControlToWorkbench(c: Ctl, target?: AxisPinTarget) {

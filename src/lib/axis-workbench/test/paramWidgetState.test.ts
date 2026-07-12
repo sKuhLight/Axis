@@ -55,4 +55,28 @@ describe('resolveParamWidgetState', () => {
       resolveParamWidgetState({ boundEffectId: 106, openEffectId: 106, presetEffectIds: [] })
     ).toBe('live');
   });
+
+  it('is live when the block is in the preset and its params are hydrated (T20 bug #4)', () => {
+    expect(
+      resolveParamWidgetState({ boundEffectId: 106, openEffectId: 100, presetEffectIds: [106, 100], hasLiveData: true })
+    ).toBe('live');
+  });
+
+  it('is live when nothing is open but the pinned block is hydrated', () => {
+    expect(
+      resolveParamWidgetState({ boundEffectId: 106, openEffectId: undefined, presetEffectIds: [106], hasLiveData: true })
+    ).toBe('live');
+  });
+
+  it('stays readonly when in-preset but not yet hydrated (brief flash / slow link)', () => {
+    expect(
+      resolveParamWidgetState({ boundEffectId: 106, openEffectId: undefined, presetEffectIds: [106], hasLiveData: false })
+    ).toBe('readonly');
+  });
+
+  it('reports missing over hydrated data when the block left the preset', () => {
+    expect(
+      resolveParamWidgetState({ boundEffectId: 999, openEffectId: undefined, presetEffectIds: [106], hasLiveData: true })
+    ).toBe('missing');
+  });
 });

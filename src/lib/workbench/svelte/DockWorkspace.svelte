@@ -52,6 +52,24 @@
     if (pagesMode && mobileDock === 'top') mobileDock = null;
   });
 
+  // A parameter drag ends in one of three ways the workspace's own drop handler
+  // does NOT observe: it is dropped onto a panel (which stopPropagation()s the
+  // drop so it can claim it), it is cancelled with Escape, or it is released over
+  // a non-target. In every case `dragend` fires on the drag source and bubbles to
+  // the window, so a window-level listener is the one reliable place to clear the
+  // edge-drop overlay (T20 bug #2 — otherwise the "Dock left" preview stuck until
+  // a reload). `drop` is a belt-and-braces clear for drops the workspace does see.
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const clear = () => { edgeDropRegion = null; };
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => {
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+    };
+  });
+
   function hasParameterSource(event: DragEvent): boolean {
     return Array.from(event.dataTransfer?.types ?? []).includes(WORKBENCH_PARAMETER_SOURCE_MIME);
   }

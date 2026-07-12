@@ -150,6 +150,14 @@ class EditorStore {
   // always-on per-block meter values (keyed effectId) + which control is active per block
   meters = $state<Record<number, { defaultId: number; defaultName: string; typeName: string; vals: Record<number, MeterVal> }>>({});
   activeCtl = $state<Record<number, number>>({});
+  // ── pinned-param hydration: full param/enum data for placed blocks that host a
+  // custom-panel control but are NOT the open block, so those controls read/write
+  // live regardless of what (if anything) is selected. Same DTO the open block
+  // uses (blockParams → named/enums), fetched on demand for mounted pinned widgets
+  // only and invalidated on every preset/scene reload. Keyed by effectId. */
+  pinnedParams = $state<Record<number, { named: NamedParam[]; enums: EnumParam[] }>>({});
+  #pinnedRefs = new Map<number, number>(); // effectId → count of mounted pinned widgets
+  #hydratePinnedTimer: ReturnType<typeof setTimeout> | null = null;
   /** Current model/type name of a placed block (for the grid tile sub-label). */
   typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
   /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
@@ -464,6 +472,92 @@ class EditorStore {
         /* meters are best-effort */
       }
     }, 350);
+  };
+
+  // ── pinned-param hydration (custom-panel controls stay live without an open block) ──
+  /** A mounted pinned param widget registers its bound block; the return unregisters it.
+   *  Ref-counted so several controls off the same block share one hydration. */
+  registerPinnedBlock = (effectId: number | undefined): (() => void) => {
+    if (effectId == null || effectId < 0) return () => {};
+    this.#pinnedRefs.set(effectId, (this.#pinnedRefs.get(effectId) ?? 0) + 1);
+    this.#scheduleHydratePinned();
+    return () => {
+      const next = (this.#pinnedRefs.get(effectId) ?? 1) - 1;
+      if (next > 0) { this.#pinnedRefs.set(effectId, next); return; }
+      this.#pinnedRefs.delete(effectId);
+      if (this.pinnedParams[effectId]) {
+        const { [effectId]: _drop, ...rest } = this.pinnedParams;
+        this.pinnedParams = rest;
+      }
+    };
+  };
+  /** Live params+enums for a block: the open block's own arrays, else the hydrated
+   *  pinned copy (empty until hydration lands). Both writable through set*ById. */
+  pinnedView = (effectId: number | undefined): { named: NamedParam[]; enums: EnumParam[] } => {
+    if (effectId != null && this.selected?.effectId === effectId) return { named: this.params, enums: this.enums };
+    return (effectId != null && this.pinnedParams[effectId]) || { named: [], enums: [] };
+  };
+  #scheduleHydratePinned = () => {
+    if (this.#hydratePinnedTimer) clearTimeout(this.#hydratePinnedTimer);
+    this.#hydratePinnedTimer = setTimeout(() => void this.#hydratePinned(), 250);
+  };
+  /** Invalidate every hydrated block (preset/scene changed) and re-fetch the mounted ones. */
+  #invalidatePinned = () => {
+    if (Object.keys(this.pinnedParams).length) this.pinnedParams = {};
+    if (this.#pinnedRefs.size) this.#scheduleHydratePinned();
+  };
+  #hydratePinned = async () => {
+    this.#hydratePinnedTimer = null;
+    // A slow 5-pin MIDI link can't afford extra per-block reads — leave those controls
+    // as read-only previews (click opens the block) instead of inflating edit latency.
+    if (!this.#pinnedRefs.size || this.slowLink || this.status !== 'ready') return;
+    const placed = new Set([...this.layout.cells, ...this.layout.shunts].map((c) => c.effectId));
+    for (const eid of this.#pinnedRefs.keys()) {
+      if (eid === this.selected?.effectId) continue; // open block is already live via editor.params
+      if (!placed.has(eid) || this.pinnedParams[eid]) continue; // not in this preset, or already hydrated
+      try {
+        const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(eid) : await forgefx.blockParams(eid);
+        this.pinnedParams = {
+          ...this.pinnedParams,
+          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: r.enums ?? [] }
+        };
+      } catch {
+        /* best-effort — the control falls back to a read-only preview */
+      }
+    }
+  };
+  #cellFor = (effectId: number): Cell | undefined =>
+    [...this.layout.cells, ...this.layout.shunts].find((c) => c.effectId === effectId);
+  /** Continuous write for a pinned control whose block may not be open. Delegates to the
+   *  normal path when it IS open; otherwise writes by effectId + optimistically updates the
+   *  hydrated copy so the tile tracks the gesture. */
+  setPinnedParam = (effectId: number, p: NamedParam, v: number) => {
+    if (this.selected?.effectId === effectId) { this.setParam(p, v); return; }
+    if (p.id == null) return;
+    const from = p.norm ?? 0;
+    p.norm = v; // optimistic on the hydrated object
+    this.pinnedParams = { ...this.pinnedParams }; // nudge reactivity
+    const cell = this.#cellFor(effectId);
+    history.recordGesture({
+      kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v,
+      block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log
+    });
+    clearTimeout(this.#sendTimers[p.id]);
+    this.#sendTimers[p.id] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
+  };
+  /** Discrete write for a pinned control whose block may not be open. */
+  setPinnedEnum = (effectId: number, e: EnumParam, value: number) => {
+    if (this.selected?.effectId === effectId) { this.setEnum(e, value); return; }
+    const from = e.value;
+    e.value = value; // optimistic
+    this.pinnedParams = { ...this.pinnedParams };
+    const cell = this.#cellFor(effectId);
+    if (from !== value) history.record({
+      kind: 'param', eid: effectId, paramId: e.id, continuous: false, from, to: value,
+      block: cell?.display ?? e.name, param: e.name,
+      fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
+    });
+    forgefx.setParam(effectId, e.id, value, false).catch(() => {});
   };
 
   // ── live audio meters (per-block monitor level, normalized→dB) ──
@@ -999,6 +1093,7 @@ class EditorStore {
       return s ? { ...c, bypassed: s.bypassed ?? undefined, channel: s.channel ?? undefined } : c;
     };
     this.layout = { ...this.layout, cells: this.layout.cells.map(apply), shunts: this.layout.shunts.map(apply) };
+    this.#invalidatePinned(); // per-channel param values changed → re-hydrate pinned controls
     if (this.selKey) await this.#loadParams(); // open block's params are per-channel → re-read it
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
@@ -1184,6 +1279,7 @@ class EditorStore {
       this.everLoaded = true;
       this.status = 'ready';
       this.fetchMeters(); // background: fill every block's level meter
+      this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
       this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
     } catch (e) {
       if (!this.everLoaded) this.status = 'offline';

@@ -18,6 +18,20 @@
   const widgetCount = $derived(selectVisibleWidgetsByZone($controller.document, zone).length);
   let parameterDragHover = $state(false);
 
+  // Clear the drag-hover wash whenever any drag ends (drop anywhere, Escape-cancel,
+  // or release over a non-target) — `dragleave` alone misses the Escape-cancel and
+  // cross-window cases, which left the accent outline stuck until reload (T20 bug #2).
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const clear = () => { parameterDragHover = false; };
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => {
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+    };
+  });
+
   function hasParameterSource(event: DragEvent): boolean {
     return Array.from(event.dataTransfer?.types ?? []).includes(WORKBENCH_PARAMETER_SOURCE_MIME);
   }
