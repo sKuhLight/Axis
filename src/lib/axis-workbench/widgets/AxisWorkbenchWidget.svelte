@@ -4,6 +4,7 @@
   import { LEGAL, openExternal } from '../../legal';
   import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
+  import { isPanelWidgetZone } from '../../workbench';
   import {
     AXIS_GRID_MODES,
     axisGridMapDots,
@@ -112,7 +113,18 @@
   const paramTarget = $derived(widget.binding?.target ?? {});
   const paramBlock = $derived(readString(paramTarget.block) ?? readString(widget.state?.block) ?? 'Block');
   const paramLabel = $derived(readString(paramTarget.param) ?? readString(paramTarget.label) ?? readString(widget.state?.label) ?? 'Parameter');
-  const paramColor = $derived(readString(widget.state?.color) ?? 'var(--accent)');
+  const paramColor = $derived(readString(widget.state?.color) ?? readString(paramTarget.color) ?? 'var(--accent)');
+  // Display mode: pinned params default to the Block-Editor square control-tile
+  // look when they live in a custom panel (touch-friendly, name-labelled), and
+  // to the compact horizontal chip in bars/rails (where a tall tile won't fit).
+  // `state.display` ('tile' | 'ring') overrides the per-context default. `mini`
+  // always collapses to the chip so an auto-fit bar stays a single row.
+  const paramDisplayPref = $derived(readString(widget.state?.display));
+  const paramInPanel = $derived(isPanelWidgetZone(widget.zone));
+  const paramTile = $derived(
+    !mini && (paramDisplayPref === 'tile' || (paramDisplayPref !== 'ring' && paramInPanel))
+  );
+  const paramRingPx = $derived(paramTile ? (compact ? 34 : 42) : 24);
   const paramEffectId = $derived(readNumber(paramTarget.effectId) ?? readNumber(paramTarget.eid));
   const paramId = $derived(readNumber(paramTarget.paramId) ?? readNumber(paramTarget.pid));
   const paramNamed = $derived(
@@ -405,21 +417,27 @@
   </div>
 {:else if kind === 'paramControl'}
   <button
-    class="axis-widget param"
+    class="axis-widget param axtipwrap"
+    class:param-tile={paramTile}
     class:writable={paramLive && (!!paramNamed || !!paramEnum)}
     class:readonly={paramReadonly}
     class:missing={paramMissing}
     data-size={size}
+    data-param-mode={paramTile ? 'tile' : 'chip'}
     data-param-state={paramState}
     type="button"
     disabled={!editMode && paramMissing}
     title={paramTip}
+    aria-label={paramTip}
+    style:--param-color={paramColor}
     onpointerdown={paramPointerDown}
     onwheel={paramWheel}
     onclick={paramClick}
   >
-    <span class="param-ring" style:--param-color={paramColor} style:--param-dash={paramDash}>
-      <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
+    <!-- control-surface-style tooltip: which block this control belongs to -->
+    <span class="axtip">{paramBlock} · {paramLabel}</span>
+    <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramRingPx}px`} style:height={`${paramRingPx}px`}>
+      <svg width={paramRingPx} height={paramRingPx} viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
         <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
       </svg>
@@ -438,8 +456,8 @@
         </svg>
       {/if}
     </span>
-    <span class="mono strong">{paramMissing ? '--' : paramValueText}</span>
-    {#if expanded}<span class="mono token">{paramLabel}</span>{/if}
+    <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
+    {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
   </button>
 {:else if kind === 'tempo'}
   <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title="Tap tempo">
@@ -898,6 +916,8 @@
   }
   .param {
     position: relative;
+    /* let the hover tooltip (.axtip, positioned below) escape the chip/tile */
+    overflow: visible;
   }
   .param.writable {
     border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
@@ -962,6 +982,80 @@
   .param-value {
     stroke: var(--param-color);
     stroke-dasharray: var(--param-dash);
+  }
+  .param .param-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text2);
+  }
+  /* control-surface-style hover/focus tooltip (design axtip): source block · param */
+  .axtipwrap {
+    position: relative;
+  }
+  .axtip {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: var(--aw-surface-2, var(--surface2));
+    border: 1px solid var(--aw-border-3, var(--border3));
+    color: var(--text);
+    font: 600 10px/1 var(--font-mono);
+    letter-spacing: 0.04em;
+    padding: 6px 9px;
+    border-radius: 7px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+    z-index: 400;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  }
+  .axtipwrap:hover .axtip,
+  .axtipwrap:focus-visible .axtip {
+    opacity: 1;
+  }
+  /* Block-Editor square control-tile look: touch-friendly, always shows the
+     parameter name, tinted by the source block's category accent (--param-color). */
+  .param.param-tile {
+    flex-direction: column;
+    justify-content: center;
+    height: auto;
+    min-height: 92px;
+    min-width: 84px;
+    width: 100%;
+    gap: 5px;
+    padding: 12px 10px;
+    border: 1px solid color-mix(in srgb, var(--param-color) 30%, var(--border));
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--param-color) 8%, var(--bg2)), var(--bg2));
+    text-align: center;
+    touch-action: none;
+  }
+  .param.param-tile[data-size='compact'] {
+    min-height: 76px;
+    min-width: 72px;
+    padding: 9px 8px;
+  }
+  .param.param-tile:hover {
+    border-color: color-mix(in srgb, var(--param-color) 62%, var(--border));
+  }
+  .param.param-tile .param-val {
+    font-size: 13px;
+  }
+  .param.param-tile .param-name {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--param-color) 55%, var(--text2));
+  }
+  .param.param-tile.readonly {
+    border-style: dashed;
+  }
+  .param.param-tile.missing {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
+    background: var(--bg2);
   }
   .glyph {
     color: var(--textdim);

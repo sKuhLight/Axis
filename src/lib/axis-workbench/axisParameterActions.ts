@@ -6,22 +6,56 @@ import {
   panelWidgetZoneId,
   parseWorkbenchParameterSource,
   selectActiveLayout,
+  selectPanelLocation,
   selectVisibleWidgetsByZone,
+  type DockRegionId,
   type JsonObject,
   type WorkbenchActionHandler,
   type WorkbenchController,
+  type WorkbenchDocument,
   type WorkbenchParameterSource
 } from '../workbench';
 import { axisParameterSourcesFromCurrentEditor } from './axisParameterSources';
 
 export const AXIS_PIN_SELECTED_PARAMETERS_ACTION = 'axis.pinSelectedParameters';
 export const AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION = WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION;
+export const AXIS_CUSTOM_PANEL_TYPE = 'axis.customPanel';
+/** Sensible default name for a fresh collect panel (renamable like any panel). */
+export const AXIS_CONTROLS_PANEL_TITLE = 'Controls';
 
 export type AxisParameterSourceProvider = () => WorkbenchParameterSource[] | Promise<WorkbenchParameterSource[]>;
 
-function titleForSources(sources: WorkbenchParameterSource[]): string {
-  if (sources.length === 1) return sources[0].label;
-  return 'Pinned Parameters';
+// A dropped parameter no longer spawns a tab per param: a fresh panel gets the
+// generic "Controls" name (renamable) so several blocks' key controls collect in
+// ONE panel. An explicit `title` arg (e.g. the "pin this page" path) still wins.
+function titleForSources(): string {
+  return AXIS_CONTROLS_PANEL_TITLE;
+}
+
+/**
+ * The custom panel an edge (empty dock space) drop should COLLECT into, or null
+ * to create a fresh "Controls" panel. Prefers a custom panel already sitting in
+ * the dropped region (drop near your controls panel → it grows); otherwise, when
+ * exactly one custom panel exists anywhere, collect into that; else start fresh.
+ * Pure so the collect rule is unit-tested.
+ */
+export function axisCollectPanelId(doc: WorkbenchDocument, region: DockRegionId): string | null {
+  const layout = selectActiveLayout(doc);
+  if (!layout) return null;
+  const customPanels = Object.values(layout.panels)
+    .filter((panel) => panel.type === AXIS_CUSTOM_PANEL_TYPE)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!customPanels.length) return null;
+  const inRegion = customPanels.find((panel) => selectPanelLocation(doc, panel.id)?.region === region);
+  if (inRegion) return inRegion.id;
+  return customPanels.length === 1 ? customPanels[0].id : null;
+}
+
+/** Append parameter-source widgets to the end of a panel's widget zone. */
+function appendSourcesCommands(controller: WorkbenchController, panelId: string, sources: WorkbenchParameterSource[]) {
+  const zone = panelWidgetZoneId(panelId);
+  const startIndex = selectVisibleWidgetsByZone(controller.document, zone).length;
+  return createParameterWidgetsForZoneCommands(controller.document, sources, { zone, index: startIndex });
 }
 
 function numericParamId(value: unknown): number | null {
@@ -39,7 +73,7 @@ function panelIdFromArgs(args: JsonObject | undefined): string | null {
 
 function isAxisCustomPanel(controller: WorkbenchController, panelId: string): boolean {
   const layout = selectActiveLayout(controller.document);
-  return layout?.panels[panelId]?.type === 'axis.customPanel';
+  return layout?.panels[panelId]?.type === AXIS_CUSTOM_PANEL_TYPE;
 }
 
 function paramIdsFromArgs(args: JsonObject | undefined): number[] | null {
@@ -83,18 +117,14 @@ export function createAxisPinSelectedParametersAction(
       // named panel isn't a live custom panel.
       const panelId = panelIdFromArgs(args);
       if (panelId && isAxisCustomPanel(controller, panelId)) {
-        const zone = panelWidgetZoneId(panelId);
-        const startIndex = selectVisibleWidgetsByZone(controller.document, zone).length;
-        controller.dispatchMany(
-          createParameterWidgetsForZoneCommands(controller.document, sources, { zone, index: startIndex })
-        );
+        controller.dispatchMany(appendSourcesCommands(controller, panelId, sources));
         return;
       }
 
       controller.dispatchMany(
         createCustomPanelFromParameterSourcesCommands(controller.document, sources, {
-          panelType: 'axis.customPanel',
-          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(sources),
+          panelType: AXIS_CUSTOM_PANEL_TYPE,
+          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(),
           region: 'right'
         })
       );
@@ -110,10 +140,21 @@ export function createAxisParameterSourceEdgeDropAction(): WorkbenchActionHandle
       const source = parseWorkbenchParameterSource(raw);
       if (!source) return;
       const region = typeof args?.region === 'string' && isDockRegionId(args.region) ? args.region : 'right';
+
+      // Collect into an existing controls panel (dropping into empty space near
+      // one grows it) instead of spawning a new tab per parameter. Only when no
+      // suitable panel exists do we create a fresh, generically-named "Controls"
+      // panel that subsequent drops then collect into.
+      const collectId = axisCollectPanelId(controller.document, region);
+      if (collectId) {
+        controller.dispatchMany(appendSourcesCommands(controller, collectId, [source]));
+        return;
+      }
+
       controller.dispatchMany(
         createCustomPanelFromParameterSourcesCommands(controller.document, [source], {
-          panelType: 'axis.customPanel',
-          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : source.label,
+          panelType: AXIS_CUSTOM_PANEL_TYPE,
+          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(),
           region
         })
       );
