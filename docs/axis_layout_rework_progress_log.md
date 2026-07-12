@@ -1610,3 +1610,43 @@ Base 7115fdd on `layout-rework`. Uncommitted; main session reviews + commits + b
 - Operator/visual pass (AXIS-22) on the live FM3: full-region highlight legibility,
   spring feel, tab-bar-drop discoverability, tile outlines on the phone profile.
 - **Committed+pushed** ROUND 21 on `layout-rework` (v0.8.17-beta).
+
+## ROUND 22 — Param drag ghost as compact chip (operator review 2026-07-12, AXIS-34)
+
+Operator screenshot: the round-20 full-tile drag image is an OPAQUE block —
+you cannot see the drop targets underneath. Directive: like the other
+drags — a compact tooltip-style ghost (icon + param name, block accent,
+translucent), consistent with the shared DragLayer chip language. Keep the
+round-20 no-clipping property (ghost fully rendered).
+
+### Implementation (Agent 9)
+
+- **`src/lib/ControlSurface.svelte`** — replaced `setFullTileDragImage` (the
+  round-20 opaque full-tile clone) with **`setParamChipDragImage(event, c, source)`**.
+  It builds a compact tooltip-style chip OFF-SCREEN (`position:fixed; top/left:-10000px`,
+  keeping T20's fully-rendered / never-clipped property) and hands it to
+  `setDragImage`, anchored at `(14, 16)` so the pointer sits just inside the chip's
+  leading edge:
+  - **Size/shape:** 32px-tall pill, `padding 0 12px`, `gap 7px`, `max-width 220px`,
+    `border-radius 8px` — matching DragLayer's `.aw-drag-ghost` language.
+  - **Content:** an 18px kind glyph (`paramChipGlyph`) + the param name
+    (`source.label`, ellipsised). Glyph recalls the control: knob dial for `cont`,
+    toggle switch for `toggle`, list rows for `select`.
+  - **Coloring:** block accent from `source.state.color` (falls back to the `accent`
+    prop) tints the glyph + the border, so the dragged chip stays block-owned.
+  - **Translucency:** `background:color-mix(--bg2 88% transparent)`, `opacity:0.9`,
+    lift shadow `0 12px 30px rgba(0,0,0,.5)`, app tokens (`--bg2`/`--text`/`--font-ui`)
+    resolved from `:root` since the chip mounts on `document.body`.
+- **Coverage:** the ONLY HTML5 param drag source in the app is ControlSurface —
+  both its plain tile grid (~line 1085) and its arrange-mode widget grid (~line 1214)
+  funnel through `onWorkbenchParameterDragStart`, so the one function fixes both.
+  Grid quick-controls carry no drag-image code; `AxisCustomPanel` is the drop TARGET
+  (no `setDragImage`); the preset-browser `startDrag` handlers are a separate
+  filter-condition feature, out of scope.
+- **e2e:** `e2e/15-param-collect.spec.ts` fires synthetic `DataTransfer` drops and
+  never inspects the native drag image (uninspectable via Playwright), so no e2e
+  change was needed.
+- **Gates:** `npm run check` 0 errors / 0 warnings (1127 files); `npm test` 834
+  passed (83 files); `npm run test:e2e` 87 passed, 1 failed = the known
+  firefox `06-persistence` flake (AXIS-28) only. No commit / no version bump.
+- **Committed+pushed** ROUND 22 on `layout-rework` (v0.8.18-beta).

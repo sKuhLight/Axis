@@ -896,32 +896,69 @@
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData(WORKBENCH_PARAMETER_SOURCE_MIME, serializeWorkbenchParameterSource(source));
     event.dataTransfer.setData('text/plain', source.label);
-    setFullTileDragImage(event);
+    setParamChipDragImage(event, c, source);
+  }
+
+  /** Glyph SVG (18px, block-accent) that recalls the control's kind on the chip. */
+  function paramChipGlyph(kind: Kind, color: string): string {
+    if (kind === 'toggle') {
+      return `<svg width="20" height="18" viewBox="0 0 40 24" aria-hidden="true"><rect x="2" y="4" width="36" height="16" rx="8" fill="none" stroke="${color}" stroke-width="2.5"/><circle cx="28" cy="12" r="6" fill="${color}"/></svg>`;
+    }
+    if (kind === 'select') {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13 M4 12h13 M4 17h9" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+    }
+    // 'cont' (and any other pinnable): a knob glyph mirroring the tile's dial.
+    return `<svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 100" transform="rotate(135 16 16)"/><circle cx="16" cy="16" r="2.4" fill="${color}"/></svg>`;
   }
 
   // The browser's default drag image is a snapshot of the dragged node clipped to
-  // whatever of it is on-screen — inside the scrolling control grid that clipped
-  // the ghost to a fraction of the tile (T20 bug #1: "the dotted outline doesn't
-  // wrap the whole tile"). Clone the tile off-screen at its full box and hand THAT
-  // to setDragImage so the ghost always wraps the complete control being dragged.
-  function setFullTileDragImage(event: DragEvent) {
-    const tile = event.currentTarget as HTMLElement | null;
-    if (!tile || typeof event.dataTransfer?.setDragImage !== 'function') return;
-    const rect = tile.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-    const clone = tile.cloneNode(true) as HTMLElement;
-    clone.style.position = 'fixed';
-    clone.style.top = '-10000px';
-    clone.style.left = '-10000px';
-    clone.style.width = `${rect.width}px`;
-    clone.style.height = `${rect.height}px`;
-    clone.style.margin = '0';
-    clone.style.pointerEvents = 'none';
-    clone.style.opacity = '1';
-    document.body.appendChild(clone);
-    event.dataTransfer.setDragImage(clone, event.clientX - rect.left, event.clientY - rect.top);
+  // whatever of it is on-screen (T20 bug #1). Round 20 handed setDragImage a full
+  // off-screen clone of the tile — but that opaque block hides the drop targets
+  // underneath (T22 review). Instead build a compact tooltip-style chip off-screen
+  // (keeping T20's "fully rendered, never clipped" property) in the shared DragLayer
+  // `.aw-drag-ghost` language — a kind glyph + the param name, block-accent border,
+  // translucent — so the operator can still see where the control will land.
+  function setParamChipDragImage(event: DragEvent, c: Ctl, source: WorkbenchParameterSource) {
+    if (typeof event.dataTransfer?.setDragImage !== 'function') return;
+    const rawColor = source.state?.color;
+    const color = typeof rawColor === 'string' && rawColor ? rawColor : accent;
+    const chip = document.createElement('div');
+    // Off-screen so the whole chip snapshots without viewport clipping. Styling
+    // mirrors DragLayer's `.aw-drag-ghost`: 32px pill, translucent surface, accent
+    // border, subtle lift — resolved via the app tokens on :root.
+    chip.style.cssText = [
+      'position:fixed',
+      'top:-10000px',
+      'left:-10000px',
+      'display:inline-flex',
+      'align-items:center',
+      'gap:7px',
+      'height:32px',
+      'max-width:220px',
+      'padding:0 12px',
+      'box-sizing:border-box',
+      `border:1px solid ${color}`,
+      'border-radius:8px',
+      'background:color-mix(in srgb, var(--bg2, #12161b) 88%, transparent)',
+      'color:var(--text, #e7edf2)',
+      'opacity:0.9',
+      'box-shadow:0 12px 30px rgba(0,0,0,0.5)',
+      'font:800 11px/1 var(--font-ui, system-ui, sans-serif)',
+      'white-space:nowrap',
+      'pointer-events:none'
+    ].join(';');
+    const glyph = document.createElement('span');
+    glyph.style.cssText = 'display:inline-flex;flex:0 0 auto;align-items:center';
+    glyph.innerHTML = paramChipGlyph(c.kind, color);
+    const name = document.createElement('span');
+    name.style.cssText = 'overflow:hidden;text-overflow:ellipsis';
+    name.textContent = source.label;
+    chip.append(glyph, name);
+    document.body.appendChild(chip);
+    // Anchor the pointer just inside the chip's leading edge, vertically centred.
+    event.dataTransfer.setDragImage(chip, 14, 16);
     // The spec snapshots the element synchronously; remove it once the drag has grabbed it.
-    setTimeout(() => clone.remove(), 0);
+    setTimeout(() => chip.remove(), 0);
   }
 
   async function pinControlToWorkbench(c: Ctl, target?: AxisPinTarget) {
