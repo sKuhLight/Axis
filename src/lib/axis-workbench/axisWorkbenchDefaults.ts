@@ -1,7 +1,6 @@
-import { createEmptyWorkbenchDocument, createDefaultWidgetZoneLayout } from '../workbench/core/defaults';
+import { createEmptyWorkbenchDocument, createDefaultWidgetZoneLayout, createEmptyDockLayout } from '../workbench/core/defaults';
 import type {
   DockNode,
-  NavigationEntryState,
   PanelInstance,
   PanelTemplate,
   JsonObject,
@@ -9,6 +8,12 @@ import type {
   WidgetInstance,
   WorkbenchDocument
 } from '../workbench/core/schema';
+import {
+  AXIS_SEED_PAGES_MARKER,
+  buildAxisSeedPages,
+  createAxisPagePanels,
+  createAxisSeedNavigation
+} from './axisWorkbenchPages';
 
 export const axisPanel = (
   id: string,
@@ -55,7 +60,11 @@ export function createAxisWorkbenchPanels(): Record<string, PanelInstance> {
     'axis.deviceTools': panel('axis.deviceTools', 'axis.deviceTools', 'Device Tools', {
       singletonKey: 'axis.deviceTools'
     }),
-    'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel')
+    'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel'),
+    // Pages (ROUND 15): Setup / Controllers / Scenes / Live each own a seed page,
+    // so their panel instances live in the roster (they used to be minted on demand
+    // by the add-or-focus nav actions). Preset Browser / FC panels already exist above.
+    ...createAxisPagePanels()
   };
 }
 
@@ -86,26 +95,13 @@ const tabs = (id: string, panelIds: string[], activePanelId = panelIds[0]): Dock
   activePanelId
 });
 
-const nav = (
-  id: string,
-  label: string,
-  command: string,
-  extra: Partial<NavigationEntryState> = {}
-): NavigationEntryState => ({
-  id,
-  label,
-  hidden: false,
-  target: { command },
-  ...extra
-});
-
 export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   const doc = createEmptyWorkbenchDocument({
     profileId: 'axis.profile.desktop',
     profileLabel: 'Desktop',
     layoutId: 'axis.layout.default',
     layoutLabel: 'Axis Default',
-    metadata: { app: 'axis', source: 'axis-workbench-defaults' }
+    metadata: { app: 'axis', source: 'axis-workbench-defaults', [AXIS_SEED_PAGES_MARKER]: 'v1' }
   });
 
   const layout = doc.layouts['axis.layout.default'];
@@ -121,16 +117,20 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
 
   layout.panels = createAxisWorkbenchPanels();
 
-  // Minimal first-contact layout (operator decision 2026-07-06): just the grid and
-  // the block editor — the two things a new user needs — so the start screen never
-  // overwhelms. Everything else (FC, history, preset browser, …) stays registered
-  // and reachable via nav / the panel library; richer arrangements are the LAYOUT
-  // presets' job.
-  // Pages (schema v2): the dock lives on the layout's (single) default page.
-  const pageDock = layout.pages[layout.activePageId].dock;
-  pageDock.root.main = tabs('axis.tabs.main', ['axis.signalGrid']);
-  pageDock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor']);
-  pageDock.regions.bottom.sizePx = 360;
+  // Pages (ROUND 15): every nav point is its own page. The GRID page keeps the
+  // minimal first-contact layout (operator decision 2026-07-06): Signal Grid main +
+  // Block Editor bottom — the two things a new user needs. Preset Browser, FC,
+  // Setup, Controllers, Scenes, and Live each get their own seed page (full-size
+  // panel in main); Theme + Axis Cloud stay ACTION nav entries. Pages are identical
+  // across profiles (operator: "same seeds").
+  const gridDock = createEmptyDockLayout();
+  gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.signalGrid']);
+  gridDock.root.bottom = tabs('axis.tabs.grid.bottom', ['axis.blockEditor']);
+  gridDock.regions.bottom.sizePx = 360;
+  const seeded = buildAxisSeedPages(gridDock);
+  layout.pages = seeded.pages;
+  layout.pageOrder = seeded.pageOrder;
+  layout.activePageId = seeded.activePageId;
 
   layout.widgets = {
     'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),
@@ -154,23 +154,10 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.legal': widget('axis.widget.legal', 'axis.legal', 'bottom', 1, { state: widgetState(90) })
   };
 
-  layout.navigation.entries = {
-    grid: nav('grid', 'Grid', 'axis.openGrid'),
-    library: nav('library', 'Preset Browser', 'axis.openPresetBrowser'),
-    fc: nav('fc', 'Footswitches', 'axis.openFc'),
-    controllers: nav('controllers', 'Controllers', 'axis.openControllers'),
-    scenes: nav('scenes', 'Scenes', 'axis.openScenes'),
-    live: nav('live', 'Live', 'axis.openLive'),
-    setup: nav('setup', 'Setup', 'axis.openSetup'),
-    theme: nav('theme', 'Theme', 'axis.openTheme'),
-    account: nav('account', 'Axis Cloud', 'axis.openAccount', {
-      locked: true,
-      fixedSlot: 'rail.footer',
-      hidden: false
-    })
-  };
-  layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'theme', 'account'];
-  layout.navigation.mode = 'side';
+  // Nav entries bind to the seed pages (grid/library/fc/controllers/scenes/live/
+  // setup); Theme + Axis Cloud stay ACTION entries. Triggering a page entry
+  // activates its page via the generic NavigationHost (`page.activate`).
+  layout.navigation = createAxisSeedNavigation('side');
 
   doc.panelLibrary = {
     'axis.library.panel.blockEditor': panelTemplate('axis.library.panel.blockEditor', 'Block Editor', layout.panels['axis.blockEditor']),

@@ -74,11 +74,12 @@ test.describe('Bottom navigation mode', () => {
       page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"] .axis-nav-entry .ic')
     ).toBeVisible();
 
-    // Side mode stays reachable: switching restores the hamburger drawer path.
+    // Side mode stays reachable: switching restores the hamburger drawer path. A
+    // real right-click carries pointer coordinates so the context menu positions +
+    // clamps itself into the viewport (a bare dispatchEvent leaves it unpositioned,
+    // which since ROUND 15 — the page entry's taller menu — drops items off a phone).
     const bottomEntry = page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"]');
-    // Dispatch the contextmenu directly (phone overlays can intercept a synthetic
-    // right-click at a computed point; the event on the element is unambiguous).
-    await bottomEntry.dispatchEvent('contextmenu');
+    await bottomEntry.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Use Side Navigation' }).click();
     await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
     await expect(page.locator('.aw-mobile-menu')).toBeVisible();

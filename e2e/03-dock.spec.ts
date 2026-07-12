@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode, exitEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
 
 test.describe('Dock interactions', () => {
   test('drag a panel tab from bottom into the main region', async ({ page }) => {
@@ -33,23 +33,35 @@ test.describe('Dock interactions', () => {
 
   test('tab switching activates the clicked panel', async ({ page }) => {
     await bootCleanWorkbench(page);
-    // Dock two extra panels into the main stack so it has multiple tabs.
-    await clickNav(page, 'setup');
-    await clickNav(page, 'scenes');
+    // ROUND 15 (Pages): nav clicks switch PAGES (they no longer accumulate tabs in
+    // one stack). To get a multi-tab main stack, drag the Grid page's Block Editor
+    // tab up into main so main = [Signal Grid, Block Editor], then switch tabs.
+    await enterEditMode(page);
+    const src = regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' }).first();
+    const mainStack = page.locator('.aw-tabstack[data-region="main"]');
+    const sb = await src.boundingBox();
+    const mb = await mainStack.boundingBox();
+    expect(sb && mb).toBeTruthy();
+    const tx = mb!.x + mb!.width / 2;
+    const ty = mb!.y + mb!.height / 2;
+    await page.mouse.move(sb!.x + sb!.width / 2, sb!.y + sb!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(sb!.x + sb!.width / 2 + 8, sb!.y + sb!.height / 2 + 8);
+    await page.mouse.move(tx, ty, { steps: 10 });
+    await page.mouse.move(tx, ty, { steps: 4 });
+    await page.mouse.up();
 
     const mainTabs = regionTabs(page, 'main');
-    await expect(mainTabs).toHaveText([/Signal Grid/, /Setup/, /Scenes/]);
-    // Last-docked panel is active.
-    await expect(mainTabs.filter({ hasText: 'Scenes' })).toHaveClass(/active/);
-
-    // The last clickNav left the rail expanded (focusin); collapse it so the
-    // 200px overlay stops covering the left edge of the main tab strip.
+    await expect(mainTabs).toHaveText([/Signal Grid/, /Block Editor/]);
+    await exitEditMode(page);
     await collapseRail(page);
 
-    // Clicking the Signal Grid tab (outside edit mode) activates it.
+    // Clicking the Block Editor tab activates it; clicking Signal Grid switches back.
+    await mainTabs.filter({ hasText: 'Block Editor' }).click();
+    await expect(mainTabs.filter({ hasText: 'Block Editor' })).toHaveClass(/active/);
     await mainTabs.filter({ hasText: 'Signal Grid' }).click();
     await expect(mainTabs.filter({ hasText: 'Signal Grid' })).toHaveClass(/active/);
-    await expect(mainTabs.filter({ hasText: 'Scenes' })).not.toHaveClass(/active/);
+    await expect(mainTabs.filter({ hasText: 'Block Editor' })).not.toHaveClass(/active/);
   });
 
   test('collapse and close a panel from the pane header menu', async ({ page }) => {

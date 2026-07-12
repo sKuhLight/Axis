@@ -95,7 +95,11 @@ describe('axis workbench persist cost (measurement, item 2)', () => {
 
     // Sanity only — no flaky perf assertions. The printed numbers are the deliverable.
     expect(realistic.bytes).toBeGreaterThan(50_000);
-    expect(stress.bytes).toBeGreaterThan(realistic.bytes * 5);
+    // 10× the widgets ⇒ the stress doc is several × larger. The multiplier is a loose
+    // sanity bound, not a tight ratio: since ROUND 15 every layout carries the seven
+    // seed pages + their panels as fixed per-layout overhead, so the widget-count
+    // scaling rides on a larger constant (stress ≈ 4.7× realistic here).
+    expect(stress.bytes).toBeGreaterThan(realistic.bytes * 4);
     expect(realistic.repairMs).toBeGreaterThan(0);
     // Repair deep-clones the whole document; it must cost at least as much as a
     // bare stringify (it stringifies AND parses AND traverses). This documents

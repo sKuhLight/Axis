@@ -800,3 +800,146 @@ presets build their dock inside a single default page; `axisMobileBlockFlow`
   791 tests green (was 746 — +45: pages commands, repair/migration rules,
   multi-page + legacy package round-trips, controller wrappers, nav helpers,
   history exclusion). e2e not run (main session).
+- **Committed** as `dae0fe5` on `layout-rework` (v0.8.10-beta); `.wt-*/` added to .gitignore.
+
+## ROUND 15 — Pages: Axis binding half (2026-07-12, Agent 2)
+
+The Axis layer now maps the framework Pages model onto Axis concepts (AXIS-23,
+binding half). Every nav point is its own layout page; Theme + Axis Cloud stay
+ACTION entries. Uncommitted; main session review pending.
+
+**New module `src/lib/axis-workbench/axisWorkbenchPages.ts`** — the single source
+for the Pages policy:
+- Seven seed pages with stable ids (`axis.page.grid` / `.presetBrowser` / `.fc` /
+  `.controllers` / `.scenes` / `.live` / `.setup`), `AXIS_SEED_PAGE_ORDER` (grid
+  first, active by default). Grid = today's default dock; each secondary page docks
+  ONE full-size panel in `main` (Preset Browser page = the full-part `axis.presetBrowser`
+  panel — full-main-region PB).
+- `buildAxisSeedPages(gridDock)` → `{ pages, pageOrder, activePageId }` (grid uses the
+  passed dock; secondaries mint their tab-node id via `createWorkbenchId` by default).
+- `createAxisSeedNavigation(mode)` — the nine nav entries: the seven page entries carry
+  `pageId` and NO `target` (their binding drives `page.activate` in NavigationHost);
+  Theme (`axis.openTheme`) + Axis Cloud (`axis.openAccount`, rail.footer/locked) stay
+  action entries.
+- `createAxisPagePanels()` — the four panel instances that used to be minted on demand
+  by the add-or-focus nav actions (Setup/Controllers = `axis.virtualScreen` w/ slug;
+  Scenes/Live = `axis.placeholder` w/ glyph/heading/description/meta), now roster panels.
+- `ensureAxisSeedPages(doc)` — one-shot migration of persisted pre-Pages docs, marker
+  `axisSeedPages` (mirrors `ensureAxisMobileBottomNav`): per layout, the existing
+  (active/first) page dock becomes the Grid page — with PB/FC/Setup/Controllers/
+  Scenes/Live panels STRIPPED out of it so they relocate cleanly — then the six other
+  seed pages + full-size PB page are added, missing page panels created, and the nav
+  rebuilt with page bindings (preserving nav `mode`). Idempotent; validate-clean.
+
+**Wiring:**
+- `axisWorkbenchDefaults.ts`: `createAxisWorkbenchPanels()` spreads in the four page
+  panels; `createAxisWorkbenchDefaultDocument()` builds the Grid dock (Signal Grid main
+  + Block Editor bottom, 360px) → `buildAxisSeedPages` → `createAxisSeedNavigation('side')`;
+  seed marker stamped in metadata so migration no-ops on it. Removed the now-dead `nav`
+  helper.
+- `axisWorkbenchLayoutPresets.ts`: `buildDock` → `buildGridPageDock` (grid + editor per
+  `editorMode` + history; NO fc/PB — they own pages); every preset now ships the full
+  seed page set via `buildAxisSeedPages` + `createAxisSeedNavigation(spec.navMode)`.
+  Removed `buildNavigation`. Design flags (navMode/contentMode/presetMode/editorMode/
+  rightW) unchanged in `settings`.
+- `axisWorkbenchStore.svelte.ts`: normalize chain now `migrate → ensureAxisSeedPages →
+  ensureGridControls → pruneRetiredRail → ensureMobileBottomNav`.
+- `axisNavigationActiveState.ts`: simplified — page entries tint generically via the
+  framework `pageNavigationEntryActive`; this provider now covers ONLY the Theme /
+  Account ACTION entries (`{themeOpen, accountOpen}`). Registry snapshot trimmed to
+  match. The `axis.open*` action registrations are KEPT (feature-keep: commands stay
+  available + AXIS_WORKBENCH_ACTION_IDS contract) — only the nav-entry `target`s were
+  replaced by `pageId` bindings.
+
+**Tests:**
+- New `test/axisWorkbenchPages.test.ts` (18): default-doc + every-preset seed page set /
+  Grid dock / secondary panels / nav bindings / validate-clean; migration (grid-from-
+  existing-dock, PB pulled out onto its page, panels added, mode preserved, marker +
+  idempotent, validate-clean, no-op on already-seeded).
+- Rewrote `test/axisNavigationActiveState.test.ts` for the theme/account-only provider.
+- `test/axisWorkbenchPersistCost.test.ts`: relaxed the loose byte-ratio sanity bound
+  (`*5`→`*4`) — every layout now carries the seven seed pages as fixed per-layout
+  overhead, so widget-count scaling rides on a larger constant (not a real regression).
+- e2e realigned to the Pages model: `03-dock` "tab switching" no longer accumulates
+  tabs via nav (nav switches PAGES now) — it drags Block Editor into main to get a
+  multi-tab stack, then switches; `06-persistence` corrupt-doc wait keys on
+  `activePageId:"axis.page.scenes"` (the Scenes panel now ships in the roster from
+  boot, so it was a trivially-true wait); `10-nav-bottom-mode` phone test uses a real
+  right-click (a bare `dispatchEvent` carries no clientX/Y, leaving the now-taller
+  page-entry menu unpositioned → items off a phone viewport). 04-nav / 07-presets /
+  01-boot / rest pass unchanged (each page docks its panel in `main`, which
+  `regionTabs(main)` reads on the active page).
+
+- **Verified**: `npm run check` 0 errors (1123 files); `npm test` 82 files / **806
+  tests** (was 791 — +15 net: +18 pages, −3 rewritten nav-active); `npm run test:e2e`
+  **38/38** (chromium + firefox). Uncommitted — main session reviews + commits.
+- **Follow-ups / open notes** (Backlog candidates): (1) migration of a persisted doc
+  whose Grid dock had extra panels docks them on the Grid page as-is — PB/FC are pulled
+  out onto their pages, but History (no page) stays on Grid (intended). (2) The context
+  menu of a page-bound nav entry gained Rename/Duplicate/Delete Page items — taller
+  menu; framework clamp keeps it in-viewport when opened with real pointer coords
+  (verified), but a coordinate-less synthetic contextmenu leaves it unpositioned (test
+  harness quirk, worked around in e2e). (3) Visual/operator pass (AXIS-22) should
+  re-check page-switch feel, per-page dock persistence, and the seed page contents on
+  the live rig.
+
+## ROUND 15 — PB-page freeze investigation (2026-07-12 afternoon, Agent 2)
+
+Main-session verification reported a 2/2-reproducible HARD FREEZE of the live :5173
+renderer on clicking the Preset Browser nav entry (silent synchronous loop, CDP
+screenshot timeout, tab recovery via navigation; boot onto Grid fine). Investigated
+per the offline-first rule; outcome: **not a code defect — unreproducible under
+exhaustive replication; evidence points to a transient dev-environment state.**
+
+**Replication ladder (every rung PASSED, i.e. no freeze):**
+1. New permanent spec `e2e/11-pages.spec.ts` — clicks all six seed-page nav entries
+   (PB/FC/Controllers/Scenes/Live/Setup), liveness-probes the main thread, asserts
+   the page panel renders + the way back to Grid (6 cases; closes exactly the
+   coverage hole the freeze shipped through — no earlier spec activated any
+   secondary page).
+2. Migrated legacy schema-v1 doc (full normalize chain) + PB click.
+3. Synthetic 120-preset library cache + PB click.
+4. The operator's REAL persisted doc — pulled from the ForgeFX config store
+   (rev 6910, post-migration, structurally clean: 17 layouts, all with the seven
+   seed pages + correct bindings) — adopted from the live backend exactly like the
+   rig boots (no route interception) + PB click.
+5. + the operator's FULL localStorage clone (469 KB / 415-preset real FM3 library
+   cache, surface docs, theme, telemetry consent ON) + their 4647×1204 window.
+6. IN THE OPERATOR'S OWN TAB (Claude-in-Chrome), with loop-breaker instrumentation
+   armed (JSON.parse/stringify, getBoundingClientRect, queueMicrotask,
+   Promise.then rate-guards that convert a runaway loop into a stack trace):
+   settled click, fresh-boot immediate click (boot-race timing), and grid↔PB
+   bouncing WHILE the whole chromium e2e suite hammered the same backend + FM3
+   concurrently. 5+ activations — the PB page renders its full 417-preset browser
+   every time, breakers silent, only the pre-existing Faro transport noise.
+
+**Assessment:** the persisted state (doc, backups, library, filters — all
+exfiltrated and inspected) is clean and the code path is sound under every state,
+timing, and concurrency combination — including in the exact browser profile that
+froze. The freeze coincided with a :5173 dev tab/server pair that had lived through
+TWO large HMR waves (framework commit `dae0fe5` + the Axis binding half, dozens of
+src modules) and with the e2e suite running against the shared backend during
+verification; both freezes predate any full settle of that graph, and the recovery
+reloads made it permanently unreproducible without any code change. Classic
+mixed-module-graph symptom set (duplicate singleton instances / subscription
+ping-pong loops are silent + synchronous). Confidence: moderate-high; if it ever
+reappears on a fresh server, `e2e/11-pages.spec.ts` is the harness that catches it,
+and the loop-breaker snippet (described above) turns it into a stack trace.
+
+**Also fixed while at it:** `e2e/support/workbench.ts` FIRST_RUN_SUPPRESS now seeds
+`axs.lib.built` — the library cache-build startup prompt (appears once the live FM3
+connects) raced the specs' first clicks and intercepted a nav click in a real
+firefox run (10-nav-bottom-mode red once). Same suppression mechanism as the other
+first-run popups.
+
+- **Hygiene:** temp repro specs deleted; scratch store docs
+  (`scratch/libcache-repro`, `scratch/ls-repro`) deleted from the ForgeFX store;
+  operator tab left clean on Grid with no instrumentation (plain reload).
+- **Gates after:** `npm run check` 0 errors (1123 files); `npm test` 806/806;
+  `npm run test:e2e` **50/50** (25 cases × chromium+firefox; was 19 × 2 — the six
+  new pages cases are permanent).
+- **Recommendation for the operator:** restart the :5173 dev server (or at least
+  hard-reload the tab) after multi-file src waves before verifying — the freeze
+  signature (silent sync loop, no error, gone after reloads with zero code change)
+  is the stale-HMR-graph class, which no in-repo gate can catch.
+- **Committed** Axis binding half + pages e2e as follow-up commit on `layout-rework` (v0.8.11-beta); PB↔Grid round-trip re-verified in the operator tab after the HMR-freeze investigation.

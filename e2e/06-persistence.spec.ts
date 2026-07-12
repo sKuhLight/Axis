@@ -30,8 +30,11 @@ test.describe('Persistence', () => {
     // would just be overwritten by that flush on reload (correct app behavior:
     // never lose an edit on close). Wait until the docked state has actually
     // landed in storage so the corruption is the final word.
+    // ROUND 15 (Pages): the Scenes panel ships in the roster from boot, so key off
+    // the ACTIVE page instead — clicking the Scenes nav entry activates the Scenes
+    // page, and that activePageId is the unambiguous signal the click persisted.
     await page.waitForFunction(
-      (key) => (window.localStorage.getItem(key) ?? '').includes('axis.scenes'),
+      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.scenes"'),
       WORKBENCH_DOC_KEY
     );
     // …and then let ALL debounced writes drain: docking dispatches more than one
