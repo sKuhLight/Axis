@@ -1491,3 +1491,122 @@ Base 314105a on `layout-rework`. Uncommitted; main session reviews + commits + b
   fine for a handful of pinned params; if panels grow large, batch the `blockParams`
   reads or reuse a single preset-params sweep.
 - **Committed+pushed** ROUND 20 on `layout-rework` (v0.8.16-beta).
+
+## ROUND 21 — Drop-target UX (operator review 2026-07-12, screenshots, AXIS-32)
+
+Operator findings, valid for ALL drag types (panels, widgets, controls):
+1. "DOCK LEFT" region indicator is a small box — it should highlight the
+   WHOLE region frame (the full drop area / window).
+2. Dragging onto a panel's TAB BAR should create a NEW TAB at that spot.
+3. Dragging over an EXISTING tab should switch to it (spring-loaded) so the
+   drag can continue into that panel's content.
+4. The dashed customize outline around widget tiles is STILL smaller than
+   the tile (screenshots: line cuts through the Gain/Drive/Bass tiles) —
+   round 20 fixed the drag GHOST, not the in-place outline. Must wrap the
+   full tile at every size.
+
+## ROUND 21 — implementation (2026-07-12, Agent 8)
+
+Base 7115fdd on `layout-rework`. Uncommitted; main session reviews + commits + bumps.
+
+### Root causes (from code + design `Axis Layout System.dc.html`)
+
+1. **Small "DOCK LEFT" box, not a region highlight.** Two edge-drop worlds each
+   drew a *small band on the edge* instead of the full region: the parameter
+   (HTML5) drag → `DockWorkspace` `.aw-edge-drop-preview` CSS was `width:min(24%,220px)`
+   (L/R) / `height:min(22%,150px)` (T/B) / `inset:18%` (main); the widget
+   pointer drag → `WidgetHost.workspaceEdgeDropAt` returned the same 24%/22% rect
+   as the DragLayer `previewRect`. Design's dock preview (`dropStyle`) fills the
+   WHOLE region rect (L/R = full height × region width, T/B = full width × region
+   height, main = whole main).
+2. **Tab-bar drop always appended, no "at that spot".** Panel drag `panelDropIntentAt`
+   returned `{kind:'tab', tabStackId}` with NO index → `insertPanelIntoTab` appended.
+   And a parameter dropped on a tab bar wasn't handled at all — it bubbled to the
+   workspace edge-drop (collect/new-panel-in-region), never "a new tab here".
+3. **No spring-loading.** Nothing activated an inactive tab under a hovering drag,
+   so a panel that was a background tab could never be dropped into.
+4. **Outline clipped to the grid row.** Custom panels render widgets in a
+   `variant="grid"` `WidgetZone` with `grid-auto-rows: <rowHeight>` (default 42px)
+   and `align-items: stretch`. A param-control **tile** is `min-height:92px`, so
+   the host was stretched to the 42px row while the tile overflowed it; the
+   drag-surface dashed outline (`inset:0` of the host) was 42px and cut straight
+   through the 92px tile. Round 20 fixed the drag GHOST (a `setDragImage` clone),
+   not this in-place host box.
+
+### What shipped
+
+1. **Full-region highlight (directive #1).** New shared pure helper
+   `defaultRegionBand(region, workspaceRect)` (+ DOM wrapper `fullRegionHighlightRect`)
+   in `workbench/svelte/drag.ts`: prefers the LIVE docked `[data-region]` rect so
+   the highlight exactly wraps the region on screen, else a full-cross-axis band on
+   the target edge (L/R full height × ~clamp(28%,180..340) width; T/B full width ×
+   clamp(32%,140..260) height; main = whole workspace). BOTH edge-drop worlds use it:
+   `WidgetHost.workspaceEdgeDropAt` returns the full rect (rendered by the existing
+   DragLayer `previewRect`), and `DockWorkspace` positions `.aw-edge-drop-preview`
+   from the measured rect (inline geometry; CSS now only carries the look — dashed
+   accent frame, label anchored top-left, `position:fixed` to match the DragLayer).
+2. **Tab-bar drop = new tab at the spot (directive #2).** `TabStack.tabInsertIndexAt(x)`
+   hit-tests the pointer against the tab pills' midpoints (shared `widgetDropIndex`);
+   `panelDropIntentAt`/`panelPreviewAt` now carry that index (reducer's
+   `insertPanelIntoTab` already honours `target.index`) and the tab preview
+   highlights the HEADER strip (tab bar), not the whole body. Parameter drops: the
+   `TabStack` header now accepts the `x-workbench-parameter-source` MIME
+   (`ondragover`/`ondrop`, `stopPropagation` so the workspace edge-drop can't also
+   fire) and runs `WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION` with
+   `{tabStackId, index}`; the Axis action (`axisParameterActions.ts`) branches on
+   `tabStackId` → creates a NEW "Controls" panel targeted `{kind:'tab', tabStackId,
+   index}` (rather than collecting).
+3. **Spring-loaded tabs (directive #3).** One shared 500ms dwell timer in `TabStack`
+   drives both worlds: a `$effect` on `$controller.drag.pointer` handles the
+   pointer-based panel/widget/list drags (hit-tests the header's `[data-panel-tab]`
+   pills), and the header `ondragover` handles the HTML5 parameter drag. Dwell
+   survives jitter over the SAME tab (only a different tab / leaving the header
+   resets it), never springs the already-active tab, cancels on drag end / unmount.
+   On elapse → `panel.activate`, revealing the panel content so the drag continues
+   into it.
+4. **Outline wraps the tile (directive #4).** `WidgetZone` grid: `grid-auto-rows`
+   → `minmax(<rowHeight>, auto)` (the row-height is a floor, not a cap, so a tall
+   tile's row grows to it) and grid `align-items: stretch` → `start` (a short chip
+   sharing a row with a tall tile keeps a tight box, not stretched). The host now
+   wraps the full rendered tile at every size, so the `inset:0` drag-surface
+   outline wraps it too. This also fixes the pre-existing visual bug of tiles
+   overflowing their 42px cells.
+
+### Semantics chosen for non-panel tab-bar drops
+- **Parameter control → tab bar:** creates a NEW "Controls" custom panel as a tab
+  at the pointer index in that stack (then further controls collect into its body).
+- **Widget → tab bar:** NOT special-cased. A widget isn't a panel; the tab header
+  is not a `[data-zone]`, so a widget released there falls through to the existing
+  workspace edge-drop (new custom panel in that region) — unchanged behaviour.
+
+### Files changed
+- `src/lib/workbench/svelte/drag.ts` — `defaultRegionBand` (pure) + `fullRegionHighlightRect` (DOM).
+- `src/lib/workbench/svelte/WidgetHost.svelte` — `workspaceEdgeDropAt` → full-region rect.
+- `src/lib/workbench/svelte/DockWorkspace.svelte` — `edgeDropRect` state; full-region preview geometry + restyle.
+- `src/lib/workbench/svelte/TabStack.svelte` — tab insert index + tab-bar preview; parameter-source header drop; shared spring-loaded dwell; `data-panel-tab`.
+- `src/lib/workbench/svelte/WidgetZone.svelte` — grid `minmax(row,auto)` rows + `align-items:start`.
+- `src/lib/axis-workbench/axisParameterActions.ts` — edge-drop action honours `{tabStackId, index}` → new "Controls" tab.
+- Tests: `workbench/svelte/test/drag.test.ts` (+`defaultRegionBand` cases), `axis-workbench/test/axisParameterActions.test.ts` (+tab-bar new-tab case), `e2e/15-param-collect.spec.ts` (+4 AXIS-32 cases: full-region highlight, tab-bar new tab, spring activation, outline-wraps-tile).
+
+### Gates
+- `npm run check` — **0 errors / 0 warnings** (1127 files).
+- `npm test` — **834** (was 830; +3 new cases: `defaultRegionBand` geometry ×3 +
+  param tab-bar new-tab action).
+- `npm run test:e2e` — **87 passed / 1 failed**; the one failure is the KNOWN
+  pre-existing firefox `06-persistence` "rearrangement survives a reload" flake
+  (AXIS-28), not this round. All 8 new AXIS-32 runs (4 cases × chromium+firefox)
+  pass; `03-dock` (panel tab drag/switch) still green after the tab-index change.
+
+### Open follow-ups (Backlog candidates)
+- **UI-scale (`zoom`) + the param edge preview.** `.aw-edge-drop-preview` is
+  `position:fixed` at the measured viewport rect (exact at default scale, like most
+  overlays). Under a non-1 UI-scale it can drift like the DragLayer did before its
+  self-calibrating zoom compensation — fold in the same comp if scale users report drift.
+- **Spring dwell tuning + reduced-motion.** 500ms fixed; no `prefers-reduced-motion`
+  gate. Operator sanity-check on the live rig for feel (esp. touch).
+- **Tab-bar drop index precision.** The panel-drag index counts all rendered pills
+  incl. the dragged one (reducer clamps); same-stack reorder can be off by one.
+  Cross-stack (the common case) is exact.
+- Operator/visual pass (AXIS-22) on the live FM3: full-region highlight legibility,
+  spring feel, tab-bar-drop discoverability, tile outlines on the phone profile.
+- **Committed+pushed** ROUND 21 on `layout-rework` (v0.8.17-beta).

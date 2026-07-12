@@ -130,6 +130,37 @@ describe('Axis parameter Workbench actions', () => {
     expect(Object.values(layout.widgets).map((w) => w.binding?.target.paramId).sort()).toEqual([7, 8]);
   });
 
+  it('makes a NEW Controls tab when a control is dropped on a tab bar (T21 directive #2)', async () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const action = createAxisParameterSourceEdgeDropAction();
+
+    // Seed a Controls panel in the left region so a tab stack (with an id) exists.
+    await action.run({ controller, source: 'host', args: { source: serializeWorkbenchParameterSource(source('7', 'Treble')), region: 'left' } });
+    const leftNode = selectActiveLayout(controller.document)!.pages[selectActiveLayout(controller.document)!.activePageId].dock.root.left;
+    expect(leftNode?.kind).toBe('tabs');
+    const tabStackId = leftNode && leftNode.kind === 'tabs' ? leftNode.id : '';
+    const firstPanelId = leftNode && leftNode.kind === 'tabs' ? leftNode.panelIds[0] : '';
+
+    // Dropping onto that stack's tab bar creates a SECOND custom panel as a new
+    // tab at the requested index — not a collect into the first panel.
+    await action.run({
+      controller,
+      source: 'host',
+      args: { source: serializeWorkbenchParameterSource(source('8', 'Bass')), region: 'left', tabStackId, index: 0 }
+    });
+
+    const layout = selectActiveLayout(controller.document)!;
+    expect(Object.values(layout.panels).filter((p) => p.type === AXIS_CUSTOM_PANEL_TYPE)).toHaveLength(2);
+    const stack = layout.pages[layout.activePageId].dock.root.left;
+    expect(stack?.kind).toBe('tabs');
+    if (stack?.kind === 'tabs') {
+      expect(stack.panelIds).toHaveLength(2);
+      // Inserted at index 0 → the new tab precedes the original.
+      expect(stack.panelIds[1]).toBe(firstPanelId);
+      expect(stack.activePanelId).toBe(stack.panelIds[0]);
+    }
+  });
+
   it('ignores malformed serialized parameter edge drops', async () => {
     const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
     const action = createAxisParameterSourceEdgeDropAction();

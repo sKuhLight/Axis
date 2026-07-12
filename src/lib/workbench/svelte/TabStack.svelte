@@ -2,11 +2,18 @@
   import PanelHost from './PanelHost.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import { getWorkbenchContext } from './context';
-  import type { DockRegionId, PanelInstance, TabStackDockNode } from '../core';
+  import { onDestroy } from 'svelte';
+  import {
+    WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION,
+    WORKBENCH_PARAMETER_SOURCE_MIME,
+    type DockRegionId,
+    type PanelInstance,
+    type TabStackDockNode
+  } from '../core';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { createPanelTemplateFromPanel } from './library';
   import { PANEL_REGION_MOVE_OPTIONS } from './moveAlternatives';
-  import { dockTargetLabel, panelDropCommand, pointerDistance, splitIntentFromRect, type PanelDropIntent, type WorkbenchRect } from './drag';
+  import { dockTargetLabel, panelDropCommand, pointerDistance, splitIntentFromRect, widgetDropIndex, type PanelDropIntent, type WorkbenchRect } from './drag';
   import { enqueueToast } from './toasts';
 
   let {
@@ -17,11 +24,16 @@
     region: DockRegionId;
   } = $props();
 
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   const layout = $derived($controller.activeLayout);
   const activePanelId = $derived(stack.panelIds.includes(stack.activePanelId) ? stack.activePanelId : stack.panelIds[0]);
   const activePanel = $derived(activePanelId ? layout?.panels[activePanelId] : undefined);
   const single = $derived(stack.panelIds.length <= 1);
+
+  let headEl = $state<HTMLElement | null>(null);
+  // A parameter control dragged over this stack's tab bar (HTML5 drag): dropping
+  // it makes a NEW "Controls" tab here (T21 directive #2).
+  let paramTabHover = $state(false);
 
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
@@ -96,6 +108,21 @@
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }
 
+  // Insertion index for a tab drop (T21 directive #2: "insert a new tab at that
+  // spot"): hit-test the pointer's x against the rendered tab pills' midpoints.
+  // Dropping past the last pill (e.g. anywhere in the panel body) appends.
+  function tabInsertIndexAt(x: number, tabStackEl: HTMLElement): number {
+    const tabRects = Array.from(tabStackEl.querySelectorAll<HTMLElement>('.aw-pane-tab')).map((el) => plainRect(rectOf(el)));
+    return widgetDropIndex({ x, y: 0 }, tabRects, 'horizontal');
+  }
+
+  // The tab bar (header) rect — the drop-highlight surface for a tab drop, so a
+  // panel dropped onto a stack's tabs lights the BAR (not the whole body).
+  function tabBarRect(tabStackEl: HTMLElement): WorkbenchRect {
+    const head = tabStackEl.querySelector<HTMLElement>('.aw-pane-head');
+    return plainRect(rectOf(head ?? tabStackEl));
+  }
+
   function panelPreviewAt(x: number, y: number, draggedPanelId: string): { intent: PanelDropIntent; rect: WorkbenchRect; kind: 'region' | 'tab' | 'split' } | null {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
     if (!el) return null;
@@ -132,7 +159,11 @@
 
     const tabStack = el.closest<HTMLElement>('[data-tabstack]');
     if (tabStack?.dataset.tabstack) {
-      return { intent: { kind: 'tab', tabStackId: tabStack.dataset.tabstack }, rect: plainRect(rectOf(tabStack)), kind: 'tab' };
+      return {
+        intent: { kind: 'tab', tabStackId: tabStack.dataset.tabstack, index: tabInsertIndexAt(x, tabStack) },
+        rect: tabBarRect(tabStack),
+        kind: 'tab'
+      };
     }
 
     const regionEl = el.closest<HTMLElement>('[data-region]');
@@ -157,7 +188,7 @@
       if (split) return split;
     }
 
-    if (tabStack?.dataset.tabstack) return { kind: 'tab', tabStackId: tabStack.dataset.tabstack };
+    if (tabStack?.dataset.tabstack) return { kind: 'tab', tabStackId: tabStack.dataset.tabstack, index: tabInsertIndexAt(x, tabStack) };
 
     const regionEl = el.closest<HTMLElement>('[data-region]');
     const region = regionEl?.dataset.region as DockRegionId | undefined;
@@ -204,10 +235,120 @@
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
+
+  // ── Spring-loaded tabs (T21 directive #3) ───────────────────────────────
+  // Hovering an EXISTING (inactive) tab during ANY drag activates it after a
+  // short dwell, so the user can continue the drag into the freshly-revealed
+  // panel content and drop there. One shared timer drives both the pointer-based
+  // controller drags (panel/widget/list — via the reactive $controller.drag
+  // pointer) and the HTML5 parameter-source drag (via the header dragover).
+  const SPRING_DWELL_MS = 500;
+  let springPanelId: string | null = null;
+  let springTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function armSpring(panelId: string): void {
+    // Never spring the already-active tab, and keep an in-flight dwell alive when
+    // the pointer merely jitters over the SAME tab (don't reset it every move).
+    if (panelId === activePanelId) { cancelSpring(); return; }
+    if (springPanelId === panelId && springTimer != null) return;
+    cancelSpring();
+    springPanelId = panelId;
+    springTimer = setTimeout(() => {
+      springTimer = null;
+      if (springPanelId) controller.dispatch({ type: 'panel.activate', panelId: springPanelId });
+    }, SPRING_DWELL_MS);
+  }
+
+  function cancelSpring(): void {
+    if (springTimer != null) clearTimeout(springTimer);
+    springTimer = null;
+    springPanelId = null;
+  }
+
+  onDestroy(cancelSpring);
+
+  // Which tab pill sits under an x coordinate (spring target).
+  function tabAtPointerX(x: number): string | null {
+    if (!headEl) return null;
+    for (const button of Array.from(headEl.querySelectorAll<HTMLElement>('[data-panel-tab]'))) {
+      const r = button.getBoundingClientRect();
+      if (x >= r.left && x <= r.right) return button.dataset.panelTab ?? null;
+    }
+    return null;
+  }
+
+  // Pointer-drag spring: while a controller drag is active with a live pointer,
+  // dwell-activate whichever inactive tab of this stack the pointer rests on.
+  $effect(() => {
+    const drag = $controller.drag;
+    const pointer = drag?.pointer;
+    if (!drag || single || !pointer || !headEl) { cancelSpring(); return; }
+    const hr = headEl.getBoundingClientRect();
+    const overHead = pointer.x >= hr.left && pointer.x <= hr.right && pointer.y >= hr.top && pointer.y <= hr.bottom;
+    if (!overHead) { cancelSpring(); return; }
+    const panelId = tabAtPointerX(pointer.x);
+    if (panelId) armSpring(panelId);
+    else cancelSpring();
+  });
+
+  // ── Parameter-source drops on the tab bar (T21 directive #2) ─────────────
+  function hasParameterSource(event: DragEvent): boolean {
+    return Array.from(event.dataTransfer?.types ?? []).includes(WORKBENCH_PARAMETER_SOURCE_MIME);
+  }
+
+  function onHeaderParameterDragOver(event: DragEvent) {
+    if (!hasParameterSource(event) || !registry.hasAction(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION)) return;
+    // Claim it so the workspace edge-drop (which would spawn a panel in a region)
+    // doesn't also fire — a tab-bar drop means "new Controls tab HERE".
+    event.preventDefault();
+    event.stopPropagation();
+    paramTabHover = true;
+    // Spring the hovered tab too, so dropping into a revealed panel's BODY still
+    // collects into that panel (the header handles the tab-bar case).
+    const springTarget = tabAtPointerX(event.clientX);
+    if (springTarget) armSpring(springTarget);
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onHeaderParameterDragLeave(event: DragEvent) {
+    if (event.currentTarget instanceof HTMLElement && event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+    paramTabHover = false;
+    cancelSpring();
+  }
+
+  async function onHeaderParameterDrop(event: DragEvent) {
+    if (!hasParameterSource(event) || !registry.hasAction(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION)) return;
+    const source = event.dataTransfer?.getData(WORKBENCH_PARAMETER_SOURCE_MIME);
+    if (!source) return;
+    event.preventDefault();
+    event.stopPropagation();
+    paramTabHover = false;
+    cancelSpring();
+    const args: Record<string, string | number> = { source, region, tabStackId: stack.id };
+    if (headEl) args.index = tabInsertIndexAt(event.clientX, headEl);
+    await registry.runActionResult(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION, {
+      controller,
+      source: 'host',
+      args
+    });
+  }
 </script>
 
 <section class="aw-tabstack" data-tabstack={stack.id} data-region={region}>
-  <header class="aw-pane-head" class:single role="toolbar" tabindex="-1" oncontextmenu={(e) => activePanelId && openHeaderMenu(activePanelId, e)}>
+  <header
+    class="aw-pane-head"
+    class:single
+    class:param-tab-hover={paramTabHover}
+    role="toolbar"
+    tabindex="-1"
+    bind:this={headEl}
+    oncontextmenu={(e) => activePanelId && openHeaderMenu(activePanelId, e)}
+    ondragover={onHeaderParameterDragOver}
+    ondragleave={onHeaderParameterDragLeave}
+    ondrop={onHeaderParameterDrop}
+  >
     <span class="aw-pane-grip" aria-hidden="true">⠿</span>
     <div class="aw-pane-tabs">
       {#each stack.panelIds as panelId (panelId)}
@@ -217,6 +358,7 @@
             class="aw-pane-tab"
             class:active={panelId === activePanelId}
             type="button"
+            data-panel-tab={panelId}
             onpointerdown={(e) => tabPointerDown(panelId, e)}
             onclick={() => !$controller.editMode && controller.dispatch({ type: 'panel.activate', panelId })}
           >
@@ -298,6 +440,13 @@
     padding: 7px 9px;
     background: transparent;
     cursor: grab;
+  }
+  /* T21 directive #2: a parameter control dragged over the tab bar highlights
+     the whole bar as an accepting "new Controls tab" drop target. */
+  .aw-pane-head.param-tab-hover {
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    box-shadow: inset 0 -2px 0 0 var(--aw-accent);
+    border-radius: 8px;
   }
   .aw-pane-grip {
     flex: none;

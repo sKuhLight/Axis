@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   anchoredWidgetIndex,
+  defaultRegionBand,
   listReorderInsertIndex,
   panelDropCommand,
   rectContainsPointer,
@@ -37,6 +38,31 @@ describe('Workbench drag helpers', () => {
       position: 'before'
     });
     expect(splitIntentFromRect({ x: 300, y: 220 }, rect, 'panel.b', 'main')).toBeNull();
+  });
+
+  describe('defaultRegionBand (T21 directive #1 full-region highlight)', () => {
+    const ws = { left: 20, top: 40, width: 1000, height: 600 };
+
+    it('runs left/right the FULL workspace height at a column width', () => {
+      const left = defaultRegionBand('left', ws);
+      expect(left).toEqual({ left: 20, top: 40, width: 280, height: 600 });
+      const right = defaultRegionBand('right', ws);
+      expect(right).toEqual({ left: 20 + 1000 - 280, top: 40, width: 280, height: 600 });
+      // Column width tracks 28% of the workspace, clamped to 180..340.
+      expect(defaultRegionBand('left', { left: 0, top: 0, width: 400, height: 400 }).width).toBe(180);
+      expect(defaultRegionBand('left', { left: 0, top: 0, width: 4000, height: 400 }).width).toBe(340);
+    });
+
+    it('spans top/bottom the FULL workspace width at a band height', () => {
+      const top = defaultRegionBand('top', ws);
+      expect(top).toEqual({ left: 20, top: 40, width: 1000, height: 192 });
+      const bottom = defaultRegionBand('bottom', ws);
+      expect(bottom).toEqual({ left: 20, top: 40 + 600 - 192, width: 1000, height: 192 });
+    });
+
+    it('fills the whole workspace for a main (new-panel) drop', () => {
+      expect(defaultRegionBand('main', ws)).toEqual({ left: 20, top: 40, width: 1000, height: 600 });
+    });
   });
 
   it('computes widget insertion index by zone orientation', () => {

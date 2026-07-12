@@ -140,6 +140,25 @@ export function createAxisParameterSourceEdgeDropAction(): WorkbenchActionHandle
       const source = parseWorkbenchParameterSource(raw);
       if (!source) return;
       const region = typeof args?.region === 'string' && isDockRegionId(args.region) ? args.region : 'right';
+      const title = typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources();
+
+      // Tab-bar drop (T21 directive #2): a control dropped onto a panel stack's
+      // tab bar makes a NEW "Controls" panel as a tab at that spot (rather than
+      // collecting into an existing panel) — the design's "drop onto the tabs =
+      // new tab" rule, applied to parameters.
+      const tabStackId = typeof args?.tabStackId === 'string' && args.tabStackId.trim() ? args.tabStackId : null;
+      if (tabStackId) {
+        const rawIndex = args?.index;
+        const index = typeof rawIndex === 'number' && Number.isFinite(rawIndex) ? Math.max(0, Math.floor(rawIndex)) : undefined;
+        controller.dispatchMany(
+          createCustomPanelFromParameterSourcesCommands(controller.document, [source], {
+            panelType: AXIS_CUSTOM_PANEL_TYPE,
+            title,
+            target: { kind: 'tab', tabStackId, index }
+          })
+        );
+        return;
+      }
 
       // Collect into an existing controls panel (dropping into empty space near
       // one grows it) instead of spawning a new tab per parameter. Only when no
@@ -154,7 +173,7 @@ export function createAxisParameterSourceEdgeDropAction(): WorkbenchActionHandle
       controller.dispatchMany(
         createCustomPanelFromParameterSourcesCommands(controller.document, [source], {
           panelType: AXIS_CUSTOM_PANEL_TYPE,
-          title: typeof args?.title === 'string' && args.title.trim() ? args.title.trim() : titleForSources(),
+          title,
           region
         })
       );

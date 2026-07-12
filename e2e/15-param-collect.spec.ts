@@ -36,14 +36,25 @@ function paramSourcePayload(opts: {
 }
 
 /** Fire the HTML5 parameter drop onto a target, exactly as a control drag ends. */
-async function dropParamOnto(page: Page, selector: string, payload: string): Promise<void> {
+async function dropParamOnto(page: Page, selector: string, payload: string, at?: { x: number; y: number }): Promise<void> {
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await page.evaluate(
     ({ dt, mime, data }) => dt.setData(mime, data),
     { dt: dataTransfer, mime: PARAM_MIME, data: payload }
   );
-  await page.dispatchEvent(selector, 'dragover', { dataTransfer });
-  await page.dispatchEvent(selector, 'drop', { dataTransfer });
+  const init = at ? { dataTransfer, clientX: at.x, clientY: at.y } : { dataTransfer };
+  await page.dispatchEvent(selector, 'dragover', init);
+  await page.dispatchEvent(selector, 'drop', init);
+}
+
+/** Fire ONLY a parameter dragover (no drop) at a point — for spring/highlight. */
+async function paramDragOverAt(page: Page, selector: string, payload: string, at: { x: number; y: number }): Promise<void> {
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await page.evaluate(
+    ({ dt, mime, data }) => dt.setData(mime, data),
+    { dt: dataTransfer, mime: PARAM_MIME, data: payload }
+  );
+  await page.dispatchEvent(selector, 'dragover', { dataTransfer, clientX: at.x, clientY: at.y });
 }
 
 test.describe('Parameter collect + tile (AXIS-30)', () => {
@@ -151,5 +162,101 @@ test.describe('Parameter collect state (AXIS-31)', () => {
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(0);
     const borderStyle = await tile.evaluate((el) => getComputedStyle(el).borderTopStyle);
     expect(borderStyle).toBe('solid');
+  });
+});
+
+// ROUND 21 (AXIS-32): drop-target UX across all drag types.
+test.describe('Drop-target UX (AXIS-32)', () => {
+  const GAIN = paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' });
+
+  test('directive #1 — a parameter edge drop highlights the ENTIRE region frame', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+
+    // Hover a control over the MAIN region: the highlight surface must match the
+    // whole region frame, not a small labelled box.
+    const mainRegion = page.locator('.aw-region[data-region="main"]');
+    const rb = await mainRegion.boundingBox();
+    expect(rb).toBeTruthy();
+    await paramDragOverAt(page, '.aw-workspace', GAIN, { x: rb!.x + rb!.width / 2, y: rb!.y + rb!.height / 2 });
+
+    const preview = page.locator('.aw-edge-drop-preview');
+    await expect(preview).toHaveCount(1);
+    const pb = await preview.boundingBox();
+    expect(pb).toBeTruthy();
+    // The preview wraps the region frame (full drop area) within a couple of px.
+    expect(Math.abs(pb!.width - rb!.width)).toBeLessThan(6);
+    expect(Math.abs(pb!.height - rb!.height)).toBeLessThan(6);
+  });
+
+  test('directive #2 — dropping a control on a tab bar makes a new Controls tab', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    // Add a custom panel so the main stack has real tabs (Signal Grid + Custom Panel).
+    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await expect(regionTabs(page, 'main')).toHaveCount(2);
+
+    // Drop a control onto the main stack's tab bar → a NEW "Controls" tab appears.
+    await dropParamOnto(page, '.aw-tabstack[data-region="main"] .aw-pane-head', GAIN);
+    await expect(regionTabs(page, 'main')).toHaveCount(3);
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Controls' })).toHaveCount(1);
+  });
+
+  test('directive #3 — hovering an inactive tab during a drag springs it active', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.getByRole('button', { name: /＋ Panel/ }).click();
+
+    const tabs = regionTabs(page, 'main');
+    await expect(tabs).toHaveCount(2);
+    // The freshly-added Custom Panel is active; Signal Grid is the inactive tab.
+    const gridTab = tabs.filter({ hasText: 'Signal Grid' });
+    await expect(gridTab).not.toHaveClass(/active/);
+    const gb = await gridTab.boundingBox();
+    expect(gb).toBeTruthy();
+
+    // A control hovering the inactive tab arms the spring; after the dwell it
+    // activates so the drag can continue into the revealed panel content.
+    await paramDragOverAt(page, '.aw-tabstack[data-region="main"] .aw-pane-head', GAIN, {
+      x: gb!.x + gb!.width / 2,
+      y: gb!.y + gb!.height / 2
+    });
+    await expect(gridTab).toHaveClass(/active/, { timeout: 2000 });
+  });
+
+  test('directive #4 — the customize dashed outline wraps the full tile at every size', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.getByRole('button', { name: /＋ Panel/ }).click();
+
+    await dropParamOnto(page, '.custom-panel', GAIN);
+    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' }));
+
+    const panel = page.locator('.custom-panel').first();
+    await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
+    await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(2);
+
+    // The drag surface (which carries the dashed outline) must wrap the whole
+    // rendered tile — pre-fix it was clamped to the 42px grid row and cut through
+    // the ~92px tile. Measure each host's tile vs its surface.
+    const wraps = await panel.locator('.aw-widget-host').evaluateAll((hosts) =>
+      hosts.map((host) => {
+        const tile = host.querySelector('.axis-widget.param');
+        const surface = host.querySelector('.aw-widget-drag-surface');
+        if (!tile || !surface) return null;
+        const t = tile.getBoundingClientRect();
+        const s = surface.getBoundingClientRect();
+        return { th: t.height, tw: t.width, sh: s.height, sw: s.width };
+      })
+    );
+    expect(wraps.length).toBe(2);
+    for (const w of wraps) {
+      expect(w).not.toBeNull();
+      // Surface wraps the tile (>= tile box, minus a px of rounding). A tile is
+      // ~92px tall — proof the outline is no longer clipped to the 42px row.
+      expect(w!.th).toBeGreaterThan(60);
+      expect(w!.sh).toBeGreaterThanOrEqual(w!.th - 2);
+      expect(w!.sw).toBeGreaterThanOrEqual(w!.tw - 2);
+    }
   });
 });
