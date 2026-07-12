@@ -2,6 +2,7 @@
   import { editor } from './editor.svelte';
   import { forgefx } from './forgefx';
   import { catFor } from './catalog';
+  import { loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState } from './types';
 
   let cs = $state<CabState | null>(null);
@@ -58,7 +59,7 @@
     loadStore();
     loading = true;
     const eid = editor.selected.effectId;
-    Promise.all([forgefx.cabState(eid), forgefx.cabIrs()])
+    Promise.all([forgefx.cabState(eid), loadCabIrsCachedFirst()])
       .then(([state, banks]) => {
         cs = state;
         irs = banks;
@@ -200,8 +201,6 @@
       <div class="list scroll">
         {#if loading}
           <div class="empty">Loading…</div>
-        {:else if mode === 'legacy' && bank === 'USER'}
-          <div class="empty">User IRs are stored on the unit — names aren't in the editor catalog. Pick a slot # by index.</div>
         {:else if view.flat.length === 0}
           <div class="empty">{query ? `No cabs match “${query}”.` : 'No cabs in this bank.'}</div>
         {:else}
