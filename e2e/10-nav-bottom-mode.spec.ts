@@ -1,0 +1,87 @@
+import { test, expect } from '@playwright/test';
+import { bootCleanWorkbench, clickNav } from './support/workbench';
+
+/**
+ * V14c / V14d — bottom-nav mode + phone persistence.
+ *
+ * V14c: when navigation.mode === 'bottom' the side rail must NOT render the nav
+ * (the entries move to the bottom bar). A widgets-only rail may survive for
+ * rail-zone widgets (e.g. connection status) but never carries the nav.
+ *
+ * V14d: on phone the bottom-nav bar is persistently visible — no hamburger, no
+ * flyout — and its entries are icon-only.
+ */
+
+/** Switch the nav mode via a nav entry's right-click context menu. */
+async function switchNavMode(
+  page: import('@playwright/test').Page,
+  to: 'bottom' | 'side',
+  entry = page.locator('[data-nav-entry="grid"]').first()
+): Promise<void> {
+  await entry.click({ button: 'right' });
+  const label = to === 'bottom' ? 'Use Bottom Navigation' : 'Use Side Navigation';
+  await page.getByRole('menuitem', { name: label }).click();
+}
+
+test.describe('Bottom navigation mode', () => {
+  test('bottom mode: nav is in the bottom bar and the rail carries no nav', async ({ page }) => {
+    await bootCleanWorkbench(page);
+
+    // Default boots in side mode: nav lives in the rail.
+    await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(1);
+
+    await switchNavMode(page, 'bottom');
+
+    // Bottom mode: the nav moved to the bottom bar; the rail carries NO nav.
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(1);
+    await expect(page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"]')).toHaveCount(1);
+    await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(0);
+
+    // The nav entries in the bottom bar still work (clicks land — geometry guard).
+    await clickNav(page, 'setup');
+    await expect(page.locator('[data-nav-entry="setup"][data-nav-active="true"]')).toHaveCount(1);
+
+    // Back to side mode restores the rail nav.
+    await switchNavMode(page, 'side');
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
+    await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(1);
+  });
+
+  test('phone boots into a persistent bottom nav — no hamburger (V14d default)', async ({ page }) => {
+    // V14d: the Axis mobile profile seeds `navMode:'bottom'` (and a one-shot
+    // migration flips persisted pre-V14d docs), so a phone boots straight into
+    // the persistent bottom bar — no hamburger, no flyout.
+    await bootCleanWorkbench(page);
+    await page.setViewportSize({ width: 390, height: 780 });
+
+    // The phone profile activates in bottom mode out of the box.
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(1);
+
+    // No hamburger and no scrim — the nav is always in the bar (V14d).
+    await expect(page.locator('.aw-mobile-menu')).toHaveCount(0);
+    await expect(page.locator('.aw-mobile-nav-scrim')).toHaveCount(0);
+
+    // The bottom-nav bar is visible and its entries are reachable.
+    const grid = page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"]');
+    await expect(grid).toBeVisible();
+    await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(0);
+
+    // Entries are icon-only in the bottom bar (label hidden; icon shown).
+    await expect(
+      page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"] .axis-nav-entry .lbl')
+    ).toBeHidden();
+    await expect(
+      page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"] .axis-nav-entry .ic')
+    ).toBeVisible();
+
+    // Side mode stays reachable: switching restores the hamburger drawer path. A
+    // real right-click carries pointer coordinates so the context menu positions +
+    // clamps itself into the viewport (a bare dispatchEvent leaves it unpositioned,
+    // which since ROUND 15 — the page entry's taller menu — drops items off a phone).
+    const bottomEntry = page.locator('[data-zone-shell="bottom-nav"] [data-nav-entry="grid"]');
+    await bottomEntry.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Use Side Navigation' }).click();
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
+    await expect(page.locator('.aw-mobile-menu')).toBeVisible();
+  });
+});

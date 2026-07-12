@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>.axg *{ box-sizing:border-box; }</style></helmet>
+<div class="axg" data-groupzone="{{ gid }}" style="{{ moduleStyle }}">
+  <sc-for list="{{ members }}" as="m" hint-placeholder-count="2">
+    <sc-if value="{{ m.showInd }}" hint-placeholder-val="{{ false }}"><span style="{{ indStyle }}"></span></sc-if>
+    <sc-if value="{{ m.showDiv }}" hint-placeholder-val="{{ false }}"><span style="width:1px; height:20px; background:#26262c; flex:none;"></span></sc-if>
+    <div data-member="{{ m.id }}" style="{{ m.wrap }}">
+      <dc-import name="AxisWidget" w="{{ m.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="{{ memberHint }}"></dc-import>
+      <sc-if value="{{ edit }}" hint-placeholder-val="{{ false }}"><div data-member="{{ m.id }}" onPointerDown="{{ onMemberDown }}" style="{{ memberOverlay }}"></div></sc-if>
+    </div>
+  </sc-for>
+  <sc-if value="{{ endInd }}" hint-placeholder-val="{{ false }}"><span style="{{ indStyle }}"></span></sc-if>
+  <sc-if value="{{ edit }}" hint-placeholder-val="{{ false }}"><div onPointerDown="{{ gripDown }}" title="Move whole group" style="{{ gripStyle }}">⠿</div></sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:300,&quot;height&quot;:56}}">
+class Component extends DCLogic {
+  renderVals(){
+    const raw=this.props.members||[];
+    const indIndex=(this.props.indIndex==null?-1:this.props.indIndex);
+    const draggingId=this.props.draggingId;
+    const hovering=indIndex>=0;
+    const members=raw.map((m,i)=>({ id:m.id, w:m.w, showDiv:i>0&&indIndex!==i, showInd:indIndex===i,
+      wrap:`position:relative; display:flex; align-items:center; ${draggingId===m.id?"display:none;":""}` }));
+    const base=this.props.moduleStyle||"";
+    const moduleStyle = hovering ? base.replace("border:1px solid #26262c","border:1px solid #35c9d6") : base;
+    const phW=this.props.phW||120, phH=this.props.phH||38;
+    return {
+      gid:this.props.gid, moduleStyle, edit:!!this.props.edit, members, endInd:indIndex===raw.length,
+      memberHint:this.props.memberHint||"90px,38px", wdata:this.props.wdata||{}, bus:this.props.bus||{},
+      onMemberDown:this.props.onMemberDown||(()=>{}), gripDown:this.props.gripDown||(()=>{}),
+      indStyle:`width:${phW}px; height:${phH}px; border-radius:9px; border:1.5px dashed #35c9d6; background:rgba(53,201,214,.16); flex:none; margin:0 2px;`,
+      memberOverlay:"position:absolute; inset:0; z-index:5; cursor:grab;",
+      gripStyle:"position:absolute; top:-9px; left:6px; z-index:8; width:20px; height:16px; display:flex; align-items:center; justify-content:center; border-radius:5px; background:#1c1c21; border:1px solid #3a3a44; color:#9a9aa3; font-size:9px; cursor:grab;"
+    };
+  }
+}
+</script>
+</body>
+</html>

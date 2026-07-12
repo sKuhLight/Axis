@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{ margin:0; padding:0; background:#0c0c0e; font-family:'Hanken Grotesk',system-ui,sans-serif; }
+  ::selection{ background:#35c9d6; color:#06181a; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#0c0c0e; color:#e9e9ee; display:flex; justify-content:center; padding:48px 24px 120px;">
+<div style="width:100%; max-width:960px; display:flex; flex-direction:column; gap:0;">
+
+  <!-- ===== HEADER ===== -->
+  <div style="display:flex; flex-direction:column; gap:14px; padding-bottom:28px; border-bottom:1px solid #26262c;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.18em; color:#35c9d6; background:#101d1e; border:1px solid #234d4f; border-radius:6px; padding:6px 10px;">AXIS</span>
+      <span style="font:600 10px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:#6e6e78;">PRE-IMPLEMENTATION REVIEW · JULY 2026</span>
+    </div>
+    <h1 style="margin:0; font:800 34px/1.15 'Hanken Grotesk',sans-serif; color:#fff; letter-spacing:-.01em;">Full Design-System &amp; UX Review</h1>
+    <p style="margin:0; font:500 14px/1.6 'Hanken Grotesk',sans-serif; color:#9a9aa3; max-width:70ch;">Scope: <span style="color:#cfcfd6;">Axis Layout System.dc.html</span> (shell, 5-region dock engine, widget zones, edit mode) plus AxisWidget, AxisGroup, AxisGridPanel, AxisBlockEditor, AxisPresetBrowser, AxisFcPanel. Reviewed against live behavior at 1440 / 924 px and the Tablet profile. No feature is removed by any recommendation.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; font:600 10px/1 'JetBrains Mono',monospace;">
+      <a href="#s1" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">1 Summary</a>
+      <a href="#s2" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">2 Risks</a>
+      <a href="#s3" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">3 Design system</a>
+      <a href="#s4" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">4 Workflows</a>
+      <a href="#s5" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">5 Mobile</a>
+      <a href="#s6" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">6 Feedback</a>
+      <a href="#s7" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">7 A11y</a>
+      <a href="#s8" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">8 Components</a>
+      <a href="#s9" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">9 Change list</a>
+      <a href="#s10" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">10 Constraint check</a>
+      <a href="#s11" style="color:#8fe3ea; text-decoration:none; background:#141417; border:1px solid #26262c; border-radius:6px; padding:6px 9px;">11 Brief</a>
+    </div>
+  </div>
+
+  <!-- ===== 1 EXECUTIVE SUMMARY ===== -->
+  <div id="s1" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 6px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">1 · Executive Summary</h2>
+    <p style="margin:0 0 18px; font:500 13.5px/1.65 'Hanken Grotesk',sans-serif; color:#b9b9c1; max-width:75ch;">The architecture is genuinely strong: a real tiling dock engine (5 regions, per-slot tabs, cell splits, collapse strips), a widget system with 3 size states, cross-instance buses for split panels, and per-profile layouts. That skeleton should not change. What blocks implementation-readiness is a layer of gaps <em>around</em> it: the size-state auto-fit is only wired to custom panels (so the top bar clips at ≤1100&nbsp;px), the Signal Grid sizes itself against the whole content area instead of its own pane (so docking anything shrinks it into scrollbars), five of seven primary nav items do nothing on the default desktop layout, there is no keyboard/focus/ARIA layer at all, and app state (saved / dirty / connected / syncing) is simulated with toasts rather than modeled.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:10px;">
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px;">
+        <div style="font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:#d6543f; margin-bottom:8px;">FIX FIRST</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Top-bar widget auto-fit · Grid pane-relative scaling · dead nav sections · edit-ribbon dropdown anchoring · tablet-profile clipping.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px;">
+        <div style="font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:#f5a623; margin-bottom:8px;">HIGH IMPACT</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Real dirty/save/sync state model · keyboard + Escape layer · touch-target expansion · unify the two docking systems · clickable History.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px;">
+        <div style="font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:#35c9d6; margin-bottom:8px;">KEEP AS-IS</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Region engine + reflow invariant · widget/panel/param model · edge-drop panel creation · buses · Customize FAB entry · default panel layouts.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 2 MAJOR RISKS ===== -->
+  <div id="s2" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">2 · Major UX Risks</h2>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#d6543f; flex:none; width:34px;">R1</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Layout breaks below ~1100&nbsp;px.</strong> Verified at 924&nbsp;px: the preset widget truncates to “DEB…”, the view switch clips mid-chip, and the top bar overflows. The 3-size auto-fit contract exists (<code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">mkW</code> + <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">estW</code>) but <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">this._panW</code> is populated only for custom panels — tl/tc/tr, bottom, and gridbar zones never shrink.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#d6543f; flex:none; width:34px;">R2</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Docking any panel cripples the Signal Grid.</strong> Verified: opening Signal Chain (bottom) leaves the grid pane ~110&nbsp;px tall with horizontal + vertical scrollbars and only 1.5 rows visible. Grid cell math uses <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">contentEl.clientWidth/Height</code> (the whole body) instead of the pane’s own <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">availW/availH</code>. Violates the “Auto mode never scrolls” expectation and the no-h-scrollbar invariant.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#d6543f; flex:none; width:34px;">R3</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Primary navigation is dead on the default desktop layout.</strong> Verified: clicking <em>Sets</em> highlights the rail item and nothing else happens. <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">onNav</code> only sets <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">section</code>; section stubs render only when <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">contentMode==="pages"</code>. Ctrl / Scn / Live / Sets / Setup are silent no-ops. Beginners will conclude the app is broken.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">R4</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">No state model behind Save.</strong> There is no dirty flag anywhere: parameter swipes, scene changes, and layout edits all report success via toast, but nothing tracks unsaved work, and preset recall silently discards edits. For a device editor this is the single largest data-loss risk.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">R5</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Zero keyboard accessibility.</strong> Every control is a <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">div onClick</code>; there is no tabindex, no focus style, no Escape-to-close on any flyout/menu/drawer, and the advertised <strong>⌘K</strong> shortcut on “Add block” is not implemented. Power users — the target audience — cannot drive the app without a mouse.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">R6</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Two competing docking systems.</strong> The legacy <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">gridDock</code>/<code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">editorMode</code> (drawer/right/left/floating) states coexist with the region engine’s <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">dock.place</code>. Layout presets set one, the Options menu sets the other, and <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">gridInMain</code> reads the legacy one — producing states where the two disagree (grid “minimap” logic vs. grid pane).</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">R7</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Edit-mode chrome is not touch-usable.</strong> Hide “×” is 17–19&nbsp;px, pane header buttons 22&nbsp;px, scene/FC chips 20–22&nbsp;px tall, resize handles 6&nbsp;px. On the Tablet profile — the profile that exists <em>for touch</em> — most customization chrome is below half the 44&nbsp;px minimum.</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 3 DESIGN SYSTEM FINDINGS ===== -->
+  <div id="s3" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">3 · Design-System Findings</h2>
+
+    <h3 style="margin:18px 0 8px; font:700 14px/1.3 'Hanken Grotesk',sans-serif; color:#8fe3ea;">3.1 Typography</h3>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px; font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li><strong style="color:#fff;">Eleven ad-hoc sizes</strong> between 8 and 16&nbsp;px (8, 8.5, 9, 10, 11, 12, 12.5, 13, 13.5, 15, 16). Consolidate to a 5-step scale: <span style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">10 (mono meta) · 11 (mono labels) · 12 (UI) · 13 (body/controls) · 15 (panel titles)</span>. Kill 8/8.5/9 entirely — they exist only in rail labels, zone hints, and widget captions and are illegible on 1×-density screens.</li>
+      <li><strong style="color:#fff;">Role convention is good</strong> (JetBrains Mono = machine values/labels, Hanken Grotesk = human UI) but applied inconsistently: pane tab labels are Grotesk 10&nbsp;px bold while ribbon section labels are Mono 9&nbsp;px. Rule: mono for values + tracking-spaced section labels at ≥10&nbsp;px; Grotesk for anything clickable at ≥11&nbsp;px.</li>
+      <li>Preset name in the top-left widget truncates with no tooltip/fallback (“DEB…”). Add <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">title</code> + min readable width before ellipsis, and prefer dropping the PRE arrows to compact state before eating the name.</li>
+    </ul>
+
+    <h3 style="margin:22px 0 8px; font:700 14px/1.3 'Hanken Grotesk',sans-serif; color:#8fe3ea;">3.2 Color &amp; contrast</h3>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px; font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li><code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">--textfaint #6e6e78</code> on <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">#0e0e10</code> ≈ 3.9:1 — fails WCAG AA for the 9–10&nbsp;px labels it is used on. <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">--textmuted #56565e</code> ≈ 2.7:1 fails everywhere it carries meaning (timestamps, zone names, widget hints). Fix by policy, not per-spot: textfaint → <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">#8a8a94</code>, textmuted reserved for genuinely decorative ghost text (DROP HERE hints may stay dim — they are edit-mode wayfinding).</li>
+      <li>Category color ramp on grid blocks (shade −0.42 → −0.62 + colored border) is excellent and should be documented as the canonical “tinted block” recipe. The white 8&nbsp;px channel badge on colored blocks passes; keep.</li>
+      <li>Accent duplication: teal appears as <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">#35c9d6, #4fd1dc, #8fe3ea</code> plus bg tints <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">#101d1e, #12262a, #13282a, #1c2b2c</code> and borders <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">#234d4f, #2f6d70, #1a3a3c</code>. Name them (accent / accent-bright / accent-text / accent-bg-1..2 / accent-border-1..2) so future widgets stop inventing near-duplicates.</li>
+    </ul>
+
+    <h3 style="margin:22px 0 8px; font:700 14px/1.3 'Hanken Grotesk',sans-serif; color:#8fe3ea;">3.3 Spacing, radius, controls</h3>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px; font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li>Gaps use every integer 2–14. Snap to a 4-px scale (4/8/12/16) with 2 allowed only inside segmented controls. Radii use 5,6,7,8,9,10,11,12,14,22 — collapse to <span style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">6 (chips) · 9 (controls) · 12 (panels/cards) · pill</span>.</li>
+      <li><strong style="color:#fff;">Four segmented-control implementations</strong> exist with different paddings and heights: <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">seg()</code> (ribbon), <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">pill()</code> (AxisWidget), <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">gmSeg()</code> (grid mode), <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">chipBase</code> (panel chips). Define one spec — 28&nbsp;px height, 6-px radius items in an 8-px radius track, active = accent fill + #06181a text — and reuse it in all four places.</li>
+      <li>Buttons have hover styles but no pressed/active state and no disabled convention (size steppers fake disabled with color only; cursor stays pointer on some). Define: disabled = 40% text, no border, cursor default, <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">aria-disabled</code>.</li>
+    </ul>
+
+    <h3 style="margin:22px 0 8px; font:700 14px/1.3 'Hanken Grotesk',sans-serif; color:#8fe3ea;">3.4 States &amp; iconography</h3>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px; font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li>Three different collapse affordances coexist: pane “–/+”, whole-dock “«”, and collapsed region strips. Keep all three behaviors, but give them one icon language (chevrons oriented to the region) and tooltips that name the target: “Collapse panel”, “Collapse LEFT dock”.</li>
+      <li>Unicode glyph icons (⠿ ✥ ▤ ⇲ ⊟ ‖ ⤢) render at inconsistent optical sizes across platforms. Acceptable for the prototype; for implementation swap to a single icon set at 16/20&nbsp;px. Flag: <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">⇲</code> is used for both “density” and “resize” meanings.</li>
+      <li>Tooltips rely on native <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">title</code> except the param widget’s custom <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">.axtip</code>. The custom one (source-block tooltip) is the right pattern — promote it to the shared tooltip for all icon-only controls, since <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">title</code> is invisible on touch.</li>
+    </ul>
+  </div>
+
+  <!-- ===== 4 WORKFLOWS ===== -->
+  <div id="s4" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">4 · Workflow Findings</h2>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W1 · Browsing &amp; loading presets</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">The quick flyout works, but the full Preset Browser (Sources / List / Info panels) is reachable <em>only</em> through Edit Layout → Panels — a customization menu, not a daily-driver path. The hidden-by-default Search widget is the only other route. <strong style="color:#8fe3ea;">Change:</strong> make the <em>Sets</em> nav item open the Preset Browser (dock <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">plist</code> to main + <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">psrc</code> left + <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">pdet</code> right, same as Single Page does), toggling back on second press — exactly the pattern already proven by the FC nav item. Keep the flyout for one-tap recall. Add an unsaved-changes guard before recall (see W4).</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W2 · Nav sections Ctrl / Scn / Live / Setup</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Silent no-ops on the default desktop layout (stubs render only in “pages” content mode). Until their panels exist, each must at minimum produce feedback: open its stub as a <em>panel in main</em> (region engine already supports arbitrary panes) with a proper empty state — “Scenes manager lands here · use the Scenes widget meanwhile”. A nav item that visually activates but changes nothing trains users to distrust the whole rail.</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W3 · Editing block parameters</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Tap-to-open editor + swipe-to-adjust on grid blocks is a great power gesture, but it is fully undiscoverable, and two hidden gestures ride on it (double-click = reset to default; horizontal axis is captured then does nothing — dead code that also blocks horizontal pan on touch). <strong style="color:#8fe3ea;">Change:</strong> (a) first successful swipe shows a one-time hint toast (“Swipe ↑↓ adjusts &lt;param&gt; · double-tap resets”); (b) show the param name + value chip <em>during</em> hover on desktop, not only mid-swipe; (c) either implement the horizontal axis (channel A/B/C/D scrub would be natural) or stop claiming it so touch scroll passes through; (d) param knobs in the Block Editor already drag out as pinned widgets — add the same affordance hint on long-press.</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W4 · Saving (preset) &amp; dirty state</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Save is a stateless toast. <strong style="color:#8fe3ea;">Change:</strong> introduce a real <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">dirty</code> flag set by param edits, scene changes, block toggle/remove, and channel switches. Surface it in the existing Save widget (amber dot + “Save*”), guard preset recall and Scene-load with a 3-option dialog (Save &amp; load / Discard / Cancel), and support <strong>⌘S</strong>. The Save widget already lives in the widget system, so this is a widget-state change, not new chrome.</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W5 · Undo / redo &amp; History</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">The Undo/Redo widget is hidden in every default layout, ⌘Z is unbound, and History rows (panel and drawer) are display-only — no hover state, no click, no “restore to here”. <strong style="color:#8fe3ea;">Change:</strong> bind ⌘Z/⇧⌘Z globally; make History rows interactive (click = preview highlight, “Restore” button on hover/focus with confirm); keep the widget optional but list it prominently in the Library under a “Safety” group.</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W6 · Customizing a layout</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Entry (FAB) and exit (Done + confirmation toast naming the profile) are solid. Friction points: <strong style="color:#fff;">(a)</strong> the Panels/Options dropdowns are hard-anchored at <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">fixed top:106px right:150px</code> — when the ribbon wraps to two rows (any width &lt; ~1180&nbsp;px) they detach from their buttons and can cover them; anchor to the trigger’s rect instead. <strong style="color:#fff;">(b)</strong> “＋ Panel” always creates the panel in RIGHT with no choice — either honor the drop position (edge-drop already exists and is better) or show a 5-region mini-picker. <strong style="color:#fff;">(c)</strong> Panel rename is dblclick-on-tab + <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">window.prompt()</code> — undiscoverable and unthemed; replace with inline editing via the existing right-click menu’s Rename. <strong style="color:#fff;">(d)</strong> ribbon “＋ Save” and top-bar “Save” both exist while layout auto-saves on Done — clarify: ribbon button becomes “Save as layout…” (named snapshot), auto-save note stays in the Done toast.</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W7 · Add block (⌘K)</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">The widget advertises ⌘K but both the shortcut and the palette are unimplemented (click → toast). Ship the palette (searchable block-type list, category-tinted rows reusing the CAT colors, Enter inserts at first empty cell / selected cell) and register the real ⌘K binding — or remove the badge until it exists. Empty grid cells should also accept click → same palette (they currently render a “+” cursor with no handler payload).</div>
+      </div>
+
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:16px 18px;">
+        <div style="font:700 13px/1.3 'Hanken Grotesk',sans-serif; color:#fff; margin-bottom:6px;">W8 · Device &amp; cloud state</div>
+        <div style="font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Connection state is a 9-px green dot with a tooltip at the rail’s bottom; there is no disconnected, syncing, or write-in-progress representation, and Account (“cloud sync”) is a toast. <strong style="color:#8fe3ea;">Change:</strong> make the connection indicator a proper status widget (it already fits the widget system) with 4 states — connected / syncing (pulse) / write-pending (amber) / disconnected (red + reconnect action) — placeable anywhere, defaulting to the rail. Device writes and cloud sync must show progress + failure with retry, not just success toasts.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== 5 MOBILE ===== -->
+  <div id="s5" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">5 · Mobile &amp; Responsive Findings</h2>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#d6543f; flex:none; width:34px;">M1</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Top bar overflow (verified at 924&nbsp;px).</strong> Wire the auto-fit pipeline to every zone: measure tl/tc/tr/bottom/gridbar container widths (extend the <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">_panW</code> mechanism or a per-zone ResizeObserver), sum <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">estW</code> of members, and step widgets default→compact→mini until the zone fits. Overflow-priority order per zone (e.g. tr sheds status group first, Save last) should be part of the widget descriptor.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#d6543f; flex:none; width:34px;">M2</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Tablet profile clipping (verified).</strong> In the 1024-px device frame the grid pane collapses to ~1.5 rows behind a horizontal scrollbar and the Signal Chain’s second row is cut by the bottom bar. Same root cause as R2 plus fixed default region sizes (bottom 300&nbsp;px) that don’t scale to the 760-px frame — clamp region defaults to percentages of frame height (bottom ≤ 34%).</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">M3</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Nav-hide “×” badges render detached</strong> below bottom-bar nav items in edit mode (absolute <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">top:-5px</code> against a wrap that has no height there). Anchor edit chrome inside the item’s box (top-right inset) so it can never orphan, and enlarge to 24&nbsp;px visual / 44&nbsp;px hit.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">M4</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Two device concepts collide.</strong> <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">mobVP</code> (viewport &lt; 760&nbsp;px → hamburger + overlay rail) and <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">profile==="tablet"</code> (bottom nav) are independent; on a real narrow tablet both trigger, yielding hamburger <em>and</em> bottom nav simultaneously. Rule: profile decides nav placement; mobVP only decides overlay-vs-inline for the side rail, and is suppressed when navMode is “bottom”.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#f5a623; flex:none; width:34px;">M5</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Touch targets.</strong> Minimum 44-px hit areas via invisible expansion (padding/pseudo-hit rect), keeping visuals: scene chips (21×22), FC layout chips (20×22), steppers (22×24), pane mini-buttons (22), edit ctrl (19), nav hide (17). Region/cell resizers 6&nbsp;px → 24-px hit zone with the visible 2-px line unchanged. Swipe-adjust on blocks: on touch, require a 250-ms press before arming the gesture so page scroll wins by default.</div></div>
+      <div style="display:flex; gap:14px; background:#141417; border:1px solid #26262c; border-radius:10px; padding:14px 16px;"><span style="font:700 11px/1.5 'JetBrains Mono',monospace; color:#35c9d6; flex:none; width:34px;">M6</span><div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;"><strong style="color:#fff;">Bottom-sheet opportunities.</strong> On tablet, the Block Editor as a bottom drawer already exists — extend the same treatment to the preset flyout (currently a 400-px right sheet, fine) and the Widget Library (320-px right sheet is narrow for touch: 88vw bottom sheet on tablet). Dialogs (future confirm dialogs from W4) should be bottom sheets on touch profiles.</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 6 VISIBILITY / FEEDBACK ===== -->
+  <div id="s6" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">6 · Visibility, Feedback &amp; State</h2>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px; font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li><strong style="color:#fff;">Toast system:</strong> single slot; <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">flash()</code> clears the previous timer, so rapid actions (drop + auto-panel + group) silently swallow messages. Queue up to 3 stacked toasts; give destructive/system toasts an inline action (“Panel removed — <span style="color:#8fe3ea;">Undo</span>”). Never deliver <em>instructions</em> by toast (current: “drag it anywhere”, “drag widgets in”) — instructional hints belong on the target (empty-panel hint already does this correctly).</li>
+      <li><strong style="color:#fff;">Drop rejection before the drop:</strong> “Too wide for the dock” fires only on release. During drag, tint the right dock red with the same message so the user aborts early. Better: since widgets have compact/mini states, auto-shrink instead of rejecting — rejection contradicts the auto-fit contract.</li>
+      <li><strong style="color:#fff;">Edge-drop affordance:</strong> auto-creating a panel from an edge drop is invisible until it happens. While dragging a widget, render the same dashed region previews used for pane drags (“NEW PANEL · LEFT”) when inside the 15–18% edge bands.</li>
+      <li><strong style="color:#fff;">CPU meter:</strong> static value, no thresholds. Add amber ≥ 75%, red ≥ 90% (bar + value), tooltip “DSP load”. It’s the device-safety metric guitarists actually watch.</li>
+      <li><strong style="color:#fff;">Scene/preset context:</strong> the chain label pattern (“DEBUG · Scene 2”) exists but isn’t shown anywhere persistent when the FC/Chain panel is closed. The preset widget should carry the scene number in compact form (PRE 430 · S2).</li>
+      <li><strong style="color:#fff;">Bypass state</strong> (green dot / 50% opacity + grayscale) is clear; document it. Selected block (amber ring) vs adjusted block (fill height) also reads well — keep.</li>
+    </ul>
+  </div>
+
+  <!-- ===== 7 ACCESSIBILITY ===== -->
+  <div id="s7" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">7 · Accessibility Findings</h2>
+    <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px; font:500 13px/1.65 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      <li><strong style="color:#fff;">Semantics &amp; keyboard (blocking):</strong> every control is a div. Add <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">role="button" tabIndex="0"</code> + Enter/Space handling to all clickables (one shared helper), <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">role="tablist/tab"</code> on pane tabs and segmented controls, <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">role="menu/menuitem"</code> on context/ribbon menus, <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">aria-pressed</code> on toggles, <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">aria-label</code> on every icon-only button.</li>
+      <li><strong style="color:#fff;">Focus:</strong> define one focus-visible ring (2-px accent, 2-px offset) and apply globally. Currently zero focus styles exist.</li>
+      <li><strong style="color:#fff;">Escape &amp; focus trap:</strong> global Escape closes (in order): context menu → ribbon dropdown → flyout/drawer/library → exits Edit Layout (with the same Done semantics). Trap focus inside flyouts/library while open; return focus to the trigger on close.</li>
+      <li><strong style="color:#fff;">Drag-only features need parity:</strong> the right-click menu already exists — extend it on widgets with “Move to → Top left / Top right / Rail / Bottom / Floating / panel…” and “Size → Default / Compact / Mini”, and on panes with “Dock to → …”. This gives keyboard/switch users the full customization feature set without new UI concepts.</li>
+      <li><strong style="color:#fff;">Sliders/knobs:</strong> grid swipe-adjust and editor knobs need <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">role="slider"</code> + arrow-key increments (±1, ⇧±10) once focusable, with <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">aria-valuenow/text</code>.</li>
+      <li><strong style="color:#fff;">Reduced motion:</strong> wrap lzSlideR/lzRise/lzPulse/toast animation in <code style="font:600 11px 'JetBrains Mono',monospace; color:#8fe3ea;">@media (prefers-reduced-motion: no-preference)</code>; the pulse on live drop zones gets a static high-contrast border fallback.</li>
+      <li><strong style="color:#fff;">Contrast:</strong> per §3.2 — one token change fixes ~40 call sites.</li>
+    </ul>
+  </div>
+
+  <!-- ===== 8 COMPONENT RECS ===== -->
+  <div id="s8" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">8 · Component-Level Recommendations</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:10px;">
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">AxisWidget</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Single chip/segment spec (§3.3); 44-px hit areas; hold-to-repeat on steppers (tempo, PRE arrows); promote <code style="font:600 10.5px 'JetBrains Mono',monospace;">.axtip</code> to all icon-only widgets; add estW entries for every new widget kind (make the fallback log a dev warning — silent 120&nbsp;px guesses break auto-fit).</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Pane header</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Consolidate the up-to-5 mini buttons (axis, tabs, collapse, dock-collapse, close) into: collapse + close visible, the rest in a kebab menu that merges with the existing right-click menu. Rename becomes a menu item with inline edit (drop <code style="font:600 10.5px 'JetBrains Mono',monospace;">window.prompt</code>). Keep drag-to-dock on the whole header.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Widget Library</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Good structure (Saved / Hidden / Placed / Hidden nav). Add: search field once list &gt; 12; drag straight from Library onto the layout (tap-to-add currently dumps everything to top-right); group items by category (Status, Transport, FC, Params). Bottom sheet on tablet (M6).</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Context menu</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Extend with Move-to and Size submenus (a11y parity, §7); add to <em>single widgets</em> too (currently only groups/panels have one); keyboard navigable; clamp vertically as well as horizontally (currently only X is clamped — long menus can overflow the bottom edge).</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Grid panel</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Pane-relative sizing (R2); keep the 12×4 device matrix always; “Auto” must guarantee all rows visible at any pane size (scale down to map density before ever scrolling); empty-cell click opens Add-block palette (W7); document swipe/double-tap gestures in a first-run coach mark.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Block Editor</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">“Remove” (destructive, red) sits in the same row as Mute/Engaged with no confirmation — require confirm or provide undo toast; channel A/B/C/D selector is display-only in the shared editor element (hardcoded active A) — wire it; knobs need keyboard + double-click-to-type-value.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">History (panel + drawer)</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Two visual treatments of the same data — unify row spec (dot / label / time / restore affordance) and make rows interactive (W5). Panel rows currently have no hover state at all; drawer rows have hover but no action.</div>
+      </div>
+      <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:15px 16px;">
+        <div style="font:700 12px/1.3 'JetBrains Mono',monospace; color:#8fe3ea; margin-bottom:7px;">Toast</div>
+        <div style="font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#cfcfd6;">Queue (≤3), optional action slot, semantic tint (success teal / warning amber / destructive red edge), <code style="font:600 10.5px 'JetBrains Mono',monospace;">role="status"</code> live region. Bottom-center is fine; keep clear of the FAB (currently both sit bottom-left/center and can overlap the Customize pill at narrow widths).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 9 CHANGE LIST ===== -->
+  <div id="s9" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 6px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">9 · Implementation-Ready Change List</h2>
+    <p style="margin:0 0 14px; font:500 12.5px/1.6 'Hanken Grotesk',sans-serif; color:#9a9aa3;">P0 = ship-blocker · P1 = high-impact UX · P2 = consistency/a11y · P3 = polish. Complexity: L / M / H.</p>
+    <div style="border:1px solid #26262c; border-radius:12px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:52px 150px 1fr 1fr 44px; gap:0; background:#101013; padding:10px 14px; font:700 9.5px/1 'JetBrains Mono',monospace; letter-spacing:.12em; color:#6e6e78;">
+        <span>PRI</span><span>AREA</span><span>PROBLEM</span><span>CHANGE + NOTES</span><span>CX</span>
+      </div>
+      <sc-for list="{{ changeRows }}" as="r" hint-placeholder-count="8">
+        <div style="display:grid; grid-template-columns:52px 150px 1fr 1fr 44px; gap:0; padding:11px 14px; border-top:1px solid #1c1c21; align-items:start;">
+          <span style="{{ r.priStyle }}">{{ r.pri }}</span>
+          <span style="font:600 11.5px/1.45 'Hanken Grotesk',sans-serif; color:#e9e9ee; padding-right:10px;">{{ r.area }}</span>
+          <span style="font:500 11.5px/1.55 'Hanken Grotesk',sans-serif; color:#9a9aa3; padding-right:12px;">{{ r.problem }}</span>
+          <span style="font:500 11.5px/1.55 'Hanken Grotesk',sans-serif; color:#cfcfd6; padding-right:8px;">{{ r.change }}</span>
+          <span style="font:700 11px/1.45 'JetBrains Mono',monospace; color:#8a8a94;">{{ r.cx }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ===== 10 CONSTRAINT CHECK ===== -->
+  <div id="s10" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">10 · Do-Not-Remove Constraint Check</h2>
+    <div style="background:#101d1e; border:1px solid #234d4f; border-radius:12px; padding:18px 20px; font:500 13px/1.7 'Hanken Grotesk',sans-serif; color:#cfcfd6;">
+      Every recommendation is additive or reorganizational. Verified feature-by-feature:
+      <ul style="margin:10px 0 0; padding-left:20px; display:flex; flex-direction:column; gap:6px;">
+        <li>All 14 dockable panels, tabs, splits, collapse (pane + dock + strips), cell resize, main-axis flip — <strong style="color:#7fe0c4;">unchanged</strong>; pane-header kebab <em>relocates</em> axis/tab buttons, it does not remove them.</li>
+        <li>Widget zones, grouping, density cycle, floating widgets, pinned params, edge-drop panel creation, Library save/load, layout presets, profiles — <strong style="color:#7fe0c4;">unchanged</strong>; auto-fit only adds shrink behavior.</li>
+        <li>Preset flyout, quick recall, scenes, view switch, FC bus controls, swipe-adjust, double-tap reset — <strong style="color:#7fe0c4;">kept</strong>; guards (dirty dialog, touch long-press arming) add a step only when data would otherwise be lost.</li>
+        <li>Legacy editorMode drawer/right/left/floating placements — <strong style="color:#7fe0c4;">kept as user-facing options</strong>; unification (R6) is internal: they become dock.place aliases, not removed capabilities.</li>
+        <li>One watch-item: making “Sets” open the Preset Browser replaces a <em>no-op</em>, so nothing is lost; the flyout remains on the preset widget.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== 11 BRIEF ===== -->
+  <div id="s11" style="padding:36px 0 8px;">
+    <h2 style="margin:0 0 14px; font:800 22px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">11 · Final Implementation Brief</h2>
+    <div style="background:#141417; border:1px solid #26262c; border-radius:12px; padding:20px 22px; font:500 13px/1.7 'Hanken Grotesk',sans-serif; color:#cfcfd6; display:flex; flex-direction:column; gap:12px;">
+      <div><strong style="color:#fff;">Order of work</strong> — each step independently shippable:</div>
+      <ol style="margin:0; padding-left:22px; display:flex; flex-direction:column; gap:8px;">
+        <li><strong style="color:#8fe3ea;">Geometry correctness (P0):</strong> zone-aware widget auto-fit for tl/tc/tr/bottom/gridbar; grid pane sizes from its own pane rect; tablet region defaults as % of frame; fix detached nav-hide badges; anchor ribbon dropdowns to their triggers.</li>
+        <li><strong style="color:#8fe3ea;">Navigation truth (P0):</strong> Sets → Preset Browser dock set; Ctrl/Scn/Live/Setup → stub panels in main with honest empty states; second press toggles closed (FC pattern).</li>
+        <li><strong style="color:#8fe3ea;">State model (P1):</strong> dirty flag + Save widget states + recall guard dialog + ⌘S; connection status widget with 4 states; toast queue with action slot.</li>
+        <li><strong style="color:#8fe3ea;">Input layer (P1):</strong> shared focusable-button helper (role/tabindex/Enter/Space/focus ring), global Escape stack, ⌘Z/⇧⌘Z, ⌘K palette, context-menu Move-to/Size submenus, 44-px hit-area expansion, touch long-press arming for swipe-adjust.</li>
+        <li><strong style="color:#8fe3ea;">Internal unification (P1):</strong> gridDock/editorMode collapse into dock.place aliases; single segmented-control, chip, and tooltip components; History row spec + restore.</li>
+        <li><strong style="color:#8fe3ea;">Token pass (P2):</strong> type scale (kill &lt;10&nbsp;px), textfaint/textmuted contrast fix, 4-px spacing grid, radius trio, named accent tints, prefers-reduced-motion.</li>
+      </ol>
+      <div><strong style="color:#fff;">Rules during implementation:</strong> everything new is a Widget, Panel, or Parameter (CLAUDE.md); default panels keep their fixed internal layouts; panes stay absolutely positioned with hard clamps and <em>no CSS transitions on pane geometry</em>; nothing overlaps except tooltips/menus/modals; docking reflows neighbours, never paints over them; layouts persist per profile; empty zones hide outside Edit mode; no feature becomes harder to reach than it is today; match the existing palette — no new colors beyond named tints of the current ones.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:40px; padding-top:18px; border-top:1px solid #26262c; font:600 10px/1.6 'JetBrains Mono',monospace; color:#56565e; letter-spacing:.08em;">EVIDENCE: live probes at 1440/924&nbsp;px + Tablet profile (screenshots/review-*.jpg) · full source read of Axis Layout System.dc.html (1346 ln) · targeted reads of AxisWidget / AxisPresetBrowser. LINE REFS: onNav ~802 · mkW/_panW ~1030/982 · estW ~640 · grid sizing ~1180 · ribbon dropdowns (template) ~161/180 · prompt rename ~592 · flash ~578.</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    const pri = (p)=>{
+      const c = p==="P0" ? "#d6543f" : p==="P1" ? "#f5a623" : p==="P2" ? "#35c9d6" : "#8a8a94";
+      return `font:700 10.5px/1.45 'JetBrains Mono',monospace; color:${c};`;
+    };
+    const rows = [
+      ["P0","Top bar zones","Widgets clip/overflow below ~1100px; auto-fit only runs in custom panels","Extend _panW/estW auto-fit to tl/tc/tr/bottom/gridbar; per-zone shed priority","M"],
+      ["P0","Signal Grid pane","Grid sized from whole content area → scrollbars + clipped rows when any panel docks","Compute cell size from the pane's own availW/availH; Auto never scrolls","M"],
+      ["P0","Nav rail","Ctrl/Scn/Live/Sets/Setup are silent no-ops on desktop 'fixed' mode","Sets opens Preset Browser dock-set; others open stub panels in main; toggle on re-press","M"],
+      ["P0","Edit ribbon menus","Panels/Options dropdowns fixed at top:106px right:150px — detach when ribbon wraps","Anchor to trigger getBoundingClientRect; flip if offscreen","L"],
+      ["P0","Tablet profile","Grid ~1.5 rows behind h-scrollbar; Signal Chain clipped; fixed 300px bottom region","Region default sizes as clamped % of frame; grid fix above resolves the rest","M"],
+      ["P0","Edit chrome anchoring","Nav-hide × badges render detached below bottom-bar items","Anchor inside item box (inset top-right); 24px visual / 44px hit","L"],
+      ["P0","Preset Browser mount cost","Docking the full Browser / List part mounts 48 rich rows synchronously — observed multi-second long-task (possible hang) in a constrained env; parts are fine standalone","Virtualize the results list (render ~15 rows + windowing); profile mount; until then Sets opens the full-browser pane (shipped), split parts stay in Edit Layout → Panels","M"],
+      ["P1","Profiles (user note)","Switching Desktop→Tablet keeps the layout but silently squeezes; nothing shows which widgets no longer fit; no Mobile profile","Profile switch keeps layout + flags non-fitting widgets: red dashed outline in Customize, ⋯ overflow chip live (v1 shipped for top bar); extend to all zones; add explicit Mobile profile alongside Desktop/Tablet","M"],
+      ["P1","Save / dirty state","No dirty tracking; recall discards edits silently; Save is a stateless toast","dirty flag; Save* + amber dot; Save/Discard/Cancel guard on recall; ⌘S","M"],
+      ["P1","Keyboard layer","No tabindex, focus styles, Escape, or shortcuts anywhere; ⌘K badge is fake","Shared button helper + focus ring; Escape stack; ⌘Z/⇧⌘Z; real ⌘K palette","H"],
+      ["P1","Touch targets","17–24px controls throughout edit mode and widget chips; 6px resizers","44px hit-area expansion, visuals unchanged; 24px resizer hit zones","M"],
+      ["P1","Dual dock systems","gridDock/editorMode coexist with dock.place; Options menu and presets set different ones","Make legacy modes aliases writing to dock.place; single source of truth","H"],
+      ["P1","History","Rows are display-only in both panel and drawer; Undo/Redo hidden, unbound","Interactive rows with Restore + confirm; bind ⌘Z; unify row spec","M"],
+      ["P1","Connection status","9px dot + tooltip is the only device state; no syncing/disconnected/write states","4-state status widget (connected/syncing/pending/disconnected + reconnect)","M"],
+      ["P1","Drop rejection","'Too wide for the dock' only after release; contradicts auto-fit","Auto-shrink to compact/mini on drop; live red tint while dragging if truly impossible","L"],
+      ["P1","Block Editor remove","Destructive Remove next to Mute/Engaged, no confirm/undo","Confirm dialog or undo toast; red styling kept","L"],
+      ["P2","Contrast tokens","textfaint 3.9:1 / textmuted 2.7:1 on tiny labels","textfaint→#8a8a94; textmuted only for decorative ghost text","L"],
+      ["P2","Type scale","11 sizes incl. 8/8.5/9px labels","5-step scale, 10px minimum; mono=values, grotesk=UI","M"],
+      ["P2","Segmented controls","4 divergent implementations (seg/pill/gmSeg/chipBase)","One 28px spec used by ribbon, widgets, grid bar, panel chips","M"],
+      ["P2","Panel rename","dblclick + window.prompt — undiscoverable, unthemed, blocks thread","Inline edit via existing right-click menu Rename","L"],
+      ["P2","Context menus","Only groups/panels have one; drag-only actions lack parity; no Y-clamp","Add to single widgets; Move-to/Size submenus; keyboard nav; clamp both axes","M"],
+      ["P2","Tooltips","Native title only — invisible on touch; icon-only buttons unlabeled","Promote .axtip pattern app-wide + aria-label","M"],
+      ["P2","Toast system","Single slot swallows rapid messages; no actions; instructions via toast","Queue ≤3; action slot; semantic tints; role=status; hints move onto targets","M"],
+      ["P2","mobVP vs profile","Hamburger + bottom nav can both trigger on narrow tablets","Profile owns nav placement; mobVP only overlays the side rail","L"],
+      ["P3","Gestures","Swipe-adjust/double-tap-reset undiscoverable; horizontal axis captured but dead","One-time coach hint; hover value chip; implement or release horizontal axis","L"],
+      ["P3","＋ Panel target","Always creates in RIGHT with no choice","Mini 5-region picker, or rely on (previewed) edge-drop","L"],
+      ["P3","Icons","Unicode glyphs, inconsistent optical size; ⇲ means two things","Single icon set 16/20px at implementation","M"],
+      ["P3","Motion","No prefers-reduced-motion handling","Gate lzSlideR/lzRise/lzPulse/toast animations","L"],
+      ["P3","Steppers","No hold-to-repeat on tempo/preset arrows","Repeat after 400ms, accelerate","L"],
+      ["P3","Widget Library","No search; tap-to-add always targets top bar; narrow sheet on touch","Search >12 items; drag-out from library; category groups; bottom sheet on tablet","M"]
+    ];
+    return {
+      changeRows: rows.map(r=>({ pri:r[0], priStyle:pri(r[0]), area:r[1], problem:r[2], change:r[3], cx:r[4] }))
+    };
+  }
+}
+</script>
+</body>
+</html>

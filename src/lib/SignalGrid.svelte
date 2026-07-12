@@ -4,8 +4,16 @@
   import { catFor, shade } from './catalog';
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
+  import { planConnect } from './gridRouting';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
+  import { resolveAxisGridMetrics, resolveAxisGridPresentation, type AxisGridView } from './axis-workbench/gridView';
+
+  // optional grid-view override (workbench gridbar). 'full' fixes tiles at the block-size px and
+  // scrolls; 'map' pins the glyph minimap; 'auto' fits to the pane and steps full → map as the pane
+  // shrinks (04-fc-and-grid.md §2.2). The old shell renders <SignalGrid /> without it → stock fit
+  // behavior. Desktop only; mobile keeps its own column-density paging.
+  let { view = null }: { view?: AxisGridView | null } = $props();
 
   // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
   // dark mode, softly lightened (dark family-tint ink) in light mode.
@@ -38,39 +46,128 @@
   const cols = $derived(editor.layout.rows ? editor.layout.cols : 12);
   const rows = $derived(editor.layout.rows || 4);
   const mob = $derived(editor.isMobile);
-  const visCols = $derived(mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12);
-  const gap = $derived(mob ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : 26);
-  // available grid area = the gridwrap CONTENT box (measured). It's flex-sized + overflow:hidden, so it
-  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement.
+  // available grid area = the viewport CONTENT box (measured). It's flex-sized + overflow:hidden, so it
+  // does NOT depend on tile size — sizing tiles to fit never feeds back into this measurement. Used for
+  // the exact fillW/fitH px fit (Axis uses fixed-px tracks, unlike the design's CSS minmax/1fr).
   let availW = $state(1);
   let availH = $state(1);
-  const hCols = $derived(mob ? visCols : cols); // columns that fill the width (one page)
+  // pane-host box (the gridwrap: the grid pane body incl. its scroll padding + gridbar chrome). The design
+  // resolves the grid MODE + the 4-row height cap from the raw pane-host rect (gpW/gpH) and bakes the
+  // padding into its constants (fullMin/fullMinH +44/56, colCapH −_padV). Feeding the padding-stripped
+  // viewport box there instead would double-count the chrome and collapse a comfortable pane into map with
+  // ~30px tiles — so mode/cap resolution keys off THIS host rect, matching 04-fc-and-grid.md §2.2 verbatim.
+  let paneW = $state(1);
+  let paneH = $state(1);
+  // ── workbench pane-relative resolution (04-fc-and-grid.md §2.2) ──
+  // Whenever a gridbar view is supplied the presentation derives ONLY from the pane metrics — NEVER from
+  // editor.isMobile (the old <1366 shell boundary, which would otherwise strip metrics/map/full off any
+  // window under 1366 and collapse the workbench into the legacy pager). 'map'/'full' pin their mode at any
+  // pane size (the user explicitly chose the chip); auto steps full → map → mobile by the pane rect. The
+  // old shell (view == null) keeps its window-driven behavior via `mob`.
+  const metrics = $derived(
+    view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
+  );
+  // Workbench mobile TIER: a docked grid pane narrower than the design's mobile threshold (<620px) renders
+  // the REAL paged presentation (page-width columns, page dots/arrows, swipe paging) instead of degrading
+  // to shrunk map tiles. Driven purely by the PANE, not the window — so it must NOT read editor.isMobile
+  // (the window may be a narrow desktop with a wide grid pane, OR a wide desktop with a narrow one). Only
+  // AUTO reaches the mobile tier; an explicit 'map'/'full' chip pins its mode even at a tiny pane. Its
+  // column density + page live in pane-local state below so editor.mobCols/gridPage (the real-mobile shell
+  // state) stay untouched.
+  // Presentation flags (paged / paneMobile / mapMode / fixedTile) come from the shared resolver so the
+  // component and its tests can't drift. View active ⇒ every flag keys off the pane metrics; old shell ⇒
+  // `mob` (editor.isMobile) drives paging. The resolver enforces that `mob` is never consulted with a view.
+  const present = $derived(
+    resolveAxisGridPresentation({ view, metricsMode: metrics?.mode ?? null, isMobile: mob })
+  );
+  const paneMobile = $derived(present.paneMobile);
+  const paged = $derived(present.paged);
+  // pane-local paging state for the workbench mobile tier (never touches the editor's real-mobile state).
+  // Column density defaults to the design's mobile default (6 cols, 04-fc-and-grid.md §2.2 `S.mobCols||6`).
+  let paneCols = $state(6);
+  let panePage = $state(0);
+  const paneColsCl = $derived(Math.max(3, Math.min(12, paneCols)));
+  const panePageCount = $derived(Math.ceil(12 / paneColsCl));
+  // unified column density: pane-local for the workbench mobile tier, the editor's real-mobile state for the
+  // old shell, else the full 12. The editor.mobCols branch is old-shell only (view == null) — a workbench
+  // view never reads the window's real-mobile density.
+  const visCols = $derived(
+    paneMobile ? paneColsCl : !view && mob ? Math.max(3, Math.min(12, editor.mobCols)) : 12
+  );
+  const mapMode = $derived(present.mapMode); // desktop glyph minimap (§2.5)
+  const gap = $derived(
+    paged ? (visCols <= 4 ? 16 : visCols <= 6 ? 12 : visCols <= 8 ? 9 : 6) : mapMode ? 7 : metrics ? metrics.fullGap : 26
+  );
+  const hCols = $derived(paged ? visCols : cols); // columns that fill the width (one page)
   const ASPECT = 0.95; // preferred tile height ÷ width (square-ish)
   const MAX_TILE = 150; // desktop: never let a tile grow past this — a full-screen 12-col row must not
   //                       stretch tiles to the whole monitor width (looks bad); center the grid instead.
   // Mobile fills the page width exactly (clean paging). Desktop fits BOTH axes as a square-ish tile and
   // caps the size, so on a wide/fullscreen window the grid stays a comfortable size and centers rather
   // than spanning edge-to-edge.
+  // fixed-size tiles that pan in a scrolling pane — ONLY the explicit 'full' view mode. `auto` never
+  // uses fixed tiles even when it RESOLVES to full: fixed tiles size purely off the height cap
+  // (fullColMax), so the 12-col width routinely exceeds the pane and .viewport.free's overflow:auto
+  // shows a scrollbar. The design invariant is that only 'full' scrolls; auto/map must always fit. So
+  // auto-resolved-full falls through to the fit-both-axes path below (centers, never scrolls).
+  const fixedTile = $derived(present.fixedTile);
+  // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140 (·colCapH), else legacy MAX_TILE.
+  const tileCap = $derived(metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE));
   const colW = $derived.by(() => {
-    if (availW <= 1) return mob ? 88 : 96;
+    if (fixedTile) return Math.min(view!.tilePx, metrics!.fullColMax);
+    if (availW <= 1) return paged ? 88 : mapMode ? 30 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
     const fillW = (availW - (hCols - 1) * gap) / hCols;
-    if (mob) return Math.max(24, fillW);
-    // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ MAX_TILE.
+    if (paged) return Math.max(24, fillW);
+    // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ the size cap.
+    // The width term (fillW) is what keeps auto/auto-resolved-full from ever overflowing horizontally.
     const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
-    return Math.max(24, Math.min(fillW, fitH / ASPECT, MAX_TILE));
+    return Math.max(mapMode ? 24 : 24, Math.min(fillW, fitH / ASPECT, tileCap));
   });
   const cellH = $derived.by(() => {
     const sq = colW * ASPECT;
+    if (fixedTile) return sq;
     if (availH <= 1) return sq;
     const fitH = (availH - (rows - 1) * gap) / rows;
     return Math.max(24, Math.min(sq, fitH));
   });
-  const page = $derived(Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage)));
+  // page count + current page: editor state for the real mobile shell, pane-local for the workbench tier.
+  const pageCount = $derived(paneMobile ? panePageCount : editor.pageCount);
+  const page = $derived(
+    paneMobile
+      ? Math.max(0, Math.min(panePageCount - 1, panePage))
+      : Math.max(0, Math.min(editor.pageCount - 1, editor.gridPage))
+  );
   const pageShift = $derived(visCols * (colW + gap));
-  const dense = $derived(mob && visCols > 6); // blocks too small for per-block param swipe
-  const showType = $derived(colW >= 56); // progressive disclosure
+  const dense = $derived(paged && visCols > 6); // blocks too small for per-block param swipe
+  // map mode strips the type line, dots, label (§2.5); otherwise progressive disclosure by width.
+  const showType = $derived(!mapMode && colW >= 56);
+  // pane-local paging helpers (workbench mobile tier) — mirror editor.changePage/setPage without touching
+  // the editor's real-mobile state. Clamp panePage when the density changes.
+  $effect(() => {
+    void panePageCount;
+    if (panePage > panePageCount - 1) panePage = Math.max(0, panePageCount - 1);
+  });
+  function paneChangePage(d: number) {
+    panePage = Math.max(0, Math.min(panePageCount - 1, panePage + d));
+  }
+  function gridChangePage(d: number) {
+    if (paneMobile) paneChangePage(d);
+    else editor.changePage(d);
+  }
+  function gridSetPage(p: number) {
+    if (paneMobile) panePage = Math.max(0, Math.min(panePageCount - 1, p));
+    else editor.setPage(p);
+  }
+  function gridChangeCols(d: number) {
+    if (paneMobile) paneCols = Math.max(3, Math.min(12, paneCols + d));
+    else editor.changeCols(d);
+  }
+  function gridColsFit() {
+    if (paneMobile) paneCols = paneColsCl >= 12 ? 4 : 12;
+    else editor.colsFit();
+  }
 
   // cell lookup by "row,col"
   const cellAt = $derived.by(() => {
@@ -105,10 +202,20 @@
     innerH = ir.height;
   }
 
+  // Observe the grid inner element reactively: it lives behind the `status === 'loading'`
+  // branch, so it does NOT exist at mount time — a mount-time `observe(innerEl)` attaches to
+  // nothing and cable endpoints then never re-measure when the pane resizes (stale cables).
+  $effect(() => {
+    const el = innerEl;
+    if (!el) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  });
+
   onMount(() => {
     measure();
-    const ro = new ResizeObserver(() => measure());
-    if (innerEl) ro.observe(innerEl);
     // measure the available grid area from the viewport's content box (stable — see availW/availH note)
     const wro = new ResizeObserver((entries) => {
       const cr = entries[entries.length - 1]?.contentRect;
@@ -118,11 +225,23 @@
       }
     });
     if (vpEl) wro.observe(vpEl);
+    // measure the pane-host box (gridwrap border-box: padding + gridbar chrome included) for mode/cap
+    // resolution — matches the design's gpW/gpH (see paneW/paneH note). border-box so the padding the
+    // design's constants already account for isn't stripped out.
+    const pro = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1]?.borderBoxSize?.[0];
+      const el = wrapEl;
+      const w = box ? box.inlineSize : el?.clientWidth ?? 0;
+      const h = box ? box.blockSize : el?.clientHeight ?? 0;
+      if (w) paneW = w;
+      if (h) paneH = h;
+    });
+    if (wrapEl) pro.observe(wrapEl);
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
     return () => {
-      ro.disconnect();
       wro.disconnect();
+      pro.disconnect();
       window.removeEventListener('resize', onResize);
     };
   });
@@ -136,6 +255,13 @@
     void editor.editorH;
     void editor.vw;
     void editor.mobCols;
+    // tile geometry: a workbench PANE resize never touches the editor signals above
+    // (editor.vw is the window width) — it reaches the DOM as new colW/cellH/gap, so
+    // track those directly or cables keep their pre-resize endpoints.
+    void colW;
+    void cellH;
+    void gap;
+    void mapMode;
     requestAnimationFrame(() => {
       measure();
       requestAnimationFrame(measure);
@@ -180,6 +306,44 @@
   });
 
   let hoverCable = $state<string | null>(null);
+
+  // ── drag routing preview ──
+  // The cell the pointer is currently over during a port-drag (connect) or block-move. Drives the
+  // full-path preview so the user sees what a drop commits (cells that will be created + cables wired).
+  let dragTarget = $state<{ row: number; col: number } | null>(null);
+
+  // Geometry for any cell — measured rect when it exists in the DOM, else synthetic from the grid
+  // metrics (a preview shunt doesn't exist yet). Inner-local coords, matching `rects` + the SVG space.
+  function cellGeom(r: number, c: number): { left: number; right: number; cx: number; cy: number } {
+    const hit = rects[`${r},${c}`];
+    if (hit) return hit;
+    const left = c * (colW + gap);
+    return { left, right: left + colW, cx: left + colW / 2, cy: r * (cellH + gap) + cellH / 2 };
+  }
+
+  // Preview of a multi-column connect drag: reuses the SAME pure planner the editor commits, so the
+  // highlighted path is exactly what a drop creates. Null when there's no valid forward target yet
+  // (the freehand dashed cable to the pointer is shown instead).
+  const connectPreview = $derived.by(() => {
+    if (!connectSrc || !dragTarget) return null;
+    const t = dragTarget;
+    if (t.row === connectSrc.row && t.col === connectSrc.col) return null;
+    const plan = planConnect(editor.layout.cells, editor.layout.shunts, connectSrc, t.row, t.col, editor.shuntBase);
+    if (!plan.ok) return null;
+    const paths = plan.cables.map((seg) => {
+      const s = cellGeom(seg.srcRow, seg.srcCol);
+      const d = cellGeom(seg.destRow, seg.srcCol + 1);
+      return cableD(s.right, s.cy, d.left, d.cy);
+    });
+    return { paths, shunts: plan.newShunts };
+  });
+
+  // During a block-move, the shunt cell the pointer is over will be REPLACED on drop — highlight it.
+  const moveReplaceTarget = $derived.by(() => {
+    if (!moveMode || !dragTarget) return null;
+    const c = cellAt.get(`${dragTarget.row},${dragTarget.col}`);
+    return c?.kind === 'shunt' && moveCell !== c ? { row: c.row, col: c.col } : null;
+  });
 
   // Cable "signal flow": driven by the live output level, but rAF-advanced with a SMOOTHED velocity
   // (not by swapping CSS animation-duration — that restarts the keyframe every level change and stutters,
@@ -297,11 +461,13 @@
       if (moveMode) {
         movePos = { x: e.clientX, y: e.clientY };
         overBin = !!document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-bin]');
+        dragTarget = cellFromPoint(e.clientX, e.clientY);
         return;
       }
       if (connectSrc && innerEl) {
         const ir = innerEl.getBoundingClientRect();
         linkTo = { x: e.clientX - ir.left, y: e.clientY - ir.top };
+        dragTarget = cellFromPoint(e.clientX, e.clientY);
         return;
       }
       if (gesture) {
@@ -341,6 +507,7 @@
         const src = connectSrc;
         connectSrc = null;
         linkTo = null;
+        dragTarget = null;
         document.body.style.cursor = '';
         // a barely-moved pointerup on the port = a TAP → arm link mode (tap-to-connect: pick the
         // destination with a second tap, on this grid or on the Grid Map — survives page swipes).
@@ -361,14 +528,18 @@
         } else {
           const tgt = cellFromPoint(e.clientX, e.clientY);
           if (tgt && (tgt.row !== src.row || tgt.col !== src.col)) {
-            // move anywhere empty; same-col keeps wires, cross-col lets them drop (device default)
-            if (cellAt.get(`${tgt.row},${tgt.col}`)) editor.showToast('Cell occupied', '#d6543f');
+            // move anywhere empty; same-col keeps wires, cross-col lets them drop (device default).
+            // A SHUNT target is replaced in place (its cables move onto the block) via editor.move →
+            // replaceShunt; only a real BLOCK target is rejected as occupied.
+            const occ = cellAt.get(`${tgt.row},${tgt.col}`);
+            if (occ?.kind === 'block') editor.showToast('Cell occupied', '#d6543f');
             else editor.move(src, tgt.row, tgt.col);
           }
         }
         moveMode = false;
         moveCell = null;
         gesture = null;
+        dragTarget = null;
         return;
       }
       if (gesture) {
@@ -431,7 +602,11 @@
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     const dist = Math.hypot(dx, dy) || 1;
-    editor.setCols(Math.round(pinch.cols * (pinch.dist / dist)));
+    const n = Math.round(pinch.cols * (pinch.dist / dist));
+    // route pinch to the pane-local density on the workbench tier (touch on a desktop window) so the
+    // editor's real-mobile state is never touched; real mobile keeps writing editor.setCols.
+    if (paneMobile) paneCols = Math.max(3, Math.min(12, n));
+    else editor.setCols(n);
   }
   function touchEnd() {
     pinch = null;
@@ -439,7 +614,7 @@
   // true right after a page-swipe, so the empty-cell click that follows pointerup is suppressed
   let pageSwiped = $state(false);
   function bgDown(e: PointerEvent) {
-    if (!mob) return;
+    if (!paged) return;
     // only a placed block runs its own horizontal gesture (cycle control) — empty cells, shunts and
     // background all page. (Previously bailed on any [data-idx], i.e. the whole grid matrix, so paging
     // only worked in the padding around it.)
@@ -452,7 +627,7 @@
     pageSwipeX = null;
     if (Math.abs(dx) > 50) {
       pageSwiped = true;
-      editor.changePage(dx < 0 ? 1 : -1);
+      gridChangePage(dx < 0 ? 1 : -1);
     }
   }
 </script>
@@ -469,7 +644,7 @@
 <div
   data-tour="grid"
   class="gridwrap scroll"
-  class:mob={editor.isMobile}
+  class:mob={paged}
   bind:this={wrapEl}
   data-screen="Signal Grid"
   role="group"
@@ -480,11 +655,11 @@
   onpointerdown={bgDown}
   onpointerup={bgUp}
 >
-  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+  {#if paged && editor.status === 'ready' && pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(-1)}>‹</button>
+    <button class="pgarrow" aria-label="Previous page" disabled={page === 0} onpointerdown={(e) => e.stopPropagation()} onclick={() => gridChangePage(-1)}>‹</button>
   {/if}
-  <div class="viewport" bind:this={vpEl}>
+  <div class="viewport" class:free={fixedTile} bind:this={vpEl}>
   {#if editor.status === 'loading'}
     <p class="hint">Connecting to ForgeFX…</p>
   {:else if editor.status === 'offline'}
@@ -496,9 +671,9 @@
   {:else}
     <div
       class="inner"
-      class:mob={editor.isMobile}
+      class:mob={paged}
       bind:this={innerEl}
-      style={mob
+      style={paged
         ? `width:${cols * colW + (cols - 1) * gap}px; transform:translateX(${-page * pageShift}px); transition:transform .26s cubic-bezier(.3,.8,.3,1);`
         : ''}
     >
@@ -540,15 +715,28 @@
             {/if}
           </g>
         {/each}
-        {#if linkTo && connectSrc}
+        {#if connectPreview}
+          <!-- full planned path: every cable + new shunt cell a drop will create -->
+          {#each connectPreview.paths as d (d)}
+            <path class="cbl-preview" d={d} fill="none" stroke="#35c9d6" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="7 5" />
+          {/each}
+          {#each connectPreview.shunts as s (`${s.row},${s.col}`)}
+            {@const g = cellGeom(s.row, s.col)}
+            <rect class="shunt-preview" x={g.left} y={g.cy - cellH / 2} width={colW} height={cellH} rx="8" fill="rgba(53,201,214,0.12)" stroke="#35c9d6" stroke-width="1.6" stroke-dasharray="5 4" />
+          {/each}
+        {:else if linkTo && connectSrc}
           {@const s = rects[`${connectSrc.row},${connectSrc.col}`]}
           {#if s}
             <path d={cableD(s.right, s.cy, linkTo.x, linkTo.y)} fill="none" stroke="#35c9d6" stroke-width="2.5" stroke-dasharray="6 5" />
           {/if}
         {/if}
+        {#if moveReplaceTarget}
+          {@const g = cellGeom(moveReplaceTarget.row, moveReplaceTarget.col)}
+          <rect class="shunt-preview" x={g.left} y={g.cy - cellH / 2} width={colW} height={cellH} rx="8" fill="rgba(53,201,214,0.14)" stroke="#35c9d6" stroke-width="2" stroke-dasharray="5 4" />
+        {/if}
       </svg>
 
-      <div class="grid" style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
+      <div class="grid" class:map={mapMode} style="grid-template-columns:repeat({cols}, {colW}px); grid-template-rows:repeat({rows}, {cellH}px); gap:{gap}px;">
         {#each Array(rows) as _, r}
           {#each Array(cols) as _, c}
             {@const cell = cellAt.get(`${r},${c}`)}
@@ -575,35 +763,37 @@
                 onmouseenter={() => showBlockHelp(cell)}
                 onmouseleave={clearBlockHelp}
               >
-                {#if meter}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
+                {#if meter && !mapMode}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
                 {#if cell.bypassed}<span class="hatch"></span>{/if}
-                {#if swipeHud && swipeHud.key === `${r},${c}`}
+                {#if swipeHud && swipeHud.key === `${r},${c}` && !mapMode}
                   <div class="swhud">
                     <div class="sh-val mono">{fmtNumber(swipeHud.m)}{#if paramUnit(swipeHud.m)}<span class="sh-unit">{paramUnit(swipeHud.m)}</span>{/if}</div>
                     <div class="sh-name">{swipeHud.m.name}</div>
                   </div>
                 {/if}
                 <span class="glyph">{cat.glyph}</span>
-                <span class="b-label">{label}</span>
-                {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
-                {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
-                {#if cell.pack}
-                  <button
-                    class="bypdot"
-                    class:on={!cell.bypassed}
-                    title="On / Off"
-                    aria-label="Toggle bypass"
-                    onpointerdown={(e) => e.stopPropagation()}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      editor.toggleBypass(cell);
-                    }}
-                  ><span class="bypdot-i"></span></button>
-                {/if}
-                {#if meter && meter.count > 0}
-                  <span class="dots">
-                    {#each Array(meter.count) as _, di (di)}<span class="dot" class:on={di === meter.active}></span>{/each}
-                  </span>
+                {#if !mapMode}
+                  <span class="b-label">{label}</span>
+                  {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}
+                  {#if cell.channel && cell.channel !== 'A'}<span class="chan mono">{cell.channel}</span>{/if}
+                  {#if cell.pack}
+                    <button
+                      class="bypdot"
+                      class:on={!cell.bypassed}
+                      title="On / Off"
+                      aria-label="Toggle bypass"
+                      onpointerdown={(e) => e.stopPropagation()}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        editor.toggleBypass(cell);
+                      }}
+                    ><span class="bypdot-i"></span></button>
+                  {/if}
+                  {#if meter && meter.count > 0}
+                    <span class="dots">
+                      {#each Array(meter.count) as _, di (di)}<span class="dot" class:on={di === meter.active}></span>{/each}
+                    </span>
+                  {/if}
                 {/if}
                 {#if c < cols - 1 && cell.pack !== 'Output'}
                   <button
@@ -640,33 +830,39 @@
       </div>
     </div>
 
-    <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+    {#if !fixedTile}
+      <button class="regrid" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+    {/if}
   {/if}
   </div>
-  {#if editor.isMobile && editor.status === 'ready' && editor.pageCount > 1}
+  {#if fixedTile && editor.status !== 'loading' && editor.status !== 'offline'}
+    <!-- outside the scrolling viewport so it stays pinned while the fixed-size grid pans -->
+    <button class="regrid pin" class:unsaved={!editor.layout.crcValid} onclick={() => editor.load()} title="Re-read the grid from the device{editor.layout.crcValid ? '' : ' · edit buffer unsaved'}">↻</button>
+  {/if}
+  {#if paged && editor.status === 'ready' && pageCount > 1}
     <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button class="pgarrow" aria-label="Next page" disabled={page === editor.pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => editor.changePage(1)}>›</button>
+    <button class="pgarrow" aria-label="Next page" disabled={page === pageCount - 1} onpointerdown={(e) => e.stopPropagation()} onclick={() => gridChangePage(1)}>›</button>
   {/if}
 </div>
 
-<!-- mobile column-density pager + page dots -->
-{#if editor.isMobile && editor.status === 'ready'}
+<!-- mobile / workbench-tier column-density pager + page dots -->
+{#if paged && editor.status === 'ready'}
   <div class="pager">
     <div class="density">
-      <button class="step" disabled={visCols <= 3} title="Bigger blocks" onclick={() => editor.changeCols(-1)}>−</button>
-      <button class="dnum" title="Tap for full overview" onclick={() => editor.colsFit()}>
+      <button class="step" disabled={visCols <= 3} title="Bigger blocks" onclick={() => gridChangeCols(-1)}>−</button>
+      <button class="dnum" title="Tap for full overview" onclick={gridColsFit}>
         <span class="dn mono">{visCols}</span><span class="dl mono">COLS</span>
       </button>
-      <button class="step" disabled={visCols >= 12} title="Fit more columns" onclick={() => editor.changeCols(1)}>+</button>
+      <button class="step" disabled={visCols >= 12} title="Fit more columns" onclick={() => gridChangeCols(1)}>+</button>
     </div>
-    {#if editor.pageCount > 1}
+    {#if pageCount > 1}
       <div class="dots">
-        {#each Array(editor.pageCount) as _, i (i)}
-          <button class="pdot" class:on={i === page} aria-label="Page {i + 1}" onclick={() => editor.setPage(i)}></button>
+        {#each Array(pageCount) as _, i (i)}
+          <button class="pdot" class:on={i === page} aria-label="Page {i + 1}" onclick={() => gridSetPage(i)}></button>
         {/each}
       </div>
     {/if}
-    <span class="phint mono">{editor.pageCount > 1 ? 'Swipe to pan · pinch to zoom' : 'Pinch to fit more'}</span>
+    <span class="phint mono">{pageCount > 1 ? (mob ? 'Swipe to pan · pinch to zoom' : 'Swipe / arrows to page') : mob ? 'Pinch to fit more' : 'Use ± to fit more'}</span>
   </div>
 {/if}
 
@@ -747,6 +943,16 @@
   }
   .gridwrap.mob .viewport {
     justify-content: flex-start; /* horizontal paging translates the grid from the left */
+  }
+  /* fixed-tile ('full') mode: the grid keeps its chosen size and pans instead of shrinking. Auto
+     margins center it while it fits and collapse to 0 when it overflows, so no edge is clipped. */
+  .viewport.free {
+    overflow: auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .viewport.free .inner {
+    margin: auto;
   }
   .inner {
     position: relative;
@@ -1083,6 +1289,32 @@
     box-shadow: 0 0 9px rgba(53, 201, 214, 0.6);
   }
 
+  /* map mode (§2.5): clean glyph minimap — bigger glyph, smaller ports, dim dashed empties */
+  .grid.map .glyph {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .grid.map .port {
+    width: 11px;
+    height: 11px;
+    right: -5px;
+    margin-top: -5px;
+    border-width: 2px;
+  }
+  .grid.map .empty {
+    border: 1px dashed var(--border2);
+  }
+  .grid.map .empty .plus {
+    display: block;
+    font-size: 12px;
+    font-weight: 300;
+    color: var(--textmuted);
+    opacity: 0.45;
+  }
+  .grid.map .empty .restdot {
+    display: none;
+  }
+
   .empty {
     border: 1px dashed transparent;
     background: transparent;
@@ -1151,6 +1383,10 @@
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
+  }
+  .regrid.pin {
+    right: 36px;
+    bottom: 34px;
   }
   .regrid:hover {
     border-color: var(--accent);

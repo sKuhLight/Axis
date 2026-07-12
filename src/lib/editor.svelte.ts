@@ -8,6 +8,7 @@ import { cloud } from './cloud.svelte';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
+import { planConnect, planReplaceShunt } from './gridRouting';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { surfApplyRemote } from './surfaceStore.svelte';
@@ -150,6 +151,14 @@ class EditorStore {
   // always-on per-block meter values (keyed effectId) + which control is active per block
   meters = $state<Record<number, { defaultId: number; defaultName: string; typeName: string; vals: Record<number, MeterVal> }>>({});
   activeCtl = $state<Record<number, number>>({});
+  // ── pinned-param hydration: full param/enum data for placed blocks that host a
+  // custom-panel control but are NOT the open block, so those controls read/write
+  // live regardless of what (if anything) is selected. Same DTO the open block
+  // uses (blockParams → named/enums), fetched on demand for mounted pinned widgets
+  // only and invalidated on every preset/scene reload. Keyed by effectId. */
+  pinnedParams = $state<Record<number, { named: NamedParam[]; enums: EnumParam[] }>>({});
+  #pinnedRefs = new Map<number, number>(); // effectId → count of mounted pinned widgets
+  #hydratePinnedTimer: ReturnType<typeof setTimeout> | null = null;
   /** Current model/type name of a placed block (for the grid tile sub-label). */
   typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
   /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
@@ -464,6 +473,92 @@ class EditorStore {
         /* meters are best-effort */
       }
     }, 350);
+  };
+
+  // ── pinned-param hydration (custom-panel controls stay live without an open block) ──
+  /** A mounted pinned param widget registers its bound block; the return unregisters it.
+   *  Ref-counted so several controls off the same block share one hydration. */
+  registerPinnedBlock = (effectId: number | undefined): (() => void) => {
+    if (effectId == null || effectId < 0) return () => {};
+    this.#pinnedRefs.set(effectId, (this.#pinnedRefs.get(effectId) ?? 0) + 1);
+    this.#scheduleHydratePinned();
+    return () => {
+      const next = (this.#pinnedRefs.get(effectId) ?? 1) - 1;
+      if (next > 0) { this.#pinnedRefs.set(effectId, next); return; }
+      this.#pinnedRefs.delete(effectId);
+      if (this.pinnedParams[effectId]) {
+        const { [effectId]: _drop, ...rest } = this.pinnedParams;
+        this.pinnedParams = rest;
+      }
+    };
+  };
+  /** Live params+enums for a block: the open block's own arrays, else the hydrated
+   *  pinned copy (empty until hydration lands). Both writable through set*ById. */
+  pinnedView = (effectId: number | undefined): { named: NamedParam[]; enums: EnumParam[] } => {
+    if (effectId != null && this.selected?.effectId === effectId) return { named: this.params, enums: this.enums };
+    return (effectId != null && this.pinnedParams[effectId]) || { named: [], enums: [] };
+  };
+  #scheduleHydratePinned = () => {
+    if (this.#hydratePinnedTimer) clearTimeout(this.#hydratePinnedTimer);
+    this.#hydratePinnedTimer = setTimeout(() => void this.#hydratePinned(), 250);
+  };
+  /** Invalidate every hydrated block (preset/scene changed) and re-fetch the mounted ones. */
+  #invalidatePinned = () => {
+    if (Object.keys(this.pinnedParams).length) this.pinnedParams = {};
+    if (this.#pinnedRefs.size) this.#scheduleHydratePinned();
+  };
+  #hydratePinned = async () => {
+    this.#hydratePinnedTimer = null;
+    // A slow 5-pin MIDI link can't afford extra per-block reads — leave those controls
+    // as read-only previews (click opens the block) instead of inflating edit latency.
+    if (!this.#pinnedRefs.size || this.slowLink || this.status !== 'ready') return;
+    const placed = new Set([...this.layout.cells, ...this.layout.shunts].map((c) => c.effectId));
+    for (const eid of this.#pinnedRefs.keys()) {
+      if (eid === this.selected?.effectId) continue; // open block is already live via editor.params
+      if (!placed.has(eid) || this.pinnedParams[eid]) continue; // not in this preset, or already hydrated
+      try {
+        const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(eid) : await forgefx.blockParams(eid);
+        this.pinnedParams = {
+          ...this.pinnedParams,
+          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: r.enums ?? [] }
+        };
+      } catch {
+        /* best-effort — the control falls back to a read-only preview */
+      }
+    }
+  };
+  #cellFor = (effectId: number): Cell | undefined =>
+    [...this.layout.cells, ...this.layout.shunts].find((c) => c.effectId === effectId);
+  /** Continuous write for a pinned control whose block may not be open. Delegates to the
+   *  normal path when it IS open; otherwise writes by effectId + optimistically updates the
+   *  hydrated copy so the tile tracks the gesture. */
+  setPinnedParam = (effectId: number, p: NamedParam, v: number) => {
+    if (this.selected?.effectId === effectId) { this.setParam(p, v); return; }
+    if (p.id == null) return;
+    const from = p.norm ?? 0;
+    p.norm = v; // optimistic on the hydrated object
+    this.pinnedParams = { ...this.pinnedParams }; // nudge reactivity
+    const cell = this.#cellFor(effectId);
+    history.recordGesture({
+      kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v,
+      block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log
+    });
+    clearTimeout(this.#sendTimers[p.id]);
+    this.#sendTimers[p.id] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
+  };
+  /** Discrete write for a pinned control whose block may not be open. */
+  setPinnedEnum = (effectId: number, e: EnumParam, value: number) => {
+    if (this.selected?.effectId === effectId) { this.setEnum(e, value); return; }
+    const from = e.value;
+    e.value = value; // optimistic
+    this.pinnedParams = { ...this.pinnedParams };
+    const cell = this.#cellFor(effectId);
+    if (from !== value) history.record({
+      kind: 'param', eid: effectId, paramId: e.id, continuous: false, from, to: value,
+      block: cell?.display ?? e.name, param: e.name,
+      fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
+    });
+    forgefx.setParam(effectId, e.id, value, false).catch(() => {});
   };
 
   // ── live audio meters (per-block monitor level, normalized→dB) ──
@@ -999,6 +1094,7 @@ class EditorStore {
       return s ? { ...c, bypassed: s.bypassed ?? undefined, channel: s.channel ?? undefined } : c;
     };
     this.layout = { ...this.layout, cells: this.layout.cells.map(apply), shunts: this.layout.shunts.map(apply) };
+    this.#invalidatePinned(); // per-channel param values changed → re-hydrate pinned controls
     if (this.selKey) await this.#loadParams(); // open block's params are per-channel → re-read it
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
@@ -1184,6 +1280,7 @@ class EditorStore {
       this.everLoaded = true;
       this.status = 'ready';
       this.fetchMeters(); // background: fill every block's level meter
+      this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
       this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
     } catch (e) {
       if (!this.everLoaded) this.status = 'offline';
@@ -1449,6 +1546,13 @@ class EditorStore {
   // optimistic: show the cell immediately, reconcile from the device in the background
   place = async (row: number, col: number, blockId: number, label?: string) => {
     const display = label ?? '…';
+    // Dropping onto an existing SHUNT replaces it in place, moving its cables onto the new block —
+    // no manual shunt removal first (routes through replaceShunt for one undoable step).
+    const existing = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
+    if (existing?.kind === 'shunt') {
+      await this.replaceShunt(existing, { blockId, display });
+      return;
+    }
     const cell: Cell = {
       row,
       col,
@@ -1499,6 +1603,12 @@ class EditorStore {
   // Optimistic: relocate the cell in the UI immediately, reconcile in the background.
   move = async (src: Cell, row: number, col: number) => {
     if (src.row === row && src.col === col) return;
+    // Dropping onto a SHUNT replaces it, moving the shunt's cables onto the block (see replaceShunt).
+    const dest = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
+    if (dest?.kind === 'shunt') {
+      await this.replaceShunt(dest, { blockId: src.effectId, display: src.display, src });
+      return;
+    }
     const sr = src.row, sc = src.col; // capture before optimistic mutation
     const sameCol = col === sc;
     // routing to preserve (same-column only) — read BEFORE we mutate the layout
@@ -1583,61 +1693,65 @@ class EditorStore {
     await this.connect(src, row, col);
   };
 
-  // Connect src → (destRow,destCol), spanning any number of columns. Intermediate
-  // empty cells get a shunt (a routing cell — eid>1000 on FM3, base SHUNT_ID) so the
-  // signal can pass through; then we chain an adjacent-column cable for each hop.
-  // The straight run flows along src.row; the final hop bends to destRow.
+  /** Routing/shunt cell base effect id (gen-3: 1024). SHUNT_ID is the legacy fallback. */
+  get shuntBase(): number { return this.caps?.shuntBase ?? SHUNT_ID; }
+
+  // Execute ONE routing op forward against the device (mirror of history's redo direction — so a
+  // freshly-run op and its recorded undo/redo stay in lock-step). Only the structural kinds a
+  // routing plan emits are handled here.
+  #runOp = async (op: import('./history.svelte').HistoryOp) => {
+    switch (op.kind) {
+      case 'place': return void (await forgefx.placeCell(this.#W(op.row), this.#W(op.col), op.blockId));
+      case 'remove': return void (await forgefx.clearCell(this.#W(op.row), this.#W(op.col)));
+      case 'cable': return void (await forgefx.cable(this.#W(op.srcRow), this.#W(op.srcCol), this.#W(op.destRow), op.connect));
+      default: return;
+    }
+  };
+
+  // Connect src → (destRow,destCol), spanning any number of columns. Intermediate empty cells get
+  // a shunt (a routing cell — eid ≥ shuntBase) so the signal can pass through; existing blocks on
+  // the source row are CHAINED through (output→input); then we chain an adjacent-column cable for
+  // each hop. The straight run flows along src.row; the final hop bends to destRow. Plan is pure
+  // (gridRouting.planConnect) so the SignalGrid drag preview highlights the exact same path.
   connect = async (src: Cell, destRow: number, destCol: number) => {
-    if (destCol <= src.col) {
-      this.showToast('Connect to a later column', '#d6543f');
+    const plan = planConnect(this.layout.cells, this.layout.shunts, src, destRow, destCol, this.shuntBase);
+    if (!plan.ok) {
+      this.showToast(plan.error ?? 'Cannot connect', '#d6543f');
       return;
     }
-    const all = [...this.layout.cells, ...this.layout.shunts];
-    const at = (r: number, c: number) => all.find((x) => x.row === r && x.col === c);
-    // FM-Edit gives every shunt a UNIQUE instance id (shuntBase + n); reusing one id makes the
-    // device accept the first and silently dedupe the rest — which is why a multi-cell connect
-    // only ever placed one shunt. Allocate the lowest free instance for each shunt we add.
-    // The base comes from the device capabilities (gen-3: 1024); SHUNT_ID is the legacy fallback.
-    const shuntBase = this.caps?.shuntBase ?? SHUNT_ID;
-    const usedShunts = new Set(all.filter((x) => x.effectId >= shuntBase).map((x) => x.effectId - shuntBase));
-    let nextInst = 0;
-    const allocShunt = () => {
-      while (usedShunts.has(nextInst)) nextInst++;
-      usedShunts.add(nextInst);
-      return shuntBase + nextInst;
-    };
     try {
-      const ops: import('./history.svelte').HistoryOp[] = []; // mirror of the executed calls, for undo
-      // ensure a carrier cell exists in every intermediate column (along src.row)
-      for (let c = src.col + 1; c < destCol; c++) {
-        const cell = at(src.row, c);
-        if (!cell) {
-          const sid = allocShunt();
-          await forgefx.placeCell(this.#W(src.row), this.#W(c), sid);
-          ops.push({ kind: 'place', row: src.row, col: c, blockId: sid, display: 'Shunt' });
-        } else if (cell.kind === 'block') {
-          this.showToast('Clear the cells in between to route through', '#d6543f');
-          return;
-        }
-      }
-      // ensure the destination exists (shunt if dropped on an empty cell)
-      if (!at(destRow, destCol)) {
-        const sid = allocShunt();
-        await forgefx.placeCell(this.#W(destRow), this.#W(destCol), sid);
-        ops.push({ kind: 'place', row: destRow, col: destCol, blockId: sid, display: 'Shunt' });
-      }
-      // chain the cables: straight along src.row, then bend into destRow on the last hop
-      for (let c = src.col; c < destCol - 1; c++) {
-        await forgefx.cable(this.#W(src.row), this.#W(c), this.#W(src.row), true);
-        ops.push({ kind: 'cable', srcRow: src.row, srcCol: c, destRow: src.row, connect: true });
-      }
-      await forgefx.cable(this.#W(src.row), this.#W(destCol - 1), this.#W(destRow), true);
-      ops.push({ kind: 'cable', srcRow: src.row, srcCol: destCol - 1, destRow, connect: true });
-      history.recordComposite(`Connected ${src.display} → r${destRow + 1}c${destCol + 1}`, ops);
+      for (const op of plan.ops) await this.#runOp(op);
+      history.recordComposite(plan.label, plan.ops);
       await this.load();
       this.showToast('Connected', '#35c9d6');
     } catch {
-      /* */
+      this.load();
+    }
+  };
+
+  // Replace a SHUNT with a block, preserving the shunt's cable topology (inputs/outputs move onto
+  // the block). Shared by the add-block flow (place onto a shunt) and block-move-onto-shunt. One
+  // composite step; plan is pure (gridRouting.planReplaceShunt) → same optimistic/undo path.
+  replaceShunt = async (
+    target: Cell,
+    block: { blockId: number; display: string; src?: Cell },
+  ) => {
+    const plan = planReplaceShunt(this.layout.cells, this.layout.shunts, target, {
+      blockId: block.blockId,
+      display: block.display,
+      src: block.src ? { row: block.src.row, col: block.src.col, effectId: block.src.effectId, display: block.src.display, fromRows: block.src.fromRows } : undefined
+    });
+    if (!plan.ok) {
+      this.showToast(plan.error ?? 'Cannot place here', '#d6543f');
+      return;
+    }
+    try {
+      for (const op of plan.ops) await this.#runOp(op);
+      history.recordComposite(plan.label, plan.ops);
+      await this.load();
+      this.showToast(block.src ? 'Moved' : `Placed ${block.display}`, '#35c9d6');
+    } catch {
+      this.load();
     }
   };
   disconnect = async (srcRow: number, srcCol: number, destRow: number) => {
