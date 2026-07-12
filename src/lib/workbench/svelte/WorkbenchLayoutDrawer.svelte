@@ -248,6 +248,22 @@
   }
 </script>
 
+{#snippet iconPencil()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.4 2.1 13.9 4.6 5.1 13.4 2 14l.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+{#snippet iconTrash()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5 5 13.5h6l.5-9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+{#snippet iconExport()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12v2h10v-2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+
 {#if open}
   <button class="aw-layout-scrim" type="button" aria-label="Close layouts" onclick={onClose}></button>
   <aside
@@ -349,25 +365,21 @@
                 >
                   Apply
                 </button>
-                <button class="aw-layout-rename-btn" type="button" onclick={() => startRename(entry.id, entry.label)}>
-                  Rename
-                </button>
+                <button class="aw-layout-icon-btn" type="button" title={`Rename ${entry.label}`} aria-label={`Rename ${entry.label}`} onclick={() => startRename(entry.id, entry.label)}>{@render iconPencil()}</button>
                 <button
-                  class="aw-layout-export"
+                  class="aw-layout-icon-btn"
                   type="button"
                   title={`Export ${entry.label}`}
+                  aria-label={`Export ${entry.label}`}
                   onclick={() => exportSavedLayout(entry.id, entry.label)}
-                >
-                  Export
-                </button>
+                >{@render iconExport()}</button>
                 <button
-                  class="aw-layout-delete"
+                  class="aw-layout-icon-btn danger"
                   type="button"
                   title={`Delete ${entry.label}`}
+                  aria-label={`Delete ${entry.label}`}
                   onclick={() => controller.deletePageLayout(entry.id)}
-                >
-                  Delete
-                </button>
+                >{@render iconTrash()}</button>
               {/if}
             </div>
           {:else}
@@ -673,11 +685,22 @@
     opacity: 0.45;
     cursor: default;
   }
-  .aw-layout-delete:hover:not(:disabled) {
+  /* R17 (AXIS-26): rename / export / delete are compact square ICON actions so
+     the label owns the row width and nothing clips the drawer's right edge. */
+  .aw-layout-row button.aw-layout-icon-btn {
+    flex: none;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .aw-layout-row button.aw-layout-icon-btn.danger:hover:not(:disabled) {
     color: var(--aw-danger);
     border-color: var(--aw-danger);
   }
-  .aw-layout-export:hover:not(:disabled),
   .aw-layout-save:hover:not(:disabled) {
     color: var(--aw-accent);
     border-color: var(--aw-accent);

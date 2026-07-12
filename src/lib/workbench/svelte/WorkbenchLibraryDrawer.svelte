@@ -37,6 +37,8 @@
     instantiateWidgetTemplateCommands,
     labelFromWorkbenchType
   } from './library';
+  import { startPanelDragOut, startWidgetDragOut } from './libraryDrag';
+  import { widgetDropIndex } from './drag';
 
   let {
     open,
@@ -200,12 +202,6 @@
     onClose();
   }
 
-  function movePage(page: WorkbenchPage, delta: -1 | 1) {
-    const index = pages.findIndex((p) => p.id === page.id);
-    if (index < 0) return;
-    controller.movePage(page.id, index + delta);
-  }
-
   function deletePage(page: WorkbenchPage) {
     if (pages.length <= 1) return;
     controller.removePage(page.id);
@@ -215,7 +211,107 @@
     controller.dispatchMany(createCustomPanelCommands($controller.document, { region: DEFAULT_PANEL_REGION }));
     setStatus('ok', 'Custom panel added to this page.'); // toast candidate
   }
+
+  // ── Page reorder by drag (R17 / AXIS-26 — replaces the ▲▼ buttons) ────────
+  // Grab a page row's handle and drag it up/down; the grabbed row is highlighted
+  // while dragging and reorders to where it is dropped (index resolved against
+  // the row midpoints at drop time — computing once avoids the mid-drag feedback
+  // loop that comes from moving the row the pointer is measuring against).
+  // Disabled while a search filter is active (the visible order isn't canonical).
+  let reorderingPageId = $state<string | null>(null);
+  function pageReorderDown(page: WorkbenchPage, event: PointerEvent) {
+    if (!!q || event.button !== 0 || pages.length <= 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startedAt = { x: event.clientX, y: event.clientY };
+    let dragging = false;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - startedAt.x, ev.clientY - startedAt.y) < 5) return;
+      dragging = true;
+      reorderingPageId = page.id;
+      ev.preventDefault();
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      reorderingPageId = null;
+      if (!dragging) return;
+      const rects = Array.from(document.querySelectorAll<HTMLElement>('.aw-lib-row.page')).map((row) => {
+        const r = row.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height };
+      });
+      // Insertion index among the visible rows, adjusted for the dragged row's
+      // own removal to get the canonical destination index in `pageOrder`.
+      const insert = widgetDropIndex({ x: ev.clientX, y: ev.clientY }, rects, 'vertical');
+      const current = pages.findIndex((p) => p.id === page.id);
+      const dest = insert > current ? insert - 1 : insert;
+      if (dest >= 0 && dest < pages.length && dest !== current) controller.movePage(page.id, dest);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // ── Drag-OUT: drag a saved panel / widget row onto the layout (AXIS-26) ────
+  // The primary placement path (design `startLibDrag`): drag the row out and drop
+  // it exactly where wanted. Tap stays as the add-to-default fallback (the row's
+  // onclick). The drawer auto-collapses the instant the drag activates.
+  function panelTemplateDragOut(template: { id: string; title: string }, event: PointerEvent) {
+    startPanelDragOut({
+      controller,
+      event,
+      onActivate: onClose,
+      commit: ({ region }) => {
+        const found = $controller.document.panelLibrary[template.id];
+        return found ? instantiatePanelTemplateCommands($controller.document, found, { region }) : null;
+      }
+    });
+  }
+  function widgetTemplateDragOut(template: { id: string }, event: PointerEvent) {
+    startWidgetDragOut({
+      controller,
+      event,
+      onActivate: onClose,
+      commit: ({ zone, index }) => {
+        const found = $controller.document.widgetLibrary[template.id];
+        return found
+          ? instantiateWidgetTemplateCommands($controller.document, found, { zone: zone as WidgetZoneId, index })
+          : null;
+      }
+    });
+  }
+  function hiddenWidgetDragOut(widget: WidgetInstance, event: PointerEvent) {
+    startWidgetDragOut({
+      controller,
+      event,
+      onActivate: onClose,
+      commit: ({ zone, index }) => [
+        { type: 'widget.move', widgetIds: [widget.id], zone: zone as WidgetZoneId, index }
+      ]
+    });
+  }
 </script>
+
+{#snippet iconPencil()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.4 2.1 13.9 4.6 5.1 13.4 2 14l.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+{#snippet iconTrash()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5 5 13.5h6l.5-9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+{#snippet iconExport()}
+  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12v2h10v-2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+{/snippet}
+{#snippet iconGrip()}
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <g fill="currentColor"><circle cx="4" cy="3" r="1"></circle><circle cx="8" cy="3" r="1"></circle><circle cx="4" cy="6" r="1"></circle><circle cx="8" cy="6" r="1"></circle><circle cx="4" cy="9" r="1"></circle><circle cx="8" cy="9" r="1"></circle></g>
+  </svg>
+{/snippet}
 
 {#if open}
   <button class="aw-lib-scrim" type="button" aria-label={`Close ${title.toLowerCase()}`} onclick={onClose}></button>
@@ -264,30 +360,40 @@
             <button class="aw-lib-add-page" type="button" onclick={addPage}>＋ Add Page</button>
           </div>
           <div class="aw-lib-list">
-            {#each filteredPages as page, index (page.id)}
-              <div class="aw-lib-row page" class:active={page.id === activePageId} title={page.label}>
+            {#each filteredPages as page (page.id)}
+              <div
+                class="aw-lib-row page"
+                class:active={page.id === activePageId}
+                class:reordering={reorderingPageId === page.id}
+                title={page.label}
+              >
                 {#if renaming?.kind === 'page' && renaming.id === page.id}
                   <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Page name" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
                 {:else}
+                  <button
+                    class="aw-lib-drag-grip"
+                    type="button"
+                    title={!!q ? 'Clear the search to reorder pages' : 'Drag to reorder page'}
+                    aria-label="Drag to reorder page"
+                    disabled={!!q || pages.length <= 1}
+                    onpointerdown={(e) => pageReorderDown(page, e)}
+                  >{@render iconGrip()}</button>
                   <button class="aw-lib-page-open" type="button" title={`Go to ${page.label}`} onclick={() => goToPage(page)}>
                     <span class="aw-lib-ico">{page.id === activePageId ? '◉' : '◎'}</span>
                     <span class="aw-lib-page-label">{page.label}</span>
                   </button>
                   <i>{page.id === activePageId ? 'active' : 'open'}</i>
-                  <div class="aw-lib-reorder">
-                    <button type="button" title="Move page up" aria-label="Move page up" disabled={!!q || index === 0} onclick={() => movePage(page, -1)}>▲</button>
-                    <button type="button" title="Move page down" aria-label="Move page down" disabled={!!q || index === pages.length - 1} onclick={() => movePage(page, 1)}>▼</button>
-                  </div>
-                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename('page', page.id, page.label)}>Rename</button>
+                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${page.label}`} aria-label={`Rename ${page.label}`} onclick={() => startRename('page', page.id, page.label)}>{@render iconPencil()}</button>
                   <button
-                    class="aw-lib-delete"
+                    class="aw-lib-icon-btn danger"
                     type="button"
                     disabled={pages.length <= 1}
                     title={pages.length <= 1 ? 'The last page cannot be deleted' : `Delete ${page.label}`}
+                    aria-label={`Delete ${page.label}`}
                     onclick={() => deletePage(page)}
-                  >Delete</button>
+                  >{@render iconTrash()}</button>
                 {/if}
               </div>
             {:else}
@@ -304,28 +410,32 @@
           <div class="aw-lib-list">
             {#each panelTemplates as template (template.id)}
               <div class="aw-lib-row saved" title={template.title}>
-                <span class="aw-lib-ico">▤</span>
                 {#if renaming?.kind === 'panel' && renaming.id === template.id}
+                  <span class="aw-lib-ico">▤</span>
                   <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Panel title" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
                 {:else}
-                  <span>{template.title}</span>
-                  <i>{Object.keys(template.panels).length} panel</i>
                   <button
-                    class="aw-lib-load"
+                    class="aw-lib-grab"
                     type="button"
-                    title={`Add ${template.title} to this page`}
+                    title={`Drag ${template.title} onto the layout · tap to add to this page`}
+                    onpointerdown={(e) => panelTemplateDragOut(template, e)}
                     onclick={() => controller.dispatchMany(instantiatePanelTemplateCommands($controller.document, template, { region: DEFAULT_PANEL_REGION }))}
-                  >Add</button>
-                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename('panel', template.id, template.title)}>Rename</button>
-                  <button class="aw-lib-export" type="button" title={`Export ${template.title}`} onclick={() => exportPanelTemplate(template.id, template.title)}>Export</button>
+                  >
+                    <span class="aw-lib-ico">▤</span>
+                    <span class="aw-lib-label">{template.title}</span>
+                    <i>{Object.keys(template.panels).length} {Object.keys(template.panels).length === 1 ? 'panel' : 'panels'}</i>
+                  </button>
+                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('panel', template.id, template.title)}>{@render iconPencil()}</button>
+                  <button class="aw-lib-icon-btn" type="button" title={`Export ${template.title}`} aria-label={`Export ${template.title}`} onclick={() => exportPanelTemplate(template.id, template.title)}>{@render iconExport()}</button>
                   <button
-                    class="aw-lib-delete"
+                    class="aw-lib-icon-btn danger"
                     type="button"
                     title={`Delete ${template.title}`}
+                    aria-label={`Delete ${template.title}`}
                     onclick={() => controller.dispatch({ type: 'library.panel.delete', templateId: template.id })}
-                  >Delete</button>
+                  >{@render iconTrash()}</button>
                 {/if}
               </div>
             {:else}
@@ -347,22 +457,25 @@
           <div class="aw-lib-list">
             {#each widgetTemplates as template (template.id)}
               <div class="aw-lib-row saved" title={template.title}>
-                <span class="aw-lib-ico">⛁</span>
                 {#if renaming?.kind === 'widget' && renaming.id === template.id}
+                  <span class="aw-lib-ico">⛁</span>
                   <input class="aw-lib-rename" bind:value={renameDraft} aria-label="Widget title" onkeydown={renameKeydown} />
                   <button class="aw-lib-save" type="button" onclick={commitRename}>Save</button>
                   <button type="button" onclick={cancelRename}>Cancel</button>
                 {:else}
-                  <span>{template.title}</span>
-                  <i>{Object.keys(template.widgets).length} widgets</i>
                   <button
-                    class="aw-lib-load"
+                    class="aw-lib-grab"
                     type="button"
-                    title={`Add ${template.title} to your layout`}
+                    title={`Drag ${template.title} onto the layout · tap to add`}
+                    onpointerdown={(e) => widgetTemplateDragOut(template, e)}
                     onclick={() => controller.dispatchMany(instantiateWidgetTemplateCommands($controller.document, template, { zone: DEFAULT_WIDGET_ZONE }))}
-                  >Add</button>
-                  <button class="aw-lib-rename-btn" type="button" onclick={() => startRename('widget', template.id, template.title)}>Rename</button>
-                  <button class="aw-lib-delete" type="button" title={`Delete ${template.title}`} onclick={() => controller.dispatch({ type: 'library.widget.delete', templateId: template.id })}>Delete</button>
+                  >
+                    <span class="aw-lib-ico">⛁</span>
+                    <span class="aw-lib-label">{template.title}</span>
+                    <i>{Object.keys(template.widgets).length} {Object.keys(template.widgets).length === 1 ? 'widget' : 'widgets'}</i>
+                  </button>
+                  <button class="aw-lib-icon-btn" type="button" title={`Rename ${template.title}`} aria-label={`Rename ${template.title}`} onclick={() => startRename('widget', template.id, template.title)}>{@render iconPencil()}</button>
+                  <button class="aw-lib-icon-btn danger" type="button" title={`Delete ${template.title}`} aria-label={`Delete ${template.title}`} onclick={() => controller.dispatch({ type: 'library.widget.delete', templateId: template.id })}>{@render iconTrash()}</button>
                 {/if}
               </div>
             {:else}
@@ -372,12 +485,18 @@
         </section>
 
         <section class="aw-lib-section">
-          <h2>Hidden · Tap To Add</h2>
+          <h2>Hidden · Drag To Place Or Tap To Add</h2>
           <div class="aw-lib-list">
             {#each hiddenWidgets as widget (widget.id)}
-              <button class="aw-lib-row add" type="button" title={`Add ${widgetTitle(widget)}`} onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: DEFAULT_WIDGET_ZONE })}>
+              <button
+                class="aw-lib-row add aw-lib-draggable"
+                type="button"
+                title={`Drag ${widgetTitle(widget)} onto the layout · tap to add`}
+                onpointerdown={(e) => hiddenWidgetDragOut(widget, e)}
+                onclick={() => controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: DEFAULT_WIDGET_ZONE })}
+              >
                 <span class="aw-lib-ico">＋</span>
-                <span>{widgetTitle(widget)}</span>
+                <span class="aw-lib-label">{widgetTitle(widget)}</span>
                 <i>hidden</i>
               </button>
             {:else}
@@ -663,17 +782,111 @@
     font-size: 12.5px;
     font-weight: 800;
   }
-  .aw-lib-reorder {
-    flex: none;
+  /* R17 (AXIS-26): the row body is a single grab button (icon + name + meta) that
+     drags onto the layout / taps to add; the label owns the free space so names
+     are never truncated to a couple of letters. Rename/export/delete are compact
+     ICON buttons that no longer overflow the drawer's right edge. */
+  /* Scoped under `.aw-lib-row button` so they beat the generic bordered-button
+     rule (which otherwise forces min-width:54px + flex:none and pushed the grip
+     off the drawer's right edge). */
+  .aw-lib-row button.aw-lib-grab {
+    flex: 1;
+    min-width: 0;
+    height: auto;
     display: flex;
-    gap: 3px;
-  }
-  .aw-lib-reorder button {
-    width: 24px;
-    min-width: 24px;
-    height: 24px;
+    align-items: center;
+    gap: 10px;
     padding: 0;
-    font-size: 9px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--aw-text-2);
+    cursor: grab;
+    /* Touch: claim the gesture so a drag-out isn't stolen by list scroll. */
+    touch-action: none;
+    text-align: left;
+  }
+  .aw-lib-row button.aw-lib-grab:hover:not(:disabled) {
+    border-color: transparent;
+  }
+  .aw-lib-row button.aw-lib-grab:active {
+    cursor: grabbing;
+  }
+  .aw-lib-row.aw-lib-draggable {
+    cursor: grab;
+    touch-action: none;
+  }
+  .aw-lib-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--aw-text-2);
+  }
+  .aw-lib-grab:hover .aw-lib-label {
+    color: var(--aw-text);
+  }
+  /* Page reorder handle (replaces the ▲▼ buttons). */
+  .aw-lib-row button.aw-lib-drag-grip {
+    flex: none;
+    width: 22px;
+    min-width: 22px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--aw-text-faint);
+    cursor: grab;
+    touch-action: none;
+  }
+  .aw-lib-row button.aw-lib-drag-grip:hover:not(:disabled) {
+    color: var(--aw-text-2);
+  }
+  .aw-lib-row button.aw-lib-drag-grip:active {
+    cursor: grabbing;
+  }
+  .aw-lib-row button.aw-lib-drag-grip:disabled {
+    opacity: 0.32;
+    cursor: default;
+  }
+  /* Compact square icon actions (rename / export / delete). */
+  .aw-lib-row button.aw-lib-icon-btn {
+    flex: none;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--aw-border);
+    border-radius: 8px;
+    background: var(--aw-bg-2);
+    color: var(--aw-text-muted);
+  }
+  .aw-lib-row button.aw-lib-icon-btn:hover:not(:disabled) {
+    color: var(--aw-text);
+    border-color: var(--aw-accent);
+  }
+  .aw-lib-row button.aw-lib-icon-btn.danger:hover:not(:disabled) {
+    color: var(--aw-danger);
+    border-color: var(--aw-danger);
+  }
+  .aw-lib-row button.aw-lib-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  /* Page being dragged: lift it with an accent frame so the reorder reads. */
+  .aw-lib-row.page.reordering {
+    border-color: var(--aw-accent);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    opacity: 0.92;
   }
   .aw-lib-row:disabled {
     opacity: 0.48;
@@ -705,8 +918,7 @@
     cursor: pointer;
     font: 800 10px/1 var(--aw-font-ui);
   }
-  .aw-lib-row button.aw-lib-page-open,
-  .aw-lib-row .aw-lib-reorder button {
+  .aw-lib-row button.aw-lib-page-open {
     min-width: 0;
   }
   .aw-lib-row button:hover:not(:disabled) {
@@ -715,10 +927,6 @@
   }
   .aw-lib-row .aw-lib-page-open:hover {
     border: 0;
-  }
-  .aw-lib-delete:hover:not(:disabled) {
-    color: var(--aw-danger);
-    border-color: var(--aw-danger);
   }
   .aw-lib-save:hover:not(:disabled) {
     color: var(--aw-accent);
@@ -771,10 +979,6 @@
     border-color: color-mix(in srgb, var(--aw-danger) 44%, var(--aw-border));
     background: color-mix(in srgb, var(--aw-danger) 10%, transparent);
     color: var(--aw-danger);
-  }
-  .aw-lib-export:hover:not(:disabled) {
-    color: var(--aw-accent);
-    border-color: var(--aw-accent);
   }
   @keyframes awLibIn {
     from { opacity: 0; }

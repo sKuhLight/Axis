@@ -51,6 +51,67 @@ test.describe('Customize drawer', () => {
     await expect(rows).toHaveCount(before + 1);
   });
 
+  test('reorder pages by dragging the grip (R17 replaces the ▲▼ buttons)', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await openPages(page);
+
+    const labels = page.locator('.aw-lib-row.page .aw-lib-page-label');
+    expect(await labels.count()).toBeGreaterThan(2);
+    const firstBefore = await labels.first().textContent();
+
+    // Drag the first page's reorder grip down past the third row's midpoint.
+    // hover() first so the drawer's slide-in animation has settled before we read
+    // geometry (boundingBox does not auto-wait for a stable position).
+    const grip = page.locator('.aw-lib-row.page .aw-lib-drag-grip').first();
+    await grip.hover();
+    const gb = (await grip.boundingBox())!;
+    const thirdRow = (await page.locator('.aw-lib-row.page').nth(2).boundingBox())!;
+    await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2 + 8);
+    await page.mouse.move(thirdRow.x + thirdRow.width / 2, thirdRow.y + thirdRow.height * 0.75, { steps: 10 });
+    await page.mouse.up();
+
+    // The page that was first is no longer first (it moved down the list).
+    await expect(labels.first()).not.toHaveText(firstBefore ?? '');
+  });
+
+  test('drag a hidden widget out of the drawer onto the layout', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.getByRole('button', { name: /⧉ Widgets/ }).click();
+    await expect(page.locator('.aw-lib-drawer')).toBeVisible();
+
+    // Ensure a hidden widget exists: hide a placed one first.
+    const placed = page.locator('.aw-lib-row.placed:not([disabled])');
+    test.skip((await placed.count()) === 0, 'no unlocked placed widget available to hide');
+    await placed.first().click();
+
+    const hidden = page.locator('.aw-lib-row.add.aw-lib-draggable').first();
+    await expect(hidden).toBeVisible();
+    await hidden.hover();
+    const hb = (await hidden.boundingBox())!;
+
+    const topbar = (await page.locator('.aw-topbar').boundingBox())!;
+    const placedBefore = await page.locator('.aw-topbar [data-widget-host]').count();
+
+    // Manual pointer drag out of the drawer into the top bar.
+    await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(hb.x + hb.width / 2 - 8, hb.y + hb.height / 2 + 8);
+    await page.mouse.move(topbar.x + topbar.width / 2, topbar.y + topbar.height / 2, { steps: 12 });
+    // The drag-out drives the same drag machinery as in-layout drags.
+    await expect(page.locator('.aw-root.aw-dragging-widget')).toHaveCount(1);
+    // …and auto-collapses the drawer the instant it activates (design behaviour).
+    await expect(page.locator('.aw-lib-drawer')).toHaveCount(0);
+    await page.mouse.move(topbar.x + topbar.width / 2, topbar.y + topbar.height / 2, { steps: 4 });
+    await page.mouse.up();
+
+    // Drag cleared and the widget landed in the top bar.
+    await expect(page.locator('.aw-root.aw-dragging-widget')).toHaveCount(0);
+    await expect(page.locator('.aw-topbar [data-widget-host]')).toHaveCount(placedBefore + 1);
+  });
+
   test('Layouts view saves the active page and applies it back', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);

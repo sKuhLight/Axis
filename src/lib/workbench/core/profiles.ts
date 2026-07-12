@@ -33,6 +33,30 @@ export function classifyViewportWidth(width: number): ViewportClass {
   return 'desktop';
 }
 
+/** A device-preview frame size (px) — the in-window canvas a profile edits inside. */
+export interface PreviewFrameSize {
+  width: number;
+  height: number;
+  /** Corner radius for the letterboxed device frame (mobile is more rounded). */
+  radius: number;
+}
+
+/**
+ * Real editing-surface size for a device-preview frame, mirroring the design's
+ * constrained "frame" canvas (Axis Layout System.dc.html `frameStyle`): tablet is
+ * a 1024×760 device canvas, mobile a 400×820 phone canvas, both centered and
+ * letterboxed on a dark backdrop. Desktop returns `null` (full-window, no frame).
+ *
+ * The frame is a REAL smaller viewport — never a CSS transform/scale — so pointer
+ * coordinates stay 1:1 and the drag/menu de-zoom calibration (DragLayer) is
+ * unaffected (the round-13 de-zoom bug class only bites under an ancestor scale).
+ */
+export function previewFrameForClass(cls: ViewportClass): PreviewFrameSize | null {
+  if (cls === 'tablet') return { width: 1024, height: 760, radius: 18 };
+  if (cls === 'phone') return { width: 400, height: 820, radius: 28 };
+  return null;
+}
+
 /**
  * A profile's declared breakpoint, defaulting to 'desktop' when unset (matches the
  * schema's documented default: `WorkbenchProfile.breakpoint` is
