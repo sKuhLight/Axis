@@ -365,21 +365,23 @@
                 >
                   Apply
                 </button>
-                <button class="aw-layout-icon-btn" type="button" title={`Rename ${entry.label}`} aria-label={`Rename ${entry.label}`} onclick={() => startRename(entry.id, entry.label)}>{@render iconPencil()}</button>
-                <button
-                  class="aw-layout-icon-btn"
-                  type="button"
-                  title={`Export ${entry.label}`}
-                  aria-label={`Export ${entry.label}`}
-                  onclick={() => exportSavedLayout(entry.id, entry.label)}
-                >{@render iconExport()}</button>
-                <button
-                  class="aw-layout-icon-btn danger"
-                  type="button"
-                  title={`Delete ${entry.label}`}
-                  aria-label={`Delete ${entry.label}`}
-                  onclick={() => controller.deletePageLayout(entry.id)}
-                >{@render iconTrash()}</button>
+                <span class="aw-layout-row-actions">
+                  <button class="aw-layout-icon-btn" type="button" title={`Rename ${entry.label}`} aria-label={`Rename ${entry.label}`} onclick={() => startRename(entry.id, entry.label)}>{@render iconPencil()}</button>
+                  <button
+                    class="aw-layout-icon-btn"
+                    type="button"
+                    title={`Export ${entry.label}`}
+                    aria-label={`Export ${entry.label}`}
+                    onclick={() => exportSavedLayout(entry.id, entry.label)}
+                  >{@render iconExport()}</button>
+                  <button
+                    class="aw-layout-icon-btn danger"
+                    type="button"
+                    title={`Delete ${entry.label}`}
+                    aria-label={`Delete ${entry.label}`}
+                    onclick={() => controller.deletePageLayout(entry.id)}
+                  >{@render iconTrash()}</button>
+                </span>
               {/if}
             </div>
           {:else}
@@ -406,7 +408,7 @@
     right: 0;
     bottom: 0;
     z-index: 131;
-    width: 336px;
+    width: 348px;
     max-width: 90vw;
     padding-right: var(--aw-safe-right, 0px);
     padding-top: var(--aw-safe-top, 0px);
@@ -628,16 +630,27 @@
   }
   .aw-layout-row {
     min-width: 0;
-    min-height: 42px;
+    min-height: 48px;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 11px 12px;
     border: 1px solid var(--aw-border-2);
-    border-radius: 9px;
+    border-radius: 10px;
     background: var(--aw-surface);
     color: var(--aw-text-2);
     text-align: left;
+  }
+  /* Right-aligned icon column — same fixed width as the Pages/Widgets drawer so
+     rename/export/delete sit at the SAME x across every drawer view. The Apply
+     text button (primary verb) stays to its left. */
+  .aw-layout-row-actions {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    width: 102px;
   }
   .aw-layout-row:hover {
     border-color: var(--aw-accent);
@@ -651,13 +664,14 @@
     color: var(--aw-accent);
     font-size: 14px;
   }
-  .aw-layout-row span:not(.aw-layout-ico) {
+  .aw-layout-row span:not(.aw-layout-ico):not(.aw-layout-row-actions) {
     min-width: 0;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: 13px;
+    line-height: 1.35;
     font-weight: 800;
   }
   .aw-layout-row i {

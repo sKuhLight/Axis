@@ -48,7 +48,43 @@ export type WorkbenchDragState =
       // (design `!drag.overGroup && !drag.overUnit`).
       zoneInsert?: { zone: string; index: number };
       groupInsert?: { groupId: string; index: number };
+    }
+  | {
+      // Generic LIST-REORDER drag (design nav-reorder treatment, generalised):
+      // reorder an item inside an ordered list (the Customize drawer's page list
+      // today). It drives the SAME machinery as the widget/panel drags — a
+      // DragLayer ghost anchored at the grab offset + an in-flow dashed slot
+      // spliced into the list flow — so it feels identical, instead of the R17
+      // bespoke second implementation.
+      kind: 'list';
+      /** Which list this drag belongs to (a rendered list keys its slot on this). */
+      listId: string;
+      /** The dragged item's id (kept lifted/hidden in the list while travelling). */
+      itemId: string;
+      pointer: WorkbenchPointer;
+      startedAt: WorkbenchPointer;
+      targetLabel?: string;
+      // Origin rect size + grab offset (design `drag.w/h` + `offx/offy`): sizes the
+      // in-flow slot and anchors the full-size ghost under the pointer. Visual px.
+      size?: { width: number; height: number };
+      grabOffset?: { x: number; y: number };
+      /**
+       * Cloned DOM node of the grabbed row — DragLayer renders it as the travelling
+       * ghost (the framework needs no knowledge of what a row looks like; it shows
+       * whatever the caller grabbed). Transient, never persisted.
+       */
+      ghostEl?: HTMLElement;
+      orientation?: 'horizontal' | 'vertical';
+      /**
+       * IN-FLOW insertion target: the list `listId` splices a dashed slot at
+       * `index` — the insertion index among the list's NON-dragged items (so it
+       * maps 1:1 onto a `page.move`-style filter-then-splice reorder).
+       */
+      listInsert?: { listId: string; index: number };
     };
+
+/** Shared pointer-move activation threshold (px) for every workbench drag. */
+export const DRAG_THRESHOLD = 5;
 
 export type PanelDropIntent =
   | { kind: 'region'; region: DockRegionId; index?: number }
@@ -118,6 +154,24 @@ export function widgetDropIndex(pointer: WorkbenchPointer, itemRects: WorkbenchR
     return coord < midpoint;
   });
   return index === -1 ? itemRects.length : index;
+}
+
+/**
+ * Insertion index for a LIST-REORDER drag. Hit-test the pointer against the
+ * item midpoints EXCLUDING the dragged item, yielding the destination index in
+ * the REMAINING order — which is exactly what a filter-then-splice reorder
+ * (`page.move`) consumes, and what the in-flow slot renders against (the dragged
+ * row is lifted out of the flow, so the slot lives among the survivors). Passing
+ * `draggedIndex < 0` (item not in the list) hit-tests against every rect.
+ */
+export function listReorderInsertIndex(
+  pointer: WorkbenchPointer,
+  itemRects: WorkbenchRect[],
+  draggedIndex: number,
+  orientation: 'horizontal' | 'vertical'
+): number {
+  const rest = draggedIndex >= 0 ? itemRects.filter((_, i) => i !== draggedIndex) : itemRects;
+  return widgetDropIndex(pointer, rest, orientation);
 }
 
 /**

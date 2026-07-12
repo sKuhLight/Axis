@@ -143,6 +143,7 @@
     class:aw-editing={$controller.editMode}
     class:aw-dragging-panel={$controller.drag?.kind === 'panel'}
     class:aw-dragging-widget={$controller.drag?.kind === 'widget'}
+    class:aw-dragging-list={$controller.drag?.kind === 'list'}
     class:aw-nav-bottom={navMode === 'bottom'}
     style={rootStyle}
   >
