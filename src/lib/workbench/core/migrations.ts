@@ -41,6 +41,7 @@ function migrateLegacy(input: Record<string, unknown>): WorkbenchDocument {
     layouts,
     panelLibrary: isRecordMap(input.panelLibrary) ? input.panelLibrary : {},
     widgetLibrary: isRecordMap(input.widgetLibrary) ? input.widgetLibrary : {},
+    pageLayouts: isRecordMap(input.pageLayouts) ? input.pageLayouts : {},
     metadata: isRecord(input.metadata) ? input.metadata : {},
     rev: sanitizeRev(input.rev),
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined

@@ -23,6 +23,15 @@ export interface WorkbenchDocument {
   panelLibrary: Record<string, PanelTemplate>;
   widgetLibrary: Record<string, WidgetTemplate>;
   /**
+   * Shared, document-level store of saved PAGE layouts (schema v2). A page
+   * layout is a self-contained snapshot of one page's dock plus the panel
+   * instances that dock references; it can be saved from — and applied to —
+   * the active page of any layout/profile. Distinct from `layouts` (the big
+   * per-profile layouts): page layouts are the small, page-scoped presets the
+   * Customize → Layouts drawer manages. Optional + repair-safe (defaults to {}).
+   */
+  pageLayouts: Record<string, WorkbenchPageLayout>;
+  /**
    * Explicit user profile choice that pins the active profile regardless of the
    * viewport class (e.g. a PROFILE switcher). When set to a profile that exists,
    * the profile resolver always returns it; clearing it (undefined) hands control
@@ -96,6 +105,21 @@ export interface WorkbenchPage {
   icon?: string;
   dock: DockLayout;
   metadata?: JsonObject;
+}
+
+/**
+ * A saved, portable PAGE layout: one page's dock plus the panel instances the
+ * dock references, kept self-contained so it can be re-minted and applied onto
+ * any page. Backs the document-level `pageLayouts` store and the page-layout
+ * package (import/export). Interior ids are inert until `pageLayout.apply`
+ * re-mints them onto the target page.
+ */
+export interface WorkbenchPageLayout {
+  id: string;
+  label: string;
+  page: WorkbenchPage;
+  panels: Record<string, PanelInstance>;
+  createdAt?: string;
 }
 
 export interface DockLayout {

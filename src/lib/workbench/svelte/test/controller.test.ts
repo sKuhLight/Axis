@@ -329,6 +329,42 @@ describe('WorkbenchController — pages', () => {
     expect(controller.activePage?.dock.root.main).toBeNull();
   });
 
+  it('movePage reorders pages through the reducer', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    controller.addPage({ id: 'page.two', label: 'Two' });
+    controller.addPage({ id: 'page.three', label: 'Three' });
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.one', 'page.two', 'page.three']);
+
+    const result = controller.movePage('page.three', 0);
+    expect(result.success).toBe(true);
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.three', 'page.one', 'page.two']);
+  });
+
+  it('savePageLayout / applyPageLayout round-trip through the shared store', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    controller.dispatch({ type: 'panel.add', panel: { id: 'panel.a', type: 'test.panel' }, region: 'main' });
+    controller.addPage({ id: 'page.two', label: 'Two' }); // empty page, now active
+
+    const snapshot = {
+      id: 'pl.1',
+      label: 'Saved',
+      page: structuredClone(controller.activeLayout!.pages['page.one']),
+      panels: { 'panel.a': structuredClone(controller.activeLayout!.panels['panel.a']) }
+    };
+    expect(controller.savePageLayout(snapshot).success).toBe(true);
+    expect(controller.pageLayouts.map((entry) => entry.id)).toEqual(['pl.1']);
+
+    // Apply onto the empty active page (page.two) — it gains a re-minted panel.
+    expect(controller.applyPageLayout('pl.1').success).toBe(true);
+    const two = controller.activeLayout!.pages['page.two'];
+    expect(two.dock.root.main?.kind).toBe('tabs');
+
+    expect(controller.renamePageLayout('pl.1', 'Renamed').success).toBe(true);
+    expect(controller.pageLayouts[0].label).toBe('Renamed');
+    expect(controller.deletePageLayout('pl.1').success).toBe(true);
+    expect(controller.pageLayouts).toEqual([]);
+  });
+
   it('activatePage switches pages; dock commands then land on the new page', () => {
     const controller = createWorkbenchController(pagedDoc());
     controller.addPage({ id: 'page.two', label: 'Two' });

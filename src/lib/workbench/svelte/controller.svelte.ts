@@ -16,6 +16,7 @@ import {
   type WorkbenchDocument,
   type WorkbenchLayout,
   type WorkbenchPage,
+  type WorkbenchPageLayout,
   type WorkbenchProfile
 } from '../core';
 import {
@@ -212,6 +213,34 @@ export class WorkbenchController {
 
   duplicatePage(pageId: string, options: { newPageId?: string; label?: string } = {}): WorkbenchCommandResult {
     return this.dispatch({ type: 'page.duplicate', pageId, newPageId: options.newPageId, label: options.label });
+  }
+
+  /** Reorder a page within the layout's `pageOrder` (and its bound nav entry). */
+  movePage(pageId: string, index: number): WorkbenchCommandResult {
+    return this.dispatch({ type: 'page.move', pageId, index });
+  }
+
+  // ── Page layouts (shared document store; thin command wrappers) ──────────
+
+  /** The shared, document-level saved page layouts. */
+  get pageLayouts(): WorkbenchPageLayout[] {
+    return Object.values(this.document.pageLayouts ?? {});
+  }
+
+  savePageLayout(pageLayout: WorkbenchPageLayout): WorkbenchCommandResult {
+    return this.dispatch({ type: 'pageLayout.save', pageLayout });
+  }
+
+  applyPageLayout(pageLayoutId: string, pageId?: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'pageLayout.apply', pageLayoutId, pageId });
+  }
+
+  renamePageLayout(pageLayoutId: string, label: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'pageLayout.rename', pageLayoutId, label });
+  }
+
+  deletePageLayout(pageLayoutId: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'pageLayout.delete', pageLayoutId });
   }
 
   // ── Layout undo/redo (in-memory only; see layoutHistory.ts) ──────────────

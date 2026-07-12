@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyWorkbenchDocument, reduceWorkbenchDocument, selectActiveLayout } from '../../core';
-import { canDeleteLayout, createLayoutSnapshot, isLayoutReferenced } from '../layouts';
+import { canDeleteLayout, createLayoutSnapshot, createPageLayoutSnapshot, isLayoutReferenced } from '../layouts';
 
 describe('layout library helpers', () => {
   it('creates collision-safe snapshots from the active layout', () => {
@@ -33,6 +33,27 @@ describe('layout library helpers', () => {
     expect(saved.success).toBe(true);
     expect(selectActiveLayout(doc)?.id).toBe('layout.stage');
     expect(selectActiveLayout(doc)?.navigation.mode).toBe('bottom');
+  });
+
+  it('snapshots the active page (dock + referenced panels) as a page layout', () => {
+    let doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    doc = reduceWorkbenchDocument(doc, {
+      type: 'panel.add',
+      panel: { id: 'panel.a', type: 'test.panel', title: 'A' },
+      region: 'main'
+    }).next;
+
+    const snapshot = createPageLayoutSnapshot(doc, { id: 'pl.1', label: 'My Page' })!;
+    expect(snapshot.id).toBe('pl.1');
+    expect(snapshot.label).toBe('My Page');
+    expect(Object.keys(snapshot.panels)).toEqual(['panel.a']);
+    expect(snapshot.createdAt).toBeTypeOf('string');
+
+    // Round-trips through the store: save then apply back onto the active page.
+    let saved = reduceWorkbenchDocument(doc, { type: 'pageLayout.save', pageLayout: snapshot });
+    expect(saved.success).toBe(true);
+    const applied = reduceWorkbenchDocument(saved.next, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' });
+    expect(applied.success).toBe(true);
   });
 
   it('reports which layouts can be deleted', () => {

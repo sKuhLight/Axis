@@ -37,16 +37,18 @@
 
 <script lang="ts">
   import {
-    exportLayoutPackage,
+    exportPageLayoutPackage,
     importLayoutPackage,
+    importPageLayoutPackage,
     importPanelPackage,
     layoutPackageFilename,
-    selectActiveLayout
+    selectActivePage,
+    type WorkbenchPageLayout
   } from '../core';
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
-  import { canDeleteLayout, createLayoutSnapshot } from './layouts';
+  import { createPageLayoutSnapshot } from './layouts';
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
 
@@ -64,9 +66,19 @@
   });
 
   const { controller } = getWorkbenchContext();
-  const activeLayoutId = $derived($controller.activeProfile?.layoutId);
-  const activeLayout = $derived(selectActiveLayout($controller.document));
-  const layouts = $derived(Object.values($controller.document.layouts).sort((a, b) => a.label.localeCompare(b.label)));
+  // R16 / AXIS-24: the Layouts drawer is PAGE-scoped now. The big per-profile
+  // layouts are the profiles (ribbon LAYOUT/PROFILE tabs); here we manage the
+  // ONE shared page-layout store — save the ACTIVE page's dock into it, apply a
+  // stored layout ONTO the active page. Import/export uses the page-layout
+  // package (older whole-layout / panel packages still import for compatibility).
+  const activePage = $derived(selectActivePage($controller.document));
+  let query = $state('');
+  const q = $derived(query.trim().toLowerCase());
+  const pageLayouts = $derived(
+    $controller.pageLayouts
+      .filter((entry) => !q || entry.label.toLowerCase().includes(q))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  );
   let renamingLayoutId = $state<string | null>(null);
   let renameDraft = $state('');
 
@@ -80,9 +92,22 @@
   }
 
   function saveSnapshot() {
-    const index = Object.keys($controller.document.layouts).length + 1;
-    const layout = createLayoutSnapshot($controller.document, { label: `Saved Layout ${index}` });
-    if (layout) controller.dispatch({ type: 'layout.save', layout });
+    const index = $controller.pageLayouts.length + 1;
+    const pageLayout = createPageLayoutSnapshot($controller.document, {
+      label: activePage ? `${activePage.label} Layout ${index}` : `Page Layout ${index}`
+    });
+    if (!pageLayout) {
+      setStatus('error', 'No active page to save.'); // toast candidate
+      return;
+    }
+    const result = controller.savePageLayout(pageLayout);
+    if (result.success) setStatus('ok', `Saved “${pageLayout.label}”.`); // toast candidate
+  }
+
+  function applyLayout(entry: WorkbenchPageLayout) {
+    const result = controller.applyPageLayout(entry.id);
+    if (result.success) setStatus('ok', `Applied “${entry.label}” to ${activePage?.label ?? 'this page'}.`); // toast candidate
+    else setStatus('error', result.error?.message ?? 'Could not apply layout.'); // toast candidate
   }
 
   function startRename(layoutId: string, label: string) {
@@ -92,7 +117,7 @@
 
   function commitRename() {
     if (!renamingLayoutId) return;
-    const result = controller.dispatch({ type: 'layout.rename', layoutId: renamingLayoutId, label: renameDraft });
+    const result = controller.renamePageLayout(renamingLayoutId, renameDraft);
     if (result.success) renamingLayoutId = null;
   }
 
@@ -119,19 +144,36 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportSavedLayout(layoutId: string, label: string) {
-    const pkg = exportLayoutPackage($controller.document, layoutId);
+  function exportSavedLayout(pageLayoutId: string, label: string) {
+    const pkg = exportPageLayoutPackage($controller.document, pageLayoutId);
     if (!pkg) {
       setStatus('error', `Could not export "${label}".`); // toast candidate
       return;
     }
-    downloadJson(layoutPackageFilename(label), pkg);
+    downloadJson(layoutPackageFilename(label, 'page-layout'), pkg);
     setStatus('ok', `Exported "${label}".`); // toast candidate
   }
 
-  // Import a layout OR panel package. Imported layouts are ADDED (layout.save)
-  // and NOT auto-applied; imported panels land in the panel library; every id
-  // is re-minted upstream.
+  // Export the ACTIVE page directly as a page-layout package (snapshot without
+  // storing it first).
+  function exportCurrentPage() {
+    const snapshot = createPageLayoutSnapshot($controller.document, {
+      label: activePage?.label ?? 'Page Layout'
+    });
+    if (!snapshot) {
+      setStatus('error', 'No active page to export.'); // toast candidate
+      return;
+    }
+    const pkg = exportPageLayoutPackage({ pageLayouts: { [snapshot.id]: snapshot } }, snapshot.id);
+    if (!pkg) return;
+    downloadJson(layoutPackageFilename(snapshot.label, 'page-layout'), pkg);
+    setStatus('ok', `Exported “${snapshot.label}”.`); // toast candidate
+  }
+
+  // Import a page-layout package (primary) — ADDED to the shared store and NOT
+  // auto-applied. Older whole-layout / panel packages still import for
+  // compatibility (a layout becomes a big layout; a panel lands in the panel
+  // library). Every id is re-minted upstream.
   async function onImportFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -145,10 +187,18 @@
       return;
     }
 
+    const asPageLayout = importPageLayoutPackage(parsed);
+    if (asPageLayout.success) {
+      const result = controller.savePageLayout(asPageLayout.payload);
+      if (result.success) setStatus('ok', `Imported “${asPageLayout.payload.label}” — apply it below.`); // toast candidate
+      else setStatus('error', 'Imported page layout could not be saved.'); // toast candidate
+      return;
+    }
+
     const asLayout = importLayoutPackage(parsed);
     if (asLayout.success) {
       const result = controller.dispatch({ type: 'layout.save', layout: asLayout.payload });
-      if (result.success) setStatus('ok', `Imported layout "${asLayout.payload.label}" — apply it below.`); // toast candidate
+      if (result.success) setStatus('ok', `Imported layout "${asLayout.payload.label}" — pick it as a profile layout.`); // toast candidate
       else setStatus('error', 'Imported layout could not be saved.'); // toast candidate
       return;
     }
@@ -156,13 +206,13 @@
     const asPanel = importPanelPackage(parsed);
     if (asPanel.success) {
       const result = controller.dispatch({ type: 'library.panel.save', template: asPanel.payload });
-      if (result.success) setStatus('ok', `Imported panel "${asPanel.payload.title}" — add it from the Panels browser.`); // toast candidate
+      if (result.success) setStatus('ok', `Imported panel "${asPanel.payload.title}" — add it from Pages.`); // toast candidate
       else setStatus('error', 'Imported panel could not be saved.'); // toast candidate
       return;
     }
 
-    // Report the most specific failure (layout parse is the primary path here).
-    setStatus('error', asLayout.error.message); // toast candidate
+    // Report the most specific failure (page-layout parse is the primary path).
+    setStatus('error', asPageLayout.error.message); // toast candidate
   }
 
   // Backups (app-provided seam above): the list is re-read every time the
@@ -174,6 +224,7 @@
     backups = workbenchBackupProvider?.list() ?? [];
     confirmBackupSlot = null;
     status = null;
+    query = '';
   });
 
   function backupTimestamp(entry: WorkbenchBackupEntry): string {
@@ -213,24 +264,41 @@
     </header>
 
     <div class="aw-layout-actions">
-      <button type="button" onclick={saveSnapshot}>Save Current Layout</button>
+      <button type="button" onclick={saveSnapshot}>Save This Page As Layout</button>
       <div class="aw-layout-io">
         <button type="button" class="aw-layout-io-btn" onclick={() => fileInput?.click()}>Import .json</button>
-        <button type="button" class="aw-layout-io-btn" disabled={!activeLayout} onclick={() => activeLayout && exportSavedLayout(activeLayout.id, activeLayout.label)}>
-          Export Current
+        <button type="button" class="aw-layout-io-btn" disabled={!activePage} onclick={exportCurrentPage}>
+          Export This Page
         </button>
         <input
           bind:this={fileInput}
           class="aw-layout-file"
           type="file"
           accept="application/json,.json"
-          aria-label="Import layout or panel package"
+          aria-label="Import page layout package"
           onchange={onImportFile}
         />
       </div>
+      <p class="aw-layout-hint">
+        Layouts apply to the active page{#if activePage} — <strong>{activePage.label}</strong>{/if}. The big
+        pre-built layouts live under the ribbon’s Profile / Layout tabs.
+      </p>
       {#if status}
         <p class="aw-layout-status" class:error={status.tone === 'error'} role="status">{status.message}</p>
       {/if}
+    </div>
+
+    <div class="aw-layout-searchbar">
+      <div class="aw-layout-search">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+          <path d="M10.8 10.8 L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+        </svg>
+        <input bind:value={query} placeholder="Search saved layouts…" aria-label="Search saved page layouts" />
+        {#if query}
+          <button type="button" class="aw-layout-search-clear" title="Clear search" aria-label="Clear search" onclick={() => (query = '')}>×</button>
+        {/if}
+      </div>
     </div>
 
     <div class="aw-layout-scroll" bind:this={scrollEl}>
@@ -262,51 +330,48 @@
       {/if}
 
       <section class="aw-layout-section">
-        <h2>Saved Layouts</h2>
+        <h2>Saved Page Layouts</h2>
         <div class="aw-layout-list">
-          {#each layouts as layout (layout.id)}
-            <div
-              class="aw-layout-row"
-              class:active={layout.id === activeLayoutId}
-              title={layout.label}
-            >
-              {#if renamingLayoutId === layout.id}
+          {#each pageLayouts as entry (entry.id)}
+            <div class="aw-layout-row" title={entry.label}>
+              {#if renamingLayoutId === entry.id}
                 <input class="aw-layout-rename" bind:value={renameDraft} aria-label="Layout name" onkeydown={renameKeydown} />
                 <button class="aw-layout-save" type="button" onclick={commitRename}>Save</button>
                 <button class="aw-layout-cancel" type="button" onclick={cancelRename}>Cancel</button>
               {:else}
-                <span>{layout.label}</span>
-                <i>{layout.id === activeLayoutId ? 'active' : 'apply'}</i>
+                <span>{entry.label}</span>
+                <i>{Object.keys(entry.panels ?? {}).length} {Object.keys(entry.panels ?? {}).length === 1 ? 'panel' : 'panels'}</i>
                 <button
                   class="aw-layout-apply"
                   type="button"
-                  disabled={layout.id === activeLayoutId}
-                  onclick={() => controller.dispatch({ type: 'layout.apply', layoutId: layout.id })}
+                  title={`Apply “${entry.label}” to ${activePage?.label ?? 'the active page'}`}
+                  onclick={() => applyLayout(entry)}
                 >
                   Apply
                 </button>
-                <button class="aw-layout-rename-btn" type="button" onclick={() => startRename(layout.id, layout.label)}>
+                <button class="aw-layout-rename-btn" type="button" onclick={() => startRename(entry.id, entry.label)}>
                   Rename
                 </button>
                 <button
                   class="aw-layout-export"
                   type="button"
-                  title={`Export ${layout.label}`}
-                  onclick={() => exportSavedLayout(layout.id, layout.label)}
+                  title={`Export ${entry.label}`}
+                  onclick={() => exportSavedLayout(entry.id, entry.label)}
                 >
                   Export
                 </button>
                 <button
                   class="aw-layout-delete"
                   type="button"
-                  disabled={!canDeleteLayout($controller.document, layout.id)}
-                  title={canDeleteLayout($controller.document, layout.id) ? `Delete ${layout.label}` : 'Layout is in use'}
-                  onclick={() => controller.dispatch({ type: 'layout.delete', layoutId: layout.id })}
+                  title={`Delete ${entry.label}`}
+                  onclick={() => controller.deletePageLayout(entry.id)}
                 >
                   Delete
                 </button>
               {/if}
             </div>
+          {:else}
+            <p class="aw-layout-empty">{q ? 'No saved layouts match your search.' : 'No saved page layouts yet — “Save This Page As Layout” above.'}</p>
           {/each}
         </div>
       </section>
@@ -460,6 +525,62 @@
     background: color-mix(in srgb, var(--aw-danger) 10%, transparent);
     color: var(--aw-danger);
   }
+  .aw-layout-hint {
+    margin: 0;
+    color: var(--aw-text-faint);
+    font: 600 10.5px/1.5 var(--aw-font-ui);
+  }
+  .aw-layout-hint strong {
+    color: var(--aw-text-2);
+    font-weight: 800;
+  }
+  .aw-layout-searchbar {
+    flex: none;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--aw-border);
+  }
+  .aw-layout-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--aw-border-2);
+    border-radius: 9px;
+    background: var(--aw-bg);
+    color: var(--aw-text-faint);
+  }
+  .aw-layout-search:focus-within {
+    border-color: var(--aw-accent);
+  }
+  .aw-layout-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--aw-text);
+    font: 600 12.5px/1 var(--aw-font-ui);
+  }
+  .aw-layout-search-clear {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--aw-surface-2);
+    color: var(--aw-text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .aw-layout-empty {
+    margin: 0;
+    padding: 14px;
+    color: var(--aw-text-faint);
+    text-align: center;
+    font: 600 11px/1.4 var(--aw-font-mono);
+  }
   .aw-layout-scroll {
     flex: 1;
     min-height: 0;
@@ -508,9 +629,6 @@
   }
   .aw-layout-row:hover {
     border-color: var(--aw-accent);
-  }
-  .aw-layout-row.active {
-    border-color: var(--aw-border);
   }
   .aw-layout-row.backup {
     background: color-mix(in srgb, var(--aw-accent) 5%, var(--aw-surface));

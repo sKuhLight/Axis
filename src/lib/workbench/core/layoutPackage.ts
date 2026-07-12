@@ -9,7 +9,8 @@ import type {
   WidgetGroup,
   WidgetInstance,
   WorkbenchLayout,
-  WorkbenchPage
+  WorkbenchPage,
+  WorkbenchPageLayout
 } from './schema';
 
 /**
@@ -29,9 +30,13 @@ import type {
 
 export const LAYOUT_PACKAGE_KIND = 'workbench.layout.package' as const;
 export const PANEL_PACKAGE_KIND = 'workbench.panel.package' as const;
+export const PAGE_LAYOUT_PACKAGE_KIND = 'workbench.pageLayout.package' as const;
 export const LAYOUT_PACKAGE_VERSION = 1 as const;
 
-export type LayoutPackageKind = typeof LAYOUT_PACKAGE_KIND | typeof PANEL_PACKAGE_KIND;
+export type LayoutPackageKind =
+  | typeof LAYOUT_PACKAGE_KIND
+  | typeof PANEL_PACKAGE_KIND
+  | typeof PAGE_LAYOUT_PACKAGE_KIND;
 
 export interface LayoutPackage {
   kind: typeof LAYOUT_PACKAGE_KIND;
@@ -48,7 +53,15 @@ export interface PanelPackage {
   template: PanelTemplate;
 }
 
-export type WorkbenchPortablePackage = LayoutPackage | PanelPackage;
+export interface PageLayoutPackage {
+  kind: typeof PAGE_LAYOUT_PACKAGE_KIND;
+  version: typeof LAYOUT_PACKAGE_VERSION;
+  schemaVersion: typeof WORKBENCH_SCHEMA_VERSION;
+  /** A self-contained saved page layout (one page's dock + the panels it references). */
+  pageLayout: WorkbenchPageLayout;
+}
+
+export type WorkbenchPortablePackage = LayoutPackage | PanelPackage | PageLayoutPackage;
 
 export type LayoutPackageErrorCode =
   | 'not-an-object'
@@ -102,6 +115,20 @@ export function exportPanelPackage(doc: { panelLibrary: Record<string, PanelTemp
     version: LAYOUT_PACKAGE_VERSION,
     schemaVersion: WORKBENCH_SCHEMA_VERSION,
     template: clone(template)
+  };
+}
+
+export function exportPageLayoutPackage(
+  doc: { pageLayouts: Record<string, WorkbenchPageLayout> },
+  pageLayoutId: string
+): PageLayoutPackage | null {
+  const pageLayout = doc.pageLayouts?.[pageLayoutId];
+  if (!pageLayout) return null;
+  return {
+    kind: PAGE_LAYOUT_PACKAGE_KIND,
+    version: LAYOUT_PACKAGE_VERSION,
+    schemaVersion: WORKBENCH_SCHEMA_VERSION,
+    pageLayout: clone(pageLayout)
   };
 }
 
@@ -470,7 +497,8 @@ export function importLayoutPackage(pkg: unknown): ImportLayoutResult<WorkbenchL
     profiles: { 'probe.profile': { id: 'probe.profile', label: 'probe', layoutId: reminted.id } },
     layouts: { [reminted.id]: reminted },
     panelLibrary: {},
-    widgetLibrary: {}
+    widgetLibrary: {},
+    pageLayouts: {}
   });
   const repaired = probe.layouts[reminted.id];
   if (!repaired) {
@@ -497,4 +525,42 @@ export function importPanelPackage(pkg: unknown): ImportLayoutResult<PanelTempla
     return { success: false, error: new LayoutPackageError('malformed', 'Package template is missing required fields.') };
   }
   return { success: true, payload: remintPanelTemplate(template) };
+}
+
+function looksLikePageLayout(value: unknown): value is WorkbenchPageLayout {
+  if (!isRecord(value)) return false;
+  const page = value.page;
+  return isRecord(page) && isRecord((page as Record<string, unknown>).dock) && isRecord(value.panels);
+}
+
+/**
+ * Parse + validate a page-layout package and return a fully re-minted
+ * {@link WorkbenchPageLayout} (fresh top-level id + re-minted interior page /
+ * panel / dock-node ids) ready for `pageLayout.save`. Re-minting keeps a
+ * round-trip import into the source document collision-free even before apply
+ * re-mints again.
+ */
+export function importPageLayoutPackage(pkg: unknown): ImportLayoutResult<WorkbenchPageLayout> {
+  const err = baseChecks(pkg, PAGE_LAYOUT_PACKAGE_KIND);
+  if (err) return { success: false, error: err };
+  const pageLayout = (pkg as PageLayoutPackage).pageLayout;
+  if (!looksLikePageLayout(pageLayout)) {
+    return { success: false, error: new LayoutPackageError('malformed', 'Package page layout is missing required fields.') };
+  }
+  const label =
+    typeof pageLayout.label === 'string' && pageLayout.label.trim() ? pageLayout.label.trim() : 'Imported Page Layout';
+  const { page, panels } = remintWorkbenchPage(pageLayout.page, pageLayout.panels ?? {}, {
+    pageId: createWorkbenchId('page'),
+    label
+  });
+  return {
+    success: true,
+    payload: {
+      id: createWorkbenchId('pageLayout'),
+      label,
+      page,
+      panels,
+      createdAt: new Date().toISOString()
+    }
+  };
 }
