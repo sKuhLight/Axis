@@ -36,3 +36,6 @@ CLAUDE.local.md
 
 # Explicitly local design notes (surfaced when /CLAUDE.md was root-anchored)
 /design/CLAUDE.md
+
+# stack-worktree.sh parallel-work worktrees
+.wt-*/

@@ -1,5 +1,6 @@
 import type {
   DockAxis,
+  DockLayout,
   DockNode,
   DockRegionId,
   FloatingRect,
@@ -10,11 +11,15 @@ import type {
   WidgetInstance,
   WidgetZoneId,
   WorkbenchDocument,
-  WorkbenchLayout
+  WorkbenchLayout,
+  WorkbenchPage
 } from './schema';
 import { DEFAULT_WIDGET_ZONES, isDockRegionId } from './schema';
 import { createWorkbenchId } from './ids';
+import { createEmptyDockLayout } from './defaults';
 import { cloneWorkbenchDocument, normalizeRatios, repairWorkbenchDocument } from './invariants';
+import { remintWorkbenchPage } from './layoutPackage';
+import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInPageDock } from './selectors';
 import type { DockTarget, WorkbenchCommand, WorkbenchCommandResult, WorkbenchErrorCode } from './commands';
 
 interface InsertResult {
@@ -44,6 +49,15 @@ const fail = (
 function activeLayout(doc: WorkbenchDocument): WorkbenchLayout | undefined {
   const profile = doc.profiles[doc.activeProfileId];
   return profile ? doc.layouts[profile.layoutId] : undefined;
+}
+
+/**
+ * The dock every dock-scoped command (panel.*, region.*, split.resize) operates
+ * on: the ACTIVE page's. Repair guarantees at least one page, so this only
+ * returns `undefined` on documents that bypassed repair entirely.
+ */
+function activePageDock(layout: WorkbenchLayout): DockLayout | undefined {
+  return activeWorkbenchPage(layout)?.dock;
 }
 
 const makeTabStack = (panelId: string): TabStackDockNode => ({
@@ -98,20 +112,30 @@ function removePanelFromNode(node: DockNode | null, panelId: string): { node: Do
   };
 }
 
-function removePanelFromDock(layout: WorkbenchLayout, panelId: string): boolean {
+function removePanelFromDock(dock: DockLayout, panelId: string): boolean {
   let removed = false;
-  for (const region of Object.keys(layout.dock.root) as DockRegionId[]) {
-    const result = removePanelFromNode(layout.dock.root[region], panelId);
-    layout.dock.root[region] = result.node;
+  for (const region of Object.keys(dock.root) as DockRegionId[]) {
+    const result = removePanelFromNode(dock.root[region], panelId);
+    dock.root[region] = result.node;
     removed = removed || result.removed;
+  }
+  return removed;
+}
+
+// A panel id may appear in at most one page's dock, but removal sweeps ALL
+// pages defensively so a move/close can never leave a stale reference behind.
+function removePanelFromAllPages(layout: WorkbenchLayout, panelId: string): boolean {
+  let removed = false;
+  for (const page of orderedWorkbenchPages(layout)) {
+    removed = removePanelFromDock(page.dock, panelId) || removed;
   }
   return removed;
 }
 
 // Run `finder` against each region root and return the first defined match. Every dock lookup
 // (tab stack by id/panel, split by id) shares this "walk all region roots, first hit wins" shape.
-function findAcrossRegions<T>(layout: WorkbenchLayout, finder: (node: DockNode | null) => T | undefined): T | undefined {
-  for (const node of Object.values(layout.dock.root)) {
+function findAcrossRegions<T>(dock: DockLayout, finder: (node: DockNode | null) => T | undefined): T | undefined {
+  for (const node of Object.values(dock.root)) {
     const found = finder(node);
     if (found) return found;
   }
@@ -138,11 +162,11 @@ function findTabStackById(node: DockNode | null, tabStackId: string): TabStackDo
   return undefined;
 }
 
-function appendPanelToRegion(layout: WorkbenchLayout, panelId: string, region: DockRegionId, index?: number): InsertResult {
+function appendPanelToRegion(dock: DockLayout, panelId: string, region: DockRegionId, index?: number): InsertResult {
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
-  const root = layout.dock.root[region];
+  const root = dock.root[region];
   if (!root) {
-    layout.dock.root[region] = makeTabStack(panelId);
+    dock.root[region] = makeTabStack(panelId);
     return { success: true };
   }
   if (root.kind === 'tabs') {
@@ -160,8 +184,8 @@ function appendPanelToRegion(layout: WorkbenchLayout, panelId: string, region: D
   return { success: true };
 }
 
-function insertPanelIntoTab(layout: WorkbenchLayout, panelId: string, target: Extract<DockTarget, { kind: 'tab' }>): InsertResult {
-  const stack = findAcrossRegions(layout, (node) =>
+function insertPanelIntoTab(dock: DockLayout, panelId: string, target: Extract<DockTarget, { kind: 'tab' }>): InsertResult {
+  const stack = findAcrossRegions(dock, (node) =>
     target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined
   );
   if (!stack) return { success: false, code: 'missing-target', message: 'Target tab stack was not found.' };
@@ -200,13 +224,13 @@ function splitNearTarget(node: DockNode | null, panelId: string, targetPanelId: 
   };
 }
 
-function insertPanelAsSplit(layout: WorkbenchLayout, panelId: string, target: Extract<DockTarget, { kind: 'split' }>): InsertResult {
+function insertPanelAsSplit(dock: DockLayout, panelId: string, target: Extract<DockTarget, { kind: 'split' }>): InsertResult {
   const position = target.position ?? 'after';
   if (target.targetPanelId) {
-    for (const region of Object.keys(layout.dock.root) as DockRegionId[]) {
-      const result = splitNearTarget(layout.dock.root[region], panelId, target.targetPanelId, target.axis, position);
+    for (const region of Object.keys(dock.root) as DockRegionId[]) {
+      const result = splitNearTarget(dock.root[region], panelId, target.targetPanelId, target.axis, position);
       if (result.inserted) {
-        layout.dock.root[region] = result.node;
+        dock.root[region] = result.node;
         return { success: true };
       }
     }
@@ -216,22 +240,22 @@ function insertPanelAsSplit(layout: WorkbenchLayout, panelId: string, target: Ex
   const region = target.region;
   if (!region) return { success: false, code: 'missing-target', message: 'Split target needs a region or target panel.' };
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
-  const root = layout.dock.root[region];
+  const root = dock.root[region];
   if (!root) {
-    layout.dock.root[region] = makeTabStack(panelId);
+    dock.root[region] = makeTabStack(panelId);
     return { success: true };
   }
   const newStack = makeTabStack(panelId);
-  layout.dock.root[region] = makeSplit(target.axis, position === 'before' ? [newStack, root] : [root, newStack]);
+  dock.root[region] = makeSplit(target.axis, position === 'before' ? [newStack, root] : [root, newStack]);
   return { success: true };
 }
 
-function insertPanel(layout: WorkbenchLayout, panelId: string, target: DockTarget | undefined, fallbackRegion: DockRegionId): InsertResult {
+function insertPanel(dock: DockLayout, panelId: string, target: DockTarget | undefined, fallbackRegion: DockRegionId): InsertResult {
   if (!target || target.kind === 'region') {
-    return appendPanelToRegion(layout, panelId, target?.region ?? fallbackRegion, target?.index);
+    return appendPanelToRegion(dock, panelId, target?.region ?? fallbackRegion, target?.index);
   }
-  if (target.kind === 'tab') return insertPanelIntoTab(layout, panelId, target);
-  return insertPanelAsSplit(layout, panelId, target);
+  if (target.kind === 'tab') return insertPanelIntoTab(dock, panelId, target);
+  return insertPanelAsSplit(dock, panelId, target);
 }
 
 function findSplitById(node: DockNode | null, splitId: string): SplitDockNode | undefined {
@@ -395,50 +419,89 @@ function layoutReferencedByProfile(doc: WorkbenchDocument, layoutId: string): bo
   return Object.values(doc.profiles).some((profile) => profile.layoutId === layoutId);
 }
 
+/** Navigation entries bound to a page (normally one, but repair tolerates several). */
+function navigationEntriesForPage(layout: WorkbenchLayout, pageId: string): NavigationEntryState[] {
+  return Object.values(layout.navigation.entries).filter((entry) => entry.pageId === pageId);
+}
+
+/**
+ * Default navigation entry for a page (used when `page.add`/`page.duplicate`
+ * get no explicit entry): id derived from the page id (`page:<id>`, minted
+ * fresh on the unlikely collision), label from the page, icon carried in
+ * `state.icon` for the app's nav renderer.
+ */
+function defaultPageNavigationEntry(layout: WorkbenchLayout, page: WorkbenchPage): NavigationEntryState {
+  const preferred = `page:${page.id}`;
+  const id = layout.navigation.entries[preferred] ? createWorkbenchId('nav') : preferred;
+  return {
+    id,
+    label: page.label,
+    hidden: false,
+    pageId: page.id,
+    ...(page.icon ? { state: { icon: page.icon } } : {})
+  };
+}
+
+function insertNavigationEntry(layout: WorkbenchLayout, entry: NavigationEntryState, index?: number): void {
+  layout.navigation.entries[entry.id] = entry;
+  const order = layout.navigation.order.filter((id) => id !== entry.id);
+  order.splice(Math.max(0, Math.min(index ?? order.length, order.length)), 0, entry.id);
+  layout.navigation.order = order;
+}
+
 export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: WorkbenchCommand): WorkbenchCommandResult {
   const next = cloneWorkbenchDocument(doc);
   const layout = activeLayout(next);
   if (!layout) return fail(doc, 'active-layout-missing', 'The active Workbench layout could not be found.');
+  // Dock-scoped commands implicitly target the ACTIVE page's dock. Repair
+  // guarantees at least one page, so a missing dock means the incoming document
+  // skipped repair — surface that as missing-page rather than crash.
+  const dock = activePageDock(layout);
 
   switch (command.type) {
     case 'panel.add': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (layout.panels[command.panel.id]) return fail(doc, 'duplicate-id', `Panel ${command.panel.id} already exists.`);
       const conflict = findSingletonConflict(layout, command.panel);
       if (conflict) return fail(doc, 'duplicate-singleton', `Panel singleton ${command.panel.singletonKey} already exists as ${conflict.id}.`);
       layout.panels[command.panel.id] = { ...command.panel };
-      const result = insertPanel(layout, command.panel.id, command.target, command.region);
+      const result = insertPanel(dock, command.panel.id, command.target, command.region);
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not add panel.');
     }
     case 'panel.close': {
       const panel = layout.panels[command.panelId];
       if (!panel) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
       if (panel.locked) return fail(doc, 'locked-panel', `Panel ${command.panelId} is locked and cannot be closed.`);
-      removePanelFromDock(layout, command.panelId);
+      removePanelFromAllPages(layout, command.panelId);
       removePanelOwnedWidgets(layout, command.panelId);
       delete layout.panels[command.panelId];
       return ok(next);
     }
     case 'panel.move': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
-      removePanelFromDock(layout, command.panelId);
-      const result = insertPanel(layout, command.panelId, command.to, 'main');
+      removePanelFromAllPages(layout, command.panelId);
+      const result = insertPanel(dock, command.panelId, command.to, 'main');
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not move panel.');
     }
     case 'panel.tab': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
       if (!layout.panels[command.targetPanelId]) return fail(doc, 'missing-target', `Target panel ${command.targetPanelId} does not exist.`);
-      removePanelFromDock(layout, command.panelId);
-      const result = insertPanelIntoTab(layout, command.panelId, { kind: 'tab', targetPanelId: command.targetPanelId, index: command.index });
+      removePanelFromAllPages(layout, command.panelId);
+      const result = insertPanelIntoTab(dock, command.panelId, { kind: 'tab', targetPanelId: command.targetPanelId, index: command.index });
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not tab panel.');
     }
     case 'panel.activate': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
-      const stack = findAcrossRegions(layout, (node) => findTabStackByPanel(node, command.panelId));
+      const stack = findAcrossRegions(dock, (node) => findTabStackByPanel(node, command.panelId));
       if (!stack) return fail(doc, 'missing-target', `Panel ${command.panelId} is not in a tab stack.`);
       stack.activePanelId = command.panelId;
       return ok(next);
     }
     case 'panel.split': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       const panelId = command.panel?.id ?? command.panelId;
       if (!panelId) return fail(doc, 'invalid-command', 'Split command needs a panel or panelId.');
       if (command.targetPanelId && command.targetPanelId === panelId) return fail(doc, 'invalid-command', 'A panel cannot be split beside itself.');
@@ -450,9 +513,9 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       } else if (!layout.panels[panelId]) {
         return fail(doc, 'missing-panel', `Panel ${panelId} does not exist.`);
       } else {
-        removePanelFromDock(layout, panelId);
+        removePanelFromAllPages(layout, panelId);
       }
-      const result = insertPanelAsSplit(layout, panelId, {
+      const result = insertPanelAsSplit(dock, panelId, {
         kind: 'split',
         region: command.region,
         targetPanelId: command.targetPanelId,
@@ -477,19 +540,107 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       return ok(next);
     }
     case 'region.resize': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!isDockRegionId(command.region)) return fail(doc, 'invalid-region', `Invalid dock region: ${command.region}`);
-      layout.dock.regions[command.region].sizePx = Math.max(0, command.sizePx);
+      dock.regions[command.region].sizePx = Math.max(0, command.sizePx);
       return ok(next);
     }
     case 'region.collapse': {
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!isDockRegionId(command.region)) return fail(doc, 'invalid-region', `Invalid dock region: ${command.region}`);
-      layout.dock.regions[command.region].collapsed = command.collapsed;
+      dock.regions[command.region].collapsed = command.collapsed;
       return ok(next);
     }
     case 'split.resize': {
-      const split = findAcrossRegions(layout, (node) => findSplitById(node, command.splitId));
+      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
+      const split = findAcrossRegions(dock, (node) => findSplitById(node, command.splitId));
       if (!split) return fail(doc, 'missing-split', `Split ${command.splitId} does not exist.`);
       split.ratio = normalizeRatios(command.ratio, split.children.length);
+      return ok(next);
+    }
+    case 'page.add': {
+      const page = command.page;
+      if (!page || typeof page.id !== 'string' || !page.id) return fail(doc, 'invalid-command', 'page.add needs a page with an id.');
+      if (layout.pages[page.id]) return fail(doc, 'duplicate-id', `Page ${page.id} already exists.`);
+      if (command.navEntry && layout.navigation.entries[command.navEntry.id]) {
+        return fail(doc, 'duplicate-id', `Navigation entry ${command.navEntry.id} already exists.`);
+      }
+      const label = typeof page.label === 'string' && page.label.trim() ? page.label.trim() : page.id;
+      const inserted: WorkbenchPage = { ...page, label, dock: page.dock ?? createEmptyDockLayout() };
+      layout.pages[page.id] = inserted;
+      const order = layout.pageOrder.filter((id) => id !== page.id);
+      order.splice(Math.max(0, Math.min(command.index ?? order.length, order.length)), 0, page.id);
+      layout.pageOrder = order;
+      const entry = command.navEntry
+        ? { ...command.navEntry, pageId: page.id }
+        : defaultPageNavigationEntry(layout, inserted);
+      insertNavigationEntry(layout, entry, command.index);
+      return ok(next);
+    }
+    case 'page.remove': {
+      const page = layout.pages[command.pageId];
+      if (!page) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      if (Object.keys(layout.pages).length <= 1) return fail(doc, 'protected-page', 'The last page cannot be removed.');
+      // Panels docked on this page exist only here (panel-in-≤1-page invariant),
+      // so their instances — and any panel-owned widgets — go with the page.
+      for (const panelId of panelIdsInPageDock(page)) {
+        removePanelOwnedWidgets(layout, panelId);
+        delete layout.panels[panelId];
+      }
+      const removedIndex = layout.pageOrder.indexOf(command.pageId);
+      delete layout.pages[command.pageId];
+      layout.pageOrder = layout.pageOrder.filter((id) => id !== command.pageId);
+      for (const entry of navigationEntriesForPage(layout, command.pageId)) {
+        delete layout.navigation.entries[entry.id];
+        layout.navigation.order = layout.navigation.order.filter((id) => id !== entry.id);
+      }
+      if (layout.activePageId === command.pageId) {
+        // Nearest remaining page by order: the one that slid into the removed
+        // slot, else the new last page.
+        const at = Math.max(0, Math.min(removedIndex < 0 ? layout.pageOrder.length - 1 : removedIndex, layout.pageOrder.length - 1));
+        layout.activePageId = layout.pageOrder[at];
+      }
+      return ok(next);
+    }
+    case 'page.rename': {
+      const page = layout.pages[command.pageId];
+      if (!page) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      const label = command.label.trim();
+      if (!label) return fail(doc, 'invalid-command', 'Page label cannot be empty.');
+      page.label = label;
+      for (const entry of navigationEntriesForPage(layout, command.pageId)) entry.label = label;
+      return ok(next);
+    }
+    case 'page.activate': {
+      if (!layout.pages[command.pageId]) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      layout.activePageId = command.pageId;
+      return ok(next);
+    }
+    case 'page.duplicate': {
+      const source = layout.pages[command.pageId];
+      if (!source) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      const newPageId = command.newPageId ?? createWorkbenchId('page');
+      if (layout.pages[newPageId]) return fail(doc, 'duplicate-id', `Page ${newPageId} already exists.`);
+      const sourcePanels: Record<string, PanelInstance> = {};
+      for (const panelId of panelIdsInPageDock(source)) {
+        if (layout.panels[panelId]) sourcePanels[panelId] = layout.panels[panelId];
+      }
+      const { page: copy, panels: copiedPanels } = remintWorkbenchPage(source, sourcePanels, {
+        pageId: newPageId,
+        label: command.label ?? `${source.label} Copy`
+      });
+      for (const panel of Object.values(copiedPanels)) layout.panels[panel.id] = panel;
+      layout.pages[copy.id] = copy;
+      const sourceIndex = layout.pageOrder.indexOf(command.pageId);
+      layout.pageOrder.splice(sourceIndex < 0 ? layout.pageOrder.length : sourceIndex + 1, 0, copy.id);
+      // Bind a nav entry right after the source page's entry (or at the end).
+      const sourceEntry = navigationEntriesForPage(layout, command.pageId)[0];
+      const sourceEntryIndex = sourceEntry ? layout.navigation.order.indexOf(sourceEntry.id) : -1;
+      insertNavigationEntry(
+        layout,
+        defaultPageNavigationEntry(layout, copy),
+        sourceEntryIndex < 0 ? undefined : sourceEntryIndex + 1
+      );
       return ok(next);
     }
     case 'widget.add': {

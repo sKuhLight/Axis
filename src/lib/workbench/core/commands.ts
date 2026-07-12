@@ -3,6 +3,7 @@ import type {
   DockRegionId,
   FloatingRect,
   JsonObject,
+  NavigationEntryState,
   PanelInstance,
   PanelTemplate,
   WidgetInstance,
@@ -12,6 +13,7 @@ import type {
   WidgetZoneId,
   WorkbenchDocument,
   WorkbenchLayout,
+  WorkbenchPage,
   WorkbenchProfile
 } from './schema';
 
@@ -28,6 +30,7 @@ export type WorkbenchErrorCode =
   | 'locked-widget-group'
   | 'missing-layout'
   | 'missing-navigation'
+  | 'missing-page'
   | 'missing-panel'
   | 'missing-profile'
   | 'missing-split'
@@ -36,6 +39,7 @@ export type WorkbenchErrorCode =
   | 'missing-widget'
   | 'missing-zone'
   | 'protected-layout'
+  | 'protected-page'
   | 'protected-profile'
   | 'protected-zone';
 
@@ -105,6 +109,26 @@ export type WorkbenchCommand =
   | { type: 'zone.rename'; zoneId: WidgetZoneId; label: string }
   | { type: 'zone.hide'; zoneId: WidgetZoneId; hidden: boolean }
   | { type: 'zone.delete'; zoneId: WidgetZoneId; moveWidgetsTo?: WidgetZoneId }
+  // ── Pages ──────────────────────────────────────────────────────────────
+  // Every dock-scoped command above (panel.*, region.*, split.resize)
+  // implicitly targets the ACTIVE page's dock.
+  //
+  // page.add inserts the page (+ a navigation entry bound to it — either the
+  // provided one or a default derived from the page id/label/icon) at `index`
+  // in both pageOrder and navigation order. It does NOT activate the page.
+  | { type: 'page.add'; page: WorkbenchPage; index?: number; navEntry?: NavigationEntryState }
+  // page.remove drops the page, its bound nav entries, and every panel
+  // instance docked on it. Removing the last page is rejected; removing the
+  // active page activates the nearest remaining page by order.
+  | { type: 'page.remove'; pageId: string }
+  // page.rename renames the page AND its bound navigation entries.
+  | { type: 'page.rename'; pageId: string; label: string }
+  // page.activate switches the rendered page. Excluded from layout history
+  // (transient view state, like panel.activate / profile.activate).
+  | { type: 'page.activate'; pageId: string }
+  // page.duplicate deep-copies the page with freshly minted dock-node ids and
+  // panel-instance ids, inserts it after the source, and binds a new nav entry.
+  | { type: 'page.duplicate'; pageId: string; newPageId?: string; label?: string }
   | { type: 'navigation.move'; entryId: string; index: number }
   | { type: 'navigation.hide'; entryId: string }
   | { type: 'navigation.show'; entryId: string; index?: number }

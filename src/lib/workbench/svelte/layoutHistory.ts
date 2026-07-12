@@ -87,6 +87,10 @@ interface HistoryEntry {
 const EXCLUDED_COMMAND_TYPES = new Set<WorkbenchCommand['type']>([
   // Pure activation / focus — no structural change, and re-selecting is cheap.
   'panel.activate',
+  // Page activation is pure view state (which page is in front); switching back
+  // is one nav click. Structural page ops (add/remove/rename/duplicate) ARE
+  // captured — those edit the layout.
+  'page.activate',
   // Profile activation is driven by viewport resolution (ResizeObserver) and by
   // the profile switcher; undoing a resize-driven profile swap would be baffling.
   'profile.activate'

@@ -1,8 +1,16 @@
-import { createEmptyWorkbenchDocument, createEmptyDockLayout, createDefaultWidgetZoneLayout, createEmptyNavigationLayout } from './defaults';
+import {
+  createEmptyWorkbenchDocument,
+  createEmptyDockLayout,
+  createEmptyWorkbenchPage,
+  createDefaultWidgetZoneLayout,
+  createEmptyNavigationLayout,
+  DEFAULT_WORKBENCH_PAGE_ID
+} from './defaults';
 import { createWorkbenchId, reserveWorkbenchIds } from './ids';
 import {
   DOCK_REGION_IDS,
   WORKBENCH_SCHEMA_VERSION,
+  type DockLayout,
   type DockNode,
   type DockRegionId,
   type JsonValue,
@@ -10,7 +18,8 @@ import {
   type TabStackDockNode,
   type WidgetInstance,
   type WorkbenchDocument,
-  type WorkbenchLayout
+  type WorkbenchLayout,
+  type WorkbenchPage
 } from './schema';
 
 export type WorkbenchValidationSeverity = 'error' | 'warning';
@@ -130,13 +139,42 @@ export function validateWorkbenchDocument(doc: WorkbenchDocument): WorkbenchVali
   }
 
   for (const [layoutId, layout] of Object.entries(doc.layouts ?? {})) {
+    // Pages: at least one, a resolving activePageId, and a deduped pageOrder
+    // that only references existing pages. Panel/node ids are unique across the
+    // WHOLE layout (all pages share the seen-maps), so a panel docked on two
+    // pages reports as `duplicate-panel-reference`.
+    const pageIds = Object.keys(layout.pages ?? {});
+    if (pageIds.length === 0) {
+      issue(issues, 'missing-pages', `Layout ${layoutId} has no pages.`, `$.layouts.${layoutId}.pages`);
+    }
+    if (pageIds.length > 0 && !layout.pages?.[layout.activePageId]) {
+      issue(issues, 'active-page-missing', `Active page ${layout.activePageId} does not exist.`, `$.layouts.${layoutId}.activePageId`);
+    }
+    const orderSeen = new Set<string>();
+    for (const pageId of layout.pageOrder ?? []) {
+      if (!layout.pages?.[pageId]) {
+        issue(issues, 'missing-page-order-entry', `Page order references missing page ${pageId}.`, `$.layouts.${layoutId}.pageOrder`);
+      }
+      if (orderSeen.has(pageId)) {
+        issue(issues, 'duplicate-page-order-entry', `Page ${pageId} appears more than once in pageOrder.`, `$.layouts.${layoutId}.pageOrder`);
+      }
+      orderSeen.add(pageId);
+    }
+    for (const pageId of pageIds) {
+      if (!orderSeen.has(pageId)) {
+        issue(issues, 'missing-page-order-entry', `Page ${pageId} is missing from pageOrder.`, `$.layouts.${layoutId}.pageOrder`);
+      }
+    }
+
     const seenPanels = new Map<string, string>();
     const seenNodeIds = new Map<string, string>();
-    for (const region of DOCK_REGION_IDS) {
-      if (!layout.dock?.regions?.[region]) {
-        issue(issues, 'missing-region-state', `Dock region ${region} is missing state.`, `$.layouts.${layoutId}.dock.regions.${region}`);
+    for (const [pageId, page] of Object.entries(layout.pages ?? {})) {
+      for (const region of DOCK_REGION_IDS) {
+        if (!page.dock?.regions?.[region]) {
+          issue(issues, 'missing-region-state', `Dock region ${region} is missing state.`, `$.layouts.${layoutId}.pages.${pageId}.dock.regions.${region}`);
+        }
+        validateDockNode(page.dock?.root?.[region] ?? null, layout, `$.layouts.${layoutId}.pages.${pageId}.dock.root.${region}`, seenPanels, seenNodeIds, issues);
       }
-      validateDockNode(layout.dock?.root?.[region] ?? null, layout, `$.layouts.${layoutId}.dock.root.${region}`, seenPanels, seenNodeIds, issues);
     }
 
     for (const [groupId, group] of Object.entries(layout.widgetGroups ?? {})) {
@@ -162,6 +200,9 @@ export function validateWorkbenchDocument(doc: WorkbenchDocument): WorkbenchVali
     for (const [id, entry] of Object.entries(navEntries)) {
       if ((entry.locked || (entry.fixedSlot && entry.fixedSlot !== 'none')) && entry.hidden) {
         issue(issues, 'locked-navigation-hidden', `Locked/fixed navigation entry ${id} cannot be hidden.`, `$.layouts.${layoutId}.navigation.entries.${id}.hidden`);
+      }
+      if (entry.pageId && !layout.pages?.[entry.pageId]) {
+        issue(issues, 'missing-navigation-page', `Navigation entry ${id} references missing page ${entry.pageId}.`, `$.layouts.${layoutId}.navigation.entries.${id}.pageId`);
       }
     }
   }
@@ -238,6 +279,12 @@ function collectDocumentIds(doc: WorkbenchDocument): Set<string> {
     for (const key of Object.keys(layout.panels ?? {})) ids.add(key);
     for (const key of Object.keys(layout.widgets ?? {})) ids.add(key);
     for (const key of Object.keys(layout.widgetGroups ?? {})) ids.add(key);
+    // Reserve across ALL pages (and any not-yet-migrated legacy dock), so ids
+    // minted this session can never collide with a persisted page interior.
+    for (const [pageId, page] of Object.entries(layout.pages ?? {})) {
+      ids.add(pageId);
+      for (const region of DOCK_REGION_IDS) collectDockNodeIds(page?.dock?.root?.[region] ?? null, ids);
+    }
     for (const region of DOCK_REGION_IDS) collectDockNodeIds(layout.dock?.root?.[region] ?? null, ids);
   }
   return ids;
@@ -256,7 +303,9 @@ function collectDockPanelIds(node: DockNode | null, ids: Set<string>): void {
 
 function dedupeSingletonPanels(layout: WorkbenchLayout): void {
   const docked = new Set<string>();
-  for (const region of DOCK_REGION_IDS) collectDockPanelIds(layout.dock.root[region], docked);
+  for (const page of orderedLayoutPages(layout)) {
+    for (const region of DOCK_REGION_IDS) collectDockPanelIds(page.dock.root[region], docked);
+  }
   const keptByKey = new Map<string, string>();
   for (const panel of Object.values(layout.panels)) {
     if (!panel.singletonKey) continue;
@@ -329,6 +378,15 @@ function normalizeNavigation(layout: WorkbenchLayout): void {
   layout.navigation = layout.navigation ?? createEmptyNavigationLayout();
   layout.navigation.entries = layout.navigation.entries ?? {};
   layout.navigation.order = Array.isArray(layout.navigation.order) ? layout.navigation.order : [];
+  // Dangling page bindings: an entry pointing at a page that no longer exists
+  // loses the binding — and when it has no other purpose (no command target),
+  // the whole entry is removed (a pure page entry without its page is dead).
+  for (const [id, entry] of Object.entries(layout.navigation.entries)) {
+    if (typeof entry.pageId === 'string' && !layout.pages?.[entry.pageId]) {
+      if (entry.target) delete entry.pageId;
+      else delete layout.navigation.entries[id];
+    }
+  }
   const seen = new Set<string>();
   layout.navigation.order = layout.navigation.order.filter((id) => {
     if (!layout.navigation.entries[id] || seen.has(id)) return false;
@@ -344,14 +402,82 @@ function normalizeNavigation(layout: WorkbenchLayout): void {
   if (layout.navigation.mode !== 'bottom') layout.navigation.mode = 'side';
 }
 
-function ensureLayoutShape(layout: WorkbenchLayout): void {
-  layout.dock = layout.dock ?? createEmptyDockLayout();
-  layout.dock.regions = layout.dock.regions ?? createEmptyDockLayout().regions;
-  layout.dock.root = layout.dock.root ?? createEmptyDockLayout().root;
+function ensureDockShape(dock: DockLayout | undefined): DockLayout {
+  const next = dock ?? createEmptyDockLayout();
+  next.regions = next.regions ?? createEmptyDockLayout().regions;
+  next.root = next.root ?? createEmptyDockLayout().root;
   for (const region of DOCK_REGION_IDS) {
-    layout.dock.regions[region] ??= { collapsed: false };
-    layout.dock.root[region] ??= null;
+    next.regions[region] ??= { collapsed: false };
+    next.root[region] ??= null;
   }
+  return next;
+}
+
+/** Pages of a layout in canonical (pageOrder) order. Call after {@link ensurePagesShape}. */
+function orderedLayoutPages(layout: WorkbenchLayout): WorkbenchPage[] {
+  const order = Array.isArray(layout.pageOrder) ? layout.pageOrder : [];
+  const seen = new Set<string>();
+  const pages: WorkbenchPage[] = [];
+  for (const id of order) {
+    const page = layout.pages?.[id];
+    if (page && !seen.has(id)) {
+      seen.add(id);
+      pages.push(page);
+    }
+  }
+  for (const [id, page] of Object.entries(layout.pages ?? {})) {
+    if (!seen.has(id)) pages.push(page);
+  }
+  return pages;
+}
+
+/**
+ * Guarantee the pages invariants: ≥1 page (a legacy v1 `layout.dock` is wrapped
+ * into the default page; otherwise an empty page is created), every page has a
+ * well-formed dock, `pageOrder` is deduped + complete, and `activePageId`
+ * resolves. The deprecated `layout.dock` is consumed and DELETED — runtime code
+ * only ever sees page docks.
+ */
+function ensurePagesShape(layout: WorkbenchLayout): void {
+  const pages: Record<string, WorkbenchPage> = {};
+  for (const [id, page] of Object.entries(layout.pages ?? {})) {
+    if (!page || typeof page !== 'object') continue;
+    const pageId = typeof page.id === 'string' && page.id ? page.id : id;
+    pages[id] = {
+      ...page,
+      id: pageId === id ? pageId : id,
+      label: typeof page.label === 'string' && page.label.trim() ? page.label : id,
+      dock: ensureDockShape(page.dock)
+    };
+  }
+
+  if (Object.keys(pages).length === 0) {
+    // Legacy single-dock layout (schema v1) or a brand-new shell: wrap whatever
+    // dock exists into one default page so the layout renders exactly as before.
+    const page = createEmptyWorkbenchPage({
+      id: DEFAULT_WORKBENCH_PAGE_ID,
+      dock: ensureDockShape(layout.dock)
+    });
+    pages[page.id] = page;
+  }
+  delete layout.dock;
+  layout.pages = pages;
+
+  const order = Array.isArray(layout.pageOrder) ? layout.pageOrder : [];
+  const seen = new Set<string>();
+  layout.pageOrder = order.filter((id) => {
+    if (typeof id !== 'string' || !pages[id] || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  for (const id of Object.keys(pages).sort()) {
+    if (!seen.has(id)) layout.pageOrder.push(id);
+  }
+  if (!pages[layout.activePageId]) layout.activePageId = layout.pageOrder[0];
+}
+
+function ensureLayoutShape(layout: WorkbenchLayout): void {
+  ensurePagesShape(layout);
   layout.panels = layout.panels ?? {};
   layout.widgets = layout.widgets ?? {};
   layout.widgetGroups = layout.widgetGroups ?? {};
@@ -394,10 +520,16 @@ export function repairWorkbenchDocument(doc: WorkbenchDocument): WorkbenchDocume
   for (const layout of Object.values(next.layouts)) {
     ensureLayoutShape(layout);
     dedupeSingletonPanels(layout);
+    // The seen-sets are shared across ALL pages: a panel id may appear in at
+    // most one page's dock (first occurrence in page order wins) and dock node
+    // ids stay unique layout-wide. Pages are repaired in pageOrder order so the
+    // "keep first occurrence" rule is deterministic.
     const seenPanels = new Set<string>();
     const seenNodeIds = new Set<string>();
-    for (const region of DOCK_REGION_IDS) {
-      layout.dock.root[region] = repairDockNode(layout.dock.root[region], layout, seenPanels, seenNodeIds);
+    for (const page of orderedLayoutPages(layout)) {
+      for (const region of DOCK_REGION_IDS) {
+        page.dock.root[region] = repairDockNode(page.dock.root[region], layout, seenPanels, seenNodeIds);
+      }
     }
     normalizeWidgetGroups(layout);
     normalizeWidgetOrders(layout);

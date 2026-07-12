@@ -1,4 +1,5 @@
 import type {
+  DockLayout,
   DockNode,
   DockRegionId,
   NavigationEntryState,
@@ -8,6 +9,7 @@ import type {
   WidgetZoneId,
   WorkbenchDocument,
   WorkbenchLayout,
+  WorkbenchPage,
   WorkbenchProfile
 } from './schema';
 import { validateWorkbenchDocument } from './invariants';
@@ -27,8 +29,49 @@ export function selectActiveLayout(doc: WorkbenchDocument): WorkbenchLayout | un
   return profile ? doc.layouts[profile.layoutId] : undefined;
 }
 
+/**
+ * The active page of a layout — the page whose dock is currently rendered and
+ * the implicit target of every dock-scoped command. Falls back to the first
+ * page in order when `activePageId` dangles (repair normally prevents that).
+ */
+export function activeWorkbenchPage(layout: WorkbenchLayout | undefined): WorkbenchPage | undefined {
+  if (!layout) return undefined;
+  return layout.pages?.[layout.activePageId] ?? orderedWorkbenchPages(layout)[0];
+}
+
+/** Pages of a layout in canonical (pageOrder) order; unlisted pages trail sorted by id. */
+export function orderedWorkbenchPages(layout: WorkbenchLayout | undefined): WorkbenchPage[] {
+  if (!layout) return [];
+  const seen = new Set<string>();
+  const pages: WorkbenchPage[] = [];
+  for (const id of layout.pageOrder ?? []) {
+    const page = layout.pages?.[id];
+    if (page && !seen.has(id)) {
+      seen.add(id);
+      pages.push(page);
+    }
+  }
+  for (const id of Object.keys(layout.pages ?? {}).sort()) {
+    if (!seen.has(id)) pages.push(layout.pages[id]);
+  }
+  return pages;
+}
+
+export function selectActivePage(doc: WorkbenchDocument): WorkbenchPage | undefined {
+  return activeWorkbenchPage(selectActiveLayout(doc));
+}
+
+export function selectOrderedPages(doc: WorkbenchDocument): WorkbenchPage[] {
+  return orderedWorkbenchPages(selectActiveLayout(doc));
+}
+
+/** The active page's dock (the layout-level single dock is gone since schema v2). */
+export function selectActiveDock(doc: WorkbenchDocument): DockLayout | undefined {
+  return selectActivePage(doc)?.dock;
+}
+
 export function selectDockRegionTree(doc: WorkbenchDocument, region: DockRegionId): DockNode | null {
-  return selectActiveLayout(doc)?.dock.root[region] ?? null;
+  return selectActiveDock(doc)?.root[region] ?? null;
 }
 
 export function panelIdsInDockTree(node: DockNode | null): string[] {
@@ -37,8 +80,14 @@ export function panelIdsInDockTree(node: DockNode | null): string[] {
   return node.children.flatMap(panelIdsInDockTree);
 }
 
+/** Panel ids docked on ONE page. */
+export function panelIdsInPageDock(page: WorkbenchPage): string[] {
+  return Object.values(page.dock.root).flatMap(panelIdsInDockTree);
+}
+
+/** Panel ids docked anywhere in the layout — the union across ALL pages. */
 export function allPanelIdsInDock(layout: WorkbenchLayout): string[] {
-  return Object.values(layout.dock.root).flatMap(panelIdsInDockTree);
+  return orderedWorkbenchPages(layout).flatMap(panelIdsInPageDock);
 }
 
 export function findTabStackById(node: DockNode | null, tabStackId: string): TabStackDockNode | undefined {
@@ -52,9 +101,9 @@ export function findTabStackById(node: DockNode | null, tabStackId: string): Tab
 }
 
 export function selectTabStackById(doc: WorkbenchDocument, tabStackId: string): TabStackDockNode | undefined {
-  const layout = selectActiveLayout(doc);
-  if (!layout) return undefined;
-  for (const node of Object.values(layout.dock.root)) {
+  const dock = selectActiveDock(doc);
+  if (!dock) return undefined;
+  for (const node of Object.values(dock.root)) {
     const found = findTabStackById(node, tabStackId);
     if (found) return found;
   }
@@ -74,10 +123,11 @@ function findPanelInNode(node: DockNode | null, panelId: string): Omit<PanelLoca
   return undefined;
 }
 
+/** Locate a panel within the ACTIVE page's dock (panels on other pages resolve undefined). */
 export function selectPanelLocation(doc: WorkbenchDocument, panelId: string): PanelLocation | undefined {
-  const layout = selectActiveLayout(doc);
-  if (!layout) return undefined;
-  for (const [region, node] of Object.entries(layout.dock.root) as [DockRegionId, DockNode | null][]) {
+  const dock = selectActiveDock(doc);
+  if (!dock) return undefined;
+  for (const [region, node] of Object.entries(dock.root) as [DockRegionId, DockNode | null][]) {
     const found = findPanelInNode(node, panelId);
     if (found) return { region, ...found };
   }

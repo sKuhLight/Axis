@@ -68,7 +68,12 @@ export function parseWorkbenchPackage(input: unknown): WorkbenchPackageResult {
   if (!isRecord(input)) return { success: false, error: 'Workbench package must be an object.' };
   if (input.format !== WORKBENCH_PACKAGE_FORMAT) return { success: false, error: 'Unsupported Workbench package format.' };
   if (input.packageVersion !== WORKBENCH_PACKAGE_VERSION) return { success: false, error: 'Unsupported Workbench package version.' };
-  if (input.schemaVersion !== WORKBENCH_SCHEMA_VERSION) return { success: false, error: 'Unsupported Workbench schema version.' };
+  // Older schema versions import fine: layout payloads go through the deep
+  // re-mint (which folds a v1 single dock into pages) and then document repair.
+  const schemaVersion = input.schemaVersion;
+  if (typeof schemaVersion !== 'number' || !Number.isFinite(schemaVersion) || schemaVersion < 1 || schemaVersion > WORKBENCH_SCHEMA_VERSION) {
+    return { success: false, error: 'Unsupported Workbench schema version.' };
+  }
   if (!['layout', 'profile', 'panelTemplate', 'widgetTemplate'].includes(String(input.kind))) {
     return { success: false, error: 'Unsupported Workbench package kind.' };
   }

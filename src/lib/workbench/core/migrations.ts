@@ -19,7 +19,16 @@ function sanitizeRev(value: unknown): number | undefined {
   return floored >= 1 ? floored : undefined;
 }
 
-function migrateV1(input: Record<string, unknown>): WorkbenchDocument {
+/**
+ * Structural migration for any known schema version (1 or 2). The heavy lifting
+ * lives in `repairWorkbenchDocument`, which — since schema v2 (Pages) — wraps a
+ * v1 layout's single `dock` into one default page (`main`/`Main`), sets it
+ * active, and deletes the deprecated `dock` field. Navigation entries are left
+ * unbound (`pageId` stays absent); the app layer decides page bindings later.
+ * A migrated v1 document therefore loads cleanly and renders exactly as before:
+ * its whole dock IS the one page.
+ */
+function migrateLegacy(input: Record<string, unknown>): WorkbenchDocument {
   const fallback = createEmptyWorkbenchDocument();
   const profiles = isRecordMap(input.profiles) ? input.profiles : fallback.profiles;
   const layouts = isRecordMap(input.layouts) ? input.layouts : fallback.layouts;
@@ -46,5 +55,5 @@ export function migrateWorkbenchDocument(input: unknown): WorkbenchDocument {
   if (typeof version !== 'number' || !Number.isFinite(version) || version < 1) {
     return createEmptyWorkbenchDocument();
   }
-  return migrateV1(input);
+  return migrateLegacy(input);
 }

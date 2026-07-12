@@ -15,7 +15,7 @@ describe('layout library helpers', () => {
 
     expect(snapshot?.id).toBe('layout.test.copy1');
     expect(snapshot?.label).toBe('Default Copy');
-    expect(snapshot?.dock).toEqual(doc.layouts['layout.test'].dock);
+    expect(snapshot?.pages).toEqual(doc.layouts['layout.test'].pages);
   });
 
   it('saves and applies layout snapshots through reducer commands', () => {

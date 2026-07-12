@@ -126,9 +126,11 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // overwhelms. Everything else (FC, history, preset browser, …) stays registered
   // and reachable via nav / the panel library; richer arrangements are the LAYOUT
   // presets' job.
-  layout.dock.root.main = tabs('axis.tabs.main', ['axis.signalGrid']);
-  layout.dock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor']);
-  layout.dock.regions.bottom.sizePx = 360;
+  // Pages (schema v2): the dock lives on the layout's (single) default page.
+  const pageDock = layout.pages[layout.activePageId].dock;
+  pageDock.root.main = tabs('axis.tabs.main', ['axis.signalGrid']);
+  pageDock.root.bottom = tabs('axis.tabs.bottom', ['axis.blockEditor']);
+  pageDock.regions.bottom.sizePx = 360;
 
   layout.widgets = {
     'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),

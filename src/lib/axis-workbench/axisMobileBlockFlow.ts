@@ -4,7 +4,7 @@ import type {
   WorkbenchDocument,
   WorkbenchLayout
 } from '../workbench/core';
-import { selectActiveLayout } from '../workbench/core';
+import { activeWorkbenchPage, selectActiveLayout } from '../workbench/core';
 import { AXIS_MOBILE_BLOCK_EXPAND_RATIO } from './axisMobileBlockFlowConstants';
 
 /**
@@ -117,7 +117,9 @@ function hasBlockEditorPanel(layout: WorkbenchLayout): boolean {
 }
 
 function currentBottomSizePx(layout: WorkbenchLayout): number | null {
-  const size = layout.dock?.regions?.bottom?.sizePx;
+  // Pages: region sizes are per-page — read the ACTIVE page's dock (the one
+  // region.resize targets).
+  const size = activeWorkbenchPage(layout)?.dock?.regions?.bottom?.sizePx;
   return typeof size === 'number' ? size : null;
 }
 

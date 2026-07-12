@@ -1,9 +1,13 @@
 import {
+  createEmptyWorkbenchPage,
+  createWorkbenchId,
   reduceWorkbenchDocument,
   repairWorkbenchDocument,
   resolveProfileForViewport,
   selectActiveLayout,
+  selectActivePage,
   selectActiveProfile,
+  selectOrderedPages,
   selectProfileOverride,
   type BindingRef,
   type JsonObject,
@@ -11,6 +15,7 @@ import {
   type WorkbenchCommandResult,
   type WorkbenchDocument,
   type WorkbenchLayout,
+  type WorkbenchPage,
   type WorkbenchProfile
 } from '../core';
 import {
@@ -75,6 +80,16 @@ export class WorkbenchController {
 
   get activeLayout(): WorkbenchLayout | undefined {
     return selectActiveLayout(this.document);
+  }
+
+  /** The active page of the active layout — the page whose dock is rendered. */
+  get activePage(): WorkbenchPage | undefined {
+    return selectActivePage(this.document);
+  }
+
+  /** Pages of the active layout in canonical (pageOrder) order. */
+  get pages(): WorkbenchPage[] {
+    return selectOrderedPages(this.document);
   }
 
   get bindingRegistry(): WorkbenchBindingRegistry {
@@ -159,6 +174,44 @@ export class WorkbenchController {
       results,
       error
     };
+  }
+
+  // ── Pages (thin command wrappers; reactive via #emit like dispatch) ──────
+
+  /** Activate a page (switch the rendered dock). Not captured by layout history. */
+  activatePage(pageId: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'page.activate', pageId });
+  }
+
+  /**
+   * Add a new page (empty dock unless a page is supplied) and activate it.
+   * Returns the new page id, or `null` when the add was rejected.
+   */
+  addPage(options: { id?: string; label?: string; icon?: string; page?: WorkbenchPage; index?: number } = {}): string | null {
+    const page: WorkbenchPage =
+      options.page ??
+      createEmptyWorkbenchPage({
+        id: options.id ?? createWorkbenchId('page'),
+        label: options.label ?? 'New Page',
+        icon: options.icon
+      });
+    const batch = this.dispatchMany([
+      { type: 'page.add', page, index: options.index },
+      { type: 'page.activate', pageId: page.id }
+    ]);
+    return batch.success ? page.id : null;
+  }
+
+  removePage(pageId: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'page.remove', pageId });
+  }
+
+  renamePage(pageId: string, label: string): WorkbenchCommandResult {
+    return this.dispatch({ type: 'page.rename', pageId, label });
+  }
+
+  duplicatePage(pageId: string, options: { newPageId?: string; label?: string } = {}): WorkbenchCommandResult {
+    return this.dispatch({ type: 'page.duplicate', pageId, newPageId: options.newPageId, label: options.label });
   }
 
   // ── Layout undo/redo (in-memory only; see layoutHistory.ts) ──────────────

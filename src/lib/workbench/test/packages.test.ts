@@ -13,30 +13,27 @@ import {
   reduceWorkbenchDocument,
   selectActiveLayout,
   validateWorkbenchDocument,
+  type DockNode,
   type WorkbenchLayout
 } from '../index';
 
 /** A layout carrying nested dock structure + grouped widgets — the T02 collision surface. */
 function nestedLayout(id: string): WorkbenchLayout {
   const base = createEmptyWorkbenchDocument({ profileId: 'p', layoutId: id }).layouts[id];
+  // Pages (schema v2): the nested dock structure lives on the layout's page.
+  const page = base.pages[base.activePageId];
+  page.dock.root.main = {
+    kind: 'split',
+    id: 'split-0001',
+    axis: 'horizontal',
+    ratio: [0.5, 0.5],
+    children: [
+      { kind: 'tabs', id: 'tabs-0001', activePanelId: 'panel.a', panelIds: ['panel.a'] },
+      { kind: 'tabs', id: 'tabs-0002', activePanelId: 'panel.b', panelIds: ['panel.b'] }
+    ]
+  };
   return {
     ...base,
-    dock: {
-      ...base.dock,
-      root: {
-        ...base.dock.root,
-        main: {
-          kind: 'split',
-          id: 'split-0001',
-          axis: 'horizontal',
-          ratio: [0.5, 0.5],
-          children: [
-            { kind: 'tabs', id: 'tabs-0001', activePanelId: 'panel.a', panelIds: ['panel.a'] },
-            { kind: 'tabs', id: 'tabs-0002', activePanelId: 'panel.b', panelIds: ['panel.b'] }
-          ]
-        }
-      }
-    },
     panels: {
       'panel.a': { id: 'panel.a', type: 'test.panel', title: 'A' },
       'panel.b': { id: 'panel.b', type: 'test.panel', title: 'B' }
@@ -60,7 +57,7 @@ describe('Workbench portable packages', () => {
     expect(pkg).toMatchObject({
       format: WORKBENCH_PACKAGE_FORMAT,
       packageVersion: WORKBENCH_PACKAGE_VERSION,
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: 'layout',
       metadata: { title: 'Studio', sourceId: 'layout.test' }
     });
@@ -107,12 +104,15 @@ describe('Workbench portable packages', () => {
     // Gather every interior id from both the existing and the imported layout.
     const interiorIds = (layout: WorkbenchLayout): string[] => {
       const ids: string[] = [];
-      const walk = (node: (typeof layout.dock.root)[keyof typeof layout.dock.root]): void => {
+      const walk = (node: DockNode | null): void => {
         if (!node) return;
         ids.push(node.id);
         if (node.kind === 'split') node.children.forEach(walk);
       };
-      for (const node of Object.values(layout.dock.root)) walk(node);
+      for (const page of Object.values(layout.pages)) {
+        ids.push(page.id);
+        for (const node of Object.values(page.dock.root)) walk(node);
+      }
       ids.push(...Object.keys(layout.panels), ...Object.keys(layout.widgets), ...Object.keys(layout.widgetGroups));
       return ids;
     };
@@ -129,7 +129,7 @@ describe('Workbench portable packages', () => {
     expect(importedIds).not.toContain('group.g');
 
     // References stay internally consistent after the re-mint.
-    const tabs = imported.dock.root.main;
+    const tabs = Object.values(imported.pages)[0].dock.root.main;
     if (tabs?.kind !== 'split') throw new Error('expected a split root');
     const firstTab = tabs.children[0];
     if (firstTab?.kind !== 'tabs') throw new Error('expected a tabs child');

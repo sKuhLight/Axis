@@ -1,7 +1,9 @@
 import {
   createEmptyDockLayout,
+  createEmptyWorkbenchPage,
   createDefaultWidgetZoneLayout,
   createWorkbenchId,
+  type DockLayout,
   type DockNode,
   type JsonObject,
   type NavigationEntryState,
@@ -366,7 +368,7 @@ function buildWidgets(spec: AxisPresetSpec): {
  * tablet / mobile) drop the docked preset browser — the browser is a full page
  * in those modes, not a left dock. Editor placement follows `editorMode`.
  */
-function buildDock(kind: AxisLayoutPresetKind, spec: AxisPresetSpec): WorkbenchLayout['dock'] {
+function buildDock(kind: AxisLayoutPresetKind, spec: AxisPresetSpec): DockLayout {
   const dock = createEmptyDockLayout();
   const tabs = (panelIds: string[], active = panelIds[0]): DockNode => ({
     kind: 'tabs',
@@ -461,10 +463,15 @@ export function createAxisLayoutPreset(
   const spec = PRESET_SPECS[kind] ?? PRESET_SPECS.default;
   const rightW = options.rightW ?? spec.rightW;
   const { widgets, groups } = buildWidgets(spec);
+  // Pages (schema v2): every preset ships a single default page carrying the
+  // whole preset dock — page bindings/splits are a user-level operation later.
+  const page = createEmptyWorkbenchPage({ dock: buildDock(kind, { ...spec, rightW }) });
   const layout: WorkbenchLayout = {
     id: options.layoutId ?? createWorkbenchId('layout'),
     label: options.label ?? `Axis ${axisLayoutPresetLabel(kind)}`,
-    dock: buildDock(kind, { ...spec, rightW }),
+    pages: { [page.id]: page },
+    pageOrder: [page.id],
+    activePageId: page.id,
     panels: createAxisWorkbenchPanels(),
     widgets,
     widgetGroups: groups,

@@ -1,4 +1,4 @@
-import { findTabStackById, selectActiveLayout, selectPanelLocation } from '../workbench';
+import { findTabStackById, selectActiveDock, selectPanelLocation } from '../workbench';
 import type { WorkbenchDocument } from '../workbench';
 
 /**
@@ -44,9 +44,11 @@ const PANEL_BACKED_ENTRIES: Record<string, string> = {
 function isActiveTab(doc: WorkbenchDocument, panelId: string): boolean {
   const location = selectPanelLocation(doc, panelId);
   if (!location) return false;
-  const layout = selectActiveLayout(doc);
-  if (!layout) return false;
-  for (const node of Object.values(layout.dock.root)) {
+  // Pages: both the location lookup above and this stack walk are scoped to the
+  // ACTIVE page's dock — a panel docked on an inactive page is not "in front".
+  const dock = selectActiveDock(doc);
+  if (!dock) return false;
+  for (const node of Object.values(dock.root)) {
     const stack = findTabStackById(node, location.tabStackId);
     if (stack) return stack.activePanelId === panelId;
   }
