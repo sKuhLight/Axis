@@ -1,0 +1,149 @@
+name: build-stack
+description: >-
+  The ONE place that checks out the ForgeFX + forgefx-midi siblings, sets up
+  Node, and builds the codec (and optionally the server) that Axis links from
+  source. Every Axis workflow (ci, release, deploy-remote, mobile-ota,
+  ios-unsigned) checks out Axis into `path: Axis` first, then calls this action
+  as `uses: ./Axis/.github/actions/build-stack`. Keeping the sibling-layout
+  build in one place stops the five workflows from drifting apart.
+#
+# WHY it lives here: Axis consumes forgefx-server as a workspace link
+# ("forgefx-server": "file:../ForgeFX/server"), which in turn links forgefx-midi
+# ("file:../../forgefx-midi"). Their package exports point at dist/, so the
+# linked packages MUST be built before Axis is installed/built.
+#
+# Ref pinning: CI integrates against default-branch HEAD (latest-against-latest
+# is the desired signal), so it calls this with use-lock 'false'. Tag-triggered
+# RELEASE builds call it with use-lock 'true' to pin the exact sibling refs
+# recorded in Axis/stack.lock.json — reproducible installers, stampable notes.
+
+inputs:
+  node-version:
+    description: Node.js version for setup-node.
+    default: '22'
+  use-lock:
+    description: >-
+      'true' pins the sibling refs from Axis/stack.lock.json (release builds);
+      'false' tracks each sibling's default branch (CI / site deploys).
+    default: 'false'
+  forgefx-ref:
+    description: Explicit ForgeFX git ref override. Wins over the lock file.
+    default: ''
+  midi-ref:
+    description: Explicit forgefx-midi git ref override. Wins over the lock file.
+    default: ''
+  build-server:
+    description: >-
+      'true' also builds ForgeFX/server (needed by everything that bundles the
+      Browser Direct / desktop runtime); 'false' builds only the codec.
+    default: 'true'
+
+outputs:
+  forgefx-ref:
+    description: Resolved ForgeFX ref that was requested ('' = default branch).
+    value: ${{ steps.refs.outputs.forgefx-ref }}
+  midi-ref:
+    description: Resolved forgefx-midi ref that was requested ('' = default branch).
+    value: ${{ steps.refs.outputs.midi-ref }}
+  forgefx-sha:
+    description: Actual ForgeFX commit SHA that got checked out (for release stamping).
+    value: ${{ steps.shas.outputs.forgefx-sha }}
+  midi-sha:
+    description: Actual forgefx-midi commit SHA that got checked out (for release stamping).
+    value: ${{ steps.shas.outputs.midi-sha }}
+
+runs:
+  using: composite
+  steps:
+    # Decide which sibling refs to check out. Precedence: explicit input >
+    # stack.lock.json (only when use-lock=='true') > '' (= default branch HEAD).
+    # A missing lock file / key is NON-fatal: warn and fall back to default
+    # branch so a release never wedges on a lock typo.
+    - name: Resolve stack refs
+      id: refs
+      shell: bash
+      env:
+        USE_LOCK: ${{ inputs.use-lock }}
+        FORGEFX_INPUT: ${{ inputs.forgefx-ref }}
+        MIDI_INPUT: ${{ inputs.midi-ref }}
+      run: |
+        set -euo pipefail
+        LOCK="Axis/stack.lock.json"
+        forgefx_lock=""
+        midi_lock=""
+        if [ "$USE_LOCK" = "true" ]; then
+          if [ -f "$LOCK" ]; then
+            forgefx_lock="$(jq -r '.["ForgeFX"].ref // empty' "$LOCK" 2>/dev/null || true)"
+            midi_lock="$(jq -r '.["forgefx-midi"].ref // empty' "$LOCK" 2>/dev/null || true)"
+            if [ -z "$forgefx_lock" ]; then
+              echo "::warning::stack.lock.json missing ForgeFX ref — using ForgeFX default branch HEAD"
+              echo "- stack.lock.json missing **ForgeFX** ref — using default branch HEAD" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            if [ -z "$midi_lock" ]; then
+              echo "::warning::stack.lock.json missing forgefx-midi ref — using forgefx-midi default branch HEAD"
+              echo "- stack.lock.json missing **forgefx-midi** ref — using default branch HEAD" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "::warning::Axis/stack.lock.json not found — using default branch HEAD for both siblings"
+            echo "- Axis/stack.lock.json not found — using default branch HEAD for ForgeFX + forgefx-midi" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        fi
+        # Explicit inputs override the lock (empty input falls through to lock).
+        forgefx_ref="${FORGEFX_INPUT:-}"
+        [ -z "$forgefx_ref" ] && forgefx_ref="$forgefx_lock"
+        midi_ref="${MIDI_INPUT:-}"
+        [ -z "$midi_ref" ] && midi_ref="$midi_lock"
+        echo "forgefx-ref=$forgefx_ref" >> "$GITHUB_OUTPUT"
+        echo "midi-ref=$midi_ref" >> "$GITHUB_OUTPUT"
+        echo "Resolved ForgeFX ref: ${forgefx_ref:-<default branch HEAD>}"
+        echo "Resolved forgefx-midi ref: ${midi_ref:-<default branch HEAD>}"
+
+    # The server links the codec as file:../../forgefx-midi — check both out as
+    # the siblings the links expect. An empty `ref` means default branch HEAD.
+    - name: Checkout forgefx-midi (codec package)
+      uses: actions/checkout@v4
+      with:
+        repository: sKuhLight/forgefx-midi
+        ref: ${{ steps.refs.outputs.midi-ref }}
+        path: forgefx-midi
+    - name: Checkout ForgeFX (bundled engine)
+      uses: actions/checkout@v4
+      with:
+        repository: sKuhLight/ForgeFX
+        ref: ${{ steps.refs.outputs.forgefx-ref }}
+        path: ForgeFX
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: |
+          Axis/package-lock.json
+          ForgeFX/server/package-lock.json
+          forgefx-midi/package-lock.json
+
+    # Build order: codec first (its exports point at dist/), then the server.
+    - name: Build forgefx-midi (codec)
+      working-directory: forgefx-midi
+      shell: bash
+      run: |
+        npm ci
+        npm run build
+    - name: Build forgefx-server (runtime)
+      if: inputs.build-server == 'true'
+      working-directory: ForgeFX/server
+      shell: bash
+      run: |
+        npm ci
+        npm run build
+
+    # Record the SHAs actually checked out so release jobs can stamp the exact
+    # shipped stack even when refs resolved to '' (default branch HEAD).
+    - name: Resolve checked-out SHAs
+      id: shas
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "forgefx-sha=$(git -C ForgeFX rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        echo "midi-sha=$(git -C forgefx-midi rev-parse HEAD)" >> "$GITHUB_OUTPUT"

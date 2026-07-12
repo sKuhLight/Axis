@@ -5,6 +5,8 @@
   import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
+  import { forgefx } from './forgefx';
+  import type { CabState, CabSlot } from './types';
 
   let { embedded = false }: { embedded?: boolean } = $props();
 
@@ -12,6 +14,32 @@
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
   const isEQ = $derived(sel?.pack === 'Peq' || sel?.pack === 'Geq');
   const isCab = $derived(sel?.pack === 'Cab');
+
+  // what's actually loaded in each cab slot, shown on the type button so you don't have to
+  // open the picker to see it. Re-read on select + whenever the picker closes (a pick may have changed it).
+  let cabState = $state<CabState | null>(null);
+  $effect(() => {
+    const eid = isCab ? sel?.effectId : undefined;
+    void editor.cabPickerOpen; // re-read after the picker closes, in case a pick changed the slots
+    if (eid == null) {
+      cabState = null;
+      return;
+    }
+    forgefx
+      .cabState(eid)
+      .then((s) => {
+        if (isCab && sel?.effectId === eid) cabState = s;
+      })
+      .catch(() => (cabState = null));
+  });
+  const cabSlotLabel = (s: CabSlot, dyna: boolean) => (dyna ? s.dyna.label : `${s.bank.label} ${s.irName}`);
+  const cabSummary = $derived.by(() => {
+    const cs = cabState;
+    if (!cs?.slots.length) return null;
+    const dyna = cs.mode.value === 1;
+    if (cs.slots.length === 1) return cabSlotLabel(cs.slots[0], dyna);
+    return cs.slots.map((s) => `Slot ${s.slot}: ${cabSlotLabel(s, dyna)}`).join('   ');
+  });
   // EQ bands from the live params (PEQ: freq 0-4 / Q 5-9 / gain 10-14; GEQ: fixed-freq gains 0-9)
   const eqBands = $derived.by((): EQBand[] => {
     if (!isEQ) return [];
@@ -87,13 +115,13 @@
       <!-- header -->
       <header class="head">
         <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</div>
-        <button class="typebtn" onclick={() => editor.openRetype()} disabled={!sel.pack} title="Change type — search models">
+        <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
           <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
           <span class="t-wrap">
-            <span class="t-title">{cat.short} · type</span>
-            <span class="t-type">{editor.blockType?.name || sel.pack || '—'}</span>
+            <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
+            <span class="t-type">{isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel.pack || '—')}</span>
           </span>
-          {#if sel.pack}<span class="t-go">Change ▾</span>{/if}
+          {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
         </button>
 
         {#if sel.pack && sel.channel != null}
@@ -119,16 +147,6 @@
       {:else if editor.sheetState === 'error'}
         <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
       {:else}
-        {#if isCab}
-          <button class="cabpick" style="--ac:{cat.accent}" onclick={() => editor.openCabPicker()}>
-            <span class="cp-ic">▦</span>
-            <span class="cp-txt">
-              <span class="cp-lbl">Cab IR · DynaCab</span>
-              <span class="cp-name">Browse cabinet library →</span>
-            </span>
-            <span class="cp-go">Open</span>
-          </button>
-        {/if}
         <ControlSurface
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
@@ -352,60 +370,6 @@
     color: var(--text);
   }
 
-  .cabpick {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    margin: 2px 0 14px;
-    padding: 14px 16px;
-    border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--ac) 35%, var(--border2));
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 10%, var(--surface)), var(--bg2));
-    cursor: pointer;
-    text-align: left;
-    transition: border-color 0.12s;
-  }
-  .cabpick:hover {
-    border-color: color-mix(in srgb, var(--ac) 60%, var(--border2));
-  }
-  .cp-ic {
-    flex: none;
-    width: 38px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9px;
-    font-size: 18px;
-    color: var(--text);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 80%, #000), color-mix(in srgb, var(--ac) 45%, #000));
-  }
-  .cp-txt {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .cp-lbl {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .cp-name {
-    font-size: 11.5px;
-    color: var(--text-mut);
-  }
-  .cp-go {
-    flex: none;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ac);
-    padding: 7px 14px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--ac) 14%, transparent);
-  }
   .hint {
     color: var(--text-dim);
   }

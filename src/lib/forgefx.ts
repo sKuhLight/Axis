@@ -70,10 +70,10 @@ let remote: RemoteTransport | null = null;
 const remoteInflight = new Map<string, Promise<unknown>>();
 /** GET endpoints whose result is fixed for the connected device — safe to cache for the whole session. */
 function remoteCacheable(path: string): boolean {
-  const p = path.split('?')[0] ?? path;
+  const [p = '', q = ''] = path.split('?');
   return (
     p === '/blocks' ||
-    p === '/cab/irs' ||
+    (p === '/cab/irs' && !q.includes('refresh=1')) ||
     p === '/mod/model' ||
     p === '/fc/model' ||
     /^\/blocks\/[^/]+\/(types|params|help)$/.test(p) ||
@@ -347,7 +347,7 @@ export const forgefx = {
   readParams: (eid: number, pids: number[]) =>
     req<Record<string, number>>(`/preset/blocks/${eid}/read`, { method: 'POST', body: JSON.stringify({ pids }) }),
   /** Cab IR names per bank (Factory 1/2, Legacy, Scratchpad) — for the cab IR picker. */
-  cabIrs: () => req<Record<string, string[]>>(`/cab/irs`),
+  cabIrs: (opts: { refresh?: boolean } = {}) => req<Record<string, string[]>>(`/cab/irs${opts.refresh ? '?refresh=1' : ''}`),
   /** Current cab block state (mode / per-slot bank + IR + dyna type) for the picker. */
   cabState: (eid: number) => req<CabState>(`/preset/blocks/${eid}/cab`),
   /** Change the block's model/type by ordinal. */
