@@ -2,6 +2,155 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.0-beta — 2026-07-12
+
+### Changed
+
+- Merge pull request #48 from sKuhLight/bump/stack-v0.6.7-beta
+- stack: bump ForgeFX pin to v0.6.7-beta (+ matching forgefx-midi pin)
+- Merge pull request #47 from sKuhLight/fix/workbench-default-on
+- shell: make the workbench the default shell (legacy opt-out via flag 0
+- Merge pull request #46 from sKuhLight/layout-rework
+- Merge remote-tracking branch 'origin/main' into layout-rework
+- surface: default board renders editor-true DeviceLayout v2
+- grid: multi-column cable drag with auto-shunts + drop-on-shunt replace
+- axis: param drag ghost as compact translucent chip
+- workbench: full-region drop highlight, tab-bar drops, spring-loaded tabs, outline fix
+- axis-workbench: fix param-control drag-out states + selection-free live controls
+- axis-workbench: collectable param-control panels with block-editor tiles
+- workbench: unify drawer list drag with shared machinery + row anatomy polish
+- workbench: drawer polish (names, icon actions, drag-out) + profile preview frame
+- workbench: customize drawer rework + page layout store + widget tap menu
+- axis-workbench: bind Pages model — seed pages, nav bindings, one-shot migration
+- workbench: split layouts into pages (schema v2, page.* commands, nav bindings)
+- Merge pull request #45 from sKuhLight/fix/version-guard-pin-exempt
+- ci: exempt stack.lock.json pin-bump PRs from the version guard
+- Merge pull request #44 from sKuhLight/ci-rework
+- ci: automate the stack ripple — stack-bump auto-PR, release-prep workflow, version guard
+- ci: shared build-stack action, unit-test gate, draft-first releases, stack pinning
+- Merge main (v0.8.5-beta scene reflection fix) into layout-rework
+- docs: progress log — scene-change reflection fix merged into layout-rework
+- Merge fix/lightweight-scene-reflect: lightweight scene reflection (no full dump), getScene flicker fix, 60s content-check
+- Merge main (v0.8.4-beta: device scene-reflection grid/block reload) into layout-rework
+- tooling: add app-layer feature-implementation guide and commands (implement-feature, new-endpoint, cross-repo-feature, ADR-0002)
+- tooling: add Claude Code baseline + workbench scaffolding (settings, hook, agents, commands, framework guide, ADR log)
+- editor: reload grid + open block on a device scene change
+- docs: progress log — round 14 complete (V14a-d + drag-model follow-up)
+- workbench: in-flow drop gap; dragged widget lifts and travels as ghost
+- docs: progress log — V14c/d landed (bottom-nav mode + mobile default)
+- axis: mobile profile defaults to the persistent bottom nav
+- workbench: bottom-nav mode drops the rail; persistent icon-only bottom nav
+- docs: progress log — V14a/b landed (group parity + insertion placeholder)
+- workbench: groups read as one unit; live insertion placeholder for group drops
+- docs: progress log — round 14 worklist (visual pass 3 findings)
+- docs: progress log — round 13 complete (V13a-h + rail-click hotfix)
+- workbench: keep rail entry height constant across hover expansion
+- workbench: anchor edit chrome inside its widget; de-zoom context menu
+- docs: progress log — V13e/f landed (PB parity ports)
+- preset browser: port search autocomplete, filter builder and block-param detail to the docked panel
+- docs: progress log — V13c/d + V13g/h landed
+- workbench: restore group member drag-out and bottom-bar widget drops
+- workbench: clean up nav rail; preset browser nav docks the panel
+- docs: progress log — V13a landed (drawer split)
+- workbench: split library drawer into Panels/Widgets/Layouts views
+- docs: progress log — drag zoom hotfix + V13 zoom-audit note
+- workbench: drag preview and ghost compensate for ancestor CSS zoom
+- docs: progress log — round 13 worklist (visual pass round 2 findings)
+- docs: progress log — buildable plan exhausted (rounds 11+12 landed)
+- e2e: drain all debounced cache writes before corrupting the stored doc
+- workbench: render pages contentMode
+- workbench(axis): storage hardening — backups, cheaper persists, rev stamping
+- workbench: layout undo/redo, in-memory and edit-scoped
+- workbench: deep interior re-mint for command-based layout imports
+- docs: progress log — e2e landed, round 12 in flight
+- e2e: realign suite to the round-9/10 chrome
+- docs: progress log — round 11 storage hardening in flight
+- docs: progress log — round 10 landed
+- workbench(axis): preset-browser row anatomy and context menus
+- workbench: layout and panel import/export with deep id re-mint
+- workbench: generic toast surface
+- workbench(axis): PROFILE switcher in the edit ribbon
+- docs: progress log — round 10 deferral cleanup in flight
+- docs: progress log — round 9 landed, e2e realignment in flight
+- workbench: themed scrollbars, fitted bottom bar, in-bar Customize, hover rail, tokens done
+- workbench(axis): phone block flow — editor expands, grid maps
+- workbench: full-height side regions and side-overlay dock drawers
+- workbench(axis): grid presentation never gates on the old-shell mobile flag
+- docs: progress log — R9c extended with full-height side regions
+- docs: progress log — round 9 worklist (T31 findings)
+- docs: progress log — T26 landed, P2 backlog complete
+- workbench: Playwright E2E suite for the gated shell
+- docs: progress log — T21+T23 landed
+- workbench: safe-area insets and phone bottom-sheet drawers
+- docs: progress log — round 7 complete, wave 2 launching
+- workbench(axis): FC part affordance polish
+- docs: progress log — T18 landed
+- workbench: keyboard focus management across menus, drawers, and chrome
+- docs: progress log — T19 landed
+- workbench: movable floating widgets with z-raise and viewport self-heal
+- docs: progress log — round 7 in flight (T18/T19/T24)
+- docs: progress log — round 6 complete, session handover
+- workbench: render bottom navigation mode
+- workbench: tokenize overflow menu, guard against hex, invalid-drop preview
+- workbench: extract first-hit region walk in the reducer
+- docs: progress log — round 6 in flight (T16/17/20, T28, T22)
+- docs: progress log — round 5 complete (W1+W2)
+- workbench(axis): auto never scrolls; mobile tier renders the real paged grid
+- docs: progress log — W2 landed
+- workbench: stable top-bar zone columns and clean edit chrome
+- docs: progress log — round 5 worklist (grid scroll/paged tier, top-bar zones)
+- docs: progress log — round 4 grid-control resilience
+- workbench(axis): grid controls survive hand-built layouts
+- docs: progress log — round 3 landed (PB cloud/saved filters, rail tint, dirty chip)
+- workbench(axis): nav-rail active tint and save-chip dirty state
+- workbench(axis): cloud presence views and saved filters in the preset browser
+- docs: progress log — cable resize fix, operator screenshot round 2
+- workbench(axis): re-measure grid cables on pane resize
+- docs: progress log — V2 landed, screenshot fix round complete
+- workbench(axis): compose the full preset-browser part from its split parts
+- docs: progress log — V3 chrome parity landed
+- workbench: pane header, chrome, and rail parity with the design shell
+- docs: progress log — V1 grid mode fix landed
+- workbench(axis): resolve grid mode from the pane-host rect, not the content box
+- docs: progress log — minimal start layout decision
+- workbench(axis): minimal first-contact default layout
+- docs: feature-keep rule + T35 framework migration audit; visual fix-round worklist
+- docs: progress log — P0/P1 implementation complete, visual pass handover
+- workbench(axis): touch parameter pinning via long-press menu
+- docs: progress log — T14 landed
+- workbench: viewport profile resolver with user override
+- docs: progress log — T11 landed
+- workbench(axis): explicit param-widget binding states
+- docs: progress log — P1 completion wave (T11/T14/T15) in flight
+- docs: progress log — implementation queue complete, visual-check handover
+- workbench(axis): layout presets and profile seeds
+- docs: progress log — FC parity landed, T13 last in flight
+- workbench(axis): FC part visual parity
+- docs: progress log — auto-fit + T33 registration landed
+- workbench(axis): register the modifier block-editor part
+- workbench: generic estW auto-fit with design shedding
+- docs: progress log — T33 landed (registry registration pending)
+- workbench(axis): docked modifier part (be-part=modifier)
+- docs: progress log — T09/T10 landed, queue state
+- workbench(axis): live navigation targets, theme entry, bottom-bar parity
+- docs: batch visual checks at the end (progress log note)
+- docs: running progress log for the layout rework
+- workbench(axis): preset-browser split-pane parity
+- workbench(axis): missing widgets, meter toggle, mini semantics
+- workbench(axis): grid map mode and pane-relative auto stepping
+- workbench: repair duplicate dock node ids from persisted layouts (phone blank render)
+- docs: extract DC design parity specs (shell, widgets, groups, fc/grid, block editor, preset browser)
+- workbench(axis): mark default panels as singletons
+- workbench: functional gridbar toolbar with grid mode and block size controls
+- workbench: tokenize edit ribbon and library drawer colors
+- workbench: enforce panel singletons, validate renames, cover untested reducer commands
+- docs: layout-rework review and remaining implementation plan
+- design: consolidate live DC design set, drop superseded editor mockups
+- workbench: Firefox visual smoke script and status tracker update
+- workbench(axis): richer split panes, parameter pin/drag wiring, paramControl editing
+- workbench: parameter sources, custom-panel grids, move alternatives, mobile dock drawers
+- Layout rework: dockable Axis workbench system
+
 ## 0.8.7-beta — 2026-07-11
 
 ### Fixed
