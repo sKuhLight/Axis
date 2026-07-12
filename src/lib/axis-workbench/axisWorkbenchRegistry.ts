@@ -75,19 +75,15 @@ AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, co
 // + keep-set. The generic layer stays widget-type agnostic.
 registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
 
-// Active-section tint (01-shell.md §9). Resolve which nav entry is in front from
-// live Axis state: docked panels (grid/controllers/scenes/setup/live) from the
-// workbench document, overlay/rail screens (library/fc/theme/account) from the
-// editor store. NavigationHost reads this inside a reactive $derived, so the
-// editor runes / document reads below are tracked and the tint stays live.
+// Active-section tint (01-shell.md §9). ROUND 15: the seven page-bound nav entries
+// resolve their tint generically in NavigationHost (pageNavigationEntryActive — the
+// entry's page is the layout's activePageId). This app provider only covers the two
+// ACTION entries — Theme / Axis Cloud — whose open-state lives on the editor store.
+// NavigationHost reads this inside a reactive $derived, so the editor runes below
+// are tracked and the tint stays live.
 registry.registerNavigationState({
   isActive: (entryId) =>
-    isAxisNavigationEntryActive(axisWorkbenchController.document, {
-      libraryOpen: editor.inLibrary,
-      virtualSlug: editor.virtual?.slug ?? null,
-      themeOpen: editor.themeOpen,
-      accountOpen: editor.axisOpen
-    }, entryId)
+    isAxisNavigationEntryActive({ themeOpen: editor.themeOpen, accountOpen: editor.axisOpen }, entryId)
 });
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>

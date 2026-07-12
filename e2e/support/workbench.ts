@@ -13,12 +13,17 @@ export const WORKBENCH_DOC_KEY = 'axs.workbench.doc';
  *   - axs.telemetry.decided : first-run consent choice made → consent modal off
  *   - axs.kofi.seen         : Ko-fi nudge toast dismissed
  *   - axs.tour.done         : guided tour completed
+ *   - axs.lib.built         : library cache-build startup prompt suppressed —
+ *     it appears once a device connects (this dev environment has a live FM3
+ *     behind the /api proxy) and RACES the specs' first clicks; it intercepted
+ *     a nav click in a real run.
  */
 const FIRST_RUN_SUPPRESS: Record<string, string> = {
   'axs.telemetry.decided': '1',
   'axs.telemetry.consent': '0',
   'axs.kofi.seen': '1',
   'axs.tour.done': '1',
+  'axs.lib.built': 'true',
 };
 
 /**

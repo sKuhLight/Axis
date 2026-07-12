@@ -1,19 +1,17 @@
 import {
   createEmptyDockLayout,
-  createEmptyWorkbenchPage,
   createDefaultWidgetZoneLayout,
   createWorkbenchId,
   type DockLayout,
   type DockNode,
   type JsonObject,
-  type NavigationEntryState,
-  type PanelInstance,
   type WidgetInstance,
   type WidgetSize,
   type WidgetZoneLayout,
   type WorkbenchLayout
 } from '../workbench/core';
 import { createAxisWorkbenchPanels } from './axisWorkbenchDefaults';
+import { buildAxisSeedPages, createAxisSeedNavigation } from './axisWorkbenchPages';
 
 /**
  * Axis layout presets — the production port of the design shell's `preset(kind)`
@@ -362,13 +360,14 @@ function buildWidgets(spec: AxisPresetSpec): {
 }
 
 /**
- * Build the dock tree for a preset. Panel visibility mirrors the design default
- * (`place:{grid:"main", editor:"bottom", fc:"bottom", history:"right", presets:"left"}`,
- * only the grid visible initially) while `presetMode:"page"` presets (stage /
- * tablet / mobile) drop the docked preset browser — the browser is a full page
- * in those modes, not a left dock. Editor placement follows `editorMode`.
+ * Build the GRID page's dock for a preset (ROUND 15). The Grid page is signal-grid
+ * centric: Signal Grid in `main`, the Block Editor placed per `editorMode` (bottom
+ * drawer / right / left dock), and History docked right. The FC and Preset Browser
+ * panels are NOT docked here — each owns its own seed page now
+ * (`buildAxisSeedPages`), so they never appear on the Grid page. Editor placement
+ * still follows `editorMode` (e.g. studio docks the editor right).
  */
-function buildDock(kind: AxisLayoutPresetKind, spec: AxisPresetSpec): DockLayout {
+function buildGridPageDock(spec: AxisPresetSpec): DockLayout {
   const dock = createEmptyDockLayout();
   const tabs = (panelIds: string[], active = panelIds[0]): DockNode => ({
     kind: 'tabs',
@@ -379,15 +378,9 @@ function buildDock(kind: AxisLayoutPresetKind, spec: AxisPresetSpec): DockLayout
 
   dock.root.main = tabs(['axis.signalGrid']);
 
-  // Editor + FC share the bottom drawer unless the editor docks to a side.
   const editorRegion =
     spec.editorMode === 'right' ? 'right' : spec.editorMode === 'left' ? 'left' : 'bottom';
-  if (editorRegion === 'bottom') {
-    dock.root.bottom = tabs(['axis.blockEditor', 'axis.fc'], 'axis.blockEditor');
-  } else {
-    dock.root[editorRegion] = tabs(['axis.blockEditor']);
-    dock.root.bottom = tabs(['axis.fc']);
-  }
+  dock.root[editorRegion] = tabs(['axis.blockEditor']);
 
   // History docks right (unless the editor already claimed right — then tab in).
   if (editorRegion === 'right') {
@@ -397,48 +390,10 @@ function buildDock(kind: AxisLayoutPresetKind, spec: AxisPresetSpec): DockLayout
     dock.root.right = tabs(['axis.history']);
   }
 
-  // Preset browser: docked left only in flyout mode; page mode keeps it undocked.
-  if (spec.presetMode === 'flyout') {
-    if (dock.root.left && dock.root.left.kind === 'tabs') {
-      dock.root.left.panelIds.push('axis.presetBrowser');
-    } else {
-      dock.root.left = tabs(['axis.presetBrowser']);
-    }
-  }
-
   dock.regions.left.sizePx = 320;
   dock.regions.right.sizePx = spec.rightW;
   dock.regions.bottom.sizePx = 360;
   return dock;
-}
-
-function buildNavigation(spec: AxisPresetSpec): WorkbenchLayout['navigation'] {
-  const nav = (
-    id: string,
-    label: string,
-    command: string,
-    extra: Partial<NavigationEntryState> = {}
-  ): NavigationEntryState => ({ id, label, hidden: false, target: { command }, ...extra });
-
-  return {
-    mode: spec.navMode,
-    entries: {
-      grid: nav('grid', 'Grid', 'axis.openGrid'),
-      library: nav('library', 'Preset Browser', 'axis.openPresetBrowser'),
-      fc: nav('fc', 'Footswitches', 'axis.openFc'),
-      controllers: nav('controllers', 'Controllers', 'axis.openControllers'),
-      scenes: nav('scenes', 'Scenes', 'axis.openScenes'),
-      live: nav('live', 'Live', 'axis.openLive'),
-      setup: nav('setup', 'Setup', 'axis.openSetup'),
-      theme: nav('theme', 'Theme', 'axis.openTheme'),
-      account: nav('account', 'Axis Cloud', 'axis.openAccount', {
-        locked: true,
-        fixedSlot: 'rail.footer',
-        hidden: false
-      })
-    },
-    order: ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'theme', 'account']
-  };
 }
 
 export interface CreateAxisLayoutPresetOptions {
@@ -463,19 +418,24 @@ export function createAxisLayoutPreset(
   const spec = PRESET_SPECS[kind] ?? PRESET_SPECS.default;
   const rightW = options.rightW ?? spec.rightW;
   const { widgets, groups } = buildWidgets(spec);
-  // Pages (schema v2): every preset ships a single default page carrying the
-  // whole preset dock — page bindings/splits are a user-level operation later.
-  const page = createEmptyWorkbenchPage({ dock: buildDock(kind, { ...spec, rightW }) });
+  // Pages (ROUND 15): every preset ships the full seed page set — the preset's
+  // signal-grid dock becomes the Grid page, and Preset Browser / FC / Setup /
+  // Controllers / Scenes / Live each get their own page. Pages are the same across
+  // profiles (operator: "same seeds"); the preset only varies the Grid page dock,
+  // widgets, and nav mode.
+  const seeded = buildAxisSeedPages(buildGridPageDock({ ...spec, rightW }), {
+    mintNodeId: () => createWorkbenchId('tabs')
+  });
   const layout: WorkbenchLayout = {
     id: options.layoutId ?? createWorkbenchId('layout'),
     label: options.label ?? `Axis ${axisLayoutPresetLabel(kind)}`,
-    pages: { [page.id]: page },
-    pageOrder: [page.id],
-    activePageId: page.id,
+    pages: seeded.pages,
+    pageOrder: seeded.pageOrder,
+    activePageId: seeded.activePageId,
     panels: createAxisWorkbenchPanels(),
     widgets,
     widgetGroups: groups,
-    navigation: buildNavigation(spec),
+    navigation: createAxisSeedNavigation(spec.navMode),
     zones: createAxisPresetZones(),
     settings: {
       presetKind: kind,

@@ -15,6 +15,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
+import { ensureAxisSeedPages } from './axisWorkbenchPages';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -50,11 +51,17 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   if (!isRecord(raw.profiles) || !Object.keys(raw.profiles).length || !isRecord(raw.layouts) || !Object.keys(raw.layouts).length) {
     return createAxisWorkbenchDefaultDocument();
   }
-  // Self-heal: layouts with a Signal Grid panel but no grid-control widgets get
-  // gridMode/blockSize seeded into their gridbar (hand-built layouts, sparse presets).
-  // Also strip rail widgets retired in V13c (History widget + "AX" account avatar)
-  // so pre-V13c persisted docs don't leave ghosts on the rail.
-  return ensureAxisMobileBottomNav(pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(migrateWorkbenchDocument(input))));
+  // Normalization chain (must stay idempotent — runs on every load over
+  // already-normalized docs):
+  //   migrate → ensureSeedPages (ROUND 15 Pages migration) → ensureGridControls →
+  //   pruneRetiredRail → ensureMobileBottomNav.
+  // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
+  // becomes the Grid page and the six other seed pages + full-size Preset Browser
+  // page are added per profile, with the nav entries bound to pages. Guarded by a
+  // doc-metadata marker so freshly seeded / default docs are untouched.
+  return ensureAxisMobileBottomNav(
+    pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+  );
 }
 
 /**
