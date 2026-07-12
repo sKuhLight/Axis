@@ -12,10 +12,11 @@ import {
 } from '../axisWorkbenchRegistryManifest';
 
 describe('Axis Workbench integration contracts', () => {
-  it('uses an explicit internal feature gate', () => {
+  it('workbench is the default shell; VITE_AXIS_WORKBENCH=0 is the legacy escape hatch', () => {
     expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: '1' })).toBe(true);
-    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: 'true' })).toBe(false);
-    expect(isAxisWorkbenchFeatureEnabled({})).toBe(false);
+    expect(isAxisWorkbenchFeatureEnabled({})).toBe(true);
+    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: 'true' })).toBe(true);
+    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: '0' })).toBe(false);
   });
 
   it('declares required Axis panel, widget, navigation, and action types', () => {
