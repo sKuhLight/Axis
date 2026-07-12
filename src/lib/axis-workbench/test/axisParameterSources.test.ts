@@ -66,6 +66,22 @@ describe('Axis parameter source adapter', () => {
     expect(JSON.stringify(source.binding.target)).not.toContain('LED');
   });
 
+  it('tags each source with its block category accent so the widget stays block-owned', () => {
+    const sources = axisParameterSourcesFromEditorView({
+      selected: { effectId: 30, display: 'Drive 1', pack: 'Drive' },
+      params: [{ id: 1, name: 'Gain', value: 5, norm: 0.5 }],
+      enums: [{ id: 2, name: 'Type', value: 1, options: [] }]
+    });
+
+    // Drive's catalog accent — the same hue the Block Editor tints Drive controls.
+    expect(sources[0].state?.color).toBe('#d6543f');
+    expect(sources[1].state?.color).toBe('#d6543f');
+    // presentation-only: the identity binding target carries no color
+    expect(sources[0].binding.target.color).toBeUndefined();
+    // pinned params default to the touch-friendly full size
+    expect(sources[0].defaultSize).toBe('default');
+  });
+
   it('creates sources from the selected editor view in stable order', () => {
     const sources = axisParameterSourcesFromEditorView({
       selected: { effectId: 20, display: 'Delay 1' },

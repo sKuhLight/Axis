@@ -7,6 +7,7 @@ import {
   type WorkbenchParameterSource
 } from '../../workbench';
 import {
+  AXIS_CUSTOM_PANEL_TYPE,
   AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION,
   AXIS_PIN_SELECTED_PARAMETERS_ACTION,
   createAxisParameterSourceEdgeDropAction,
@@ -43,7 +44,7 @@ describe('Axis parameter Workbench actions', () => {
     const panel = Object.values(layout.panels).find((item) => item.type === 'axis.customPanel');
     const widgets = Object.values(layout.widgets);
 
-    expect(panel?.title).toBe('Pinned Parameters');
+    expect(panel?.title).toBe('Controls');
     expect(panel ? layout.zones[`panel:${panel.id}`] : undefined).toBeDefined();
     expect(widgets.map((widget) => widget.type)).toEqual(['axis.paramControl', 'axis.paramControl']);
     expect(widgets.map((widget) => widget.binding?.target.paramId)).toEqual([1, 2]);
@@ -110,9 +111,23 @@ describe('Axis parameter Workbench actions', () => {
     const widgets = Object.values(layout.widgets);
 
     expect(layout.pages[layout.activePageId].dock.root.left?.kind).toBe('tabs');
-    expect(panel?.title).toBe('Treble');
+    // No tab-per-param: a fresh collect panel gets the generic "Controls" name.
+    expect(panel?.title).toBe('Controls');
     expect(widgets).toHaveLength(1);
     expect(widgets[0]?.binding?.target.paramId).toBe(7);
+  });
+
+  it('collects a second edge drop into the existing controls panel in the same region', async () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
+    const action = createAxisParameterSourceEdgeDropAction();
+
+    await action.run({ controller, source: 'host', args: { source: serializeWorkbenchParameterSource(source('7', 'Treble')), region: 'left' } });
+    await action.run({ controller, source: 'host', args: { source: serializeWorkbenchParameterSource(source('8', 'Bass')), region: 'left' } });
+
+    const layout = selectActiveLayout(controller.document)!;
+    // one panel, two collected controls — not a second tab
+    expect(Object.values(layout.panels).filter((p) => p.type === AXIS_CUSTOM_PANEL_TYPE)).toHaveLength(1);
+    expect(Object.values(layout.widgets).map((w) => w.binding?.target.paramId).sort()).toEqual([7, 8]);
   });
 
   it('ignores malformed serialized parameter edge drops', async () => {

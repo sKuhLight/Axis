@@ -1262,3 +1262,129 @@ reviews + commits + bumps.
 - The list-reorder primitive is only wired to the page list today; the hidden-nav
   / saved-template lists still reorder by their existing means (they don't reorder).
 - **Committed** ROUND 18 on `layout-rework` (v0.8.14-beta); live verify: plain labels (no chip border), icon column at identical x across all rows, 7 page grips; unified drag path e2e-asserted (aw-dragging-list + generic ghost + in-flow slot).
+
+## ROUND 19 — Param-control panels (operator review 2026-07-12, AXIS-30)
+
+Operator tried dragging parameter CONTROLS out of the Block Editor:
+1. The dragged controls have NO name — you can't tell what they are.
+2. Every drop auto-creates a NEW TAB named after the parameter ("Drive 1",
+   "Gain 1", "Bass 1") — one tab per param makes no sense. The point is to
+   COLLECT the most important parameters of different blocks in ONE panel
+   and ARRANGE them there.
+3. They look nothing like the Block Editor controls. They should be
+   widget-like, but need a display mode with the Block Editor's square
+   control tiles — the current small ones are useless on mobile/touch.
+4. Expected: drag the control INTO a panel and arrange it there like
+   widgets; SAME color coding as the source block's controls in the Block
+   Editor; hover/click tooltip shows the source block ("Amp 1", "Drive 1").
+
+## ROUND 19 — implementation (2026-07-12, Agent 6)
+
+Base 92e0982 on `layout-rework`. Uncommitted; main session reviews + commits + bumps.
+
+### Exploration — what the current param drag-out did
+
+- **Drag source** = `ControlSurface.svelte`. A pinnable control tile
+  (`pinnable()`: cont/toggle/select, id≥0) is `draggable` and `ondragstart`
+  writes an HTML5 `dataTransfer` payload: MIME `application/x-workbench-parameter-source+json`
+  = a serialized `WorkbenchParameterSource` built by
+  `axisParameterSourceFromEditorParamId` (`axisParameterSources.ts`). There is
+  ALSO a touch/right-click path (`onPinContextMenu`/`onPinLongPress`) that opens a
+  ContextMenu from `buildAxisPinMenuItems` (`pinMenu.ts` + `pinTargets.ts`) listing
+  existing custom panels + "New custom panel", routed through
+  `AXIS_PIN_SELECTED_PARAMETERS_ACTION`.
+- **Two drop landing zones existed and DOUBLE-FIRED.** `AxisCustomPanel.svelte`
+  had its own `ondrop` that appended a widget into the panel's zone
+  (`createParameterWidgetCommand`) — good — but it did NOT `stopPropagation`, so
+  the event bubbled to `DockWorkspace.svelte`'s workspace-level `ondrop`
+  (`WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION`) which ALWAYS ran
+  `createCustomPanelFromParameterSourcesCommands` → **a brand-new panel/tab per
+  drop**. And with no existing custom panel present, every drop hit only the
+  workspace handler → new tab every time, titled after the param
+  (`titleForSources` → single source's `.label`, i.e. "Drive 1"/"Gain 1"). That is
+  exactly the operator's complaint #2.
+- **Widget render** = `AxisWorkbenchWidget.svelte` `kind === 'paramControl'` branch:
+  a small horizontal chip (24px ring + value); the param NAME only showed at
+  `expanded` (default) size → invisible in compact/mini (complaint #1). `paramColor`
+  was already read from `widget.state.color` but **nothing ever populated it** →
+  always `var(--accent)` (complaint #4). Binding states (T11 live/readonly/missing,
+  `paramWidgetState.ts`), live value edit (pointer-drag/wheel), and read-only
+  click-to-open were all present and are preserved. There was no tile look
+  (complaint #3). Block color coding lives in `catalog.ts` (`catFor(pack,base).accent`)
+  and the Block Editor's control tiles are `.restile` (118×112, `.dialwrap` 60px
+  knob + `.lbl`); design `AxisWidget.dc.html` already specifies `paramColor`,
+  `paramSub`, and a `.axtip` hover tooltip (`block · label`) — the port had dropped
+  colour + tooltip.
+
+### What shipped
+
+1. **Collect, don't spawn tabs.** `AxisCustomPanel` drop now `stopPropagation()`s
+   (dragover + drop) so the workspace edge-drop can't also fire → dropping onto a
+   panel appends into THAT panel, period. The workspace edge-drop
+   (`createAxisParameterSourceEdgeDropAction`) now COLLECTS: pure
+   `axisCollectPanelId(doc, region)` prefers a custom panel already in the dropped
+   region, else the sole custom panel, else null → a fresh panel. Fresh collect
+   panels get the generic renamable title **"Controls"** (`titleForSources()` no
+   longer names after the param; explicit `title` args e.g. the pin-page path still
+   win). The menu/touch pin path already appended when a `panelId` was chosen; it
+   now shares the `appendSourcesCommands` helper and the same "Controls" default.
+2. **Arrange = shared machinery, unchanged.** Collected controls are ordinary
+   widgets in the panel's `WidgetZone` (grid variant), so they reorder/arrange via
+   the SAME WidgetHost drag surface + `controller.drag` pipeline as every other
+   widget (round-18 lesson: reuse, don't reinvent). No new drag code.
+3. **Identity.** `axisParameterSources.ts` now computes the source block's category
+   accent (`axisBlockAccent` → shared `catFor`/`baseName`) and stows it in the
+   source `state.color` (presentation only — NOT in the identity `binding.target`).
+   The widget reads it into `--param-color`. Name is now shown at every size except
+   mini. A control-surface-style `.axtip` hover/focus tooltip renders
+   "`Block · Param`" (plus `title`/`aria-label` for a11y).
+4. **Block-editor tile mode.** New `param-tile` display: a touch-friendly square
+   (min 92×84, compact 76×72) column — bigger knob ring (42/34px), value, name —
+   bordered/backed with the block accent so ownership reads at a glance. It's the
+   DEFAULT when a pinned param lives in a custom panel (`isPanelWidgetZone(widget.zone)`),
+   and falls back to the compact horizontal chip in bars/rails (where a tall tile
+   won't fit) and at mini size. `state.display` (`'tile'`|`'ring'`) overrides the
+   per-context default (no toggle UI yet — see follow-ups). The existing default/
+   compact/mini size menu scales the tile (item 4's "size options the widget menu
+   already offers"). `defaultSize` for new pinned params is now `'default'` (the
+   full touch tile).
+5. **Feature-keep.** T11 binding states, live value edit, read-only lock/missing
+   badges + click-to-open all intact. Old per-param custom panels keep loading
+   (schema unchanged; a persisted param widget with no `state.color`/`display`
+   simply renders tile-in-panel with the accent fallback). ControlSurface's ∿
+   modifier badge (source side) untouched.
+
+### Files changed
+- `axisParameterSources.ts` — `color` on source inputs + `axisBlockAccent` + `state.color`; `defaultSize: 'default'`.
+- `axisParameterActions.ts` — `axisCollectPanelId` + `appendSourcesCommands`; edge-drop collects; "Controls" default title; `AXIS_CUSTOM_PANEL_TYPE`/`AXIS_CONTROLS_PANEL_TITLE` exports.
+- `panels/AxisCustomPanel.svelte` — `stopPropagation` on param dragover/drop.
+- `widgets/AxisWorkbenchWidget.svelte` — tile render + name-always + `--param-color` + `.axtip` tooltip + `param-tile` CSS + `isPanelWidgetZone` import.
+- Tests: `test/axisParameterSources.test.ts` (+color/defaultSize case), `test/axisParameterActions.test.ts` ("Controls" title + edge-drop collect case), new `e2e/15-param-collect.spec.ts` (drop-collect + identity/tile/colour/tooltip + arrange surface).
+
+### Gates
+- `npm run check` — **0 errors / 0 warnings** (1127 files).
+- `npm test` — **826** (was 824; +2: colour-propagation + edge-drop-collect).
+- `npm run test:e2e` — **75 passed / 1 failed**; the one failure is the KNOWN
+  pre-existing firefox `06-persistence` "rearrangement survives a reload" flake
+  (AXIS-28), not this round. New `15-param-collect` (×2) passes on BOTH browsers;
+  `09-custom-panel` still green after the AxisCustomPanel change.
+
+### Open follow-ups (Backlog candidates)
+- **No tile/ring toggle in the widget menu.** The per-context default + `state.display`
+  cover it, but there's no UI to flip a placed control between tile and ring (and
+  no generic per-widget-type menu-contribution seam in `WorkbenchRenderRegistry`
+  yet — round-16 noted the same gap). Add `registerWidgetMenu` if params (or other
+  widgets) gain real per-widget settings.
+- **Live block colour** is captured at pin time (persisted in `state.color`); if a
+  preset swap changes the block in that slot, the tile keeps the original hue.
+  Re-deriving live would need the widget to know the bound block's pack even when
+  the block isn't open.
+- **Edge-drop collect heuristic** picks the region-matched panel, else the sole
+  custom panel, else new. With ≥2 custom panels in different regions, an empty-space
+  drop in a region with none makes a fresh "Controls" — intended, but worth an
+  operator sanity-check on the live rig (drag-into-panel is the primary path).
+- Operator/visual pass (AXIS-22) on the live FM3: real drag from the Block Editor
+  into a docked Controls panel, tile legibility + touch size on the phone profile,
+  and the `.axtip` under a `position:fixed` preview frame (round-17 follow-up: fixed
+  overlays attach to the window, not the preview frame).
+- **Committed+pushed** ROUND 19 on `layout-rework` (v0.8.15-beta).

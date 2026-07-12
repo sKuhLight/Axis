@@ -24,7 +24,11 @@
 
   function onParameterDragOver(event: DragEvent) {
     if (!hasParameterSource(event)) return;
+    // Claim the drop here so the workspace-level edge-drop (which would spawn a
+    // NEW panel per parameter) does not also fire — dropping onto a panel means
+    // "collect into THIS panel".
     event.preventDefault();
+    event.stopPropagation();
     parameterDragHover = true;
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   }
@@ -41,6 +45,7 @@
     const source = raw ? parseWorkbenchParameterSource(raw) : null;
     if (!source) return;
     event.preventDefault();
+    event.stopPropagation();
     parameterDragHover = false;
     const command = createParameterWidgetCommand($controller.document, source, { zone, index: widgetCount });
     if (command) controller.dispatch(command);
