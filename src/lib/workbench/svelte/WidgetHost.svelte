@@ -22,6 +22,7 @@
   } from './contextMenu';
   import {
     anchoredWidgetIndex,
+    fullRegionHighlightRect,
     pointerDistance,
     rectContainsPointer,
     widgetDropCommand,
@@ -243,11 +244,16 @@
     const nx = (x - rect.left) / rect.width;
     const ny = (y - rect.top) / rect.height;
     const edge = 0.18;
-    if (nx < edge) return { region: 'left', rect: { left: rect.left, top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
-    if (nx > 1 - edge) return { region: 'right', rect: { left: rect.right - Math.min(rect.width * 0.24, 220), top: rect.top, width: Math.min(rect.width * 0.24, 220), height: rect.height } };
-    if (ny < edge) return { region: 'top', rect: { left: rect.left, top: rect.top, width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
-    if (ny > 1 - edge) return { region: 'bottom', rect: { left: rect.left, top: rect.bottom - Math.min(rect.height * 0.22, 150), width: rect.width, height: Math.min(rect.height * 0.22, 150) } };
-    return null;
+    let region: DockRegionId | null = null;
+    if (nx < edge) region = 'left';
+    else if (nx > 1 - edge) region = 'right';
+    else if (ny < edge) region = 'top';
+    else if (ny > 1 - edge) region = 'bottom';
+    if (!region) return null;
+    // T21 directive #1: highlight the WHOLE region frame (full drop area), not a
+    // small band on the edge — shared with the parameter-source edge drop.
+    const highlight = fullRegionHighlightRect(region);
+    return { region, rect: highlight ?? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
   }
 
   // Top-level zone units under a zone element: loose widget hosts + group

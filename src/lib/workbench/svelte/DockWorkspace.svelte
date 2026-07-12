@@ -10,10 +10,14 @@
     WORKBENCH_PARAMETER_SOURCE_MIME,
     type DockRegionId
   } from '../core';
+  import { fullRegionHighlightRect, type WorkbenchRect } from './drag';
 
   const { controller, registry } = getWorkbenchContext();
   let mobileDock = $state<DockRegionId | null>(null);
   let edgeDropRegion = $state<DockRegionId | null>(null);
+  // Full-region highlight rect for the current edge-drop target (T21 directive
+  // #1): the whole region frame lights up, not a small labelled box.
+  let edgeDropRect = $state<WorkbenchRect | null>(null);
   const layout = $derived($controller.activeLayout);
   // 01-shell §11: `settings.contentMode==="pages"` (stage/tablet/mobile presets)
   // shows one content section full-bleed instead of the fixed multi-region dock.
@@ -61,7 +65,7 @@
   // a reload). `drop` is a belt-and-braces clear for drops the workspace does see.
   $effect(() => {
     if (typeof window === 'undefined') return;
-    const clear = () => { edgeDropRegion = null; };
+    const clear = () => { edgeDropRegion = null; edgeDropRect = null; };
     window.addEventListener('dragend', clear);
     window.addEventListener('drop', clear);
     return () => {
@@ -89,7 +93,9 @@
   function onParameterDragOver(event: DragEvent) {
     if (!hasParameterSource(event) || !registry.hasAction(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION)) return;
     event.preventDefault();
-    edgeDropRegion = regionFromPointer(event);
+    const region = regionFromPointer(event);
+    edgeDropRegion = region;
+    edgeDropRect = fullRegionHighlightRect(region);
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   }
 
@@ -98,6 +104,7 @@
       return;
     }
     edgeDropRegion = null;
+    edgeDropRect = null;
   }
 
   async function onParameterDrop(event: DragEvent) {
@@ -107,6 +114,7 @@
     const region = edgeDropRegion ?? regionFromPointer(event);
     event.preventDefault();
     edgeDropRegion = null;
+    edgeDropRect = null;
     await registry.runActionResult(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION, {
       controller,
       source: 'host',
@@ -191,8 +199,14 @@
     {/if}
   {/if}
 
-  {#if edgeDropRegion}
-    <div class="aw-edge-drop-preview {edgeDropRegion}">
+  {#if edgeDropRegion && edgeDropRect}
+    <!-- T21 directive #1: the ENTIRE target region frame lights up (full drop
+         area), positioned from the measured region rect; the label is kept but
+         anchored top-left so the highlight surface reads as the whole region. -->
+    <div
+      class="aw-edge-drop-preview {edgeDropRegion}"
+      style="left:{edgeDropRect.left}px; top:{edgeDropRect.top}px; width:{edgeDropRect.width}px; height:{edgeDropRect.height}px;"
+    >
       <span>{edgeDropRegion === 'main' ? 'New Custom Panel' : `Dock ${edgeDropRegion}`}</span>
     </div>
   {/if}
@@ -310,54 +324,39 @@
     box-shadow: 14px 0 46px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     animation: awDockSideLeft 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
+  /* T21 directive #1: the highlight surface is the WHOLE target region. Geometry
+     comes from an inline style (measured region rect / full-cross-axis band), so
+     this rule only carries the look. `position: fixed` matches the DragLayer drop
+     preview so the measured viewport rect maps 1:1 (default UI scale). The label
+     is anchored top-left rather than centred so it reads as a region tag on the
+     full frame, not a standalone box. */
   .aw-edge-drop-preview {
-    position: absolute;
+    position: fixed;
     z-index: 140;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    justify-content: flex-start;
+    box-sizing: border-box;
     pointer-events: none;
-    border: 1px solid color-mix(in srgb, var(--aw-accent) 68%, transparent);
+    border: 2px dashed color-mix(in srgb, var(--aw-accent) 68%, transparent);
+    border-radius: 12px;
     background:
-      linear-gradient(135deg, color-mix(in srgb, var(--aw-accent) 16%, transparent), transparent),
-      color-mix(in srgb, var(--aw-bg-2) 74%, transparent);
+      linear-gradient(135deg, color-mix(in srgb, var(--aw-accent) 14%, transparent), transparent),
+      color-mix(in srgb, var(--aw-accent) 8%, transparent);
     color: color-mix(in srgb, var(--aw-accent) 82%, white);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 18px 55px rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aw-accent) 26%, transparent), 0 18px 55px rgba(0, 0, 0, 0.35);
     font: 800 10px/1 var(--aw-font-mono);
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    animation: awEdgeDropIn 0.12s ease;
   }
-  .aw-edge-drop-preview.left {
-    left: 8px;
-    top: 8px;
-    bottom: 8px;
-    width: min(24%, 220px);
-    border-radius: 12px 6px 6px 12px;
+  .aw-edge-drop-preview span {
+    margin: 10px 0 0 12px;
+    color: color-mix(in srgb, var(--aw-accent) 88%, white);
   }
-  .aw-edge-drop-preview.right {
-    right: 8px;
-    top: 8px;
-    bottom: 8px;
-    width: min(24%, 220px);
-    border-radius: 6px 12px 12px 6px;
-  }
-  .aw-edge-drop-preview.top {
-    left: 8px;
-    right: 8px;
-    top: 8px;
-    height: min(22%, 150px);
-    border-radius: 12px 12px 6px 6px;
-  }
-  .aw-edge-drop-preview.bottom {
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    height: min(22%, 150px);
-    border-radius: 6px 6px 12px 12px;
-  }
-  .aw-edge-drop-preview.main {
-    inset: 18%;
-    border-radius: 14px;
+  @keyframes awEdgeDropIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @media (max-width: 760px) {
     .aw-mobile-dock-indicator {

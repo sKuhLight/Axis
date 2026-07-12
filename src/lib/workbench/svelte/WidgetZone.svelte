@@ -375,9 +375,18 @@
     min-height: 100%;
     display: grid;
     grid-template-columns: repeat(var(--aw-zone-grid-columns), minmax(0, 1fr));
-    grid-auto-rows: var(--aw-zone-grid-row-height);
+    /* T21 directive #4: rows GROW to fit tall units (the row-height is a floor,
+       not a cap). A param-control tile (Block-Editor square, ~92px) is far taller
+       than the 42px default row — a fixed row clipped the tile so the customize
+       dashed outline (bound to the host box) cut straight through it. `minmax(…,
+       auto)` lets each row take its tallest unit, so the host wraps the full
+       rendered tile and the outline wraps the host. */
+    grid-auto-rows: minmax(var(--aw-zone-grid-row-height), auto);
     gap: var(--aw-zone-grid-gap);
-    align-items: stretch;
+    /* `start` (not `stretch`): a cell hugs its unit's own height instead of being
+       stretched to the (possibly taller) row, so a short chip sharing a row with a
+       tall tile keeps a tight outline. Widths still fill via the cell/host below. */
+    align-items: start;
     align-content: flex-start;
     overflow: auto;
     padding: 1px;

@@ -268,3 +268,56 @@ export function dockTargetLabel(intent: PanelDropIntent): string {
   if (intent.kind === 'split') return `Split ${intent.position}`;
   return `Dock ${intent.region}`;
 }
+
+/**
+ * Full-region drop-highlight rect for an edge (new-panel) drop, given the
+ * workspace's own client rect (T21 directive #1: the "DOCK LEFT/RIGHT/…"
+ * indicator must highlight the WHOLE region frame, not a small labelled box).
+ * This is the fallback the parameter-source and widget edge drops use when the
+ * target region isn't docked yet, so there is no live `[data-region]` element to
+ * measure — it mirrors the design's dock-preview geometry (`Axis Layout System`
+ * dropStyle): left/right run the FULL height at a sensible column width;
+ * top/bottom span the FULL width at a sensible band height; main fills the
+ * workspace. Pure (rect-in → rect-out) so the geometry is unit-tested; the live
+ * region rect, when present, is preferred by the caller.
+ */
+export function defaultRegionBand(region: DockRegionId, workspace: WorkbenchRect): WorkbenchRect {
+  const columnWidth = Math.max(180, Math.min(workspace.width * 0.28, 340));
+  const bandHeight = Math.max(140, Math.min(workspace.height * 0.32, 260));
+  switch (region) {
+    case 'left':
+      return { left: workspace.left, top: workspace.top, width: columnWidth, height: workspace.height };
+    case 'right':
+      return { left: workspace.left + workspace.width - columnWidth, top: workspace.top, width: columnWidth, height: workspace.height };
+    case 'top':
+      return { left: workspace.left, top: workspace.top, width: workspace.width, height: bandHeight };
+    case 'bottom':
+      return { left: workspace.left, top: workspace.top + workspace.height - bandHeight, width: workspace.width, height: bandHeight };
+    default:
+      return { left: workspace.left, top: workspace.top, width: workspace.width, height: workspace.height };
+  }
+}
+
+/**
+ * DOM helper: the full-region highlight rect for an edge drop. Prefers the live
+ * docked region element (`.aw-workspace [data-region="…"]`) so the highlight
+ * exactly wraps the region already on screen; falls back to `defaultRegionBand`
+ * (a full-cross-axis band on the target edge) when that region has no panels
+ * yet. Shared by the parameter-source edge drop (DockWorkspace) and the widget
+ * new-panel edge drop (WidgetHost) so both read identically. Returns null only
+ * when the workspace itself can't be measured.
+ */
+export function fullRegionHighlightRect(region: DockRegionId): WorkbenchRect | null {
+  if (typeof document === 'undefined') return null;
+  const workspaceEl = document.querySelector<HTMLElement>('.aw-workspace');
+  if (!workspaceEl) return null;
+  const ws = workspaceEl.getBoundingClientRect();
+  if (ws.width <= 0 || ws.height <= 0) return null;
+  const workspace: WorkbenchRect = { left: ws.left, top: ws.top, width: ws.width, height: ws.height };
+  const regionEl = workspaceEl.querySelector<HTMLElement>(`[data-region="${region}"]`);
+  if (regionEl) {
+    const r = regionEl.getBoundingClientRect();
+    if (r.width > 8 && r.height > 8) return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
+  return defaultRegionBand(region, workspace);
+}
