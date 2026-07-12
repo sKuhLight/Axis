@@ -21,7 +21,7 @@ import {
 
 describe('workbench public exports', () => {
   it('exposes core and Svelte foundation APIs from the top-level barrel', () => {
-    expect(WORKBENCH_SCHEMA_VERSION).toBe(1);
+    expect(WORKBENCH_SCHEMA_VERSION).toBe(2);
     expect(WORKBENCH_PACKAGE_VERSION).toBe(1);
     expect(canDeleteProfile).toBeTypeOf('function');
     expect(createBoundWidgetCommand).toBeTypeOf('function');

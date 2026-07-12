@@ -21,16 +21,24 @@ function richLayout(): WorkbenchLayout {
   return {
     id: 'layout.studio',
     label: 'Studio',
-    dock: {
-      regions: {
-        left: { collapsed: false },
-        right: { collapsed: false },
-        top: { collapsed: false },
-        bottom: { collapsed: false },
-        main: { collapsed: false }
-      },
-      root: { left: null, right: null, top: null, bottom: null, main: split }
+    pages: {
+      'page.studio': {
+        id: 'page.studio',
+        label: 'Studio Page',
+        dock: {
+          regions: {
+            left: { collapsed: false },
+            right: { collapsed: false },
+            top: { collapsed: false },
+            bottom: { collapsed: false },
+            main: { collapsed: false }
+          },
+          root: { left: null, right: null, top: null, bottom: null, main: split }
+        }
+      }
     },
+    pageOrder: ['page.studio'],
+    activePageId: 'page.studio',
     panels: {
       'panel.a': { id: 'panel.a', type: 'workbench.customPanel', title: 'A', state: { acceptsWidgets: true } },
       'panel.b': { id: 'panel.b', type: 'test.panel', title: 'B' }
@@ -51,6 +59,9 @@ function richLayout(): WorkbenchLayout {
 function docWith(layout: WorkbenchLayout) {
   return { layouts: { [layout.id]: layout } };
 }
+
+// Pages (schema v2): the layout's docks live on its pages.
+const firstPageDock = (layout: WorkbenchLayout) => Object.values(layout.pages)[0].dock;
 
 describe('layoutPackage export/import (T29)', () => {
   it('exports a versioned, self-contained layout package', () => {
@@ -75,13 +86,13 @@ describe('layoutPackage export/import (T29)', () => {
 
     // Collect every id on both sides.
     const collect = (l: WorkbenchLayout): string[] => {
-      const ids: string[] = [l.id, ...Object.keys(l.panels), ...Object.keys(l.widgets), ...Object.keys(l.widgetGroups)];
+      const ids: string[] = [l.id, ...Object.keys(l.pages), ...Object.keys(l.panels), ...Object.keys(l.widgets), ...Object.keys(l.widgetGroups)];
       const walk = (node: DockNode | null): void => {
         if (!node) return;
         ids.push(node.id);
         if (node.kind === 'split') node.children.forEach(walk);
       };
-      Object.values(l.dock.root).forEach(walk);
+      for (const page of Object.values(l.pages)) Object.values(page.dock.root).forEach(walk);
       return ids;
     };
     const originalIds = new Set(collect(original));
@@ -98,7 +109,7 @@ describe('layoutPackage export/import (T29)', () => {
     const result = importLayoutPackage(pkg);
     expect(result.success).toBe(true);
     if (!result.success) return;
-    const dock = result.payload.dock.root.main as Extract<DockNode, { kind: 'split' }>;
+    const dock = firstPageDock(result.payload).root.main as Extract<DockNode, { kind: 'split' }>;
 
     expect(dock.kind).toBe('split');
     expect(dock.id).not.toBe('split-0001');
@@ -161,6 +172,84 @@ describe('layoutPackage export/import (T29)', () => {
     const malformed = importLayoutPackage({ ...good, layout: { id: 'x' } });
     expect(malformed.success).toBe(false);
     if (!malformed.success) expect(malformed.error.code).toBe('malformed');
+  });
+
+  it('round-trips a MULTI-PAGE layout: pages, order, active page, and nav bindings all remap', () => {
+    const layout = richLayout();
+    // Second page with its own dock tree + panel.
+    layout.panels['panel.c'] = { id: 'panel.c', type: 'test.panel', title: 'C' };
+    layout.pages['page.live'] = {
+      id: 'page.live',
+      label: 'Live',
+      dock: {
+        regions: {
+          left: { collapsed: false },
+          right: { collapsed: false },
+          top: { collapsed: false },
+          bottom: { collapsed: false },
+          main: { collapsed: false }
+        },
+        root: {
+          left: null,
+          right: null,
+          top: null,
+          bottom: null,
+          main: { kind: 'tabs', id: 'tabs-0003', activePanelId: 'panel.c', panelIds: ['panel.c'] }
+        }
+      }
+    };
+    layout.pageOrder = ['page.studio', 'page.live'];
+    layout.activePageId = 'page.live';
+    layout.navigation.entries['page:live'] = { id: 'page:live', label: 'Live', pageId: 'page.live' };
+    layout.navigation.order = ['page:live'];
+
+    const pkg = exportLayoutPackage(docWith(layout), 'layout.studio')!;
+    const result = importLayoutPackage(pkg);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const imported = result.payload;
+
+    // Both pages survive with fresh ids, order + active page follow the map.
+    expect(Object.keys(imported.pages)).toHaveLength(2);
+    expect(imported.pageOrder).toHaveLength(2);
+    for (const id of imported.pageOrder) expect(imported.pages[id]).toBeDefined();
+    expect(['page.studio', 'page.live']).not.toContain(imported.pageOrder[0]);
+    expect(imported.activePageId).toBe(imported.pageOrder[1]);
+
+    // The nav page binding follows the re-minted page id.
+    const navEntry = Object.values(imported.navigation.entries).find((e) => e.pageId);
+    expect(navEntry).toBeDefined();
+    expect(imported.pages[navEntry!.pageId!]).toBeDefined();
+    expect(navEntry!.pageId).not.toBe('page.live');
+
+    // Per-page panel references stay consistent.
+    for (const page of Object.values(imported.pages)) {
+      for (const node of Object.values(page.dock.root)) {
+        if (node?.kind === 'tabs') {
+          for (const pid of node.panelIds) expect(imported.panels[pid]).toBeTruthy();
+        }
+      }
+    }
+  });
+
+  it('imports a legacy schema-v1 package (single dock) as a single-page layout', () => {
+    const layout = richLayout();
+    // Rebuild the payload in v1 shape: dock on the layout, no pages fields.
+    const { pages: _pages, pageOrder: _pageOrder, activePageId: _activePageId, ...rest } = layout;
+    const legacy = { ...rest, dock: layout.pages['page.studio'].dock };
+
+    const pkg = { ...exportLayoutPackage(docWith(layout), 'layout.studio')!, schemaVersion: 1, layout: legacy };
+    const result = importLayoutPackage(pkg);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const imported = result.payload;
+
+    expect(Object.keys(imported.pages)).toHaveLength(1);
+    const page = Object.values(imported.pages)[0];
+    const main = page.dock.root.main;
+    expect(main?.kind).toBe('split');
+    // Interior ids were still re-minted on the legacy path.
+    expect(main?.id).not.toBe('split-0001');
   });
 
   it('exports and re-mints panel-template packages', () => {

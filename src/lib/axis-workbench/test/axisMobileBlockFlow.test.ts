@@ -36,6 +36,12 @@ function activeLayout(doc: WorkbenchDocument) {
   return doc.layouts[doc.profiles[doc.activeProfileId].layoutId];
 }
 
+// Pages (schema v2): region sizes live on the ACTIVE page's dock.
+function activeDock(doc: WorkbenchDocument) {
+  const layout = activeLayout(doc);
+  return layout.pages[layout.activePageId].dock;
+}
+
 function gridModeWidget(doc: WorkbenchDocument) {
   return Object.values(activeLayout(doc).widgets).find((w) => w.type === 'axis.gridMode')!;
 }
@@ -59,7 +65,7 @@ describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
   it('expands the bottom to ~75% and forces grid map, capturing prev state', () => {
     const doc = docFromPreset('mobile');
     const mem0 = createAxisMobileBlockFlowMemory();
-    const beforeBottom = activeLayout(doc).dock.regions.bottom.sizePx ?? null;
+    const beforeBottom = activeDock(doc).regions.bottom.sizePx ?? null;
     const beforeGrid = gridModeWidget(doc);
     expect(beforeGrid.zone).toBe('hidden'); // mobile preset hides gridMode
 
@@ -76,7 +82,7 @@ describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
     });
 
     const next = apply(doc, commands);
-    expect(activeLayout(next).dock.regions.bottom.sizePx).toBe(EXPANDED);
+    expect(activeDock(next).regions.bottom.sizePx).toBe(EXPANDED);
     const g = gridModeWidget(next);
     expect(g.zone).toBe('gridbar');
     expect(g.state?.mode).toBe('map');
@@ -112,7 +118,7 @@ describe('decideAxisMobileBlockFlow — leave (block minimized/closed)', () => {
     const leave = decideAxisMobileBlockFlow(input({ doc: expanded, blockOpen: false }), enter.memory);
     const restored = apply(expanded, leave.commands);
 
-    expect(activeLayout(restored).dock.regions.bottom.sizePx).toBe(activeLayout(doc).dock.regions.bottom.sizePx);
+    expect(activeDock(restored).regions.bottom.sizePx).toBe(activeDock(doc).regions.bottom.sizePx);
     const g = gridModeWidget(restored);
     expect(g.zone).toBe('hidden');
     expect(g.state?.mode).toBe('auto');
@@ -149,7 +155,7 @@ describe('decideAxisMobileBlockFlow — user-resize respect', () => {
     // No region.resize command — the user's 420 stays; grid mode still restores.
     expect(leave.commands.some((c) => c.type === 'region.resize')).toBe(false);
     const restored = apply(expanded, leave.commands);
-    expect(activeLayout(restored).dock.regions.bottom.sizePx).toBe(420);
+    expect(activeDock(restored).regions.bottom.sizePx).toBe(420);
     expect(gridModeWidget(restored).zone).toBe('hidden');
   });
 });

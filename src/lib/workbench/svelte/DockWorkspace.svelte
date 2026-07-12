@@ -34,7 +34,7 @@
   });
 
   function hasRegion(region: DockRegionId): boolean {
-    return !!layout?.dock.root[region];
+    return !!$controller.activePage?.dock.root[region];
   }
 
   // R9c: LEFT/RIGHT dock drawers present as side overlays (partial-width panels

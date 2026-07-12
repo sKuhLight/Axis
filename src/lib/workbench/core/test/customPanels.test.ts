@@ -38,7 +38,7 @@ describe('custom panel helpers', () => {
     expect(layout.panels['panel.custom']).toMatchObject({ type: 'test.customPanel', title: 'Performance' });
     expect(layout.panels['panel.custom'].state?.grid).toEqual({ columns: 4, rowHeight: 42, gap: 8 });
     expect(layout.zones['panel:panel.custom']).toMatchObject({ label: 'Performance', orientation: 'free', acceptsGroups: true });
-    expect(layout.dock.root.right?.kind).toBe('tabs');
+    expect(layout.pages[layout.activePageId].dock.root.right?.kind).toBe('tabs');
   });
 
   it('normalizes custom panel grid settings from persisted panel state', () => {

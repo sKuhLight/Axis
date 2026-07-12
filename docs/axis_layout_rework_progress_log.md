@@ -703,3 +703,100 @@ current-slot content-check relaxed 11s→60s (less serial polling).
 - **Deferred**: per-channel tile block-type reflection (the original ask) — attempted
   then reverted (broke channel changes); to be revisited as an offline task, not on-rig.
 - **Verified**: `npm run check` 0/0 (1116 files); `npm test` 746/746.
+
+## ROUND 15 — PIVOT: Pages navigation model (operator session 2026-07-12)
+
+Round 15 was planned as the batched visual pass over the round-13/14 debt
+(AXIS-22). Before the sweep ran, the operator redefined the round from live use:
+the **nav model itself is the finding**. Concrete symptoms: clicking the Preset
+Browser nav entry no-ops when the panel is already docked; clicking Grid (or the
+"Grid" back button) never brings the Signal Grid back once the main tab shows
+another section; add-or-focus semantics feel arbitrary ("das ganze ist etwas
+komisch").
+
+**Operator directive:** nav entries become **Pages** — every menu point is its
+own freely configurable layout page, like the grid page. No more fixed menu
+scheme: we ship predefined pages that can be deleted, renamed, saved; Preset
+Browser gets a full-size PB layout as its own page.
+
+**Design decisions (operator Q&A, 2026-07-12):**
+1. **Scope:** top bar, bottom bar and rail stay GLOBAL per layout; the dock
+   regions (left/right/main/bottom) are per page. → `WorkbenchLayout` gains
+   `pages` (each page owns a `DockLayout`); `widgets`/`zones`/`navigation`
+   stay layout-level.
+2. **Seed pages:** all current nav points — Grid (= today's default layout),
+   Preset Browser (full-size PB), Scenes, Live, Setup, Controllers, FC.
+   Theme + Axis Cloud stay ACTION entries (no page). "+" creates a new empty
+   page; every page is renamable/deletable/reorderable.
+3. **Profiles:** pages are per device profile (desktop/tablet/phone), same
+   seeds — as layouts behave today.
+
+Plane: AXIS-23 (In Progress) carries the rework; AXIS-22 (visual pass) moved
+back to Backlog — several debt items (nav docking, drawer UX, bottom-nav)
+need re-checking against the new model anyway and resume after it lands.
+
+Session setup notes: dev servers up (ForgeFX :5056 with a live FM3 "5153
+Hardcore", Axis :5173 with VITE_AXIS_WORKBENCH=1); local layout-rework was 14
+commits AHEAD of origin (unpushed main merges v0.8.4/v0.8.5) — origin is
+ancestor, so this checkout is the current tip. Playwright deps were missing in
+node_modules (npm install fixed it); a claude-driven sweep script lives in
+.workbench-smoke/sweep.mjs (untracked) with backend-store write guards for
+later re-use.
+
+## ROUND 15 — Pages: framework half (2026-07-12)
+
+The generic `workbench/` layer now implements the Pages model (AXIS-23,
+framework half; the Axis binding — page seeds, PB full-size page, nav entry
+bindings — is a follow-up step).
+
+**Schema v2** (`core/schema.ts`, `WORKBENCH_SCHEMA_VERSION` 1→2):
+`WorkbenchLayout` gains `pages: Record<string, WorkbenchPage>` (each page =
+`{ id, label, icon?, dock: DockLayout, metadata? }`), `pageOrder`,
+`activePageId`; the old layout-level `dock` is a deprecated optional field
+accepted as MIGRATION INPUT ONLY — repair wraps it into a single `main`/"Main"
+page and deletes it, so old persisted docs load and render exactly as before
+(nav entries stay unbound; the app layer binds pages later).
+`NavigationEntryState` gains `pageId?` — a bound entry activates its page on
+trigger and tints active while its page is `activePageId`.
+
+**Commands** (`core/commands.ts` + `reducer.ts`): `page.add` (+ default or
+provided nav entry, no auto-activate), `page.remove` (rejects last page,
+drops bound nav entries + panels docked on the page, activates nearest by
+order), `page.rename` (page + bound nav entries), `page.activate`
+(layout-history-EXCLUDED like panel/profile.activate), `page.duplicate`
+(deep copy via new `remintWorkbenchPage` — fresh dock-node + panel-instance
+ids, `singletonKey` stripped on copies, inserted after source + nav entry).
+All existing dock-scoped commands (panel.*, region.*, split.resize) keep
+their shapes and implicitly target the ACTIVE page's dock; panel
+close/move/tab/split sweep ALL pages on removal.
+
+**Repair/validation** (`core/invariants.ts`): ≥1 page, valid `activePageId`,
+deduped+complete `pageOrder`, per-page dock repairs with layout-wide panel
+and node-id uniqueness (panel in ≤1 page — first page in order wins),
+dangling nav `pageId` → binding dropped (entry removed when it has no
+`target`), `reserveWorkbenchIds` reserves across all pages. New validation
+codes: missing-pages, active-page-missing, missing/duplicate-page-order-entry,
+missing-navigation-page.
+
+**Packages** (`core/layoutPackage.ts`, `packages.ts`): re-mint now remaps page
+ids, per-page dock nodes, and nav `pageId` bindings; schema-v1 packages
+(single dock) still import — coerced into a single page then deep-reminted.
+
+**Svelte**: controller exposes `activePage`/`pages` + `activatePage`/
+`addPage` (adds AND activates)/`removePage`/`renamePage`/`duplicatePage`;
+`DockRegion`/`DockWorkspace` render the active page's dock (page switch =
+dock swap); `NavigationHost` dispatches `page.activate` for bound entries,
+resolves their active tint generically (app provider untouched for the rest),
+gains page context-menu items (Rename Page… inline input, Duplicate Page,
+Delete Page — disabled on last page) and an edit-mode-only trailing "+" that
+creates+activates an empty page. Pure helpers in `svelte/navigation.ts`
+(`navigationEntryCommand`, `pageNavigationEntryActive`, …).
+
+**Axis layer** (mechanical routing only, no behavior change): defaults +
+presets build their dock inside a single default page; `axisMobileBlockFlow`
++ `axisNavigationActiveState` read the active page's dock.
+
+- **Verified**: `npm run check` 0 errors (1121 files); `npm test` 81 files /
+  791 tests green (was 746 — +45: pages commands, repair/migration rules,
+  multi-page + legacy package round-trips, controller wrappers, nav helpers,
+  history exclusion). e2e not run (main session).

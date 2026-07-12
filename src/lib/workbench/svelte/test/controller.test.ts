@@ -303,3 +303,93 @@ describe('WorkbenchController', () => {
     expect(result).toEqual({ handled: true, success: true, value: 'widget.bound' });
   });
 });
+
+describe('WorkbenchController — pages', () => {
+  const pagedDoc = () =>
+    createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test', pageId: 'page.one', pageLabel: 'One' });
+
+  it('exposes the active page and the ordered page list', () => {
+    const controller = createWorkbenchController(pagedDoc());
+
+    expect(controller.activePage?.id).toBe('page.one');
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.one']);
+  });
+
+  it('addPage inserts an empty default page, binds a nav entry, and activates it', () => {
+    const controller = createWorkbenchController(pagedDoc());
+
+    const id = controller.addPage({ id: 'page.two', label: 'Two' });
+
+    expect(id).toBe('page.two');
+    expect(controller.activePage?.id).toBe('page.two');
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.one', 'page.two']);
+    const layout = controller.activeLayout!;
+    expect(Object.values(layout.navigation.entries).some((entry) => entry.pageId === 'page.two')).toBe(true);
+    // Empty default dock.
+    expect(controller.activePage?.dock.root.main).toBeNull();
+  });
+
+  it('activatePage switches pages; dock commands then land on the new page', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    controller.addPage({ id: 'page.two', label: 'Two' });
+    controller.dispatch({ type: 'panel.add', panel: { id: 'panel.a', type: 'test.panel' }, region: 'main' });
+
+    expect(controller.activeLayout!.pages['page.two'].dock.root.main?.kind).toBe('tabs');
+    expect(controller.activeLayout!.pages['page.one'].dock.root.main).toBeNull();
+
+    const result = controller.activatePage('page.one');
+    expect(result.success).toBe(true);
+    expect(controller.activePage?.id).toBe('page.one');
+  });
+
+  it('renamePage / duplicatePage / removePage round-trip through the reducer', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    controller.addPage({ id: 'page.two', label: 'Two' });
+
+    expect(controller.renamePage('page.two', 'Stage').success).toBe(true);
+    expect(controller.activeLayout!.pages['page.two'].label).toBe('Stage');
+
+    expect(controller.duplicatePage('page.two', { newPageId: 'page.copy' }).success).toBe(true);
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.one', 'page.two', 'page.copy']);
+    expect(controller.activeLayout!.pages['page.copy'].label).toBe('Stage Copy');
+
+    expect(controller.removePage('page.two').success).toBe(true);
+    expect(controller.pages.map((page) => page.id)).toEqual(['page.one', 'page.copy']);
+    // page.two was active — nearest by order takes over.
+    expect(controller.activePage?.id).toBe('page.copy');
+  });
+
+  it('rejects removing the last page (document unchanged)', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    const result = controller.removePage('page.one');
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('protected-page');
+    expect(controller.pages).toHaveLength(1);
+  });
+
+  it('page.activate is NOT an undo step, structural page ops are', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    expect(controller.canUndoLayout).toBe(false);
+
+    controller.addPage({ id: 'page.two', label: 'Two' }); // structural batch → one step
+    expect(controller.canUndoLayout).toBe(true);
+
+    controller.undoLayout();
+    expect(controller.pages).toHaveLength(1);
+    expect(controller.canUndoLayout).toBe(false);
+
+    controller.dispatch({ type: 'page.activate', pageId: 'page.one' });
+    expect(controller.canUndoLayout).toBe(false);
+  });
+
+  it('setDocument keeps working with paged documents (repair path)', () => {
+    const controller = createWorkbenchController(pagedDoc());
+    const raw = JSON.parse(JSON.stringify(controller.document));
+    raw.layouts['layout.test'].activePageId = 'missing.page';
+
+    controller.setDocument(raw);
+
+    expect(controller.activePage?.id).toBe('page.one');
+  });
+});

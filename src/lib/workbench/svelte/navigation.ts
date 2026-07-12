@@ -1,7 +1,36 @@
-import type { NavigationEntryState, NavigationMode } from '../core';
+import type { NavigationEntryState, NavigationMode, WorkbenchCommand, WorkbenchLayout } from '../core';
 
 export function canMoveNavigationEntry(entry: NavigationEntryState): boolean {
   return !entry.locked && (!entry.fixedSlot || entry.fixedSlot === 'none');
+}
+
+/** True when the entry is bound to a page (triggering it activates that page). */
+export function isPageNavigationEntry(entry: NavigationEntryState): boolean {
+  return typeof entry.pageId === 'string' && entry.pageId.length > 0;
+}
+
+/**
+ * The command a navigation entry dispatches when triggered, or `null` when the
+ * entry is action-backed (the app's registered nav action runs instead). Page
+ * entries always resolve to `page.activate` — the binding wins over any target.
+ */
+export function navigationEntryCommand(entry: NavigationEntryState): WorkbenchCommand | null {
+  if (isPageNavigationEntry(entry)) return { type: 'page.activate', pageId: entry.pageId! };
+  return null;
+}
+
+/**
+ * Active-state for a page-bound entry: its page is the layout's active page.
+ * Non-page entries return `null` (defer to the app's navigation-state provider).
+ */
+export function pageNavigationEntryActive(entry: NavigationEntryState, layout: WorkbenchLayout | undefined): boolean | null {
+  if (!isPageNavigationEntry(entry)) return null;
+  return !!layout && layout.activePageId === entry.pageId;
+}
+
+/** Page entries can be deleted unless theirs is the last page of the layout. */
+export function canDeleteNavigationPage(layout: WorkbenchLayout | undefined): boolean {
+  return !!layout && Object.keys(layout.pages ?? {}).length > 1;
 }
 
 export function canHideNavigationEntry(entry: NavigationEntryState): boolean {

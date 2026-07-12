@@ -110,7 +110,7 @@ describe('Axis layout presets', () => {
 
       it('always keeps the grid visible in the dock', () => {
         const { layout: presetLayout } = docWithPreset(kind);
-        const docked = Object.values(presetLayout.dock.root)
+        const docked = Object.values(presetLayout.pages[presetLayout.activePageId].dock.root)
           .flatMap((node) => (node && node.kind === 'tabs' ? node.panelIds : []));
         expect(docked).toContain('axis.signalGrid');
       });
@@ -130,7 +130,7 @@ describe('Axis layout presets', () => {
     for (const kind of ['stage', 'tablet', 'mobile'] as const) {
       const layout = createAxisLayoutPreset(kind, { layoutId: `axis.layout.${kind}` });
       expect(layout.settings?.presetMode).toBe('page');
-      const docked = Object.values(layout.dock.root)
+      const docked = Object.values(layout.pages[layout.activePageId].dock.root)
         .flatMap((node) => (node && node.kind === 'tabs' ? node.panelIds : []));
       expect(docked).not.toContain('axis.presetBrowser');
     }
@@ -138,7 +138,7 @@ describe('Axis layout presets', () => {
 
   it('studio docks the block editor to the right region', () => {
     const layout = createAxisLayoutPreset('studio', { layoutId: 'axis.layout.studio' });
-    const right = layout.dock.root.right;
+    const right = layout.pages[layout.activePageId].dock.root.right;
     expect(right?.kind).toBe('tabs');
     expect(right && right.kind === 'tabs' ? right.panelIds : []).toContain('axis.blockEditor');
   });

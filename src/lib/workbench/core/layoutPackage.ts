@@ -2,12 +2,14 @@ import { createWorkbenchId, reserveWorkbenchIds } from './ids';
 import { cloneWorkbenchDocument, isJsonSerializable, repairWorkbenchDocument, validateWorkbenchDocument } from './invariants';
 import { WORKBENCH_SCHEMA_VERSION } from './schema';
 import type {
+  DockLayout,
   DockNode,
   PanelInstance,
   PanelTemplate,
   WidgetGroup,
   WidgetInstance,
-  WorkbenchLayout
+  WorkbenchLayout,
+  WorkbenchPage
 } from './schema';
 
 /**
@@ -197,53 +199,162 @@ function remapLayoutBits(
   return { panels: nextPanels, widgets: nextWidgets, widgetGroups: nextGroups, panelIdMap };
 }
 
+/** Remap one dock (regions kept, every node id re-minted, panel refs mapped). */
+function remapDock(dock: DockLayout, panelIdMap: Map<string, string>): DockLayout {
+  const root = Object.fromEntries(
+    Object.entries(dock.root ?? {}).map(([region, node]) => [region, remapDockNode(node, panelIdMap)])
+  ) as DockLayout['root'];
+  return { regions: clone(dock.regions ?? {}) as DockLayout['regions'], root };
+}
+
+/**
+ * Normalize a (possibly legacy schema-v1) layout payload into pages form so the
+ * re-mint path treats every dock uniformly: when the payload has no pages but a
+ * top-level `dock`, that dock becomes the single `main` page (mirroring the
+ * repair-time migration) so its interior node ids get re-minted too.
+ */
+function coercePagesShape(layout: WorkbenchLayout): {
+  pages: Record<string, WorkbenchPage>;
+  pageOrder: string[];
+  activePageId: string;
+} {
+  const pages = isRecord(layout.pages) ? layout.pages : {};
+  if (Object.keys(pages).length > 0) {
+    return {
+      pages,
+      pageOrder: Array.isArray(layout.pageOrder) ? layout.pageOrder : Object.keys(pages),
+      activePageId: typeof layout.activePageId === 'string' ? layout.activePageId : Object.keys(pages)[0]
+    };
+  }
+  const legacyDock: DockLayout = isRecord(layout.dock)
+    ? (layout.dock as DockLayout)
+    : ({ regions: {}, root: {} } as unknown as DockLayout);
+  const page: WorkbenchPage = { id: 'main', label: 'Main', dock: legacyDock };
+  return { pages: { [page.id]: page }, pageOrder: [page.id], activePageId: page.id };
+}
+
+/** Remap every page of a layout: fresh page ids, fresh dock-node ids, mapped panel refs. */
+function remapPages(
+  layout: WorkbenchLayout,
+  panelIdMap: Map<string, string>
+): { pages: Record<string, WorkbenchPage>; pageOrder: string[]; activePageId: string; pageIdMap: Map<string, string> } {
+  const source = coercePagesShape(layout);
+  const pageIdMap = new Map<string, string>();
+  for (const id of Object.keys(source.pages)) pageIdMap.set(id, createWorkbenchId(prefixOf(id, 'page')));
+
+  const pages: Record<string, WorkbenchPage> = {};
+  for (const page of Object.values(source.pages)) {
+    const id = pageIdMap.get(page.id) ?? page.id;
+    pages[id] = {
+      ...clone(page),
+      id,
+      dock: remapDock(page.dock ?? ({ regions: {}, root: {} } as unknown as DockLayout), panelIdMap)
+    };
+  }
+  const pageOrder = source.pageOrder.map((id) => pageIdMap.get(id) ?? id).filter((id) => !!pages[id]);
+  const activePageId = pageIdMap.get(source.activePageId) ?? pageOrder[0] ?? Object.keys(pages)[0];
+  return { pages, pageOrder, activePageId, pageIdMap };
+}
+
+/** Rewrite navigation `pageId` bindings through the page id map (dropping nothing else). */
+function remapNavigationPageIds(layout: WorkbenchLayout, pageIdMap: Map<string, string>): WorkbenchLayout['navigation'] {
+  const navigation = clone(layout.navigation);
+  for (const entry of Object.values(navigation?.entries ?? {})) {
+    if (entry.pageId) entry.pageId = pageIdMap.get(entry.pageId) ?? entry.pageId;
+  }
+  return navigation;
+}
+
 /**
  * Deep-clone a layout with every interior id re-minted so it cannot collide with any
  * id already present in a target document. Reserves the source ids first so a later
  * `createWorkbenchId` call in the same session never reproduces them.
  */
 export function remintLayout(layout: WorkbenchLayout): WorkbenchLayout {
-  reserveWorkbenchIds(collectLayoutIds(layout));
-  const { panels, widgets, widgetGroups, panelIdMap } = remapLayoutBits(layout.panels, layout.widgets, layout.widgetGroups);
-  const root = Object.fromEntries(
-    Object.entries(layout.dock.root).map(([region, node]) => [region, remapDockNode(node, panelIdMap)])
-  ) as WorkbenchLayout['dock']['root'];
-
-  return {
-    ...clone(layout),
-    id: createWorkbenchId(prefixOf(layout.id, 'layout')),
-    dock: { regions: clone(layout.dock.regions), root },
-    panels,
-    widgets,
-    widgetGroups
-  };
+  return remintLayoutInteriorIds(layout, createWorkbenchId(prefixOf(layout.id, 'layout')));
 }
 
 /**
- * Deep-clone a layout re-minting every **interior** id (dock nodes, panels, widgets,
- * groups, `panel:` zone refs, tab-stack `panelIds`) so it cannot collide with any id
- * already live in a target document — but keep a caller-supplied top-level `layoutId`
- * rather than minting a fresh one. This is the collision-safe core of {@link remintLayout}
- * exposed for the command-based import path (`packages.ts`), which owns its own top-level
- * id policy (`.copyN` de-dup / explicit id / overwrite) and only needs the interior fixed.
+ * Deep-clone a layout re-minting every **interior** id (page ids, dock nodes, panels,
+ * widgets, groups, `panel:` zone refs, tab-stack `panelIds`, nav `pageId` bindings) so
+ * it cannot collide with any id already live in a target document — but keep a
+ * caller-supplied top-level `layoutId` rather than minting a fresh one. This is the
+ * collision-safe core of {@link remintLayout} exposed for the command-based import path
+ * (`packages.ts`), which owns its own top-level id policy (`.copyN` de-dup / explicit
+ * id / overwrite) and only needs the interior fixed.
  *
  * Reserves the source ids first so a later `createWorkbenchId` never reproduces them.
  */
 export function remintLayoutInteriorIds(layout: WorkbenchLayout, layoutId: string): WorkbenchLayout {
   reserveWorkbenchIds(collectLayoutIds(layout));
-  const { panels, widgets, widgetGroups, panelIdMap } = remapLayoutBits(layout.panels, layout.widgets, layout.widgetGroups);
-  const root = Object.fromEntries(
-    Object.entries(layout.dock.root).map(([region, node]) => [region, remapDockNode(node, panelIdMap)])
-  ) as WorkbenchLayout['dock']['root'];
+  const { panels, widgets, widgetGroups, panelIdMap } = remapLayoutBits(
+    layout.panels ?? {},
+    layout.widgets ?? {},
+    layout.widgetGroups ?? {}
+  );
+  const { pages, pageOrder, activePageId, pageIdMap } = remapPages(layout, panelIdMap);
 
-  return {
+  const next: WorkbenchLayout = {
     ...clone(layout),
     id: layoutId,
-    dock: { regions: clone(layout.dock.regions), root },
+    pages,
+    pageOrder,
+    activePageId,
+    navigation: remapNavigationPageIds(layout, pageIdMap),
     panels,
     widgets,
     widgetGroups
   };
+  // The legacy single dock (schema v1 payloads) has been folded into `pages`.
+  delete next.dock;
+  return next;
+}
+
+export interface RemintWorkbenchPageOptions {
+  /** Top-level id for the copy (the caller owns collision policy for it). */
+  pageId: string;
+  label?: string;
+}
+
+/**
+ * Deep-copy ONE page plus the panel instances its dock references, re-minting
+ * every interior id (dock nodes via {@link remapDockNode}, panel instances via
+ * the shared id machinery). `singletonKey` is stripped from the copied panels —
+ * singletons are mutually exclusive per layout, so a faithful copy would be
+ * repaired away immediately. Backs `page.duplicate`.
+ */
+export function remintWorkbenchPage(
+  page: WorkbenchPage,
+  panels: Record<string, PanelInstance>,
+  options: RemintWorkbenchPageOptions
+): { page: WorkbenchPage; panels: Record<string, PanelInstance> } {
+  const sourceIds: string[] = [page.id, ...Object.keys(panels)];
+  const walk = (node: DockNode | null): void => {
+    if (!node) return;
+    sourceIds.push(node.id);
+    if (node.kind === 'split') node.children.forEach(walk);
+  };
+  for (const node of Object.values(page.dock.root ?? {})) walk(node);
+  reserveWorkbenchIds(sourceIds);
+
+  const panelIdMap = new Map<string, string>();
+  for (const id of Object.keys(panels)) panelIdMap.set(id, createWorkbenchId(prefixOf(id, 'panel')));
+
+  const nextPanels: Record<string, PanelInstance> = {};
+  for (const panel of Object.values(panels)) {
+    const id = panelIdMap.get(panel.id) ?? panel.id;
+    const next = { ...clone(panel), id };
+    delete next.singletonKey;
+    nextPanels[id] = next;
+  }
+
+  const nextPage: WorkbenchPage = {
+    ...clone(page),
+    id: options.pageId,
+    label: options.label ?? page.label,
+    dock: remapDock(page.dock, panelIdMap)
+  };
+  return { page: nextPage, panels: nextPanels };
 }
 
 /** Deep-clone a panel template with every interior id (template, panels, widgets, groups, dock) re-minted. */
@@ -271,8 +382,13 @@ function collectLayoutIds(layout: WorkbenchLayout): string[] {
     ids.push(node.id);
     if (node.kind === 'split') node.children.forEach(walk);
   };
-  for (const node of Object.values(layout.dock.root)) walk(node);
-  ids.push(...Object.keys(layout.panels), ...Object.keys(layout.widgets), ...Object.keys(layout.widgetGroups));
+  for (const [pageId, page] of Object.entries(layout.pages ?? {})) {
+    ids.push(pageId);
+    for (const node of Object.values(page?.dock?.root ?? {})) walk(node);
+  }
+  // Legacy schema-v1 payloads: the single dock's node ids must be reserved too.
+  for (const node of Object.values(layout.dock?.root ?? {})) walk(node);
+  ids.push(...Object.keys(layout.panels ?? {}), ...Object.keys(layout.widgets ?? {}), ...Object.keys(layout.widgetGroups ?? {}));
   return ids;
 }
 
@@ -299,7 +415,11 @@ function baseChecks(input: unknown, kind: LayoutPackageKind): LayoutPackageError
   if (input.version !== LAYOUT_PACKAGE_VERSION) {
     return new LayoutPackageError('wrong-version', `Unsupported package version ${String(input.version)}.`);
   }
-  if (input.schemaVersion !== WORKBENCH_SCHEMA_VERSION) {
+  // Older schema versions are accepted: the import path re-mints and then runs
+  // the payload through document repair, which migrates a v1 single-dock layout
+  // into pages form. Newer-than-current versions are rejected.
+  const schemaVersion = input.schemaVersion;
+  if (typeof schemaVersion !== 'number' || !Number.isFinite(schemaVersion) || schemaVersion < 1 || schemaVersion > WORKBENCH_SCHEMA_VERSION) {
     return new LayoutPackageError('wrong-schema-version', `Unsupported schema version ${String(input.schemaVersion)}.`);
   }
   if (!isJsonSerializable(input)) return new LayoutPackageError('not-serializable', 'Package is not serializable JSON.');
@@ -307,17 +427,20 @@ function baseChecks(input: unknown, kind: LayoutPackageKind): LayoutPackageError
 }
 
 function looksLikeLayout(value: unknown): value is WorkbenchLayout {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    isRecord(value.dock) &&
-    isRecord((value.dock as Record<string, unknown>).root) &&
-    isRecord(value.panels) &&
-    isRecord(value.widgets) &&
-    isRecord(value.widgetGroups) &&
-    isRecord(value.navigation) &&
-    isRecord(value.zones)
-  );
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !isRecord(value.panels) ||
+    !isRecord(value.widgets) ||
+    !isRecord(value.widgetGroups) ||
+    !isRecord(value.navigation) ||
+    !isRecord(value.zones)
+  ) {
+    return false;
+  }
+  // Dock content: either pages (schema v2) or the legacy single dock (v1).
+  if (isRecord(value.pages) && Object.keys(value.pages).length > 0) return true;
+  return isRecord(value.dock) && isRecord((value.dock as Record<string, unknown>).root);
 }
 
 function looksLikePanelTemplate(value: unknown): value is PanelTemplate {

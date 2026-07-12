@@ -13,9 +13,11 @@
     overlay?: boolean;
   } = $props();
   const { controller } = getWorkbenchContext();
-  const layout = $derived($controller.activeLayout);
-  const node = $derived(layout?.dock.root[region] ?? null);
-  const state = $derived(layout?.dock.regions[region]);
+  // Pages: the dock rendered here is the ACTIVE page's — switching pages swaps
+  // the whole region tree.
+  const page = $derived($controller.activePage);
+  const node = $derived(page?.dock.root[region] ?? null);
+  const state = $derived(page?.dock.regions[region]);
   const empty = $derived(!node);
   const hidden = $derived(empty && !$controller.editMode && region !== 'main');
   const horizontalRegion = $derived(region === 'top' || region === 'bottom');

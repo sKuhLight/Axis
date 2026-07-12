@@ -71,6 +71,61 @@ describe('migrateWorkbenchDocument', () => {
     expect(migrateWorkbenchDocument({ ...base, rev: 7.9 }).rev).toBe(7);
   });
 
+  it('migrates a pre-pages (schema v1) document into a single default page', () => {
+    // Hand-built v1 document: layout carries a single `dock`, no pages fields.
+    const v1 = {
+      schemaVersion: 1,
+      activeProfileId: 'profile.v1',
+      profiles: { 'profile.v1': { id: 'profile.v1', label: 'V1', layoutId: 'layout.v1' } },
+      layouts: {
+        'layout.v1': {
+          id: 'layout.v1',
+          label: 'Legacy',
+          dock: {
+            regions: {
+              left: { collapsed: false },
+              right: { collapsed: false },
+              top: { collapsed: false },
+              bottom: { collapsed: false, sizePx: 360 },
+              main: { collapsed: false }
+            },
+            root: {
+              left: null,
+              right: null,
+              top: null,
+              bottom: null,
+              main: { kind: 'tabs', id: 'tabs.v1', activePanelId: 'panel.a', panelIds: ['panel.a'] }
+            }
+          },
+          panels: { 'panel.a': { id: 'panel.a', type: 'legacy.panel', title: 'A' } },
+          widgets: {},
+          widgetGroups: {},
+          navigation: { mode: 'side', entries: { grid: { id: 'grid', label: 'Grid', target: { command: 'app.grid' } } }, order: ['grid'] },
+          zones: {}
+        }
+      },
+      panelLibrary: {},
+      widgetLibrary: {}
+    };
+
+    const migrated = migrateWorkbenchDocument(v1);
+    const l = layout(migrated);
+
+    expect(migrated.schemaVersion).toBe(WORKBENCH_SCHEMA_VERSION);
+    // One default page wrapping the entire legacy dock, active, in order.
+    expect(Object.keys(l.pages)).toEqual(['main']);
+    expect(l.pageOrder).toEqual(['main']);
+    expect(l.activePageId).toBe('main');
+    expect(l.pages.main.dock.root.main).toMatchObject({ kind: 'tabs', panelIds: ['panel.a'], activePanelId: 'panel.a' });
+    expect(l.pages.main.dock.regions.bottom.sizePx).toBe(360);
+    // The deprecated layout-level dock is gone from the migrated document.
+    expect('dock' in l).toBe(false);
+    // Panels survive; existing nav entries stay UNBOUND (the app binds pages later).
+    expect(l.panels['panel.a']).toMatchObject({ type: 'legacy.panel' });
+    expect(l.navigation.entries.grid.pageId).toBeUndefined();
+    expect(l.navigation.entries.grid.target).toEqual({ command: 'app.grid' });
+  });
+
   it('preserves unknown state fields', () => {
     const current = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
     layout(current).panels.panel = { id: 'panel', type: 'unknown.panel', state: { custom: 'panel-state' } };

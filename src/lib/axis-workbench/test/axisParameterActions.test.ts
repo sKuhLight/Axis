@@ -109,7 +109,7 @@ describe('Axis parameter Workbench actions', () => {
     const panel = Object.values(layout.panels).find((item) => item.type === 'axis.customPanel');
     const widgets = Object.values(layout.widgets);
 
-    expect(layout.dock.root.left?.kind).toBe('tabs');
+    expect(layout.pages[layout.activePageId].dock.root.left?.kind).toBe('tabs');
     expect(panel?.title).toBe('Treble');
     expect(widgets).toHaveLength(1);
     expect(widgets[0]?.binding?.target.paramId).toBe(7);

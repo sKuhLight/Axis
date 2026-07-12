@@ -3,7 +3,7 @@ import { createEmptyWorkbenchDocument } from '../defaults';
 import { repairWorkbenchDocument } from '../invariants';
 import { reduceWorkbenchDocument } from '../reducer';
 import type { PanelInstance, WidgetInstance, WorkbenchDocument } from '../schema';
-import { selectActiveLayout } from '../selectors';
+import { activeWorkbenchPage, selectActiveLayout } from '../selectors';
 
 const panel = (id: string, extra: Partial<PanelInstance> = {}): PanelInstance => ({
   id,
@@ -28,13 +28,15 @@ const doc = (): WorkbenchDocument =>
   });
 
 const layout = (d: WorkbenchDocument) => selectActiveLayout(d)!;
+// Pages (schema v2): dock-scoped assertions read the ACTIVE page's dock.
+const dock = (d: WorkbenchDocument) => activeWorkbenchPage(layout(d))!.dock;
 
 describe('reduceWorkbenchDocument — panels', () => {
   it('adds a panel to an empty main region', () => {
     const r = reduceWorkbenchDocument(doc(), { type: 'panel.add', panel: panel('panel.a'), region: 'main' });
 
     expect(r.success).toBe(true);
-    const root = layout(r.next).dock.root.main;
+    const root = dock(r.next).root.main;
     expect(root?.kind).toBe('tabs');
     if (root?.kind === 'tabs') expect(root.panelIds).toEqual(['panel.a']);
   });
@@ -48,7 +50,7 @@ describe('reduceWorkbenchDocument — panels', () => {
       target: { kind: 'tab', targetPanelId: 'panel.a' }
     });
 
-    const root = layout(second.next).dock.root.main;
+    const root = dock(second.next).root.main;
     expect(second.success).toBe(true);
     expect(root?.kind).toBe('tabs');
     if (root?.kind === 'tabs') {
@@ -67,7 +69,7 @@ describe('reduceWorkbenchDocument — panels', () => {
     }).next;
 
     const activated = reduceWorkbenchDocument(next, { type: 'panel.activate', panelId: 'panel.a' });
-    const root = layout(activated.next).dock.root.main;
+    const root = dock(activated.next).root.main;
 
     expect(activated.success).toBe(true);
     expect(root?.kind).toBe('tabs');
@@ -86,8 +88,8 @@ describe('reduceWorkbenchDocument — panels', () => {
     });
 
     expect(moved.success).toBe(true);
-    expect(layout(moved.next).dock.root.main).toBeNull();
-    const right = layout(moved.next).dock.root.right;
+    expect(dock(moved.next).root.main).toBeNull();
+    const right = dock(moved.next).root.right;
     expect(right?.kind).toBe('tabs');
     if (right?.kind === 'tabs') expect(right.panelIds).toEqual(['panel.a']);
   });
@@ -101,7 +103,7 @@ describe('reduceWorkbenchDocument — panels', () => {
       axis: 'horizontal'
     });
 
-    const root = layout(split.next).dock.root.main;
+    const root = dock(split.next).root.main;
     expect(split.success).toBe(true);
     expect(root?.kind).toBe('split');
     if (root?.kind === 'split') {
@@ -116,7 +118,7 @@ describe('reduceWorkbenchDocument — panels', () => {
     const closed = reduceWorkbenchDocument(first, { type: 'panel.close', panelId: 'panel.a' });
 
     expect(closed.success).toBe(true);
-    expect(layout(closed.next).dock.root.main).toBeNull();
+    expect(dock(closed.next).root.main).toBeNull();
     expect(layout(closed.next).panels['panel.a']).toBeUndefined();
   });
 
@@ -162,7 +164,7 @@ describe('reduceWorkbenchDocument — panels', () => {
     }).next;
 
     const tabbed = reduceWorkbenchDocument(next, { type: 'panel.tab', panelId: 'panel.a', targetPanelId: 'panel.b' });
-    const root = layout(tabbed.next).dock.root.main;
+    const root = dock(tabbed.next).root.main;
 
     expect(tabbed.success).toBe(true);
     expect(root?.kind).toBe('tabs');
@@ -241,10 +243,10 @@ describe('reduceWorkbenchDocument — panels', () => {
     const next = doc();
     layout(next).panels['panel.b'] = panel('panel.b', { singletonKey: 'inspector' });
     layout(next).panels['panel.a'] = panel('panel.a', { singletonKey: 'inspector' });
-    layout(next).dock.root.main = { kind: 'tabs', id: 'tabs.main', activePanelId: 'panel.a', panelIds: ['panel.a'] };
+    dock(next).root.main = { kind: 'tabs', id: 'tabs.main', activePanelId: 'panel.a', panelIds: ['panel.a'] };
 
     const repaired = repairWorkbenchDocument(next);
-    const root = layout(repaired).dock.root.main;
+    const root = dock(repaired).root.main;
 
     expect(layout(repaired).panels['panel.a']).toBeDefined();
     expect(layout(repaired).panels['panel.b']).toBeUndefined();
@@ -256,14 +258,14 @@ describe('reduceWorkbenchDocument — panels', () => {
     const resized = reduceWorkbenchDocument(doc(), { type: 'region.resize', region: 'right', sizePx: 420 });
 
     expect(resized.success).toBe(true);
-    expect(layout(resized.next).dock.regions.right.sizePx).toBe(420);
+    expect(dock(resized.next).regions.right.sizePx).toBe(420);
   });
 
   it('clamps region resize to non-negative sizes', () => {
     const resized = reduceWorkbenchDocument(doc(), { type: 'region.resize', region: 'left', sizePx: -50 });
 
     expect(resized.success).toBe(true);
-    expect(layout(resized.next).dock.regions.left.sizePx).toBe(0);
+    expect(dock(resized.next).regions.left.sizePx).toBe(0);
   });
 
   it('resizes splits with normalized ratios', () => {
@@ -274,13 +276,13 @@ describe('reduceWorkbenchDocument — panels', () => {
       targetPanelId: 'panel.a',
       axis: 'horizontal'
     }).next;
-    const root = layout(split).dock.root.main;
+    const root = dock(split).root.main;
     const splitId = root?.kind === 'split' ? root.id : '';
 
     const resized = reduceWorkbenchDocument(split, { type: 'split.resize', splitId, ratio: [3, 1] });
     const missing = reduceWorkbenchDocument(split, { type: 'split.resize', splitId: 'missing', ratio: [1, 1] });
 
-    const resizedRoot = layout(resized.next).dock.root.main;
+    const resizedRoot = dock(resized.next).root.main;
     expect(resized.success).toBe(true);
     expect(resizedRoot?.kind).toBe('split');
     if (resizedRoot?.kind === 'split') expect(resizedRoot.ratio).toEqual([0.75, 0.25]);
@@ -292,7 +294,7 @@ describe('reduceWorkbenchDocument — panels', () => {
     const collapsed = reduceWorkbenchDocument(doc(), { type: 'region.collapse', region: 'bottom', collapsed: true });
 
     expect(collapsed.success).toBe(true);
-    expect(layout(collapsed.next).dock.regions.bottom.collapsed).toBe(true);
+    expect(dock(collapsed.next).regions.bottom.collapsed).toBe(true);
   });
 });
 

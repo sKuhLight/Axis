@@ -1,4 +1,4 @@
-export const WORKBENCH_SCHEMA_VERSION = 1 as const;
+export const WORKBENCH_SCHEMA_VERSION = 2 as const;
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -59,13 +59,43 @@ export interface WorkbenchProfile {
 export interface WorkbenchLayout {
   id: string;
   label: string;
-  dock: DockLayout;
+  /**
+   * The dockable content of a layout is split into PAGES (schema v2): each page
+   * owns a full {@link DockLayout} (regions + trees), while everything else on
+   * the layout (widgets/zones/navigation/panel instances/libraries) is global.
+   * `activePageId` selects the page whose dock is rendered; `pageOrder` is the
+   * canonical page sequence. Repair guarantees ≥1 page, a valid `activePageId`,
+   * and a deduped, complete `pageOrder`.
+   */
+  pages: Record<string, WorkbenchPage>;
+  pageOrder: string[];
+  activePageId: string;
+  /**
+   * @deprecated Schema v1 single dock. Accepted as MIGRATION INPUT ONLY: repair
+   * wraps it into a single page when `pages` is empty and then deletes it.
+   * Runtime code must exclusively read page docks (see `activeWorkbenchPage`).
+   */
+  dock?: DockLayout;
   panels: Record<string, PanelInstance>;
   widgets: Record<string, WidgetInstance>;
   widgetGroups: Record<string, WidgetGroup>;
   navigation: NavigationLayout;
   zones: WidgetZoneLayout;
   settings?: JsonObject;
+}
+
+/**
+ * One freely configurable dock arrangement inside a layout. Panel instances
+ * stay flat on `layout.panels`; a page's dock trees reference them by id, and a
+ * panel id may appear in AT MOST one page's dock (repair keeps the first
+ * occurrence in page order).
+ */
+export interface WorkbenchPage {
+  id: string;
+  label: string;
+  icon?: string;
+  dock: DockLayout;
+  metadata?: JsonObject;
 }
 
 export interface DockLayout {
@@ -171,6 +201,14 @@ export interface NavigationEntryState {
   locked?: boolean;
   fixedSlot?: NavigationFixedSlot;
   target?: NavigationCommandTarget;
+  /**
+   * Bound page: triggering the entry activates this page (`page.activate`) and
+   * the entry tints active while it is the layout's `activePageId`. Entries
+   * without a `pageId` keep their app-provided `target` action behavior.
+   * Repair drops a dangling binding (and removes the entry entirely when it
+   * has no `target` to fall back to).
+   */
+  pageId?: string;
   state?: JsonObject;
 }
 

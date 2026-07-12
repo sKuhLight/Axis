@@ -37,12 +37,23 @@ describe('layoutHistory — capture policy', () => {
   it('excludes pure activation commands', () => {
     expect(isCapturedCommand(panelActivate('p'))).toBe(false);
     expect(isCapturedCommand({ type: 'profile.activate', profileId: 'x' })).toBe(false);
+    // Page activation is transient view state (which page is in front).
+    expect(isCapturedCommand({ type: 'page.activate', pageId: 'p' })).toBe(false);
   });
 
   it('includes structural + widget.state commands', () => {
     expect(isCapturedCommand(panelAdd('a'))).toBe(true);
     expect(isCapturedCommand({ type: 'widget.state', widgetId: 'w', state: {} })).toBe(true);
     expect(isCapturedCommand(splitResize('s'))).toBe(true);
+  });
+
+  it('captures structural page operations (add/remove/rename/duplicate)', () => {
+    expect(isCapturedCommand({ type: 'page.add', page: { id: 'p', label: 'P', dock: { regions: {}, root: {} } as never } })).toBe(true);
+    expect(isCapturedCommand({ type: 'page.remove', pageId: 'p' })).toBe(true);
+    expect(isCapturedCommand({ type: 'page.rename', pageId: 'p', label: 'X' })).toBe(true);
+    expect(isCapturedCommand({ type: 'page.duplicate', pageId: 'p' })).toBe(true);
+    // Page ops never coalesce with adjacent commits.
+    expect(coalesceKeyFor({ type: 'page.rename', pageId: 'p', label: 'X' })).toBeNull();
   });
 
   it('scopes coalesce keys to the specific target', () => {
