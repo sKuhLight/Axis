@@ -27,6 +27,13 @@ export interface ParamWidgetStateInput {
    * Undefined ⇒ the preset is not loaded yet (treat as "can't tell it's missing").
    */
   presetEffectIds: Iterable<number> | undefined;
+  /**
+   * The bound block has live param data available even though it is NOT the open
+   * block — i.e. it was hydrated on demand (custom-panel pinned controls). When
+   * true the widget reads/writes live regardless of selection, so it resolves to
+   * `live` instead of the `readonly` (block-exists-but-not-open) preview.
+   */
+  hasLiveData?: boolean;
 }
 
 /**
@@ -38,13 +45,16 @@ export interface ParamWidgetStateInput {
  *   (there's no block to be missing).
  * - `live` when the bound block is the open block.
  * - `missing` when we have a preset roster and the bound block isn't in it.
- * - `readonly` otherwise (block exists but not open, or roster unknown).
+ * - `live` when the block is in the preset and its params were hydrated on demand.
+ * - `readonly` otherwise (block exists but not open and not yet hydrated, or roster
+ *   unknown).
  */
 export function resolveParamWidgetState(input: ParamWidgetStateInput): ParamWidgetState {
-  const { boundEffectId, openEffectId, presetEffectIds } = input;
+  const { boundEffectId, openEffectId, presetEffectIds, hasLiveData } = input;
   if (boundEffectId == null) return 'readonly';
   if (openEffectId != null && openEffectId === boundEffectId) return 'live';
   if (presetEffectIds != null && !hasEffectId(presetEffectIds, boundEffectId)) return 'missing';
+  if (hasLiveData) return 'live';
   return 'readonly';
 }
 

@@ -1388,3 +1388,106 @@ Base 92e0982 on `layout-rework`. Uncommitted; main session reviews + commits + b
   and the `.axtip` under a `position:fixed` preview frame (round-17 follow-up: fixed
   overlays attach to the window, not the preview frame).
 - **Committed+pushed** ROUND 19 on `layout-rework` (v0.8.15-beta).
+
+## ROUND 20 — Param-control drag-out state bugs (operator review 2026-07-12, AXIS-31)
+
+Operator findings on the fresh round-19 feature:
+1. The dotted border on a dragged-out control does NOT wrap the whole tile.
+2. The "Dock Left" drop overlay STAYS after dragging a control out — only a
+   reload clears it (drag-end cleanup missing on some path).
+3. After reload — and sometimes after leaving customize — the controls sit
+   in a weird drag/drop-looking state although customize is OFF. Seems
+   correlated with no block being selected.
+4. Pinned controls appear to depend on Block-Editor selection. Unnecessary:
+   the grid blocks' quick controls work without any block open — pinned
+   panel controls must be fully live regardless of selection.
+
+## ROUND 20 — implementation (2026-07-12, Agent 7)
+
+Base 314105a on `layout-rework`. Uncommitted; main session reviews + commits + bumps.
+
+### Root causes (reproduced from code + the running :5173 workbench + live FM3 /api)
+
+1. **Ghost outline too small.** The drag SOURCE (a `.card`/`.restile` tile in
+   `ControlSurface.svelte`) never set a drag image, so the browser used its default:
+   a snapshot of the dragged node **clipped to the on-screen portion** of it. Inside
+   the scrolling control grid that clipped the ghost to a fraction of the tile — the
+   "dotted outline that doesn't wrap the whole tile". Nothing in round 19 touched the
+   source, so this predates it; the bigger tiles just made the clip obvious.
+2. **Stale "Dock left" overlay.** `DockWorkspace.svelte` cleared its `edgeDropRegion`
+   (the `.aw-edge-drop-preview` region overlay) only in `ondragleave` and its OWN
+   `ondrop`. Round 19 made `AxisCustomPanel` `stopPropagation()` the drop so it can
+   claim it — which means the workspace's `ondrop` never fires when the drop lands on
+   a panel, so the overlay was never cleared. Escape-cancel and drop-over-non-target
+   had the same gap. Only a reload reset it. `AxisCustomPanel`'s own
+   `parameter-drag-hover` wash had the identical hole (Escape-cancel while hovering).
+3. **Drag/drop-looking controls with customize OFF.** The T11 `readonly` and `missing`
+   binding states rendered with `border-style: dashed` — the exact look of a drag
+   slot. After a reload no block is open, so EVERY in-preset pinned control resolved to
+   `readonly` (block exists but not the open block) → all dashed → "weird drag state",
+   perfectly correlated with "no block selected".
+4. **Selection dependency.** The widget read live values ONLY from `editor.params`/
+   `editor.enums`, which are populated for the OPEN block alone. Bound-but-not-open →
+   no data → `--` value, ring stuck at 0.5, edits disabled. The grid quick controls
+   dodge this by reading `editor.meters` (a background per-block read, no block open);
+   pinned params weren't wired to any equivalent.
+
+### What shipped
+
+1. **Full-tile drag image (bug #1).** `ControlSurface.onWorkbenchParameterDragStart`
+   now clones the dragged tile off-screen at its full client box and hands it to
+   `dataTransfer.setDragImage`, so the ghost always wraps the whole control regardless
+   of scroll clipping. Guarded for environments without `setDragImage`; clone removed
+   on the next tick after the spec's synchronous snapshot.
+2. **Overlay cleanup on every drag end (bug #2).** Both `DockWorkspace` and
+   `AxisCustomPanel` add a window-level `dragend` + `drop` listener (via `$effect`)
+   that clears their hover state. `dragend` fires on the drag source and bubbles to
+   the window on drop-anywhere, Escape-cancel, and release-over-non-target — the one
+   reliable clear point the panel's `stopPropagation()` can't hide.
+3. **Always-live pinned controls (bug #4).** New on-demand hydration in
+   `editor.svelte.ts`: a mounted `axis.paramControl` widget calls
+   `editor.registerPinnedBlock(effectId)` (ref-counted); a debounced `#hydratePinned()`
+   fetches `blockParams(eid)` for each pinned block that is placed but NOT open and
+   stashes the same `{ named, enums }` DTO the open block uses into `pinnedParams`
+   (invalidated on every preset/scene reload; skipped on a slow MIDI link). The widget
+   reads through `editor.pinnedView(effectId)` (open block's arrays, else the hydrated
+   copy) and writes through `setPinnedParam`/`setPinnedEnum` (by effectId, optimistic +
+   `forgefx.setParam`, history-recorded), which delegate to the normal `setParam`/
+   `setEnum` when the block IS open. `resolveParamWidgetState` gained `hasLiveData` →
+   an in-preset hydrated block is `live` (editable), not `readonly`.
+4. **Clean resting state (bug #3).** With bug #4, in-preset controls are `live` (no
+   dashed border). The residual `readonly` (brief pre-hydration flash / slow-link
+   fallback) and `missing` states were re-styled `border-style: solid` (chip + tile)
+   so a resting control is never mistaken for a drag/drop slot. `readonly` keeps its
+   lock badge + click-to-open; `missing` keeps its amber warn badge, now clearly
+   "unavailable" rather than an empty slot.
+
+### Files changed
+- `src/lib/ControlSurface.svelte` — `setFullTileDragImage()` off-screen clone in the param dragstart.
+- `src/lib/workbench/svelte/DockWorkspace.svelte` — window `dragend`/`drop` clears `edgeDropRegion`.
+- `src/lib/axis-workbench/panels/AxisCustomPanel.svelte` — window `dragend`/`drop` clears `parameterDragHover`.
+- `src/lib/editor.svelte.ts` — `pinnedParams` state + `registerPinnedBlock`/`pinnedView`/`#hydratePinned`/`#invalidatePinned`/`setPinnedParam`/`setPinnedEnum`; invalidate in `load()` + `#refreshScene()`.
+- `src/lib/axis-workbench/widgets/paramWidgetState.ts` — `hasLiveData` input → `live` for hydrated in-preset blocks.
+- `src/lib/axis-workbench/widgets/AxisWorkbenchWidget.svelte` — read via `pinnedView`, register hydration, write via `setPinned*`, `hasLiveData` into the state resolver, readonly/missing borders → solid.
+- Tests: `test/paramWidgetState.test.ts` (+4 hasLiveData cases), `e2e/15-param-collect.spec.ts` (+overlay-clears-after-drop, +no-drag-affordance/solid-border-outside-customize).
+
+### Gates
+- `npm run check` — **0 errors / 0 warnings** (1127 files).
+- `npm test` — **830** (was 826; +4 paramWidgetState hasLiveData cases).
+- `npm run test:e2e` — **80 passed / 0 failed** (was 76 = 38×2; +2 new cases ×2 browsers).
+  The known firefox `06-persistence` flake (AXIS-28) passed this run too.
+
+### Open follow-ups (Backlog candidates)
+- **Live value/edit on the physical FM3 (bug #4)** is verified by types + unit + e2e
+  and confirmed at the API level (`/preset/blocks/:eid/params` + `/preset/meters`
+  return the data for unselected blocks), but NOT driven end-to-end on the rig: the
+  e2e/dev backend serves the shared workbench doc, so injecting a real pinned control
+  persistently would pollute the operator's layout. Fold a "drag a real control into a
+  Controls panel, leave it unselected, confirm live value + editability + per-scene
+  refresh" check into the AXIS-22 live-rig pass.
+- **Enum pinned controls on a slow link** stay `readonly` (hydration skipped) — click
+  opens the block. Acceptable; revisit if slow-link users pin many discretes.
+- **Hydration is per mounted widget**, invalidated wholesale on preset/scene reload —
+  fine for a handful of pinned params; if panels grow large, batch the `blockParams`
+  reads or reuse a single preset-params sweep.
+- **Committed+pushed** ROUND 20 on `layout-rework` (v0.8.16-beta).

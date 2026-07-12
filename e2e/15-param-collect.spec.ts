@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, regionTabs } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode, exitEditMode, regionTabs } from './support/workbench';
 
 // ROUND 19 (AXIS-30): dragging parameter controls out of the Block Editor must
 // COLLECT them into one panel (no tab-per-param), render as recognizable,
@@ -100,5 +100,56 @@ test.describe('Parameter collect + tile (AXIS-30)', () => {
     // workbench uses (round-18 shared machinery) — one per collected widget.
     await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(2);
+  });
+});
+
+// ROUND 20 (AXIS-31): state bugs on the collect feature.
+test.describe('Parameter collect state (AXIS-31)', () => {
+  test('bug #2 — the edge-drop overlay clears when a drag ends over a panel', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await expect(page.locator('.custom-panel')).toBeVisible();
+
+    const payload = paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' });
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await page.evaluate(({ dt, mime, data }) => dt.setData(mime, data), { dt: dataTransfer, mime: PARAM_MIME, data: payload });
+
+    // Dragging over the workspace edge raises the "Dock left" region overlay.
+    await page.dispatchEvent('.aw-workspace', 'dragover', { dataTransfer });
+    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(1);
+
+    // The drop lands on the panel, which stopPropagation()s it — so the workspace
+    // never sees the drop that would have cleared its own overlay. Pre-fix, the
+    // overlay stuck until reload.
+    await page.dispatchEvent('.custom-panel', 'drop', { dataTransfer });
+    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(1);
+
+    // `dragend` fires on the drag source and bubbles to the window — the reliable
+    // cleanup point. After it, no overlay lingers.
+    await page.evaluate(() => window.dispatchEvent(new DragEvent('dragend', { bubbles: true })));
+    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(0);
+  });
+
+  test('bug #3 — a resting pinned control shows no drag affordance and no dashed slot look', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
+
+    const panel = page.locator('.custom-panel').first();
+    await expect(panel.locator('.axis-widget.param')).toHaveCount(1);
+    // In edit mode the tile has the drag surface (expected).
+    await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(1);
+
+    // Leaving customize must return the control to a clean resting state: the tile
+    // is still there, but there is NO drag surface and its border is SOLID (never
+    // the dashed drag/drop-slot look), regardless of what block is selected.
+    await exitEditMode(page);
+    const tile = panel.locator('.axis-widget.param').first();
+    await expect(tile).toBeVisible();
+    await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(0);
+    const borderStyle = await tile.evaluate((el) => getComputedStyle(el).borderTopStyle);
+    expect(borderStyle).toBe('solid');
   });
 });

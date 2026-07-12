@@ -127,16 +127,18 @@
   const paramRingPx = $derived(paramTile ? (compact ? 34 : 42) : 24);
   const paramEffectId = $derived(readNumber(paramTarget.effectId) ?? readNumber(paramTarget.eid));
   const paramId = $derived(readNumber(paramTarget.paramId) ?? readNumber(paramTarget.pid));
-  const paramNamed = $derived(
-    paramEffectId != null && editor.selected?.effectId === paramEffectId && paramId != null
-      ? editor.params.find((param) => param.id === paramId)
-      : undefined
-  );
-  const paramEnum = $derived(
-    paramEffectId != null && editor.selected?.effectId === paramEffectId && paramId != null
-      ? editor.enums.find((param) => param.id === paramId)
-      : undefined
-  );
+  // Live param/enum data for the bound block: its own arrays when it's the open
+  // block, else the hydrated pinned copy (T20 bug #4 — a pinned control must read
+  // and write live regardless of what, if anything, is selected). Registering the
+  // block below drives that on-demand hydration.
+  const paramView = $derived(paramEffectId != null ? editor.pinnedView(paramEffectId) : { named: [], enums: [] });
+  const paramNamed = $derived(paramId != null ? paramView.named.find((param) => param.id === paramId) : undefined);
+  const paramEnum = $derived(paramId != null ? paramView.enums.find((param) => param.id === paramId) : undefined);
+  // Keep the bound block hydrated for as long as this pinned control is mounted.
+  $effect(() => {
+    if (kind !== 'paramControl' || paramEffectId == null) return;
+    return editor.registerPinnedBlock(paramEffectId);
+  });
   const paramPreview = $derived(readNumber(widget.state?.previewValue));
   const paramNorm = $derived(paramNamed?.norm ?? (paramPreview != null ? Math.max(0, Math.min(1, paramPreview / 100)) : undefined));
   // effectIds present in the current preset grid — undefined until a preset is loaded
@@ -152,7 +154,8 @@
     resolveParamWidgetState({
       boundEffectId: paramEffectId,
       openEffectId: editor.selected?.effectId,
-      presetEffectIds: paramPresetIds
+      presetEffectIds: paramPresetIds,
+      hasLiveData: !!paramNamed || !!paramEnum
     })
   );
   const paramLive = $derived(paramState === 'live');
@@ -247,25 +250,27 @@
   }
 
   function nudgeParam(delta: number) {
-    if (editMode) return;
+    if (editMode || paramEffectId == null) return;
     if (paramNamed) {
-      editor.setParam(paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
+      editor.setPinnedParam(paramEffectId, paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
       return;
     }
     if (paramEnum) {
       const index = paramEnum.options.findIndex((option) => option.value === paramEnum.value);
       const next = paramEnum.options[Math.max(0, Math.min(paramEnum.options.length - 1, index + Math.sign(delta)))];
-      if (next) editor.setEnum(paramEnum, next.value);
+      if (next) editor.setPinnedEnum(paramEffectId, paramEnum, next.value);
     }
   }
 
   function paramPointerDown(event: PointerEvent) {
-    if (editMode || !paramNamed || event.button !== 0) return;
+    if (editMode || !paramNamed || paramEffectId == null || event.button !== 0) return;
     event.preventDefault();
     const startY = event.clientY;
     const startNorm = paramNamed.norm ?? 0;
+    const eid = paramEffectId;
+    const named = paramNamed;
     const onMove = (move: PointerEvent) => {
-      editor.setParam(paramNamed, clamp01(startNorm + (startY - move.clientY) / 180));
+      editor.setPinnedParam(eid, named, clamp01(startNorm + (startY - move.clientY) / 180));
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
@@ -925,9 +930,12 @@
   .param.writable:hover {
     border-color: var(--accent);
   }
-  /* read-only: block exists but isn't open — dimmed, lock badge, click opens it */
+  /* read-only preview: block is in the preset but its live values aren't hydrated
+     yet (a brief flash) or hydration is disabled on a slow link — dimmed, lock
+     badge, click opens the block. A SOLID border (never dashed) so a resting
+     control is never mistaken for a drag/drop slot (T20 bug #3). */
   .param.readonly {
-    border-style: dashed;
+    border-style: solid;
     border-color: var(--aw-border-2, var(--border2));
   }
   .param.readonly .param-ring svg:first-child,
@@ -941,9 +949,10 @@
   .param.readonly:hover .strong {
     opacity: 0.78;
   }
-  /* missing: bound block not in this preset — inert, warning badge */
+  /* missing: bound block not in this preset — inert, warning badge. SOLID border
+     (never dashed) so it reads as "unavailable", not as an empty drag slot. */
   .param.missing {
-    border-style: dashed;
+    border-style: solid;
     border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
     cursor: default;
   }
@@ -1050,10 +1059,10 @@
     color: color-mix(in srgb, var(--param-color) 55%, var(--text2));
   }
   .param.param-tile.readonly {
-    border-style: dashed;
+    border-style: solid;
   }
   .param.param-tile.missing {
-    border-style: dashed;
+    border-style: solid;
     border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
     background: var(--bg2);
   }
