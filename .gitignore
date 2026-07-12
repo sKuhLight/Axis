@@ -16,10 +16,26 @@ axe3/
 fm9/
 
 # Local-only Claude Code context (documents RE/capture methods — never commit)
-CLAUDE.md
+# (root-anchored: src/lib/axis-workbench/CLAUDE.md is a committable framework guide)
+/CLAUDE.md
 
 # Design reference screenshots (large PNGs, not needed in the repo)
 design/screenshots/
 
-# Session git worktrees (per-session scratch checkouts — keep other sessions' status clean)
+# Local Workbench visual smoke screenshots
+.workbench-smoke/
+
+# Playwright artifacts
+/test-results
+/playwright-report
+
+# Claude Code local config (private: Plane MCP, personal settings)
+.mcp.json
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Explicitly local design notes (surfaced when /CLAUDE.md was root-anchored)
+/design/CLAUDE.md
+
+# Session git worktrees / stack-worktree.sh parallel-work checkouts
 .wt-*/

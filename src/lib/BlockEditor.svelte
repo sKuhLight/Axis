@@ -8,6 +8,8 @@
   import { forgefx } from './forgefx';
   import type { CabState, CabSlot } from './types';
 
+  let { embedded = false }: { embedded?: boolean } = $props();
+
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
   const isEQ = $derived(sel?.pack === 'Peq' || sel?.pack === 'Geq');
@@ -73,6 +75,7 @@
   // ── docked resize (desktop) ──
   let resizing = false;
   function resizeDown(e: PointerEvent) {
+    if (embedded) return;
     e.preventDefault();
     resizing = true;
     const startY = e.clientY;
@@ -93,16 +96,17 @@
   }
 </script>
 
-{#if editor.editorOpen && sel && cat}
+{#if (embedded || editor.editorOpen) && sel && cat}
   <div
     class="ed"
-    class:mob={editor.isMobile}
-    style="--c:{cat.accent}; {editor.isMobile ? '' : `height:${editor.editorH}px;`}"
+    class:mob={editor.isMobile && !embedded}
+    class:embedded
+    style="--c:{cat.accent}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
     data-screen="Block Editor"
   >
-    {#if editor.isMobile}<div class="overlaybg" role="presentation" onclick={() => editor.closeEditor()}></div>{/if}
-    <div class="card" class:sheet={editor.isMobile}>
-      {#if !editor.isMobile}
+    {#if editor.isMobile && !embedded}<div class="overlaybg" role="presentation" onclick={() => editor.closeEditor()}></div>{/if}
+    <div class="card" class:sheet={editor.isMobile && !embedded}>
+      {#if !editor.isMobile && !embedded}
         <div class="resize" role="separator" aria-label="Resize panel" title="Drag to resize" onpointerdown={resizeDown}>
           <span class="grip"></span>
         </div>
@@ -129,7 +133,7 @@
           </div>
         {/if}
 
-        <button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>
+        {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
       </header>
 
       <!-- grid map navigator: hop between blocks / add / route without leaving the editor -->
@@ -184,6 +188,15 @@
     z-index: 95;
     border-top: 0;
     box-shadow: none;
+  }
+  .ed.embedded {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    border-top: 0;
+    box-shadow: none;
+    z-index: 0;
   }
   .overlaybg {
     position: absolute;

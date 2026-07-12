@@ -1,0 +1,1687 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0c0c0e;--bg2:#0e0e10;--surface:#141417;--surface2:#1c1c21;--border:#26262c;--border2:#2a2a31;--border3:#3a3a44;--text:#e9e9ee;--text2:#cfcfd6;--textdim:#9a9aa3;--textfaint:#8a8a94;--textmuted:#56565e;--accent:#35c9d6;--accent-bright:#4fd1dc;--accent-text:#8fe3ea;--accent-ink:#06181a;--accent-bg1:#101d1e;--accent-bg2:#12262a;--accent-border1:#234d4f;--accent-border2:#2f6d70;--amber:#f5a623;}
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); overscroll-behavior:none; font-family:'Hanken Grotesk',system-ui,sans-serif; }
+  ::selection{ background:var(--accent); color:#06181a; }
+  *:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  input:focus{ outline:none; }
+  .lz-scroll::-webkit-scrollbar{ width:9px; height:9px; }
+  .lz-scroll::-webkit-scrollbar-track{ background:transparent; }
+  .lz-scroll::-webkit-scrollbar-thumb{ background:#2a2a31; border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  /* canonical scrollbar — applies document-wide (incl. mounted child panels) so nothing renders an unstyled OS scrollbar */
+  *{ scrollbar-width:thin; scrollbar-color:var(--border2) transparent; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--border2); border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--border3); }
+  ::-webkit-scrollbar-corner{ background:transparent; }
+  @keyframes lzIn{ from{ opacity:0; } to{ opacity:1; } }
+  @keyframes lzSlideR{ from{ transform:translateX(100%); } to{ transform:translateX(0); } }
+  @keyframes lzRise{ from{ opacity:0; transform:translateY(12px); } to{ opacity:1; transform:translateY(0); } }
+  @keyframes lzToast{ 0%{opacity:0;transform:translate(-50%,10px);} 12%{opacity:1;transform:translate(-50%,0);} 88%{opacity:1;transform:translate(-50%,0);} 100%{opacity:0;transform:translate(-50%,6px);} }
+  @keyframes lzPulse{ 0%,100%{ border-color:var(--accent); } 50%{ border-color:#1c4a4e; } }
+  .lz-zone-live{ animation:lzPulse 1.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; } .lz-zone-live{ animation:none !important; border-color:var(--accent) !important; } }
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="{{ shellStyle }}">
+<div style="{{ frameStyle }}">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <sc-if value="{{ railVisible }}" hint-placeholder-val="{{ true }}">
+  <div style="{{ railStyle }}">
+    <div style="margin:2px 0 12px;">
+      <svg width="30" height="30" viewBox="0 0 30 30"><circle cx="9" cy="9" r="3.4" fill="var(--accent)"></circle><circle cx="21" cy="9" r="3.4" fill="#4f6bed"></circle><circle cx="15" cy="21" r="3.4" fill="var(--amber)"></circle><path d="M9 9 L21 9 L15 21 Z" fill="none" stroke="var(--border3)" stroke-width="1.6"></path></svg>
+    </div>
+    <sc-if value="{{ navInRail }}" hint-placeholder-val="{{ true }}">
+    <div data-navzone="1" data-navvert="1" style="display:flex; flex-direction:column; align-items:center; gap:5px; width:100%;">
+    <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="7">
+      <div data-nav="{{ n.id }}" style="{{ n.wrapStyle }}">
+        <sc-if value="{{ n.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ n.gapStyle }}"></div></sc-if>
+        <sc-if value="{{ n.notGap }}" hint-placeholder-val="{{ true }}">
+        <div data-sec="{{ n.id }}" onClick="{{ onNav }}" onKeyDown="{{ onKeyActivate }}" role="button" tabindex="0" aria-label="{{ n.label }}" title="{{ n.label }}" style="{{ n.railStyle }}" style-hover="background:var(--surface2); color:var(--text2);">
+          <span style="font-size:18px; line-height:1;">{{ n.glyph }}</span>
+          <span style="font-size:10px; font-weight:600; letter-spacing:.02em;">{{ n.label }}</span>
+        </div>
+        <div onPointerDown="{{ n.onDrag }}" style="{{ n.overlayStyle }}"></div>
+        <div onClick="{{ n.onHide }}" title="Hide" style="{{ n.hideStyle }}">×</div>
+        </sc-if>
+      </div>
+    </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- rail-zoned widgets -->
+    <div data-zone="rail" style="{{ railZoneStyle }}">
+      <sc-for list="{{ zoneRail }}" as="it" hint-placeholder-count="0">
+        <div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+          <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+          <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="52px,52px"></dc-import></sc-if>
+          <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="52px,44px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="52px,52px"></dc-import></sc-if>
+          <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+          <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / resize" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex:1; min-height:8px;"></div>
+    <div title="Connected · AX-3 FW 1.4.0" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 0;">
+      <span style="width:9px; height:9px; border-radius:50%; background:#33c46b; box-shadow:0 0 8px #33c46b;"></span>
+      <span style="font:600 9px/1 'JetBrains Mono',monospace; color:var(--border3);">FW1.4</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ MOBILE NAV DRAWER (scrim + hamburger) ============ -->
+  <sc-if value="{{ navDrawerScrim }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeNavDrawer }}" style="position:absolute; inset:0; z-index:225; background:rgba(6,6,8,.52); backdrop-filter:blur(2px); animation:lzIn .16s ease;"></div>
+  </sc-if>
+  <sc-if value="{{ navHamburger }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ openNavDrawer }}" title="Menu" style="{{ hamburgerStyle }}" style-hover="border-color:var(--border3);">
+    <span style="{{ hbLine }}"></span><span style="{{ hbLine }}"></span><span style="{{ hbLine }}"></span>
+  </div>
+  </sc-if>
+
+  <!-- ============ MOBILE EDGE DOCKS (edge indicators for left / right / top) ============ -->
+  <sc-if value="{{ mobIndLeft }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ openMobDockLeft }}" title="Open left dock" style="{{ mobIndLeftStyle }}" style-hover="border-color:var(--accent);">◧ LEFT</div>
+  </sc-if>
+  <sc-if value="{{ mobIndRight }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ openMobDockRight }}" title="Open right dock" style="{{ mobIndRightStyle }}" style-hover="border-color:var(--accent);">RIGHT ◨</div>
+  </sc-if>
+  <sc-if value="{{ mobIndTop }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ openMobDockTop }}" title="Open top dock" style="{{ mobIndTopStyle }}" style-hover="border-color:var(--accent);">▽ TOP</div>
+  </sc-if>
+
+  <!-- ============ MAIN COLUMN ============ -->
+  <div style="flex:1; min-width:0; min-height:0; display:flex; flex-direction:column;">
+
+    <!-- TOP BAR -->
+    <div style="{{ topbarStyle }}">
+      <div data-zone="tl" style="{{ zoneTLStyle }}">
+        <sc-for list="{{ zoneTL }}" as="it" hint-placeholder-count="2">
+          <div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+            <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+            <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></sc-if>
+            <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="90px,38px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="150px,40px"></dc-import></sc-if>
+            <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+            <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / density" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div data-zone="tc" style="{{ zoneTCStyle }}">
+        <sc-for list="{{ zoneTC }}" as="it" hint-placeholder-count="0">
+          <div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+            <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+            <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></sc-if>
+            <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="90px,38px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="150px,40px"></dc-import></sc-if>
+            <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+            <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / density" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ tcEmpty }}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'JetBrains Mono',monospace; color:#33333a; letter-spacing:.14em;">DROP HERE · CENTER</span></sc-if>
+      </div>
+
+      <div data-zone="tr" style="{{ zoneTRStyle }}">
+        <sc-for list="{{ zoneTR }}" as="it" hint-placeholder-count="4">
+          <div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+            <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+            <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></sc-if>
+            <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="90px,38px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="150px,40px"></dc-import></sc-if>
+            <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+            <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / density" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+          </div>
+        </sc-for>
+      </div>
+      <div onClick="{{ toggleOfMenu }}" title="Hidden — not enough space" style="{{ ofChipStyle }}">⋯ {{ ofCount }}</div>
+    </div>
+
+    <!-- EDIT RIBBON -->
+    <sc-if value="{{ editMode }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:none; background:#0b1516; border-bottom:1px solid #1a3a3c; padding:11px 16px; display:flex; flex-direction:column; gap:10px; animation:lzRise .22s ease; z-index:40;">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <span style="font:700 11px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:var(--accent);">✥ EDIT LAYOUT</span>
+        <div style="display:flex; align-items:center; gap:7px;">
+          <span style="font:600 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.1em;">PROFILE</span>
+          <div style="display:flex; gap:3px; background:#0e0e10; border:1px solid var(--border); border-radius:8px; padding:3px;">
+            <sc-for list="{{ profileTabs }}" as="p" hint-placeholder-count="2"><div data-p="{{ p.id }}" onClick="{{ onProfile }}" style="{{ p.style }}">{{ p.label }}</div></sc-for>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:7px;">
+          <span style="font:600 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.1em;">LAYOUT</span>
+          <sc-for list="{{ presetTabs }}" as="p" hint-placeholder-count="4"><div data-p="{{ p.id }}" onClick="{{ onPreset }}" style="{{ p.style }}">{{ p.label }}</div></sc-for>
+          <div onClick="{{ saveLayout }}" title="Save current arrangement" style="display:flex; align-items:center; gap:5px; height:28px; padding:0 11px; border-radius:8px; cursor:pointer; background:#141417; border:1px solid var(--border2); color:var(--text2); font:600 11px/1 'Hanken Grotesk',sans-serif;" style-hover="border-color:var(--border3);">＋ Save</div>
+        </div>
+        <div style="flex:1;"></div>
+        <div onClick="{{ toggleRibPanels }}" title="Show / hide dockable panels" style="{{ ribPanelsBtn }}">▤ Panels ▾</div>
+        <div onClick="{{ toggleRibOptions }}" title="Layout options" style="{{ ribOptionsBtn }}">⚙ Options ▾</div>
+        <div onClick="{{ addPanel }}" title="Insert a custom panel you can fill with widgets &amp; params" style="display:flex; align-items:center; gap:6px; height:30px; padding:0 13px; border-radius:8px; cursor:pointer; background:#101d1e; border:1px solid #234d4f; color:#4fd1dc; font:600 12px/1 'Hanken Grotesk',sans-serif;" style-hover="border-color:var(--accent);">＋ Panel</div>
+        <div onClick="{{ openLib }}" style="display:flex; align-items:center; gap:7px; height:30px; padding:0 13px; border-radius:8px; cursor:pointer; background:#101d1e; border:1px solid #234d4f; color:#4fd1dc; font:600 12px/1 'Hanken Grotesk',sans-serif;" style-hover="border-color:var(--accent);">▤ Widgets</div>
+        <div onClick="{{ exitEdit }}" style="display:flex; align-items:center; gap:6px; height:30px; padding:0 15px; border-radius:8px; cursor:pointer; background:var(--accent); color:#06181a; font:700 12px/1 'Hanken Grotesk',sans-serif;">✓ Done</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- PANELS dropdown -->
+    <sc-if value="{{ ribPanels }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeRibMenu }}" style="position:fixed; inset:0; z-index:44;"></div>
+    <div style="{{ ribPanelsMenuStyle }}">
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em;">PRESET BROWSER</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <div onClick="{{ togglePSrc }}" style="{{ chipPSrc }}">Sources</div>
+        <div onClick="{{ togglePList }}" style="{{ chipPList }}">List</div>
+        <div onClick="{{ togglePDet }}" style="{{ chipPDet }}">Info</div>
+      </div>
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em;">BLOCK EDITOR</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <div onClick="{{ toggleBeCtl }}" style="{{ chipBeCtl }}">Controls</div>
+        <div onClick="{{ toggleBeMod }}" style="{{ chipBeMod }}">Modifier</div>
+      </div>
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em;">FC CONTROLLERS</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <div onClick="{{ toggleFcBd }}" style="{{ chipFcBd }}">Board</div>
+        <div onClick="{{ toggleFcIn }}" style="{{ chipFcIn }}">Switch</div>
+        <div onClick="{{ toggleFcLay }}" style="{{ chipFcLay }}">Layouts</div>
+        <div onClick="{{ toggleFcLed }}" style="{{ chipFcLed }}">LED</div>
+        <div onClick="{{ toggleFcTap }}" style="{{ chipFcTap }}">Tap</div>
+        <div onClick="{{ toggleFcHold }}" style="{{ chipFcHold }}">Hold</div>
+      </div>
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em;">OTHER</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+        <div onClick="{{ toggleFc }}" style="{{ chipFc }}">Chain</div>
+        <div onClick="{{ toggleHistory }}" style="{{ chipHistory }}">History</div>
+        <div onClick="{{ singlePage }}" style="{{ ribSingleBtn }}">◧ Single Page</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- OPTIONS dropdown -->
+    <sc-if value="{{ ribOptions }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeRibMenu }}" style="position:fixed; inset:0; z-index:44;"></div>
+    <div style="{{ ribOptionsMenuStyle }}">
+      <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="4">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font:600 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.08em; width:56px; flex:none;">{{ t.label }}</span>
+          <div style="display:flex; gap:2px; background:#0e0e10; border:1px solid var(--border); border-radius:8px; padding:2px;">
+            <sc-for list="{{ t.opts }}" as="o" hint-placeholder-count="2"><div data-t="{{ o.t }}" data-v="{{ o.v }}" onClick="{{ onToggle }}" style="{{ o.style }}">{{ o.label }}</div></sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- BODY : dockable panel surface (5 regions) -->
+    <div ref="{{ contentRef }}" style="flex:1; min-width:0; min-height:0; position:relative; overflow:hidden; background:var(--bg);">
+
+      <!-- panes: Grid + Editor, absolutely positioned by the region layout engine -->
+      <sc-for list="{{ panes }}" as="pane" hint-placeholder-count="2">
+        <sc-if value="{{ pane.show }}" hint-placeholder-val="{{ true }}">
+        <div data-pane="{{ pane.id }}" style="{{ pane.style }}">
+          <div onPointerDown="{{ pane.onHeaderDown }}" onContextMenu="{{ pane.onCtx }}" title="Drag to dock · right-click for options" style="{{ pane.headerStyle }}">
+            <span style="{{ pane.gripStyle }}">⠿</span>
+            <sc-for list="{{ pane.tabs }}" as="tab" hint-placeholder-count="1">
+              <div onPointerDown="{{ stopProp }}" onClick="{{ tab.onActivate }}" onDblClick="{{ tab.onRename }}" style="{{ tab.style }}">{{ tab.label }}</div>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <sc-if value="{{ pane.isGrid }}" hint-placeholder-val="{{ true }}"><div data-zone="gridbar" onPointerDown="{{ stopProp }}" style="display:flex; align-items:center; gap:6px;">
+              <sc-for list="{{ zoneGridbar }}" as="it" hint-placeholder-count="2"><div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}"><sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="130px,32px"></dc-import></sc-if><div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div></div></sc-for>
+            </div></sc-if>
+            <sc-if value="{{ pane.showAxis }}" hint-placeholder-val="{{ false }}"><div onClick="{{ pane.onToggleAxis }}" onPointerDown="{{ stopProp }}" title="Split direction" style="{{ pane.miniBtn }}">{{ pane.axisIcon }}</div></sc-if>
+            <sc-if value="{{ pane.tabbable }}" hint-placeholder-val="{{ false }}"><div onClick="{{ pane.onToggleTabs }}" onPointerDown="{{ stopProp }}" title="Group as tabs / split apart" style="{{ pane.miniBtn }}">{{ pane.tabsIcon }}</div></sc-if>
+            <div onClick="{{ pane.onPaneCollapse }}" onPointerDown="{{ stopProp }}" title="Collapse this panel" style="{{ pane.miniBtn }}">{{ pane.paneCollapseIcon }}</div>
+            <sc-if value="{{ pane.canDockCollapse }}" hint-placeholder-val="{{ false }}"><div onClick="{{ pane.onDockCollapse }}" onPointerDown="{{ stopProp }}" title="{{ pane.dockCollapseTitle }}" style="{{ pane.miniBtn }}">«</div></sc-if>
+            <sc-if value="{{ pane.closable }}" hint-placeholder-val="{{ false }}"><div onClick="{{ pane.onDelete }}" onPointerDown="{{ stopProp }}" title="Close panel" style="{{ pane.miniBtn }}">×</div></sc-if>
+          </div>
+          <div style="{{ pane.bodyStyle }}">
+            <sc-if value="{{ pane.isGrid }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisFcPanel" fc-part="grid" grid-mode="{{ gridMode }}" block-size="{{ blockSize }}" on-select-block="{{ onGridSelect }}" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isEditor }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisBlockEditor" block="{{ editorBlock }}" on-close="{{ closeEditor }}" on-param-grab="{{ onParamGrab }}" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isBeMod }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisBlockEditor" be-part="modifier" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isCustom }}" hint-placeholder-val="{{ false }}"><div data-zone="{{ pane.panelZone }}" style="{{ pane.panelBodyStyle }}">
+              <sc-for list="{{ pane.items }}" as="it" hint-placeholder-count="0"><div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+                <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+                <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></sc-if>
+                <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="90px,38px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="150px,40px"></dc-import></sc-if>
+                <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+                <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / density" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+              </div></sc-for>
+              <sc-if value="{{ pane.empty }}" hint-placeholder-val="{{ true }}"><div style="margin:auto; text-align:center; color:#3a3a44; font:600 10px/1.7 'JetBrains Mono',monospace; letter-spacing:.12em; pointer-events:none;">EMPTY PANEL<br>drag widgets &amp; params here</div></sc-if>
+            </div></sc-if>
+            <sc-if value="{{ pane.isFc }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; inset:0; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:13px;">
+              <div style="font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.16em; color:#6e6e78;">SIGNAL CHAIN</div>
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <sc-for list="{{ fcRows }}" as="row" hint-placeholder-count="6"><div style="display:flex; align-items:center; gap:8px;">
+                  <div onClick="{{ row.onClick }}" style="{{ row.cardStyle }}">
+                    <div style="display:flex; align-items:center; gap:6px;"><span style="{{ row.dotStyle }}"></span><span style="{{ row.nameStyle }}">{{ row.name }}</span></div>
+                    <span style="{{ row.typeStyle }}">{{ row.type }}</span>
+                  </div>
+                  <sc-if value="{{ row.showArrow }}" hint-placeholder-val="{{ false }}"><span style="color:#4a4a52; font-size:15px;">→</span></sc-if>
+                </div></sc-for>
+              </div>
+            </div></sc-if>
+            <sc-if value="{{ pane.isHistory }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; inset:0; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:2px;">
+              <sc-for list="{{ histRows }}" as="h" hint-placeholder-count="5"><div onClick="{{ h.restore }}" title="Restore to this point" style="{{ h.rowStyle }}" style-hover="background:#141417;">
+                <span style="{{ h.dotStyle }}"></span>
+                <span style="{{ h.labelStyle }}">{{ h.label }}</span>
+                <span style="{{ h.tagStyle }}">{{ h.tag }}</span>
+              </div></sc-for>
+            </div></sc-if>
+            <sc-if value="{{ pane.isStub }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; max-width:360px;">
+                <span style="font-size:28px; line-height:1; color:#3a3a44;">{{ pane.stubGlyph }}</span>
+                <span style="font:700 14px/1.3 'Hanken Grotesk',sans-serif; color:#cfcfd6;">{{ pane.stubTitle }}</span>
+                <span style="font:500 12px/1.6 'Hanken Grotesk',sans-serif; color:#9a9aa3;">{{ pane.stubDesc }}</span>
+                <span style="font:600 9.5px/1.7 'JetBrains Mono',monospace; letter-spacing:.08em; color:#6e6e78;">{{ pane.stubMeta }}</span>
+              </div>
+            </div></sc-if>
+            <sc-if value="{{ pane.isPSrc }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisPresetBrowser" part="sources" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isPList }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisPresetBrowser" part="list" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isPDet }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisPresetBrowser" part="detail" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcBd }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="board" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcIn }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="inspector" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcLay }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="layouts" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcLed }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="led" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcTap }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="tap" hint-size="100%,100%"></dc-import></sc-if>
+            <sc-if value="{{ pane.isFcHold }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisFcPanel" fc-part="hold" hint-size="100%,100%"></dc-import></sc-if>
+          </div>
+        </div>
+        </sc-if>
+      </sc-for>
+
+      <!-- collapsed region strips -->
+      <sc-for list="{{ strips }}" as="st" hint-placeholder-count="0">
+        <div onClick="{{ st.onExpand }}" title="Expand region" style="{{ st.style }}"><span style="{{ st.labelStyle }}">{{ st.text }}</span></div>
+      </sc-for>
+
+      <!-- mobile edge-dock scrim (tap to close the open drawer) -->
+      <sc-if value="{{ mobDockScrim }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeMobDock }}" style="position:absolute; inset:0; z-index:150; background:rgba(6,6,8,.5); backdrop-filter:blur(2px); animation:lzIn .16s ease;"></div>
+      </sc-if>
+
+      <!-- region resize handles -->
+      <sc-for list="{{ resizers }}" as="rz" hint-placeholder-count="0">
+        <div onPointerDown="{{ rz.onDown }}" style="{{ rz.style }}"></div>
+      </sc-for>
+
+      <!-- Preset Browser: mounted ONCE at load (hidden), revealed over its pane — no heavy runtime mount -->
+      <div style="{{ pbHostStyle }}"><dc-import name="AxisPresetBrowser" part="full" hint-size="100%,100%"></dc-import></div>
+
+      <!-- main empty hint -->
+      <sc-if value="{{ mainEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ mainEmptyStyle }}"><div style="text-align:center; color:#33333a; font:600 11px/1.6 'JetBrains Mono',monospace; letter-spacing:.1em;">MAIN<br>drag a panel here</div></div>
+      </sc-if>
+
+      <!-- all available drop zones (outlined while dragging a panel) -->
+      <sc-for list="{{ dropZones }}" as="dz" hint-placeholder-count="0">
+        <div style="{{ dz.style }}"><span style="{{ dz.labelStyle }}">{{ dz.label }}</span></div>
+      </sc-for>
+
+      <!-- live drop preview -->
+      <sc-if value="{{ dropActive }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ dropStyle }}"><span style="position:absolute; top:10px; left:12px; font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.1em; color:#4fd1dc;">{{ dropLabel }}</span></div>
+      </sc-if>
+
+    </div>
+    <!-- /BODY -->
+
+    <!-- BOTTOM BAR -->
+    <sc-if value="{{ bottomVisible }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ bottomBarStyle }}">
+      <sc-if value="{{ showFab }}" hint-placeholder-val="{{ true }}">
+      <div onClick="{{ enterEdit }}" title="Customize your Axis" style="flex:none; display:flex; align-items:center; gap:7px; height:34px; padding:0 13px; border-radius:9px; cursor:pointer; background:#101d1e; border:1px solid #234d4f; color:#4fd1dc; font:700 12px/1 'Hanken Grotesk',sans-serif;" style-hover="border-color:var(--accent); background:#13282a;">✥ Customize</div>
+      <div style="width:1px; height:26px; background:var(--border); margin:0 2px;"></div>
+      </sc-if>
+      <sc-if value="{{ navInBottom }}" hint-placeholder-val="{{ false }}">
+      <div data-navzone="1" data-navvert="0" style="display:flex; align-items:center; gap:4px;">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="7"><div data-nav="{{ n.id }}" style="{{ n.wrapStyle }}"><sc-if value="{{ n.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ n.gapStyle }}"></div></sc-if><sc-if value="{{ n.notGap }}" hint-placeholder-val="{{ true }}"><div data-sec="{{ n.id }}" onClick="{{ onNav }}" onKeyDown="{{ onKeyActivate }}" role="button" tabindex="0" aria-label="{{ n.label }}" style="{{ n.bottomStyle }}"><span style="font-size:17px; line-height:1;">{{ n.glyph }}</span><span style="font-size:10px; font-weight:600;">{{ n.label }}</span></div><div onPointerDown="{{ n.onDrag }}" style="{{ n.overlayStyle }}"></div><div onClick="{{ n.onHide }}" title="Hide" style="{{ n.hideStyle }}">×</div></sc-if></div></sc-for>
+      </div>
+      <div style="width:1px; height:30px; background:var(--border); margin:0 4px;"></div>
+      </sc-if>
+      <div data-zone="bottom" style="{{ bottomZoneStyle }}">
+        <sc-for list="{{ zoneBottom }}" as="it" hint-placeholder-count="0">
+          <div data-wid="{{ it.dragId }}" onContextMenu="{{ it.onCtx }}" style="{{ it.wrapStyle }}">
+            <sc-if value="{{ it.isGap }}" hint-placeholder-val="{{ false }}"><div style="{{ it.gapStyle }}"></div></sc-if>
+            <sc-if value="{{ it.isSingle }}" hint-placeholder-val="{{ true }}"><dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></sc-if>
+            <sc-if value="{{ it.isGroup }}" hint-placeholder-val="{{ false }}"><dc-import name="AxisGroup" gid="{{ it.groupId }}" members="{{ it.members }}" edit="{{ editMode }}" module-style="{{ it.groupModuleStyle }}" ind-index="{{ it.indIndex }}" dragging-id="{{ it.draggingId }}" ph-w="{{ it.phW }}" ph-h="{{ it.phH }}" member-hint="90px,38px" on-member-down="{{ onMemberDown }}" grip-down="{{ it.onDrag }}" wdata="{{ wdata }}" bus="{{ bus }}" hint-size="150px,40px"></dc-import></sc-if>
+            <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+            <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Group / density" style="{{ ctrlBtn }}">{{ it.densityIcon }}</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ bottomEmpty }}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'JetBrains Mono',monospace; color:#33333a; letter-spacing:.14em;">DROP HERE · BOTTOM BAR</span></sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+  </div><!-- /main column -->
+
+  <!-- ============ FLOATING WIDGETS ============ -->
+  <sc-for list="{{ zoneFloat }}" as="it" hint-placeholder-count="0">
+    <div data-wid="{{ it.id }}" style="{{ it.wrapStyle }}">
+      <dc-import name="AxisWidget" w="{{ it.w }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="160px,44px"></dc-import>
+      <div onPointerDown="{{ it.onDrag }}" style="{{ it.overlayStyle }}"></div>
+      <div style="{{ it.ctrlStyle }}"><div onClick="{{ it.onDensity }}" title="Density" style="{{ ctrlBtn }}">⇲</div><div onClick="{{ it.onHide }}" title="Hide" style="{{ ctrlBtn }}">×</div></div>
+    </div>
+  </sc-for>
+
+  <!-- floating block editor -->
+  <sc-if value="{{ editorFloating }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ floatEditorStyle }}">
+    <div onPointerDown="{{ startPanelDrag }}" style="{{ floatEditorHeader }}">
+      <span style="font:700 11px/1 'JetBrains Mono',monospace; letter-spacing:.1em; color:var(--textdim);">⠿ BLOCK · FLOATING</span>
+      <div style="flex:1;"></div>
+      <div onClick="{{ closeEditor }}" style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; color:var(--textdim);" style-hover="background:var(--surface2);">×</div>
+    </div>
+    <div style="flex:1; min-height:0;"><dc-import name="AxisBlockEditor" block="{{ editorBlock }}" on-close="{{ closeEditor }}" on-param-grab="{{ onParamGrab }}" hint-size="100%,100%"></dc-import></div>
+    <div data-rz="floatwh" onPointerDown="{{ startDockResize }}" title="Resize" style="{{ floatResizeWH }}"></div>
+  </div>
+  </sc-if>
+
+</div><!-- /frame -->
+
+  <!-- (bottom editor is docked inside the content column so it shrinks the grid) -->
+
+
+  <!-- ============ PANEL DOCK PREVIEW ============ -->
+  <sc-if value="{{ panelDragging }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ panelPreviewStyle }}"><div style="position:absolute; top:10px; left:12px; font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.1em; color:#4fd1dc;">{{ panelDockLabel }}</div></div>
+  </sc-if>
+
+  <!-- ============ PRESET FLYOUT ============ -->
+  <sc-if value="{{ presetFlyout }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePreset }}" style="position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:120; animation:lzIn .18s ease;"></div>
+  <div style="position:fixed; top:0; right:0; bottom:0; width:400px; max-width:88vw; z-index:121; background:#0d0d0f; border-left:1px solid var(--border2); display:flex; flex-direction:column; animation:lzSlideR .24s cubic-bezier(.2,.7,.2,1); box-shadow:-24px 0 60px rgba(0,0,0,.5);">
+    <div style="flex:none; padding:18px 20px 14px; border-bottom:1px solid var(--surface2); display:flex; align-items:center; gap:12px;">
+      <span style="font-size:16px; font-weight:700; color:#fff;">Presets</span>
+      <span style="font:700 10px/1 'JetBrains Mono',monospace; color:#f5c878; background:#241a12; border:1px solid #5a3f1f; border-radius:6px; padding:5px 8px;">PRE {{ presetNum }}</span>
+      <div style="flex:1;"></div>
+      <div onClick="{{ closePreset }}" style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; background:var(--surface2); border:1px solid var(--border2); color:var(--textdim); font-size:15px;">×</div>
+    </div>
+    <div class="lz-scroll" style="flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:6px;">
+      <sc-for list="{{ presetList }}" as="p" hint-placeholder-count="12"><div data-n="{{ p.n }}" onClick="{{ pickPreset }}" style="{{ p.rowStyle }}"><span style="{{ p.tagStyle }}"></span><span style="font:700 12px/1 'JetBrains Mono',monospace; color:var(--textfaint); width:26px;">{{ p.n }}</span><span style="font-size:13px; font-weight:600; color:var(--text);">{{ p.name }}</span></div></sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ HISTORY DRAWER ============ -->
+  <sc-if value="{{ histOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeHist }}" style="position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:120; animation:lzIn .18s ease;"></div>
+  <div style="position:fixed; top:0; right:0; bottom:0; width:330px; max-width:86vw; z-index:121; background:#0d0d0f; border-left:1px solid var(--border2); display:flex; flex-direction:column; animation:lzSlideR .24s cubic-bezier(.2,.7,.2,1);">
+    <div style="flex:none; padding:18px 20px; border-bottom:1px solid var(--surface2); display:flex; align-items:center; gap:10px;"><span style="font-size:15px; font-weight:700; color:#fff;">History</span><div style="flex:1;"></div><div onClick="{{ closeHist }}" style="width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; background:var(--surface2); color:var(--textdim);">×</div></div>
+    <div class="lz-scroll" style="flex:1; overflow-y:auto; padding:8px 12px;">
+      <sc-for list="{{ histItems }}" as="h" hint-placeholder-count="6"><div onClick="{{ h.restore }}" title="Restore to this point" style="{{ h.rowStyle }}" style-hover="background:var(--surface);"><span style="{{ h.dotStyle }}"></span><div style="min-width:0; flex:1;"><div style="{{ h.labelStyle }}">{{ h.label }}</div><div style="font:500 10px/1 'JetBrains Mono',monospace; color:var(--textmuted); margin-top:3px;">{{ h.time }}</div></div><span style="{{ h.tagStyle }}">{{ h.tag }}</span></div></sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ WIDGET LIBRARY ============ -->
+  <sc-if value="{{ libOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeLib }}" style="{{ libScrimStyle }}"></div>
+  <div style="{{ libSheetStyle }}">
+    <div style="flex:none; padding:17px 18px; border-bottom:1px solid #163032; display:flex; align-items:center; gap:9px;"><span style="font-size:15px; font-weight:700; color:#fff;">Widget Library</span><div style="flex:1;"></div><div onClick="{{ closeLib }}" style="width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; background:var(--surface2); color:var(--textdim);">×</div></div>
+    <div style="flex:none; padding:11px 14px; border-bottom:1px solid #163032;">
+      <div style="display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; background:#0e0e10; border:1px solid var(--border2); border-radius:9px;">
+        <svg width="14" height="14" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--textfaint)" stroke-width="1.5"></circle><path d="M10.8 10.8 L14 14" stroke="var(--textfaint)" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <input value="{{ libQuery }}" onInput="{{ onLibSearch }}" placeholder="Search widgets…" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font:600 12px/1 'Hanken Grotesk',sans-serif;">
+      </div>
+    </div>
+    <div class="lz-scroll" style="flex:1; overflow-y:auto; padding:14px;">
+      <sc-if value="{{ hasSaved }}" hint-placeholder-val="{{ false }}">
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.14em; margin-bottom:9px;">SAVED · TAP TO LOAD</div>
+      <div style="display:flex; flex-direction:column; gap:7px; margin-bottom:20px;">
+        <sc-for list="{{ savedPanelsList }}" as="p" hint-placeholder-count="0"><div data-i="{{ p.i }}" onClick="{{ loadSavedPanel }}" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#12181c; border:1px solid #2a4a44; border-radius:9px; cursor:pointer;" style-hover="border-color:var(--accent);"><span style="font-size:13px; color:#7fe0c4;">▤</span><span style="font-size:12.5px; font-weight:600; color:var(--text2);">{{ p.name }}</span><div style="flex:1;"></div><span style="font:500 9px/1 'JetBrains Mono',monospace; color:var(--textmuted);">{{ p.count }} widgets</span><span data-i="{{ p.i }}" onClick="{{ delSavedPanel }}" style="color:var(--textfaint); font-size:13px; padding:0 2px;">×</span></div></sc-for>
+        <sc-for list="{{ savedGroupsList }}" as="g" hint-placeholder-count="0"><div data-i="{{ g.i }}" onClick="{{ loadSavedGroup }}" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#12181c; border:1px solid #2a4a44; border-radius:9px; cursor:pointer;" style-hover="border-color:var(--accent);"><span style="font-size:13px; color:#7fe0c4;">⛁</span><span style="font-size:12.5px; font-weight:600; color:var(--text2);">{{ g.name }}</span><div style="flex:1;"></div><span style="font:500 9px/1 'JetBrains Mono',monospace; color:var(--textmuted);">{{ g.count }} widgets</span><span data-i="{{ g.i }}" onClick="{{ delSavedGroup }}" style="color:var(--textfaint); font-size:13px; padding:0 2px;">×</span></div></sc-for>
+      </div>
+      </sc-if>
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.14em; margin-bottom:9px;">HIDDEN · TAP TO ADD</div>
+      <sc-for list="{{ libHiddenGroups }}" as="g" hint-placeholder-count="3">
+        <div style="font:700 8.5px/1 'JetBrains Mono',monospace; color:#4a4a52; letter-spacing:.12em; margin:2px 0 7px;">{{ g.cat }}</div>
+        <div style="display:flex; flex-direction:column; gap:7px; margin-bottom:14px;">
+          <sc-for list="{{ g.items }}" as="l" hint-placeholder-count="2"><div data-id="{{ l.id }}" onClick="{{ addWidget }}" onPointerDown="{{ startLibDrag }}" title="Tap to add · drag onto the layout" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#101d1e; border:1px solid #234d4f; border-radius:9px; cursor:grab;" style-hover="border-color:var(--accent);"><span style="font-size:14px; color:#4fd1dc;">＋</span><span style="font-size:12.5px; font-weight:600; color:var(--text2);">{{ l.label }}</span><div style="flex:1;"></div><span style="font:500 9px/1 'JetBrains Mono',monospace; color:var(--textmuted);">{{ l.hint }}</span></div></sc-for>
+        </div>
+      </sc-for>
+      <sc-if value="{{ noHidden }}" hint-placeholder-val="{{ false }}"><div style="padding:14px; text-align:center; font:500 11px/1 'JetBrains Mono',monospace; color:var(--textmuted); margin-bottom:16px;">All widgets are placed.</div></sc-if>
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.14em; margin-bottom:9px;">ON YOUR LAYOUT · TAP TO HIDE</div>
+      <div style="display:flex; flex-direction:column; gap:7px;">
+        <sc-for list="{{ libPlaced }}" as="l" hint-placeholder-count="6"><div data-id="{{ l.id }}" onClick="{{ hideWidgetById }}" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface); border:1px solid var(--border2); border-radius:9px; cursor:pointer;" style-hover="border-color:var(--border3);"><span style="width:6px; height:6px; border-radius:50%; background:var(--accent);"></span><span style="font-size:12.5px; font-weight:600; color:var(--text2);">{{ l.label }}</span><div style="flex:1;"></div><span style="font:500 9px/1 'JetBrains Mono',monospace; color:var(--textmuted);">{{ l.zoneName }}</span><span style="color:var(--textfaint); font-size:13px;">⌦</span></div></sc-for>
+      </div>
+      <sc-if value="{{ hasNavHidden }}" hint-placeholder-val="{{ false }}">
+      <div style="font:700 9px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.14em; margin:20px 0 9px;">HIDDEN NAV · TAP TO RESTORE</div>
+      <div style="display:flex; flex-direction:column; gap:7px;">
+        <sc-for list="{{ navHiddenList }}" as="n" hint-placeholder-count="1"><div data-id="{{ n.id }}" onClick="{{ showNav }}" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#101d1e; border:1px solid #234d4f; border-radius:9px; cursor:pointer;" style-hover="border-color:var(--accent);"><span style="font-size:15px; color:#4fd1dc;">{{ n.glyph }}</span><span style="font-size:12.5px; font-weight:600; color:var(--text2);">{{ n.label }}</span><div style="flex:1;"></div><span style="font-size:14px; color:#4fd1dc;">＋</span></div></sc-for>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ CONTEXT MENU ============ -->
+  <sc-if value="{{ ctx }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeCtx }}" onContextMenu="{{ closeCtx }}" style="position:fixed; inset:0; z-index:249;"></div>
+    <div style="{{ ctxStyle }}">
+      <sc-if value="{{ ctxIsPanel }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ ctxSavePanel }}" style="{{ ctxMenuItem }}" style-hover="background:#12262a; color:#8fe3ea;">▤ Save to Library</div>
+        <div onClick="{{ ctxRenamePanel }}" style="{{ ctxMenuItem }}" style-hover="background:#12262a; color:#8fe3ea;">✎ Rename</div>
+        <div onClick="{{ ctxClosePanel }}" style="{{ ctxMenuItem }}" style-hover="background:#2a1416; color:#e88;">× Close panel</div>
+      </sc-if>
+      <sc-if value="{{ ctxIsGroup }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ ctxSaveGroup }}" style="{{ ctxMenuItem }}" style-hover="background:#12262a; color:#8fe3ea;">⛁ Save group to Library</div>
+      </sc-if>
+      <sc-if value="{{ ctxIsWidget }}" hint-placeholder-val="{{ false }}">
+        <div style="font:700 8.5px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em; padding:4px 8px 6px;">{{ ctxWidgetLabel }}</div>
+        <div style="font:700 8.5px/1 'JetBrains Mono',monospace; color:#4a4a52; letter-spacing:.12em; padding:6px 8px 4px;">MOVE TO</div>
+        <div style="display:flex; flex-wrap:wrap; gap:4px; padding:0 6px 4px;">
+          <sc-for list="{{ ctxWidgetZones }}" as="z" hint-placeholder-count="7"><div data-z="{{ z.zone }}" onClick="{{ ctxMoveTo }}" style="{{ z.style }}" style-hover="border-color:var(--accent);">{{ z.label }}</div></sc-for>
+        </div>
+        <div style="font:700 8.5px/1 'JetBrains Mono',monospace; color:#4a4a52; letter-spacing:.12em; padding:6px 8px 4px;">SIZE</div>
+        <div style="display:flex; gap:4px; padding:0 6px 6px;">
+          <sc-for list="{{ ctxWidgetSizes }}" as="z" hint-placeholder-count="3"><div data-d="{{ z.d }}" onClick="{{ ctxSetSize }}" style="{{ z.style }}" style-hover="border-color:var(--accent);">{{ z.label }}</div></sc-for>
+        </div>
+        <div onClick="{{ ctxHideWidget }}" style="{{ ctxMenuItem }}" style-hover="background:#2a1416; color:#e88;">× Hide widget</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- ============ DRAG GHOST ============ -->
+  <sc-if value="{{ ghost }}" hint-placeholder-val="{{ false }}">
+  <div ref="{{ ghostRef }}" style="{{ ghostStyle }}"><dc-import name="AxisWidget" w="{{ ghostW }}" data="{{ wdata }}" bus="{{ bus }}" hint-size="140px,40px"></dc-import></div>
+  </sc-if>
+  <sc-if value="{{ navGhost }}" hint-placeholder-val="{{ false }}">
+  <div ref="{{ navGhostRef }}" style="{{ navGhostStyle }}"><span style="font-size:18px; line-height:1;">{{ navGhostGlyph }}</span><span style="font-size:10px; font-weight:600; letter-spacing:.02em;">{{ navGhostLabel }}</span></div>
+  </sc-if>
+
+  <!-- ============ TOP-BAR OVERFLOW MENU ============ -->
+  <sc-if value="{{ ofMenuOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeOfMenu }}" style="position:fixed; inset:0; z-index:44;"></div>
+  <div style="{{ ofMenuStyle }}">
+    <div style="font:700 9px/1 'JetBrains Mono',monospace; color:#6e6e78; letter-spacing:.14em;">HIDDEN · NOT ENOUGH SPACE</div>
+    <sc-for list="{{ ofList }}" as="o" hint-placeholder-count="2">
+      <div style="display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:8px; background:#141417; border:1px solid #26262c;">
+        <span style="width:6px; height:6px; border-radius:50%; background:#d6543f; flex:none;"></span>
+        <span style="font:600 12px/1 'Hanken Grotesk',sans-serif; color:#cfcfd6;">{{ o.label }}</span>
+        <div style="flex:1;"></div>
+        <span style="font:500 9px/1 'JetBrains Mono',monospace; color:#6e6e78;">{{ o.zoneName }}</span>
+      </div>
+    </sc-for>
+    <div onClick="{{ ofCustomize }}" style="display:flex; align-items:center; justify-content:center; gap:7px; height:32px; border-radius:8px; cursor:pointer; background:#101d1e; border:1px solid #234d4f; color:#4fd1dc; font:600 12px/1 'Hanken Grotesk',sans-serif;" style-hover="border-color:var(--accent);">✥ Rearrange in Customize</div>
+  </div>
+  </sc-if>
+
+  <!-- ============ TOAST QUEUE ============ -->
+  <sc-if value="{{ hasToasts }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; left:50%; bottom:26px; z-index:200; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+    <sc-for list="{{ toastList }}" as="t" hint-placeholder-count="0">
+      <div style="{{ t.style }}">
+        <span>{{ t.msg }}</span>
+        <sc-if value="{{ t.hasAction }}" hint-placeholder-val="{{ false }}"><span onClick="{{ t.act }}" style="margin-left:14px; color:var(--accent); cursor:pointer; font-weight:700;">{{ t.actionLabel }}</span></sc-if>
+      </div>
+    </sc-for>
+  </div>
+  </sc-if>
+
+  <!-- ============ CONFIRM DIALOG ============ -->
+  <sc-if value="{{ confirm }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ confirmCancel }}" style="position:fixed; inset:0; z-index:260; background:rgba(6,6,8,.6); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; animation:lzIn .16s ease;">
+    <div onClick="{{ stopProp }}" role="dialog" aria-modal="true" aria-label="Unsaved changes" style="width:372px; max-width:88vw; background:#141417; border:1px solid var(--border3); border-radius:16px; box-shadow:0 24px 70px rgba(0,0,0,.6); padding:22px; display:flex; flex-direction:column; gap:14px; animation:lzRise .2s ease;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="width:9px; height:9px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px var(--amber); flex:none;"></span>
+        <span style="font:700 15px/1.2 'Hanken Grotesk',sans-serif; color:#fff;">{{ confirmTitle }}</span>
+      </div>
+      <div style="font:500 13px/1.6 'Hanken Grotesk',sans-serif; color:var(--textdim);">{{ confirmMsg }}</div>
+      <div style="display:flex; gap:8px; margin-top:2px;">
+        <div onClick="{{ confirmSave }}" style="flex:1; height:38px; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; background:var(--accent); color:#06181a; font:700 12.5px/1 'Hanken Grotesk',sans-serif;">Save &amp; load</div>
+        <div onClick="{{ confirmDiscard }}" style="height:38px; padding:0 14px; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; background:#2a1414; border:1px solid #5a2c2c; color:#e88; font:600 12.5px/1 'Hanken Grotesk',sans-serif;">Discard</div>
+        <div onClick="{{ confirmCancel }}" style="height:38px; padding:0 14px; display:flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer; background:#1c1c21; border:1px solid var(--border2); color:var(--text2); font:600 12.5px/1 'Hanken Grotesk',sans-serif;">Cancel</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ RENAME PANEL DIALOG ============ -->
+  <sc-if value="{{ renameOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ cancelRename }}" style="position:fixed; inset:0; z-index:263; background:rgba(6,6,8,.55); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding-top:16vh; animation:lzIn .14s ease;">
+    <div onClick="{{ stopProp }}" role="dialog" aria-modal="true" aria-label="Rename panel" style="width:340px; max-width:88vw; background:#141417; border:1px solid var(--border3); border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,.6); padding:18px; display:flex; flex-direction:column; gap:12px; animation:lzRise .18s ease;">
+      <span style="font:700 13px/1 'Hanken Grotesk',sans-serif; color:#fff;">Rename panel</span>
+      <input ref="{{ renameInputRef }}" value="{{ renameValue }}" onInput="{{ onRenameInput }}" onKeyDown="{{ onRenameKey }}" style="height:38px; padding:0 12px; border-radius:9px; background:#0e0e10; border:1px solid var(--border2); color:var(--text); font:600 13px/1 'Hanken Grotesk',sans-serif; outline:none;">
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <div onClick="{{ cancelRename }}" style="height:34px; padding:0 14px; display:flex; align-items:center; border-radius:8px; cursor:pointer; background:#1c1c21; border:1px solid var(--border2); color:var(--text2); font:600 12px/1 'Hanken Grotesk',sans-serif;">Cancel</div>
+        <div onClick="{{ commitRename }}" style="height:34px; padding:0 16px; display:flex; align-items:center; border-radius:8px; cursor:pointer; background:var(--accent); color:#06181a; font:700 12px/1 'Hanken Grotesk',sans-serif;">Rename</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ ADD-BLOCK PALETTE (⌘K) ============ -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePalette }}" style="position:fixed; inset:0; z-index:262; background:rgba(6,6,8,.6); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh; animation:lzIn .14s ease;">
+    <div onClick="{{ stopProp }}" role="dialog" aria-modal="true" aria-label="Add a block" style="width:520px; max-width:90vw; max-height:66vh; background:#0e0e10; border:1px solid var(--border3); border-radius:16px; box-shadow:0 28px 80px rgba(0,0,0,.66); display:flex; flex-direction:column; overflow:hidden; animation:lzRise .18s ease;">
+      <div style="display:flex; align-items:center; gap:11px; padding:14px 16px; border-bottom:1px solid var(--border);">
+        <svg width="17" height="17" viewBox="0 0 16 16" style="flex:none;"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--accent)" stroke-width="1.5"></circle><path d="M10.8 10.8 L14 14" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"></path></svg>
+        <input ref="{{ paletteInputRef }}" onInput="{{ onPaletteInput }}" placeholder="Add a block…  amp, delay, reverb" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--text); font:600 15px/1 'Hanken Grotesk',sans-serif;">
+        <span style="font:700 9px/1 'JetBrains Mono',monospace; letter-spacing:.1em; color:var(--textfaint); background:#141417; border:1px solid var(--border2); border-radius:6px; padding:5px 7px; flex:none;">⌘K</span>
+      </div>
+      <div class="lz-scroll" style="flex:1; min-height:0; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:2px;">
+        <sc-for list="{{ paletteItems }}" as="p" hint-placeholder-count="6">
+          <div onClick="{{ p.insert }}" style="{{ p.rowStyle }}" style-hover="background:#141417;">
+            <span style="{{ p.iconStyle }}">{{ p.glyph }}</span>
+            <span style="font:700 13px/1 'Hanken Grotesk',sans-serif; color:var(--text); min-width:64px;">{{ p.name }}</span>
+            <span style="font:500 12px/1 'JetBrains Mono',monospace; color:var(--amber);">{{ p.type }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ paletteEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px; text-align:center; font:500 13px/1.5 'Hanken Grotesk',sans-serif; color:var(--textfaint);">No block type matches — try “amp”, “verb”, “comp”.</div>
+        </sc-if>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px; padding:10px 16px; border-top:1px solid var(--border); font:600 10px/1 'JetBrains Mono',monospace; color:var(--textfaint); letter-spacing:.06em;">
+        <span>↑↓ NAVIGATE</span><span>⏎ INSERT → {{ paletteTarget }}</span><span>ESC CLOSE</span>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.CAT = {
+      in:{c:"#4f6bed",g:"→"}, comp:{c:"#b3a52b",g:"▮"}, drive:{c:"#d6543f",g:"◈"}, amp:{c:"#d98a2b",g:"◣"},
+      cab:{c:"#7d7d87",g:"▦"}, filter:{c:"#d65b9e",g:"⌇"}, chorus:{c:"#2fb0c9",g:"∿"}, delay:{c:"#4a82e0",g:"⟫"},
+      reverb:{c:"#3fa890",g:"◜"}, out:{c:"#2fa15f",g:"⇥"}
+    };
+    this.BLOCKS = [
+      [ {catId:"in",name:"Input",type:"Instrument"},{catId:"comp",name:"Comp",type:"Studio Opto"},{catId:"drive",name:"Drive",type:"T808 Mod"},{catId:"amp",name:"Amp",type:"5153 100W Red"},{catId:"cab",name:"Cab",type:"4x12 Recto"} ],
+      [ {catId:"filter",name:"Filter",type:"Auto-Wah"},{catId:"chorus",name:"Chorus",type:"Analog Stereo"},{catId:"delay",name:"Delay",type:"Tube Tape"},{catId:"reverb",name:"Reverb",type:"Large Hall"},{catId:"out",name:"Output",type:"Output 1"} ]
+    ];
+    // ---- dense device grid: 12 cols x 4 rows (idx = row*12 + col) ----
+    this.COLS=12; this.ROWS=4;
+    this.GP={};
+    const place=(idx,catId,name,type,param,val,channel)=>{ this.GP[idx]={catId,name,type,param,val,channel:channel||"A"}; };
+    place(0,"in","Input","Instrument","Level",50);
+    place(1,"comp","Comp","Studio Opto","Ratio",42);
+    place(2,"drive","Drive","T808 Mod","Gain",72);
+    place(3,"amp","Amp","5153 100W Red","Gain",65);
+    place(4,"cab","Cab","4x12 Recto","Level",55);
+    place(5,"filter","PEQ","Peaking","Gain",48);
+    place(12,"comp","Gate","Noise Gate","Thresh",30,"A");
+    place(13,"chorus","Chorus","Analog Stereo","Mix",30);
+    place(14,"delay","Delay","Tube Tape","Mix",28,"B");
+    place(15,"reverb","Reverb","Large Hall","Mix",34,"B");
+    place(16,"out","Output","Output 1","Level",70);
+    this.PARAM0={}; Object.keys(this.GP).forEach(i=>{ this.PARAM0[i]=this.GP[i].val; });
+    this.SIZES=[{w:82,h:66},{w:106,h:82},{w:132,h:100}];
+
+    this.WIDGETS = {
+      preset:{label:"Preset display",hint:"nav + name"}, scenes:{label:"Scenes",hint:"1–8"}, view:{label:"View switch",hint:"Basic/Adv"},
+      add:{label:"Add block",hint:"⌘K"}, tuner:{label:"Tuner",hint:""}, tempo:{label:"Tempo",hint:"BPM"},
+      cpu:{label:"CPU meter",hint:""}, save:{label:"Save",hint:""}, search:{label:"Search",hint:""},
+      history:{label:"History",hint:""}, map:{label:"Grid map",hint:""}, undo:{label:"Undo / Redo",hint:""},
+      account:{label:"Account",hint:""}, gridmode:{label:"Grid mode",hint:"Full/Map/Auto"}, blocksize:{label:"Block size",hint:"S/M/L"},
+      fcdevice:{label:"FC device",hint:"FM3/FC-6/FC-12"},
+      fclayouts:{label:"FC Layouts",hint:"1–8 · Master"},
+      fcswitch:{label:"Switch / View",hint:"switch + 1–4"}
+    };
+    this.NAV = [
+      {id:"grid",label:"Grid",glyph:"⊞"},{id:"ctrl",label:"Ctrl",glyph:"◉"},{id:"fc",label:"FC",glyph:"⌗"},
+      {id:"scn",label:"Scn",glyph:"◪"},{id:"live",label:"Live",glyph:"⏺"},{id:"sets",label:"Sets",glyph:"≣"},{id:"setup",label:"Setup",glyph:"⚙"}
+    ];
+    this.PRESETS = [
+      {n:0,name:"Studio Clean",t:"#35c9d6"},{n:2,name:"Pristine Chime",t:"#35c9d6"},{n:7,name:"Crunch Rhythm",t:"#f5a623"},
+      {n:14,name:"Modern Metal",t:"#d6543f"},{n:18,name:"Soaring Lead",t:"#d65b9e"},{n:22,name:"Ambient Wash",t:"#9b8cf0"},
+      {n:25,name:"Blues Driver",t:"#f5a623"},{n:31,name:"Doom Wall",t:"#d6543f"},{n:40,name:"Ambient Swell",t:"#9b8cf0"},
+      {n:44,name:"Worship Lead",t:"#d65b9e"},{n:47,name:"Live Rig Master",t:"#35c9d6"},{n:430,name:"DEBUG",t:"#2fb0c9"}
+    ];
+    this.HIST = [
+      {label:"Gain 72 → 78",dot:"#35c9d6",time:"just now"},{label:"Added Drive · T808 Mod",dot:"#d6543f",time:"12s ago"},
+      {label:"Scene 1 → 2",dot:"#f5a623",time:"40s ago"},{label:"Reverb Mix 30 → 34",dot:"#3fa890",time:"1m ago"},
+      {label:"Preset recalled · DEBUG",dot:"#9a9aa3",time:"2m ago"}
+    ];
+    this.KNOBS = [{k:"Gain",v:72},{k:"Master",v:59},{k:"Bass",v:56},{k:"Mid",v:39},{k:"Treble",v:29},{k:"Presence",v:28}];
+    // ---- add-block palette catalog ----
+    this.BLOCKTYPES = [];
+    const bt=(catId,name,param,types)=>types.forEach(type=>this.BLOCKTYPES.push({catId,name,type,param}));
+    bt("drive","Drive","Gain",["T808 Mod","Fat Rat","Klon Mod","Timmy","Full OD","Fuzz Face"]);
+    bt("amp","Amp","Gain",["5153 100W Red","Brit 800","USA Lead+","Deluxe Verb","Recto Modern","AC-20"]);
+    bt("cab","Cab","Level",["4x12 Recto","1x12 Deluxe","2x12 Blue","4x12 Green","IR Loader"]);
+    bt("comp","Comp","Ratio",["Studio Opto","Pedal Comp","Bus Comp","Noise Gate"]);
+    bt("filter","Filter","Freq",["Auto-Wah","Peaking EQ","Format","Low-Pass","Wah"]);
+    bt("chorus","Chorus","Mix",["Analog Stereo","Dimension","Ensemble","Flanger","Phaser","Rotary"]);
+    bt("delay","Delay","Mix",["Tube Tape","Digital Mono","Ducking","Multi-Tap","Reverse"]);
+    bt("reverb","Reverb","Mix",["Large Hall","Spring 63","Plate","Room","Shimmer","Cave"]);
+    bt("in","Pitch","Amount",["Detune","Whammy","Harmony","Octave"]);
+    bt("out","Utility","Level",["Volume","Send/Return","Looper","Tuner Out"]);
+
+    this.state = {
+      editMode:false, libOpen:false, libQuery:"", ribMenu:null, ctx:null, savedPanels:[], savedGroups:[], profile:"desktop", customPanels:{}, cpseq:0, contentW:0, contentH:0,
+      layouts:{ desktop:this.preset("default"), tablet:this.preset("tablet"), mobile:this.preset("mobile") },
+      activePreset:"default",
+      scene:2, view:"basic", presetNum:430, presetName:"DEBUG", bpm:120, cpu:38,
+      section:"grid", stubs:{}, selected:null, editorOpen:false, panelBeMod:false, panelFc:false, panelHist:false, panelPresets:false, panelPSrc:false, panelPList:false, panelPDet:false, panelFcBd:false, panelFcIn:false, panelFcLay:false, panelFcLed:false, panelFcTap:false, panelFcHold:false,
+      params:Object.assign({}, this.PARAM0), adjust:null, blockSize:1, bypassed:{}, gridMode:"auto",
+      navOrder:this.NAV.map(n=>n.id), navHidden:{}, pinned:{}, editorCollapsed:false, dockColLeft:false, dockColRight:false,
+      dock:{ place:{ grid:"main", editor:"bottom", fc:"bottom", history:"right", presets:"left" }, tab:{left:false,right:false,top:false,bottom:false,main:false}, active:{left:null,right:null,top:null,bottom:null,main:null}, mainAxis:"h", size:{left:340,right:380,top:220,bottom:300}, collapsed:{left:false,right:false,top:false,bottom:false} },
+      presetFlyoutOpen:false, presetPageOpen:false, histOpen:false,
+      drag:null, rightW:340, toast:null, toasts:[], toastSeq:0, confirm:null, palette:null, renameState:null, dirty:false, connState:"connected", navDrawerOpen:false, mobDrawer:null, vw:(typeof window!=="undefined"?window.innerWidth:1440)
+    };
+  }
+  clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  shade(hex,amt){ let c=hex.replace("#",""); if(c.length===3) c=c.split("").map(x=>x+x).join(""); let r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16); const t=amt<0?0:255, p=Math.abs(amt); r=Math.round(r+(t-r)*p); g=Math.round(g+(t-g)*p); b=Math.round(b+(t-b)*p); return "rgb("+r+","+g+","+b+")"; }
+
+  // ---------- layout presets ----------
+  preset(kind){
+    const W=(zone,order,density,group)=>({zone,order,density:density||"expanded",group:group||null});
+    if(kind==="default") return {
+      navMode:"side", contentMode:"fixed", presetMode:"flyout", editorMode:"drawer", rightW:340,
+      widgets:{ preset:W("tl",0), scenes:W("tl",1), view:W("tr",0), add:W("tr",1), tuner:W("tr",2,"expanded","status"), tempo:W("tr",3,"expanded","status"), cpu:W("tr",4,"expanded","status"), save:W("tr",5),
+                gridmode:W("gridbar",0), blocksize:W("gridbar",1),
+                history:W("rail",0,"compact"), account:W("rail",1,"compact"), search:W("hidden",0), map:W("hidden",0), undo:W("hidden",0) }
+    };
+    if(kind==="stage") return {
+      navMode:"bottom", contentMode:"pages", presetMode:"page", editorMode:"floating", rightW:340,
+      widgets:{ preset:W("tl",0), tuner:W("tl",1), scenes:W("tc",0), tempo:W("tr",0), save:W("tr",1),
+                view:W("hidden",0), add:W("hidden",0), cpu:W("hidden",0), search:W("hidden",0), history:W("hidden",0), map:W("hidden",0), undo:W("hidden",0), account:W("hidden",0) }
+    };
+    if(kind==="studio") return {
+      navMode:"side", contentMode:"fixed", presetMode:"flyout", editorMode:"right", rightW:400,
+      widgets:{ preset:W("tl",0), search:W("tl",1), scenes:W("tl",2), view:W("tr",0), add:W("tr",1), cpu:W("tr",2), save:W("tr",3),
+                gridmode:W("gridbar",0), blocksize:W("gridbar",1),
+                tuner:W("right",0), tempo:W("right",1), map:W("right",2), history:W("rail",0,"compact"), account:W("rail",1,"compact"), undo:W("hidden",0) }
+    };
+    if(kind==="compact") return {
+      navMode:"side", contentMode:"fixed", presetMode:"flyout", editorMode:"drawer", rightW:320,
+      widgets:{ preset:W("tl",0,"compact"), scenes:W("tl",1,"compact"), add:W("tr",0,"compact"), save:W("tr",1,"compact"),
+                view:W("hidden",0), tuner:W("hidden",0), tempo:W("hidden",0), cpu:W("hidden",0), search:W("hidden",0), history:W("hidden",0), map:W("hidden",0), undo:W("hidden",0), account:W("rail",0,"compact") }
+    };
+    if(kind==="tablet") return {
+      navMode:"bottom", contentMode:"pages", presetMode:"page", editorMode:"drawer", rightW:320,
+      widgets:{ preset:W("tl",0), scenes:W("tc",0), tuner:W("tr",0), save:W("tr",1), add:W("bottom",0,"compact"),
+                view:W("hidden",0), tempo:W("hidden",0), cpu:W("hidden",0), search:W("hidden",0), history:W("hidden",0), map:W("hidden",0), undo:W("hidden",0), account:W("hidden",0) }
+    };
+    if(kind==="mobile") return {
+      navMode:"side", contentMode:"pages", presetMode:"page", editorMode:"drawer", rightW:300,
+      widgets:{ preset:W("tl",0,"compact"), save:W("tr",0,"mini"), scenes:W("bottom",0,"compact"), add:W("bottom",1,"mini"),
+                view:W("hidden",0), tuner:W("hidden",0), tempo:W("hidden",0), cpu:W("hidden",0), search:W("hidden",0), history:W("hidden",0), map:W("hidden",0), undo:W("hidden",0), account:W("hidden",0), gridmode:W("hidden",0), blocksize:W("hidden",0) }
+    };
+    return this.preset("default");
+  }
+  L(){ return this.state.layouts[this.state.profile]; }
+  setL(next){ this.setState({ layouts:Object.assign({}, this.state.layouts, {[this.state.profile]:next}) }); }
+  patchWidget(id, patch){ const L=this.L(); const w=Object.assign({}, L.widgets[id], patch); this.setL(Object.assign({}, L, {widgets:Object.assign({}, L.widgets, {[id]:w})})); }
+
+  componentDidMount(){
+    this._move=(e)=>this.onDragMove(e); this._up=(e)=>this.onDragUp(e);
+    this._rz=()=>this.setState({vw:window.innerWidth});
+    this._key=(e)=>this.onKey(e);
+    if(this.histBase==null){ this.hist=this.hist||[]; this.histPos=(this.histPos==null?-1:this.histPos); this.histBase=this.snapshot(); }
+    window.addEventListener("pointermove",this._move,{passive:false});
+    window.addEventListener("pointerup",this._up);
+    window.addEventListener("resize",this._rz);
+    window.addEventListener("keydown",this._key);
+    this._measure=()=>{ if(this.contentEl){ const w=this.contentEl.clientWidth, h=this.contentEl.clientHeight; if(w&&h){ if(w!==this.state.contentW||h!==this.state.contentH){ this.setState({contentW:w, contentH:h}); } return true; } } return false; };
+    let _tries=0; const _tick=()=>{ if(this._dead) return; const ok=this._measure(); if(!ok && _tries++<40){ setTimeout(_tick,32); } else { this.forceUpdate(); } };
+    requestAnimationFrame(_tick);
+  }
+  componentWillUnmount(){ this._dead=true; window.removeEventListener("pointermove",this._move); window.removeEventListener("pointerup",this._up); window.removeEventListener("resize",this._rz); window.removeEventListener("keydown",this._key); }
+
+  flash(msg, opts){ opts=opts||{}; const id=(this.state.toastSeq||0)+1; const t={id, msg, action:opts.action||null, kind:opts.kind||"info"}; const list=(this.state.toasts||[]).concat([t]).slice(-3); this.setState({toasts:list, toastSeq:id, toast:msg}); const dur=opts.action?4600:2300; setTimeout(()=>{ if(this._dead) return; this.setState({toasts:(this.state.toasts||[]).filter(x=>x.id!==id)}); }, dur); }
+  markDirty(){ if(!this.state.dirty) this.setState({dirty:true}); }
+  pushHist(label,dot){ requestAnimationFrame(()=>{ if(this._dead) return; this.recordAction(label,dot); }); }
+  snapshot(){ const s=this.state; return { params:Object.assign({},s.params), scene:s.scene, bypassed:Object.assign({},s.bypassed), presetNum:s.presetNum, presetName:s.presetName, dirty:s.dirty, gp:JSON.parse(JSON.stringify(this.GP)) }; }
+  recordAction(label,dot){ if(!this.hist) this.hist=[]; const after=this.snapshot(); if(this.histPos < this.hist.length-1){ this.hist=this.hist.slice(0,this.histPos+1); } this.hist.push({label, dot:dot||"#35c9d6", after, t:Date.now()}); this.histPos=this.hist.length-1; if(this.hist.length>60){ this.hist.shift(); this.histPos--; } this.forceUpdate(); }
+  restoreTo(pos){ if(!this.hist) return; pos=Math.max(-1,Math.min(pos,this.hist.length-1)); const snap = pos<0 ? this.histBase : (this.hist[pos]||{}).after; if(!snap) return; if(snap.gp) this.GP=JSON.parse(JSON.stringify(snap.gp)); this.histPos=pos; this.setState({ params:Object.assign({},snap.params), scene:snap.scene, bypassed:Object.assign({},snap.bypassed), presetNum:snap.presetNum, presetName:snap.presetName, dirty:snap.dirty }); }
+  undoAction(){ if(this.hist && this.histPos>=0){ const lbl=this.hist[this.histPos].label; this.restoreTo(this.histPos-1); this.flash("Undo \u00b7 "+lbl,{action:{label:"Redo",fn:()=>this.redoAction()}}); } else this.flash("Nothing to undo"); }
+  redoAction(){ if(this.hist && this.histPos<this.hist.length-1){ this.restoreTo(this.histPos+1); this.flash("Redo \u00b7 "+this.hist[this.histPos].label); } else this.flash("Nothing to redo"); }
+  historyView(){ const now=Date.now(); const hist=this.hist||[]; const pos=(this.histPos==null?-1:this.histPos); const rel=(t)=>{ const d=Math.round((now-t)/1000); return d<3?"just now":d<60?d+"s ago":Math.round(d/60)+"m ago"; }; const mk=(o)=>{ const isCur=o.isCur, isFuture=o.isFuture; return { i:o.i, label:o.label, dot:o.dot, time:o.time, tag:isCur?"NOW":o.time, restore:()=>this.restoreTo(o.i), rowStyle:`display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; cursor:pointer; ${isCur?"background:#12262a; border:1px solid #2f6d70;":"border:1px solid transparent;"} ${isFuture?"opacity:.4;":""}`, dotStyle:`width:8px; height:8px; border-radius:50%; flex:none; background:${o.dot}; box-shadow:0 0 6px ${o.dot}66;`, labelStyle:`flex:1; min-width:0; font:600 12px/1.3 'Hanken Grotesk',sans-serif; color:${isCur?"#eaf6f7":"#d8d8dc"};`, tagStyle:`font:700 9px/1 'JetBrains Mono',monospace; white-space:nowrap; letter-spacing:.06em; color:${isCur?"#35c9d6":"#6e6e78"};` }; }; const out=[]; for(let i=hist.length-1;i>=0;i--){ const h=hist[i]; out.push(mk({ i, label:h.label, dot:h.dot, time:rel(h.t), isCur:i===pos, isFuture:i>pos })); } out.push(mk({ i:-1, label:"Initial state", dot:"#56565e", time:"start", isCur:pos<0, isFuture:false })); return out; }
+  doSave(){ if(!this.state.dirty){ this.flash("Preset "+this.state.presetNum+" · already saved"); return; } this.setState({dirty:false}); this.pushHist("Preset saved · "+this.state.presetName,"#2fa15f"); this.flash("Preset "+this.state.presetNum+" saved"); }
+  doSync(){ if(this.state.connState==="disconnected"){ this.doReconnect(); return; } this.setState({connState:"syncing"}); this.flash("Syncing to cloud\u2026"); clearTimeout(this._sync); this._sync=setTimeout(()=>{ if(this._dead) return; this.setState({connState:"connected"}); this.flash("Cloud sync complete"); },1400); }
+  doReconnect(){ this.setState({connState:"syncing"}); this.flash("Reconnecting to AX-3\u2026"); clearTimeout(this._sync); this._sync=setTimeout(()=>{ if(this._dead) return; this.setState({connState:"connected"}); this.flash("Device connected"); },1400); }
+  askRecall(n){ this.setState({confirm:{kind:"recall", n}}); }
+  doRecall(n){ const p=this.PRESETS.find(x=>x.n===n)||{name:"?"}; this.setState({presetNum:n, presetName:p.name, dirty:false}); this.closePreset(); this.pushHist("Preset recalled · "+p.name,"#9a9aa3"); this.flash("Recalled preset "+n+" · "+p.name); }
+  confirmResolve(choice){ const c=this.state.confirm; this.setState({confirm:null}); if(!c) return; if(choice==="cancel") return; if(c.kind==="recall"){ if(choice==="save"){ this.setState({dirty:false}); this.pushHist("Preset saved · "+this.state.presetName,"#2fa15f"); } this.doRecall(c.n); } }
+  onKey(e){ const k=e.key; const meta=e.metaKey||e.ctrlKey; if(meta && (k==="s"||k==="S")){ e.preventDefault(); this.doSave(); return; } if(meta && (k==="z"||k==="Z")){ e.preventDefault(); if(e.shiftKey) this.redoAction(); else this.undoAction(); return; } if(meta && (k==="k"||k==="K")){ e.preventDefault(); this.openPalette(null); return; } if(this.state.palette){ if(k==="Escape"){ this.closePalette(); return; } if(k==="Enter"){ e.preventDefault(); const rows=this.paletteRows(); if(rows.length) this.paletteInsert(rows[Math.min(this.state.palette.sel||0,rows.length-1)]); return; } if(k==="ArrowDown"){ e.preventDefault(); const n=this.paletteRows().length; this.setState({palette:Object.assign({},this.state.palette,{sel:Math.min((this.state.palette.sel||0)+1,Math.max(0,n-1))})}); return; } if(k==="ArrowUp"){ e.preventDefault(); this.setState({palette:Object.assign({},this.state.palette,{sel:Math.max((this.state.palette.sel||0)-1,0)})}); return; } }
+    if(k==="Escape"){ if(this.state.renameState){ this.setState({renameState:null}); return; } if(this.state.confirm){ this.setState({confirm:null}); return; } if(this.state.ribMenu){ this.setState({ribMenu:null}); return; } if(this.state.ctx){ this.setState({ctx:null}); return; } if(this.state.libOpen){ this.setState({libOpen:false}); return; } if(this.state.presetFlyoutOpen||this.state.presetPageOpen){ this.closePreset(); return; } if(this.state.editMode){ this.exitEdit(); return; } } }
+  openPalette(target){ this.setState({palette:{query:"", sel:0, target:(target==null?null:target)}}); }
+  closePalette(){ if(this.state.palette) this.setState({palette:null}); }
+  setPaletteQuery(q){ this.setState({palette:Object.assign({},this.state.palette,{query:q, sel:0})}); }
+  firstEmptyCell(){ const total=this.COLS*this.ROWS; for(let i=0;i<total;i++){ if(!this.GP[i]) return i; } return null; }
+  paletteRows(){ const p=this.state.palette; if(!p) return []; const q=(p.query||"").trim().toLowerCase(); return this.BLOCKTYPES.filter(r=> !q || (r.name+" "+r.type).toLowerCase().indexOf(q)>=0 ); }
+  paletteInsert(row){ if(!row) return; const p=this.state.palette||{}; let idx=(p.target!=null)?p.target:this.firstEmptyCell(); if(idx==null){ this.flash("Grid is full \u2014 remove a block first",{kind:"warn"}); return; } this.GP[idx]={catId:row.catId, name:row.name, type:row.type, param:row.param||"Level", val:50, channel:"A"}; this.PARAM0[idx]=50; const params=Object.assign({},this.state.params,{[idx]:50}); this.setState({params, palette:null, selected:idx, editorOpen:true}); this.markDirty(); this.pushHist("Added "+row.name+" \u00b7 "+row.type,(this.CAT[row.catId]||{}).c||"#35c9d6"); this.flash(row.name+" \u00b7 "+row.type+" added"); }
+
+  // ---------- edit mode ----------
+  enterEdit(){ this.setState({editMode:true}); }
+  exitEdit(){ this.setState({editMode:false, libOpen:false, drag:null, ribMenu:null}); this.flash("Layout saved to \u201c"+this.profileName()+"\u201d profile"); }
+  openLib(){ this.setState({libOpen:true, ribMenu:null, libQuery:""}); }
+  closeLib(){ this.setState({libOpen:false}); }
+  toggleRibMenu(which,e){ let x=null,y=null; if(e&&e.currentTarget&&e.currentTarget.getBoundingClientRect){ const r=e.currentTarget.getBoundingClientRect(); x=r.right; y=r.bottom; } this.setState({ribMenu:this.state.ribMenu===which?null:which, ribX:(x!=null?x:this.state.ribX), ribY:(y!=null?y:this.state.ribY)}); }
+  closeRibMenu(){ if(this.state.ribMenu) this.setState({ribMenu:null}); }
+
+  profileName(p){ p=p||this.state.profile; return p==="desktop"?"Desktop":p==="tablet"?"Tablet":p==="mobile"?"Mobile":p; }
+  onProfile(e){ const p=e.currentTarget.dataset.p; const from=this.state.profile; if(p===from) return; this.setState({profile:p, mobDrawer:null, navDrawerOpen:false}); if(p!=="desktop"){ this.flash(this.profileName(p)+" profile", {action:{label:"Copy "+this.profileName(from)+" layout", fn:()=>this.copyLayoutFrom(from)}}); } else { this.flash("Desktop profile"); } }
+  copyLayoutFrom(src){ const from=this.state.layouts[src]; if(!from) return; const clone=JSON.parse(JSON.stringify(from)); this.setState({ layouts:Object.assign({},this.state.layouts,{[this.state.profile]:clone}) }); this.flash("Copied "+this.profileName(src)+" layout \u2192 "+this.profileName()+" \u00b7 widgets that don\u2019t fit are flagged in Customize"); }
+  onPreset(e){ const id=e.currentTarget.dataset.p; const L=this.L(); const next=this.preset(id); next.rightW=L.rightW; this.setState({ layouts:Object.assign({},this.state.layouts,{[this.state.profile]:next}), activePreset:id }); this.flash("Applied “"+id.charAt(0).toUpperCase()+id.slice(1)+"” layout"); }
+  saveLayout(){ this.flash("Saved \u201cMy Layout \u00b7 "+this.profileName()+"\u201d"); }
+  paneName(id,eName){ if(id==="grid") return "Signal Grid"; if(id==="editor") return eName||"Block"; if(id==="bemod") return "Modifier"; if(id==="fc") return "Signal Chain"; if(id==="history") return "History"; if(id==="presets") return "Presets"; if(id==="pbrowse") return "Preset Browser"; if(id==="psrc") return "Sources"; if(id==="plist") return "Preset List"; if(id==="pdet") return "Preset Info"; if(id==="fcbd") return "FC Board"; if(id==="fcin") return "Switch Inspector"; if(id==="fclay") return "FC Layouts"; if(id==="fcled") return "Switch LED / Label"; if(id==="fctap") return "Tap Action"; if(id==="fchold") return "Hold Action"; if(id&&id.indexOf("stub:")===0){ const m={ctrl:"Controllers",scn:"Scenes",live:"Live",setup:"Setup"}; return m[id.slice(5)]||"Panel"; } const cp=(this.state.customPanels||{})[id]; return (cp&&cp.name)||"Panel"; }
+  basePanels(){ return ["grid","editor","bemod","fc","history","presets","pbrowse","psrc","plist","pdet","fcbd","fcin","fclay","fcled","fctap","fchold"]; }
+  allPanels(){ return this.basePanels().concat(Object.keys(this.state.customPanels||{})).concat(Object.keys(this.state.stubs||{}).map(k=>"stub:"+k)); }
+  visOf(p){ const s=this.state; if(p==="grid") return true; if(p==="editor") return !!s.editorOpen; if(p==="bemod") return !!s.panelBeMod; if(p==="fc") return !!s.panelFc; if(p==="history") return !!s.panelHist; if(p==="presets") return !!s.panelPresets; if(p==="pbrowse") return !!s.panelPBrowse; if(p==="psrc") return !!s.panelPSrc; if(p==="plist") return !!s.panelPList; if(p==="pdet") return !!s.panelPDet; if(p==="fcbd") return !!s.panelFcBd; if(p==="fcin") return !!s.panelFcIn; if(p==="fclay") return !!s.panelFcLay; if(p==="fcled") return !!s.panelFcLed; if(p==="fctap") return !!s.panelFcTap; if(p==="fchold") return !!s.panelFcHold; if(p.indexOf("stub:")===0) return !!(s.stubs&&s.stubs[p.slice(5)]); return true; }
+  toggleStub(sec){ const s=this.state; const on=!!(s.stubs&&s.stubs[sec]); if(on){ this.closePanel("stub:"+sec); this.flash(this.paneName("stub:"+sec)+" closed"); return; } const st=Object.assign({},s.stubs); st[sec]=true; const dk=JSON.parse(JSON.stringify(s.dock)); dk.place=dk.place||{}; if(!dk.place["stub:"+sec]) dk.place["stub:"+sec]="main"; this.setState({stubs:st, dock:dk, section:sec}); this.flash(this.paneName("stub:"+sec)+" \u2192 "+(dk.place["stub:"+sec]||"main").toUpperCase()); }
+  toggleBrowser(){ const s=this.state; const open=s.panelPBrowse||s.panelPSrc||s.panelPList||s.panelPDet; if(open){ this.setState({panelPBrowse:false, panelPSrc:false, panelPList:false, panelPDet:false, section:(s.section==="sets"?"grid":s.section)}); this.flash("Preset Browser closed"); return; } const dk=JSON.parse(JSON.stringify(s.dock)); dk.place=Object.assign({},dk.place,{pbrowse:"main"}); this.setState({dock:dk, panelPBrowse:true, section:"sets"}); this.flash("Preset Browser \u2192 MAIN \u00b7 split into parts via Edit Layout \u2192 Panels"); }
+  addPanel(region){ const s=this.state; const seq=(s.cpseq||0)+1; const id="cp"+seq; const cp=Object.assign({},s.customPanels,{[id]:{name:"Panel "+seq}}); const dk=JSON.parse(JSON.stringify(s.dock)); dk.place=dk.place||{}; dk.place[id]=region||"right"; dk.collapsed=dk.collapsed||{}; dk.collapsed[region||"right"]=false; this.setState({customPanels:cp, cpseq:seq, dock:dk, editMode:true}); this.flash("New panel → "+(region||"right").toUpperCase()+" · drag widgets in"); }
+  renamePanel(id){ if(id&&id.indexOf("stub:")===0){ this.flash("Built-in panels can\u2019t be renamed"); return; } const cur=((this.state.customPanels||{})[id]||{}).name||"Panel"; this.setState({renameState:{id, value:cur}}); }
+  commitRename(){ const r=this.state.renameState; if(!r) return; const cur=((this.state.customPanels||{})[r.id]||{}).name||"Panel"; const name=(r.value||"").trim()||cur; const cp=Object.assign({},this.state.customPanels); cp[r.id]=Object.assign({},cp[r.id],{name}); this.setState({customPanels:cp, renameState:null}); this.flash("Renamed \u2192 "+name); }
+  cancelRename(){ if(this.state.renameState) this.setState({renameState:null}); }
+  deletePanel(id){ const s=this.state; const cp=Object.assign({},s.customPanels); delete cp[id]; const dk=JSON.parse(JSON.stringify(s.dock)); if(dk.place) delete dk.place[id]; const L=this.L(); const w=Object.assign({},L.widgets); Object.keys(w).forEach(k=>{ if(w[k].zone==="panel:"+id) w[k]=Object.assign({},w[k],{zone:"hidden",group:null}); }); const layouts=Object.assign({},s.layouts,{[s.profile]:Object.assign({},L,{widgets:w})}); this.setState({customPanels:cp, dock:dk, layouts}); this.flash("Panel removed — its widgets moved to the Library"); }
+  onToggle(e){ const t=e.currentTarget.dataset.t, v=e.currentTarget.dataset.v;
+    if(t==="dockGrid"){ this.setPaneRegion("grid",v); return; }
+    if(t==="dockEditor"){ if(!this.state.editorOpen) this.setState({selected:(this.state.selected==null?2:this.state.selected),editorOpen:true}); this.setPaneRegion("editor",v); return; }
+    const L=this.L(); this.setL(Object.assign({},L,{[t]:v})); }
+  setPaneRegion(p,r){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.place[p]=r; dk.collapsed[r]=false; this.setState({dock:dk}); }
+  startPaneDrag(p,e){ e.preventDefault(); e.stopPropagation(); const r=(this.state.dock.place&&this.state.dock.place[p])||"main"; this.setState({drag:{mode:"dock", pane:p, target:r, tab:false, px:e.clientX, py:e.clientY}}); }
+  startRegionResize(r,e){ e.preventDefault(); e.stopPropagation(); const dk=this.state.dock; const s0=(dk.size&&dk.size[r])||(r==="left"?340:r==="right"?380:r==="top"?220:300); this.setState({drag:{mode:"regionresize", r, s0, sx:e.clientX, sy:e.clientY}}); }
+  toggleRegionCollapse(r){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.collapsed[r]=!dk.collapsed[r]; this.setState({dock:dk}); }
+  togglePaneCollapse(id){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.paneCollapsed=dk.paneCollapsed||{}; dk.paneCollapsed[id]=!dk.paneCollapsed[id]; this.setState({dock:dk}); }
+  moveWidgetTo(id, zone){ const n=this.zoneItems(zone).length; const patch={zone, order:n}; if(zone==="float"){ patch.fx=48; patch.fy=48; } this.patchWidget(id, patch); this.setState({ctx:null}); this.flash("Moved \u2192 "+({tl:"Top left",tc:"Top center",tr:"Top right",rail:"Rail",bottom:"Bottom bar",gridbar:"Grid bar",float:"Floating"}[zone]||zone)); }
+  setWidgetSize(id, d){ this.patchWidget(id,{density:d}); this.setState({ctx:null}); this.flash("Size \u00b7 "+({default:"Default",compact:"Compact",mini:"Mini"}[d]||d)); }
+  openCtx(e,type,id,ids){ e.preventDefault(); e.stopPropagation(); this.setState({ctx:{type,id,ids:ids||null,x:e.clientX,y:e.clientY}, ribMenu:null}); }
+  closeCtx(){ if(this.state.ctx) this.setState({ctx:null}); }
+  savePanelToLib(id){ const L=this.L(); const items=this.zoneItems("panel:"+id).map(wid=>({ id:wid, density:(L.widgets[wid]||{}).density||"default", group:(L.widgets[wid]||{}).group||null })); const nm=((this.state.customPanels||{})[id]||{}).name||"Panel"; const sp=(this.state.savedPanels||[]).concat([{name:nm, items}]); this.setState({savedPanels:sp, ctx:null}); this.flash("Saved “"+nm+"” to Library"); }
+  loadSavedPanel(idx){ const sp=(this.state.savedPanels||[])[idx]; if(!sp) return; const seq=(this.state.cpseq||0)+1; const cid="cp"+seq; const cp=Object.assign({},this.state.customPanels,{[cid]:{name:sp.name}}); const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.place=dk.place||{}; dk.place[cid]="right"; dk.collapsed=dk.collapsed||{}; dk.collapsed.right=false; const L=this.L(); const w=Object.assign({},L.widgets); (sp.items||[]).forEach((it,i)=>{ w[it.id]=Object.assign({},w[it.id],{zone:"panel:"+cid, order:i, density:it.density||"default", group:it.group||null}); }); this.setState({customPanels:cp, cpseq:seq, dock:dk, layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}), libOpen:false}); this.flash("Loaded “"+sp.name+"” → RIGHT"); }
+  saveGroupToLib(groupId,ids){ const L=this.L(); const list=(ids||[]).map(wid=>({ id:wid, density:(L.widgets[wid]||{}).density||"default" })); const sg=(this.state.savedGroups||[]).concat([{name:"Group "+((this.state.savedGroups||[]).length+1), ids:list}]); this.setState({savedGroups:sg, ctx:null}); this.flash("Saved widget group to Library"); }
+  loadSavedGroup(idx){ const sg=(this.state.savedGroups||[])[idx]; if(!sg) return; const gid="g"+Date.now().toString(36); const L=this.L(); const w=Object.assign({},L.widgets); const n=this.zoneItems("tr").length; (sg.ids||[]).forEach((it,i)=>{ w[it.id]=Object.assign({},w[it.id],{zone:"tr", order:n+i, density:it.density||"default", group:gid}); }); this.setState({layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}), libOpen:false}); this.flash("Loaded “"+sg.name+"” → top bar"); }
+  deleteSaved(kind,idx){ if(kind==="panel"){ const sp=(this.state.savedPanels||[]).slice(); sp.splice(idx,1); this.setState({savedPanels:sp}); } else { const sg=(this.state.savedGroups||[]).slice(); sg.splice(idx,1); this.setState({savedGroups:sg}); } }
+  activateTab(id,slot){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.activePane=dk.activePane||{}; (slot||[id]).forEach(x=>{ delete dk.activePane[x]; }); dk.activePane[id]=true; this.setState({dock:dk}); }
+  effectiveCells(r){ const dk=this.state.dock||{}; const flat=[]; this.allPanels().forEach(p=>{ if(!this.visOf(p)) return; if(((dk.place&&dk.place[p])||"main")===r) flat.push(p); }); const stored=(dk.cells&&dk.cells[r])||null; if(!stored) return flat.map(id=>[id]); const seen={}, out=[]; stored.forEach(grp=>{ const g=(grp||[]).filter(id=> flat.indexOf(id)>=0 && !seen[id]); g.forEach(id=>seen[id]=1); if(g.length) out.push(g); }); flat.forEach(id=>{ if(!seen[id]){ out.push([id]); seen[id]=1; } }); return out; }
+  ungroupSlot(r,slot){ const dk=JSON.parse(JSON.stringify(this.state.dock)); const cells=this.effectiveCells(r); const out=[]; cells.forEach(g=>{ const same=(g.length===slot.length)&&g.every(x=>slot.indexOf(x)>=0); if(same){ g.forEach(x=>out.push([x])); } else out.push(g); }); dk.cells=dk.cells||{}; dk.cells[r]=out; this.setState({dock:dk}); this.flash("Split tabs apart"); }
+  toggleTabs(r){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.tab[r]=!dk.tab[r]; if(dk.tab[r]) dk.active[r]=dk.active[r]||"grid"; this.setState({dock:dk}); this.flash(dk.tab[r]?"Grouped as tabs":"Split apart"); }
+  toggleMainAxis(){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.mainAxis=(dk.mainAxis==="v"?"h":"v"); this.setState({dock:dk}); }
+  closePanel(id){ if(id&&id.indexOf("stub:")===0){ const k=id.slice(5); const st=Object.assign({},this.state.stubs); st[k]=false; const patch={stubs:st}; if(this.state.section===k) patch.section="grid"; this.setState(patch); return; } if(id==="editor"){ this.setState({editorOpen:false}); return; } if(id==="bemod"){ this.setState({panelBeMod:false}); return; } if(id==="fc"){ this.setState({panelFc:false}); return; } if(id==="history"){ this.setState({panelHist:false}); return; } if(id==="presets"){ this.setState({panelPresets:false}); return; } if(id==="pbrowse"){ this.setState({panelPBrowse:false, section:(this.state.section==="sets"?"grid":this.state.section)}); return; } if(id==="psrc"){ this.setState({panelPSrc:false}); return; } if(id==="plist"){ this.setState({panelPList:false}); return; } if(id==="pdet"){ this.setState({panelPDet:false}); return; } if(id==="fcbd"){ this.setState({panelFcBd:false}); return; } if(id==="fcin"){ this.setState({panelFcIn:false}); return; } if(id==="fclay"){ this.setState({panelFcLay:false}); return; } if(id==="fcled"){ this.setState({panelFcLed:false}); return; } if(id==="fctap"){ this.setState({panelFcTap:false}); return; } if(id==="fchold"){ this.setState({panelFcHold:false}); return; } this.deletePanel(id); }
+  openPanel(id,region){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.place=dk.place||{}; if(region){ dk.place[id]=region; dk.collapsed=dk.collapsed||{}; dk.collapsed[region]=false; } if(id&&id.indexOf("stub:")===0){ const st=Object.assign({},this.state.stubs); st[id.slice(5)]=true; if(!dk.place[id]) dk.place[id]="main"; this.setState({dock:dk, stubs:st, section:id.slice(5)}); this.flash(this.paneName(id)+" \u2192 "+((region||dk.place[id]||"main").toUpperCase())); return; } const key=id==="bemod"?"panelBeMod":id==="fc"?"panelFc":id==="history"?"panelHist":id==="psrc"?"panelPSrc":id==="plist"?"panelPList":id==="pdet"?"panelPDet":id==="fcbd"?"panelFcBd":id==="fcin"?"panelFcIn":id==="fclay"?"panelFcLay":id==="fcled"?"panelFcLed":id==="fctap"?"panelFcTap":id==="fchold"?"panelFcHold":id==="presets"?"panelPresets":null; const patch={dock:dk}; if(key) patch[key]=true; this.setState(patch); this.flash(this.paneName(id)+" \u2192 "+((region||(dk.place&&dk.place[id])||"main").toUpperCase())); }
+  togglePanel(id,region){ if(id&&id.indexOf("stub:")===0){ if(this.visOf(id)){ this.closePanel(id); this.flash(this.paneName(id)+" closed"); } else this.openPanel(id,region); return; } const key=id==="bemod"?"panelBeMod":id==="fc"?"panelFc":id==="history"?"panelHist":id==="psrc"?"panelPSrc":id==="plist"?"panelPList":id==="pdet"?"panelPDet":id==="fcbd"?"panelFcBd":id==="fcin"?"panelFcIn":id==="fclay"?"panelFcLay":id==="fcled"?"panelFcLed":id==="fctap"?"panelFcTap":id==="fchold"?"panelFcHold":"panelPresets"; if(this.state[key]){ this.closePanel(id); this.flash(this.paneName(id)+" closed"); } else this.openPanel(id,region); }
+  singlePage(){ const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.place=Object.assign({},dk.place,{grid:"main", psrc:"left", plist:"main", pdet:"right", history:"right", fc:"bottom"}); dk.collapsed={left:false,right:false,top:false,bottom:false};
+    const rc=this.contentEl?this.contentEl.getBoundingClientRect():{width:1440,height:640}; const cw=rc.width||1440, ch=rc.height||640;
+    dk.size=Object.assign({},dk.size,{ left:Math.round(this.clamp(cw*0.24,220,340)), right:Math.round(this.clamp(cw*0.26,240,380)), bottom:Math.round(this.clamp(ch*0.34,150,300)) });
+    this.setState({dock:dk, panelFc:true, panelHist:true, panelPSrc:true, panelPList:true, editorOpen:false, editMode:true, section:"grid"}); this.flash("Single-Page workspace \u00b7 Grid + Chain + Presets + History docked"); }
+
+  // ---------- widget ops ----------
+  toggleDensity(id){ const w=this.L().widgets[id]; const cur=w.density==="mini"?"mini":w.density==="compact"?"compact":"default"; const next=cur==="default"?"compact":cur==="compact"?"mini":"default"; this.patchWidget(id,{density:next}); this.flash("Widget size · "+next); }
+  hideWidget(id){ this.patchWidget(id,{zone:"hidden"}); }
+  addWidget(e){ if(this._libDragged){ this._libDragged=false; return; } const id=e.currentTarget.dataset.id; const n=this.zoneItems("tr").length; this.patchWidget(id,{zone:"tr",order:n,density:"expanded"}); const lbl=(this.WIDGETS[id]||{}).label||(this.state.pinned[id]?this.state.pinned[id].param:"Widget"); this.flash("Added "+lbl+" to top bar"); }
+  startLibDrag(e){ if(!this.state.editMode){ return; } const id=e.currentTarget.dataset.id; if(!id) return; this.libDrag={ id, sx:e.clientX, sy:e.clientY }; }
+  activateLibDrag(e){ const id=this.libDrag.id; this.libDrag=null; this._libDragged=true; const L=this.L(); const cr=this.contentEl?this.contentEl.getBoundingClientRect():{left:0,top:0}; const w=Object.assign({},L.widgets,{[id]:{zone:"float", fx:Math.max(6,e.clientX-cr.left-64), fy:Math.max(6,e.clientY-cr.top-19), order:0, density:"expanded"}}); this.setState({ editMode:true, libOpen:false, layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}), drag:{ id, mode:"widget", px:e.clientX, py:e.clientY, offx:64, offy:19, w:150, h:40, overZone:null, overIndex:0 } }); }
+
+  zoneItems(zone){ const L=this.L(); return Object.keys(L.widgets).filter(id=>L.widgets[id].zone===zone).sort((a,b)=>L.widgets[a].order-L.widgets[b].order); }
+  estW(id){ const k=id.indexOf("param:")===0?"param":id; const m={preset:250,scenes:240,view:170,add:132,tuner:78,tempo:82,cpu:124,save:98,search:168,history:44,map:98,undo:80,account:44,conn:124,param:128,gridmode:184,blocksize:132,fcdevice:150,fclayouts:210,fcswitch:220}; return m[k]||120; }
+
+  // ---------- drag ----------
+  startDrag(e, id){ if(!this.state.editMode) return; e.preventDefault(); e.stopPropagation(); this._gsnapGid=null;
+    const el=e.currentTarget.closest("[data-member]")||e.currentTarget.closest("[data-wid]"); const r=el?el.getBoundingClientRect():{left:e.clientX-40,top:e.clientY-20,width:120,height:40};
+    this.setState({ drag:{ id, px:e.clientX, py:e.clientY, offx:e.clientX-r.left, offy:e.clientY-r.top, w:r.width, h:r.height, overZone:null, overIndex:0, mode:"widget" } });
+  }
+  onMemberDown(e){ this.startDrag(e, e.currentTarget.dataset.member); }
+  onDragMove(e){
+    // library drag-out: activate a float+drag once the pointer moves past threshold
+    if(this.libDrag){ const dx=e.clientX-this.libDrag.sx, dy=e.clientY-this.libDrag.sy; if(Math.abs(dx)>5||Math.abs(dy)>5){ e.preventDefault(); this.activateLibDrag(e); } return; }
+    // nav reorder
+    if(this.navDrag){ e.preventDefault(); const strip=this.rootEl&&this.rootEl.querySelector("[data-navzone]"); if(strip){ const vert=strip.getAttribute("data-navvert")==="1"; const kids=Array.prototype.slice.call(strip.querySelectorAll("[data-nav]")).filter(k=>k.dataset.nav!=="__navgap"); let idx=kids.length; for(let i=0;i<kids.length;i++){ const r=kids[i].getBoundingClientRect(); const mid=vert?r.top+r.height/2:r.left+r.width/2; const pos=vert?e.clientY:e.clientX; if(pos<mid){ idx=i; break; } } this.navDrag.over=idx; this.navDrag.px=e.clientX; this.navDrag.py=e.clientY; if(this.state.navOver!==idx) this.setState({navOver:idx}); if(this.navGhostEl){ this.navGhostEl.style.left=(e.clientX-(this.navDrag.offx||26))+"px"; this.navGhostEl.style.top=(e.clientY-(this.navDrag.offy||25))+"px"; } } return; }
+    // grid quick-control swipe
+    if(this.gesture){ const g=this.gesture; const dx=e.clientX-g.sx, dy=e.clientY-g.sy;
+      if(!g.axis){ if(Math.abs(dx)>5||Math.abs(dy)>5){ g.axis=Math.abs(dy)>=Math.abs(dx)?"v":"h"; g.moved=true; } else return; }
+      e.preventDefault();
+      if(g.axis==="v"){ const val=this.clamp(g.startVal+(g.sy-e.clientY)*0.55,0,100); this.setState({ params:Object.assign({},this.state.params,{[g.idx]:val}), adjust:{idx:g.idx,val:Math.round(val),label:g.param} }); }
+      return;
+    }
+    const d=this.state.drag; if(!d) return; e.preventDefault();
+    if(d.mode==="rightresize"){ const w=Math.max(260,Math.min(560, this.rootRight()-e.clientX)); const L=this.L(); this.setL(Object.assign({},L,{rightW:w})); return; }
+    if(d.mode==="dockresize"){ const L=this.L(); const dx=e.clientX-d.sx, dy=e.clientY-d.sy;
+      if(d.which==="left") this.setL(Object.assign({},L,{leftW:this.clamp(d.sLeft+dx,300,560)}));
+      else if(d.which==="right") this.setL(Object.assign({},L,{rightW:this.clamp(d.sRight-dx,300,620)}));
+      else if(d.which==="drawer") this.setL(Object.assign({},L,{drawerH:this.clamp(d.sDraw-dy,200,640)}));
+      else if(d.which==="floatw") this.setState({floatW:this.clamp(d.sFW+dx,320,760)});
+      else if(d.which==="floath") this.setState({floatH:this.clamp(d.sFH+dy,240,700)});
+      else if(d.which==="floatwh") this.setState({floatW:this.clamp(d.sFW+dx,320,760), floatH:this.clamp(d.sFH+dy,240,700)});
+      return; }
+    if(d.mode==="dock"){ const rc=this.contentEl?this.contentEl.getBoundingClientRect():{left:0,top:0,width:1000,height:600};
+      const px=e.clientX-rc.left, py=e.clientY-rc.top, W2=rc.width, H2=rc.height;
+      let t="main"; if(px<W2*0.2) t="left"; else if(px>W2*0.8) t="right"; else if(py<H2*0.22) t="top"; else if(py>H2*0.78) t="bottom";
+      let tabTarget=null; const proot=this.rootEl; if(proot){ const pels=Array.prototype.slice.call(proot.querySelectorAll("[data-pane]")); for(const pe of pels){ if(pe.dataset.pane===d.pane) continue; const pr=pe.getBoundingClientRect(); if(e.clientX>=pr.left&&e.clientX<=pr.right&&e.clientY>=pr.top&&e.clientY<=pr.bottom){ const rg=(this.state.dock.place&&this.state.dock.place[pe.dataset.pane])||"main"; t=rg; if(e.clientY<=pr.top+pr.height*0.42) tabTarget=pe.dataset.pane; break; } } }
+      if(t!==d.target||tabTarget!==d.tabTarget||d.px!==e.clientX) this.setState({drag:Object.assign({},d,{target:t,tabTarget:tabTarget,px:e.clientX,py:e.clientY})}); return; }
+    if(d.mode==="regionresize"){ const rc=this.contentEl?this.contentEl.getBoundingClientRect():{width:1200,height:640}; const dk=JSON.parse(JSON.stringify(this.state.dock)); const r=d.r;
+      if(r==="left") dk.size.left=this.clamp(d.s0+(e.clientX-d.sx),220,Math.max(260,rc.width-420));
+      else if(r==="right") dk.size.right=this.clamp(d.s0-(e.clientX-d.sx),220,Math.max(280,rc.width-420));
+      else if(r==="top") dk.size.top=this.clamp(d.s0+(e.clientY-d.sy),120,Math.max(160,rc.height-220));
+      else if(r==="bottom") dk.size.bottom=this.clamp(d.s0-(e.clientY-d.sy),120,Math.max(180,rc.height-120));
+      this.setState({dock:dk}); return; }
+    if(d.mode==="cellresize"){ const delta=(d.axis==="v"?(e.clientY-d.sy):(e.clientX-d.sx))/Math.max(1,d.total); const base=d.base.slice(); let a=base[d.i]+delta, b=base[d.i+1]-delta; const min=0.12; if(a<min){ b-=(min-a); a=min; } if(b<min){ a-=(min-b); b=min; } base[d.i]=a; base[d.i+1]=b; const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.split=dk.split||{}; dk.split[d.r]=base; this.setState({dock:dk}); return; }
+    if(d.mode==="panel"){ const x=e.clientX,y=e.clientY; const vw=(typeof window!=="undefined"?window.innerWidth:1440), vh=(typeof window!=="undefined"?window.innerHeight:800);
+      let t;
+      if(d.panelKind==="grid"){ t="main"; if(x<66+150) t="left"; else if(x>vw-150) t="right"; else if(y<170) t="top"; else if(y>vh-190) t="drawer"; }
+      else { t="floating"; if(x<66+150) t="left"; else if(x>vw-150) t="right"; else if(y<170) t="top"; else if(y>vh-190) t="drawer"; }
+      if(t!==d.panelTarget||d.px!==x||d.py!==y) this.setState({drag:Object.assign({},d,{px:x,py:y,panelTarget:t})}); return; }
+    if(d.mode==="floateditor"){ this.setState({drag:Object.assign({},d,{ex:e.clientX-d.offx, ey:e.clientY-d.offy})}); return; }
+    // widget drag: hit test zones
+    const root=this.rootEl; if(!root) return;
+    const zones=Array.prototype.slice.call(root.querySelectorAll("[data-zone]"));
+    let over=null;
+    for(const z of zones){ const zn=z.dataset.zone; if(zn==="float") continue; const r=z.getBoundingClientRect(); if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){ over=z; } }
+    const selfUnitId = d.groupIds ? ("grp:"+d.groupId) : d.id;
+    let overZone=null, overIndex=0, overGroup=null, overGroupIndex=-1;
+    if(over){ overZone=over.dataset.zone; const vert=(overZone==="rail"||overZone==="right"); const kids=Array.prototype.slice.call(over.querySelectorAll(":scope > [data-wid]")).filter(k=>k.dataset.wid!==selfUnitId);
+      overIndex=kids.length;
+      for(let i=0;i<kids.length;i++){ const kr=kids[i].getBoundingClientRect(); const mid=vert?(kr.top+kr.height/2):(kr.left+kr.width/2); const pos=vert?e.clientY:e.clientX; if(pos<mid){ overIndex=i; break; } }
+    } else { overZone="float"; }
+    // group hover: positional insert inside a group module (index from a stable snapshot so the reflowing placeholder can't cause jitter)
+    const groups=Array.prototype.slice.call(root.querySelectorAll("[data-groupzone]"));
+    let hitGid=null, hitEl=null;
+    for(const gEl of groups){ const gid=gEl.dataset.groupzone; if(d.groupIds && d.groupId===gid) continue;
+      const gr=gEl.getBoundingClientRect(); if(e.clientX>=gr.left-8&&e.clientX<=gr.right+8&&e.clientY>=gr.top-4&&e.clientY<=gr.bottom+4){ hitGid=gid; hitEl=gEl; break; } }
+    if(hitGid){
+      if(this._gsnapGid!==hitGid){ this._gsnapGid=hitGid; this._gsnap=Array.prototype.slice.call(hitEl.querySelectorAll(":scope > [data-member]")).filter(m=>m.dataset.member!==d.id).map(m=>{ const r=m.getBoundingClientRect(); return r.left+r.width/2; }); }
+      const xs=this._gsnap||[]; let gi=xs.length; for(let i=0;i<xs.length;i++){ if(e.clientX<xs[i]){ gi=i; break; } }
+      overGroup=hitGid; overGroupIndex=gi;
+    } else { this._gsnapGid=null; }
+    // single-unit center hover -> offer to create a group (global scan so it works in every zone)
+    let overUnit=null;
+    if(!overGroup){ const singles=Array.prototype.slice.call(root.querySelectorAll("[data-zone] > [data-wid]")).filter(k=>k.dataset.wid!==selfUnitId && k.dataset.wid.indexOf("grp:")!==0 && k.dataset.wid!=="__gap");
+      for(const k of singles){ const kr=k.getBoundingClientRect(); if(e.clientX>=kr.left+kr.width*0.36&&e.clientX<=kr.right-kr.width*0.36&&e.clientY>=kr.top&&e.clientY<=kr.bottom){ overUnit=k.dataset.wid; break; } }
+    }
+    this.dragPX=e.clientX; this.dragPY=e.clientY;
+    if(this.ghostEl){ this.ghostEl.style.left=(e.clientX-d.offx)+"px"; this.ghostEl.style.top=(e.clientY-d.offy)+"px"; }
+    if(overZone!==d.overZone || overIndex!==d.overIndex || overGroup!==d.overGroup || overGroupIndex!==d.overGroupIndex || overUnit!==d.overUnit){
+      this.setState({ drag:Object.assign({},d,{ px:e.clientX, py:e.clientY, overZone, overIndex, overGroup, overGroupIndex, overUnit }) });
+    } else { d.px=e.clientX; d.py=e.clientY; }
+  }
+  onDragUp(e){
+    if(this.libDrag){ this.libDrag=null; }
+    // nav reorder release
+    if(this.navDrag){ const nd=this.navDrag; this.navDrag=null; if(nd.over!=null){ const order=this.state.navOrder.filter(x=>x!==nd.id); order.splice(Math.min(nd.over,order.length),0,nd.id); this.setState({navOrder:order, navDragId:null, navOver:null}); } else this.setState({navDragId:null, navOver:null}); return; }
+    // grid quick-control release
+    if(this.gesture){ const g=this.gesture; this.gesture=null; this.setState({adjust:null}); if(!g.moved){ this.setState({selected:g.idx, editorOpen:true}); } else { const v=Math.round(this.state.params[g.idx]!=null?this.state.params[g.idx]:g.startVal); this.markDirty(); this.pushHist((g.param||"Param")+" \u2192 "+v,"#35c9d6"); } return; }
+    const d=this.state.drag; if(!d){ return; }
+    if(d.mode==="rightresize"||d.mode==="dockresize"||d.mode==="cellresize"){ this.setState({drag:null}); return; }
+    if(d.mode==="dock"){ const p=d.pane; const t=d.target||((this.state.dock.place&&this.state.dock.place[p])||"main"); const other=(p==="grid")?"editor":"grid";
+      const dk=JSON.parse(JSON.stringify(this.state.dock)); const from=(dk.place&&dk.place[p])||"main"; dk.place[p]=t; dk.collapsed=dk.collapsed||{}; dk.collapsed[t]=false; dk.cells=dk.cells||{}; const effT=this.effectiveCells(t).map(g=>g.filter(x=>x!==p)).filter(g=>g.length); const effFrom=(from!==t)?this.effectiveCells(from).map(g=>g.filter(x=>x!==p)).filter(g=>g.length):null; if(d.tabTarget){ let placed=false; effT.forEach(g=>{ if(!placed && g.indexOf(d.tabTarget)>=0){ g.push(p); placed=true; } }); if(!placed) effT.push([d.tabTarget,p]); dk.activePane=dk.activePane||{}; dk.activePane[p]=true; } else { effT.push([p]); } dk.cells[t]=effT; if(effFrom) dk.cells[from]=effFrom; this.setState({dock:dk, drag:null}); this.flash("Docked "+this.paneName(p)+" \u2192 "+t.toUpperCase()); return; }
+    if(d.mode==="regionresize"){ this.setState({drag:null}); return; }
+    if(d.mode==="panel"){ this.setState({drag:null}); return; }  /* legacy grid/editor panel-drag retired: grid & editor dock only via the region engine (mode==='dock'), so dock.place is the single source of truth */
+    if(d.mode==="floateditor"){ if(d.ex!=null){ this.setState({floatEX:d.ex,floatEY:d.ey}); } this.setState({drag:null}); return; }
+    const L=this.L(); const draggedIds=d.groupIds?d.groupIds.slice():[d.id];
+    if(d.overGroup!=null){
+      // insert into a group at a specific position
+      const gid=d.overGroup; const w=Object.assign({}, L.widgets);
+      const existing=Object.keys(w).filter(x=>w[x].group===gid && draggedIds.indexOf(x)<0);
+      if(existing.length){
+        const zone=w[existing[0]].zone;
+        let mem=existing.sort((a,b)=>(w[a].order||0)-(w[b].order||0));
+        let gi=Math.max(0,Math.min(d.overGroupIndex,mem.length));
+        mem.splice(gi,0,...draggedIds);
+        mem.forEach(x=>{ w[x]=Object.assign({},w[x],{group:gid,zone,density:"expanded"}); });
+        // reorder whole zone, keeping group block where it currently sits
+        let zoneIds=Object.keys(w).filter(x=>w[x].zone===zone).sort((a,b)=>(w[a].order||0)-(w[b].order||0)).filter(x=>draggedIds.indexOf(x)<0);
+        let anchor=zoneIds.length; zoneIds.forEach((x,i)=>{ if(w[x].group===gid && i<anchor) anchor=i; });
+        zoneIds=zoneIds.filter(x=>w[x].group!==gid);
+        zoneIds.splice(Math.min(anchor,zoneIds.length),0,...mem);
+        zoneIds.forEach((x,i)=>{ w[x]=Object.assign({},w[x],{order:i}); });
+        this.setL(Object.assign({},L,{widgets:w})); this.setState({drag:null}); this.flash("Placed in group"); return;
+      }
+    }
+    if(d.overUnit!=null && d.overUnit!==d.id){
+      // create a new group from a single target + dragged widget(s)
+      const w=Object.assign({}, L.widgets); const gid="g"+Math.random().toString(36).slice(2,7);
+      const zone=w[d.overUnit].zone; const mem=[d.overUnit].concat(draggedIds);
+      mem.forEach(x=>{ w[x]=Object.assign({},w[x],{group:gid,zone,density:"expanded"}); });
+      let zoneIds=Object.keys(w).filter(x=>w[x].zone===zone).sort((a,b)=>(w[a].order||0)-(w[b].order||0)).filter(x=>draggedIds.indexOf(x)<0);
+      let anchor=zoneIds.indexOf(d.overUnit); zoneIds=zoneIds.filter(x=>mem.indexOf(x)<0);
+      zoneIds.splice(anchor<0?zoneIds.length:anchor,0,...mem);
+      zoneIds.forEach((x,i)=>{ w[x]=Object.assign({},w[x],{order:i}); });
+      this.setL(Object.assign({},L,{widgets:w})); this.setState({drag:null}); this.flash("Grouped — now they move together"); return;
+    }
+    if(d.overZone==="float"){
+      const cr=this.contentEl?this.contentEl.getBoundingClientRect():{left:0,top:0,width:1000,height:600};
+      const px=(this.dragPX!=null?this.dragPX:d.px), py=(this.dragPY!=null?this.dragPY:d.py);
+      // edge-drop: dropping a widget/param on an empty region edge auto-creates a Custom Panel there and drops it in
+      const rx=px-cr.left, ry=py-cr.top, W2=cr.width||1000, H2=cr.height||600;
+      let region=null;
+      if(rx<W2*0.18) region="left"; else if(rx>W2*0.82) region="right"; else if(ry<H2*0.15) region="top"; else if(ry>H2*0.85) region="bottom";
+      if(region){
+        const seq=(this.state.cpseq||0)+1; const cid="cp"+seq;
+        const cp=Object.assign({},this.state.customPanels,{[cid]:{name:"Panel "+seq}});
+        const dk=JSON.parse(JSON.stringify(this.state.dock)); dk.place=dk.place||{}; dk.place[cid]=region; dk.collapsed=dk.collapsed||{}; dk.collapsed[region]=false;
+        const w=Object.assign({}, L.widgets);
+        draggedIds.forEach((x,i)=>{ w[x]=Object.assign({},w[x],{zone:"panel:"+cid, order:i, group:null}); });
+        this.setState({customPanels:cp, cpseq:seq, dock:dk, layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}), drag:null});
+        this.flash("New "+region.toUpperCase()+" panel · dropped in");
+        return;
+      }
+      const bx=Math.max(6, px-d.offx-cr.left), by=Math.max(6, py-d.offy-cr.top);
+      const w=Object.assign({}, L.widgets);
+      draggedIds.forEach((x,i)=>{ w[x]=Object.assign({},w[x],{zone:"float", fx:bx+i*10, fy:by+i*46, order:0, group:null}); });
+      this.setL(Object.assign({},L,{widgets:w}));
+    } else if(d.overZone){
+      const vertZone=(d.overZone==="rail");
+      let shrink=null;
+      if(d.overZone==="right"){ const need=draggedIds.reduce((sum,x)=>sum+this.estW(x),0); const avail=L.rightW-24; if(need>avail){ shrink = need>avail*1.7 ? "mini" : "compact"; this.flash("Auto-shrank to "+(shrink==="mini"?"Mini":"Compact")+" to fit the dock"); } }
+      const others=this.zoneItems(d.overZone).filter(x=>draggedIds.indexOf(x)<0);
+      let gi=d.overIndex; if(gi>others.length) gi=others.length;
+      others.splice(gi,0,...draggedIds);
+      const w=Object.assign({}, L.widgets);
+      others.forEach((x,i)=>{ w[x]=Object.assign({},w[x],{zone:d.overZone,order:i}); });
+      if(shrink){ draggedIds.forEach(x=>{ w[x]=Object.assign({},w[x],{density:shrink}); }); }
+      else if(!d.groupIds){ const def=vertZone?"compact":(w[d.id].density||"expanded"); w[d.id]=Object.assign({},w[d.id],{density:def}); }
+      this.setL(Object.assign({},L,{widgets:w}));
+    }
+    this.setState({drag:null});
+  }
+  startDragGroup(e, group, ids){ if(!this.state.editMode) return; e.preventDefault(); e.stopPropagation();
+    const el=e.currentTarget.closest("[data-wid]"); const r=el?el.getBoundingClientRect():{left:e.clientX-60,top:e.clientY-19,width:160,height:38};
+    this.setState({ drag:{ mode:"widget", groupId:group, groupIds:ids.slice(), id:ids[0], px:e.clientX, py:e.clientY, offx:e.clientX-r.left, offy:e.clientY-r.top, w:r.width, h:r.height, overZone:null, overIndex:0, overUnit:null } });
+  }
+  ungroup(group){ const L=this.L(); const w=Object.assign({},L.widgets); Object.keys(w).forEach(id=>{ if(w[id].group===group) w[id]=Object.assign({},w[id],{group:null}); }); this.setL(Object.assign({},L,{widgets:w})); this.flash("Ungrouped"); }
+  hideGroup(ids){ const L=this.L(); const w=Object.assign({},L.widgets); ids.forEach(id=>{ w[id]=Object.assign({},w[id],{zone:"hidden",group:null}); }); this.setL(Object.assign({},L,{widgets:w})); }
+  startRightResize(e){ e.preventDefault(); this.setState({drag:{mode:"rightresize"}}); }
+  startPanelDrag(e){ e.preventDefault(); e.stopPropagation(); this.setState({drag:{mode:"panel", panelKind:"editor", px:e.clientX, py:e.clientY, panelTarget:this.L().editorMode}}); }
+  startGridDrag(e){ e.preventDefault(); e.stopPropagation(); this.setState({drag:{mode:"panel", panelKind:"grid", px:e.clientX, py:e.clientY, panelTarget:this.state.gridDock}}); }
+  startDockResize(e){ e.preventDefault(); e.stopPropagation(); const which=e.currentTarget.dataset.rz; const L=this.L(), s=this.state;
+    this.setState({drag:{mode:"dockresize", which, sx:e.clientX, sy:e.clientY, sLeft:L.leftW||300, sRight:L.rightW||340, sDraw:L.drawerH||340, sFW:s.floatW||440, sFH:s.floatH||360}}); }
+  startFloatEditorDrag(e){ this.startPanelDrag(e); }
+  rootRight(){ return this.state.vw; }
+
+  // ---------- content interactions ----------
+  onNav(e){ const sec=e.currentTarget.dataset.sec; const close=this.state.navDrawerOpen?{navDrawerOpen:false}:{};
+    if(sec==="fc"){ this.setState(close); this.togglePanel("fc","bottom"); return; }
+    if(sec==="sets"){ this.setState(close); this.toggleBrowser(); return; }
+    if(sec==="ctrl"||sec==="scn"||sec==="live"||sec==="setup"){ this.setState(close); this.toggleStub(sec); return; }
+    this.setState(Object.assign({section:sec, presetPageOpen:false}, close)); }
+  onBlock(e){ const idx=+e.currentTarget.dataset.idx; this.setState({selected:idx, editorOpen:true}); }
+  onGridDown(e){ if(e.button===2) return; const idx=+e.currentTarget.dataset.idx; if(!this.GP[idx]) return;
+    if(this.state.editMode){ this.setState({selected:idx, editorOpen:true}); return; }
+    e.preventDefault(); this.gesture={ idx, sx:e.clientX, sy:e.clientY, startVal:(this.state.params[idx]!=null?this.state.params[idx]:50), moved:false, axis:null, param:this.GP[idx].param };
+  }
+  onGridDbl(e){ const idx=+e.currentTarget.dataset.idx; if(this.GP[idx]) this.setState({ params:Object.assign({},this.state.params,{[idx]:this.PARAM0[idx]}), adjust:null }); }
+  toggleBlock(e){ e.stopPropagation(); const idx=+e.currentTarget.dataset.idx; const b=Object.assign({},this.state.bypassed); b[idx]=!b[idx]; this.setState({bypassed:b}); this.markDirty(); this.pushHist((this.GP[idx]?this.GP[idx].name:"Block")+(b[idx]?" bypassed":" engaged"),"#7d7d87"); }
+  sizeLess(){ this.setState({blockSize:this.clamp(this.state.blockSize+1,0,2)}); }
+  sizeMore(){ this.setState({blockSize:this.clamp(this.state.blockSize-1,0,2)}); }
+  setGridMode(e){ this.setState({gridMode:e.currentTarget.dataset.m}); }
+  stopProp(e){ e.stopPropagation(); }
+  startNavDrag(e,id){ if(!this.state.editMode) return; e.preventDefault(); e.stopPropagation(); const el=e.currentTarget.closest("[data-nav]"); const r=el?el.getBoundingClientRect():null; this.navDrag={id, over:null, offx:r?e.clientX-r.left:26, offy:r?e.clientY-r.top:25, px:e.clientX, py:e.clientY}; this.setState({navDragId:id, navOver:null}); }
+  hideNav(id){ this.setState({navHidden:Object.assign({},this.state.navHidden,{[id]:true})}); this.flash("Hid “"+(this.NAV.find(n=>n.id===id)||{}).label+"” — restore from Widgets"); }
+  showNav(e){ const id=e.currentTarget.dataset.id; const h=Object.assign({},this.state.navHidden); delete h[id]; this.setState({navHidden:h}); }
+  pinParam(p){ const id="param:"+p.block+":"+p.param; const L=this.L(); if(L.widgets[id]){ this.flash(p.param+" is already pinned"); return; }
+    let idx=null; Object.keys(this.GP).forEach(i=>{ if(this.GP[i].name===p.block) idx=+i; });
+    const rec=Object.assign({}, p, {idx});
+    const n=this.zoneItems("tr").length; const w=Object.assign({},L.widgets,{[id]:{zone:"tr",order:n,density:"expanded"}});
+    this.setState({ layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}), pinned:Object.assign({},this.state.pinned,{[id]:rec}) });
+    this.flash("Pinned “"+p.block+" · "+p.param+"” — drag it anywhere");
+  }
+  onParamGrab(p, e){ e.preventDefault();
+    const id="param:"+p.block+":"+p.param; let idx=null; Object.keys(this.GP).forEach(i=>{ if(this.GP[i].name===p.block) idx=+i; });
+    const L=this.L(); const cr=this.contentEl?this.contentEl.getBoundingClientRect():{left:0,top:0};
+    const exists=!!L.widgets[id];
+    const w=Object.assign({},L.widgets,{[id]:{zone:"float", fx:Math.max(6,e.clientX-cr.left-64), fy:Math.max(6,e.clientY-cr.top-19), order:0, density:"expanded"}});
+    this._gsnapGid=null;
+    this.setState({ editMode:true, pinned:Object.assign({},this.state.pinned,{[id]:Object.assign({},p,{idx})}),
+      layouts:Object.assign({},this.state.layouts,{[this.state.profile]:Object.assign({},L,{widgets:w})}),
+      drag:{ id, mode:"widget", px:e.clientX, py:e.clientY, offx:64, offy:19, w:132, h:38, overZone:null, overIndex:0 } });
+    if(!exists) this.flash("Drag “"+p.block+" · "+p.param+"” onto your layout");
+  }
+  closeEditor(){ this.setState({editorOpen:false, selected:null, editorCollapsed:false}); }
+  toggleCollapse(){ this.setState({editorCollapsed:!this.state.editorCollapsed}); }
+  toggleDock(e){ const w=e.currentTarget.dataset.dock; const key=w==="left"?"dockColLeft":"dockColRight"; this.setState({[key]:!this.state[key]}); }
+  openPresetBrowser(){ const L=this.L(); if(L.presetMode==="page"){ this.setState({presetPageOpen:true}); } else { this.setState({presetFlyoutOpen:true}); } }
+  closePreset(){ this.setState({presetFlyoutOpen:false, presetPageOpen:false}); }
+  pickPreset(e){ const n=+e.currentTarget.dataset.n; if(this.state.dirty){ this.closePreset(); this.askRecall(n); return; } this.doRecall(n); }
+  openHist(){ this.setState({histOpen:true}); }
+  closeHist(){ this.setState({histOpen:false}); }
+
+  bus(){
+    const s=this.state;
+    return {
+      presetPrev:()=>{ this.flash("Previous preset"); }, presetNext:()=>{ this.flash("Next preset"); },
+      presetPick:()=>this.openPresetBrowser(),
+      onScene:(n)=>{ this.setState({scene:n}); this.markDirty(); this.pushHist("Scene \u2192 "+n,"#f5a623"); },
+      setView:(v)=>this.setState({view:v}),
+      addBlock:()=>this.openPalette(null), tuner:()=>this.flash("Tuner armed"),
+      tempo:()=>{ this.setState({bpm:this.state.bpm+1}); this.markDirty(); }, save:()=>this.doSave(),
+      search:()=>this.openPanel("plist","main"), history:()=>this.openPanel("history","right"),
+      setFcDevice:(id)=>{ const b=(typeof window!=="undefined")&&window.__FCBus; if(b){ if(b.state) b.state.fcDevice=id; const first=[...b.instances][0]; if(first){ first.setState({fcDevice:id, fcSwitch:0}); } } this.flash("FC device · "+id); this.forceUpdate(); },
+      setFcLayout:(i)=>{ const b=(typeof window!=="undefined")&&window.__FCBus; if(b){ if(b.state) b.state.fcLayout=i; const first=[...b.instances][0]; if(first){ first.setState({fcLayout:i, fcView:0, fcSwitch:0}); } } this.flash("FC layout · "+(i===8?"Master":(i+1))); this.forceUpdate(); },
+      setFcSwitch:(i)=>{ const b=(typeof window!=="undefined")&&window.__FCBus; const n=Math.max(0,i); if(b){ if(b.state) b.state.fcSwitch=n; const first=[...b.instances][0]; if(first){ first.setState({fcSwitch:n}); } } this.forceUpdate(); },
+      setFcView:(i)=>{ const b=(typeof window!=="undefined")&&window.__FCBus; if(b){ if(b.state) b.state.fcView=i; const first=[...b.instances][0]; if(first){ first.setState({fcView:i, fcSwitch:0}); } } this.forceUpdate(); },
+      map:()=>this.flash("Grid map"), undo:()=>this.undoAction(), redo:()=>this.redoAction(),
+      account:()=>this.doSync(), reconnect:()=>this.doReconnect(),
+      setGridMode:(m)=>this.setState({gridMode:m}), sizeLess:()=>this.sizeLess(), sizeMore:()=>this.sizeMore()
+    };
+  }
+
+  // ---------- editor panel (shared) as React element ----------
+  editorEl(){
+    const s=this.state; const idx=s.selected==null?2:s.selected;
+    const flat=[]; this.BLOCKS.forEach(r=>r.forEach(b=>flat.push(b)));
+    const b=flat[idx]||flat[2]; const cat=this.CAT[b.catId];
+    const h=React.createElement;
+    const knob=(kb)=>{
+      const dash=(kb.v/100)*283*(270/360); const rem=283-dash;
+      return h("div",{key:kb.k,style:{display:"flex",flexDirection:"column",alignItems:"center",gap:6}},
+        h("div",{style:{position:"relative",width:52,height:52}},
+          h("svg",{width:52,height:52,viewBox:"0 0 64 64"},
+            h("circle",{cx:32,cy:32,r:24,fill:"none",stroke:"#2a2a31",strokeWidth:5,strokeLinecap:"round",strokeDasharray:"113.1 300",transform:"rotate(135 32 32)"}),
+            h("circle",{cx:32,cy:32,r:24,fill:"none",stroke:"#35c9d6",strokeWidth:5,strokeLinecap:"round",strokeDasharray:(113.1*kb.v/100)+" 300",transform:"rotate(135 32 32)"})
+          ),
+          h("span",{style:{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",font:"700 13px/1 'JetBrains Mono',monospace",color:"#e9e9ee"}},kb.v)
+        ),
+        h("span",{style:{font:"600 10px/1 'Hanken Grotesk',sans-serif",color:"#9a9aa3"}},kb.k)
+      );
+    };
+    return h("div",{style:{display:"flex",flexDirection:"column",height:"100%",minHeight:0}},
+      h("div",{style:{display:"flex",alignItems:"center",gap:11,padding:"12px 16px",borderBottom:"1px solid #1c1c21",flex:"none"}},
+        h("div",{style:{width:40,height:40,borderRadius:10,background:cat.c+"22",border:"1px solid "+cat.c+"55",display:"flex",alignItems:"center",justifyContent:"center",color:cat.c,fontSize:18}},cat.g),
+        h("div",{style:{minWidth:0}},
+          h("div",{style:{font:"700 15px/1 'Hanken Grotesk',sans-serif",color:"#fff"}},b.name),
+          h("div",{style:{font:"500 11px/1.3 'JetBrains Mono',monospace",color:"#f5a623",marginTop:4}},b.type)
+        ),
+        h("div",{style:{flex:1}}),
+        h("div",{style:{display:"flex",gap:3,background:"#0e0e10",border:"1px solid #26262c",borderRadius:9,padding:3}},
+          ["A","B","C","D"].map((ch,i)=>h("div",{key:ch,style:{width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,font:"700 11px/1 'JetBrains Mono',monospace",background:i===0?"#35c9d6":"transparent",color:i===0?"#06181a":"#6e6e78",cursor:"pointer"}},ch))
+        ),
+        h("div",{onClick:()=>this.closeEditor(),style:{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:"#1c1c21",border:"1px solid #2a2a31",borderRadius:9,color:"#9a9aa3",cursor:"pointer",fontSize:16}},"×")
+      ),
+      h("div",{style:{flex:1,minHeight:0,overflowY:"auto",padding:"18px 16px"},className:"lz-scroll"},
+        h("div",{style:{display:"flex",flexWrap:"wrap",gap:18,justifyContent:"flex-start"}},this.KNOBS.map(knob))
+      ),
+      h("div",{style:{display:"flex",gap:8,padding:"12px 16px",borderTop:"1px solid #1c1c21",flex:"none",flexWrap:"wrap"}},
+        h("div",{style:{padding:"10px 16px",borderRadius:9,background:"#1c1c21",color:"#cfcfd6",font:"600 12px/1 'Hanken Grotesk',sans-serif",cursor:"pointer"}},"Mute"),
+        h("div",{style:{padding:"10px 16px",borderRadius:9,background:"#132a17",border:"1px solid #2c5a34",color:"#7fae4a",font:"700 12px/1 'Hanken Grotesk',sans-serif",cursor:"pointer"}},"Engaged"),
+        h("div",{style:{flex:1}}),
+        h("div",{style:{padding:"10px 16px",borderRadius:9,background:"#2a1414",border:"1px solid #5a2c2c",color:"#d6543f",font:"600 12px/1 'Hanken Grotesk',sans-serif",cursor:"pointer"}},"Remove")
+      )
+    );
+  }
+
+  startCellResize(r,i,axis,total,e){ e.preventDefault(); e.stopPropagation(); const dk=this.state.dock; const n=this.effectiveCells(r).length; let base=(dk.split&&dk.split[r]&&dk.split[r].length===n)?dk.split[r].slice():new Array(n).fill(1/n); const s=base.reduce((a,b)=>a+b,0)||1; base=base.map(x=>x/s); this.setState({ drag:{ mode:"cellresize", r, i, axis, total, sx:e.clientX, sy:e.clientY, base } }); }
+
+  computeDock(){
+    const s=this.state, d=s.dock||{place:{grid:"main"}};
+    const cw=this.contentEl?this.contentEl.clientWidth:0, ch=this.contentEl?this.contentEl.clientHeight:0;
+    const W=cw>0?cw:(s.contentW||Math.max(640,(s.vw||1280)-70)); const H=ch>0?ch:(s.contentH||600);
+    const cpids=Object.keys(s.customPanels||{});
+    const vis=(p)=>this.visOf(p);
+    const panels=this.allPanels(); const occ={left:[],right:[],top:[],bottom:[],main:[]};
+    panels.forEach(p=>{ if(vis(p)){ const r=(d.place&&d.place[p])||"main"; (occ[r]||occ.main).push(p); } });
+    const has=(r)=>occ[r].length>0; const strip=26; const dsz=d.size||{}, dc=d.collapsed||{}, dtab=d.tab||{};
+    // ---- mobile: left/right/top become overlay drawers (edge-indicator access), not inline docks. Bottom stays inline (main control point). ----
+    const isMobile=s.profile==="mobile"; const mobD=s.mobDrawer||null;
+    const ovL=isMobile&&has("left"), ovR=isMobile&&has("right"), ovT=isMobile&&has("top");
+    let Lw= has("left")?(dc.left?strip:Math.min(dsz.left||340,Math.max(200,Math.round(W*0.34)))):0, Rw= has("right")?(dc.right?strip:Math.min(dsz.right||380,Math.max(220,Math.round(W*0.36)))):0;
+    const MINC=180; if(Lw+Rw>W-MINC){ const avail=Math.max(0,W-MINC), tot=Lw+Rw||1; Lw=Math.floor(avail*Lw/tot); Rw=Math.floor(avail*Rw/tot); }
+    // bottom cap: allow a much taller drawer (mobile especially) so you can keep a small grid and see all controls
+    let Th= has("top")?(dc.top?strip:Math.min(dsz.top||220,Math.max(110,Math.round(H*0.36)))):0, Bh= has("bottom")?(dc.bottom?strip:Math.min(dsz.bottom||300,Math.max(120,Math.round(H*(isMobile?0.9:0.78))))):0;
+    // overlay regions contribute 0 to inline layout so the grid keeps full width/height
+    const ThLpre=ovT?0:Th;
+    const MINR=120; if(ThLpre+Bh>H-MINR){ const av=Math.max(0,H-MINR), tv=ThLpre+Bh||1; if(!ovT) Th=Math.floor(av*ThLpre/tv); Bh=Math.floor(av*Bh/tv); }
+    const LwL=ovL?0:Lw, RwL=ovR?0:Rw, ThL=ovT?0:Th;
+    const midW=Math.max(160, W-LwL-RwL);
+    // overlay drawer geometry (slid off-canvas when their drawer isn't the open one)
+    const OWL=Math.min(dsz.left||320,Math.round(W*0.88)), OWR=Math.min(dsz.right||340,Math.round(W*0.88)), OHT=Math.min(dsz.top||260,Math.round(H*0.72));
+    const rects={
+      left:  ovL? {x:(mobD==="left"?0:-OWL-60), y:0, w:OWL, h:H} : {x:0,y:0,w:Lw,h:H},
+      right: ovR? {x:(mobD==="right"?W-OWR:W+60), y:0, w:OWR, h:H} : {x:W-Rw,y:0,w:Rw,h:H},
+      top:   ovT? {x:0, y:(mobD==="top"?0:-OHT-60), w:W, h:OHT} : {x:LwL,y:0,w:midW,h:ThL},
+      bottom:{x:LwL,y:H-Bh,w:midW,h:Bh},
+      main:  {x:LwL,y:ThL,w:midW,h:Math.max(90,H-ThL-Bh)} };
+    const overlayRegion={left:ovL,right:ovR,top:ovT};
+    const paneRect={}, paneTabs={}, paneShow={}, paneMini={}, paneRegion={}, cellResizers=[], cellsByRegion={}, regionLead={};
+    panels.forEach(p=>{ paneShow[p]=false; paneRegion[p]=(d.place&&d.place[p])||"main"; });
+    const paneCollapsedFlag={}; const pc=d.paneCollapsed||{}; const HH=36;
+    const buildCells=(r)=>{ const flat=occ[r]; const stored=(d.cells&&d.cells[r])||null; if(!stored) return flat.map(id=>[id]); const seen={}, out=[]; stored.forEach(grp=>{ const g=(grp||[]).filter(id=> flat.indexOf(id)>=0 && !seen[id]); g.forEach(id=>seen[id]=1); if(g.length) out.push(g); }); flat.forEach(id=>{ if(!seen[id]){ out.push([id]); seen[id]=1; } }); return out; };
+    Object.keys(occ).forEach(r=>{ const flat=occ[r]; if(!flat.length||dc[r]){ cellsByRegion[r]=[]; return; } const R=rects[r]; const edge=(r!=="main"); const slots=buildCells(r); cellsByRegion[r]=slots; const n=slots.length;
+      let axis; if(r==="left"||r==="right") axis="v"; else if(r==="top"||r==="bottom") axis="h"; else axis=(d.mainAxis||"h");
+      let ratios=(d.split&&d.split[r]&&d.split[r].length===n)?d.split[r].slice():slots.map(()=>1/n); const rsum=ratios.reduce((a,b)=>a+b,0)||1; ratios=ratios.map(x=>x/rsum);
+      let acc=0; const along=(axis==="v"?R.h:R.w); const isColl=(slot)=>{ const a=slot.find(id=>d.activePane&&d.activePane[id])||slot[0]; return !!pc[a]; };
+      let collCount=0, expRatio=0; slots.forEach((slot,i)=>{ if(isColl(slot)) collCount++; else expRatio+=ratios[i]; }); const remain=Math.max(0, along-collCount*HH);
+      slots.forEach((slot,i)=>{ const coll=isColl(slot); let seg; if(coll) seg=HH; else if(n===1) seg=along; else seg=(expRatio>0?remain*(ratios[i]/expRatio):remain/Math.max(1,n-collCount)); let rc; if(axis==="v"){ rc={x:R.x,y:R.y+acc,w:R.w,h:seg}; } else { rc={x:R.x+acc,y:R.y,w:seg,h:R.h}; } acc+=seg;
+        const active=slot.find(id=> d.activePane&&d.activePane[id])||slot[0];
+        if(i===0) regionLead[r]=active;
+        slot.forEach(p=>{ paneRect[p]=Object.assign({},rc); paneTabs[p]=slot.slice(); paneShow[p]=(p===active); paneMini[p]=edge; paneCollapsedFlag[p]=coll; });
+        if(n>1&&i<n-1){ const b=Math.round(acc); cellResizers.push({ onDown:((rr,ii,ax,tot)=>(e)=>this.startCellResize(rr,ii,ax,tot,e))(r,i,axis,(axis==="v"?R.h:R.w)), style: axis==="v" ? `position:absolute; left:${R.x}px; top:${R.y+b-6}px; width:${R.w}px; height:12px; cursor:ns-resize; z-index:15;` : `position:absolute; left:${R.x+b-6}px; top:${R.y}px; width:12px; height:${R.h}px; cursor:ew-resize; z-index:15;` }); }
+      });
+    });
+    const egb=this.GP[s.selected]||this.GP[3]||{name:"Block"}; const eName=(s.fcSel&&(s.fcSel.label||s.fcSel.type))||egb.name||"Block";
+    const miniBtn="width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; color:#9a9aa3; font-size:12px;";
+    const panes=panels.map(p=>{ const rc=paneRect[p]||{x:0,y:0,w:0,h:0}; const r=paneRegion[p]; const slot=paneTabs[p]||[p]; const multi=slot.length>1; const _ov=!!overlayRegion[r];
+      const tabs=slot.map(id=>({ label:this.paneName(id,eName), active:!!paneShow[id], isCustom:(id!=="grid"&&id!=="editor"), onActivate:()=>this.activateTab(id,slot), onRename:()=>this.renamePanel(id),
+        style:`padding:5px 10px; border-radius:7px; cursor:pointer; font:700 10px/1 'Hanken Grotesk',sans-serif; white-space:nowrap; ${paneShow[id]?"background:#1c2b2c; color:#8fe3ea;":"color:#9a9aa3;"}` }));
+      const _stubK=(p.indexOf("stub:")===0)?p.slice(5):null;
+      const _cust=(!_stubK&&p!=="grid"&&p!=="editor"&&p!=="bemod"&&p!=="fc"&&p!=="history"&&p!=="presets"&&p!=="pbrowse"&&p!=="psrc"&&p!=="plist"&&p!=="pdet"&&p!=="fcbd"&&p!=="fcin"&&p!=="fclay"&&p!=="fcled"&&p!=="fctap"&&p!=="fchold");
+      const _ST=(_stubK?({ctrl:{g:"\u25c9",t:"Controllers",d:"Modifiers, LFOs and pedalboard assignments dock here in a later phase.",m:"MEANWHILE \u00b7 PIN ANY PARAMETER FROM A BLOCK EDITOR AS A QUICK CONTROL"},scn:{g:"\u25ea",t:"Scenes",d:"The scene manager docks here in a later phase.",m:"MEANWHILE \u00b7 SWITCH SCENES WITH THE SCENES WIDGET IN THE TOP BAR"},live:{g:"\u23fa",t:"Live",d:"The performance view docks here in a later phase.",m:"MEANWHILE \u00b7 TRY THE STAGE LAYOUT PRESET IN EDIT LAYOUT"},setup:{g:"\u2699",t:"Setup",d:"Device setup \u0026 preferences dock here in a later phase.",m:"MEANWHILE \u00b7 DEVICE STATUS LIVES AT THE BOTTOM OF THE RAIL"}})[_stubK]||{}:{});
+      return { id:p, isGrid:p==="grid", isEditor:p==="editor", isBeMod:p==="bemod", isCustom:_cust, isStub:!!_stubK, stubGlyph:_ST.g, stubTitle:_ST.t, stubDesc:_ST.d, stubMeta:_ST.m, isPBrowse:p==="pbrowse", isFc:p==="fc", isHistory:p==="history", isPresets:p==="presets", isPSrc:p==="psrc", isPList:p==="plist", isPDet:p==="pdet", isFcBd:p==="fcbd", isFcIn:p==="fcin", isFcLay:p==="fclay", isFcLed:p==="fcled", isFcTap:p==="fctap", isFcHold:p==="fchold", closable:(p!=="grid"), availW:Math.round(rc.w), availH:Math.max(140,Math.round(rc.h)-40), name:this.paneName(p,eName), panelZone:"panel:"+p, onDelete:()=>this.closePanel(p), panelBodyStyle:"position:absolute; inset:0; overflow:auto; display:flex; flex-wrap:wrap; align-content:flex-start; gap:8px; padding:12px;", show:!!paneShow[p], minimap:!!paneMini[p],
+        style:`position:absolute; left:${Math.round(rc.x)}px; top:${Math.round(rc.y)}px; width:${Math.round(rc.w)}px; height:${Math.round(rc.h)}px; max-width:${Math.round(rc.w)}px; max-height:${Math.round(rc.h)}px; min-width:0; min-height:0; box-sizing:border-box; display:flex; flex-direction:column; background:var(--bg2); border-radius:0; overflow:hidden; ${_ov?"z-index:180;":""} box-shadow:${_ov?"0 0 46px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.08)":"inset 0 0 0 1px rgba(255,255,255,.06)"};`,
+        headerStyle:"flex:none; display:flex; align-items:center; gap:5px; padding:7px 9px; background:transparent; cursor:grab;",
+        gripStyle:"font:700 11px/1 'JetBrains Mono',monospace; color:#5a5a63; padding:0 3px; cursor:grab;",
+        onHeaderDown:(e)=>this.startPaneDrag(p,e), onCtx:(e)=>this.openCtx(e,"panel",p), tabs, tabbable:multi, showAxis:(r==="main"&&(cellsByRegion["main"]||[]).length>1),
+        tabsIcon:"\u2016", axisIcon:((d.mainAxis||"h")==="v"?"\u2b0d":"\u2b0c"),
+        onToggleTabs:()=>this.ungroupSlot(r,slot), onToggleAxis:()=>this.toggleMainAxis(), onPaneCollapse:()=>this.togglePaneCollapse(p), onDockCollapse:()=>this.toggleRegionCollapse(r), collapsed:!!paneCollapsedFlag[p], paneCollapseIcon:(paneCollapsedFlag[p]?"+":"–"), canDockCollapse:(r!=="main" && regionLead[r]===p), dockCollapseTitle:("Collapse "+String(r).toUpperCase()+" dock"), miniBtn,
+        bodyStyle:(paneCollapsedFlag[p]?"display:none;":"flex:1; min-height:0; position:relative; overflow:hidden;") };
+    });
+    const strips=[]; ["left","right","top","bottom"].forEach(r=>{ if(has(r)&&dc[r]){ const R=rects[r]; const vert=(r==="left"||r==="right");
+      strips.push({ onExpand:()=>this.toggleRegionCollapse(r),
+        style:`position:absolute; left:${R.x}px; top:${R.y}px; width:${R.w}px; height:${R.h}px; display:flex; align-items:center; justify-content:center; background:var(--bg2); border:1px solid var(--surface2); border-radius:10px; cursor:pointer; z-index:6;`,
+        labelStyle:`font:700 9px/1 'JetBrains Mono',monospace; letter-spacing:.14em; color:#6e6e78; ${vert?"writing-mode:vertical-rl; transform:rotate(180deg);":""}`,
+        text:(r==="left"?"\u00bb ":r==="right"?"\u00ab ":r==="top"?"\u25be ":"\u25b4 ")+r.toUpperCase() }); }});
+    const resizers=[];
+    if(has("left")&&!dc.left&&!overlayRegion.left) resizers.push({ onDown:(e)=>this.startRegionResize("left",e), style:`position:absolute; left:${Lw-6}px; top:0; width:12px; height:${H}px; cursor:ew-resize; z-index:14;` });
+    if(has("right")&&!dc.right&&!overlayRegion.right) resizers.push({ onDown:(e)=>this.startRegionResize("right",e), style:`position:absolute; left:${W-Rw-6}px; top:0; width:12px; height:${H}px; cursor:ew-resize; z-index:14;` });
+    if(has("top")&&!dc.top&&!overlayRegion.top) resizers.push({ onDown:(e)=>this.startRegionResize("top",e), style:`position:absolute; left:${LwL}px; top:${Th-6}px; width:${midW}px; height:12px; cursor:ns-resize; z-index:14;` });
+    if(has("bottom")&&!dc.bottom) resizers.push({ onDown:(e)=>this.startRegionResize("bottom",e), style:`position:absolute; left:${LwL}px; top:${H-Bh-6}px; width:${midW}px; height:12px; cursor:ns-resize; z-index:14;` });
+    cellResizers.forEach(x=>resizers.push(x));
+    const mainEmpty=!has("main");
+    const mainEmptyStyle=`position:absolute; left:${rects.main.x}px; top:${rects.main.y}px; width:${rects.main.w}px; height:${rects.main.h}px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #1c1c21; border-radius:10px;`;
+    const drag=s.drag; let dropActive=false, dropStyle="display:none;", dropLabel="";
+    if(drag&&drag.mode==="dock"&&drag.target){ const t=drag.target; const def={left:340,right:380,top:220,bottom:300}; let pr;
+      if(t==="main") pr=rects.main; else if(t==="left") pr={x:0,y:0,w:(has("left")&&!dc.left?Lw:def.left),h:H}; else if(t==="right"){ const rw=(has("right")&&!dc.right?Rw:def.right); pr={x:W-rw,y:0,w:rw,h:H}; } else if(t==="top") pr={x:Lw,y:0,w:midW,h:(has("top")&&!dc.top?Th:def.top)}; else { const bh=(has("bottom")&&!dc.bottom?Bh:def.bottom); pr={x:Lw,y:H-bh,w:midW,h:bh}; }
+      dropActive=true; dropStyle=`position:absolute; left:${Math.round(pr.x)}px; top:${Math.round(pr.y)}px; width:${Math.round(pr.w)}px; height:${Math.round(pr.h)}px; background:rgba(53,201,214,.14); border:2px dashed #35c9d6; border-radius:12px; pointer-events:none; z-index:40;`;
+      dropLabel="Dock "+t.toUpperCase();
+    }
+    if(drag&&drag.mode==="dock"&&drag.tabTarget&&paneRect[drag.tabTarget]){ const pr=paneRect[drag.tabTarget]; dropActive=true; dropStyle=`position:absolute; left:${Math.round(pr.x)}px; top:${Math.round(pr.y)}px; width:${Math.round(pr.w)}px; height:36px; background:rgba(53,201,214,.24); border:2px solid #35c9d6; pointer-events:none; z-index:41;`; dropLabel="Tab into "+this.paneName(drag.tabTarget,eName); }
+    const pbRect=(paneShow["pbrowse"] && !paneCollapsedFlag["pbrowse"]) ? paneRect["pbrowse"] : null;
+    // all-available drop zones outlined the moment a panel drag begins (wayfinding, esp. on a clean canvas)
+    let dropZones=[];
+    if(drag&&drag.mode==="dock"){ const def={left:340,right:380,top:220,bottom:300};
+      const zr=(t)=>{ if(t==="main") return rects.main; if(t==="left") return {x:0,y:0,w:(has("left")&&!dc.left?Lw:def.left),h:H}; if(t==="right"){ const rw=(has("right")&&!dc.right?Rw:def.right); return {x:W-rw,y:0,w:rw,h:H}; } if(t==="top") return {x:Lw,y:0,w:midW,h:(has("top")&&!dc.top?Th:def.top)}; const bh=(has("bottom")&&!dc.bottom?Bh:def.bottom); return {x:Lw,y:H-bh,w:midW,h:bh}; };
+      ["left","right","top","bottom","main"].forEach(t=>{ const pr=zr(t); const on=(drag.target===t && !drag.tabTarget);
+        dropZones.push({ key:t, label:t.toUpperCase(), active:on,
+          style:`position:absolute; left:${Math.round(pr.x)}px; top:${Math.round(pr.y)}px; width:${Math.round(pr.w)}px; height:${Math.round(pr.h)}px; box-sizing:border-box; border:1.5px dashed ${on?"#35c9d6":"rgba(53,201,214,.30)"}; background:${on?"rgba(53,201,214,.10)":"rgba(53,201,214,.025)"}; border-radius:12px; pointer-events:none; z-index:${on?39:38};`,
+          labelStyle:`position:absolute; top:8px; left:10px; font:700 9px/1 'JetBrains Mono',monospace; letter-spacing:.12em; color:${on?"#4fd1dc":"rgba(79,209,220,.55)"};` }); });
+    }
+    return { panes, strips, resizers, mainEmpty, mainEmptyStyle, dropActive, dropStyle, dropLabel, pbRect, dropZones, mobDock:{ left:ovL, right:ovR, top:ovT, open:mobD } };
+  }
+
+  renderVals(){
+    const s=this.state, L=this.L(), edit=s.editMode, drag=s.drag, isMobile=s.profile==="mobile", isTablet=s.profile==="tablet", mob=isTablet||isMobile;
+    const gridInMain = ((s.dock&&s.dock.place&&s.dock.place.grid)||"main")==="main";
+    const DK=this.computeDock();
+    this._panW={}; DK.panes.forEach(pn=>{ if(pn.isCustom) this._panW["panel:"+pn.id]=pn.availW; });
+    // ---- row-zone auto-fit: top bar / bottom bar / gridbar step default -> compact -> mini so they never overflow ----
+    const _mobVP0=(s.vw||1440)<760;
+    const _frameW = isMobile ? Math.min(430, Math.round((s.vw||1440)*0.98)) : isTablet ? Math.min(1024, Math.round((s.vw||1440)*0.96)) : (s.vw||1440);
+    const _navSide=(L.navMode==="side")||_mobVP0;
+    const _railW0=(_mobVP0||isMobile)?0:((_navSide||this.zoneItems("rail").length>0||edit)?(_navSide?72:64):0);
+    const _fit=(ids,avail,gapPx)=>{ if(!ids.length) return "default";
+      const need=(f)=>ids.reduce((t,id)=>t+Math.max(40,Math.round(this.estW(id)*f)),0)+gapPx*Math.max(0,ids.length-1);
+      return need(1)<=avail ? "default" : (need(0.62)<=avail ? "compact" : "mini"); };
+    this._zoneSize={};
+    const _topIds=this.zoneItems("tl").concat(this.zoneItems("tc"),this.zoneItems("tr"));
+    const _topAvail=Math.max(180,_frameW-_railW0-(_mobVP0?62:32)-56);
+    let _tlv=_fit(_topIds,_topAvail,12);
+    this._overflow={};
+    if(_tlv==="mini"){
+      // even mini can't fit everything: shed lowest-priority widgets into the ⋯ overflow (preset + save always stay)
+      const _keep={preset:1,save:1};
+      const _miniW=(id)=>Math.max(36,Math.round(this.estW(id)*0.42));
+      const _avail=_topAvail-44; // reserve room for the ⋯ chip
+      let _used=0; _topIds.forEach(id=>{ if(_keep[id]) _used+=_miniW(id)+10; });
+      _topIds.forEach(id=>{ if(_keep[id]) return; _used+=_miniW(id)+10; if(_used>_avail) this._overflow[id]=true; });
+      _tlv=_fit(_topIds.filter(id=>!this._overflow[id]),_avail,12);
+    }
+    this._zoneSize.tl=_tlv; this._zoneSize.tc=_tlv; this._zoneSize.tr=_tlv;
+    const _ofIds=Object.keys(this._overflow);
+    const _zn0={tl:"Top \u00b7 Left",tc:"Top \u00b7 Center",tr:"Top \u00b7 Right"};
+    const _ofList=_ofIds.map(id=>({ label:(id.indexOf("param:")===0? (((s.pinned[id]||{}).block?((s.pinned[id]||{}).block+" \u00b7 "+(s.pinned[id]||{}).param):"Parameter")) : ((this.WIDGETS[id]||{}).label||id)), zoneName:_zn0[(L.widgets[id]||{}).zone]||"" }));
+    const _ofChipStyle=(_ofIds.length&&!edit)?"display:flex; align-items:center; gap:5px; height:30px; padding:0 10px; border-radius:8px; cursor:pointer; background:#1c1c21; border:1px solid #3a3a44; color:#cfcfd6; font:700 12px/1 'JetBrains Mono',monospace; flex:none;":"display:none;";
+    const _ofMenuStyle=(()=>{const w=270,vw=(s.vw||1280),x=(s.ofX!=null?s.ofX:vw-16),y=(s.ofY!=null?s.ofY:58);return `position:fixed; top:${Math.round(y+8)}px; left:${Math.round(this.clamp(x-w,8,vw-w-8))}px; z-index:45; width:${w}px; background:#0c1213; border:1px solid #1a3a3c; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,.55); padding:12px; display:flex; flex-direction:column; gap:8px; animation:lzRise .16s ease;`;})();
+    const _navBot=(L.navMode==="bottom");
+    const _navN=s.navOrder.filter(id=>!s.navHidden[id]).length;
+    this._zoneSize.bottom=_fit(this.zoneItems("bottom"), Math.max(120,_frameW-_railW0-32-(_navBot?_navN*56+21:0)), 10);
+    let _gpw=0; DK.panes.forEach(pn=>{ if(pn.isGrid&&pn.show) _gpw=pn.availW; });
+    if(_gpw) this._zoneSize.gridbar=_fit(this.zoneItems("gridbar"), Math.max(70,_gpw-250), 8);
+    const fcOrder=Object.keys(this.GP).map(Number).sort((a,b)=>a-b);
+    const fcRows=fcOrder.map((i,ix)=>{ const b=this.GP[i]; const cc=(this.CAT[b.catId]||{}).c||"#8a8a93"; const off=!!s.bypassed[i];
+      return { idx:i, name:b.name, type:b.type, showArrow:(ix<fcOrder.length-1),
+        cardStyle:`display:flex; flex-direction:column; gap:5px; min-width:112px; padding:10px 12px; border-radius:11px; background:var(--bg2); box-shadow:inset 0 0 0 1px ${cc}66, 0 2px 8px rgba(0,0,0,.25); cursor:pointer; opacity:${off?0.4:1};`,
+        dotStyle:`width:9px; height:9px; border-radius:3px; background:${cc}; flex:none;`,
+        nameStyle:"font:700 12px/1 'Hanken Grotesk',sans-serif; color:#e8e8ec;",
+        typeStyle:"font:600 9px/1.2 'JetBrains Mono',monospace; color:#8a8a93; letter-spacing:.03em;",
+        onClick:()=>this.setState({selected:i, editorOpen:true}) }; });
+    const histRows=this.historyView();
+    const presetRows=this.PRESETS.map(p=>({ n:p.n, name:p.name,
+      cardStyle:`display:flex; flex-direction:column; gap:7px; padding:12px 13px; border-radius:12px; background:var(--bg2); cursor:pointer; box-shadow:inset 0 0 0 1px ${p.n===s.presetNum?p.t:"rgba(255,255,255,.07)"}, 0 2px 8px rgba(0,0,0,.22);`,
+      swatchStyle:`width:100%; height:5px; border-radius:3px; background:${p.t};`,
+      numStyle:"font:700 9px/1 'JetBrains Mono',monospace; color:#7a7a83; letter-spacing:.08em;",
+      nameStyle:"font:700 13px/1.1 'Hanken Grotesk',sans-serif; color:#e8e8ec;",
+      onClick:()=>{ const pp=this.PRESETS.find(x=>x.n===p.n)||{name:"?"}; this.setState({presetNum:p.n,presetName:pp.name}); this.flash("Recalled \u201c"+pp.name+"\u201d"); } }));
+    const chipBase="height:28px; padding:0 12px; border-radius:8px; cursor:pointer; font:600 11px/1 'Hanken Grotesk',sans-serif; display:flex; align-items:center; gap:5px;";
+    const chipOn=chipBase+" background:#1c2b2c; color:#8fe3ea; border:1px solid #2f6d70;";
+    const chipOff=chipBase+" background:#141417; color:var(--text2); border:1px solid var(--border2);";
+    const chipFc=s.panelFc?chipOn:chipOff, chipPresets=s.panelPresets?chipOn:chipOff, chipHistory=s.panelHist?chipOn:chipOff;
+    const chipPSrc=s.panelPSrc?chipOn:chipOff, chipPList=s.panelPList?chipOn:chipOff, chipPDet=s.panelPDet?chipOn:chipOff;
+    const chipBeCtl=s.editorOpen?chipOn:chipOff, chipBeMod=s.panelBeMod?chipOn:chipOff;
+    const chipFcBd=s.panelFcBd?chipOn:chipOff, chipFcIn=s.panelFcIn?chipOn:chipOff, chipFcLay=s.panelFcLay?chipOn:chipOff;
+    const chipFcLed=s.panelFcLed?chipOn:chipOff, chipFcTap=s.panelFcTap?chipOn:chipOff, chipFcHold=s.panelFcHold?chipOn:chipOff;
+    const gridBus={ down:(i,e)=>{ if(s.editMode){ this.setState({selected:i,editorOpen:true}); return; } if(e&&e.preventDefault)e.preventDefault(); this.gesture={idx:i,sx:e.clientX,sy:e.clientY,startVal:(s.params[i]!=null?s.params[i]:50),moved:false,axis:null,param:(this.GP[i]||{}).param}; },
+      dbl:(i)=>{ if(this.GP[i]) this.setState({params:Object.assign({},s.params,{[i]:this.PARAM0[i]}),adjust:null}); },
+      toggleBlock:(i)=>{ const b=Object.assign({},s.bypassed); b[i]=!b[i]; this.setState({bypassed:b}); this.markDirty(); this.pushHist((this.GP[i]?this.GP[i].name:"Block")+(b[i]?" bypassed":" engaged"),"#7d7d87"); },
+      setGridMode:(m)=>this.setState({gridMode:m}), sizeLess:()=>this.sizeLess(), sizeMore:()=>this.sizeMore(), add:()=>this.openPalette(null) };
+    const mobVP=(s.vw||1440)<760;
+    const navBottom=(L.navMode==="bottom");
+    const railOverlay=(mobVP||isMobile)&&!navBottom;
+    const railVisible=(L.navMode==="side")||this.zoneItems("rail").length>0||edit;
+    const bottomVisible=true;  /* persistent bottom utility bar (hosts Customize at its left + bottom-zone widgets) */
+    const rightVisible=this.zoneItems("right").length>0||(gridInMain&&L.editorMode==="right"&&s.editorOpen)||edit;
+
+    // ---- widget zone builder ----
+    const dragOverlay="position:absolute; inset:0; z-index:6; cursor:grab; border-radius:9px;";
+    const ctrlWrap="position:absolute; top:-20px; right:-18px; z-index:8; display:flex; gap:0px;";
+    const ctrlBtn="box-sizing:content-box; width:22px; height:22px; border:11px solid transparent; border-radius:17px; background:#1c1c21; background-clip:padding-box; box-shadow:inset 0 0 0 1px #3a3a44; display:flex; align-items:center; justify-content:center; color:#cfcfd6; font-size:12px; cursor:pointer;";
+    const mkW=(id, grouped)=>{ const wl=L.widgets[id]; const vert=(wl.zone==="rail");
+      // 3-size auto-fit: in a width-constrained panel, pick the largest of default/compact/mini that fits; manual density caps it smaller
+      const rank={default:2,compact:1,mini:0}; const man=wl.density==="mini"?"mini":wl.density==="compact"?"compact":"default";
+      let size="default"; const zoneW=this._panW&&this._panW[wl.zone];
+      if(zoneW!=null && !vert){ const avail=zoneW-24, ew=this.estW(id); size = ew<=avail?"default":(ew*0.62<=avail?"compact":"mini"); }
+      const zs=this._zoneSize&&this._zoneSize[wl.zone];
+      if(zs&&!vert&&rank[zs]<rank[size]) size=zs;
+      if(rank[man]<rank[size]) size=man;
+      const constrained=(zoneW!=null && !vert)||(zs!=null&&zs!=="default");
+      if(id.indexOf("param:")===0){ const p=s.pinned[id]||{}; return { kind:"param", density:wl.density, size, constrained, axis:vert?"v":"h", grouped:!!grouped, label:p.param, value:(p.idx!=null&&s.params[p.idx]!=null?s.params[p.idx]:p.value), color:p.color, block:p.block }; }
+      return { kind:id, density:wl.density, size, constrained, axis:vert?"v":"h", grouped:!!grouped };
+    };
+    const dragUnitId = drag&&drag.mode==="widget" ? (drag.groupIds?("grp:"+drag.groupId):drag.id) : null;
+    const buildZone=(zone)=>{
+      const vert=(zone==="rail");
+      const ids=this.zoneItems(zone);
+      const raw=[];
+      ids.forEach(id=>{ const gr=L.widgets[id].group; const last=raw[raw.length-1];
+        if(gr && last && last.group===gr) last.ids.push(id); else raw.push({group:gr||null, ids:[id]}); });
+      const units=raw.map(u=>{
+        const isGroup=u.ids.length>1;
+        const dragId=isGroup?("grp:"+u.group):u.ids[0];
+        const dragging=drag&&drag.mode==="widget"&&(drag.groupIds?(drag.groupIds.indexOf(u.ids[0])>=0):(!isGroup&&drag.id===u.ids[0]));
+        const ofUnit=!!(this._overflow && u.ids.length && u.ids.every(x=>this._overflow[x]));
+        return {
+          dragId, isGroup, isSingle:!isGroup, isGap:false, notGap:true, groupId:u.group,
+          w: isGroup?null:mkW(u.ids[0], false),
+          members: u.ids.map((id,mi)=>({ id, w:mkW(id,true), showDiv:mi>0 })),
+          indIndex: (isGroup&&drag&&drag.overGroup===u.group)?drag.overGroupIndex:-1,
+          draggingId: (drag&&drag.mode==="widget"&&!drag.groupIds)?drag.id:null,
+          phW:(drag&&drag.w)||120, phH:(drag&&drag.h)||38,
+          wrapStyle:`position:relative; display:flex; align-items:center; ${vert?"width:100%; justify-content:center;":""} ${edit?"outline:1px dashed #2f4a4c; outline-offset:3px; border-radius:10px;":""} ${dragging?"display:none;":""} ${(!isGroup&&drag&&drag.overUnit===u.ids[0])?"outline:2px solid var(--accent); outline-offset:3px; border-radius:10px; background:rgba(53,201,214,.10);":""} ${ofUnit?(edit?"outline:2px dashed #d6543f; outline-offset:3px; border-radius:10px;":"display:none;"):""}`,
+          groupModuleStyle:`display:flex; align-items:center; height:${(this._zoneSize&&this._zoneSize[zone])==="mini"?28:(this._zoneSize&&this._zoneSize[zone])==="compact"?34:38}px; background:#0e0e10; border:1px solid #26262c; border-radius:10px; overflow:visible; padding:0 2px;`,
+          onDrag:(e)=> isGroup? this.startDragGroup(e, u.group, u.ids) : this.startDrag(e, u.ids[0]),
+          onCtx:(e)=> isGroup? this.openCtx(e,"group",u.group) : this.openCtx(e,"widget",u.ids[0]), ctxIds:u.ids.slice(),
+          onDensity:()=> isGroup? this.ungroup(u.group) : this.toggleDensity(u.ids[0]),
+          onHide:()=> isGroup? this.hideGroup(u.ids) : this.hideWidget(u.ids[0]),
+          densityIcon: isGroup? "⊟" : "⇲",
+          overlayStyle:((edit&&!isGroup)?dragOverlay:"display:none;"),
+          ctrlStyle:(edit?ctrlWrap:"display:none;")
+        };
+      });
+      if(drag&&drag.mode==="widget"&&drag.overZone===zone&&!drag.overGroup&&!drag.overUnit){
+        const gw=(drag.w||120), gh=(drag.h||38);
+        const gap={ isGap:true, notGap:false, dragId:"__gap", overlayStyle:"display:none;", ctrlStyle:"display:none;", gapStyle:`width:${vert?"88%":(gw+"px")}; height:${gh}px; border-radius:9px; border:1.5px dashed #35c9d6; background:rgba(53,201,214,.10); flex:none;` };
+        let gi=drag.overIndex; if(gi>units.length) gi=units.length; units.splice(gi,0,gap);
+      }
+      return units;
+    };
+    const zoneTL=buildZone("tl"), zoneTC=buildZone("tc"), zoneTR=buildZone("tr");
+    const zoneRail=buildZone("rail"), zoneRight=buildZone("right"), zoneBottom=buildZone("bottom"), zoneLeft=buildZone("left"), zoneGridbar=buildZone("gridbar");
+    DK.panes.forEach(pn=>{ if(pn.isCustom){ pn.items=buildZone(pn.panelZone); pn.empty=pn.items.length===0; } });
+    // floating widgets
+    const cr=this.contentEl?this.contentEl.getBoundingClientRect():{left:0,top:0};
+    const zoneFloat=this.zoneItems("float").map(id=>{ const wl=L.widgets[id]; const isDragging=drag&&drag.id===id&&drag.mode==="widget"&&!drag.groupIds;
+      const x=(cr.left+(wl.fx||20)), y=(cr.top+(wl.fy||20));
+      return { id, isSingle:true, w:mkW(id,false), wrapStyle:`position:fixed; left:${x}px; top:${y}px; z-index:50; display:${isDragging?"none":"flex"}; align-items:center; padding:6px; border-radius:11px; background:#0d0d0f; border:1px solid ${edit?"#2f4a4c":"#26262c"}; box-shadow:0 10px 30px rgba(0,0,0,.45);`,
+        onDrag:(e)=>this.startDrag(e,id), onDensity:()=>this.toggleDensity(id), onHide:()=>this.hideWidget(id), overlayStyle:(edit?dragOverlay:"display:none;"), ctrlStyle:(edit?ctrlWrap:"display:none;") };
+    });
+
+    // ---- zone container styles (highlight when drag target) ----
+    const hl=(zone,base)=> base + ((drag&&drag.mode==="widget"&&drag.overZone===zone)?" background:#0e2224;":"") + (edit&&drag&&drag.mode==="widget"?" outline:1px dashed #234d4f; outline-offset:-3px;":"");
+    const zoneTLStyle=hl("tl","display:flex; align-items:center; gap:12px; min-width:0;"+(edit?" flex-wrap:wrap;":""));
+    const zoneTCStyle=hl("tc","display:flex; align-items:center; justify-content:center; gap:12px; flex:1; min-width:40px; "+(edit?"min-height:40px; border-radius:9px; flex-wrap:wrap;":""));
+    const zoneTRStyle=hl("tr","display:flex; align-items:center; gap:10px; flex:none;"+(edit?" flex-wrap:wrap;":""));
+    const railZoneStyle=hl("rail","display:flex; flex-direction:column; align-items:center; gap:7px; width:100%; margin-top:8px; "+(edit?"min-height:44px; border-radius:9px;":""));
+    const rightZoneStyle=hl("right","display:flex; flex-wrap:wrap; align-content:flex-start; align-items:center; gap:8px; padding:12px; flex:1; min-height:0; overflow-y:auto;");
+    const bottomZoneStyle=hl("bottom","display:flex; align-items:center; gap:10px; flex:1; "+(edit?"min-height:40px; border-radius:9px;":""));
+    const gridbarZoneStyle=hl("gridbar","display:flex; align-items:center; gap:8px; "+(edit?"min-height:40px; min-width:40px; border-radius:9px;":""));
+
+    // ---- top bar ----
+    const topbarEmpty=!edit && this.zoneItems("tl").length===0 && this.zoneItems("tc").length===0 && this.zoneItems("tr").length===0;
+    const topbarStyle=topbarEmpty
+      ? (railOverlay?"flex:none; display:flex; align-items:center; padding:10px 16px 10px 62px; background:var(--bg2); border-bottom:1px solid var(--surface2); min-height:56px; z-index:30;":"display:none;")
+      : ("flex:none; display:flex; align-items:center; gap:14px; padding:11px 16px 11px "+(railOverlay?"62px":"16px")+"; background:var(--bg2); border-bottom:1px solid var(--surface2); min-height:62px; z-index:30;");
+
+    // ---- rail ----
+    const navInRail=(L.navMode==="side");
+    const navInBottom=navBottom;
+    const railStyle= railOverlay
+      ? `position:absolute; top:0; left:0; bottom:0; width:80px; z-index:230; flex:none; display:flex; flex-direction:column; align-items:center; padding:14px 0; background:var(--bg2); border-right:1px solid var(--surface2); box-shadow:${s.navDrawerOpen?"10px 0 40px rgba(0,0,0,.55)":"none"}; transform:translateX(${s.navDrawerOpen?"0":"-96px"}); transition:transform .26s cubic-bezier(.2,.8,.3,1);`
+      : `width:${navInRail?72:64}px; flex:none; display:flex; flex-direction:column; align-items:center; padding:12px 0; background:var(--bg2); border-right:1px solid var(--surface2); z-index:20; overflow:visible;`;
+    const hamburgerStyle=`position:absolute; top:11px; left:11px; z-index:120; width:42px; height:42px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; background:var(--bg2); border:1px solid var(--border2); border-radius:11px; cursor:pointer;`;
+    const hbLine="width:18px; height:2px; border-radius:2px; background:var(--text2);";
+    const navDrawerScrim=railOverlay&&s.navDrawerOpen;
+    const navHamburger=railOverlay&&!s.navDrawerOpen;
+    const navById={}; this.NAV.forEach(n=>navById[n.id]=n);
+    const navOverlay="position:absolute; inset:0; z-index:6; cursor:grab; border-radius:11px;";
+    const navHideBtn="box-sizing:content-box; position:absolute; top:-18px; right:-16px; z-index:8; width:20px; height:20px; border:12px solid transparent; border-radius:16px; background:#1c1c21; background-clip:padding-box; box-shadow:inset 0 0 0 1px #3a3a44; display:flex; align-items:center; justify-content:center; color:#cfcfd6; font-size:11px; cursor:pointer;";
+    const navItems=s.navOrder.filter(id=>!s.navHidden[id]&&navById[id]).map(id=>{ const n=navById[id]; const act=s.section===n.id; const dragging=s.navDragId===n.id;
+      return { id:n.id, label:n.label, glyph:n.glyph, isGap:false, notGap:true,
+        wrapStyle:`position:relative; ${dragging?"opacity:.3;":""}`,
+        onDrag:(e)=>this.startNavDrag(e,n.id), onHide:()=>this.hideNav(n.id),
+        overlayStyle:(edit?navOverlay:"display:none;"), hideStyle:(edit?navHideBtn:"display:none;"),
+        railStyle:`width:52px; height:50px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:11px; cursor:pointer; ${act?"background:#13282a; color:var(--accent); border:1px solid #234d4f;":"color:var(--textfaint); border:1px solid transparent;"}`,
+        bottomStyle:`display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; width:52px; height:44px; border-radius:10px; cursor:pointer; ${act?"background:#13282a; color:var(--accent);":"color:var(--textfaint);"}` };
+    });
+    // nav reorder: insertion placeholder + floating ghost (mirrors the widget drag treatment)
+    const navVert=navInRail;
+    if(edit && s.navDragId && s.navOver!=null){ const gi=Math.max(0,Math.min(s.navOver, navItems.length));
+      navItems.splice(gi,0,{ id:"__navgap", isGap:true, notGap:false, wrapStyle:"position:relative; display:flex;", overlayStyle:"display:none;", hideStyle:"display:none;", railStyle:"", bottomStyle:"", label:"", glyph:"",
+        gapStyle:`flex:none; width:52px; height:${navVert?50:44}px; border-radius:11px; border:1.5px dashed var(--accent); background:rgba(53,201,214,.12);` }); }
+    const navGhost = !!(edit && s.navDragId && navById[s.navDragId]);
+    const navGhostN = navGhost ? navById[s.navDragId] : null;
+    const _ngx=(this.navDrag?(this.navDrag.px-this.navDrag.offx):(s.vw-60)), _ngy=(this.navDrag?(this.navDrag.py-this.navDrag.offy):80);
+    const navGhostStyle = navGhost ? `position:fixed; left:${_ngx}px; top:${_ngy}px; z-index:300; pointer-events:none; opacity:.7; width:52px; height:${navVert?50:44}px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:11px; background:#0d0d0f; border:1px solid var(--accent); box-shadow:0 12px 30px rgba(0,0,0,.5); transform:scale(1.06); color:var(--accent);` : "";
+
+    // ---- right dock / left dock / bottom bar ----
+    const rightColl=s.dockColRight, leftColl=s.dockColLeft;
+    const rightDockStyle=`position:relative; width:${rightColl?18:L.rightW}px; flex:none; display:flex; flex-direction:column; background:var(--bg2); border-left:1px solid var(--surface2); z-index:15; ${(drag&&drag.overZone==="right")?"box-shadow:inset 3px 0 0 var(--accent);":""}`;
+    const editorInRight=gridInMain&&L.editorMode==="right"&&s.editorOpen;
+    const editorPanelInner="__EDITOR__";
+    const rightEmpty=this.zoneItems("right").length===0&&!editorInRight;
+    const leftVisible=this.zoneItems("left").length>0||edit||(gridInMain&&L.editorMode==="left"&&s.editorOpen);
+    const leftDockStyle=`position:relative; width:${leftColl?18:(L.leftW||300)}px; flex:none; display:flex; flex-direction:column; background:var(--bg2); border-right:1px solid var(--surface2); z-index:15; ${(drag&&drag.overZone==="left")?"box-shadow:inset -3px 0 0 var(--accent);":""}`;
+    const leftZoneStyle=hl("left","display:flex; flex-wrap:wrap; align-content:flex-start; align-items:center; gap:8px; padding:12px; flex:1; min-height:0; overflow-y:auto;");
+    const leftEmpty=this.zoneItems("left").length===0&&!(L.editorMode==="left"&&s.editorOpen);
+    const gridAlign=L.gridAlign||"left";
+    const gridScrollJustify=gridAlign==="center"?"center":(gridAlign==="right"?"flex-end":"flex-start");
+    const bottomBarStyle="flex:none; display:flex; align-items:center; gap:12px; padding:8px 16px; background:var(--bg2); border-top:1px solid var(--surface2); min-height:52px; z-index:25;";
+    const bottomEmpty=edit&&this.zoneItems("bottom").length===0&&!navInBottom;
+    const tcEmpty=this.zoneItems("tc").length===0&&edit;
+
+    // ---- content ----
+    const presetPage=s.presetPageOpen;
+    const showStub=!presetPage&&L.contentMode==="pages"&&s.section!=="grid";
+    const showGrid=!presetPage&&!showStub;
+    const chainLabel=this.state.presetName+" · Scene "+this.state.scene;
+    // ---- dense device grid (Axis Editor styling) ----
+    const canvasW = mob?1024:s.vw;
+    const mapMode = s.gridMode==="map" || (s.gridMode==="auto" && canvasW<1160) || !gridInMain;
+    const sz=mapMode?{w:54,h:46}:this.SIZES[s.blockSize]; const gap=mapMode?6:8;
+    const availW=(this.contentEl?this.contentEl.clientWidth:(mob?1024:s.vw));
+    const availH=(this.contentEl?this.contentEl.clientHeight:600);
+    const cwByW=Math.min(sz.w, Math.floor((availW-40-(this.COLS-1)*gap)/this.COLS));
+    const cwByH=Math.min(sz.w, Math.round(sz.w*(((availH-30-(this.ROWS-1)*gap)/this.ROWS)/sz.h)));
+    const cw=Math.max(mapMode?26:38, Math.min(cwByW||sz.w, cwByH||sz.w));
+    const ch=Math.round(sz.h*(cw/sz.w));
+    const col=(i)=>i%this.COLS, rowOf=(i)=>Math.floor(i/this.COLS);
+    const cx=(i)=>col(i)*(cw+gap)+cw/2, cy=(i)=>rowOf(i)*(ch+gap)+ch/2;
+    const deviceLabel="AXIS FM · 12 × 4";
+    const blockSizeLabel=["S","M","L"][s.blockSize];
+    const sBtn=(dis)=>`width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:${dis?"default":"pointer"}; font-size:16px; font-weight:600; color:${dis?"var(--border3)":"var(--textdim)"}; background:${dis?"transparent":"var(--surface2)"};`;
+    const sizeLessStyle=sBtn(mapMode||s.blockSize>=2), sizeMoreStyle=sBtn(mapMode||s.blockSize<=0);
+    const gmSeg=(a)=>`padding:5px 9px; border-radius:7px; cursor:pointer; font:600 10px/1 'Hanken Grotesk',sans-serif; ${a?"background:var(--accent); color:#06181a;":"color:var(--textdim);"}`;
+    const gridModeTabs=[{id:"full",label:"Full"},{id:"map",label:"Map"},{id:"auto",label:"Auto"}].map(m=>({id:m.id,label:m.label,style:gmSeg(s.gridMode===m.id)}));
+    const total=this.COLS*this.ROWS;
+    const showType=!mapMode&&s.blockSize>=1, showName=!mapMode;
+    const cells=[];
+    for(let i=0;i<total;i++){
+      const g=this.GP[i];
+      if(g){ const cat=this.CAT[g.catId]; const a=cat.c; const sel=s.selected===i&&s.editorOpen; const byp=!!s.bypassed[i];
+        const val=Math.round(s.params[i]!=null?s.params[i]:g.val); const adj=!!(s.adjust&&s.adjust.idx===i); const on=!byp;
+        cells.push({ isBlock:true, isEmpty:false, idx:i, name:g.name, type:g.type, glyph:cat.g, channel:g.channel,
+          showType, showName, adjusting:adj, adjVal:(s.adjust?s.adjust.val:val), adjLabel:(s.adjust?s.adjust.label:g.param),
+          style:`position:relative; overflow:hidden; border-radius:${mapMode?9:11}px; cursor:pointer; touch-action:none; user-select:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${mapMode?0:2}px; padding:${mapMode?2:4}px; background:linear-gradient(180deg, ${this.shade(a,-0.42)}, ${this.shade(a,-0.62)}); border:1px solid ${sel?"#f5a623":this.shade(a,-0.05)}; box-shadow:${sel?"inset 0 1px 0 rgba(255,255,255,.14), 0 0 0 2px #f5a623, 0 0 22px rgba(245,166,35,.34)":"inset 0 1px 0 rgba(255,255,255,.1), 0 2px 6px rgba(0,0,0,.35)"}; opacity:${byp?0.5:1}; ${byp?"filter:grayscale(.5);":""}`,
+          hover:sel?"":"box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 0 1px rgba(255,255,255,.22),0 4px 10px rgba(0,0,0,.4);",
+          fillStyle:`position:absolute; left:0; right:0; bottom:0; height:${byp?0:val}%; background:linear-gradient(180deg, ${this.shade(a,0.35)}, ${a}); opacity:${adj?1:.78}; border-top:2px solid rgba(255,255,255,.7); z-index:0; pointer-events:none; transition:height .05s linear;`,
+          glyphStyle:`position:relative; z-index:2; font-size:${mapMode?16:15}px; line-height:1; color:rgba(255,255,255,.85); ${mapMode?"":"margin-bottom:1px;"}`,
+          chanStyle:`position:absolute; top:5px; right:6px; z-index:3; font:700 8px/1 'JetBrains Mono',monospace; color:rgba(255,255,255,.85); background:rgba(0,0,0,.3); border-radius:4px; padding:2px 4px; ${(mapMode||s.blockSize<1)?"display:none;":""}`,
+          dotStyle:`position:absolute; top:${mapMode?4:6}px; left:${mapMode?4:6}px; z-index:4; width:${mapMode?7:9}px; height:${mapMode?7:9}px; border-radius:50%; cursor:pointer; ${on?"background:#46d17f; box-shadow:0 0 6px rgba(70,209,127,.85);":"background:#80808a;"}`
+        });
+      } else {
+        cells.push({ isBlock:false, isEmpty:true, idx:i,
+          style:`display:flex; align-items:center; justify-content:center; border-radius:${mapMode?9:11}px; border:1.5px dashed var(--border2); color:var(--border3); font-size:${mapMode?13:18}px; cursor:pointer;` });
+      }
+    }
+    const cables=[];
+    for(let i=0;i<total;i++){ if(this.GP[i]&&this.GP[i+1]&&col(i)<this.COLS-1){ cables.push({ d:`M ${cx(i)} ${cy(i)} L ${cx(i+1)} ${cy(i+1)}`, color:"#46464f" }); } }
+    if(this.GP[5]&&this.GP[12]){ cables.push({ d:`M ${cx(5)} ${cy(5)} C ${cx(5)+46} ${cy(5)}, ${cx(12)-46} ${cy(12)}, ${cx(12)} ${cy(12)}`, color:"#46464f" }); }
+    const gridInnerStyle=`position:relative; width:${this.COLS*(cw+gap)-gap}px; height:${this.ROWS*(ch+gap)-gap}px;`;
+    const gridMatrixStyle=`display:grid; grid-template-columns:repeat(${this.COLS}, ${cw}px); grid-auto-rows:${ch}px; gap:${gap}px; position:relative; z-index:1;`;
+    const gridScrollStyle=`flex:1; min-height:0; overflow:auto; padding:8px 20px 24px; display:flex; justify-content:${gridScrollJustify};`;
+    const stubGlyph=(this.NAV.find(n=>n.id===s.section)||{}).glyph||"";
+    const stubTitle=(this.NAV.find(n=>n.id===s.section)||{}).label||"";
+
+    // preset list
+    const presetList=this.PRESETS.map(p=>{ const active=p.n===s.presetNum;
+      return { n:p.n, name:p.name,
+        style:`display:flex; align-items:center; gap:10px; padding:11px 13px; border-radius:10px; cursor:pointer; background:${active?"#13282a":"var(--surface)"}; border:1px solid ${active?"#234d4f":"var(--border2)"};`,
+        rowStyle:`display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px; cursor:pointer; background:${active?"#13282a":"transparent"}; border:1px solid ${active?"#234d4f":"transparent"};`,
+        tagStyle:`width:8px; height:8px; border-radius:2px; background:${p.t}; flex:none;` };
+    });
+
+    // ---- edit ribbon controls ----
+    const seg=(active)=>`height:28px; padding:0 12px; display:inline-flex; align-items:center; justify-content:center; border-radius:7px; cursor:pointer; font:600 11px/1 'Hanken Grotesk',sans-serif; white-space:nowrap; ${active?"background:var(--accent); color:var(--accent-ink);":"color:var(--textdim);"}`;
+    const profileTabs=[{id:"desktop",label:"Desktop"},{id:"tablet",label:"Tablet"},{id:"mobile",label:"Mobile"}].map(p=>({id:p.id,label:p.label,style:seg(s.profile===p.id)}));
+    const presetTabs=[{id:"default",label:"Default"},{id:"stage",label:"Stage"},{id:"studio",label:"Studio"},{id:"compact",label:"Compact"}].map(p=>({id:p.id,label:p.label,style:seg(s.activePreset===p.id)}));
+    const dgrid=(s.dock.place&&s.dock.place.grid)||"main"; const dedit=(s.dock.place&&s.dock.place.editor)||"bottom"; const ropts=[["Left","left"],["Right","right"],["Top","top"],["Btm","bottom"],["Main","main"]];
+    const toggles=[
+      {label:"NAV", key:"navMode", opts:[["Side","side"],["Bottom","bottom"]], cur:L.navMode},
+      {label:"PRESETS", key:"presetMode", opts:[["Flyout","flyout"],["Page","page"]], cur:L.presetMode},
+      {label:"GRID", key:"dockGrid", opts:ropts, cur:dgrid},
+      {label:"EDITOR", key:"dockEditor", opts:ropts, cur:dedit}
+    ].map(t=>({ label:t.label, opts:t.opts.map(o=>({ label:o[0], t:t.key, v:o[1], style:seg(t.cur===o[1]) })) }));
+
+    // ---- library ----
+    const labelOf=(id)=>{ if(id.indexOf("param:")===0){ const p=s.pinned[id]; return p?(p.block+" · "+p.param):"Parameter"; } return (this.WIDGETS[id]||{}).label||id; };
+    const hintOf=(id)=>{ if(id.indexOf("param:")===0) return "quick control"; return (this.WIDGETS[id]||{}).hint||""; };
+    const placedIds=Object.keys(L.widgets).filter(id=>L.widgets[id].zone!=="hidden");
+    const hiddenIds=Object.keys(L.widgets).filter(id=>L.widgets[id].zone==="hidden").concat(Object.keys(this.WIDGETS).filter(id=>!L.widgets[id]));
+    const zoneName={tl:"Top · Left",tc:"Top · Center",tr:"Top · Right",rail:"Side rail",right:"Right dock",left:"Left dock",bottom:"Bottom bar",gridbar:"Grid bar",float:"Floating"};
+    const _lq=(s.libQuery||"").trim().toLowerCase();
+    const _lf=(label)=>!_lq || String(label).toLowerCase().indexOf(_lq)>=0;
+    const libHidden=hiddenIds.map(id=>({id, label:labelOf(id), hint:hintOf(id)})).filter(o=>_lf(o.label));
+    const libPlaced=placedIds.map(id=>({id, label:labelOf(id), zoneName:zoneName[L.widgets[id].zone]||""})).filter(o=>_lf(o.label));
+    const _catOf=(id)=>{ if(String(id).indexOf("param:")===0) return "Parameters"; const m={preset:"Transport",scenes:"Transport",view:"Transport",add:"Transport",save:"Transport",tempo:"Transport",cpu:"Status",conn:"Status",tuner:"Status",account:"Status",search:"Tools",history:"Tools",map:"Tools",undo:"Tools",gridmode:"Grid",blocksize:"Grid",fcdevice:"FC",fclayouts:"FC",fcswitch:"FC"}; return m[id]||"Other"; };
+    const _catOrder=["Transport","Status","Grid","FC","Tools","Parameters","Other"];
+    const _grp={}; libHidden.forEach(o=>{ const c=_catOf(o.id); (_grp[c]=_grp[c]||[]).push(o); });
+    const libHiddenGroups=_catOrder.filter(c=>_grp[c]&&_grp[c].length).map(c=>({cat:c, items:_grp[c]}));
+    const navHiddenList=this.NAV.filter(n=>s.navHidden[n.id]).map(n=>({id:n.id, label:n.label, glyph:n.glyph}));
+
+    // ---- editor block ----
+    const fs=s.fcSel; let editorBlock;
+    if(fs){ const c2=this.CAT[fs.catId]||{c:"#888",g:"?"}; editorBlock={ name:fs.label||fs.type, type:fs.type, color:c2.c, glyph:c2.g, block:fs.label||fs.type }; }
+    else { const eg=this.GP[s.selected]||this.GP[3]; const ec=this.CAT[eg.catId]; editorBlock={ name:eg.name, type:eg.type, color:ec.c, glyph:ec.g, block:eg.name }; }
+
+    // ---- editor containers ----
+    const editorInMain = !gridInMain && s.editorOpen;
+    const editorDrawer=gridInMain&&L.editorMode==="drawer"&&s.editorOpen;
+    const editorTop=gridInMain&&L.editorMode==="top"&&s.editorOpen;
+    const editorFloating=false;
+    const editorInLeftPanel=gridInMain&&L.editorMode==="left"&&s.editorOpen;
+    const drawerH=this.clamp(L.drawerH||340,200,640);
+    const coll=s.editorCollapsed;
+    const editorContentStyle=coll?"display:none;":"flex:1; min-height:0;";
+    const collapseIcon=coll?"▸":"▾";
+    const _railW=(railVisible&&!railOverlay)?(navInRail?72:64):0;
+    const _leftW=leftVisible?(L.leftW||300):0;
+    const _rightW=rightVisible?(L.rightW||340):0;
+    const _bottomH=bottomVisible?60:0;
+    const drawerStyle=`position:relative; flex:none; height:${coll?46:drawerH}px; background:#0d0d0f; border-top:1px solid var(--surface2); display:flex; flex-direction:column; overflow:hidden;`;
+    const topDrawerStyle=`position:relative; flex:none; height:${coll?46:drawerH}px; background:#0d0d0f; border-bottom:1px solid var(--surface2); display:flex; flex-direction:column; overflow:hidden;`;
+    const drawerResize="position:absolute; left:0; right:0; top:-3px; height:12px; cursor:ns-resize; z-index:16;";
+    const fw=this.clamp(s.floatW||440,320,760), fh=this.clamp(s.floatH||360,240,700);
+    const fex=(s.floatEX!=null?s.floatEX:(s.vw-560)), fey=(s.floatEY!=null?s.floatEY:120);
+    const floatEditorStyle=`position:fixed; left:${fex}px; top:${fey}px; width:${fw}px; height:${fh}px; max-width:96vw; z-index:112; background:#0d0d0f; border:1px solid var(--border3); border-radius:14px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.55); display:flex; flex-direction:column;`;
+    const floatEditorHeader="display:flex; align-items:center; gap:9px; padding:11px 14px; background:#101013; border-bottom:1px solid var(--surface2); cursor:grab; flex:none;";
+    const floatResizeWH="position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; z-index:6;";
+    // panel dock preview overlay
+    const crP=this.contentEl?this.contentEl.getBoundingClientRect():{left:66,top:120,right:s.vw,bottom:(s.vh||760),width:s.vw,height:640};
+    const panelDragging=drag&&drag.mode==="panel";
+    const pt=panelDragging?drag.panelTarget:null;
+    let panelPreviewStyle="display:none;";
+    if(panelDragging){
+      if(pt==="left") panelPreviewStyle=`position:fixed; left:66px; top:62px; width:${L.leftW||300}px; height:calc(100vh - 62px); z-index:260;`;
+      else if(pt==="right") panelPreviewStyle=`position:fixed; right:0; top:62px; width:${L.rightW||340}px; height:calc(100vh - 62px); z-index:260;`;
+      else if(pt==="drawer") panelPreviewStyle=`position:fixed; left:66px; right:0; bottom:0; height:${drawerH}px; z-index:260;`;
+      else if(pt==="top") panelPreviewStyle=`position:fixed; left:66px; right:0; top:62px; height:${drawerH}px; z-index:260;`;
+      else if(pt==="main") panelPreviewStyle=`position:fixed; left:66px; right:0; top:62px; bottom:0; z-index:260;`;
+      else panelPreviewStyle=`position:fixed; left:${Math.max(6,drag.px-140)}px; top:${Math.max(64,drag.py-16)}px; width:${fw}px; height:${fh}px; z-index:260;`;
+      panelPreviewStyle+=" background:rgba(53,201,214,.14); border:2px dashed #35c9d6; border-radius:12px; pointer-events:none; animation:lzIn .12s ease;";
+    }
+    const gk=panelDragging&&drag.panelKind==="grid";
+    const panelDockLabel = pt==="left"?(gk?"Grid → left":"Dock left"):pt==="right"?(gk?"Grid → right":"Dock right"):pt==="drawer"?(gk?"Grid → bottom":"Dock bottom"):pt==="top"?(gk?"Grid → top":"Dock top"):(gk?"Grid → Main":"Float");
+
+    // ghost
+    const ghost=drag&&drag.mode==="widget";
+    const ghostW=ghost?mkW(drag.groupIds?drag.groupIds[0]:drag.id,false):null;
+    const ghostStyle=ghost?`position:fixed; left:${drag.px-drag.offx}px; top:${drag.py-drag.offy}px; z-index:300; pointer-events:none; opacity:.5; padding:6px 8px; border-radius:11px; background:#0d0d0f; border:1px solid var(--accent); box-shadow:0 12px 30px rgba(0,0,0,.5); transform:scale(1.03);`:"";
+
+    // ---- mobile edge-dock indicators + overlay scrim (left / right / top drawers) ----
+    const _md=DK.mobDock||{}; const _mdOpen=_md.open||null;
+    const mobDockScrim=isMobile&&!!_mdOpen&&(_md.left||_md.right||_md.top);
+    const _indBase="position:absolute; z-index:170; display:flex; align-items:center; justify-content:center; gap:6px; background:var(--bg2); border:1px solid var(--accent-border1); color:var(--accent-text); box-shadow:0 6px 20px rgba(0,0,0,.5); cursor:pointer; font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.08em;";
+    const mobIndLeft = (isMobile&&_md.left&&!_mdOpen);
+    const mobIndRight= (isMobile&&_md.right&&!_mdOpen);
+    const mobIndTop  = (isMobile&&_md.top&&!_mdOpen);
+    const mobIndLeftStyle =_indBase+" left:10px; bottom:64px; height:40px; padding:0 13px; border-radius:11px;";
+    const mobIndRightStyle=_indBase+" right:10px; bottom:64px; height:40px; padding:0 13px; border-radius:11px;";
+    const mobIndTopStyle  =_indBase+" top:8px; left:50%; transform:translateX(-50%); height:26px; padding:0 16px; border-radius:0 0 12px 12px;";
+    const openMobDock=(r)=>this.setState({mobDrawer:this.state.mobDrawer===r?null:r, navDrawerOpen:false});
+    const closeMobDock=()=>this.setState({mobDrawer:null});
+
+    // shell / frame (tablet = constrained device canvas)
+    const shellStyle="position:fixed; inset:0; background:#08080a; display:flex; align-items:center; justify-content:center; color:var(--text); overflow:hidden;";
+    const frameStyle=isMobile
+      ? "position:relative; width:400px; max-width:96vw; height:min(820px,96vh); display:flex; flex-direction:row; overflow:hidden; background:var(--bg); border:1px solid var(--border3); border-radius:28px; box-shadow:0 30px 80px rgba(0,0,0,.6);"
+      : mob
+      ? "position:relative; width:1024px; max-width:96vw; height:min(760px,96vh); display:flex; flex-direction:row; overflow:hidden; background:var(--bg); border:1px solid var(--border3); border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.6);"
+      : "position:absolute; inset:0; display:flex; flex-direction:row; overflow:hidden; background:var(--bg);";
+
+    return {
+      rootRef:(el)=>{ this.rootEl=el; }, contentRef:(el)=>{ this.contentEl=el; if(el&&!this._ro&&typeof ResizeObserver!=="undefined"){ this._ro=new ResizeObserver(()=>{ clearTimeout(this._rot); this._rot=setTimeout(()=>{ if(this._measure) this._measure(); else this.forceUpdate(); },30); }); this._ro.observe(el); if(this._measure) this._measure(); } }, ghostRef:(el)=>{ this.ghostEl=el; },
+      shellStyle, frameStyle,
+      libScrimStyle:"position:absolute; inset:0; background:rgba(0,0,0,.45); z-index:130; animation:lzIn .16s ease;",
+      libSheetStyle:(mob
+        ? `position:absolute; left:50%; transform:translateX(-50%); bottom:0; width:${isMobile?"min(400px,96vw)":"min(1024px,96vw)"}; max-height:86%; z-index:131; background:#0c1213; border-top:1px solid #1a3a3c; border-radius:18px 18px 0 0; display:flex; flex-direction:column; animation:lzRise .24s cubic-bezier(.2,.7,.2,1); box-shadow:0 -24px 60px rgba(0,0,0,.5);`
+        : "position:absolute; top:0; right:0; bottom:0; width:320px; z-index:131; background:#0c1213; border-left:1px solid #1a3a3c; display:flex; flex-direction:column; animation:lzSlideR .22s cubic-bezier(.2,.7,.2,1); box-shadow:-24px 0 60px rgba(0,0,0,.5);"),
+      navDrawerScrim, navHamburger, hamburgerStyle, hbLine,
+      mobDockScrim, mobIndLeft, mobIndRight, mobIndTop, mobIndLeftStyle, mobIndRightStyle, mobIndTopStyle,
+      openMobDockLeft:()=>openMobDock("left"), openMobDockRight:()=>openMobDock("right"), openMobDockTop:()=>openMobDock("top"), closeMobDock,
+      openNavDrawer:()=>this.setState({navDrawerOpen:true}), closeNavDrawer:()=>this.setState({navDrawerOpen:false}),
+      editMode:edit, libOpen:s.libOpen, histOpen:s.histOpen,
+      fcRows, histRows, presetRows, chipFc, chipPresets, chipHistory, chipPSrc, chipPList, chipPDet, chipBeCtl, chipBeMod, chipFcBd, chipFcIn, chipFcLay, chipFcLed, chipFcTap, chipFcHold,
+      toggleBeMod:()=>this.togglePanel("bemod","right"), toggleBeCtl:()=>{ if(s.editorOpen){ this.closePanel("editor"); this.flash("Block Controls closed"); } else { this.setState({selected:(s.selected==null?2:s.selected), editorOpen:true}); this.flash("Block Controls opened"); } }, togglePSrc:()=>this.togglePanel("psrc","left"), togglePList:()=>this.togglePanel("plist","main"), togglePDet:()=>this.togglePanel("pdet","right"), toggleFcBd:()=>this.togglePanel("fcbd","main"), toggleFcIn:()=>this.togglePanel("fcin","right"), toggleFcLay:()=>this.togglePanel("fclay","top"), toggleFcLed:()=>this.togglePanel("fcled","right"), toggleFcTap:()=>this.togglePanel("fctap","right"), toggleFcHold:()=>this.togglePanel("fchold","right"),
+      toggleFc:()=>this.togglePanel("fc","bottom"), togglePresets:()=>this.togglePanel("presets","main"), toggleHistory:()=>this.togglePanel("history","right"), singlePage:()=>this.singlePage(),
+      showFab:!edit,
+      railVisible, bottomVisible, rightVisible, navInRail, navInBottom,
+      railStyle, railZoneStyle, rightDockStyle, rightZoneStyle, bottomBarStyle, bottomZoneStyle,
+      leftVisible, leftDockStyle, leftZoneStyle, leftEmpty, zoneLeft, zoneGridbar, gridbarZoneStyle, gridScrollStyle,
+      leftColl:s.dockColLeft, rightColl:s.dockColRight, leftExp:!s.dockColLeft, rightExp:!s.dockColRight, toggleDock:(e)=>this.toggleDock(e),
+      topbarStyle, zoneTLStyle, zoneTCStyle, zoneTRStyle, startGridDrag:(e)=>this.startGridDrag(e),
+      gp:this.GP, cat:this.CAT, COLS:this.COLS, ROWS:this.ROWS, params:s.params, bypassed:s.bypassed, adjust:s.adjust, gridMode:s.gridMode, blockSize:s.blockSize, selected:s.selected, editorOpen:s.editorOpen, gridBus,
+      panes:DK.panes, strips:DK.strips, resizers:DK.resizers, mainEmpty:DK.mainEmpty, mainEmptyStyle:DK.mainEmptyStyle, dropActive:DK.dropActive, dropStyle:DK.dropStyle, dropLabel:DK.dropLabel, dropZones:DK.dropZones,
+      pbHostStyle:((DK.pbRect && !edit)
+        ? `position:absolute; left:${Math.round(DK.pbRect.x)}px; top:${Math.round(DK.pbRect.y+36)}px; width:${Math.round(DK.pbRect.w)}px; height:${Math.round(Math.max(60,DK.pbRect.h-36))}px; z-index:5; overflow:hidden; background:var(--bg2);`
+        : "position:absolute; left:8px; top:8px; width:720px; height:480px; visibility:hidden; pointer-events:none; z-index:0; overflow:hidden;"),
+      navItems,
+      zoneTL, zoneTC, zoneTR, zoneRail, zoneRight, zoneBottom, zoneFloat,
+      tcEmpty, rightEmpty, bottomEmpty,
+      ofCount:_ofIds.length, ofList:_ofList, ofChipStyle:_ofChipStyle, ofMenuOpen:!!(s.ofMenu&&_ofIds.length), ofMenuStyle:_ofMenuStyle,
+      toggleOfMenu:(e)=>{ const r=e.currentTarget.getBoundingClientRect(); this.setState({ofMenu:!this.state.ofMenu, ofX:r.right, ofY:r.bottom}); },
+      closeOfMenu:()=>this.setState({ofMenu:false}),
+      ofCustomize:()=>this.setState({ofMenu:false, editMode:true}),
+      dragOverlay, ctrlWrap, ctrlBtn,
+      wdata:{ presetNum:s.presetNum, presetName:s.presetName, scene:s.scene, view:s.view, bpm:s.bpm, cpu:s.cpu, dirty:s.dirty, connState:s.connState, initials:"JV", gridMode:s.gridMode, blockSizeLabel:["S","M","L"][s.blockSize], fcDevice:((typeof window!=="undefined"&&window.__FCBus&&window.__FCBus.state&&window.__FCBus.state.fcDevice)||"FM3"), fcLayout:((typeof window!=="undefined"&&window.__FCBus&&window.__FCBus.state&&window.__FCBus.state.fcLayout)||0), fcSwitch:((typeof window!=="undefined"&&window.__FCBus&&window.__FCBus.state&&window.__FCBus.state.fcSwitch)||0), fcView:((typeof window!=="undefined"&&window.__FCBus&&window.__FCBus.state&&window.__FCBus.state.fcView)||0) },
+      bus:this.bus(),
+      showGrid, showStub, presetPage, cells, cables, gridInnerStyle, gridMatrixStyle, deviceLabel, blockSizeLabel, sizeLessStyle, sizeMoreStyle, gridModeTabs,
+      sizeLess:()=>this.sizeLess(), sizeMore:()=>this.sizeMore(), setGridMode:(e)=>this.setGridMode(e), onGridDown:(e)=>this.onGridDown(e), onGridDbl:(e)=>this.onGridDbl(e), toggleBlock:(e)=>this.toggleBlock(e), stopProp:(e)=>this.stopProp(e),
+      chainLabel, stubTitle, stubGlyph,
+      presetList, presetNum:s.presetNum,
+      presetFlyout:s.presetFlyoutOpen, histItems:this.historyView(),
+      profileTabs, presetTabs, toggles,
+      onProfile:(e)=>this.onProfile(e), onPreset:(e)=>this.onPreset(e), onToggle:(e)=>this.onToggle(e),
+      ribPanels:s.ribMenu==="panels", ribOptions:s.ribMenu==="options",
+      toggleRibPanels:(e)=>this.toggleRibMenu("panels",e), toggleRibOptions:(e)=>this.toggleRibMenu("options",e), closeRibMenu:()=>this.closeRibMenu(),
+      ribPanelsMenuStyle:(()=>{const w=288,vw=(s.vw||1280),x=(s.ribX!=null?s.ribX:vw-150),y=(s.ribY!=null?s.ribY:98);return `position:fixed; top:${Math.round(y+8)}px; left:${Math.round(this.clamp(x-w,8,vw-w-8))}px; z-index:45; width:${w}px; background:#0c1213; border:1px solid #1a3a3c; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,.55); padding:13px; display:flex; flex-direction:column; gap:11px; animation:lzRise .16s ease;`;})(),
+      ribOptionsMenuStyle:(()=>{const w=300,vw=(s.vw||1280),x=(s.ribX!=null?s.ribX:vw-150),y=(s.ribY!=null?s.ribY:98);return `position:fixed; top:${Math.round(y+8)}px; left:${Math.round(this.clamp(x-w,8,vw-w-8))}px; z-index:45; width:${w}px; background:#0c1213; border:1px solid #1a3a3c; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,.55); padding:15px; display:flex; flex-direction:column; gap:13px; animation:lzRise .16s ease;`;})(),
+      ribPanelsBtn:`display:flex; align-items:center; gap:6px; height:30px; padding:0 13px; border-radius:8px; cursor:pointer; font:600 12px/1 'Hanken Grotesk',sans-serif; ${s.ribMenu==="panels"?"background:#12262a; border:1px solid #2f6d70; color:#8fe3ea;":"background:#141417; border:1px solid var(--border2); color:var(--text2);"}`,
+      ribOptionsBtn:`display:flex; align-items:center; gap:6px; height:30px; padding:0 13px; border-radius:8px; cursor:pointer; font:600 12px/1 'Hanken Grotesk',sans-serif; ${s.ribMenu==="options"?"background:#12262a; border:1px solid #2f6d70; color:#8fe3ea;":"background:#141417; border:1px solid var(--border2); color:var(--text2);"}`,
+      ribSingleBtn:"display:flex; align-items:center; gap:6px; height:28px; padding:0 12px; border-radius:8px; cursor:pointer; background:#141417; border:1px solid var(--border2); color:var(--text2); font:600 11px/1 'Hanken Grotesk',sans-serif;",
+      saveLayout:()=>this.saveLayout(), addPanel:()=>this.addPanel("right"), openLib:()=>this.openLib(), closeLib:()=>this.closeLib(),
+      ctx:s.ctx, ctxStyle:(s.ctx?`position:fixed; left:${Math.min(s.ctx.x,(s.vw||1280)-224)}px; top:${Math.min(s.ctx.y,Math.max(60,((typeof window!=="undefined"?window.innerHeight:800)||800)-270))}px; z-index:250; width:214px; background:#0c1213; border:1px solid #1a3a3c; border-radius:10px; box-shadow:0 18px 44px rgba(0,0,0,.6); padding:6px; display:flex; flex-direction:column; gap:2px;`:""),
+      ctxIsPanel:!!(s.ctx&&s.ctx.type==="panel"), ctxIsGroup:!!(s.ctx&&s.ctx.type==="group"),
+      ctxIsWidget:!!(s.ctx&&s.ctx.type==="widget"),
+      ctxWidgetLabel:(s.ctx&&s.ctx.type==="widget")?((this.WIDGETS[s.ctx.id]||{}).label||(String(s.ctx.id).indexOf("param:")===0?"Parameter":s.ctx.id)):"",
+      ctxWidgetZones:((s.ctx&&s.ctx.type==="widget")?(()=>{ const cur=(this.L().widgets[s.ctx.id]||{}).zone; return [["tl","Top L"],["tc","Top C"],["tr","Top R"],["rail","Rail"],["bottom","Bottom"],["gridbar","Grid bar"],["float","Float"]].map(z=>({ zone:z[0], label:z[1], style:`padding:6px 9px; border-radius:7px; cursor:pointer; font:600 11px/1 'Hanken Grotesk',sans-serif; ${cur===z[0]?"background:#12262a; border:1px solid #2f6d70; color:#8fe3ea;":"background:#141417; border:1px solid #26262c; color:#cfcfd6;"}` })); })():[]),
+      ctxWidgetSizes:((s.ctx&&s.ctx.type==="widget")?(()=>{ const raw=(this.L().widgets[s.ctx.id]||{}).density||"default"; const cur=raw==="mini"?"mini":raw==="compact"?"compact":"default"; return [["default","Default"],["compact","Compact"],["mini","Mini"]].map(z=>({ d:z[0], label:z[1], style:`flex:1; text-align:center; padding:6px 8px; border-radius:7px; cursor:pointer; font:600 11px/1 'Hanken Grotesk',sans-serif; ${cur===z[0]?"background:#12262a; border:1px solid #2f6d70; color:#8fe3ea;":"background:#141417; border:1px solid #26262c; color:#cfcfd6;"}` })); })():[]),
+      ctxMoveTo:(e)=>{ if(s.ctx) this.moveWidgetTo(s.ctx.id, e.currentTarget.dataset.z); },
+      ctxSetSize:(e)=>{ if(s.ctx) this.setWidgetSize(s.ctx.id, e.currentTarget.dataset.d); },
+      ctxHideWidget:()=>{ if(s.ctx){ const id=s.ctx.id; this.setState({ctx:null}); this.hideWidget(id); } },
+      closeCtx:()=>this.closeCtx(),
+      ctxSavePanel:()=>{ if(s.ctx) this.savePanelToLib(s.ctx.id); },
+      ctxRenamePanel:()=>{ if(s.ctx){ const id=s.ctx.id; this.setState({ctx:null}); this.renamePanel(id); } },
+      renameOpen:!!s.renameState,
+      renameValue:(s.renameState?s.renameState.value:""),
+      onRenameInput:(e)=>this.setState({renameState:Object.assign({},this.state.renameState,{value:e.target.value})}),
+      onRenameKey:(e)=>{ if(e.key==="Enter"){ e.preventDefault(); this.commitRename(); } else if(e.key==="Escape"){ e.preventDefault(); this.cancelRename(); } },
+      renameInputRef:(el)=>{ if(el){ requestAnimationFrame(()=>{ try{ if(document.activeElement!==el){ el.focus(); if(el.select) el.select(); } }catch(_){}}); } },
+      commitRename:()=>this.commitRename(), cancelRename:()=>this.cancelRename(),
+      ctxClosePanel:()=>{ if(s.ctx){ const id=s.ctx.id; this.setState({ctx:null}); this.closePanel(id); } },
+      ctxSaveGroup:()=>{ if(s.ctx) this.saveGroupToLib(s.ctx.id, s.ctx.ids||[]); },
+      ctxMenuItem:"display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px; cursor:pointer; font:600 12px/1 'Hanken Grotesk',sans-serif; color:var(--text2);",
+      savedPanelsList:(s.savedPanels||[]).map((p,i)=>({ name:p.name, count:(p.items||[]).length, i })),
+      savedGroupsList:(s.savedGroups||[]).map((g,i)=>({ name:g.name, count:(g.ids||[]).length, i })),
+      hasSaved:((s.savedPanels||[]).length+(s.savedGroups||[]).length)>0,
+      loadSavedPanel:(e)=>this.loadSavedPanel(+e.currentTarget.dataset.i), loadSavedGroup:(e)=>this.loadSavedGroup(+e.currentTarget.dataset.i),
+      delSavedPanel:(e)=>{ e.stopPropagation(); this.deleteSaved("panel",+e.currentTarget.dataset.i); }, delSavedGroup:(e)=>{ e.stopPropagation(); this.deleteSaved("group",+e.currentTarget.dataset.i); },
+      exitEdit:()=>this.exitEdit(), enterEdit:()=>this.enterEdit(),
+      onNav:(e)=>this.onNav(e), onBlock:(e)=>this.onBlock(e), addBlockFn:()=>this.openPalette(null),
+      onKeyActivate:(e)=>{ if(e.key==="Enter"||e.key===" "||e.key==="Spacebar"){ e.preventDefault(); if(e.currentTarget&&e.currentTarget.click) e.currentTarget.click(); } },
+      onMemberDown:(e)=>this.onMemberDown(e),
+      closePreset:()=>this.closePreset(), pickPreset:(e)=>this.pickPreset(e), closeHist:()=>this.closeHist(),
+      libHidden, libPlaced, libHiddenGroups, noHidden:libHidden.length===0 && !_lq, navHiddenList, hasNavHidden:navHiddenList.length>0,
+      libQuery:s.libQuery||"", onLibSearch:(e)=>this.setState({libQuery:e.target.value}),
+      addWidget:(e)=>this.addWidget(e), startLibDrag:(e)=>this.startLibDrag(e), hideWidgetById:(e)=>this.hideWidget(e.currentTarget.dataset.id), showNav:(e)=>this.showNav(e),
+      startRightResize:(e)=>this.startRightResize(e), startFloatEditorDrag:(e)=>this.startFloatEditorDrag(e),
+      startPanelDrag:(e)=>this.startPanelDrag(e), startDockResize:(e)=>this.startDockResize(e),
+      editorDrawer, editorFloating, editorInRight, editorInLeftPanel, editorTop, drawerStyle, topDrawerStyle, drawerResize, floatEditorStyle, floatEditorHeader, floatResizeWH,
+      panelPreviewStyle, panelDockLabel, panelDragging,
+      editorContentStyle, collapseIcon, toggleCollapse:()=>this.toggleCollapse(),
+      closeEditor:()=>this.closeEditor(),
+      onGridSelect:(idx,c)=>{ this.setState({fcSel:c, editorOpen:true}); },
+      pinFromEditor:(p)=>this.pinParam(p), onParamGrab:(p,e)=>this.onParamGrab(p,e),
+      editorBlock,
+      ghost, ghostW, ghostStyle,
+      navGhost, navGhostGlyph:(navById[s.navDragId]?navById[s.navDragId].glyph:""), navGhostLabel:(navById[s.navDragId]?navById[s.navDragId].label:""), navGhostStyle, navGhostRef:(el)=>{ this.navGhostEl=el; },
+      toast:s.toast,
+      hasToasts:(s.toasts||[]).length>0,
+      toastList:(s.toasts||[]).map(t=>({ msg:t.msg, hasAction:!!t.action, actionLabel:t.action?t.action.label:"", act:t.action?()=>{ if(t.action.fn) t.action.fn(); this.setState({toasts:(this.state.toasts||[]).filter(x=>x.id!==t.id)}); }:(()=>{}), style:`display:flex; align-items:center; padding:11px 18px; border-radius:11px; background:#16161a; border:1px solid ${t.kind==="warn"?"#5a4a2c":t.kind==="error"?"#5a2c2c":"var(--border3)"}; color:var(--text); font:600 13px/1 'Hanken Grotesk',sans-serif; box-shadow:0 12px 40px rgba(0,0,0,.5); white-space:nowrap; animation:lzRise .18s ease;` })),
+      confirm:s.confirm,
+      confirmTitle:"Unsaved changes",
+      confirmMsg:(s.confirm&&s.confirm.kind==="recall")?("Preset “"+s.presetName+"” has unsaved edits. Save them before loading preset "+s.confirm.n+"?"):"",
+      confirmSave:()=>this.confirmResolve("save"),
+      confirmDiscard:()=>this.confirmResolve("discard"),
+      confirmCancel:()=>this.confirmResolve("cancel"),
+      palette:s.palette,
+      paletteOpen:!!s.palette,
+      paletteTarget:(s.palette&&s.palette.target!=null)?("cell "+(s.palette.target+1)):"first empty cell",
+      paletteEmpty:!!(s.palette)&&this.paletteRows().length===0,
+      paletteItems:(s.palette?this.paletteRows().slice(0,60).map((r,i)=>{ const cat=this.CAT[r.catId]||{c:"#35c9d6",g:"\u2022"}; const sel=(s.palette.sel||0)===i; return { key:r.catId+":"+r.type, name:r.name, type:r.type, glyph:cat.g, insert:()=>this.paletteInsert(r), rowStyle:`display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:9px; cursor:pointer; ${sel?"background:#12262a; border:1px solid #2f6d70;":"border:1px solid transparent;"}`, iconStyle:`width:30px; height:30px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; background:${cat.c}22; border:1px solid ${cat.c}55; color:${cat.c};` }; }):[]),
+      onPaletteInput:(e)=>this.setPaletteQuery(e.target.value),
+      paletteInputRef:(el)=>{ if(el){ requestAnimationFrame(()=>{ try{ if(document.activeElement!==el) el.focus(); }catch(err){} }); } },
+      closePalette:()=>this.closePalette()
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -11,6 +11,23 @@
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
+  import { buildDeviceLayoutBoard, layoutVariantSig, packRows, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
+  import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
+  import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
+  import {
+    WORKBENCH_PARAMETER_SOURCE_MIME,
+    getOptionalWorkbenchContext,
+    menuPositionFromPointer,
+    serializeWorkbenchParameterSource,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition,
+    type WorkbenchParameterSource
+  } from './workbench';
+  import ContextMenu from './workbench/svelte/ContextMenu.svelte';
+  import { longPress } from './axis-workbench/longPress';
+  import { buildAxisPinMenuItems } from './axis-workbench/pinMenu';
+  import type { AxisPinTarget } from './axis-workbench/pinTargets';
+  import { axisBlockEditorModifierController } from './axis-workbench/blockEditor/blockEditorModifierController';
 
   let {
     slug = '',
@@ -25,11 +42,15 @@
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
   const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇' };
+  const workbench = getOptionalWorkbenchContext();
+  const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
   type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
-  type Widget = { id: string; key: string; x: number; y: number; w: number; h: number; view: string };
-  type Board = { pageOrder: string[]; page: string; boards: Record<string, Widget[]> };
+  // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
+  // device-authentic Default board can preserve the editor's rows through responsive re-pack).
+  type Widget = SurfaceWidget;
+  type Board = SurfaceBoard;
 
   // ── live control catalog (rebuilt from the device params; widgets reference these by key) ──
   const knobById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
@@ -119,9 +140,25 @@
   let modTargetParam = $state<number | null>(null);
   function openMod(c: Ctl) {
     if (editMode) return;
+    const targetEid = editor.selected?.effectId ?? null;
+    const blockName = editor.selected?.display ?? 'Block';
+    // Modifier-ownership rule (design §1, 05-block-editor.md): when a docked `be-part="modifier"`
+    // panel is mounted, the ∿ badge targets THAT panel via the shared controller instead of opening
+    // the in-editor flyout. Only fall back to the overlay flyout when no docked panel exists.
+    if (axisBlockEditorModifierController.modPartMounted) {
+      axisBlockEditorModifierController.targetParameter({
+        label: c.label,
+        block: blockName,
+        targetEffectId: targetEid,
+        targetParam: c.id,
+        slot: 1
+      });
+      editor.showToast(`∿ ${c.label} → Modifier panel`, '#f5a623');
+      return;
+    }
     modLabel = c.label;
     modTargetParam = c.id;
-    modTargetEid = editor.selected?.effectId ?? null;
+    modTargetEid = targetEid;
     modOpen = true;
   }
   let editingKey = $state<string | null>(null);
@@ -191,8 +228,17 @@
   // cell = exactly the width split across the shown columns, so the board ALWAYS fills the width
   // (fewer cols = bigger tiles). Min keeps tiles legible; the col count drops before tiles get tiny.
   const cell = $derived(Math.max(isMobile ? 60 : 48, Math.floor((containerW - (displayCols - 1) * GAP) / displayCols)));
-  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses
-  const viewWidgets = $derived(!editMode && displayCols < cols ? packInto(widgets, displayCols, 256) : widgets);
+  // a device-authentic Default board tags its widgets with a source `row`; the free-arranged boards don't
+  const rowGrouped = $derived(widgets.some((w) => w.row != null));
+  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses.
+  // Row-grouped (device) boards reflow row-by-row so the editor's rows survive; free boards gravity-pack.
+  const viewWidgets = $derived(
+    !editMode && displayCols < cols
+      ? rowGrouped
+        ? packRows(widgets, displayCols)
+        : packInto(widgets, displayCols, 256)
+      : widgets
+  );
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   const effCompact = $derived(compact || isMobile);
@@ -234,7 +280,15 @@
   function loadProfileBoard(s: string, prof: string): Board {
     try {
       const raw = surfGet(bKey(s, prof));
-      if (raw) return reconcile(JSON.parse(raw));
+      if (raw) {
+        const saved = reconcile(JSON.parse(raw));
+        // The Default board is device-authentic: when the served layout variant differs from the one it
+        // was seeded against (a type change, or a first load after this feature landed), re-seed it from
+        // the current layout instead of restoring the stale arrangement. Blank/custom profiles keep their
+        // saved board regardless. An empty `variantSig` means "no device layout" — nothing to re-seed to.
+        if (prof === 'Default' && variantSig && saved.variantSig !== variantSig) return seedFor('Default');
+        return saved;
+      }
       if (prof === 'Default') {
         const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem(LEGACY_KEY(s)) : null; // carry a pre-profile board into Default
         if (legacy) return reconcile(JSON.parse(legacy));
@@ -312,57 +366,17 @@
   }
 
   const mk = (c: Ctl): Widget => ({ id: 'w' + c.key, key: c.key, x: 0, y: 0, w: c.w, h: c.h, view: c.view });
-  // catalog key for a layout control's paramId (cont → k<id>, enum → e<id>); null if not on this device
-  function keyForParam(pid: number | null): string | null {
-    if (pid == null) return null;
-    if (knobById.has(pid)) return `k${pid}`;
-    if (enumById.has(pid)) return `e${pid}`;
-    return null;
-  }
-  // Device-authentic Default layout: one page per editor page, controls in the editor's order with the
-  // editor's labels. Positions are gravity-packed into the grid (NOT the editor's absolute columns —
-  // those assume a far wider canvas and read as sparse/overlapping here). Anything the layout doesn't
-  // reference gets swept onto a trailing "More" page so nothing is lost.
+  // Fingerprint of the served layout variant (family/variant/type-selected pages). The variant is chosen
+  // server-side by the block's current type, so a type change yields a different sig → the Default board
+  // re-seeds (below); user-arranged profiles keep their own storage and are untouched.
+  const variantSig = $derived(layoutVariantSig(editor.blockLayout));
+  // Device-authentic Default layout (v2): pages become tabs; inside a page, controls flow left→right per
+  // row and rows flow top→bottom (widgets carry their source `row` for row-preserving reflow). Widget
+  // types map to views (knob/slider/dropdown/toggle/meter/bypass); unmapped/`unknown` controls fall back
+  // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
+  // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    const lay = editor.blockLayout;
-    if (!lay?.pages?.length) return null;
-    const boards: Record<string, Widget[]> = {};
-    const pageOrder: string[] = [];
-    // Page names are the keys of the `{#each pageOrder (pg)}` block, so they MUST be unique — a device
-    // layout can repeat a name (e.g. Delay ships its own "More" page, which also collides with the
-    // catch-all below) and a duplicate key is a fatal `each_key_duplicate`. Suffix any repeat.
-    const usedNames = new Set<string>();
-    const uniqName = (n: string): string => {
-      const base = n || 'Page';
-      let name = base;
-      for (let i = 2; usedNames.has(name); i++) name = `${base} ${i}`;
-      usedNames.add(name);
-      return name;
-    };
-    for (const pg of lay.pages) {
-      const ws: Widget[] = [];
-      const seen = new Set<string>();
-      for (const ctl of pg.controls) {
-        const key = keyForParam(ctl.paramId);
-        const cat = key ? catByKey.get(key) : undefined;
-        if (!cat || seen.has(key!)) continue; // skip unknown params + dupes (a param listed twice)
-        seen.add(key!);
-        ws.push(mk(cat));
-      }
-      if (!ws.length) continue;
-      const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
-      boards[name] = packList(ws); // tidy left→right, top→bottom in editor order
-      pageOrder.push(name);
-    }
-    if (!pageOrder.length) return null;
-    const placed = new Set(pageOrder.flatMap((p) => boards[p]!.map((w) => w.key)));
-    const rest = catalog.filter((c) => !placed.has(c.key));
-    if (rest.length) {
-      const name = uniqName('More');
-      boards[name] = packList(rest.map(mk));
-      pageOrder.push(name);
-    }
-    return { pageOrder, page: pageOrder[0]!, boards };
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -393,14 +407,17 @@
       boards[pg] = ws;
     }
     const page = b.pageOrder.includes(b.page) ? b.page : b.pageOrder[0] ?? 'Main';
-    return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards };
+    return { pageOrder: b.pageOrder.length ? b.pageOrder : ['Main'], page, boards, variantSig: b.variantSig };
   }
 
   // load a slug's board (storage → reconcile, else default) when it first appears, the catalog changes, OR a
   // live config push from another UI bumps surfRev() (host↔remote arrange sync).
   let loadedSig = '';
   $effect(() => {
-    const sig = slug + '|' + catalog.map((c) => c.key).join(',') + '|' + surfRev();
+    // variantSig is pipe-joined but surfRev stays the LAST segment, so the revChanged `.pop()` below is
+    // still the surfRev — a served-layout variant change (type switch) now also re-runs this load, which
+    // re-seeds the Default board via loadProfileBoard's variant check.
+    const sig = slug + '|' + catalog.map((c) => c.key).join(',') + '|' + variantSig + '|' + surfRev();
     if (!slug || catalog.length <= 1 || sig === loadedSig) return;
     const revChanged = loadedSig.split('|').pop() !== String(surfRev());
     loadedSig = sig;
@@ -839,6 +856,172 @@
     setNorm(pid, (knob(pid)?.norm ?? 0) + dir * 0.02);
   }
 
+  function pinnable(c: Ctl | undefined): c is Ctl {
+    return !!c && c.id >= 0 && (c.kind === 'cont' || c.kind === 'toggle' || c.kind === 'select');
+  }
+
+  function parameterSourceForControl(c: Ctl): WorkbenchParameterSource | null {
+    if (!pinnable(c)) return null;
+    return axisParameterSourceFromEditorParamId(
+      {
+        selected: editor.selected,
+        params: editor.params,
+        enums: editor.enums
+      },
+      c.id
+    );
+  }
+
+  function onWorkbenchParameterDragStart(event: DragEvent, c: Ctl) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    const source = parameterSourceForControl(c);
+    if (!source || !event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(WORKBENCH_PARAMETER_SOURCE_MIME, serializeWorkbenchParameterSource(source));
+    event.dataTransfer.setData('text/plain', source.label);
+    setParamChipDragImage(event, c, source);
+  }
+
+  /** Glyph SVG (18px, block-accent) that recalls the control's kind on the chip. */
+  function paramChipGlyph(kind: Kind, color: string): string {
+    if (kind === 'toggle') {
+      return `<svg width="20" height="18" viewBox="0 0 40 24" aria-hidden="true"><rect x="2" y="4" width="36" height="16" rx="8" fill="none" stroke="${color}" stroke-width="2.5"/><circle cx="28" cy="12" r="6" fill="${color}"/></svg>`;
+    }
+    if (kind === 'select') {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13 M4 12h13 M4 17h9" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+    }
+    // 'cont' (and any other pinnable): a knob glyph mirroring the tile's dial.
+    return `<svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 100" transform="rotate(135 16 16)"/><circle cx="16" cy="16" r="2.4" fill="${color}"/></svg>`;
+  }
+
+  // The browser's default drag image is a snapshot of the dragged node clipped to
+  // whatever of it is on-screen (T20 bug #1). Round 20 handed setDragImage a full
+  // off-screen clone of the tile — but that opaque block hides the drop targets
+  // underneath (T22 review). Instead build a compact tooltip-style chip off-screen
+  // (keeping T20's "fully rendered, never clipped" property) in the shared DragLayer
+  // `.aw-drag-ghost` language — a kind glyph + the param name, block-accent border,
+  // translucent — so the operator can still see where the control will land.
+  function setParamChipDragImage(event: DragEvent, c: Ctl, source: WorkbenchParameterSource) {
+    if (typeof event.dataTransfer?.setDragImage !== 'function') return;
+    const rawColor = source.state?.color;
+    const color = typeof rawColor === 'string' && rawColor ? rawColor : accent;
+    const chip = document.createElement('div');
+    // Off-screen so the whole chip snapshots without viewport clipping. Styling
+    // mirrors DragLayer's `.aw-drag-ghost`: 32px pill, translucent surface, accent
+    // border, subtle lift — resolved via the app tokens on :root.
+    chip.style.cssText = [
+      'position:fixed',
+      'top:-10000px',
+      'left:-10000px',
+      'display:inline-flex',
+      'align-items:center',
+      'gap:7px',
+      'height:32px',
+      'max-width:220px',
+      'padding:0 12px',
+      'box-sizing:border-box',
+      `border:1px solid ${color}`,
+      'border-radius:8px',
+      'background:color-mix(in srgb, var(--bg2, #12161b) 88%, transparent)',
+      'color:var(--text, #e7edf2)',
+      'opacity:0.9',
+      'box-shadow:0 12px 30px rgba(0,0,0,0.5)',
+      'font:800 11px/1 var(--font-ui, system-ui, sans-serif)',
+      'white-space:nowrap',
+      'pointer-events:none'
+    ].join(';');
+    const glyph = document.createElement('span');
+    glyph.style.cssText = 'display:inline-flex;flex:0 0 auto;align-items:center';
+    glyph.innerHTML = paramChipGlyph(c.kind, color);
+    const name = document.createElement('span');
+    name.style.cssText = 'overflow:hidden;text-overflow:ellipsis';
+    name.textContent = source.label;
+    chip.append(glyph, name);
+    document.body.appendChild(chip);
+    // Anchor the pointer just inside the chip's leading edge, vertically centred.
+    event.dataTransfer.setDragImage(chip, 14, 16);
+    // The spec snapshots the element synchronously; remove it once the drag has grabbed it.
+    setTimeout(() => chip.remove(), 0);
+  }
+
+  async function pinControlToWorkbench(c: Ctl, target?: AxisPinTarget) {
+    if (!workbenchCanPin || !workbench || !pinnable(c)) return;
+    const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
+      controller: workbench.controller,
+      source: 'menu',
+      args: {
+        paramId: c.id,
+        title: c.label,
+        ...(target?.panelId ? { panelId: target.panelId } : {})
+      }
+    });
+    if (result.success) {
+      const where = target?.panelId ? ` to ${target.label}` : '';
+      editor.showToast(`Pinned ${c.label}${where}`, '#35c9d6');
+    }
+  }
+
+  // ── touch / context-menu pin path (HTML5 drag doesn't work on touch) ──
+  let pinMenuOpen = $state(false);
+  let pinMenuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  let pinMenuCtl = $state<Ctl | null>(null);
+
+  const pinMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    if (!pinMenuOpen || !workbench || !pinMenuCtl) return [];
+    const c = pinMenuCtl;
+    return buildAxisPinMenuItems(workbench.controller.document, (target) => void pinControlToWorkbench(c, target));
+  });
+
+  function openPinMenuAt(c: Ctl, pos: WorkbenchMenuPosition) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    pinMenuCtl = c;
+    pinMenuPos = pos;
+    pinMenuOpen = true;
+  }
+
+  function onPinContextMenu(event: MouseEvent, c: Ctl) {
+    if (!workbenchCanPin || !pinnable(c)) return;
+    event.preventDefault();
+    openPinMenuAt(c, menuPositionFromPointer(event));
+  }
+
+  function onPinLongPress(c: Ctl, detail: { x: number; y: number }) {
+    openPinMenuAt(c, detail);
+  }
+
+  function closePinMenu() {
+    pinMenuOpen = false;
+    pinMenuCtl = null;
+  }
+
+  function pagePinIds(): number[] {
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const widget of viewWidgets) {
+      const c = catByKey.get(widget.key);
+      if (!pinnable(c) || seen.has(c.id)) continue;
+      seen.add(c.id);
+      ids.push(c.id);
+    }
+    return ids;
+  }
+
+  async function pinPageToWorkbench() {
+    if (!workbenchCanPin || !workbench) return;
+    const paramIds = pagePinIds();
+    if (!paramIds.length) return;
+    const block = editor.selected?.display ?? 'Block';
+    const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
+      controller: workbench.controller,
+      source: 'host',
+      args: {
+        paramIds,
+        title: `${block} Controls`
+      }
+    });
+    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, '#35c9d6');
+  }
+
   // dropdown popover geometry
   const selMenu = $derived.by(() => {
     if (!openSelect) return null;
@@ -913,7 +1096,17 @@
     <div class="results">
       {#each matches as c (c.key)}
         {@const view = viewOf(c)}
-        <div class="restile" class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')} class:nobg={c.kind === 'action'}>
+        <div
+          class="restile"
+          class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')}
+          class:nobg={c.kind === 'action'}
+          role="group"
+          aria-label={c.label}
+          draggable={workbenchCanPin && pinnable(c)}
+          ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
+          oncontextmenu={(e) => onPinContextMenu(e, c)}
+          use:longPress={{ onLongPress: (d) => onPinLongPress(c, d) }}
+        >
           {#if c.kind === 'cont' && view === 'knob'}
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
             <div class="dialwrap" style:width="60px" style:height="60px"
@@ -1005,6 +1198,9 @@
     <div class="stepper"><span class="sl">ROWS</span><button onclick={() => gridResize('rows', -1)}>−</button><span class="sv">{rows}</span><button onclick={() => gridResize('rows', 1)}>＋</button></div>
     <span class="ab-note">applies to every block</span>
     <span class="ab-sp"></span>
+    {#if workbenchCanPin}
+      <button class="ab-btn" onclick={pinPageToWorkbench} title="Pin this page to a Workbench custom panel">⌖ Pin page</button>
+    {/if}
     <button class="ab-btn" class:on={effCompact} onclick={toggleCompact} title="Free = leave gaps · Packed = no holes">{effCompact ? '⊞ Packed' : '⊡ Free'}</button>
     <button class="ab-btn" onclick={tidyUp}>⤢ Tidy up</button>
   </div>
@@ -1035,6 +1231,10 @@
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq'}
               class:dragging={drag?.id === w.id}
+              draggable={workbenchCanPin && pinnable(c) && !editMode}
+              ondragstart={(e) => onWorkbenchParameterDragStart(e, c)}
+              oncontextmenu={(e) => { if (!editMode) onPinContextMenu(e, c); }}
+              use:longPress={{ onLongPress: (d) => { if (!editMode) onPinLongPress(c, d); } }}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
               onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0) showParamHelp(c.id, c.label); }}
               onmouseleave={clearParamHelp}
@@ -1172,6 +1372,9 @@
                   {@const sp = knob(c.id)}
                   <button class="qbadge" class:on={editor.isSwipeControl(c.id)} onpointerdown={(e) => e.stopPropagation()} onclick={() => sp && editor.toggleSwipeControl(sp)} title="Map to grid swipe control (adjust from the Signal Grid tile)">⚡</button>
                 {/if}
+                {#if workbenchCanPin && pinnable(c)}
+                  <button class="pinbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => pinControlToWorkbench(c)} title="Pin to a Workbench custom panel">⌖</button>
+                {/if}
                 <button class="rsz" onpointerdown={(e) => onResizeDown(e, w.id)} aria-label="Resize">
                   <svg width="13" height="13" viewBox="0 0 13 13"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke={accent} stroke-width="1.6" stroke-linecap="round" /></svg>
                 </button>
@@ -1245,6 +1448,11 @@
 
 <!-- modifier editor flyout (opened from a control's ∿ badge) -->
 <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
+
+<!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to HTML5 drag -->
+{#if workbenchCanPin}
+  <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
+{/if}
 
 <style>
   .modbadge {
@@ -1606,7 +1814,7 @@
   }
   /* in arrange mode the whole tile is grabbable — the controls don't intercept the pointer,
      only the chrome buttons (remove / retype / resize) stay interactive */
-  .card.editing > :not(.wx):not(.vcyc):not(.rsz):not(.qbadge) {
+  .card.editing > :not(.wx):not(.vcyc):not(.rsz):not(.qbadge):not(.pinbadge) {
     pointer-events: none;
   }
   .card.dragging {
@@ -2103,6 +2311,27 @@
     background: rgba(245, 166, 35, 0.22);
     border-color: var(--amber);
     color: var(--amber);
+  }
+  .pinbadge {
+    position: absolute;
+    bottom: 4px;
+    right: 56px;
+    z-index: 8;
+    width: 21px;
+    height: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 11px;
+    background: rgba(53, 201, 214, 0.14);
+    border: 1px solid rgba(53, 201, 214, 0.5);
+    color: var(--accentbright);
+  }
+  .pinbadge:hover {
+    background: rgba(53, 201, 214, 0.22);
+    border-color: var(--accent);
   }
   .vcyc {
     position: absolute;

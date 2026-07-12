@@ -24,6 +24,7 @@
   import StatusBar from '$lib/StatusBar.svelte';
   import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
+  import AxisWorkbenchShell from '$lib/axis-workbench/AxisWorkbenchShell.svelte';
   import RemoteGate from '$lib/RemoteGate.svelte';
   import DirectGate from '$lib/DirectGate.svelte';
   import MobileGate from '$lib/MobileGate.svelte';
@@ -31,12 +32,14 @@
   import { directBoot } from '$lib/direct.svelte';
   import { mobileBoot } from '$lib/mobile.svelte';
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
+  import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
   // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
   let started = false;
   let tp: ReturnType<typeof setInterval> | null = null;
   let tw: ReturnType<typeof setInterval> | null = null;
+  const workbenchEnabled = isAxisWorkbenchFeatureEnabled(import.meta.env);
   function startApp() {
     if (started) return;
     started = true;
@@ -127,21 +130,25 @@
   <DirectGate />
 {:else}
 <div class="app">
-  <ToolRail />
-  <div class="main">
-    <TopBar />
-    {#if editor.inLibrary}
-      <PresetBrowser />
-    {:else if editor.virtual?.slug === 'fc'}
-      <FcEditor />
-    {:else if editor.virtual}
-      <VirtualScreen />
-    {:else}
-      <SignalGrid />
-      <BlockEditor />
-    {/if}
-    <StatusBar />
-  </div>
+  {#if workbenchEnabled}
+    <AxisWorkbenchShell />
+  {:else}
+    <ToolRail />
+    <div class="main">
+      <TopBar />
+      {#if editor.inLibrary}
+        <PresetBrowser />
+      {:else if editor.virtual?.slug === 'fc'}
+        <FcEditor />
+      {:else if editor.virtual}
+        <VirtualScreen />
+      {:else}
+        <SignalGrid />
+        <BlockEditor />
+      {/if}
+      <StatusBar />
+    </div>
+  {/if}
   <CommandPalette />
   <CabPicker />
   <DeviceTools />
