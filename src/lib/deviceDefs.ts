@@ -50,17 +50,19 @@ export function deviceDefsActions(inp: DeviceDefsInputs): DeviceDefAction[] {
 }
 
 /**
- * Whether the connect-time prompt should appear. It appears when the device can self-describe, the
- * status has loaded and reports NO persisted profile for the current firmware, and the user hasn't
- * dismissed it for this device+firmware. `building` in-flight also shows the prompt (so its progress
- * bar is visible), but a persisted profile (`exists`) or a missing capability hides it.
+ * Whether the connect-time prompt should appear. It appears when the device can acquire a
+ * definition profile at all — self-describe (walk) OR cache import (import-only devices like the
+ * AM4, whose action list simply has no "Read from device") — the status has loaded and reports NO
+ * persisted profile for the current firmware, and the user hasn't dismissed it for this
+ * device+firmware. `building` in-flight also shows the prompt (so its progress bar is visible),
+ * but a persisted profile (`exists`) or a missing capability hides it.
  */
 export function shouldOfferDeviceDefs(
-  caps: { selfDescribe?: boolean } | null,
+  caps: { selfDescribe?: boolean; cacheImport?: boolean } | null,
   status: Pick<DeviceCacheStatus, 'exists' | 'building'> | null,
   dismissed: boolean
 ): boolean {
-  if (!caps?.selfDescribe || !status) return false;
+  if ((!caps?.selfDescribe && !caps?.cacheImport) || !status) return false;
   if (status.building) return true; // always surface an in-flight build
   if (status.exists) return false; // already have a profile — nothing to prompt
   return !dismissed;
