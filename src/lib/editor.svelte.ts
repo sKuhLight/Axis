@@ -1281,6 +1281,9 @@ class EditorStore {
   #pollTick = 0;
   poll = async () => {
     if (this.#polling) return; // never let interval ticks stack serial ops on a slow link
+    // A definitions walk/import owns the exclusive transport (FORGEFX-32) — /healthz and /device are
+    // free, but #adoptDevice fans out into real device reads on change. Sit the whole tick out.
+    if (deviceDefs.building || deviceDefs.importing) return;
     this.#polling = true;
     try {
       const h = await forgefx.health();
@@ -1376,6 +1379,9 @@ class EditorStore {
   watchPreset = async () => {
     if (!this.presetLiveQuery) return; // no live current-preset query on this device — polling would just time out
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
+    // A definitions walk/import owns the exclusive transport — interleaved preset reads during the
+    // 3ms-paced query stream have frozen an FM3 (FORGEFX-32). Skip ticks until it finishes.
+    if (deviceDefs.building || deviceDefs.importing) return;
     // On a slow MIDI link, background preset-watch polling competes with edits and inflates latency —
     // run it only every 4th tick (~16s instead of ~4s) so the link stays free for what the user is doing.
     if (this.slowLink && this.#watchTick++ % 4 !== 0) return;
