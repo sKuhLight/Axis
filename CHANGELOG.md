@@ -2,6 +2,16 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.1-beta — 2026-07-13
+
+Re-cut of 0.9.0-beta (The Layout Update — see below), whose macOS installers never built. Same app, fixed release pipeline.
+
+### Fixed
+
+- macOS installer build: the UI build ran out of memory on the smaller macOS runners (Node heap limit) — the release workflow now grants it a 4 GB heap
+
+
+
 ## 0.9.0-beta — 2026-07-12
 
 The Layout Update — the workbench shell is now the default UI (legacy shell: start with VITE_AXIS_WORKBENCH=0).
