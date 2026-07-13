@@ -17,6 +17,8 @@ import type {
   FcModel,
   FcReadState,
   TelemetryStatus,
+  TelemetryConfig,
+  TelemetryMode,
   DebugReport,
   ModModel,
   PresetSummary,
@@ -333,6 +335,12 @@ export const forgefx = {
   // ── telemetry / diagnostics ──
   diag: () => req<unknown>('/diag'),
   telemetryStatus: () => req<TelemetryStatus>('/telemetry/status'),
+  /** Device-telemetry polling-mode config (META-17). Transport-agnostic — routes through req() so it
+   *  works in local/remote/direct automatically. 404/501 on OLD servers → treat as unsupported. */
+  telemetryConfig: () => req<TelemetryConfig>('/telemetry/config'),
+  /** Set the device-telemetry polling mode. 400 on an unknown mode; 404/501 on servers without the control. */
+  setTelemetryMode: (mode: TelemetryMode) =>
+    req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ mode }) }),
   uploadDebugReport: (report: DebugReport) =>
     req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
   /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */

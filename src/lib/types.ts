@@ -221,6 +221,29 @@ export interface DebugReport {
   events?: { t: number; kind: string; text: string }[];
 }
 
+/** Device-telemetry polling mode (META-17). `performance` = snappiest reflection / most traffic;
+ *  `balanced` = default; `reduced` = minimal background traffic for stage use. */
+export type TelemetryMode = 'performance' | 'balanced' | 'reduced';
+/** GET/PUT /telemetry/config — the active polling mode, the server's resolved interval set, and the
+ *  modes the server offers. `effective` is opaque server detail (interval numbers) surfaced for display. */
+export interface TelemetryConfig {
+  mode: TelemetryMode;
+  effective: Record<string, unknown>;
+  modes: TelemetryMode[];
+}
+/** Cumulative device-traffic counters pushed on the DeviceEvent bus (`traffic` event). Rates are computed
+ *  client-side from deltas between successive snapshots. `loops` = the currently-active poll loops. */
+export interface TrafficSnapshot {
+  txMsgs: number;
+  txBytes: number;
+  rxMsgs: number;
+  rxBytes: number;
+  /** Epoch (ms) the counters were last reset — lets a client detect a counter reset (reconnect). */
+  since: number;
+  /** Active background poll loops (e.g. ['meters','editWatch']). */
+  loops: string[];
+}
+
 /** Modifier (eid 3) address model — field → paramId. */
 export interface ModFieldDef {
   pid: number;
@@ -507,7 +530,12 @@ export type DeviceEvent =
   // A shared Axis config doc (layouts / swipe quick-actions / tags / surface arrange …) was written by
   // another UI — apply it live so both directions stay in sync without a reload. `origin` = the writer's
   // client id, so a UI ignores its own echo.
-  | { type: 'config'; id: string; data: unknown; origin?: string };
+  | { type: 'config'; id: string; data: unknown; origin?: string }
+  // Device-telemetry control (META-17): the active polling mode changed server-side (another UI / a PUT
+  // elsewhere), and cumulative traffic counters for the live traffic monitor. `traffic` carries the
+  // TrafficSnapshot fields inline.
+  | { type: 'telemetryConfig'; mode: TelemetryMode }
+  | ({ type: 'traffic' } & TrafficSnapshot);
 
 /** A user-defined parameter tab within a block family (persisted client-side). */
 export interface TabDef {
@@ -578,6 +606,9 @@ export interface DeviceCaps {
   restoreDump?: boolean;
   versionStore?: boolean;
   deviceParams?: boolean;
+  /** Device server exposes the telemetry polling-mode control (GET/PUT /telemetry/config). Absent on
+   *  older servers → the polling-mode UI (AxisPanel Performance tab + workbench telemetry widget) is hidden. */
+  telemetryControl?: boolean;
   /** Rail-screen virtual effects this device exposes (Setup/Controllers/Modifier/FC …). */
   virtualEffects?: { eid: number; slug: string; name: string }[];
 }

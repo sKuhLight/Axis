@@ -33,12 +33,11 @@
   import { mobileBoot } from '$lib/mobile.svelte';
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
+  import { pollIntervalsFor } from '$lib/pollIntervals';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
   // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
-  let started = false;
-  let tp: ReturnType<typeof setInterval> | null = null;
-  let tw: ReturnType<typeof setInterval> | null = null;
+  let started = $state(false);
   const workbenchEnabled = isAxisWorkbenchFeatureEnabled(import.meta.env);
   function startApp() {
     if (started) return;
@@ -46,14 +45,18 @@
     void surfInit(); // load control-surface layouts from the config store (host: cache is already seeded)
     editor.init();
     editor.poll();
-    // Remote mode is event-driven — the host pushes live param/grid/scene/tempo/config changes over the
-    // relay, so we don't poll aggressively (each poll is a metered Realtime round-trip). A slow heartbeat is
-    // enough to track connection status + catch device-initiated preset changes. Local mode stays snappy.
-    const pollMs = remoteBoot.active ? 20000 : 5000;
-    const watchMs = remoteBoot.active ? 25000 : 4000;
-    tp = setInterval(() => editor.poll(), pollMs);
-    tw = setInterval(() => editor.watchPreset(), watchMs);
   }
+  // Poll/preset-watch loops. The interval depends on the active telemetry polling mode (META-17/AXIS-40):
+  // faster modes reflect device changes sooner at the cost of traffic; remote sessions are event-driven
+  // and clamp to a slow relay floor (pollIntervals.ts). Rebuild BOTH intervals whenever the mode changes
+  // (this $effect re-runs on editor.pollingMode / started) — clearing + re-creating the two setIntervals.
+  $effect(() => {
+    if (!started) return;
+    const { pollMs, watchMs } = pollIntervalsFor(editor.pollingMode, remoteBoot.active);
+    const tp = setInterval(() => editor.poll(), pollMs);
+    const tw = setInterval(() => editor.watchPreset(), watchMs);
+    return () => { clearInterval(tp); clearInterval(tw); };
+  });
   // Web build: start the app the moment the relay session (remote) or the in-page runtime (direct)
   // goes live. Desktop starts immediately in onMount.
   $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
@@ -107,8 +110,7 @@
     window.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => {
-      if (tp) clearInterval(tp);
-      if (tw) clearInterval(tw);
+      // The poll/watch intervals are owned by the $effect above (it clears them on teardown).
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('beforeunload', onBeforeUnload);
