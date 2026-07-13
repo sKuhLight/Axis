@@ -65,7 +65,7 @@
   // pane size (the user explicitly chose the chip); auto steps full → map → mobile by the pane rect. The
   // old shell (view == null) keeps its window-driven behavior via `mob`.
   const metrics = $derived(
-    view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0) : null
+    view ? resolveAxisGridMetrics(view, paneW > 1 ? paneW : 0, paneH > 1 ? paneH : 0, { rows, cols }) : null
   );
   // Workbench mobile TIER: a docked grid pane narrower than the design's mobile threshold (<620px) renders
   // the REAL paged presentation (page-width columns, page dots/arrows, swipe paging) instead of degrading
@@ -111,18 +111,28 @@
   // shows a scrollbar. The design invariant is that only 'full' scrolls; auto/map must always fit. So
   // auto-resolved-full falls through to the fit-both-axes path below (centers, never scrolls).
   const fixedTile = $derived(present.fixedTile);
-  // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140 (·colCapH), else legacy MAX_TILE.
-  const tileCap = $derived(metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE));
+  // desktop cell-width cap: map cells ≤42 (·colCapH), full cells ≤140·12/cols (·colCapH), else legacy
+  // MAX_TILE scaled the same way — a small grid (AM4 1×4) may use the pane fraction a 12-col grid would.
+  const tileCap = $derived(
+    metrics ? (mapMode ? metrics.mapColMax : metrics.fullColMax) : (view?.tilePx ?? MAX_TILE * Math.max(1, 12 / cols))
+  );
   const colW = $derived.by(() => {
-    if (fixedTile) return Math.min(view!.tilePx, metrics!.fullColMax);
-    if (availW <= 1) return paged ? 88 : mapMode ? 30 : 96;
     // exact (not floored): visCols tiles + gaps == availW precisely, so the next column sits exactly
     // off-screen — no partial-column sliver at the right edge.
     const fillW = (availW - (hCols - 1) * gap) / hCols;
+    const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
+    if (fixedTile) {
+      // explicit 'full': the chosen S/M/L px is the FLOOR (the grid scrolls rather than shrink below
+      // it), but when the pane offers more room the tiles grow to fill it — same fit-both-axes math
+      // as auto, same cap — so a small grid never floats at chip size in an otherwise empty pane.
+      const base = Math.min(view!.tilePx, metrics!.fullColMax);
+      if (availW <= 1) return base;
+      return Math.max(base, Math.min(fillW, fitH / ASPECT, metrics!.fullColMax));
+    }
+    if (availW <= 1) return paged ? 88 : mapMode ? 30 : 96;
     if (paged) return Math.max(24, fillW);
     // desktop: largest tile that fits the width, fits all rows in height, and stays ≤ the size cap.
     // The width term (fillW) is what keeps auto/auto-resolved-full from ever overflowing horizontally.
-    const fitH = availH > 1 ? (availH - (rows - 1) * gap) / rows : Infinity;
     return Math.max(mapMode ? 24 : 24, Math.min(fillW, fitH / ASPECT, tileCap));
   });
   const cellH = $derived.by(() => {
