@@ -87,6 +87,12 @@ describe('shouldOfferDeviceDefs — when the prompt appears', () => {
     expect(shouldOfferDeviceDefs({ selfDescribe: true }, { exists: false, building: false }, false)).toBe(true);
   });
 
+  it('offers the prompt for import-only devices (cacheImport without selfDescribe, e.g. AM4)', () => {
+    expect(shouldOfferDeviceDefs({ cacheImport: true }, { exists: false, building: false }, false)).toBe(true);
+    expect(shouldOfferDeviceDefs({ selfDescribe: false, cacheImport: false }, { exists: false, building: false }, false)).toBe(false);
+    expect(shouldOfferDeviceDefs({ cacheImport: true }, { exists: true, building: false }, false)).toBe(false);
+  });
+
   it('does not appear once a profile is persisted', () => {
     expect(shouldOfferDeviceDefs({ selfDescribe: true }, { exists: true, building: false }, false)).toBe(false);
   });
