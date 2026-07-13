@@ -4,6 +4,7 @@
   // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
+  import { deviceDefs } from './deviceDefs.svelte';
   import { isDirect } from './forgefx';
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
@@ -433,6 +434,12 @@
           <p class="statline">
             {#if editor.profileOverride}<span class="badge warn">FORCED</span> {editor.profileOverride.toUpperCase()}
             {:else}<span class="badge ok">AUTO</span> {detName}{/if}
+          </p>
+
+          <div class="sec mt">DEFINITIONS</div>
+          <p class="statline" title={deviceDefs.activeSource.detail}>
+            <span class="badge" class:ok={deviceDefs.activeSource.origin !== 'bundled'}>{deviceDefs.activeSource.origin === 'bundled' ? 'BUNDLED' : 'PROFILE'}</span>
+            {deviceDefs.activeSource.label}{#if editor.conn.fw} · fw {editor.conn.fw}{/if}
           </p>
 
           <div class="sec mt">CONNECTION</div>

@@ -535,7 +535,10 @@ export type DeviceEvent =
   // elsewhere), and cumulative traffic counters for the live traffic monitor. `traffic` carries the
   // TrafficSnapshot fields inline.
   | { type: 'telemetryConfig'; mode: TelemetryMode }
-  | ({ type: 'traffic' } & TrafficSnapshot);
+  | ({ type: 'traffic' } & TrafficSnapshot)
+  // Device-definitions build progress (A4 · META-22): streamed while a self-describe walk builds the
+  // per-firmware definition profile. `building` flips false on completion/cancel/error.
+  | { type: 'cacheBuild'; phase: 'walking' | 'building' | 'done' | 'error' | 'cancelled' | 'already-built'; done: number; total: number; key?: string; model?: number; firmware?: string; error?: string };
 
 /** A user-defined parameter tab within a block family (persisted client-side). */
 export interface TabDef {
@@ -611,6 +614,14 @@ export interface DeviceCaps {
   telemetryControl?: boolean;
   /** Rail-screen virtual effects this device exposes (Setup/Controllers/Modifier/FC …). */
   virtualEffects?: { eid: number; slug: string; name: string }[];
+  // ── device-definitions / self-describe (A4, AXIS-17/44 · META-22) ──
+  /** Device can self-describe its effect definitions by reading them off the unit (the "live walk"),
+   *  so Axis can build a per-firmware definition profile instead of shipping bundled ones. Absent on
+   *  older servers → the device-definitions prompt never appears (bundled definitions keep working). */
+  selfDescribe?: boolean;
+  /** Server accepts importing an official editor `effectDefinitions_*.cache` file (POST
+   *  /device/cache/import). Absent → the import affordances are hidden. */
+  cacheImport?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */
@@ -623,6 +634,84 @@ export interface DeviceInfo {
   capabilities?: DeviceCaps | null;
   firmware: Firmware | null;
   port: string;
+}
+
+// ── Device definitions / effect-definition profile cache (A4, AXIS-17/44 · META-22) ──
+// Axis normally ships BUNDLED effect definitions. When the connected device+firmware has no persisted
+// profile, it can build one — by reading the definitions off the device (self-describe "live walk"),
+// importing an official editor `effectDefinitions_*.cache`, or pulling a shared profile from the cloud.
+// All of these route through ONE server-side cache, described by the shapes below.
+
+/** Where the currently-active definition profile came from. `bundled` = Axis's shipped definitions
+ *  (no device profile persisted); the others = a built/imported/pulled profile. `origin` on the meta is
+ *  optional server detail; when absent but a profile exists we surface a generic "device profile". */
+export type DeviceDefsOrigin = 'bundled' | 'device' | 'editorCache' | 'cloud';
+
+/** Metadata about a built/imported definition profile (`GET /device/cache` → `meta`). */
+export interface DeviceCacheMeta {
+  recordCount: number;
+  builtAt: string | null;
+  /** Firmware the profile was built against (e.g. "12.0"). */
+  firmware?: string | null;
+  /** Sections/families the walk couldn't map — a coverage hint (0 = full coverage). */
+  unmappedSections?: number;
+  unmappedFamilies?: number;
+  /** How the profile was obtained: 'live' = A3 self-describe walk, 'editor-cache' = imported official
+   *  editor file, 'cloud' = pulled shared profile. Absent on servers that don't stamp it. */
+  source?: 'live' | 'editor-cache' | 'cloud' | (string & {});
+}
+
+/** POST /device/cache/import and /device/cache/cloud/pull success body. */
+export interface DeviceCacheImportResult {
+  ok: boolean;
+  imported?: boolean;
+  pulled?: boolean;
+  key: string;
+  model: number;
+  firmware: string;
+  source: string;
+  recordCount?: number;
+  contentHash?: string;
+}
+
+/** GET /device/cache — status of the per-device definition profile. 404/501 → capability absent. */
+export interface DeviceCacheStatus {
+  /** Opaque cache key (model+firmware) the server addresses this profile by. */
+  key: string;
+  /** A persisted profile exists for the connected device+firmware. */
+  exists: boolean;
+  /** A build is currently running. */
+  building: boolean;
+  progress?: { done: number; total: number; phase: string };
+  meta?: DeviceCacheMeta;
+}
+
+/** One editor-cache file discovered on disk (Node/Electron) — GET /device/cache/sources → candidates. */
+export interface DeviceCacheCandidate {
+  path: string;
+  file: string;
+  /** Model byte parsed from the filename (e.g. 0x15 = 21). */
+  model: number;
+  fwMajor: number;
+  fwMinor: number;
+  size: number;
+  mtime: number;
+}
+
+/** GET /device/cache/sources — discovered import candidates + whether a profile is already persisted.
+ *  Browser sessions get no filesystem discovery (`discovery: 'unavailable'`, empty candidates). */
+export interface DeviceCacheSources {
+  persisted: boolean;
+  candidates: DeviceCacheCandidate[];
+  discovery?: 'unavailable';
+}
+
+/** GET /device/cache/cloud — whether a shared cloud profile exists for this device+firmware.
+ *  `enabled:false` = the server has no cloud configured at all (AXIS_CLOUD off). */
+export interface CloudCacheStatus {
+  enabled?: boolean;
+  available: boolean;
+  meta?: { source?: string; recordCount?: number | null; createdAt?: string; contentHash?: string };
 }
 
 export interface Health {
