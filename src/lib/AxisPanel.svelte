@@ -37,6 +37,14 @@
 
   const version = (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev';
 
+  // ── Performance tab (device-telemetry polling mode, META-17) ──
+  const POLL_MODES: { key: import('./types').TelemetryMode; label: string; desc: string }[] = [
+    { key: 'performance', label: 'Performance', desc: 'Snappiest reflection — the most device traffic.' },
+    { key: 'balanced', label: 'Balanced', desc: 'The default — responsive with moderate background traffic.' },
+    { key: 'reduced', label: 'Reduced (Live)', desc: 'Minimal background traffic for stage use — on AM4, successive front-panel edits reflect only on save / scene / channel change.' }
+  ];
+  const pm = $derived(editor.pollingMode);
+
   // ── Connection & Device tab ──
   const PROFILES: { key: import('./types').ProfileKey; label: string }[] = [
     { key: 'auto', label: 'Auto-detect' }, { key: 'fm3', label: 'FM3' }, { key: 'fm9', label: 'FM9' }, { key: 'axe3', label: 'Axe-Fx III' }, { key: 'axe2', label: 'Axe-Fx II' }, { key: 'vp4', label: 'VP4' }, { key: 'am4', label: 'AM4' }, { key: 'gen1', label: 'Axe-Fx Std/Ultra' }
@@ -134,6 +142,9 @@
           <button class="tb" class:on={editor.axisTab === 'storage'} onclick={() => (editor.axisTab = 'storage')}>Storage</button>
         {/if}
         <button class="tb" class:on={editor.axisTab === 'device'} onclick={() => editor.openAxis('device')}>Connection</button>
+        {#if editor.hasTelemetryControl}
+          <button class="tb" class:on={editor.axisTab === 'performance'} onclick={() => (editor.axisTab = 'performance')}>Performance</button>
+        {/if}
         <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
         <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
       </div>
@@ -346,6 +357,32 @@
             <p class="muted">On a fresh machine (or after data loss), re-import every version from the folder's Sync/ back into Axis. Verified against the index; never overwrites existing versions.</p>
             <button class="signout" disabled={!loc.exists || loc.syncing} onclick={restoreFromFolder}>Restore from folder…</button>
           {/if}
+        </div>
+
+      {:else if editor.axisTab === 'performance' && editor.hasTelemetryControl}
+        <!-- Device polling mode (META-17): how aggressively Axis reads the device in the background. -->
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">⚡</div>
+            <div><div class="h1">Performance</div><div class="sub">How often Axis polls your device in the background</div></div>
+          </div>
+
+          <div class="sec">POLLING MODE</div>
+          <p class="muted">Faster modes reflect front-panel and footswitch changes sooner, at the cost of more traffic on the device link. Slower modes keep a stage rig quiet.</p>
+          <div class="modes tri">
+            {#each POLL_MODES as m}
+              <button class="mbtn" class:on={pm === m.key} onclick={() => editor.setPollingMode(m.key)}>{m.label}</button>
+            {/each}
+          </div>
+
+          <div class="pmodes">
+            {#each POLL_MODES as m}
+              <div class="pmode" class:on={pm === m.key}>
+                <span class="pmk">{m.label}</span>
+                <span class="pmd">{m.desc}</span>
+              </div>
+            {/each}
+          </div>
         </div>
 
       {:else if editor.axisTab === 'privacy'}
@@ -593,6 +630,15 @@
   .mbtn { flex: 1; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; }
   .mbtn.on { background: var(--accent); color: var(--accentink); }
   .slownote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 14px; padding: 10px 12px; background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 10px; font-size: 11.5px; line-height: 1.5; color: var(--text2); }
+
+  /* performance tab */
+  .modes.tri .mbtn { font-size: 12px; }
+  .pmodes { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .pmode { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg2); }
+  .pmode.on { border-color: var(--accent); background: var(--accent-tint, var(--bg2)); }
+  .pmk { font-size: 12.5px; font-weight: 700; color: var(--text2); }
+  .pmode.on .pmk { color: var(--accent); }
+  .pmd { font-size: 11px; color: var(--textfaint); line-height: 1.5; }
 
   /* storage tab */
   .pathtxt { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
