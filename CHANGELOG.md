@@ -2,6 +2,39 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.4-beta — 2026-07-13
+
+The Telemetry Update: Axis now lets you choose how chatty it is with your device.
+
+### Added
+
+- **Polling mode** — new Performance section in the Axis panel with three modes:
+  *Performance* (snappiest reflection), *Balanced* (new default) and *Reduced (Live)*
+  (minimal background traffic for stage use). The choice syncs with your profile and
+  applies across desktop, browser-direct and remote sessions.
+- **Telemetry widget** — optional workbench widget showing the active polling mode
+  (with quick-switch) and the live MIDI wire traffic (messages/s, KB/s) of the
+  connected ForgeFX engine.
+
+### Fixed
+
+- **AM4 audio dropouts** — the bundled ForgeFX engine (0.6.8-beta) no longer
+  re-reads all placed blocks every 1.5 s while a preset has unsaved edits; on the
+  AM4 this caused audible dropouts about once a second, even on direct monitoring.
+  Background polling now mirrors AM4-Edit's lightweight idle behavior; front-panel
+  changes still reflect within a couple of seconds.
+- **Stale block editor after channel switch** — on devices without scene-state
+  support the open block's parameters (e.g. the Type selector) now refresh after a
+  device-side channel change.
+- **Small grids fill the pane** — AM4/VP4 grids now use the full editor pane in
+  auto/full layout modes instead of huddling in a corner.
+
+### Changed
+
+- Background polling of the device server now scales with the selected polling
+  mode; device meters keep their feel at every rate (tick-rate-aware smoothing).
+- Bundled engine pins: ForgeFX v0.6.8-beta, forgefx-midi v0.3.15.
+
 ## 0.9.1-beta — 2026-07-13
 
 Re-cut of 0.9.0-beta (The Layout Update — see below), whose macOS installers never built. Same app, fixed release pipeline.
