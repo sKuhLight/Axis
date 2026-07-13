@@ -2,6 +2,20 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.4-beta — 2026-07-13
+
+### Changed
+
+- Merge pull request #54 from sKuhLight/bump/stack-v0.6.8-beta
+- Merge branch 'main' into bump/stack-v0.6.8-beta
+- Merge pull request #53 from sKuhLight/feature/telemetry-mode
+- Merge remote-tracking branch 'origin/main' into feature/telemetry-mode
+- Merge pull request #52 from sKuhLight/fix/small-grid-space-and-channel-refresh
+- stack: bump ForgeFX pin to v0.6.8-beta (+ matching forgefx-midi pin)
+- client: polling-mode setting, performance panel + telemetry traffic widget
+- grid: let small device grids (AM4/VP4) fill the pane in auto/full modes
+- editor: re-read open-block params after channel change on devices without scene-state
+
 ## 0.9.1-beta — 2026-07-13
 
 Re-cut of 0.9.0-beta (The Layout Update — see below), whose macOS installers never built. Same app, fixed release pipeline.
