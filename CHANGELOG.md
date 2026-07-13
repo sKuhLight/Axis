@@ -4,15 +4,9 @@ Notable changes per release, for Axis and its bundled ForgeFX engine. Newest fir
 
 ## 0.9.9-beta — 2026-07-13
 
-### Changed
-
-- Merge pull request #62 from sKuhLight/bump/stack-v0.6.12-beta
-- stack: bump ForgeFX pin to v0.6.12-beta (+ matching forgefx-midi pin)
-
-## 0.9.8-beta — 2026-07-13
-
 The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
-definitions (blocks, types, parameters, ranges) on its own — no app update needed.
+definitions (blocks, types, parameters, ranges) on its own — no app update needed. (Supersedes
+the unreleased 0.9.8-beta, whose read-from-device path could freeze an FM3.)
 
 ### Added
 
@@ -28,12 +22,20 @@ definitions (blocks, types, parameters, ranges) on its own — no app update nee
 - **Definitions readout** — the Axis panel now shows where the active definitions come from
   (bundled, read from device, editor cache file, or shared cloud profile).
 
+### Fixed
+
+- **FM3 freeze during read-from-device.** The definitions walk asked the device to describe
+  value lists for continuous (non-list) parameters — a request real units don't support, which
+  could hard-freeze an FM3 seconds into a build. The walk now only queries genuine value lists,
+  stays inside the hardware-validated parameter range, pauses briefly between blocks, and pairs
+  every reply strictly with its own query.
+
 ### Changed
 
-- Read-from-device is gentle on the hardware: the definitions walk is paced, and Axis pauses its
-  background polling while a build or import runs.
-- Bundled ForgeFX engine **0.6.11-beta** (runtime on-connect definition builds, editor-cache
-  import, cloud profile source) with protocol codec **0.3.17** (firmware-version read, live
+- Read-from-device is gentle on the hardware: the walk is paced, and Axis pauses its background
+  polling while a build or import runs.
+- Bundled ForgeFX engine **0.6.12-beta** (runtime on-connect definition builds, editor-cache
+  import, cloud profile source) with protocol codec **0.3.18** (firmware-version read, live
   self-describe walk).
 
 ## 0.9.4-beta — 2026-07-13
