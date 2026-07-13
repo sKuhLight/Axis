@@ -2,7 +2,7 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
-## 0.9.6-beta — 2026-07-13
+## 0.9.8-beta — 2026-07-13
 
 The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
 definitions (blocks, types, parameters, ranges) on its own — no app update needed.
@@ -23,7 +23,9 @@ definitions (blocks, types, parameters, ranges) on its own — no app update nee
 
 ### Changed
 
-- Bundled ForgeFX engine **0.6.10-beta** (runtime on-connect definition builds, editor-cache
+- Read-from-device is gentle on the hardware: the definitions walk is paced, and Axis pauses its
+  background polling while a build or import runs.
+- Bundled ForgeFX engine **0.6.11-beta** (runtime on-connect definition builds, editor-cache
   import, cloud profile source) with protocol codec **0.3.17** (firmware-version read, live
   self-describe walk).
 
