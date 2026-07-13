@@ -74,14 +74,21 @@ export function axisGridMapDots(
 // The design keys everything off `gpSizeMin=[56,72,96][gpSize]` (S/M/L min column width),
 // with the full-grid gap = round(gpSizeMin*0.32). `auto` steps full → map → mobile so the
 // grid never scrollbars: <620px pane → mobile; else map when the pane can't fit a scroll-free
-// full grid in EITHER axis, else full. Cell heights are capped so 4 rows always fit
-// (_colCapH); map cells ≤42px, full cells ≤140px.
+// full grid in EITHER axis, else full. Cell heights are capped so all rows always fit
+// (_colCapH); map cells ≤42px, full cells ≤140px on the design's 12-col grid (smaller
+// device grids scale that cap by 12/cols — see resolveAxisGridMetrics).
 export const AXIS_GRID_SIZE_MIN: Record<AxisBlockSize, number> = { S: 56, M: 72, L: 96 };
 export const AXIS_GRID_MOBILE_MAX_PANE_W = 620;
 export const AXIS_GRID_MAP_COL_MAX = 42;
 export const AXIS_GRID_FULL_COL_MAX = 140;
 
 export type AxisResolvedGridMode = 'full' | 'map' | 'mobile';
+
+/** Device routing-grid dimensions (AM4 1×4, VP4 1×8, FM3 4×12, FM9/III 6×14). */
+export interface AxisGridDims {
+  rows: number;
+  cols: number;
+}
 
 export interface AxisGridMetrics {
   /** resolved rendering mode after the auto stepping */
@@ -106,16 +113,27 @@ export interface AxisGridMetrics {
  * Resolve the concrete grid mode + cell caps for a pane of `paneW × paneH` px, given the
  * requested view. Mirrors the design's `renderVals()` grid math (§2.2). `paneH<=0` disables
  * the height-based cap (returns a large colCapH), matching the desktop-unmeasured fallback.
+ *
+ * `grid` = the DEVICE routing-grid dimensions. The §2.2 constants assume the design's 12×4
+ * grid, so dims are clamped at 12/4: gen-3 grids (12 & 14 col) resolve exactly as before,
+ * while SMALLER grids (AM4 1×4, VP4 1×8) relax the math to their own size — the mode
+ * thresholds shrink to what a scroll-free small grid actually needs, the height cap divides
+ * the pane by the real row count, and the full-cell cap scales by 12/cols so the grid may
+ * use the same pane fraction a 12-col grid would (tiles fill the pane instead of floating
+ * at gen-3 size in empty space).
  */
 export function resolveAxisGridMetrics(
   view: Pick<AxisGridView, 'mode' | 'size'>,
   paneW: number,
-  paneH: number
+  paneH: number,
+  grid?: AxisGridDims
 ): AxisGridMetrics {
+  const cols = Math.max(1, Math.min(grid?.cols ?? 12, 12));
+  const rows = Math.max(1, Math.min(grid?.rows ?? 4, 4));
   const sizeMin = AXIS_GRID_SIZE_MIN[view.size];
   const fullGap = Math.round(sizeMin * 0.32);
-  const fullMin = 12 * sizeMin + 11 * fullGap + 44;
-  const fullMinH = 4 * Math.round(sizeMin * 0.95) + 3 * fullGap + 56;
+  const fullMin = cols * sizeMin + (cols - 1) * fullGap + 44;
+  const fullMinH = rows * Math.round(sizeMin * 0.95) + (rows - 1) * fullGap + 56;
 
   let mode: AxisResolvedGridMode;
   if (view.mode === 'map') mode = 'map';
@@ -126,9 +144,9 @@ export function resolveAxisGridMetrics(
   const isMap = mode === 'map';
   const gap = isMap ? 7 : fullGap;
   const padV = isMap ? 34 : 58;
-  const colCapH = paneH > 0 ? Math.max(22, Math.floor(((paneH - padV - 3 * gap) / 4) / 0.95)) : 9999;
+  const colCapH = paneH > 0 ? Math.max(22, Math.floor(((paneH - padV - (rows - 1) * gap) / rows) / 0.95)) : 9999;
   const mapColMax = Math.min(AXIS_GRID_MAP_COL_MAX, colCapH);
-  const fullColMax = Math.min(AXIS_GRID_FULL_COL_MAX, colCapH);
+  const fullColMax = Math.min(Math.round(AXIS_GRID_FULL_COL_MAX * (12 / cols)), colCapH);
 
   return { mode, sizeMin, fullGap, fullMin, fullMinH, colCapH, mapColMax, fullColMax };
 }

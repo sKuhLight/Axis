@@ -207,6 +207,51 @@ describe('resolveAxisGridMetrics', () => {
       expect(met.mapColMax).toBe(AXIS_GRID_MAP_COL_MAX); // 42, not the ~30 the stripped box yielded
     });
   });
+
+  // Small device grids (AM4 1×4, VP4 1×8) relax the 12×4-anchored math so tiles may fill the pane;
+  // larger-than-design grids (FM9/III 6×14) clamp back to the 12×4 constants — gen-3 stays pixel-identical.
+  describe('grid-aware dims (AM4/VP4 fill, gen-3 unchanged)', () => {
+    const M = { mode: 'auto' as const, size: 'M' as const };
+
+    it('omitted dims ≡ the design 12×4 (backwards compatible)', () => {
+      const def = resolveAxisGridMetrics(M, 1400, 520);
+      const dims = resolveAxisGridMetrics(M, 1400, 520, { rows: 4, cols: 12 });
+      expect(dims).toEqual(def);
+    });
+
+    it('grids larger than 12×4 clamp to the design constants (FM9/III 6×14 ≡ today)', () => {
+      const def = resolveAxisGridMetrics(M, 1400, 520);
+      const fm9 = resolveAxisGridMetrics(M, 1400, 520, { rows: 6, cols: 14 });
+      expect(fm9).toEqual(def);
+    });
+
+    it('AM4 (1×4): full-cell cap scales by 12/cols and the height cap divides by ONE row', () => {
+      const am4 = resolveAxisGridMetrics(M, 1400, 700, { rows: 1, cols: 4 });
+      // colCapH for 1 row: floor(((700-58-0)/1)/0.95) = 675 → cap = min(140*3, 675) = 420
+      expect(am4.colCapH).toBe(675);
+      expect(am4.fullColMax).toBe(AXIS_GRID_FULL_COL_MAX * 3);
+      // map minimap keeps its compact ceiling
+      expect(am4.mapColMax).toBe(AXIS_GRID_MAP_COL_MAX);
+    });
+
+    it('AM4 (1×4): auto stays full on panes where a 12-col grid would step to map', () => {
+      // 700×500 pane: 12-col fullMin is 1161 → map; a 4-col grid needs only 4*72+3*23+44 = 401 → full.
+      expect(resolveAxisGridMetrics(M, 700, 500).mode).toBe('map');
+      const am4 = resolveAxisGridMetrics(M, 700, 500, { rows: 1, cols: 4 });
+      expect(am4.mode).toBe('full');
+      expect(am4.fullMin).toBe(4 * 72 + 3 * 23 + 44);
+      expect(am4.fullMinH).toBe(Math.round(72 * 0.95) + 56);
+    });
+
+    it('VP4 (1×8): cap scales by 12/8', () => {
+      const vp4 = resolveAxisGridMetrics(M, 2000, 800, { rows: 1, cols: 8 });
+      expect(vp4.fullColMax).toBe(Math.round(AXIS_GRID_FULL_COL_MAX * 1.5));
+    });
+
+    it('the mobile threshold still wins below 620px regardless of dims', () => {
+      expect(resolveAxisGridMetrics(M, 500, 500, { rows: 1, cols: 4 }).mode).toBe('mobile');
+    });
+  });
 });
 
 describe('resolveAxisGridPresentation (view-active NEVER consults editor.isMobile)', () => {

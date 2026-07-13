@@ -33,8 +33,8 @@ interface View {
  * Returns the grid box (gridW×gridH incl. gaps) and the viewport content box it must fit inside, plus
  * whether the fixed-tile (scrolling) path is used — which the invariant only permits for view.mode 'full'.
  */
-function renderGrid(view: View, paneW: number, paneH: number) {
-  const metrics = resolveAxisGridMetrics(view, paneW, paneH);
+function renderGrid(view: View, paneW: number, paneH: number, dims = { rows: ROWS, cols: COLS }) {
+  const metrics = resolveAxisGridMetrics(view, paneW, paneH, dims);
   const mapMode = metrics.mode === 'map';
   const fullGap = metrics.fullGap;
   const gap = mapMode ? 7 : fullGap;
@@ -46,21 +46,23 @@ function renderGrid(view: View, paneW: number, paneH: number) {
   // fixedTile ONLY for explicit 'full' (post-fix): auto never uses fixed tiles even when it resolves to full.
   const fixedTile = view.mode === 'full' && metrics.mode === 'full';
 
+  const fillW = (availW - (dims.cols - 1) * gap) / dims.cols;
+  const fitH = availH > 1 ? (availH - (dims.rows - 1) * gap) / dims.rows : Infinity;
   let colW: number;
   let cellH: number;
   if (fixedTile) {
-    colW = Math.min(view.tilePx, metrics.fullColMax);
+    // chosen S/M/L px is the floor (scrolls below it); given room the tiles grow to fill, capped like auto.
+    const base = Math.min(view.tilePx, metrics.fullColMax);
+    colW = Math.max(base, Math.min(fillW, fitH / ASPECT, metrics.fullColMax));
     cellH = colW * ASPECT;
   } else {
-    const fillW = (availW - (COLS - 1) * gap) / COLS;
-    const fitH = availH > 1 ? (availH - (ROWS - 1) * gap) / ROWS : Infinity;
     colW = Math.max(24, Math.min(fillW, fitH / ASPECT, tileCap));
     const sq = colW * ASPECT;
     cellH = Math.max(24, Math.min(sq, fitH));
   }
 
-  const gridW = COLS * colW + (COLS - 1) * gap;
-  const gridH = ROWS * cellH + (ROWS - 1) * gap;
+  const gridW = dims.cols * colW + (dims.cols - 1) * gap;
+  const gridH = dims.rows * cellH + (dims.rows - 1) * gap;
   return { mode: metrics.mode, fixedTile, colW, cellH, gridW, gridH, availW, availH };
 }
 
@@ -116,6 +118,42 @@ describe('grid no-overflow invariant (auto/map never scrollbar)', () => {
     const g = renderGrid(view('full', 'M'), 1400, 900);
     expect(g.fixedTile).toBe(true);
     expect(g.gridW).toBeGreaterThan(g.availW); // fixed tiles → wider than the pane → panning scroll
+  });
+});
+
+describe('small device grids fill the pane (AM4 1×4, VP4 1×8)', () => {
+  const AM4 = { rows: 1, cols: 4 };
+
+  it('auto+M on an AM4 grid grows tiles far past the gen-3 cap and still fits both axes', () => {
+    const g = renderGrid(view('auto', 'M'), 1400, 700, AM4);
+    expect(g.mode).toBe('full');
+    // pre-fix these 4 tiles were pinned at fullColMax=140 (min(140, colCapH)) in a ~1356px-wide box
+    expect(g.colW).toBeGreaterThan(300);
+    expect(g.gridW).toBeLessThanOrEqual(g.availW + 0.5);
+    expect(g.gridH).toBeLessThanOrEqual(g.availH + 0.5);
+  });
+
+  it("explicit 'full'+M on an AM4 grid grows past the chosen tile px when the pane has room (no scroll)", () => {
+    const g = renderGrid(view('full', 'M'), 1400, 700, AM4);
+    expect(g.fixedTile).toBe(true);
+    expect(g.colW).toBeGreaterThan(AXIS_BLOCK_TILE_PX.M); // grew beyond the 150px chip size
+    expect(g.gridW).toBeLessThanOrEqual(g.availW + 0.5); // grown-to-fit → nothing to scroll
+  });
+
+  it("explicit 'full'+M on a tight pane keeps the chip px as the floor and scrolls", () => {
+    const g = renderGrid(view('full', 'M'), 700, 300, AM4);
+    expect(g.fixedTile).toBe(true);
+    expect(g.colW).toBe(AXIS_BLOCK_TILE_PX.M); // floor holds: 150px tiles
+    expect(g.gridW).toBeGreaterThan(g.availW); // → the sanctioned 'full' panning scroll
+  });
+
+  it('auto on an AM4 grid never scrolls across the pane sweep', () => {
+    for (const [w, h] of PANE_SWEEP) {
+      const g = renderGrid(view('auto', 'M'), w, h, AM4);
+      expect(g.fixedTile).toBe(false);
+      expect(g.gridW).toBeLessThanOrEqual(g.availW + 0.5);
+      expect(g.gridH).toBeLessThanOrEqual(g.availH + 0.5);
+    }
   });
 });
 
