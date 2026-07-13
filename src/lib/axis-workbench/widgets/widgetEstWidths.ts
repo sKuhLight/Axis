@@ -41,7 +41,9 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   // `hint` is `flex:1` in the bottom bar — it flexes down, so keep its estW
   // small so it never forces the bottom zone to compact/mini on its own.
   'axis.hint': 40,
-  'axis.legal': 98
+  'axis.legal': 98,
+  // Telemetry monitor (META-17): mode label + P/B/R quick-switch + TX/RX rates + loops indicator.
+  'axis.telemetry': 190
 };
 
 /** Design fallback estW for unknown widget kinds. */

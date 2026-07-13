@@ -149,6 +149,10 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 0, { size: 'compact', state: widgetState(90) }),
     'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0, { state: { mode: 'auto' } }),
     'axis.widget.blockSize': widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', 1, { state: { size: 'M' } }),
+    // Telemetry monitor (META-17): device polling-mode quick-switch + live traffic. Capability-gated in
+    // the widget (renders nothing when the server has no telemetry control), so it degrades to an empty
+    // slot on older servers.
+    'axis.widget.telemetry': widget('axis.widget.telemetry', 'axis.telemetry', 'gridbar', 2, { state: widgetState(30) }),
     // Bottom utility bar (StatusBar parity, T10): left = hover-hint ticker, right = Ko-fi / imprint.
     'axis.widget.hint': widget('axis.widget.hint', 'axis.hint', 'bottom', 0, { state: widgetState(20) }),
     'axis.widget.legal': widget('axis.widget.legal', 'axis.legal', 'bottom', 1, { state: widgetState(90) })

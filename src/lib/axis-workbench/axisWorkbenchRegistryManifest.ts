@@ -44,7 +44,8 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.fcSwitchView',
   'axis.paramControl',
   'axis.hint',
-  'axis.legal'
+  'axis.legal',
+  'axis.telemetry'
 ] as const;
 
 export const AXIS_WORKBENCH_NAVIGATION_IDS = [
