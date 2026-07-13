@@ -2,6 +2,13 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.9-beta — 2026-07-13
+
+### Changed
+
+- Merge pull request #62 from sKuhLight/bump/stack-v0.6.12-beta
+- stack: bump ForgeFX pin to v0.6.12-beta (+ matching forgefx-midi pin)
+
 ## 0.9.8-beta — 2026-07-13
 
 The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
