@@ -60,7 +60,8 @@ describe('Axis Workbench integration contracts', () => {
       'axis.fcSwitchView',
       'axis.paramControl',
       'axis.hint',
-      'axis.legal'
+      'axis.legal',
+      'axis.telemetry'
     ]);
 
     expect(AXIS_WORKBENCH_NAVIGATION_IDS).toEqual([

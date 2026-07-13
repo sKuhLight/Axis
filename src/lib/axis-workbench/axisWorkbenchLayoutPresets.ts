@@ -92,7 +92,8 @@ const WIDGET_TYPE: Record<string, string> = {
   gridmode: 'axis.gridMode',
   blocksize: 'axis.blockSize',
   hint: 'axis.hint',
-  legal: 'axis.legal'
+  legal: 'axis.legal',
+  telemetry: 'axis.telemetry'
 };
 
 type Density = 'expanded' | 'compact' | 'mini';
@@ -142,6 +143,9 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       save: W('tr', 5),
       gridmode: W('gridbar', 0),
       blocksize: W('gridbar', 1),
+      // Telemetry monitor (META-17) — capability-gated in the widget; only the default preset seeds it
+      // (design keeps the other five presets minimal).
+      telemetry: W('gridbar', 2),
       history: W('rail', 0, 'compact'),
       account: W('rail', 1, 'compact'),
       search: W('hidden', 0),
@@ -289,7 +293,8 @@ const WIDGET_INSTANCE_ID: Record<string, string> = {
   gridmode: 'axis.widget.gridMode',
   blocksize: 'axis.widget.blockSize',
   hint: 'axis.widget.hint',
-  legal: 'axis.widget.legal'
+  legal: 'axis.widget.legal',
+  telemetry: 'axis.widget.telemetry'
 };
 
 /** Widgets that carry a fixed rail-footer slot / lock in every preset. */

@@ -14,7 +14,7 @@ import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, 
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -43,6 +43,12 @@ function loadInstanceId(): string {
 // Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
 const CONTACT_KEY = 'axs.profile.contact';
 const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KEY) ?? ''; } catch { return ''; } };
+// Device-telemetry polling mode (META-17). Local mirror so the poll intervals + UI have it synchronously
+// on boot (before /device confirms telemetryControl); the synced `config/profile` doc carries it across
+// devices. Default 'balanced' (mirrors the server default).
+const POLLING_MODE_KEY = 'axs.telemetry.pollingMode';
+const isTelemetryMode = (v: unknown): v is TelemetryMode => v === 'performance' || v === 'balanced' || v === 'reduced';
+const loadPollingMode = (): TelemetryMode => { try { const v = localStorage.getItem(POLLING_MODE_KEY); return isTelemetryMode(v) ? v : 'balanced'; } catch { return 'balanced'; } };
 // Whether the user has made a first-run telemetry choice (accept OR decline). Distinct from the consent
 // value: unset → show the first-run prompt once; set → respect the stored consent silently.
 const DECIDED_KEY = 'axs.telemetry.decided';
@@ -111,6 +117,9 @@ class EditorStore {
   get canGridRoute(): boolean { return this.isV2 ? !!this.caps?.gridRouting : !this.isAm4; }
   /** Number of scenes this device has (0 if none) — drives the topbar SCN selector. */
   get sceneCount(): number { return this.caps?.hasScenes ? (this.caps.sceneCount || 0) : 0; }
+  /** Device server exposes the telemetry polling-mode control (META-17). Gates the AxisPanel Performance
+   *  tab + the workbench telemetry widget. Absent on old servers → false → all new UI hidden. */
+  get hasTelemetryControl(): boolean { return !!this.caps?.telemetryControl; }
   detected = $state<DetectResult | null>(null); // which Fractal unit is attached (auto-detect)
   preset = $state<{ number: number; name: string } | null>(null);
   lastPreset = $state<number | null>(null);
@@ -226,6 +235,14 @@ class EditorStore {
 
   // ── live telemetry (SSE) ──
   tuner = $state<{ active: boolean; freq?: number; note?: string; cents?: number; octave?: number }>({ active: false });
+  // ── device-telemetry polling mode (META-17) ──
+  /** Active polling mode — drives the poll/watch interval selection (pollIntervals.ts) + the mode UI.
+   *  Seeded from the local mirror; reconciled with the server (PUT on reconnect, adopt on telemetryConfig
+   *  events). */
+  pollingMode = $state<TelemetryMode>(loadPollingMode());
+  /** Latest cumulative device-traffic snapshot (from the `traffic` DeviceEvent), or null until the first
+   *  one arrives. The workbench telemetry widget derives per-second rates from successive snapshots. */
+  traffic = $state<TrafficSnapshot | null>(null);
   // CPU% is not transmitted by the FM3 (FM3-Edit computes it from a DSP cost model) — so the top-bar
   // slot shows the real, measurable serial round-trip latency instead.
   linkMs = $state<number | null>(null);
@@ -271,7 +288,7 @@ class EditorStore {
   }>({ available: false, configured: false, root: null, exists: true, syncing: false, lastSync: null, note: null, autoSync: loadLocalAutoSync() });
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
-  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device'>('account');
+  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance'>('account');
   themeOpen = $state(false); // Appearance / theme picker modal
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
@@ -638,6 +655,7 @@ class EditorStore {
     // negotiate the API version + capabilities BEFORE the first load(), so every caps gate below
     // (unified vs legacy routes, polling, meters, renames) is decided correctly from the start
     await this.#handshake();
+    this.#reapplyPollingMode(); // re-assert the saved polling mode once caps confirm the control exists
     if (this.presetLiveQuery) {
       try {
         const n = (await forgefx.currentPreset()).number;
@@ -876,9 +894,33 @@ class EditorStore {
     this.setTelemetryConsent(on);
     this.#maybeShowKofi();
   };
+  // ── device-telemetry polling mode (META-17) ──
+  /** Set the polling mode from a LOCAL user action: optimistic update → PUT → revert on failure. Follows
+   *  the store's optimistic-update idiom. Persists (local mirror + synced profile) only after the PUT
+   *  succeeds, so a rejected change never leaks into the profile. A no-op if unchanged. */
+  setPollingMode = async (mode: TelemetryMode) => {
+    const prev = this.pollingMode;
+    if (prev === mode) return;
+    this.pollingMode = mode; // optimistic
+    try {
+      await forgefx.setTelemetryMode(mode);
+      try { localStorage.setItem(POLLING_MODE_KEY, mode); } catch { /* */ }
+      this.#persistProfile(); // mirror the choice to the synced profile when logged in
+    } catch {
+      this.pollingMode = prev; // revert — server rejected / unsupported
+      this.showToast('Could not change polling mode', '#d6543f');
+    }
+  };
+  /** Re-apply the saved polling mode to the device after a connect/reconnect, once caps confirm the
+   *  control exists. Fire-and-forget with error tolerance — an old/unsupported server just ignores it.
+   *  NOT a user action, so it never persists (the local mirror is already the source of the value). */
+  #reapplyPollingMode = () => {
+    if (!this.hasTelemetryControl) return;
+    forgefx.setTelemetryMode(this.pollingMode).catch(() => { /* unsupported / not ready — leave as-is */ });
+  };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
+  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };
@@ -892,7 +934,7 @@ class EditorStore {
    *  when logged in) and is wiped by account deletion. Kept as a plain doc so no bespoke table/endpoint is
    *  needed. Local mirrors (localStorage) keep contact + consent available synchronously and offline. */
   #persistProfile = () => {
-    forgefx.putDoc('config', 'profile', { contact: this.contact, telemetryConsent: this.telemetry.consent, updatedAt: Date.now() })
+    forgefx.putDoc('config', 'profile', { contact: this.contact, telemetryConsent: this.telemetry.consent, pollingMode: this.pollingMode, updatedAt: Date.now() })
       .then(() => notifyMutation())
       .catch(() => { /* store unavailable (engine not ready) — the local mirror still holds the value */ });
   };
@@ -908,7 +950,7 @@ class EditorStore {
   };
   #loadProfile = async () => {
     try {
-      const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean }>('config', 'profile');
+      const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean; pollingMode?: TelemetryMode }>('config', 'profile');
       const p = doc?.data;
       if (!p) return;
       if (typeof p.contact === 'string' && p.contact !== this.contact) {
@@ -917,6 +959,13 @@ class EditorStore {
       }
       if (typeof p.telemetryConsent === 'boolean' && p.telemetryConsent !== this.telemetry.consent) {
         this.setTelemetryConsent(p.telemetryConsent);
+      }
+      // Adopt a cloud-set polling mode: update state + local mirror, then push it to the device (if the
+      // control is available). Not a fresh user action, so we don't re-persist the profile.
+      if (isTelemetryMode(p.pollingMode) && p.pollingMode !== this.pollingMode) {
+        this.pollingMode = p.pollingMode;
+        try { localStorage.setItem(POLLING_MODE_KEY, p.pollingMode); } catch { /* */ }
+        this.#reapplyPollingMode();
       }
     } catch { /* no profile yet / engine not ready */ }
   };
@@ -1163,6 +1212,20 @@ class EditorStore {
         break;
       }
       case 'config': if (e.origin !== CLIENT_ID) this.#applyConfig(e.id, e.data); break; // ignore our own echo
+      case 'telemetryConfig': {
+        // The polling mode changed server-side (another UI, or our own PUT's echo). Adopt it into state
+        // + the local mirror WITHOUT re-triggering a PUT or a profile persist — only a local user action
+        // (setPollingMode) writes back, so this can never loop.
+        if (isTelemetryMode(e.mode) && e.mode !== this.pollingMode) {
+          this.pollingMode = e.mode;
+          try { localStorage.setItem(POLLING_MODE_KEY, e.mode); } catch { /* */ }
+        }
+        break;
+      }
+      case 'traffic': {
+        this.traffic = { txMsgs: e.txMsgs, txBytes: e.txBytes, rxMsgs: e.rxMsgs, rxBytes: e.rxBytes, since: e.since, loops: e.loops };
+        break;
+      }
     }
   };
   /** Apply a shared config doc pushed by another UI (host↔remote). Sets local state + the localStorage cache
@@ -1919,6 +1982,7 @@ class EditorStore {
       if (d) this.detected = d;
       await this.load();
       await this.loadPorts();
+      this.#reapplyPollingMode(); // reconnect → re-assert the saved polling mode
       this.showToast(conn ? 'Connection changed' : 'Back to auto-detect', '#35c9d6');
     } catch {
       this.showToast('Could not switch connection', '#d6543f');
@@ -1937,6 +2001,7 @@ class EditorStore {
       if (d) this.detected = d;
       await this.load();
       await this.loadPorts();
+      this.#reapplyPollingMode(); // reconnect → re-assert the saved polling mode
       this.showToast(model === 'auto' ? 'Device profile: auto-detect' : `Device profile forced: ${model.toUpperCase()}`, '#35c9d6');
     } catch {
       this.showToast('Could not set device profile', '#d6543f');
