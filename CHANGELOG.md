@@ -2,6 +2,12 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.1-beta — 2026-07-13
+
+### Changed
+
+
+
 ## 0.9.0-beta — 2026-07-12
 
 The Layout Update — the workbench shell is now the default UI (legacy shell: start with VITE_AXIS_WORKBENCH=0).
