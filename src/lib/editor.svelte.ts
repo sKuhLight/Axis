@@ -1087,7 +1087,14 @@ class EditorStore {
    *  back to a full load(). */
   #refreshScene = async () => {
     const st = await forgefx.sceneState().catch(() => null);
-    if (!st || !Array.isArray(st)) { await this.load(); return; } // no lightweight path → full reload
+    if (!st || !Array.isArray(st)) {
+      // no lightweight path (AM4: /preset/scene-state is 501) → full reload. load() only refreshes
+      // grid+blocks, so the open block's per-channel params (incl. blockType — the Type row) must be
+      // re-read here too, exactly like the lightweight path below does.
+      await this.load();
+      if (this.selKey) await this.#loadParams();
+      return;
+    }
     const byId = new Map(st.map((b) => [b.effectId, b]));
     const apply = (c: Cell): Cell => {
       const s = byId.get(c.effectId);
