@@ -2,6 +2,15 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.6-beta — 2026-07-13
+
+### Changed
+
+- Merge pull request #57 from sKuhLight/bump/stack-v0.6.10-beta
+- stack: bump ForgeFX pin to v0.6.10-beta (+ matching forgefx-midi pin)
+- Merge pull request #56 from sKuhLight/feature/device-defs
+- devicedefs: connect-time definitions prompt with cloud/editor-cache/walk sources (A4)
+
 ## 0.9.4-beta — 2026-07-13
 
 The Telemetry Update: Axis now lets you choose how chatty it is with your device.
