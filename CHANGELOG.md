@@ -2,6 +2,31 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.6-beta — 2026-07-13
+
+The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
+definitions (blocks, types, parameters, ranges) on its own — no app update needed.
+
+### Added
+
+- **Device-definitions prompt** — connecting a device whose firmware has no stored definition
+  profile now offers, in order of speed: pulling a **shared community profile from the cloud**,
+  importing the **official editor's cache file** (found automatically on your computer, or drag
+  and drop an `effectDefinitions_*.cache` file), or **reading the definitions straight off the
+  device** with a live progress bar. Dismissible per device+firmware.
+- **Share to cloud** — after building or importing a profile, signed-in users can share it so the
+  next person on that firmware skips the wait entirely.
+- **Editor-folder access in the browser** (Chromium): point Axis at your editor's folder once and
+  it silently picks up fresh definition caches after future firmware updates.
+- **Definitions readout** — the Axis panel now shows where the active definitions come from
+  (bundled, read from device, editor cache file, or shared cloud profile).
+
+### Changed
+
+- Bundled ForgeFX engine **0.6.10-beta** (runtime on-connect definition builds, editor-cache
+  import, cloud profile source) with protocol codec **0.3.17** (firmware-version read, live
+  self-describe walk).
+
 ## 0.9.4-beta — 2026-07-13
 
 The Telemetry Update: Axis now lets you choose how chatty it is with your device.
