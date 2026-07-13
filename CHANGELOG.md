@@ -2,11 +2,12 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
-## 0.9.9-beta — 2026-07-13
+## 0.9.10-beta — 2026-07-13
 
 The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
 definitions (blocks, types, parameters, ranges) on its own — no app update needed. (Supersedes
-the unreleased 0.9.8-beta, whose read-from-device path could freeze an FM3.)
+the unreleased 0.9.8/0.9.9-beta cuts, whose read-from-device path could freeze an FM3; this
+build's path has been verified end-to-end on real hardware.)
 
 ### Added
 
@@ -24,19 +25,22 @@ the unreleased 0.9.8-beta, whose read-from-device path could freeze an FM3.)
 
 ### Fixed
 
-- **FM3 freeze during read-from-device.** The definitions walk asked the device to describe
-  value lists for continuous (non-list) parameters — a request real units don't support, which
-  could hard-freeze an FM3 seconds into a build. The walk now only queries genuine value lists,
-  stays inside the hardware-validated parameter range, pauses briefly between blocks, and pairs
-  every reply strictly with its own query.
+- **FM3 freeze during read-from-device.** Real units hard-froze on two request classes the walk
+  used to send: value-list queries against continuous (non-list) parameters, and queries against
+  system selectors that answer with junk data. The walk now only queries genuine value lists,
+  ignores implausible definitions, stays inside the hardware-validated parameter range, pauses
+  between blocks, and pairs every reply strictly with its own query. The complete walk has been
+  validated on a real FM3 (all 128 blocks, ~19,000 queries, zero anomalies).
 
 ### Changed
 
 - Read-from-device is gentle on the hardware: the walk is paced, and Axis pauses its background
   polling while a build or import runs.
-- Bundled ForgeFX engine **0.6.12-beta** (runtime on-connect definition builds, editor-cache
-  import, cloud profile source) with protocol codec **0.3.18** (firmware-version read, live
-  self-describe walk).
+- Profiles read from the device now map their data by block family independently of the unit's
+  internal numbering — required for real hardware, whose live numbering differs from the
+  editors' cache files.
+- Bundled ForgeFX engine **0.6.13-beta** with protocol codec **0.3.19** (firmware-version read,
+  hardware-validated live self-describe walk).
 
 ## 0.9.4-beta — 2026-07-13
 
