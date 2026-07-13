@@ -5,6 +5,7 @@
 import { forgefx, ForgeError, setRequestFailureReporter, isRemote, isDirect, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
+import { deviceDefs } from './deviceDefs.svelte';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
@@ -1226,6 +1227,11 @@ class EditorStore {
         this.traffic = { txMsgs: e.txMsgs, txBytes: e.txBytes, rxMsgs: e.rxMsgs, rxBytes: e.rxBytes, since: e.since, loops: e.loops };
         break;
       }
+      case 'cacheBuild': {
+        // Device-definitions build progress (A4) — hand off to the deviceDefs store.
+        deviceDefs.onBuildEvent(e);
+        break;
+      }
     }
   };
   /** Apply a shared config doc pushed by another UI (host↔remote). Sets local state + the localStorage cache
@@ -1253,7 +1259,11 @@ class EditorStore {
   /** One-shot /device pull that adopts the negotiated API version + capabilities before first load. */
   #handshake = async () => {
     try {
-      this.#adoptDevice(await forgefx.device());
+      const dev = await forgefx.device();
+      this.#adoptDevice(dev);
+      // Refresh the device-definitions profile status once per connect (self-describe / import / cloud).
+      // Degrades silently on older servers (the endpoints 404 → capOptional → null).
+      if (dev) void deviceDefs.refresh({ model: dev.model, modelByte: dev.modelByte, firmware: dev.firmware?.version ?? null, caps: dev.capabilities ?? null });
     } catch {
       /* engine not ready — poll() keeps retrying and adopts caps when it comes up */
     }

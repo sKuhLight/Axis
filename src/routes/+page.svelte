@@ -18,6 +18,7 @@
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
+  import DeviceDefsPrompt from '$lib/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/AxisPanel.svelte';
   import ThemePicker from '$lib/ThemePicker.svelte';
   import Notices from '$lib/Notices.svelte';
@@ -159,6 +160,7 @@
   <SaveDialog />
   <TunerOverlay />
   <CachePrompt />
+  <DeviceDefsPrompt />
   <AxisPanel />
   {#if editor.themeOpen}<ThemePicker onclose={() => (editor.themeOpen = false)} />{/if}
   <Notices />

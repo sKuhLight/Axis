@@ -27,7 +27,11 @@ import type {
   CloudVersion,
   LocalConfig,
   LocalPresetEntry,
-  LocalSyncResult
+  LocalSyncResult,
+  DeviceCacheStatus,
+  DeviceCacheImportResult,
+  DeviceCacheSources,
+  CloudCacheStatus
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -165,6 +169,19 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const ct = res.headers.get('content-type') ?? '';
   return (ct.includes('json') ? res.json() : (res.arrayBuffer() as unknown)) as Promise<T>;
+}
+
+/** Status codes that mean "the server doesn't have this capability" — an old ForgeFX (no route → 404)
+ *  or one that gates the feature off for this device (501 unsupported). Reads wrapped in `capOptional`
+ *  degrade to null on these so the device-definitions UI silently falls back to bundled definitions. */
+const CAP_ABSENT = new Set([404, 501]);
+async function capOptional<T>(p: Promise<T>): Promise<T | null> {
+  try {
+    return await p;
+  } catch (e) {
+    if (e instanceof ForgeError && CAP_ABSENT.has(e.status)) return null;
+    throw e;
+  }
 }
 
 export const forgefx = {
@@ -343,6 +360,62 @@ export const forgefx = {
     req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ mode }) }),
   uploadDebugReport: (report: DebugReport) =>
     req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
+
+  // ── device definitions / effect-definition profile cache (A4, AXIS-17/44 · META-22) ──
+  // A per-device+firmware definition profile the server can build (self-describe walk), import from an
+  // official editor cache file, or pull from the cloud. Every READ degrades to null when the server
+  // lacks the capability (404 old server / 501 device-gated) so the UI silently keeps bundled defs.
+  /** Status of the connected device's definition profile (exists / building / progress / meta). */
+  deviceCache: () => capOptional(req<DeviceCacheStatus>('/device/cache')),
+  /** Start a self-describe build. 202 {key} on success. Throws ForgeError 409 (already building) or
+   *  501 (no capability) — the caller decides how to surface those. */
+  buildDeviceCache: () => req<{ key: string }>('/device/cache/build', { method: 'POST' }),
+  /** Cancel an in-flight build (no-op / null when absent). */
+  cancelDeviceCache: () => capOptional(req<{ ok: boolean }>('/device/cache/cancel', { method: 'POST' })),
+  /** Delete the persisted profile → fall back to bundled definitions (null when absent). */
+  deleteDeviceCache: () => capOptional(req<{ ok: boolean }>('/device/cache', { method: 'DELETE' })),
+  /** Discovered editor-cache candidates on disk + whether a profile is already persisted. Node/Electron
+   *  returns candidates; browser sessions get `discovery: 'unavailable'` and none. Null when absent. */
+  cacheSources: () => capOptional(req<DeviceCacheSources>('/device/cache/sources')),
+  /** Import an official editor `effectDefinitions_*.cache`. Two sources:
+   *   - `{ bytes, name }`  → raw octet-stream upload (browser drag-drop / folder pick).
+   *   - `{ path }`         → import a server-discovered candidate from disk (Electron).
+   *  `opts.force` overrides a firmware mismatch. Throws ForgeError 409 (firmware/model mismatch) or
+   *  501 (no capability); resolves to the fresh cache status on success. */
+  importEditorCache: (
+    source: { bytes: ArrayBuffer | Uint8Array; name: string } | { path: string },
+    opts: { force?: boolean } = {}
+  ): Promise<DeviceCacheImportResult> => {
+    if ('path' in source) {
+      return req<DeviceCacheImportResult>(`/device/cache/import${opts.force ? '?force=1' : ''}`, {
+        method: 'POST',
+        body: JSON.stringify({ path: source.path })
+      });
+    }
+    const qs = `?name=${encodeURIComponent(source.name)}${opts.force ? '&force=1' : ''}`;
+    const bytes = source.bytes instanceof Uint8Array ? source.bytes : new Uint8Array(source.bytes);
+    if (isDirect()) {
+      return transportBinary(`/device/cache/import${qs}`, 'POST', bytes).then(
+        (r) => JSON.parse(typeof r.body === 'string' ? r.body : new TextDecoder().decode(r.body)) as DeviceCacheImportResult
+      );
+    }
+    return fetch(`${BASE}/device/cache/import${qs}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: bytes as BodyInit,
+      signal: AbortSignal.timeout(120000)
+    }).then((r) => {
+      if (!r.ok) { reportFailure(`/device/cache/import`, 'POST', r.status, `import → ${r.status}`); throw new ForgeError(r.status, `import → ${r.status}`); }
+      return r.json() as Promise<DeviceCacheImportResult>;
+    });
+  },
+  /** Whether a shared cloud profile exists for this device+firmware (null when cloud absent). */
+  cloudCacheCheck: () => capOptional(req<CloudCacheStatus>('/device/cache/cloud')),
+  /** Pull the shared cloud profile and persist it locally → fresh cache status. */
+  cloudCachePull: () => req<DeviceCacheImportResult>('/device/cache/cloud/pull', { method: 'POST' }),
+  /** Publish the local profile to the cloud so others on the same firmware can pull it. Throws
+   *  ForgeError 401 when the user isn't signed in; 200 (deduped or stored) on success. */
+  cloudCachePublish: () => req<{ ok: boolean; deduped?: boolean }>('/device/cache/cloud/publish', { method: 'POST' }),
   /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */
   modBind: (slot: number, targetEffectId: number, targetParam: number, source: number) =>
     req<{ ok: boolean; slotEid?: number; error?: string }>(`/mod/bind`, {
