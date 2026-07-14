@@ -6,10 +6,10 @@
   // P4b seam that the fake-grid phase re-points.
   import { editor } from './editor.svelte';
   import { convert } from './convert.svelte';
+  import { convertScratch } from './convertScratch.svelte';
   import ConvertReport from './ConvertReport.svelte';
   import { CONVERTER_DEVICES, deviceName, deviceIdFromModel } from './convertReport';
   import type { ConverterDeviceId } from './types';
-  import type { Cell } from './grid';
 
   let target = $state<ConverterDeviceId | null>(null);
   let useFile = $state(false);
@@ -59,22 +59,21 @@
     convert.reset();
   }
 
-  // ── block-focus seam (P4b rewires) ─────────────────────────────────────────────────────────────
-  // Best-effort: match a converted block's family to a placed block in the CURRENT editor grid. Only
-  // meaningful when converting the connected device's own preset; a no-op otherwise.
-  function resolveCell(family: string): Cell | null {
-    if (!family) return null;
-    return editor.layout.cells.find((c) => c.pack === family) ?? null;
+  function openInGrid() {
+    convert.close();
+    convertScratch.openView();
   }
-  function blockAvailable(_blockKey: string, family: string): boolean {
-    return !!resolveCell(family);
+
+  // ── block-focus seam (P4b) ──────────────────────────────────────────────────────────────────────
+  // Re-pointed at the fake-grid scratch buffer: a report row focuses its converted block in the scratch
+  // view (opening it if needed). `blockAvailable` reflects whether that block exists in the conversion.
+  function blockAvailable(blockKey: string, _family: string): boolean {
+    return convertScratch.hasBlock(blockKey);
   }
-  function focusBlock(_blockKey: string, family: string): boolean {
-    const cell = resolveCell(family);
-    if (!cell) return false;
-    editor.openCell(cell);
-    convert.close(); // reveal the focused block behind the modal
-    return true;
+  function focusBlock(blockKey: string, _family: string): boolean {
+    const ok = convertScratch.focusBlock(blockKey);
+    if (ok) convert.close(); // reveal the scratch view
+    return ok;
   }
 </script>
 
@@ -101,6 +100,7 @@
         <footer>
           <button class="ghost" onclick={newConversion}>Convert another…</button>
           <span class="spacer"></span>
+          <button class="ghost" onclick={openInGrid}>Open in grid…</button>
           <button class="primary" onclick={close}>Done</button>
         </footer>
       {:else}
