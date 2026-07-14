@@ -2,10 +2,10 @@
   "_doc": "Pinned sibling refs used by tag-triggered release builds (see docs/RELEASING.md). CI still tracks default-branch HEAD. Bump these as part of the release checklist.",
   "forgefx-midi": {
     "repo": "sKuhLight/forgefx-midi",
-    "ref": "v0.3.19"
+    "ref": "v0.3.20"
   },
   "ForgeFX": {
     "repo": "sKuhLight/ForgeFX",
-    "ref": "v0.6.13-beta"
+    "ref": "v0.6.15-beta"
   }
 }
