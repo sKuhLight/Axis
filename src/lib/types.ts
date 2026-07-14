@@ -776,6 +776,107 @@ export interface PresetGrid {
   source?: 'dump';
 }
 
+// ── Cross-device preset converter (P4a · META-24 · AXIS-47/48) ──
+// POST /api/preset/convert — port a preset to another Fractal device, best-effort, with a per-decision
+// event log. The server (ForgeFX → forgefx-midi) does the actual conversion; Axis only renders the diff.
+// This is the FIXED wire contract — mirror it exactly; do not author conversion logic here.
+
+/** The seven devices a preset can be converted TO (the converter's target ids — distinct from the
+ *  connection-picker `ProfileKey`). */
+export type ConverterDeviceId =
+  | 'axe-fx-iii'
+  | 'fm9'
+  | 'fm3'
+  | 'vp4'
+  | 'am4'
+  | 'axe-fx-ii'
+  | 'axe-fx-gen1';
+
+/** One decision the converter made, as a discriminated union on `kind`. Severity is derived
+ *  client-side (see convertReport.ts `eventSeverity`) — the API returns raw events. */
+export type ConversionEvent =
+  /** The source preset could only be decoded to `decodeDepth` (e.g. name-scan only). */
+  | { kind: 'source-partial'; decodeDepth: string; detail: string }
+  /** A whole block couldn't be carried over. */
+  | { kind: 'block-dropped'; blockKey: string; family: string; reason: 'family-missing' | 'capacity-exceeded' | 'instance-limit' }
+  /** A block converted but couldn't be placed on the target grid. */
+  | { kind: 'block-unplaced'; blockKey: string; family: string; reason: string }
+  /** A block's model/type was mapped to a different target type. */
+  | { kind: 'type-substituted'; blockKey: string; family: string; sourceTypeName: string; targetTypeName: string; confidence: 'exact' | 'lineage' | 'fuzzy' | 'fallback'; score?: number }
+  /** A block's source type had no match on the target (kept a default). */
+  | { kind: 'type-unresolved'; blockKey: string; family: string; sourceTypeName: string }
+  /** A parameter value was clamped to the target's range. */
+  | { kind: 'param-clamped'; blockKey: string; nativeName: string; conceptKey?: string; sourceValue: number; targetValue: number; targetMin?: number; targetMax?: number }
+  /** A parameter couldn't be mapped and was dropped. */
+  | { kind: 'param-dropped'; blockKey: string; nativeName: string; reason: 'no-concept-mapping' | 'target-lacks-param' }
+  /** A parameter was carried over but its mapping isn't verified. */
+  | { kind: 'param-unverified'; blockKey: string; nativeName: string; value: number }
+  /** The routing/grid had to be simplified. */
+  | { kind: 'routing-simplified'; detail: string; affectedBlockKeys: string[] }
+  /** The target has fewer scenes than the source. */
+  | { kind: 'scene-collapsed'; sourceScenes: number; targetScenes: number }
+  /** A block's channels were collapsed to fit the target. */
+  | { kind: 'channel-collapsed'; blockKey: string; sourceChannels: number; targetChannels: number };
+
+/** Every discriminant of {@link ConversionEvent}. */
+export type ConversionEventKind = ConversionEvent['kind'];
+
+/** One converted parameter on a target block. Extra keys are tolerated (server may add detail). */
+export interface ConverterParam {
+  nativeName: string;
+  conceptKey?: string;
+  value: number;
+  [k: string]: unknown;
+}
+
+/** One block in the converted (target) preset. */
+export interface ConverterBlock {
+  key: string;
+  family: string;
+  instance: number;
+  typeName?: string;
+  typeValue?: number;
+  params: ConverterParam[];
+  channels?: number;
+  bypassPerScene?: boolean[];
+  position?: { row: number; col: number } | number | null;
+}
+
+/** The converted preset's routing. `gridCells` is device-specific (opaque here); `seriesChains`
+ *  is the linear fallback chain of block keys. */
+export interface ConverterRouting {
+  gridCells?: unknown;
+  seriesChains: string[][];
+}
+
+/** The converted (target) preset IR — the P4b fake-grid consumes this. */
+export interface ConverterPreset {
+  sourceDevice: string;
+  name: string;
+  sceneNames?: string[];
+  sceneCount: number;
+  blocks: ConverterBlock[];
+  routing: ConverterRouting;
+  decodeDepth: string;
+  meta?: Record<string, unknown>;
+}
+
+/** Event tally by severity (the summary chips). */
+export interface ConversionSummary {
+  total: number;
+  info: number;
+  warn: number;
+  loss: number;
+}
+
+/** POST /api/preset/convert → 200 body. */
+export interface ConvertResponse {
+  source: { device: string; name: string; decodeDepth: string };
+  target: ConverterPreset;
+  events: ConversionEvent[];
+  summary: ConversionSummary;
+}
+
 // connection picker (serial + MIDI ports)
 export type ConnPick = { transport: 'serial' | 'midi'; id: string; inId?: string; outId?: string };
 /** Manual device-profile override (Axis "Connection & Device"). 'auto' = detect. */

@@ -4,6 +4,7 @@
   // validation (caps.firmwareValidate) and a read-only modifier-model view (caps.modifiers.model).
   // Legacy v1 fallback: an AM4 on a pre-v2 server keeps the old /am4/* routes behind the same UI.
   import { editor } from './editor.svelte';
+  import { convert } from './convert.svelte';
   import { forgefx } from './forgefx';
   import type { SyxDecodeResult } from './types';
 
@@ -181,6 +182,14 @@
           {/if}
         </section>
       {/if}
+
+      <section>
+        <h3>Convert to another device</h3>
+        <div class="line">
+          <span>Port this preset (or an imported .syx) to a different Fractal device — best-effort, with a full diff report</span>
+          <button onclick={() => { close(); convert.openDialog(); }}>Convert preset…</button>
+        </div>
+      </section>
 
       <section>
         <h3>Offline .syx browse</h3>

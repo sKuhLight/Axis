@@ -14,6 +14,8 @@
   import CommandPalette from '$lib/CommandPalette.svelte';
   import CabPicker from '$lib/CabPicker.svelte';
   import DeviceTools from '$lib/DeviceTools.svelte';
+  import ConvertDialog from '$lib/ConvertDialog.svelte';
+  import { convert } from '$lib/convert.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
@@ -96,6 +98,7 @@
         else if (history.panelOpen) history.panelOpen = false;
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
         else if (editor.paletteOpen) editor.paletteOpen = false;
+        else if (convert.open) convert.close();
         else if (editor.presetOpen) editor.presetOpen = false;
         else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
         else if (editor.editorOpen) editor.closeEditor();
@@ -155,6 +158,7 @@
   <CommandPalette />
   <CabPicker />
   <DeviceTools />
+  <ConvertDialog />
   <HistoryPanel />
   <PresetPicker />
   <SaveDialog />
