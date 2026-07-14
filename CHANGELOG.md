@@ -2,6 +2,18 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.12-beta — 2026-07-14
+
+### Fixed
+
+- **Controls are adjustable again** — in the Workbench layout, control tiles (knobs, faders,
+  sliders) could no longer be adjusted by dragging: the always-on "pin to a panel" drag hijacked
+  the gesture. Dragging a control now adjusts its value as expected. To move a control into a
+  panel, **press and hold** it briefly (about a third of a second) and then drag — the same
+  hold-to-move gesture the signal-grid blocks use, so a quick drag never gets mistaken for a
+  reposition. Touch keeps its press-and-hold pin menu, and right-click still offers "Pin to
+  custom panel".
+
 ## 0.9.11-beta — 2026-07-14
 
 The AM4 joins the definitions pipeline: fresh, editor-true effect definitions after a firmware
