@@ -120,7 +120,7 @@
                       <button
                         class="rowbtn"
                         disabled={!canFocus}
-                        title={canFocus ? 'Focus this block in the editor' : 'This block isn’t in the current editor view'}
+                        title={canFocus ? 'Open this block in the converted grid' : 'This block isn’t in the converted preset'}
                         onclick={() => rowClick(f.blockKey, 'family' in e ? e.family : '')}
                       >
                         <span class="rtitle">{f.title}</span>

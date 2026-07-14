@@ -4,6 +4,7 @@
 import type {
   BlockParams,
   BlockSummary,
+  BlockTypeOption,
   CabState,
   ConnPick,
   DetectResult,
@@ -200,10 +201,7 @@ export const forgefx = {
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),
-  blockTypes: (slug: string) =>
-    req<{ value: number; name: string; manufacturer: string | null; basedOn: string | null }[]>(
-      `/blocks/${slug}/types`
-    ),
+  blockTypes: (slug: string) => req<BlockTypeOption[]>(`/blocks/${slug}/types`),
 
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),

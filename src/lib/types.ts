@@ -736,6 +736,14 @@ export interface BlockSummary {
   typeCount: number;
 }
 
+/** GET /blocks/:slug/types — one selectable type/model for a block family. */
+export interface BlockTypeOption {
+  value: number;
+  name: string;
+  manufacturer: string | null;
+  basedOn: string | null;
+}
+
 /** GET /preset/blocks — a placed block: position + routing + live bypass/channel. */
 export interface PresetBlock {
   slug: string;
