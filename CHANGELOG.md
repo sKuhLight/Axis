@@ -2,6 +2,31 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.11-beta — 2026-07-14
+
+The AM4 joins the definitions pipeline: fresh, editor-true effect definitions after a firmware
+update can now be imported and shared for the AM4 too.
+
+### Added
+
+- **Device-definitions prompt on the AM4** — connecting an AM4 whose firmware has no stored
+  definition profile now brings up the same prompt the FM3/FM9/III got in 0.9.10: pull a
+  **shared community profile from the cloud**, or import the **official AM4-Edit cache file**
+  (found automatically, or drag and drop). The AM4 cannot be read from device, so that option
+  simply doesn't appear. Imported profiles are stored per firmware and can be shared to the
+  cloud for other AM4 users on the same firmware.
+
+### Notes
+
+- The AM4 driver still serves its built-in definition tables in this build — an imported
+  profile is persisted and shareable, but applying it live to the running editor is a
+  follow-up. The FM3/FM9/III are unaffected (their imported profiles are live).
+
+### Changed
+
+- Shipped stack: ForgeFX **v0.6.15-beta** (AM4 editor-cache import endpoint, guarded
+  live-walk diagnostics probe) on forgefx-midi **v0.3.20**.
+
 ## 0.9.10-beta — 2026-07-13
 
 The Definitions Update: after a firmware update, Axis can now get fresh, device-true effect
