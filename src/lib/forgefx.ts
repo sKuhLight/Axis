@@ -31,7 +31,9 @@ import type {
   DeviceCacheStatus,
   DeviceCacheImportResult,
   DeviceCacheSources,
-  CloudCacheStatus
+  CloudCacheStatus,
+  ConverterDeviceId,
+  ConvertResponse
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -340,6 +342,15 @@ export const forgefx = {
     if (!res.ok) throw new ForgeError(res.status, (await res.json().catch(() => ({})))?.error ?? res.statusText);
     return res.json();
   },
+  /** Port a preset to another Fractal device (P4a · META-24). `sourceSyx` (base64) converts an imported
+   *  file; omit it to convert the CONNECTED device's current preset (501 if the active device can't
+   *  provide a source). Conversion decodes + remaps a whole preset — give it a generous timeout. */
+  convertPreset: (targetDevice: ConverterDeviceId, sourceSyx?: string) =>
+    req<ConvertResponse>('/preset/convert', {
+      method: 'POST',
+      body: JSON.stringify({ targetDevice, ...(sourceSyx ? { source: { syx: sourceSyx } } : {}) }),
+      signal: AbortSignal.timeout(30000)
+    }),
   /** Foot Controller address model (field bases + config formula + enums); null if not decoded. */
   fcModel: () => req<FcModel | null>(`/fc/model`),
   /** Modifier address model (field → paramId); null if not decoded. */
