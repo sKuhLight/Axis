@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { canExportTarget, isFm3Model, syxFilename, exportToast } from './convertExport';
+import {
+  canExportTarget,
+  isFm3Model,
+  syxFilename,
+  exportToast,
+  exportFidelityToast,
+  exportErrorToast
+} from './convertExport';
 
 describe('convertExport.canExportTarget', () => {
   it('allows only the FM3 target', () => {
@@ -49,5 +56,30 @@ describe('convertExport.exportToast', () => {
   it('appends the skipped count when any were skipped', () => {
     expect(exportToast(8, 2)).toBe('Exported 8 blocks · 2 skipped');
     expect(exportToast(0, 3)).toBe('Exported 0 blocks · 3 skipped');
+  });
+});
+
+describe('convertExport.exportFidelityToast', () => {
+  it('returns null when the base covered every converted block (nothing dropped)', () => {
+    expect(exportFidelityToast({ sourceBlocks: 12, landedBlocks: 12, droppedForNoBaseBlock: 0 })).toBe(null);
+  });
+  it('warns "Exported N of M blocks" naming the base-coverage gap when blocks were dropped', () => {
+    expect(exportFidelityToast({ sourceBlocks: 14, landedBlocks: 9, droppedForNoBaseBlock: 5 })).toBe(
+      'Exported 9 of 14 blocks — the base template lacked the rest (pick a richer base for full coverage)'
+    );
+  });
+});
+
+describe('convertExport.exportErrorToast', () => {
+  it('shows a "pick a different base" message for the validation-gate refusals (400 base / 422 authored)', () => {
+    expect(exportErrorToast(400)).toBe('Export failed: base template invalid — pick a different base');
+    expect(exportErrorToast(422, 'authored preset failed validation: invalid CRC')).toBe(
+      'Export failed: base template invalid — pick a different base'
+    );
+  });
+  it('falls back to the raw message for other failures, or a generic string when none', () => {
+    expect(exportErrorToast(0, 'network unreachable')).toBe('Export failed: network unreachable');
+    expect(exportErrorToast(503, '')).toBe('Export failed');
+    expect(exportErrorToast(undefined, null)).toBe('Export failed');
   });
 });

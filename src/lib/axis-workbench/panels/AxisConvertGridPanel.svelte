@@ -17,7 +17,14 @@
   import { library } from '../../library.svelte';
   import { forgefx } from '../../forgefx';
   import { entrySyxBytes, bytesToBase64 } from '../../presetConvertSource';
-  import { canExportTarget, isFm3Model, syxFilename, exportToast } from '../../convertExport';
+  import {
+    canExportTarget,
+    isFm3Model,
+    syxFilename,
+    exportToast,
+    exportFidelityToast,
+    exportErrorToast
+  } from '../../convertExport';
   import { AXIS_DEFAULT_GRID_VIEW } from '../gridView';
   import { cellDecorationFor, type CellDecoration } from '../../convertDecorations';
 
@@ -218,12 +225,26 @@
         name: saveName.trim() || undefined,
         slot: slotCheck.ok ? slotCheck.slot : undefined
       });
+      // Defensive: the server refuses a non-ok authored preset with 422 (→ catch), but never download one.
+      if (!res.validation?.ok) {
+        editor.showToast(exportErrorToast(422), '#d6543f');
+        return;
+      }
       downloadSyx(res.syx, res.name || saveName);
-      // File-level valid only — the FM3 must still accept it on a real hardware load.
-      editor.showToast(`${exportToast(res.written.length, res.skipped.length)} — load-test on a real FM3`, '#33c46b');
+      const fidelityWarning = exportFidelityToast(res.fidelity);
+      if (fidelityWarning) {
+        // Amber warning: the base template lacked slots for some converted blocks.
+        editor.showToast(fidelityWarning, '#e0a233');
+      } else {
+        // File-level valid only — the FM3 must still accept it on a real hardware load.
+        editor.showToast(`${exportToast(res.written.length, res.skipped.length)} — load-test on a real FM3`, '#33c46b');
+      }
       saveOpen = false;
     } catch (e) {
-      editor.showToast((e as Error)?.message || 'Export failed', '#d6543f');
+      // A refusal (400 corrupt base / 422 authored-invalid) throws a ForgeError with a numeric status — no
+      // file was returned, so nothing downloads. Show a clear "pick a different base" toast.
+      const status = (e as { status?: number })?.status;
+      editor.showToast(exportErrorToast(status, (e as Error)?.message), '#d6543f');
     } finally {
       exporting = false;
     }
