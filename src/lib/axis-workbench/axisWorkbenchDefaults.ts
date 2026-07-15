@@ -11,6 +11,7 @@ import type {
 import {
   AXIS_SEED_PAGES_MARKER,
   buildAxisSeedPages,
+  createAxisConvertPanels,
   createAxisPagePanels,
   createAxisSeedNavigation
 } from './axisWorkbenchPages';
@@ -64,7 +65,9 @@ export function createAxisWorkbenchPanels(): Record<string, PanelInstance> {
     // Pages (ROUND 15): Setup / Controllers / Scenes / Live each own a seed page,
     // so their panel instances live in the roster (they used to be minted on demand
     // by the add-or-focus nav actions). Preset Browser / FC panels already exist above.
-    ...createAxisPagePanels()
+    ...createAxisPagePanels(),
+    // Cross-device converter page (M4) — four offline review/edit panels.
+    ...createAxisConvertPanels()
   };
 }
 

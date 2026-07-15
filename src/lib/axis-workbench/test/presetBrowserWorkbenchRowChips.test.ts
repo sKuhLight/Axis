@@ -27,6 +27,8 @@ function entry(over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBro
     blocks: [],
     syncState: 'none',
     cloudOnly: false,
+    converted: false,
+    provenance: null,
     ...over
   };
 }

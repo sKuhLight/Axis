@@ -90,6 +90,7 @@ export function eventSeverity(e: ConversionEvent): Severity {
     case 'type-substituted':
       return e.confidence === 'exact' || e.confidence === 'lineage' ? 'info' : 'warn';
     case 'param-unverified':
+    case 'block-merged':
       return 'info';
     default:
       return 'info';
@@ -173,6 +174,15 @@ export function formatEvent(e: ConversionEvent): FormattedEvent {
     }
     case 'param-unverified':
       return { ...base, title: `${e.nativeName} carried over unverified`, detail: `value ${e.value}` };
+    case 'block-merged':
+      // the source cab has no standalone block on the target — it folds into the host (amp). Focus the
+      // host block (it exists on the grid), not the removed source block.
+      return {
+        ...base,
+        blockKey: e.intoBlockKey ?? base.blockKey,
+        title: `${familyLabel(e.family)} folded into the ${familyLabel(e.intoFamily)} block`,
+        detail: `The target’s ${familyLabel(e.intoFamily)} block includes the ${familyLabel(e.family)} — merged in, not dropped`
+      };
     case 'routing-simplified':
       return { ...base, title: 'Routing simplified', detail: e.detail };
     case 'scene-collapsed':

@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { editor, baseName } from './editor.svelte';
+  import { baseName } from './editor.svelte';
+  import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from './catalog';
   import ControlSurface from './ControlSurface.svelte';
   import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
-  import { forgefx } from './forgefx';
   import type { CabState, CabSlot } from './types';
+
+  const editor = getEditorSurface();
 
   let { embedded = false }: { embedded?: boolean } = $props();
 
@@ -25,7 +27,7 @@
       cabState = null;
       return;
     }
-    forgefx
+    editor
       .cabState(eid)
       .then((s) => {
         if (isCab && sel?.effectId === eid) cabState = s;

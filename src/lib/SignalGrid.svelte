@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { editor, baseName } from './editor.svelte';
+  import { baseName } from './editor.svelte';
+  import { getEditorSurface } from './editorSurface';
+  const editor = getEditorSurface();
   import { catFor, shade } from './catalog';
   import { fmtNumber, paramUnit } from './format';
   import type { Cell } from './grid';
@@ -13,7 +15,22 @@
   // scrolls; 'map' pins the glyph minimap; 'auto' fits to the pane and steps full → map as the pane
   // shrinks (04-fc-and-grid.md §2.2). The old shell renders <SignalGrid /> without it → stock fit
   // behavior. Desktop only; mobile keeps its own column-density paging.
-  let { view = null }: { view?: AxisGridView | null } = $props();
+  // Cross-device converter conflict overlay (Phase 2 · META-24 · AXIS-48). Both props are OPTIONAL and
+  // inert by default — the live editor renders <SignalGrid> without them, so the grid is byte-for-byte
+  // unchanged. When provided:
+  //  • cellDecorations — keyed "row,col": a corner conflict badge + severity ring + transient ok-tick on
+  //    the matching PLACED cell (the converter's target-grid conflict markers).
+  //  • externalDropPreview — the cell a SOURCE→TARGET drag (from the converter's source grid) is over +
+  //    whether the drop is valid, rendered identically to the native move preview (＋ / ✕).
+  let {
+    view = null,
+    cellDecorations = null,
+    externalDropPreview = null
+  }: {
+    view?: AxisGridView | null;
+    cellDecorations?: Map<string, { icon?: string; sevVar?: string; outlineVar?: string; tick?: boolean }> | null;
+    externalDropPreview?: { row: number; col: number; valid: boolean } | null;
+  } = $props();
 
   // Block tiles are tinted chips of the block-family color that adapt to the theme: darkened (dark ink) in
   // dark mode, softly lightened (dark family-tint ink) in light mode.
@@ -758,6 +775,8 @@
               {@const sameFam = editor.layout.cells.filter((x) => baseName(x.display) === base).length}
               {@const label = inst && (inst !== '1' || sameFam > 1) ? `${cat.short} ${inst}` : cat.short}
               {@const meter = editor.meterFor(cell)}
+              {@const deco = cellDecorations?.get(`${r},${c}`) ?? null}
+              {@const edp = externalDropPreview && externalDropPreview.row === r && externalDropPreview.col === c ? externalDropPreview : null}
               <div
                 class="cell block"
                 class:byp={cell.bypassed}
@@ -813,6 +832,10 @@
                     onpointerdown={(e) => onPortDown(cell, e)}
                   ></button>
                 {/if}
+                {#if deco?.outlineVar && !sel}<span class="deco-ring" style="box-shadow: inset 0 0 0 2px {deco.outlineVar};"></span>{/if}
+                {#if deco?.icon && !mapMode}<span class="deco-badge" style="background:{deco.sevVar};">{deco.icon}</span>{/if}
+                {#if edp}<span class="deco-ring" style="box-shadow: inset 0 0 0 2px {edp.valid ? 'var(--accent)' : 'var(--danger)'};"></span>{/if}
+                {#if deco?.tick}<span class="deco-tick">✓</span>{/if}
               </div>
             {:else if cell?.kind === 'shunt'}
               {@const sel = editor.selKey === `${r},${c}`}
@@ -830,9 +853,20 @@
                 {/if}
               </div>
             {:else}
-              <button class="cell empty" data-idx="{r},{c}" onclick={() => { if (pageSwiped) { pageSwiped = false; return; } if (editor.linkFrom) { editor.completeLink(r, c); return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}>
-                <span class="restdot"></span>
-                <span class="plus">+</span>
+              {@const edp = externalDropPreview && externalDropPreview.row === r && externalDropPreview.col === c ? externalDropPreview : null}
+              <button
+                class="cell empty"
+                class:drop-valid={edp?.valid}
+                class:drop-invalid={edp && !edp.valid}
+                data-idx="{r},{c}"
+                onclick={() => { if (pageSwiped) { pageSwiped = false; return; } if (editor.linkFrom) { editor.completeLink(r, c); return; } editor.selectCellOnDevice(r, c); editor.openPaletteAt(r, c); }}
+              >
+                {#if edp}
+                  <span class="dropmark">{edp.valid ? '＋' : '✕'}</span>
+                {:else}
+                  <span class="restdot"></span>
+                  <span class="plus">+</span>
+                {/if}
               </button>
             {/if}
           {/each}
@@ -1323,6 +1357,79 @@
   }
   .grid.map .empty .restdot {
     display: none;
+  }
+
+  /* ── converter conflict overlay (only present when SignalGrid is given cellDecorations /
+     externalDropPreview — the live editor never renders these) ── */
+  .deco-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 11px;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .deco-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 6;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font: 800 11px/1 var(--font-mono, monospace);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+  }
+  .deco-tick {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 20%, rgba(6, 10, 8, 0.55));
+    border-radius: 11px;
+    pointer-events: none;
+    animation: cvTick 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  @keyframes cvTick {
+    0% {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    55% {
+      transform: scale(1.12);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  .dropmark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .empty.drop-valid {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+  .empty.drop-invalid {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    color: var(--danger);
   }
 
   .empty {

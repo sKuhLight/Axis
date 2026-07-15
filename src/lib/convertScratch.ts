@@ -8,6 +8,7 @@
 //
 // Framework-free + fully unit-tested (convertScratch.test.ts). The `.svelte.ts` store stays a thin shell.
 
+import { z } from 'zod';
 import type {
   ConversionEvent,
   ConverterBlock,
@@ -39,7 +40,9 @@ const TOPOLOGY_DEFAULTS: Record<ConverterDeviceId, Topology> = {
   'axe-fx-ii': { kind: 'grid', rows: 6, cols: 14 },
   'axe-fx-gen1': { kind: 'grid', rows: 4, cols: 12 },
   vp4: { kind: 'chain', rows: 1, cols: 4 },
-  am4: { kind: 'slots', rows: 8, cols: 1 }
+  // AM4 is a 4-slot chain the device lays out LEFT→RIGHT (1 row × 4 cols), exactly like the live AM4
+  // grid — not a vertical list. (`slots` stays a distinct kind for provenance; it renders horizontally.)
+  am4: { kind: 'slots', rows: 1, cols: 4 }
 };
 
 /** Normalize an IR position (object, slot index, or null) to a (row,col) cell for the given topology,
@@ -51,8 +54,14 @@ export function normalizePosition(
   if (pos == null) return null;
   if (typeof pos === 'number') {
     if (pos < 0) return null;
-    // a bare slot index: lay chains left-to-right, slot lists top-to-bottom, grids across row 0.
-    return kind === 'slots' ? { row: pos, col: 0 } : { row: 0, col: pos };
+    // a bare slot index: chains AND slot lists (VP4/AM4) lay left-to-right across row 0, as do grids.
+    return { row: 0, col: pos };
+  }
+  // slot/chain targets (AM4/VP4) carry a { slot } position — a left-to-right chain across row 0.
+  if ('slot' in pos) {
+    const slot = Math.floor(pos.slot);
+    if (slot < 0) return null;
+    return { row: 0, col: slot };
   }
   const row = Math.max(0, Math.floor(pos.row ?? 0));
   const col = Math.max(0, Math.floor(pos.col ?? 0));
@@ -71,6 +80,10 @@ export interface ScratchBlock {
   /** null while the block is unplaced (in the tray). */
   position: { row: number; col: number } | null;
   channels?: number;
+  /** Offline edit state (set by the real-grid convert surface): per-block bypass and the routing
+   *  feed-rows (which upstream rows connect INTO this block's cell — mirrors device `Cell.fromRows`). */
+  bypassed?: boolean;
+  fromRows?: number[];
 }
 
 export type ConflictKind = 'type' | 'clamps' | 'placement' | 'routing';
@@ -151,16 +164,18 @@ export function seedScratch(
   );
   for (const b of blocks) if (unplacedKeys.has(b.key)) b.position = null;
 
-  // expand the topology to fit every placed position (never shrink below the device default).
+  // Grid targets expand to fit every placed position (never shrink below the device default).
+  // Slot/chain targets (AM4/VP4) keep their FIXED slot count — the device has exactly that many slots,
+  // and the user assigns blocks into them from the tray (overflow candidates stay in the tray).
   let rows = def.rows;
   let cols = def.cols;
-  for (const b of blocks) {
-    if (!b.position) continue;
-    rows = Math.max(rows, b.position.row + 1);
-    cols = Math.max(cols, b.position.col + 1);
+  if (def.kind === 'grid') {
+    for (const b of blocks) {
+      if (!b.position) continue;
+      rows = Math.max(rows, b.position.row + 1);
+      cols = Math.max(cols, b.position.col + 1);
+    }
   }
-  // slot lists grow their row count so there's always a free slot to place a tray block into.
-  if (def.kind === 'slots') rows = Math.max(rows, blocks.length + 1);
   const topology: Topology = { kind: def.kind, rows, cols };
 
   const conflicts = deriveConflicts(events, blocks);
@@ -275,9 +290,25 @@ export function deriveConflicts(events: ConversionEvent[], blocks: ScratchBlock[
 
 // ── selectors ────────────────────────────────────────────────────────────────────────────────────
 
-/** Count of unresolved conflicts — drives the commit gate. */
+/** Count of unresolved conflicts that actually gate the commit. A type/clamps conflict on a block still
+ *  sitting in the tray does NOT block commit — that block won't be written unless the user places it
+ *  (which re-arms the gate). This is what makes slot/chain targets (AM4/VP4) usable: every convertible
+ *  block starts in the tray, and you only owe a decision on the ones you place. Placement conflicts
+ *  (an overflow block you must place-or-discard) and preset-wide conflicts (routing) always gate, as do
+ *  all conflicts on placed blocks. */
 export function remainingConflicts(state: ScratchState): number {
-  return state.conflicts.filter((c) => !c.resolved).length;
+  const placed = new Set(state.blocks.filter((b) => b.position !== null).map((b) => b.key));
+  return state.conflicts.filter((c) => {
+    if (c.resolved) return false;
+    // `clamps` and `routing` are INFORMATIONAL (mockup: WARN/INFO with no action) — they never gate the
+    // commit. A grid→slot remap ("routing simplified") or a clamped param must not block Save/Apply,
+    // otherwise the user can never commit (there is no acknowledge control, by design).
+    if (c.kind === 'clamps' || c.kind === 'routing') return false;
+    // a type conflict (unresolved type OR unverified substitution) gates only once its block is PLACED —
+    // convertible candidates resting in the tray (slot targets) don't block until the user keeps them.
+    if (c.kind === 'type' && c.blockKey != null && !placed.has(c.blockKey)) return false;
+    return true;
+  }).length;
 }
 
 /** Unresolved conflicts for one block (type/clamps/placement), most-severe first. */
@@ -373,9 +404,34 @@ export function discardBlock(state: ScratchState, blockKey: string): ScratchStat
   };
 }
 
-/** Remove a placed block back into the tray (opposite of place) without discarding it. */
+/** Remove a placed block back into the tray (opposite of place) without discarding it. Also clears its
+ *  routing (a tray block feeds from nothing). */
 export function unplaceBlock(state: ScratchState, blockKey: string): ScratchState {
-  return patchBlocks(state, (b) => (b.key === blockKey ? { ...b, position: null } : b));
+  return patchBlocks(state, (b) => (b.key === blockKey ? { ...b, position: null, fromRows: [] } : b));
+}
+
+/** Set one param's value on a block (offline), addressed by its index in the block's `params` array —
+ *  the convert surface maps a NamedParam id 1:1 to this index. No-op on an out-of-range index. */
+export function setBlockParam(state: ScratchState, blockKey: string, paramIndex: number, value: number): ScratchState {
+  return patchBlocks(state, (b) => {
+    if (b.key !== blockKey) return b;
+    if (paramIndex < 0 || paramIndex >= b.params.length) return b;
+    const params = b.params.map((p, i) => (i === paramIndex ? { ...p, value } : p));
+    return { ...b, params };
+  });
+}
+
+/** Toggle a block's bypass (offline). */
+export function toggleBlockBypass(state: ScratchState, blockKey: string): ScratchState {
+  return patchBlocks(state, (b) => (b.key === blockKey ? { ...b, bypassed: !b.bypassed } : b));
+}
+
+/** Replace a placed block's routing feed-rows (offline). The convert surface computes the new set from
+ *  a cable gesture (reusing the grid's own connect planner) and hands the result here. A no-op for a
+ *  tray block (unplaced blocks feed from nothing). */
+export function setBlockRouting(state: ScratchState, blockKey: string, fromRows: number[]): ScratchState {
+  const uniqSorted = [...new Set(fromRows.filter((r) => Number.isInteger(r) && r >= 0))].sort((a, b) => a - b);
+  return patchBlocks(state, (b) => (b.key === blockKey && b.position ? { ...b, fromRows: uniqSorted } : b));
 }
 
 // ── commit: library document ───────────────────────────────────────────────────────────────────────
@@ -402,7 +458,77 @@ export interface ConvertedPresetDoc {
   sourceDevice: string;
   targetDevice: ConverterDeviceId;
   savedAt: number;
+  /** The target slot the user chose to save this conversion into (optional — free-form, non-negative;
+   *  purely metadata today: the true `.syx` store/export happens in the separate codec-authoring task). */
+  slot?: number;
   preset: ConverterPreset;
+}
+
+/** Name/slot overrides captured by the save flow, threaded into {@link buildLibraryDoc}. */
+export interface SaveOverrides {
+  /** Rename the saved preset (falls back to the scratch buffer's name when blank). */
+  name?: string;
+  /** The target slot number the user picked (already validated — see {@link validateSlot}). */
+  slot?: number;
+}
+
+/** Validate a user-entered slot value against an optional target-device preset count. A blank value is
+ *  valid (slot is optional). Otherwise it must be a non-negative whole number and, when `count` is known,
+ *  within `0..count-1`. Pure + unit-tested; the save UI renders `error` and only saves when `ok`. */
+export interface SlotValidation {
+  ok: boolean;
+  slot?: number;
+  error?: string;
+}
+export function validateSlot(raw: string | number | null | undefined, count?: number): SlotValidation {
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return { ok: true };
+  const n = typeof raw === 'number' ? raw : Number(raw.trim());
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return { ok: false, error: 'Enter a non-negative whole number.' };
+  if (count != null && count > 0 && n >= count) return { ok: false, error: `Slot must be 0–${count - 1}.` };
+  return { ok: true, slot: n };
+}
+
+// ── persisted-doc validation (Zod) ─────────────────────────────────────────────────────────────────
+// Validate a ConvertedPresetDoc read back from the store → drop anything corrupt or from an older schema
+// (mirrors library.svelte.ts `summarySchema`). Permissive on the nested preset: only the fields the
+// library + re-open path rely on are required; unknown extras pass through untouched.
+const converterParamSchema = z.object({ nativeName: z.string(), value: z.number() }).passthrough();
+const converterBlockSchema = z
+  .object({
+    key: z.string(),
+    family: z.string(),
+    instance: z.number(),
+    typeName: z.string().optional(),
+    typeValue: z.number().optional(),
+    params: z.array(converterParamSchema),
+    channels: z.number().optional(),
+    position: z.any().optional()
+  })
+  .passthrough();
+const converterPresetSchema = z
+  .object({
+    sourceDevice: z.string(),
+    name: z.string(),
+    sceneCount: z.number(),
+    blocks: z.array(converterBlockSchema),
+    routing: z.any(),
+    decodeDepth: z.string()
+  })
+  .passthrough();
+export const convertedPresetDocSchema = z.object({
+  v: z.literal(1),
+  name: z.string(),
+  sourceDevice: z.string(),
+  targetDevice: z.enum(['axe-fx-iii', 'fm9', 'fm3', 'vp4', 'am4', 'axe-fx-ii', 'axe-fx-gen1']),
+  savedAt: z.number(),
+  slot: z.number().int().nonnegative().optional(),
+  preset: converterPresetSchema
+});
+
+/** Parse an untrusted store value into a ConvertedPresetDoc, or null when it fails validation. */
+export function parseConvertedDoc(raw: unknown): ConvertedPresetDoc | null {
+  const r = convertedPresetDocSchema.safeParse(raw);
+  return r.success ? (r.data as ConvertedPresetDoc) : null;
 }
 
 /** URL/id-safe slug from a preset name. */
@@ -415,17 +541,28 @@ export function slugifyName(name: string): string {
   return s || 'preset';
 }
 
-/** Build the library document + its store id from a resolved scratch buffer. */
-export function buildLibraryDoc(state: ScratchState, savedAt: number): { id: string; doc: ConvertedPresetDoc } {
+/** Build the library document + its store id from a resolved scratch buffer. `overrides` carries the
+ *  name + slot the save flow captured; a blank name falls back to the buffer's own name. The chosen name
+ *  is reflected in BOTH the doc and the embedded preset so a re-open shows it. */
+export function buildLibraryDoc(
+  state: ScratchState,
+  savedAt: number,
+  overrides: SaveOverrides = {}
+): { id: string; doc: ConvertedPresetDoc } {
+  const name = overrides.name?.trim() || state.name;
+  const slot =
+    Number.isInteger(overrides.slot) && (overrides.slot as number) >= 0 ? (overrides.slot as number) : undefined;
+  const preset: ConverterPreset = { ...scratchToPreset(state), name };
   const doc: ConvertedPresetDoc = {
     v: 1,
-    name: state.name,
+    name,
     sourceDevice: state.sourceDevice,
     targetDevice: state.targetDevice,
     savedAt,
-    preset: scratchToPreset(state)
+    ...(slot != null ? { slot } : {}),
+    preset
   };
-  const id = `${state.targetDevice}-${slugifyName(state.name)}-${savedAt}`;
+  const id = `${state.targetDevice}-${slugifyName(name)}-${savedAt}`;
   return { id, doc };
 }
 
