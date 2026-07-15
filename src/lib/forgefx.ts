@@ -352,21 +352,22 @@ export const forgefx = {
       body: JSON.stringify({ targetDevice, ...(sourceSyx ? { source: { syx: sourceSyx } } : {}) }),
       signal: AbortSignal.timeout(30000)
     }),
-  /** Author a target-device preset `.syx` from a converted preset, edit-in-place on a caller-supplied FM3
-   *  BASE template (base64). `sourceSyx` (base64) converts an imported file; omit it to convert the
-   *  CONNECTED device's current preset. FM3 targets ONLY (the server answers 501 otherwise); `baseSyx`
-   *  MUST be an FM3 preset dump (400 otherwise). The returned `syx` is FILE-level valid only — a hardware
-   *  load test on a real FM3 is still required. Authoring re-converts + re-packs a whole preset → long
-   *  timeout. */
+  /** Author a target-device preset `.syx` from a converted preset by FULL-BODY SYNTHESIS onto the codec's
+   *  bundled default FM3 scaffold — NO base needed (one-click). `sourceSyx` (base64) converts an imported
+   *  file; omit it to convert the CONNECTED device's current preset. FM3 targets ONLY (server answers 501
+   *  otherwise). `baseSyx` is OPTIONAL — supply it (base64) to use your own FM3 preset as the synthesis
+   *  scaffold override (must be a valid FM3 dump; 400 otherwise). The returned `syx` is FILE-level valid
+   *  only — a hardware load test on a real FM3 is still required. Synthesis re-converts + re-packs a whole
+   *  preset → long timeout. */
   exportConvertedSyx: (
     targetDevice: ConverterDeviceId,
-    opts: { sourceSyx?: string; baseSyx: string; name?: string; slot?: number }
+    opts: { sourceSyx?: string; baseSyx?: string; name?: string; slot?: number }
   ) =>
     req<ConvertExportResponse>('/preset/convert/export', {
       method: 'POST',
       body: JSON.stringify({
         targetDevice,
-        base: { syx: opts.baseSyx },
+        ...(opts.baseSyx ? { base: { syx: opts.baseSyx } } : {}),
         ...(opts.sourceSyx ? { source: { syx: opts.sourceSyx } } : {}),
         ...(opts.name != null ? { name: opts.name } : {}),
         ...(opts.slot != null ? { slot: opts.slot } : {})

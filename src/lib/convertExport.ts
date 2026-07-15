@@ -1,9 +1,10 @@
 // Pure helpers for the cross-device converter's ".syx export" flow (META-24 · AXIS-47/48).
 //
 // The actual authoring runs server-side in ForgeFX (POST /preset/convert/export → the FM3-calibrated
-// codec `authorGen3PresetFromIR`); Axis only chooses a base template, calls the endpoint, and downloads
-// the returned bytes. So there is no IR→author mapping on this side — the non-trivial-but-pure bits are
-// the eligibility gate, the FM3 model match (for filtering library base candidates), the download
+// codec `authorGen3PresetFromIRFull`, which SYNTHESIZES the whole FM3 body onto a bundled scaffold — no
+// base needed). Axis only calls the endpoint (one-click) and downloads the returned bytes; an FM3 base is
+// an OPTIONAL scaffold override. So there is no IR→author mapping on this side — the non-trivial-but-pure
+// bits are the eligibility gate, the FM3 model match (for filtering optional base candidates), the download
 // filename sanitizer, and the toast copy. They live here (node-testable) so the Svelte panel stays thin.
 //
 // HONESTY: export is FM3-only for now, and a file-level-valid `.syx` is NOT proof of device acceptance —
@@ -31,27 +32,32 @@ export function exportToast(writtenCount: number, skippedCount: number): string 
   return skippedCount > 0 ? `${blocks} · ${skippedCount} skipped` : blocks;
 }
 
-/** The FIDELITY warning toast when edit-in-place could not place every converted block because the base
- *  template lacked matching slots. Returns null when the base covered everything (`dropped === 0`), so the
+/** The FIDELITY warning toast when full synthesis could not reproduce every converted block because some
+ *  families have no harvested FM3 template yet. Returns null when everything landed (`dropped === 0`), so the
  *  caller falls back to the plain success toast. */
 export function exportFidelityToast(fidelity: {
   sourceBlocks: number;
   landedBlocks: number;
-  droppedForNoBaseBlock: number;
+  droppedNoTemplate: number;
 }): string | null {
-  if (fidelity.droppedForNoBaseBlock <= 0) return null;
+  if (fidelity.droppedNoTemplate <= 0) return null;
+  const fams = fidelity.droppedNoTemplate;
   return (
     `Exported ${fidelity.landedBlocks} of ${fidelity.sourceBlocks} blocks — ` +
-    'the base template lacked the rest (pick a richer base for full coverage)'
+    `${fams} famil${fams === 1 ? 'y has' : 'ies have'} no FM3 template yet`
   );
 }
 
-/** The error toast when the server REFUSES an export. The end-to-end validation gate rejects a corrupt base
- *  (400) or an authored preset that failed re-decode (422) — both mean "don't download this". Other failures
- *  (network/timeout/5xx) fall back to the raw message. NO file is downloaded on any of these. */
+/** The error toast when the server REFUSES an export. A supplied base OVERRIDE that is not a valid FM3 dump
+ *  is rejected (400); an authored preset that failed re-decode is refused (422) — both mean "don't download
+ *  this". Other failures (network/timeout/5xx) fall back to the raw message. NO file is downloaded on any of
+ *  these. */
 export function exportErrorToast(status: number | undefined, message?: string | null): string {
-  if (status === 400 || status === 422) {
-    return 'Export failed: base template invalid — pick a different base';
+  if (status === 422) {
+    return 'Export refused: the synthesized preset failed validation';
+  }
+  if (status === 400) {
+    return 'Export failed: base override invalid — remove it or pick a valid FM3 preset';
   }
   const m = message?.trim();
   return m ? `Export failed: ${m}` : 'Export failed';

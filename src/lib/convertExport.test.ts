@@ -60,21 +60,30 @@ describe('convertExport.exportToast', () => {
 });
 
 describe('convertExport.exportFidelityToast', () => {
-  it('returns null when the base covered every converted block (nothing dropped)', () => {
-    expect(exportFidelityToast({ sourceBlocks: 12, landedBlocks: 12, droppedForNoBaseBlock: 0 })).toBe(null);
+  it('returns null when every converted block was synthesized (nothing dropped)', () => {
+    expect(exportFidelityToast({ sourceBlocks: 12, landedBlocks: 12, droppedNoTemplate: 0 })).toBe(null);
   });
-  it('warns "Exported N of M blocks" naming the base-coverage gap when blocks were dropped', () => {
-    expect(exportFidelityToast({ sourceBlocks: 14, landedBlocks: 9, droppedForNoBaseBlock: 5 })).toBe(
-      'Exported 9 of 14 blocks — the base template lacked the rest (pick a richer base for full coverage)'
+  it('warns "Exported N of M blocks" naming the missing-template families when blocks were dropped', () => {
+    expect(exportFidelityToast({ sourceBlocks: 9, landedBlocks: 7, droppedNoTemplate: 2 })).toBe(
+      'Exported 7 of 9 blocks — 2 families have no FM3 template yet'
+    );
+  });
+  it('uses the singular for a single dropped family', () => {
+    expect(exportFidelityToast({ sourceBlocks: 8, landedBlocks: 7, droppedNoTemplate: 1 })).toBe(
+      'Exported 7 of 8 blocks — 1 family has no FM3 template yet'
     );
   });
 });
 
 describe('convertExport.exportErrorToast', () => {
-  it('shows a "pick a different base" message for the validation-gate refusals (400 base / 422 authored)', () => {
-    expect(exportErrorToast(400)).toBe('Export failed: base template invalid — pick a different base');
+  it('refuses a synthesized preset that failed validation (422)', () => {
     expect(exportErrorToast(422, 'authored preset failed validation: invalid CRC')).toBe(
-      'Export failed: base template invalid — pick a different base'
+      'Export refused: the synthesized preset failed validation'
+    );
+  });
+  it('names the optional-base-override problem for a 400', () => {
+    expect(exportErrorToast(400)).toBe(
+      'Export failed: base override invalid — remove it or pick a valid FM3 preset'
     );
   });
   it('falls back to the raw message for other failures, or a generic string when none', () => {
