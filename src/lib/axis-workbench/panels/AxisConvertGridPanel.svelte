@@ -149,31 +149,31 @@
   const sourceAvailable = $derived(!!convert.lastSource || convert.lastRequest?.hasSource === false);
   const fm3LibEntries = $derived(library.entries.filter((e) => isFm3Model(e.summary.model)));
 
-  type BaseChoice = 'connected' | 'library' | 'upload';
-  let baseChoice = $state<BaseChoice>('upload');
+  // Full-body synthesis needs NO base — the common path is one-click (baseChoice='none', the codec's
+  // bundled scaffold). The connected/library/upload choices are an OPTIONAL "use my own FM3 as the scaffold"
+  // advanced affordance.
+  type BaseChoice = 'none' | 'connected' | 'library' | 'upload';
+  let baseChoice = $state<BaseChoice>('none');
   let baseLibId = $state('');
   let uploadedBase = $state<{ b64: string; name: string } | null>(null);
   let exporting = $state(false);
 
-  // Preselect the connected-FM3 default (else a library FM3, else upload) each time the popover opens.
+  // One-click default: no base override. (The advanced picker still lets the user pick their own scaffold.)
   function initBaseChoice() {
     uploadedBase = null;
-    if (connectedIsFm3) {
-      baseChoice = 'connected';
-    } else if (fm3LibEntries.length > 0) {
-      baseChoice = 'library';
-      baseLibId = fm3LibEntries[0].id;
-    } else {
-      baseChoice = 'upload';
-    }
+    baseChoice = 'none';
+    if (fm3LibEntries.length > 0) baseLibId = fm3LibEntries[0].id;
   }
 
+  // A chosen OVERRIDE must resolve; 'none' is always ready (synthesis uses the bundled scaffold).
   const baseReady = $derived(
-    baseChoice === 'connected'
-      ? connectedIsFm3
-      : baseChoice === 'library'
-        ? !!fm3LibEntries.find((e) => e.id === baseLibId)
-        : !!uploadedBase
+    baseChoice === 'none'
+      ? true
+      : baseChoice === 'connected'
+        ? connectedIsFm3
+        : baseChoice === 'library'
+          ? !!fm3LibEntries.find((e) => e.id === baseLibId)
+          : !!uploadedBase
   );
   const canExport = $derived(canExportTargetFm3 && sourceAvailable && baseReady && !exporting);
 
@@ -187,10 +187,13 @@
     uploadedBase = { b64: bytesToBase64(new Uint8Array(buf)), name: file.name.replace(/\.syx$/i, '') };
   }
 
-  /** Resolve the chosen base template to base64 FM3 `.syx` bytes (throws a user-facing message on failure). */
-  async function resolveBaseB64(): Promise<string> {
+  /** Resolve the OPTIONAL base override to base64 FM3 `.syx` bytes, or undefined for the one-click default
+   *  (synthesis uses the codec's bundled scaffold). Throws a user-facing message when a chosen override
+   *  can't be resolved. */
+  async function resolveBaseB64(): Promise<string | undefined> {
+    if (baseChoice === 'none') return undefined;
     if (baseChoice === 'upload') {
-      if (!uploadedBase) throw new Error('Choose an FM3 .syx to use as the base template.');
+      if (!uploadedBase) throw new Error('Choose an FM3 .syx to use as the base scaffold.');
       return uploadedBase.b64;
     }
     if (baseChoice === 'library') {
@@ -198,7 +201,7 @@
       if (!e) throw new Error('Pick an FM3 preset from the library.');
       return bytesToBase64(new Uint8Array(await entrySyxBytes(e)));
     }
-    // connected FM3: dump the current preset (active buffer) as the base template
+    // connected FM3: dump the current preset (active buffer) as the base scaffold
     const b = await forgefx.presetBackup();
     return bytesToBase64(Uint8Array.from(b.bytes));
   }
@@ -233,11 +236,11 @@
       downloadSyx(res.syx, res.name || saveName);
       const fidelityWarning = exportFidelityToast(res.fidelity);
       if (fidelityWarning) {
-        // Amber warning: the base template lacked slots for some converted blocks.
-        editor.showToast(fidelityWarning, '#e0a233');
+        // Amber warning: some converted families have no FM3 template yet.
+        editor.showToast(`${fidelityWarning} — load-test on a real FM3`, '#e0a233');
       } else {
-        // File-level valid only — the FM3 must still accept it on a real hardware load.
-        editor.showToast(`${exportToast(res.written.length, res.skipped.length)} — load-test on a real FM3`, '#33c46b');
+        // Every block synthesized. File-level valid only — the FM3 must still accept it on a hardware load.
+        editor.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real FM3`, '#33c46b');
       }
       saveOpen = false;
     } catch (e) {
@@ -295,32 +298,37 @@
               </div>
             </div>
             {#if !slotCheck.ok}<div class="save-err">{slotCheck.error}</div>{/if}
-            <!-- .syx export (FM3-only). Authors the converted preset ONTO an FM3 base template. The bytes
-                 are file-valid only — a hardware load test on a real FM3 is still required. -->
+            <!-- .syx export (FM3-only). SYNTHESIZES the whole FM3 preset from the conversion — one-click, no
+                 base needed. The bytes are file-valid only — a hardware load test on a real FM3 is still
+                 required. An FM3 base is an OPTIONAL scaffold override (advanced). -->
             {#if canExportTargetFm3}
               <div class="export-box">
                 <span class="export-title">Export .syx (FM3)</span>
                 {#if !sourceAvailable}
                   <div class="export-hint">Re-open this preset from a source file or device to export it.</div>
                 {:else}
-                  <label class="save-field">
-                    <span>Base template</span>
-                    <select bind:value={baseChoice}>
-                      {#if connectedIsFm3}<option value="connected">Connected FM3 (current preset)</option>{/if}
-                      {#if fm3LibEntries.length > 0}<option value="library">FM3 preset from library</option>{/if}
-                      <option value="upload">Upload an FM3 .syx…</option>
-                    </select>
-                  </label>
-                  {#if baseChoice === 'library'}
-                    <select class="export-liblist" bind:value={baseLibId}>
-                      {#each fm3LibEntries as e (e.id)}<option value={e.id}>{e.summary.name || e.id}</option>{/each}
-                    </select>
-                  {:else if baseChoice === 'upload'}
-                    <input type="file" accept=".syx" class="export-file" onchange={onBaseFile} />
-                  {/if}
                   <button type="button" class="save-export" disabled={!canExport} onclick={exportSyx}>
-                    {exporting ? 'Exporting…' : 'Export .syx'}
+                    {exporting ? 'Synthesizing…' : 'Export .syx'}
                   </button>
+                  <details class="export-advanced">
+                    <summary>Advanced: use my own FM3 as scaffold</summary>
+                    <label class="save-field">
+                      <span>Scaffold</span>
+                      <select bind:value={baseChoice}>
+                        <option value="none">Default (bundled scaffold)</option>
+                        {#if connectedIsFm3}<option value="connected">Connected FM3 (current preset)</option>{/if}
+                        {#if fm3LibEntries.length > 0}<option value="library">FM3 preset from library</option>{/if}
+                        <option value="upload">Upload an FM3 .syx…</option>
+                      </select>
+                    </label>
+                    {#if baseChoice === 'library'}
+                      <select class="export-liblist" bind:value={baseLibId}>
+                        {#each fm3LibEntries as e (e.id)}<option value={e.id}>{e.summary.name || e.id}</option>{/each}
+                      </select>
+                    {:else if baseChoice === 'upload'}
+                      <input type="file" accept=".syx" class="export-file" onchange={onBaseFile} />
+                    {/if}
+                  </details>
                   <div class="export-hint">File-valid only — load-test the export on a real FM3 before trusting it.</div>
                 {/if}
               </div>
@@ -609,6 +617,15 @@
     font-size: 10.5px;
     line-height: 1.35;
     color: var(--textdim);
+  }
+  .export-advanced > summary {
+    font-size: 10.5px;
+    color: var(--textdim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .export-advanced[open] > summary {
+    margin-bottom: 6px;
   }
   .save-actions {
     display: flex;

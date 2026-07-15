@@ -931,9 +931,10 @@ export interface ConvertExportResponse {
   /** END-TO-END VALIDATION GATE result for the authored output, decoded back with the codec. On a 200 this
    *  is always `ok:true` — a failing authored preset is refused server-side (422) and never returned. */
   validation: { ok: boolean; issues: string[] };
-  /** Edit-in-place FIDELITY: how many converted source blocks LANDED vs were DROPPED because the base
-   *  template lacked a matching block. `droppedForNoBaseBlock > 0` ⇒ warn the user their base is too thin. */
-  fidelity: { sourceBlocks: number; landedBlocks: number; droppedForNoBaseBlock: number };
+  /** FULL-SYNTHESIS FIDELITY: how many converted source blocks LANDED in the freshly-synthesized body vs
+   *  were DROPPED because their family has no harvested FM3 template yet. `droppedNoTemplate > 0` ⇒ warn the
+   *  user some families could not be reproduced. Synthesis is NOT bounded by any base's block set. */
+  fidelity: { sourceBlocks: number; landedBlocks: number; droppedNoTemplate: number };
 }
 
 // connection picker (serial + MIDI ports)
