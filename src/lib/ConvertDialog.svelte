@@ -50,6 +50,18 @@
     return btoa(bin);
   }
 
+  // The file input is triggered programmatically from the "Choose…" button: the row itself is a
+  // <label> (for the radio), and a nested <label> for the file input is invalid HTML — clicking it
+  // activated the OUTER label's radio instead of opening the file dialog. A button + hidden input avoids
+  // the nesting entirely.
+  let fileInput = $state<HTMLInputElement | null>(null);
+  function chooseFile(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    useFile = true;
+    fileInput?.click();
+  }
+
   async function pickFile(e: Event) {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (!f) return;
@@ -176,8 +188,9 @@
                 <b>From a .syx file</b>
                 <span class="sub">{fileName ? fileName : 'Convert an exported preset file'}</span>
               </span>
-              <label class="filebtn">Choose…<input type="file" accept=".syx" onchange={pickFile} /></label>
+              <button type="button" class="filebtn" onclick={chooseFile}>Choose…</button>
             </label>
+            <input class="hidden-file" type="file" accept=".syx" bind:this={fileInput} onchange={pickFile} />
             {#if fileErr}<div class="err">{fileErr}</div>{/if}
           </section>
 
@@ -221,8 +234,9 @@
   .opt > span { display: flex; flex-direction: column; gap: 1px; flex: 1; }
   .opt b { font-size: 13px; }
   .opt .sub { font-size: 11px; color: var(--textdim); }
-  .filebtn { position: relative; overflow: hidden; flex: none; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface); font-size: 12px; cursor: pointer; }
-  .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .filebtn { flex: none; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+  .filebtn:hover { border-color: var(--border3); }
+  .hidden-file { display: none; }
 
   .err { font-size: 12px; color: var(--danger, #d6543f); }
   .err.banner { padding: 9px 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--danger, #d6543f) 45%, transparent); background: color-mix(in srgb, var(--danger, #d6543f) 10%, transparent); }
