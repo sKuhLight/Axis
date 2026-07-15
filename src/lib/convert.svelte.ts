@@ -52,6 +52,16 @@ class ConvertStore {
   openDialog = () => { this.open = true; };
   close = () => { this.open = false; };
 
+  /** Open the dialog FRESH with NO pre-seeded source — the general "Convert Preset…" entry point in the
+   *  preset browser. Drops any prior report and staged/retained source so the dialog lands on the
+   *  target-device picker + the "From a .syx file → Choose…" path rather than re-showing the last run. */
+  openBlank = () => {
+    this.#s = initialConvertState;
+    this.pendingSource = null;
+    this.lastSource = null;
+    this.open = true;
+  };
+
   /** Open the dialog fresh with a pre-seeded source .syx (a preset-browser row / detail "Convert…").
    *  Resets any prior report so the dialog lands on the target-picker step for the new source. */
   openWithSource = (b64: string, name: string) => {

@@ -12,6 +12,7 @@
   import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
   import { notifyMutation } from './syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
+  import { convert } from './convert.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
@@ -1001,6 +1002,7 @@
     <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title={editor.scanNamesOnly ? 'Scan the stored-preset locations (names) into the local library' : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}>
       {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
     </button>
+    <button class="ghost ic-btn" onclick={() => convert.openBlank()} title="Convert a preset to another Fractal device — pick a target device, then Choose a .syx file"><Icon name="convert" size={14} /> Convert Preset…</button>
     <button class="ghost ic-btn" onclick={addFolder} title="Browse a local folder of .syx presets — load any of them live into the edit buffer"><Icon name="folder" size={14} /> Folder</button>
     {#if library.localEnabled}
       <button class="ghost ic-btn" onclick={() => library.refreshLocal(true).then(() => editor.showToast(`Local library refreshed${library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped` : ''}`, '#33c46b'))} title="Re-scan the Axis Presets/ folder on disk"><Icon name="refresh" size={14} /> Local</button>
