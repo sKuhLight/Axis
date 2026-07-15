@@ -4,6 +4,7 @@
   import { editor } from '../../../editor.svelte';
   import { cloud, browseEntries } from '../../../cloud.svelte';
   import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
+  import { convert } from '../../../convert.svelte';
   import type { SyncState } from '../../../types';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
@@ -663,6 +664,16 @@
         onclick={() => axisPresetBrowserWorkbenchController.setSaving(!snapshot.saving)}
       >
         ☆ Save filter
+      </button>
+      <!-- General cross-device converter entry point (not only the per-row menu): opens the ConvertDialog
+           FRESH (no pre-seeded source) so the user picks a target device + Chooses a .syx directly. -->
+      <button
+        type="button"
+        class="convert-preset"
+        title="Convert a preset to another Fractal device — pick a target device, then Choose a .syx file"
+        onclick={() => convert.openBlank()}
+      >
+        ⇄ Convert Preset…
       </button>
     </div>
     <!-- V13e FILTERS builder-chips row (§2.5) — also a drop target for params/blocks dragged from detail -->
@@ -1991,6 +2002,19 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accentink, var(--bg));
+  }
+  .convert-preset {
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    text-transform: none;
+    font: 700 11px/1 var(--font-mono);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    color: var(--accent);
+  }
+  .convert-preset:hover {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
   .quick-tags {
     display: flex;

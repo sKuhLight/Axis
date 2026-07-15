@@ -92,6 +92,17 @@
   });
   const slotCheck = $derived(validateSlot(saveSlot, targetCount));
 
+  // Slot chooser: open the real device-preset picker (PresetPicker) in "pick a slot" mode and thread the
+  // chosen slot into `saveSlot` (still validated by `slotCheck`). Falls back gracefully with no device —
+  // the picker shows the library / last-known preset list (presetCount defaults, names from the library).
+  const slotPad = $derived(saveSlot === '' ? '' : String(Number(saveSlot)).padStart(3, '0'));
+  const slotName = $derived(saveSlot === '' ? '' : library.nameOfSlot(Number(saveSlot)));
+  function pickSlot() {
+    editor.openSlotPicker((slot) => {
+      saveSlot = String(slot);
+    });
+  }
+
   function openSave() {
     saveName = convertScratch.state?.name ?? presetName;
     saveSlot = '';
@@ -244,10 +255,24 @@
               <!-- svelte-ignore a11y_autofocus -->
               <input type="text" maxlength="32" autofocus spellcheck="false" bind:value={saveName} onkeydown={(e) => { if (e.key === 'Enter') confirmSave(); }} />
             </label>
-            <label class="save-field">
+            <div class="save-field">
               <span>Slot {targetCount ? `(0–${targetCount - 1}, optional)` : '(optional)'}</span>
-              <input type="text" inputmode="numeric" placeholder={targetCount ? `0–${targetCount - 1}` : 'e.g. 12'} bind:value={saveSlot} onkeydown={(e) => { if (e.key === 'Enter') confirmSave(); }} />
-            </label>
+              <!-- Reuse the app's real device-preset picker (PresetPicker, via editor.openSlotPicker) to
+                   choose a slot from the numbered + named preset list — not a bare number spinner. -->
+              <div class="slot-row">
+                <button type="button" class="slot-pick" onclick={pickSlot}>
+                  {#if saveSlot === ''}
+                    <span class="slot-ph">Choose a slot…</span>
+                  {:else}
+                    <span class="slot-num">PRE {slotPad}</span>
+                    <span class="slot-name">{slotName || `Preset ${saveSlot}`}</span>
+                  {/if}
+                </button>
+                {#if saveSlot !== ''}
+                  <button type="button" class="slot-clear" title="Clear slot" onclick={() => (saveSlot = '')}>✕</button>
+                {/if}
+              </div>
+            </div>
             {#if !slotCheck.ok}<div class="save-err">{slotCheck.error}</div>{/if}
             <!-- .syx export (FM3-only). Authors the converted preset ONTO an FM3 base template. The bytes
                  are file-valid only — a hardware load test on a real FM3 is still required. -->
@@ -448,6 +473,63 @@
   }
   .save-field input:focus {
     border-color: var(--accent);
+  }
+  .slot-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .slot-pick {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--bg2);
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+  }
+  .slot-pick:hover {
+    border-color: var(--accent);
+  }
+  .slot-ph {
+    color: var(--textdim);
+    font: 500 12px/1 var(--font-mono, monospace);
+  }
+  .slot-num {
+    flex: none;
+    font: 700 11px/1 var(--font-mono, monospace);
+    color: var(--accent);
+  }
+  .slot-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 600 12px/1 var(--font-mono, monospace);
+    color: var(--text);
+  }
+  .slot-clear {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: transparent;
+    color: var(--textdim);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .slot-clear:hover {
+    border-color: var(--border3, var(--border));
+    color: var(--text);
   }
   .save-err {
     font-size: 11px;
