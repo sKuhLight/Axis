@@ -9,13 +9,30 @@
   import { convertScratch } from './convertScratch.svelte';
   import ConvertReport from './ConvertReport.svelte';
   import { CONVERTER_DEVICES, deviceName, deviceIdFromModel } from './convertReport';
+  import { isAxisWorkbenchFeatureEnabled } from './axis-workbench/featureGate';
   import type { ConverterDeviceId } from './types';
+
+  // Workbench shell → the review hop routes to the REAL SignalGrid convert page; the legacy monolith
+  // keeps the fake-grid view (ConvertScratchView) as its fallback (removed in M5).
+  const workbench = isAxisWorkbenchFeatureEnabled(import.meta.env);
 
   let target = $state<ConverterDeviceId | null>(null);
   let useFile = $state(false);
   let fileName = $state('');
   let fileB64 = $state<string | null>(null);
   let fileErr = $state('');
+
+  // Consume a source .syx staged by a preset-browser "Convert…" action (convert.openWithSource):
+  // pre-seed the file source so the user lands on the target-device picker for that preset.
+  $effect(() => {
+    if (convert.open && convert.pendingSource) {
+      useFile = true;
+      fileB64 = convert.pendingSource.b64;
+      fileName = convert.pendingSource.name;
+      fileErr = '';
+      convert.pendingSource = null;
+    }
+  });
 
   const connectedId = $derived(deviceIdFromModel(editor.detected?.modelId));
   const canConvert = $derived(!!target && !convert.running && (!useFile || !!fileB64));
@@ -59,20 +76,43 @@
     convert.reset();
   }
 
+  async function activateConvertPage() {
+    const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
+      import('./axis-workbench/axisWorkbenchStore.svelte'),
+      import('./axis-workbench/axisWorkbenchPages')
+    ]);
+    axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
+  }
+
   function openInGrid() {
-    convert.close();
-    convertScratch.openView();
+    if (workbench) {
+      // Seed the scratch buffer (NOT convertScratch.open — that drives the legacy view) and activate the
+      // real-grid convert page.
+      if (!convertScratch.seed()) return;
+      convert.close();
+      void activateConvertPage();
+    } else {
+      convert.close();
+      convertScratch.openView();
+    }
   }
 
   // ── block-focus seam (P4b) ──────────────────────────────────────────────────────────────────────
-  // Re-pointed at the fake-grid scratch buffer: a report row focuses its converted block in the scratch
-  // view (opening it if needed). `blockAvailable` reflects whether that block exists in the conversion.
+  // A report row focuses its converted block. Workbench: seed + focus + open the convert page; monolith:
+  // the legacy fake-grid view. `blockAvailable` reflects whether that block exists in the conversion.
   function blockAvailable(blockKey: string, _family: string): boolean {
     return convertScratch.hasBlock(blockKey);
   }
   function focusBlock(blockKey: string, _family: string): boolean {
+    if (workbench) {
+      if (!convertScratch.seed() || !convertScratch.hasBlock(blockKey)) return false;
+      convertScratch.focusKey = blockKey;
+      convert.close();
+      void activateConvertPage();
+      return true;
+    }
     const ok = convertScratch.focusBlock(blockKey);
-    if (ok) convert.close(); // reveal the scratch view
+    if (ok) convert.close(); // reveal the legacy scratch view
     return ok;
   }
 </script>

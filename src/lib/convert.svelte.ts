@@ -13,6 +13,7 @@
 
 import { forgefx, ForgeError } from './forgefx';
 import type { ConverterDeviceId, ConvertResponse } from './types';
+import type { ConvertedPresetDoc } from './convertScratch';
 import {
   initialConvertState,
   beginConvert,
@@ -25,6 +26,15 @@ import {
 class ConvertStore {
   /** Convert dialog visibility (mounted unconditionally in +page.svelte, gated on this). */
   open = $state(false);
+
+  /** A source .syx (base64 + display name) staged for the dialog to pre-seed, set by the preset-browser
+   *  "Convert…" entry points (see presetConvertSource.ts). Consumed (cleared) by the dialog on open. */
+  pendingSource = $state<{ b64: string; name: string } | null>(null);
+
+  /** The OFFLINE source .syx of the last conversion (base64 + name), retained so the `.syx` export flow
+   *  can re-author from the same source. Null when the last conversion had no offline source — either a
+   *  connected-device convert (source = the live device) or a re-opened saved doc (no source bytes). */
+  lastSource = $state<{ b64: string; name: string } | null>(null);
 
   // The whole flow state is one snapshot so the reducers can replace it atomically.
   #s = $state<ConvertState>(initialConvertState);
@@ -42,8 +52,31 @@ class ConvertStore {
   openDialog = () => { this.open = true; };
   close = () => { this.open = false; };
 
+  /** Open the dialog fresh with a pre-seeded source .syx (a preset-browser row / detail "Convert…").
+   *  Resets any prior report so the dialog lands on the target-picker step for the new source. */
+  openWithSource = (b64: string, name: string) => {
+    this.#s = initialConvertState;
+    this.pendingSource = { b64, name };
+    this.open = true;
+  };
+
   /** Clear the flow back to idle (drops the last report) — for "Convert another". */
-  reset = () => { this.#s = initialConvertState; };
+  reset = () => { this.#s = initialConvertState; this.lastSource = null; };
+
+  /** Re-seed the flow from a SAVED converted-preset doc (the library "Open in converter" action). Builds a
+   *  synthetic, already-resolved result (no events) so `convertScratch.seed()` reconstructs the editable
+   *  buffer straight from the persisted target IR — no re-conversion, no device round-trip. */
+  seedFromDoc = (doc: ConvertedPresetDoc): void => {
+    const res: ConvertResponse = {
+      source: { device: doc.sourceDevice, name: doc.name, decodeDepth: doc.preset.decodeDepth ?? 'full' },
+      target: doc.preset,
+      events: [],
+      summary: { total: 0, info: 0, warn: 0, loss: 0 }
+    };
+    this.#s = succeedConvert(beginConvert({ targetDevice: doc.targetDevice, hasSource: true, sourceName: doc.name }), res);
+    // A re-opened saved doc carries no source .syx — the export flow cannot re-author it from source.
+    this.lastSource = null;
+  };
 
   /**
    * Run a conversion. `sourceSyx` (base64) converts an imported file; omit it to convert the connected
@@ -51,6 +84,8 @@ class ConvertStore {
    */
   run = async (targetDevice: ConverterDeviceId, sourceSyx?: string, sourceName?: string): Promise<void> => {
     this.#s = beginConvert({ targetDevice, hasSource: !!sourceSyx, sourceName });
+    // Retain the offline source so the export flow can re-author from it; null = connected-device source.
+    this.lastSource = sourceSyx ? { b64: sourceSyx, name: sourceName ?? '' } : null;
     try {
       const r = await forgefx.convertPreset(targetDevice, sourceSyx);
       this.#s = succeedConvert(this.#s, r);

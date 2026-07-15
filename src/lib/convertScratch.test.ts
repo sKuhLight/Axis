@@ -19,9 +19,14 @@ import {
   moveBlock,
   discardBlock,
   unplaceBlock,
+  setBlockParam,
+  toggleBlockBypass,
+  setBlockRouting,
   scratchToPreset,
   buildLibraryDoc,
   slugifyName,
+  validateSlot,
+  parseConvertedDoc,
   buildApplyPlan,
   blockEffectId,
   type ScratchState
@@ -75,9 +80,17 @@ describe('normalizePosition', () => {
   it('passes object positions through for grids', () => {
     expect(normalizePosition({ row: 2, col: 5 }, 'grid')).toEqual({ row: 2, col: 5 });
   });
-  it('maps a slot index to a column on a chain, a row on a slot list', () => {
+  it('maps a slot index to a left-to-right column for chains AND slot lists', () => {
     expect(normalizePosition(3, 'chain')).toEqual({ row: 0, col: 3 });
-    expect(normalizePosition(3, 'slots')).toEqual({ row: 3, col: 0 });
+    expect(normalizePosition(3, 'slots')).toEqual({ row: 0, col: 3 });
+  });
+  it('maps a { slot } position (AM4/VP4 wire shape) to a left-to-right column', () => {
+    // regression: the converter emits { slot: N } for slot/chain targets; treating it as a plain
+    // {row,col} object collapsed every block to (0,0). It maps to the slot column (row 0) instead —
+    // AM4 and VP4 both lay their slots out left-to-right, exactly like the live devices.
+    expect(normalizePosition({ slot: 2 }, 'slots')).toEqual({ row: 0, col: 2 });
+    expect(normalizePosition({ slot: 2 }, 'chain')).toEqual({ row: 0, col: 2 });
+    expect(normalizePosition({ slot: -1 }, 'slots')).toBeNull();
   });
   it('treats null / negative as unplaced', () => {
     expect(normalizePosition(null, 'grid')).toBeNull();
@@ -144,7 +157,17 @@ describe('seedScratch topology + tray', () => {
     expect(vp4.topology).toMatchObject({ kind: 'chain', rows: 1 });
     const am4 = seedScratch(preset({ blocks: [] }), [], 'am4');
     expect(am4.topology.kind).toBe('slots');
-    expect(am4.topology.cols).toBe(1);
+    expect(am4.topology).toMatchObject({ rows: 1, cols: 4 }); // horizontal 4-slot chain, like the device
+  });
+  it('keeps AM4 at its 4 fixed slots and drops every convertible block into the tray', () => {
+    // the converter leaves slot/chain targets unplaced (position null) so the user fills the fixed
+    // slots from the tray. The topology must NOT grow to the block count — AM4 has exactly 4 slots.
+    const blocks = ['comp1', 'drive1', 'amp1', 'delay1', 'reverb1', 'chorus1'].map((key) => ({
+      key, family: key.replace(/\d+$/, ''), instance: 1, params: [], position: null as null
+    }));
+    const am4 = seedScratch(preset({ blocks }), [], 'am4');
+    expect(am4.topology).toMatchObject({ kind: 'slots', rows: 1, cols: 4 });
+    expect(unplacedBlocks(am4)).toHaveLength(6);
   });
   it('seedScratchFromResponse threads target + events', () => {
     const s = seedScratchFromResponse({ source: { device: 'FM3', name: 'x', decodeDepth: 'full' }, target: preset(), events: allEvents(), summary: { total: 0, info: 0, warn: 0, loss: 0 } }, 'fm3');
@@ -179,20 +202,21 @@ describe('canPlaceAt', () => {
 // ── resolution transitions + gate ────────────────────────────────────────────────────────────
 
 describe('resolution transitions', () => {
-  it('remainingConflicts starts at the derived count and reaches 0 as each resolves', () => {
+  it('gates only on placed type conflicts + placement; clamps/routing are informational', () => {
     let s = seed();
-    expect(remainingConflicts(s)).toBe(5);
+    // type:amp1 (placed) + type:cab1 (placed) + placement:drive1. clamps:amp1 and routing DON'T gate.
+    expect(remainingConflicts(s)).toBe(3);
 
     s = setBlockType(s, 'amp1', { typeName: 'Brit 900', typeValue: 13 });
-    expect(remainingConflicts(s)).toBe(4);
+    expect(remainingConflicts(s)).toBe(2);
     expect(s.blocks.find((b) => b.key === 'amp1')?.typeValue).toBe(13);
 
     s = acceptType(s, 'cab1');
-    expect(remainingConflicts(s)).toBe(3);
+    expect(remainingConflicts(s)).toBe(1);
 
+    // acknowledging clamps / routing never changed the gate — they are informational, not blocking.
     s = acknowledgeClamps(s, 'amp1');
-    expect(remainingConflicts(s)).toBe(2);
-
+    expect(remainingConflicts(s)).toBe(1);
     s = acknowledgeRouting(s);
     expect(remainingConflicts(s)).toBe(1);
 
@@ -205,7 +229,26 @@ describe('resolution transitions', () => {
     const s = seed();
     expect(placeBlock(s, 'drive1', 0, 2)).toBe(s); // amp1's cell
     expect(placeBlock(s, 'drive1', 99, 99)).toBe(s);
-    expect(remainingConflicts(s)).toBe(5); // placement still open
+    expect(remainingConflicts(s)).toBe(3); // nothing resolved — placement + both placed type conflicts open
+  });
+
+  it('does not gate the commit on a type conflict while its block sits in the tray', () => {
+    // AM4/VP4 fill model: every block starts in the tray, so a tray block's type conflict must not
+    // block commit — only placing it (a block you actually keep) re-arms the gate.
+    const p = preset({
+      blocks: [
+        { key: 'amp1', family: 'amp', instance: 1, typeName: 'X', typeValue: 1, params: [], position: null },
+        { key: 'peq1', family: 'peq', instance: 1, params: [], position: null }
+      ]
+    });
+    const events: ConversionEvent[] = [{ kind: 'type-unresolved', blockKey: 'peq1', family: 'peq', sourceTypeName: '' }];
+    let s = seedScratch(p, events, 'am4');
+    expect(s.conflicts).toHaveLength(1);
+    expect(remainingConflicts(s)).toBe(0); // peq1 unplaced → its type conflict doesn't gate
+    s = placeBlock(s, 'peq1', 0, 0);
+    expect(remainingConflicts(s)).toBe(1); // now placed → gates
+    s = unplaceBlock(s, 'peq1');
+    expect(remainingConflicts(s)).toBe(0); // back to tray → clears
   });
 
   it('moveBlock relocates a placed block to a free cell', () => {
@@ -220,8 +263,8 @@ describe('resolution transitions', () => {
     s = discardBlock(s, 'amp1');
     expect(s.blocks.some((b) => b.key === 'amp1')).toBe(false);
     expect(conflictsForBlock(s, 'amp1').every((c) => c.resolved)).toBe(true);
-    // amp1 had type + clamps (2 conflicts) → remaining drops from 5 to 3
-    expect(remainingConflicts(s)).toBe(3);
+    // amp1's gating conflict was its type (clamps never gated) → remaining drops from 3 to 2
+    expect(remainingConflicts(s)).toBe(2);
   });
 
   it('unplaceBlock sends a placed block back to the tray without discarding', () => {
@@ -313,5 +356,110 @@ describe('buildLibraryDoc + scratchToPreset', () => {
     s = placeBlock(s, 'drive1', 2, 4);
     const out = scratchToPreset(s);
     expect(out.blocks.find((b) => b.key === 'drive1')?.position).toEqual({ row: 2, col: 4 });
+  });
+
+  it('threads a name + slot override into the doc, preset, and id', () => {
+    const s = seed();
+    const { id, doc } = buildLibraryDoc(s, 1720000000000, { name: 'Renamed Patch', slot: 7 });
+    expect(doc.name).toBe('Renamed Patch');
+    expect(doc.preset.name).toBe('Renamed Patch'); // reflected in the embedded preset too
+    expect(doc.slot).toBe(7);
+    expect(id).toBe('fm3-renamed-patch-1720000000000'); // id follows the chosen name
+  });
+
+  it('falls back to the buffer name and omits slot when overrides are blank/invalid', () => {
+    const s = seed();
+    const { doc } = buildLibraryDoc(s, 1720000000000, { name: '   ', slot: -3 });
+    expect(doc.name).toBe('Test Patch');
+    expect('slot' in doc).toBe(false); // negative slot dropped
+    const { doc: d2 } = buildLibraryDoc(s, 1720000000000);
+    expect('slot' in d2).toBe(false);
+  });
+});
+
+// ── slot validation ──────────────────────────────────────────────────────────────────────────
+describe('validateSlot', () => {
+  it('treats blank/null as valid with no slot', () => {
+    expect(validateSlot('')).toEqual({ ok: true });
+    expect(validateSlot(null)).toEqual({ ok: true });
+    expect(validateSlot(undefined)).toEqual({ ok: true });
+  });
+  it('accepts a non-negative whole number', () => {
+    expect(validateSlot('5')).toEqual({ ok: true, slot: 5 });
+    expect(validateSlot(0)).toEqual({ ok: true, slot: 0 });
+  });
+  it('rejects negatives, fractions, and non-numbers', () => {
+    expect(validateSlot('-1').ok).toBe(false);
+    expect(validateSlot('2.5').ok).toBe(false);
+    expect(validateSlot('abc').ok).toBe(false);
+  });
+  it('range-checks against a device preset count when given', () => {
+    expect(validateSlot('383', 384)).toEqual({ ok: true, slot: 383 });
+    const over = validateSlot('384', 384);
+    expect(over.ok).toBe(false);
+    expect(over.error).toContain('0–383');
+  });
+});
+
+// ── persisted-doc validation ───────────────────────────────────────────────────────────────
+describe('parseConvertedDoc', () => {
+  it('round-trips a doc built by buildLibraryDoc', () => {
+    const { doc } = buildLibraryDoc(seed(), 1720000000000, { name: 'Rt', slot: 2 });
+    const parsed = parseConvertedDoc(doc);
+    expect(parsed).not.toBeNull();
+    expect(parsed).toMatchObject({ v: 1, name: 'Rt', slot: 2, targetDevice: 'fm3' });
+    expect(parsed?.preset.blocks.length).toBe(doc.preset.blocks.length);
+  });
+  it('rejects corrupt / older-schema shapes', () => {
+    expect(parseConvertedDoc(null)).toBeNull();
+    expect(parseConvertedDoc({ v: 2, name: 'x' })).toBeNull();
+    expect(parseConvertedDoc({ v: 1, name: 'x', sourceDevice: 'FM3', targetDevice: 'nope', savedAt: 1, preset: {} })).toBeNull();
+  });
+  it('accepts a doc without a slot (slot is optional)', () => {
+    const { doc } = buildLibraryDoc(seed(), 1);
+    expect(parseConvertedDoc(doc)?.slot).toBeUndefined();
+  });
+});
+
+// ── offline edit transitions (real-grid convert surface) ─────────────────────────────────────────
+describe('offline block edits', () => {
+  const blockOf = (s: ReturnType<typeof seed>, key: string) => s.blocks.find((b) => b.key === key)!;
+
+  it('setBlockParam sets one param by index and leaves others/blocks untouched', () => {
+    let s = seed();
+    s = setBlockParam(s, 'amp1', 0, 8);
+    expect(blockOf(s, 'amp1').params[0].value).toBe(8);
+    expect(blockOf(s, 'drive1').params[0].value).toBe(7); // untouched block
+  });
+  it('setBlockParam is a no-op on an out-of-range index', () => {
+    const s = seed();
+    expect(setBlockParam(s, 'amp1', 5, 99)).toEqual(s);
+    expect(setBlockParam(s, 'amp1', -1, 99)).toEqual(s);
+  });
+  it('toggleBlockBypass flips the bypass flag', () => {
+    let s = seed();
+    expect(blockOf(s, 'amp1').bypassed).toBeUndefined();
+    s = toggleBlockBypass(s, 'amp1');
+    expect(blockOf(s, 'amp1').bypassed).toBe(true);
+    s = toggleBlockBypass(s, 'amp1');
+    expect(blockOf(s, 'amp1').bypassed).toBe(false);
+  });
+  it('setBlockRouting stores deduped, sorted feed-rows on a placed block', () => {
+    let s = seed();
+    s = setBlockRouting(s, 'amp1', [2, 0, 2, -1]);
+    expect(blockOf(s, 'amp1').fromRows).toEqual([0, 2]);
+  });
+  it('setBlockRouting is a no-op for a tray (unplaced) block', () => {
+    const s = seed();
+    expect(blockOf(s, 'drive1').position).toBeNull();
+    const next = setBlockRouting(s, 'drive1', [0, 1]);
+    expect(blockOf(next, 'drive1').fromRows).toBeUndefined();
+  });
+  it('unplaceBlock clears routing when sending a block back to the tray', () => {
+    let s = seed();
+    s = setBlockRouting(s, 'amp1', [0, 1]);
+    s = unplaceBlock(s, 'amp1');
+    expect(blockOf(s, 'amp1').position).toBeNull();
+    expect(blockOf(s, 'amp1').fromRows).toEqual([]);
   });
 });

@@ -21,7 +21,7 @@ import {
   type Severity
 } from './convertReport';
 
-// A synthetic event set covering ALL 11 ConversionEvent kinds.
+// A synthetic event set covering ALL 12 ConversionEvent kinds.
 const ALL: ConversionEvent[] = [
   { kind: 'source-partial', decodeDepth: 'name-only', detail: 'Only the preset name could be read.' },
   { kind: 'block-dropped', blockKey: 'pitch1', family: 'pitch', reason: 'family-missing' },
@@ -33,7 +33,8 @@ const ALL: ConversionEvent[] = [
   { kind: 'param-unverified', blockKey: 'delay1', nativeName: 'Ducking', value: 5 },
   { kind: 'routing-simplified', detail: 'Parallel paths merged.', affectedBlockKeys: ['amp1', 'cab1'] },
   { kind: 'scene-collapsed', sourceScenes: 8, targetScenes: 4 },
-  { kind: 'channel-collapsed', blockKey: 'amp1', sourceChannels: 4, targetChannels: 1 }
+  { kind: 'channel-collapsed', blockKey: 'amp1', sourceChannels: 4, targetChannels: 1 },
+  { kind: 'block-merged', blockKey: 'cab1', family: 'cab', intoFamily: 'amp', intoBlockKey: 'amp1' }
 ];
 
 describe('eventSeverity', () => {
@@ -41,7 +42,7 @@ describe('eventSeverity', () => {
     const bySeverity = (s: Severity) => ALL.filter((e) => eventSeverity(e) === s).map((e) => e.kind);
     expect(bySeverity('loss').sort()).toEqual(['block-dropped', 'block-unplaced', 'channel-collapsed', 'param-dropped', 'scene-collapsed'].sort());
     expect(bySeverity('warn').sort()).toEqual(['param-clamped', 'routing-simplified', 'source-partial', 'type-unresolved'].sort());
-    expect(bySeverity('info').sort()).toEqual(['param-unverified', 'type-substituted'].sort());
+    expect(bySeverity('info').sort()).toEqual(['block-merged', 'param-unverified', 'type-substituted'].sort());
   });
 
   it('type-substituted severity depends on confidence', () => {
@@ -53,7 +54,7 @@ describe('eventSeverity', () => {
 });
 
 describe('formatEvent', () => {
-  it('produces a non-empty title + correct severity for all 11 kinds', () => {
+  it('produces a non-empty title + correct severity for all 12 kinds', () => {
     for (const e of ALL) {
       const f = formatEvent(e);
       expect(f.title.length, `title for ${e.kind}`).toBeGreaterThan(0);
@@ -61,7 +62,7 @@ describe('formatEvent', () => {
       expect(f.kind).toBe(e.kind);
     }
     // Every kind is represented exactly once → 11 distinct kinds formatted.
-    expect(new Set(ALL.map((e) => e.kind)).size).toBe(11);
+    expect(new Set(ALL.map((e) => e.kind)).size).toBe(12);
   });
 
   it('renders key rows readably', () => {
@@ -93,6 +94,14 @@ describe('formatEvent', () => {
     expect(eventBlockKey(ALL[9])).toBeUndefined(); // scene-collapsed
     expect(formatEvent(ALL[3]).blockKey).toBe('amp1');
   });
+
+  it('formats block-merged as an info fold and focuses the host block, not the merged one', () => {
+    const f = formatEvent(ALL[11]); // block-merged: cab → amp
+    expect(f.severity).toBe('info');
+    expect(f.title.toLowerCase()).toContain('cab');
+    expect(f.title.toLowerCase()).toContain('amp');
+    expect(f.blockKey).toBe('amp1'); // the removed cab has no cell; focus the host amp instead
+  });
 });
 
 describe('familyLabel', () => {
@@ -109,7 +118,7 @@ describe('groupEvents', () => {
     const groups = groupEvents(ALL);
     expect(groups.map((g) => g.severity)).toEqual(['loss', 'warn', 'info']);
     const counts = Object.fromEntries(groups.map((g) => [g.severity, g.count]));
-    expect(counts).toEqual({ loss: 5, warn: 4, info: 2 });
+    expect(counts).toEqual({ loss: 5, warn: 4, info: 3 });
   });
 
   it('sub-groups by kind and preserves first-appearance order', () => {
@@ -151,7 +160,7 @@ describe('filterEvents', () => {
 
 describe('summarize', () => {
   it('tallies severities', () => {
-    expect(summarize(ALL)).toEqual({ total: 11, info: 2, warn: 4, loss: 5 });
+    expect(summarize(ALL)).toEqual({ total: 12, info: 3, warn: 4, loss: 5 });
   });
 });
 

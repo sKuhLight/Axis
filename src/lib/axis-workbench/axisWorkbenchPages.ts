@@ -40,6 +40,19 @@ export const AXIS_PAGE_SCENES = 'axis.page.scenes';
 export const AXIS_PAGE_LIVE = 'axis.page.live';
 export const AXIS_PAGE_SETUP = 'axis.page.setup';
 
+/**
+ * Cross-device preset-converter page (M4 · META-24). NOT a nav-bound seed page — it has no navigation
+ * entry and is reached only by activating it programmatically from a preset-browser "Convert…" action.
+ * It reviews/edits the converted preset in the REAL SignalGrid over the offline `convertEditor` surface.
+ * Its four panels dock: convert grid in `main`, minimap + tray split vertically in `right`, block editor
+ * in `bottom`.
+ */
+export const AXIS_PAGE_CONVERT = 'axis.page.convert';
+export const AXIS_CONVERT_GRID_PANEL = 'axis.convertGrid';
+export const AXIS_CONVERT_BLOCK_EDITOR_PANEL = 'axis.convertBlockEditor';
+export const AXIS_CONVERT_MINIMAP_PANEL = 'axis.convertMinimap';
+export const AXIS_CONVERT_TRAY_PANEL = 'axis.convertTray';
+
 /** Canonical seed-page order — mirrors the nav order (grid first, active by default). */
 export const AXIS_SEED_PAGE_ORDER = [
   AXIS_PAGE_GRID,
@@ -193,6 +206,42 @@ const mainTabs = (panelId: string, mintNodeId: () => string): DockNode => ({
   activePanelId: panelId
 });
 
+/** The four convert-page panel instances (offline converter review/edit surface). Fresh per call. */
+export function createAxisConvertPanels(): Record<string, PanelInstance> {
+  const p = (id: string, title: string, extra: Partial<PanelInstance> = {}): PanelInstance => ({
+    id,
+    type: id,
+    title,
+    closable: true,
+    collapsible: true,
+    singletonKey: id,
+    ...extra
+  });
+  return {
+    [AXIS_CONVERT_GRID_PANEL]: p(AXIS_CONVERT_GRID_PANEL, 'Converted Grid', { closable: false }),
+    [AXIS_CONVERT_BLOCK_EDITOR_PANEL]: p(AXIS_CONVERT_BLOCK_EDITOR_PANEL, 'Block Editor'),
+    [AXIS_CONVERT_MINIMAP_PANEL]: p(AXIS_CONVERT_MINIMAP_PANEL, 'Source'),
+    [AXIS_CONVERT_TRAY_PANEL]: p(AXIS_CONVERT_TRAY_PANEL, 'Unplaced Blocks')
+  };
+}
+
+/** Build the convert page's dock: grid (main) · minimap+tray split (right) · block editor (bottom). */
+function buildConvertPageDock(mintNodeId: () => string): DockLayout {
+  const dock = createEmptyDockLayout();
+  dock.root.main = mainTabs(AXIS_CONVERT_GRID_PANEL, mintNodeId);
+  dock.root.right = {
+    kind: 'split',
+    id: mintNodeId(),
+    axis: 'vertical',
+    ratio: [0.5, 0.5],
+    children: [mainTabs(AXIS_CONVERT_MINIMAP_PANEL, mintNodeId), mainTabs(AXIS_CONVERT_TRAY_PANEL, mintNodeId)]
+  };
+  dock.root.bottom = mainTabs(AXIS_CONVERT_BLOCK_EDITOR_PANEL, mintNodeId);
+  dock.regions.right.sizePx = 340;
+  dock.regions.bottom.sizePx = 360;
+  return dock;
+}
+
 export interface BuildAxisSeedPagesOptions {
   /** Node-id factory for the secondary pages' tab stacks (defaults to `createWorkbenchId`). */
   mintNodeId?: () => string;
@@ -217,6 +266,10 @@ export function buildAxisSeedPages(
     dock.root.main = mainTabs(spec.panelId, mintNodeId);
     pages[spec.pageId] = { id: spec.pageId, label: spec.label, dock };
   }
+  // The converter page is seeded on every layout so it can be activated on demand, but it stays OUT of
+  // the returned pageOrder / navigation (no nav entry) — repair appends it to pageOrder, and it is only
+  // reached via a preset-browser "Convert…" action.
+  pages[AXIS_PAGE_CONVERT] = { id: AXIS_PAGE_CONVERT, label: 'Convert', dock: buildConvertPageDock(mintNodeId) };
   return { pages, pageOrder: [...AXIS_SEED_PAGE_ORDER], activePageId: AXIS_PAGE_GRID };
 }
 
@@ -345,6 +398,36 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
   }
 
   doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_PAGES_MARKER]: 'v1' };
+  return doc;
+}
+
+/**
+ * Ensure the (nav-less) converter page + its four panels exist on every layout (M4). Idempotent and
+ * marker-free: a layout that already carries the convert page is left untouched, so it self-heals a
+ * persisted document minted before the converter page existed without a one-shot migration. Runs in the
+ * normalization chain after `ensureAxisSeedPages` (which guarantees every layout has a `pages` map).
+ */
+export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object') continue;
+    layout.pages = layout.pages ?? {};
+    layout.panels = layout.panels ?? {};
+    if (!layout.pages[AXIS_PAGE_CONVERT]) {
+      layout.pages[AXIS_PAGE_CONVERT] = {
+        id: AXIS_PAGE_CONVERT,
+        label: 'Convert',
+        dock: buildConvertPageDock(() => createWorkbenchId('tabs'))
+      };
+    }
+    const convertPanels = createAxisConvertPanels();
+    for (const [id, instance] of Object.entries(convertPanels)) {
+      if (!layout.panels[id]) layout.panels[id] = instance;
+    }
+    // Heal the repurposed right-top panel's title on docs persisted before it became the source grid
+    // (it shipped as the converted-grid "Grid Map" minimap). Idempotent: only rewrites the old title.
+    const srcPanel = layout.panels[AXIS_CONVERT_MINIMAP_PANEL];
+    if (srcPanel && srcPanel.title === 'Grid Map') srcPanel.title = 'Source';
+  }
   return doc;
 }
 

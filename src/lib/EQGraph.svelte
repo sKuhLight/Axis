@@ -2,7 +2,8 @@
   import type { NamedParam } from './types';
   import { paramValue, normFromValue, fmtCompact } from './format';
   import type { EQShape } from './eq';
-  import { editor } from './editor.svelte';
+  import { getEditorSurface } from './editorSurface';
+  const editor = getEditorSurface();
 
   const mob = $derived(editor.isMobile);
 

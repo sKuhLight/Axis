@@ -16,6 +16,7 @@ import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -1603,6 +1604,9 @@ class EditorStore {
   };
 
   // ── cab IR picker ──
+  /** Read a block's current cab/IR state. Routed through the store (not called on `forgefx` directly by
+   *  components) so the editor surface owns it — an offline surface can override with a buffer read. */
+  cabState = (eid: number) => forgefx.cabState(eid);
   openCabPicker = () => {
     if (!this.selected?.pack) return;
     this.cabPickerOpen = true;
@@ -2101,3 +2105,9 @@ class EditorStore {
 
 export const editor = new EditorStore();
 export { baseName, packFor };
+
+// Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
+// editor-backed grid components (SignalGrid / GridMap / BlockEditor / ControlSurface / EQGraph /
+// CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
+// (the interface is a subset the singleton satisfies) — never the reverse.
+export const _editorSatisfiesSurface: EditorSurface = editor;

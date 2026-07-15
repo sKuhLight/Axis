@@ -11,6 +11,7 @@
   import { forgefx, ForgeError } from './forgefx';
   import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
   import { notifyMutation } from './syncBus';
+  import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
@@ -297,13 +298,14 @@
   // device library + cloud-only presets, so cloud-only rigs are browseable + loadable
   const baseEntries = $derived(cloudOn ? browseEntries() : library.entries);
   function syncStateOf(e: LibEntry): SyncState {
+    if (e.source === 'converted') return 'none'; // saved conversions never participate in cloud sync
     if (!cloudOn) return 'none';
     if (e.id.startsWith('cloud:')) return 'cloudOnly';
     // dev: entries came from a device scan — they ARE on the unit even if the cached summary has no
     // CRC to compare (name-scan devices, stale cache rows); never let those read as "cloud only".
     return cloud.stateOf(e.summary.number, e.summary.crc, e.id.startsWith('dev:') || e.summary.crc != null);
   }
-  type SyncView = 'all' | 'device' | 'local' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
+  type SyncView = 'all' | 'device' | 'local' | 'converted' | 'cloud' | 'cloudOnly' | 'notBackedUp' | 'needsUpload' | 'needsUpdate';
   // "On your FM3" — named after the detected unit; the cloud views only appear when signed in,
   // "Local presets" only when a local storage folder is configured.
   const devName = $derived(editor.detected?.connected ? editor.detected.short : (editor.conn.device ?? 'device'));
@@ -311,6 +313,7 @@
     { id: 'all', label: 'All presets', icon: 'list' },
     { id: 'device', label: `On your ${devName}`, icon: 'device' },
     ...(library.localEnabled ? [{ id: 'local' as const, label: 'Local presets', icon: 'folder' as IconName }] : []),
+    ...(baseEntries.some((e) => e.source === 'converted') ? [{ id: 'converted' as const, label: 'Converted', icon: 'convert' as IconName }] : []),
     ...(cloudOn
       ? ([
           { id: 'cloud', label: 'In cloud', icon: 'cloud' },
@@ -331,6 +334,7 @@
     switch (view) {
       case 'device': return e.source === 'device' && !cloudEntry; // real slots only (cloud-only rows synthesize source 'device')
       case 'local': return e.source === 'local';
+      case 'converted': return e.source === 'converted';
       case 'cloud': return cloudEntry || s === 'synced' || s === 'modified' || s === 'outdated' || s === 'unknown';
       case 'cloudOnly': return s === 'cloudOnly';
       case 'notBackedUp': return s === 'deviceOnly';
@@ -523,6 +527,9 @@
     if (act === 'saveLocal') return void saveToLocalFolder(e);
     if (act === 'upload' || act === 'download') return void cloudAction(act, e);
     if (act === 'convert') return void convertToDevice(e);
+    if (act === 'crossConvert') return void startCrossConvert(e);
+    if (act === 'openConverter') { if (e.converted) void openConvertedInConverter(e.converted); return; }
+    if (act === 'delete' && e.source === 'converted') { void library.removeConverted(e.id); editor.showToast('Deleted', '#33c46b'); return; }
     if (act === 'delete' && e.source === 'file') { library.removeFile(e.id); editor.showToast('Removed from library', '#33c46b'); return; }
     if (SOON.has(act)) editor.showToast('Coming soon', '#9b8cf0');
   }
@@ -536,6 +543,15 @@
   }
   type CtxItem = { id: string; icon: IconName; label: string; danger?: boolean };
   function ctxItems(e: LibEntry): (CtxItem | 'div')[] {
+    // Saved cross-device conversions are not device slots — reduced menu: re-open in the converter +
+    // delete. (A true ".syx export" action is wired in the separate codec-authoring task.)
+    if (e.source === 'converted') {
+      return [
+        { id: 'openConverter', icon: 'convert', label: 'Open in converter' },
+        'div',
+        { id: 'delete', icon: 'trash', label: 'Delete', danger: true }
+      ];
+    }
     const cloudOnly = e.id.startsWith('cloud:');
     const s = syncStateOf(e);
     const cloudItem: CtxItem =
@@ -558,6 +574,9 @@
                         { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem
                       ]),
       'div',
+      // Cross-device converter (M4): port this preset to another Fractal device, best-effort + diff.
+      // Distinct from the cloud-only `convert` id above (= restore a cloud version to its device slot).
+      { id: 'crossConvert', icon: 'convert', label: 'Convert to another device…' },
       { id: 'export', icon: 'export', label: 'Export to disk' },
       ...(library.localEnabled && e.source !== 'local' ? [{ id: 'saveLocal', icon: 'folder', label: 'Save to Axis folder' } as CtxItem] : []),
       ...(cloudOn ? ['div' as const, cloudItem] : []),
@@ -872,6 +891,8 @@
 
   // ===================== load preset =====================
   async function loadPreset(e: LibEntry) {
+    // Saved conversion (no device slot): re-open it in the converter instead of a device load.
+    if (e.source === 'converted') { if (e.converted) void openConvertedInConverter(e.converted); return; }
     // Cloud-only preset (no device slot): load the latest cloud version straight into the edit buffer.
     if (e.id.startsWith('cloud:')) {
       const cv = cloud.latestCloud(e.summary.number);
@@ -1129,10 +1150,11 @@
         {@const cpu = estCpu(e)}
         {@const ss = syncStateOf(e)}
         <button class="row" class:sel onclick={() => { if (lpFired) { lpFired = false; return; } selectedId = e.id; focusEid = null; }} oncontextmenu={(ev) => onRowContext(ev, e)} onpointerdown={(ev) => rowDown(ev, e)} onpointermove={rowMove} onpointerup={rowUp} onpointercancel={rowUp}>
-          <span class="num" class:sel>{e.source === 'file' ? 'FILE' : pad(e.summary.number)}</span>
+          <span class="num" class:sel>{e.source === 'file' ? 'FILE' : e.source === 'converted' ? 'CONV' : pad(e.summary.number)}</span>
           <div class="row-mid">
             <div class="row-top">
               <span class="row-n">{e.summary.name}</span>
+              {#if e.source === 'converted' && e.provenance}<span class="conv-prov" title={`Converted from ${e.provenance}`}>{e.provenance}</span>{/if}
               {#each library.tagsOf(e.id).slice(0, 3) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}
             </div>
             <div class="row-blocks">
@@ -1191,7 +1213,7 @@
         {@const cpu = estCpu(selected)}
         {#if editor.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
         <div class="d-head">
-          <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span></div>
+          <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : selected.source === 'converted' ? 'CONV' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span>{#if selected.source === 'converted' && selected.provenance}<span class="conv-prov" title={`Converted from ${selected.provenance}`}>{selected.provenance}</span>{/if}</div>
           <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}</div>
           <div class="d-stats">
             <div class="st"><span class="sk">SOURCE</span><span class="sv2">{selected.source === 'file' ? 'Imported file' : selected.summary.model}</span></div>
@@ -1203,6 +1225,7 @@
           {#if selected.source === 'device' && !selected.id.startsWith('cloud:') && selected.summary.number >= 0}
             <button class="load audition" onclick={() => auditionEntry(selected!)} title="Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style">▶ Audition</button>
           {/if}
+          <button class="load convert" onclick={() => startCrossConvert(selected!)} title="Port this preset to another Fractal device — best-effort, with a full diff report">⇄ Convert…</button>
           {#if cloudOn && selSync !== 'none'}
             <div class="cloud-box">
               <span class="cb-chip" style:color={SYNC_META[selSync].col} style:background="{SYNC_META[selSync].col}1f" style:border="1px solid {SYNC_META[selSync].col}40"><Icon name={SYNC_META[selSync].icon} size={12} stroke={2} /> {SYNC_META[selSync].short}</span>
@@ -1431,6 +1454,7 @@
   .row-top { display: flex; align-items: center; gap: 9px; }
   .row-n { font-size: 14.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tg { padding: 2px 7px; border-radius: 5px; font: 700 9.5px/1 'JetBrains Mono', monospace; color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+  .conv-prov { flex: none; padding: 2px 7px; border-radius: 5px; font: 700 9.5px/1 'JetBrains Mono', monospace; color: var(--amber, #f5a623); background: color-mix(in srgb, var(--amber, #f5a623) 14%, transparent); border: 1px solid color-mix(in srgb, var(--amber, #f5a623) 45%, transparent); white-space: nowrap; }
   .row-blocks { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .bk { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font: 600 10px/1 'JetBrains Mono', monospace; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row-r { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }

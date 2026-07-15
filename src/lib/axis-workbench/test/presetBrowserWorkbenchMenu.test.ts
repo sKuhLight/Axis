@@ -17,21 +17,21 @@ function entry(over: Partial<AxisPbMenuEntry> = {}): AxisPbMenuEntry {
 }
 
 describe('context menu building (§4.4)', () => {
-  it('device slot signed out → Load + Audition + Rename + Favorite, no cloud items', () => {
+  it('device slot signed out → Load + Audition + Rename + Convert + Favorite, no cloud items', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: true, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'rename', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'rename', 'crossConvert', 'favorite']);
     expect(actions[0].label).toBe('Load preset');
     expect(actions.find((a) => a.id === 'favorite')?.label).toBe('Add to favorites');
   });
 
   it('omits Rename when the device cannot rename', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: false, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'crossConvert', 'favorite']);
   });
 
-  it('non-device rows (files) get Load + Favorite only (no audition/rename)', () => {
+  it('non-device rows (files) get Load + Convert + Favorite (no audition/rename)', () => {
     const actions = buildAxisPbMenuActions(entry({ deviceSlot: false }), { canRename: true, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite']);
   });
 
   it('cloud-only rows load "from cloud" and skip audition/rename', () => {
@@ -63,6 +63,17 @@ describe('context menu building (§4.4)', () => {
   it('marks the cloud action with a separator so it sits below the core group', () => {
     const actions = buildAxisPbMenuActions(entry({ syncState: 'modified' }), { canRename: true, cloudOn: true });
     expect(actions.find((a) => a.id === 'cloudUpload')?.separatorBefore).toBe(true);
+  });
+
+  it('saved conversions get a reduced menu: Open in converter + Favorite + Delete (no device actions)', () => {
+    const actions = buildAxisPbMenuActions(
+      entry({ id: 'conv:x', deviceSlot: false, converted: true }),
+      { canRename: true, cloudOn: true }
+    );
+    expect(actions.map((a) => a.id)).toEqual(['openConverter', 'favorite', 'deleteConverted']);
+    expect(actions.map((a) => a.id)).not.toContain('load'); // not a device slot — no load-to-device
+    expect(actions.map((a) => a.id)).not.toContain('crossConvert');
+    expect(actions.find((a) => a.id === 'deleteConverted')?.danger).toBe(true);
   });
 
   it('adapts to WorkbenchMenuItems whose run dispatches the action id', () => {

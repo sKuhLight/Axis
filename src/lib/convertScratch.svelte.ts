@@ -24,11 +24,15 @@ import {
   moveBlock,
   discardBlock,
   unplaceBlock,
+  setBlockParam,
+  toggleBlockBypass,
+  setBlockRouting,
   buildApplyPlan,
   buildLibraryDoc,
   type ScratchState,
   type ScratchBlock,
-  type ApplyOp
+  type ApplyOp,
+  type SaveOverrides
 } from './convertScratch';
 
 /** Progress of a running apply-to-device commit. */
@@ -49,6 +53,15 @@ class ConvertScratchStore {
   open = $state(false);
 
   #s = $state<ScratchState | null>(null);
+
+  /** Bumped on every fresh seed (and on discard) so the offline grid surface knows to (re)build its
+   *  editable Layout for a NEW conversion — editing swaps `#s` too, but never the epoch. */
+  seedEpoch = $state(0);
+
+  /** Grid-target commit hook (installed by convertEditor): maps the committed ScratchState so in-memory
+   *  routing/position edits are reflected in Save-to-library + Apply-to-device. Identity for slot/chain
+   *  targets — their edits already live in `#s`, so their commit path is untouched. */
+  commitStateFor: (s: ScratchState) => ScratchState = (s) => s;
 
   /** Block the resolve panel is focused on (grid click, or the report's "focus block" hook). */
   focusKey = $state<string | null>(null);
@@ -78,16 +91,25 @@ class ConvertScratchStore {
   typesFor = (family: string): BlockTypeOption[] | 'loading' | 'error' | undefined => this.#types[family];
 
   // ── lifecycle ──
-  /** Seed from the current conversion result and open the view. No-op without a result. */
-  openView = () => {
+  /** Seed the scratch buffer from the current conversion result WITHOUT opening any view. Returns true
+   *  if a buffer was seeded (the real-grid workbench convert page reads this buffer; it does NOT use the
+   *  legacy `open` flag). No-op without a result. */
+  seed = (): boolean => {
     const res = convert.result;
     const dev = convert.lastRequest?.targetDevice;
-    if (!res || !dev) return;
+    if (!res || !dev) return false;
     this.#s = seedScratchFromResponse(res, dev);
+    this.seedEpoch++;
     this.focusKey = null;
     this.placingKey = null;
     this.apply = { running: false, total: 0, done: 0, applied: 0, failed: 0 };
-    this.open = true;
+    return true;
+  };
+
+  /** Seed from the current conversion result and open the LEGACY fake-grid view (monolith fallback).
+   *  No-op without a result. */
+  openView = () => {
+    if (this.seed()) this.open = true;
   };
 
   /** Open the view focused on a specific block (the report's re-pointed onFocusBlock hook). */
@@ -117,6 +139,7 @@ class ConvertScratchStore {
   /** Drop the scratch buffer entirely (Discard). */
   discardAll = () => {
     this.#s = null;
+    this.seedEpoch++;
     this.close();
   };
 
@@ -149,6 +172,17 @@ class ConvertScratchStore {
   unplace = (blockKey: string) => this.#tx((s) => unplaceBlock(s, blockKey));
   move = (blockKey: string, row: number, col: number) => this.#tx((s) => moveBlock(s, blockKey, row, col));
 
+  // ── offline block edits driven by the real-grid convert surface (convertEditor.svelte.ts) ──
+  // These wrap the pure transitions through the same #tx snapshot-swap the resolve panel uses, so a
+  // knob turn / bypass / re-route re-renders the fake grid exactly like a conflict resolution does.
+  /** Set one param's value on a block, by its index in the block's params array. */
+  setParam = (blockKey: string, paramIndex: number, value: number) =>
+    this.#tx((s) => setBlockParam(s, blockKey, paramIndex, value));
+  /** Toggle a block's offline bypass. */
+  bypass = (blockKey: string) => this.#tx((s) => toggleBlockBypass(s, blockKey));
+  /** Replace a placed block's routing feed-rows (computed by the surface from a cable gesture). */
+  setRouting = (blockKey: string, fromRows: number[]) => this.#tx((s) => setBlockRouting(s, blockKey, fromRows));
+
   /** Arm a tray block for placement (toggle). */
   arm = (blockKey: string) => {
     this.placingKey = this.placingKey === blockKey ? null : blockKey;
@@ -164,9 +198,11 @@ class ConvertScratchStore {
   };
 
   // ── commit: save to library (always works, no device) ──
-  saveToLibrary = async (): Promise<{ ok: boolean; id?: string; error?: string }> => {
+  /** Persist the resolved buffer to the `converted` store collection. `overrides` carries the name + slot
+   *  the save flow captured (both optional — a blank name keeps the buffer's own name). */
+  saveToLibrary = async (overrides: SaveOverrides = {}): Promise<{ ok: boolean; id?: string; error?: string }> => {
     if (!this.#s) return { ok: false, error: 'Nothing to save.' };
-    const { id, doc } = buildLibraryDoc(this.#s, Date.now());
+    const { id, doc } = buildLibraryDoc(this.commitStateFor(this.#s), Date.now(), overrides);
     try {
       await forgefx.putDoc('converted', id, doc);
       return { ok: true, id };
@@ -182,7 +218,7 @@ class ConvertScratchStore {
 
   applyToDevice = async (): Promise<void> => {
     if (!this.#s || this.apply.running) return;
-    const plan = buildApplyPlan(this.#s);
+    const plan = buildApplyPlan(this.commitStateFor(this.#s));
     this.#abort = false;
     this.apply = { running: true, total: plan.ops.length, done: 0, applied: 0, failed: 0 };
 

@@ -821,6 +821,9 @@ export type ConversionEvent =
   | { kind: 'param-unverified'; blockKey: string; nativeName: string; value: number }
   /** The routing/grid had to be simplified. */
   | { kind: 'routing-simplified'; detail: string; affectedBlockKeys: string[] }
+  /** A block folded into another block on the target (e.g. cab → the AM4 amp's integrated cab). Info,
+   *  not a loss — the function survives inside the host block. */
+  | { kind: 'block-merged'; blockKey: string; family: string; intoFamily: string; intoBlockKey?: string }
   /** The target has fewer scenes than the source. */
   | { kind: 'scene-collapsed'; sourceScenes: number; targetScenes: number }
   /** A block's channels were collapsed to fit the target. */
@@ -847,7 +850,9 @@ export interface ConverterBlock {
   params: ConverterParam[];
   channels?: number;
   bypassPerScene?: boolean[];
-  position?: { row: number; col: number } | number | null;
+  // Grid targets carry {row,col}; slot/chain targets (AM4/VP4) carry {slot}; a bare number is a legacy
+  // slot index. null / omitted = unplaced (the editor's tray).
+  position?: { row: number; col: number } | { slot: number } | number | null;
 }
 
 /** The converted preset's routing. `gridCells` is device-specific (opaque here); `seriesChains`
@@ -881,8 +886,48 @@ export interface ConversionSummary {
 export interface ConvertResponse {
   source: { device: string; name: string; decodeDepth: string };
   target: ConverterPreset;
+  /** ADDITIVE: the fully-decoded SOURCE preset (blocks + routing.gridCells for gen-3 sources), rendered
+   *  read-only as a reference + drag source next to the converted target grid. Optional so a legacy
+   *  server that omits it degrades gracefully (the source panel shows an empty-state hint). */
+  sourcePreset?: ConverterPreset;
   events: ConversionEvent[];
   summary: ConversionSummary;
+}
+
+/** One block (and its written params/type) that landed in an authored export. */
+export interface ConvertExportBlockRecord {
+  blockKey: string;
+  family: string;
+  displayName: string;
+  instance: number;
+  eid: number;
+  /** Type ordinal written (absent when no type was written). */
+  typeWritten?: number;
+  params: { paramId: number; nativeName?: string; channel: number; raw: number }[];
+}
+
+/** One IR block/param the author could not place onto the base and skipped (never synthesized). */
+export interface ConvertExportSkip {
+  blockKey?: string;
+  family?: string;
+  paramId?: number;
+  nativeName?: string;
+  reason: string;
+}
+
+/** POST /api/preset/convert/export → 200 body. FM3-only offline `.syx` authoring: the converted preset
+ *  is written onto a caller-supplied FM3 BASE template. `syx` is FILE-level valid only (valid CRC, decodes
+ *  back to the written values) — NOT a proof of device acceptance; a hardware load test on a real FM3 is
+ *  still required before trusting an authored preset. */
+export interface ConvertExportResponse {
+  /** Authored FM3 preset `.syx` bytes. */
+  syx: number[];
+  /** Blocks (and their params/type) that landed in the output. */
+  written: ConvertExportBlockRecord[];
+  /** IR blocks/params that had no base match and were skipped. */
+  skipped: ConvertExportSkip[];
+  /** The preset name written into the header. */
+  name: string;
 }
 
 // connection picker (serial + MIDI ports)

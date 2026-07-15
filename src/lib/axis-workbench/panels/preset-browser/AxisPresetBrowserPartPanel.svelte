@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { library } from '../../../library.svelte';
+  import { library, type LibEntry } from '../../../library.svelte';
   import { editor } from '../../../editor.svelte';
   import { cloud, browseEntries } from '../../../cloud.svelte';
+  import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
   import type { SyncState } from '../../../types';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
@@ -346,12 +347,32 @@
 
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    // A saved conversion isn't a device slot — its primary action re-opens it in the converter.
+    if (entry.converted) { openConverter(entry.id); return; }
     void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
+  }
+
+  // Re-open a SAVED conversion (source 'converted') back in the converter, rehydrated from its stored doc.
+  function openConverter(entryId: string) {
+    const raw = baseEntries.find((e) => e.id === entryId) as unknown as LibEntry | undefined;
+    if (raw?.converted) void openConvertedInConverter(raw.converted);
+  }
+  // Delete a saved conversion (store doc + library entry) via the library store.
+  function deleteConverted(entryId: string) {
+    void library.removeConverted(entryId);
   }
 
   function auditionEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
     void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
+  }
+
+  // Cross-device converter (M4): read the row's raw .syx and open the convert dialog seeded with it.
+  // The base entries carry the real LibEntry shape (library.entries / browseEntries), so the shared
+  // startCrossConvert flow works identically to the monolith.
+  function crossConvert(entryId: string) {
+    const raw = baseEntries.find((e) => e.id === entryId);
+    if (raw) void startCrossConvert(raw as unknown as LibEntry);
   }
 
   // ── §4.3 inline rename ──────────────────────────────────────────────────────────────────────
@@ -397,7 +418,8 @@
         cloudOnly: entry.cloudOnly,
         deviceSlot: entry.sourceId === 'device' && (entry.number ?? -1) >= 0,
         fav: entry.fav,
-        syncState: entry.syncState
+        syncState: entry.syncState,
+        converted: entry.converted
       },
       { canRename: editor.canRenamePresets, cloudOn }
     );
@@ -426,6 +448,15 @@
         return;
       case 'rename':
         beginRename(entry);
+        return;
+      case 'crossConvert':
+        crossConvert(entry.id);
+        return;
+      case 'openConverter':
+        openConverter(entry.id);
+        return;
+      case 'deleteConverted':
+        deleteConverted(entry.id);
         return;
       case 'cloudUpload':
         void cloudUpload(entry);
@@ -744,6 +775,9 @@
             {:else}
               <strong>{entry.name}</strong>
             {/if}
+            {#if entry.converted && entry.provenance}
+              <span class="conv-prov" title={`Converted from ${entry.provenance}`}>{entry.provenance}</span>
+            {/if}
             {#if anatomy.tagPills.length}
               <span class="tag-pills">
                 {#each anatomy.tagPills as tag}<em class="tag-pill">{tag}</em>{/each}
@@ -805,6 +839,7 @@
 
       <dl>
         <div><dt>Source</dt><dd>{data.selectedEntry.sourceLabel}</dd></div>
+        {#if data.selectedEntry.converted && data.selectedEntry.provenance}<div><dt>Converted</dt><dd>{data.selectedEntry.provenance}</dd></div>{/if}
         <div><dt>Scenes</dt><dd>{data.selectedEntry.sceneCount}</dd></div>
         <div><dt>Blocks</dt><dd>{data.selectedEntry.blockCount}</dd></div>
         {#if data.selectedEntry.folder}<div><dt>Folder</dt><dd>{data.selectedEntry.folder}</dd></div>{/if}
@@ -831,17 +866,31 @@
         </div>
       {/if}
       <div class="detail-actions">
-        <button type="button" class="load-action" onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}>
-          {runtimeSnapshot.loadingEntryId === data.selectedEntry.id ? 'Loading...' : 'Load preset'}
-        </button>
-        {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null}
-          <button type="button" class="load-action audition" onclick={() => auditionEntry(data.selectedEntry!)}>
-            {runtimeSnapshot.auditioningEntryId === data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
+        {#if data.selectedEntry.converted}
+          <!-- A saved conversion re-opens in the converter (not a device load). True .syx export is wired in
+               the separate codec-authoring task. -->
+          <button type="button" class="load-action" onclick={() => openConverter(data.selectedEntry!.id)}>
+            Open in converter
+          </button>
+          <button type="button" class="load-action secondary danger" onclick={() => deleteConverted(data.selectedEntry!.id)}>
+            Delete
+          </button>
+        {:else}
+          <button type="button" class="load-action" onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}>
+            {runtimeSnapshot.loadingEntryId === data.selectedEntry.id ? 'Loading...' : 'Load preset'}
+          </button>
+          {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null}
+            <button type="button" class="load-action audition" onclick={() => auditionEntry(data.selectedEntry!)}>
+              {runtimeSnapshot.auditioningEntryId === data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
+            </button>
+          {/if}
+          <button type="button" class="load-action secondary" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
+            {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Refreshing...' : 'Refresh detail'}
+          </button>
+          <button type="button" class="load-action secondary" title="Port this preset to another Fractal device — best-effort, with a full diff report" onclick={() => crossConvert(data.selectedEntry!.id)}>
+            ⇄ Convert…
           </button>
         {/if}
-        <button type="button" class="load-action secondary" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
-          {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Refreshing...' : 'Refresh detail'}
-        </button>
       </div>
 
       {#if selectedDetail}
@@ -1228,6 +1277,17 @@
     color: var(--accent);
     font: 700 9.5px/1 var(--font-mono);
     font-style: normal;
+    white-space: nowrap;
+  }
+  /* Cross-device conversion provenance chip ("FM3 → AM4") on saved-conversion rows. */
+  .conv-prov {
+    align-self: flex-start;
+    padding: 2px 7px;
+    border: 1px solid color-mix(in srgb, var(--amber, #f5a623) 45%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--amber, #f5a623) 14%, transparent);
+    color: var(--amber, #f5a623);
+    font: 700 9.5px/1 var(--font-mono);
     white-space: nowrap;
   }
   .block-chip {
@@ -2083,6 +2143,10 @@
   }
   .load-action.secondary {
     color: var(--textdim);
+  }
+  .load-action.danger {
+    color: var(--danger, #d6543f);
+    border-color: color-mix(in srgb, var(--danger, #d6543f) 40%, var(--border));
   }
   .runtime-detail {
     display: grid;

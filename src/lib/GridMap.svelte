@@ -5,7 +5,9 @@
   // tap a port (◉) to arm link mode, then tap ANY cell in a later column — editor.connect() lays
   // shunts through the gaps, so the destination is never restricted to the adjacent column.
   // Arm state is editor.linkFrom (shared with the SignalGrid: arm here, complete there — or vice versa).
-  import { editor, baseName } from './editor.svelte';
+  import { baseName } from './editor.svelte';
+  import { getEditorSurface } from './editorSurface';
+  const editor = getEditorSurface();
   import { catFor } from './catalog';
   import type { Cell } from './grid';
 

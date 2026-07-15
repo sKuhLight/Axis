@@ -62,7 +62,8 @@ describe('Preset Browser Workbench data view', () => {
       ['device', 1],
       ['local', 1],
       ['file', 1],
-      ['cloud', 0]
+      ['cloud', 0],
+      ['converted', 0]
     ]);
     expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient']);
     expect(view.visibleEntries[0]).toMatchObject({
@@ -100,6 +101,22 @@ describe('Preset Browser Workbench data view', () => {
     // only the reverb-carrying preset remains visible, but the detail column can still resolve any entry.
     expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient']);
     expect(view.selectedEntry?.id).toBe('file:ambient');
+  });
+
+  it('surfaces a Converted source with provenance, and shows the source label when the slot is unset', () => {
+    const converted: AxisPresetBrowserLibEntryLike[] = [
+      ...entries,
+      {
+        id: 'conv:fm3-lead-1',
+        source: 'converted',
+        provenance: 'FM3 → AM4',
+        summary: { number: -1, name: 'Lead Port', model: 'AM4', scenes: [], blocks: [{ effectId: 0, slug: 'amp', name: 'Brit 800' }] }
+      }
+    ];
+    const view = createAxisPresetBrowserDataView({ entries: converted, sourceId: 'converted' });
+    expect(view.sources.find((s) => s.id === 'converted')).toMatchObject({ label: 'Converted', count: 1 });
+    expect(view.visibleEntries.map((e) => e.id)).toEqual(['conv:fm3-lead-1']);
+    expect(view.visibleEntries[0]).toMatchObject({ converted: true, provenance: 'FM3 → AM4', number: null });
   });
 
   it('uses filtered entries for list content while resolving detail from all entries', () => {

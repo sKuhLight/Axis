@@ -34,7 +34,8 @@ import type {
   DeviceCacheSources,
   CloudCacheStatus,
   ConverterDeviceId,
-  ConvertResponse
+  ConvertResponse,
+  ConvertExportResponse
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -321,6 +322,8 @@ export const forgefx = {
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data, origin: CLIENT_ID }) }),
   listDocs: <T>(c: string) => req<{ docs: { id: string; data: T; updatedAt: number }[] }>(`/store/${c}`),
+  /** Delete one stored doc. Degrades to null on 404/501 (older server / no store) so callers stay quiet. */
+  deleteDoc: (c: string, id: string) => capOptional(req<{ ok: boolean }>(`/store/${c}/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
   presetSummary: (n: number, full = false) => req<PresetSummary>(`/presets/${n}/summary${full ? '?full=1' : ''}`),
   /** Full per-block decoded params for a device preset (every family/param) — deep search + detail. */
@@ -348,6 +351,27 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ targetDevice, ...(sourceSyx ? { source: { syx: sourceSyx } } : {}) }),
       signal: AbortSignal.timeout(30000)
+    }),
+  /** Author a target-device preset `.syx` from a converted preset, edit-in-place on a caller-supplied FM3
+   *  BASE template (base64). `sourceSyx` (base64) converts an imported file; omit it to convert the
+   *  CONNECTED device's current preset. FM3 targets ONLY (the server answers 501 otherwise); `baseSyx`
+   *  MUST be an FM3 preset dump (400 otherwise). The returned `syx` is FILE-level valid only — a hardware
+   *  load test on a real FM3 is still required. Authoring re-converts + re-packs a whole preset → long
+   *  timeout. */
+  exportConvertedSyx: (
+    targetDevice: ConverterDeviceId,
+    opts: { sourceSyx?: string; baseSyx: string; name?: string; slot?: number }
+  ) =>
+    req<ConvertExportResponse>('/preset/convert/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetDevice,
+        base: { syx: opts.baseSyx },
+        ...(opts.sourceSyx ? { source: { syx: opts.sourceSyx } } : {}),
+        ...(opts.name != null ? { name: opts.name } : {}),
+        ...(opts.slot != null ? { slot: opts.slot } : {})
+      }),
+      signal: AbortSignal.timeout(60000)
     }),
   /** Foot Controller address model (field bases + config formula + enums); null if not decoded. */
   fcModel: () => req<FcModel | null>(`/fc/model`),
