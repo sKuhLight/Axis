@@ -1,0 +1,44 @@
+name: pr-labels
+
+# Sanity check for the release classification of a PR. Fails only if MORE THAN ONE `release:*`
+# label is present (release-on-main can't pick a bump then). Otherwise it just prints the
+# effective classification to the step summary. NOT a required check.
+on:
+  pull_request:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  release-label:
+    name: release label sanity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check at most one release:* label + print classification
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+          REL="$(echo "$LABELS" | jq -r '.[]' | grep -E '^release:' || true)"
+          # Precedence: release:hold / release:none always win over a co-present bump label
+          # (the documented opt-out); only then do we fail on more than one bump label.
+          if echo "$REL" | grep -qx 'release:hold'; then
+            echo "effective release classification: release:hold" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if echo "$REL" | grep -qx 'release:none'; then
+            echo "effective release classification: release:none" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          BUMP="$(echo "$REL" | grep -E '^release:(patch|minor|major)$' || true)"
+          COUNT="$(echo -n "$BUMP" | grep -c . || true)"
+          if [ "$COUNT" -gt 1 ]; then
+            echo "::error::more than one release:* label present: $(echo "$BUMP" | tr '\n' ' ')"
+            exit 1
+          fi
+          if [ "$COUNT" -eq 1 ]; then
+            echo "effective release classification: $BUMP" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "effective release classification: default (patch, or none for a docs/CI-only PR)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

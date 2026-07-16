@@ -98,11 +98,15 @@ jobs:
       # GITHUB_TOKEN the PR is still created, but its CI must be triggered manually
       # (close/reopen the PR). Commits authored as the maintainer, no AI attribution.
       - name: Open stack-bump PR
+        id: cpr
         if: steps.pin.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.STACK_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
-          branch: bump/stack-${{ steps.target.outputs.forgefx-ref }}
+          branch: bump/stack
+          labels: |
+            bot/stack-sync
+            release:patch
           author: sKuhLight <sKuhLight@users.noreply.github.com>
           committer: sKuhLight <sKuhLight@users.noreply.github.com>
           commit-message: "stack: bump ForgeFX pin to ${{ steps.target.outputs.forgefx-ref }} (+ matching forgefx-midi pin)"
@@ -113,6 +117,8 @@ jobs:
             ForgeFX published a release; this bumps Axis's pinned ForgeFX ref **and** the
             matching forgefx-midi ref it shipped against. CI validates Axis against the new
             pins on tag/mobile builds (CI + axisapp.live still track default-branch HEAD).
+
+            Chain: `${{ github.event.client_payload.chain_id || 'manual' }}`
 
             | field | value |
             |---|---|
@@ -126,7 +132,29 @@ jobs:
             > one ForgeFX shipped.
 
             ### Decision (yours, on this PR)
-            - **Merge** = adopt the pins.
-            - **Cut an Axis release too?** Cut one when the server change is **user-visible in
-              the app**; infra-only changes just let the pins ride along the next release
-              (see `docs/RELEASING.md`).
+            - **Merge** = adopt the pins (auto-merge is enabled — it lands once checks are green).
+            - **Cut an Axis release too?** Merging this labeled `release:patch` PR triggers a
+              release by default. Relabel `release:none` to just adopt the pins without a release
+              (infra-only changes ride along the next release; see `docs/RELEASING.md`).
+
+      # Enable auto-merge so a green pin PR lands hands-off. Must use the PAT: a GITHUB_TOKEN
+      # merge would not fire release-on-main's CI workflow_run chain. Soft-gated: without the PAT
+      # the PR stays for manual merge.
+      - name: Enable auto-merge
+        if: steps.pin.outputs.changed == 'true' && steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.STACK_DISPATCH_TOKEN }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          if [ "${{ vars.RELEASE_AUTOMATION_ENABLED }}" = "false" ]; then
+            echo "::notice::RELEASE_AUTOMATION_ENABLED=false — auto-merge skipped; PR #$PR stays manual."
+            echo "Automation halted — auto-merge skipped; PR #$PR stays manual." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice::STACK_DISPATCH_TOKEN missing — leaving PR #$PR for manual merge."
+            exit 0
+          fi
+          gh pr update-branch "$PR" || true   # refresh if base moved; best-effort
+          gh pr merge "$PR" --auto --squash
