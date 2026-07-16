@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   canExportTarget,
+  exportTargetName,
+  isModelForTarget,
   isFm3Model,
   syxFilename,
   exportToast,
@@ -9,13 +11,38 @@ import {
 } from './convertExport';
 
 describe('convertExport.canExportTarget', () => {
-  it('allows only the FM3 target', () => {
+  it('allows the three gen-3 targets (FM3/FM9/Axe-Fx III)', () => {
     expect(canExportTarget('fm3')).toBe(true);
+    expect(canExportTarget('fm9')).toBe(true);
+    expect(canExportTarget('axe-fx-iii')).toBe(true);
   });
-  it('rejects every other target and nullish input', () => {
-    for (const t of ['fm9', 'axe-fx-iii', 'am4', 'vp4', 'axe-fx-ii', undefined, null, '']) {
+  it('rejects non-gen3 targets and nullish input', () => {
+    for (const t of ['am4', 'vp4', 'axe-fx-ii', 'axe-fx-gen1', undefined, null, '']) {
       expect(canExportTarget(t)).toBe(false);
     }
+  });
+});
+
+describe('convertExport.exportTargetName', () => {
+  it('names each gen-3 target', () => {
+    expect(exportTargetName('fm3')).toBe('FM3');
+    expect(exportTargetName('fm9')).toBe('FM9');
+    expect(exportTargetName('axe-fx-iii')).toBe('Axe-Fx III');
+    expect(exportTargetName('am4')).toBe('the target device');
+  });
+});
+
+describe('convertExport.isModelForTarget', () => {
+  it('matches a base-candidate model to its target device', () => {
+    expect(isModelForTarget('FM3', 'fm3')).toBe(true);
+    expect(isModelForTarget('fm9', 'fm9')).toBe(true);
+    expect(isModelForTarget('Axe-Fx III', 'axe-fx-iii')).toBe(true);
+  });
+  it('rejects mismatched device / target pairs and nullish input', () => {
+    expect(isModelForTarget('FM3', 'fm9')).toBe(false);
+    expect(isModelForTarget('FM9', 'fm3')).toBe(false);
+    expect(isModelForTarget(undefined, 'fm3')).toBe(false);
+    expect(isModelForTarget('FM3', 'am4')).toBe(false);
   });
 });
 
@@ -65,12 +92,12 @@ describe('convertExport.exportFidelityToast', () => {
   });
   it('warns "Exported N of M blocks" naming the missing-template families when blocks were dropped', () => {
     expect(exportFidelityToast({ sourceBlocks: 9, landedBlocks: 7, droppedNoTemplate: 2 })).toBe(
-      'Exported 7 of 9 blocks — 2 families have no FM3 template yet'
+      'Exported 7 of 9 blocks — 2 families have no template on the target device yet'
     );
   });
   it('uses the singular for a single dropped family', () => {
     expect(exportFidelityToast({ sourceBlocks: 8, landedBlocks: 7, droppedNoTemplate: 1 })).toBe(
-      'Exported 7 of 8 blocks — 1 family has no FM3 template yet'
+      'Exported 7 of 8 blocks — 1 family has no template on the target device yet'
     );
   });
 });

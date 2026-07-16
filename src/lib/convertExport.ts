@@ -7,15 +7,50 @@
 // bits are the eligibility gate, the FM3 model match (for filtering optional base candidates), the download
 // filename sanitizer, and the toast copy. They live here (node-testable) so the Svelte panel stays thin.
 //
-// HONESTY: export is FM3-only for now, and a file-level-valid `.syx` is NOT proof of device acceptance —
-// a hardware load test on a real FM3 is still required. The panel surfaces the same caveat to the user.
+// HONESTY: export supports the gen-3 devices (FM3/FM9/Axe-Fx III); AM4/VP4 are not yet authorable. A
+// file-level-valid `.syx` is NOT proof of device acceptance — a hardware load test on the real target is
+// still required. The panel surfaces the same caveat to the user.
 
-/** The only converter target `.syx` export supports today. */
+/** The converter targets `.syx` export supports today — the three gen-3 devices that share the
+ *  catalog/defs-driven synthesis model. AM4/VP4 have no harvested block templates yet. */
+const EXPORTABLE_TARGETS = new Set(['fm3', 'fm9', 'axe-fx-iii']);
+
 export function canExportTarget(targetDeviceId: string | undefined | null): boolean {
-  return targetDeviceId === 'fm3';
+  return typeof targetDeviceId === 'string' && EXPORTABLE_TARGETS.has(targetDeviceId);
 }
 
-/** True when a preset-summary model string names the FM3 (base templates must themselves be FM3). */
+/** Human name of an export target, for toast/label copy. */
+export function exportTargetName(targetDeviceId: string | undefined | null): string {
+  switch (targetDeviceId) {
+    case 'fm3':
+      return 'FM3';
+    case 'fm9':
+      return 'FM9';
+    case 'axe-fx-iii':
+      return 'Axe-Fx III';
+    default:
+      return 'the target device';
+  }
+}
+
+/** True when a preset-summary model string names the same gen-3 device as `targetDeviceId` — an OPTIONAL
+ *  base-scaffold override must itself be a preset of the target device. */
+export function isModelForTarget(model: string | undefined | null, targetDeviceId: string | undefined | null): boolean {
+  if (typeof model !== 'string') return false;
+  const m = model.trim().toLowerCase();
+  switch (targetDeviceId) {
+    case 'fm3':
+      return m === 'fm3';
+    case 'fm9':
+      return m === 'fm9';
+    case 'axe-fx-iii':
+      return m === 'axe-fx-iii' || m === 'axe-fx iii' || m === 'axefx iii' || m === 'axe3';
+    default:
+      return false;
+  }
+}
+
+/** True when a preset-summary model string names the FM3. Retained for the FM3 base-candidate filter. */
 export function isFm3Model(model: string | undefined | null): boolean {
   return typeof model === 'string' && model.trim().toLowerCase() === 'fm3';
 }
@@ -44,7 +79,7 @@ export function exportFidelityToast(fidelity: {
   const fams = fidelity.droppedNoTemplate;
   return (
     `Exported ${fidelity.landedBlocks} of ${fidelity.sourceBlocks} blocks — ` +
-    `${fams} famil${fams === 1 ? 'y has' : 'ies have'} no FM3 template yet`
+    `${fams} famil${fams === 1 ? 'y has' : 'ies have'} no template on the target device yet`
   );
 }
 
