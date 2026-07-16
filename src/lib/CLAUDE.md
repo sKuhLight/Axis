@@ -37,9 +37,10 @@ private generic `req<T>(path, init?)`:
 All API shapes are **hand-mirrored interfaces** — no codegen, no OpenAPI. The
 chain is: ForgeFX route JSON → `types.ts` interface → `req<T>` → store `$state` →
 component `$derived`. `DeviceCaps` is load-bearing: capability gates hang off it.
-Drift failure mode: CI is typecheck+build only, so a server shape change that is
-not reflected in `types.ts` typechecks green and fails at runtime — missing caps
-fields silently hide features. v2 caps fields are optional (`?`) by design so
+Drift failure mode: typecheck and the node-env unit suite still cannot catch
+server↔`types.ts` shape drift (no codegen, no contract test), so a server shape
+change not reflected in `types.ts` typechecks green and fails at runtime — missing
+caps fields silently hide features; the manual mirror discipline stands. v2 caps fields are optional (`?`) by design so
 legacy payloads degrade to the `isAm4` fallback branches.
 
 ## Store pattern (`src/lib/editor.svelte.ts`, ~1865 lines)
@@ -125,7 +126,7 @@ client-gate.
 - All 10 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
   `bootCleanWorkbench`, viewport ≥ 1366 px). There is NO monolith-shell e2e
   harness — monolith behavior is verified manually.
-- CI runs typecheck+build only; tests are local-only. Green CI ≠ passing tests.
+- CI now also runs the vitest unit suite; only Playwright e2e stays local. Green CI ≠ passing e2e.
 
 ## Pitfalls (all have bitten before)
 

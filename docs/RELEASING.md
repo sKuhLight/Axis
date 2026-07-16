@@ -161,6 +161,9 @@ are gone.)
   number). Uses the pinned lock. Keep `MIN_NATIVE` <= the IPA's `MARKETING_VERSION`.
 - `ios-unsigned.yml` — tag `ios-v*` → unsigned IPA artifact (re-sign at install time). Uses the
   pinned lock.
+- **Caveat:** since versions moved to tags (2026-07-16) the committed `package.json` is frozen at
+  `0.9.x` — `mobile-ota`/`ios-unsigned` still read it, so their reported versions do not advance;
+  fix tracked in Plane (AXIS-60).
 
 ---
 

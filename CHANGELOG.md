@@ -1,5 +1,9 @@
 # Changelog
 
+> **FROZEN as of 2026-07-16.** Release notes now live on the GitHub releases page (auto-generated
+> from merged PRs + `.github/release.yml` categories, plus a Shipped-stack footer). This file is
+> kept as history of releases up to v0.9.22-beta and is no longer updated.
+
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
 ## 0.9.22-beta — 2026-07-16
