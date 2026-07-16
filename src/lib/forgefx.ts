@@ -35,7 +35,8 @@ import type {
   CloudCacheStatus,
   ConverterDeviceId,
   ConvertResponse,
-  ConvertExportResponse
+  ConvertExportResponse,
+  ConverterPreset
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -361,12 +362,15 @@ export const forgefx = {
    *  preset → long timeout. */
   exportConvertedSyx: (
     targetDevice: ConverterDeviceId,
-    opts: { sourceSyx?: string; baseSyx?: string; name?: string; slot?: number }
+    opts: { preset?: ConverterPreset; sourceSyx?: string; baseSyx?: string; name?: string; slot?: number }
   ) =>
     req<ConvertExportResponse>('/preset/convert/export', {
       method: 'POST',
       body: JSON.stringify({
         targetDevice,
+        // PREFERRED: the EDITED converter IR (carries the user's grid routing/cables + block/param
+        // edits verbatim). The server authors it directly; `source`/`base` become the fallback.
+        ...(opts.preset ? { preset: opts.preset } : {}),
         ...(opts.baseSyx ? { base: { syx: opts.baseSyx } } : {}),
         ...(opts.sourceSyx ? { source: { syx: opts.sourceSyx } } : {}),
         ...(opts.name != null ? { name: opts.name } : {}),

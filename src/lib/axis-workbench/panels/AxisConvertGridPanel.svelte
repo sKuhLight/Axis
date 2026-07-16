@@ -11,7 +11,7 @@
   import type { PanelInstance } from '../../workbench';
   import { convert } from '../../convert.svelte';
   import { convertScratch } from '../../convertScratch.svelte';
-  import { validateSlot } from '../../convertScratch';
+  import { validateSlot, scratchToPreset } from '../../convertScratch';
   import { deviceName, deviceIdFromModel } from '../../convertReport';
   import { editor } from '../../editor.svelte';
   import { library } from '../../library.svelte';
@@ -222,8 +222,15 @@
     exporting = true;
     try {
       const baseSyx = await resolveBaseB64();
+      // Author from the EDITED scratch IR so the user's grid routing/cables + block/param edits are
+      // carried verbatim (commitStateFor folds the live grid layout — routeFlag/fromRows — into it).
+      // Fall back to re-converting the source only when there is no scratch buffer.
+      const editedPreset = convertScratch.state
+        ? scratchToPreset(convertScratch.commitStateFor(convertScratch.state))
+        : undefined;
       const res = await forgefx.exportConvertedSyx('fm3', {
-        sourceSyx: convert.lastSource?.b64,
+        preset: editedPreset,
+        sourceSyx: editedPreset ? undefined : convert.lastSource?.b64,
         baseSyx,
         name: saveName.trim() || undefined,
         slot: slotCheck.ok ? slotCheck.slot : undefined
