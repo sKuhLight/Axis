@@ -85,6 +85,37 @@ describe('effectKeyMap / keyForGridCell', () => {
   });
 });
 
+// FORGEFXMID-43: a CROSS-DEVICE converted fm3 target now carries DISTINCT effect ids (assigned
+// at conversion time). The Axis grid editor keys cells by effectId; distinct ids keep every cell
+// addressable to its OWN block. Before the fix, cross-device cells had NO effectId → the map
+// collapsed to one entry and every cell resolved to the same block → export authored 1 block → 422.
+describe('cross-device fm3 target: distinct effect ids keep cells addressable (FORGEFXMID-43)', () => {
+  const distinctCells = [
+    { row: 0, col: 0, effectId: 58, name: 'Amp', isShunt: false, routeFlag: 0, fromRows: [], blockKey: 'amp1' },
+    { row: 0, col: 1, effectId: 118, name: 'Drive', isShunt: false, routeFlag: 1, fromRows: [0], blockKey: 'drive1' },
+    { row: 0, col: 2, effectId: 66, name: 'Reverb', isShunt: false, routeFlag: 1, fromRows: [0], blockKey: 'rev1' }
+  ];
+  const blocks = [
+    block({ key: 'amp1', family: 'amp', position: { row: 0, col: 0 } }),
+    block({ key: 'drive1', family: 'drive', position: { row: 0, col: 1 } }),
+    block({ key: 'rev1', family: 'reverb', position: { row: 0, col: 2 } })
+  ];
+
+  it('maps each cell to its OWN block — distinct blockKeys, not collapsed', () => {
+    const map = effectKeyMap(gridState(distinctCells, blocks));
+    expect(map.size).toBe(3);
+    const keys = distinctCells.map((c) => map.get(c.effectId));
+    expect(keys).toEqual(['amp1', 'drive1', 'rev1']);
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  it('REGRESSION: missing (0/undefined) effect ids collapse the map — the pre-fix failure mode', () => {
+    const collapsed = distinctCells.map((c) => ({ ...c, effectId: 0 }));
+    // Every cell shares key 0 → one entry → all cells would resolve to a single block.
+    expect(effectKeyMap(gridState(collapsed, blocks)).size).toBeLessThanOrEqual(1);
+  });
+});
+
 // ── source-preset (read-only reference grid + drag source) ──
 function sourcePreset(gridCells: unknown[], blocks: ConverterBlock[] = []): ConverterPreset {
   return {
