@@ -259,6 +259,8 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+      # No checkout in this job — gh has no git context to infer the repo from.
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Emergency stop
         id: estop
