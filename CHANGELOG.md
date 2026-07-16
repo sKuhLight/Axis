@@ -2,6 +2,33 @@
 
 Notable changes per release, for Axis and its bundled ForgeFX engine. Newest first.
 
+## 0.9.21-beta — 2026-07-16
+
+Cross-device preset conversion arrives: bring a preset from one Fractal device onto another.
+
+### Added
+
+- **Convert a preset to the FM3** — open any preset in the library, choose **Convert Preset…**,
+  and pick a target device. Axis maps the blocks family-by-family, lays them out on a live,
+  editable target grid, and reports exactly what carried over and what it couldn't place. The
+  FM3 is the first fully supported **export** target: from the converted grid you can save the
+  result into the library or synthesize a complete FM3 `.syx` in one click — no base preset
+  required. The drawn signal cables and block routing are carried into the exported file.
+- **Conversion diff report** — before committing, see a per-block breakdown: which effects
+  mapped cleanly, which were approximated, and which have no equivalent on the target yet.
+- **Conflict resolution + fake-grid editor** — where the target grid can't hold everything the
+  source had, resolve each conflict interactively; the editor blocks committing until every
+  unresolved cell is handled.
+- **Honest fidelity feedback on export** — the export toast tells you whether every block
+  synthesized or some families are still template-gated, and always reminds you to load-test the
+  result on real hardware. Devices other than the FM3 keep the export control disabled until
+  their authoring path lands (a later release).
+
+### Notes
+
+- The FM3 export path is hardware-verified end-to-end (blocks **and** drawn cables load on a real
+  FM3). Converting *to* FM9 / Axe-Fx III / AM4 / VP4 targets is planned for a follow-up.
+
 ## 0.9.12-beta — 2026-07-14
 
 ### Fixed
