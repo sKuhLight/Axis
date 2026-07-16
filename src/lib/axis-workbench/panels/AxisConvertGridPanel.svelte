@@ -19,7 +19,8 @@
   import { entrySyxBytes, bytesToBase64 } from '../../presetConvertSource';
   import {
     canExportTarget,
-    isFm3Model,
+    exportTargetName,
+    isModelForTarget,
     syxFilename,
     exportToast,
     exportFidelityToast,
@@ -134,20 +135,21 @@
     if (summary) editor.showToast(summary, convertScratch.apply.failed ? '#f5a623' : '#33c46b');
   }
 
-  // ── .syx export (FM3-only for now) ──────────────────────────────────────────────────────────────
-  // HONESTY: FM3 is the ONLY supported export target today; every other target keeps the control disabled
-  // with a clear hint. A file-valid .syx is NOT proof of device acceptance — a hardware load test on a
-  // real FM3 is still required, which the success toast reminds the user of.
+  // ── .syx export (gen-3 targets: FM3 / FM9 / Axe-Fx III) ──────────────────────────────────────────
+  // HONESTY: the three gen-3 devices are supported export targets; AM4/VP4 keep the control disabled with
+  // a clear hint. A file-valid .syx is NOT proof of device acceptance — a hardware load test on the real
+  // target device is still required, which the success toast reminds the user of.
   //
-  // Base template (Option A): the converted preset is AUTHORED ONTO an FM3 base the user provides.
-  // Default = the connected device's current preset when it's an FM3; otherwise an FM3 preset from the
-  // library, or an uploaded .syx. The source is re-authored from the retained OFFLINE source bytes, or —
-  // when the last conversion had no offline source — the connected device (server dumps its current
-  // preset). A re-opened saved doc carries neither, so export is unavailable for it.
-  const canExportTargetFm3 = $derived(canExportTarget(targetDeviceId));
-  const connectedIsFm3 = $derived(deviceIdFromModel(editor.detected?.modelId) === 'fm3');
+  // Base template (Option A): the converted preset is AUTHORED ONTO a base of the TARGET device the user
+  // provides. Default = the connected device's current preset when it matches the target; otherwise a
+  // matching preset from the library, or an uploaded .syx. The source is re-authored from the retained
+  // OFFLINE source bytes, or — when the last conversion had no offline source — the connected device
+  // (server dumps its current preset). A re-opened saved doc carries neither, so export is unavailable.
+  const canExportTargetGen3 = $derived(canExportTarget(targetDeviceId));
+  const targetName = $derived(exportTargetName(targetDeviceId));
+  const connectedIsTarget = $derived(!!targetDeviceId && deviceIdFromModel(editor.detected?.modelId) === targetDeviceId);
   const sourceAvailable = $derived(!!convert.lastSource || convert.lastRequest?.hasSource === false);
-  const fm3LibEntries = $derived(library.entries.filter((e) => isFm3Model(e.summary.model)));
+  const targetLibEntries = $derived(library.entries.filter((e) => isModelForTarget(e.summary.model, targetDeviceId)));
 
   // Full-body synthesis needs NO base — the common path is one-click (baseChoice='none', the codec's
   // bundled scaffold). The connected/library/upload choices are an OPTIONAL "use my own FM3 as the scaffold"
@@ -162,7 +164,7 @@
   function initBaseChoice() {
     uploadedBase = null;
     baseChoice = 'none';
-    if (fm3LibEntries.length > 0) baseLibId = fm3LibEntries[0].id;
+    if (targetLibEntries.length > 0) baseLibId = targetLibEntries[0].id;
   }
 
   // A chosen OVERRIDE must resolve; 'none' is always ready (synthesis uses the bundled scaffold).
@@ -170,12 +172,12 @@
     baseChoice === 'none'
       ? true
       : baseChoice === 'connected'
-        ? connectedIsFm3
+        ? connectedIsTarget
         : baseChoice === 'library'
-          ? !!fm3LibEntries.find((e) => e.id === baseLibId)
+          ? !!targetLibEntries.find((e) => e.id === baseLibId)
           : !!uploadedBase
   );
-  const canExport = $derived(canExportTargetFm3 && sourceAvailable && baseReady && !exporting);
+  const canExport = $derived(canExportTargetGen3 && sourceAvailable && baseReady && !exporting);
 
   async function onBaseFile(ev: Event) {
     const file = (ev.target as HTMLInputElement).files?.[0];
@@ -193,15 +195,15 @@
   async function resolveBaseB64(): Promise<string | undefined> {
     if (baseChoice === 'none') return undefined;
     if (baseChoice === 'upload') {
-      if (!uploadedBase) throw new Error('Choose an FM3 .syx to use as the base scaffold.');
+      if (!uploadedBase) throw new Error(`Choose a ${targetName} .syx to use as the base scaffold.`);
       return uploadedBase.b64;
     }
     if (baseChoice === 'library') {
-      const e = fm3LibEntries.find((x) => x.id === baseLibId);
-      if (!e) throw new Error('Pick an FM3 preset from the library.');
+      const e = targetLibEntries.find((x) => x.id === baseLibId);
+      if (!e) throw new Error(`Pick a ${targetName} preset from the library.`);
       return bytesToBase64(new Uint8Array(await entrySyxBytes(e)));
     }
-    // connected FM3: dump the current preset (active buffer) as the base scaffold
+    // connected target device: dump the current preset (active buffer) as the base scaffold
     const b = await forgefx.presetBackup();
     return bytesToBase64(Uint8Array.from(b.bytes));
   }
@@ -228,7 +230,7 @@
       const editedPreset = convertScratch.state
         ? scratchToPreset(convertScratch.commitStateFor(convertScratch.state))
         : undefined;
-      const res = await forgefx.exportConvertedSyx('fm3', {
+      const res = await forgefx.exportConvertedSyx(targetDeviceId!, {
         preset: editedPreset,
         sourceSyx: editedPreset ? undefined : convert.lastSource?.b64,
         baseSyx,
@@ -243,11 +245,11 @@
       downloadSyx(res.syx, res.name || saveName);
       const fidelityWarning = exportFidelityToast(res.fidelity);
       if (fidelityWarning) {
-        // Amber warning: some converted families have no FM3 template yet.
-        editor.showToast(`${fidelityWarning} — load-test on a real FM3`, '#e0a233');
+        // Amber warning: some converted families have no template on the target device yet.
+        editor.showToast(`${fidelityWarning} — load-test on a real ${targetName}`, '#e0a233');
       } else {
-        // Every block synthesized. File-level valid only — the FM3 must still accept it on a hardware load.
-        editor.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real FM3`, '#33c46b');
+        // Every block synthesized. File-level valid only — the target must still accept it on a hardware load.
+        editor.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real ${targetName}`, '#33c46b');
       }
       saveOpen = false;
     } catch (e) {
@@ -305,12 +307,12 @@
               </div>
             </div>
             {#if !slotCheck.ok}<div class="save-err">{slotCheck.error}</div>{/if}
-            <!-- .syx export (FM3-only). SYNTHESIZES the whole FM3 preset from the conversion — one-click, no
-                 base needed. The bytes are file-valid only — a hardware load test on a real FM3 is still
-                 required. An FM3 base is an OPTIONAL scaffold override (advanced). -->
-            {#if canExportTargetFm3}
+            <!-- .syx export (gen-3 targets). SYNTHESIZES the whole target preset from the conversion —
+                 one-click, no base needed. The bytes are file-valid only — a hardware load test on the real
+                 target device is still required. A target-device base is an OPTIONAL scaffold override. -->
+            {#if canExportTargetGen3}
               <div class="export-box">
-                <span class="export-title">Export .syx (FM3)</span>
+                <span class="export-title">Export .syx ({targetName})</span>
                 {#if !sourceAvailable}
                   <div class="export-hint">Re-open this preset from a source file or device to export it.</div>
                 {:else}
@@ -318,29 +320,29 @@
                     {exporting ? 'Synthesizing…' : 'Export .syx'}
                   </button>
                   <details class="export-advanced">
-                    <summary>Advanced: use my own FM3 as scaffold</summary>
+                    <summary>Advanced: use my own {targetName} as scaffold</summary>
                     <label class="save-field">
                       <span>Scaffold</span>
                       <select bind:value={baseChoice}>
                         <option value="none">Default (bundled scaffold)</option>
-                        {#if connectedIsFm3}<option value="connected">Connected FM3 (current preset)</option>{/if}
-                        {#if fm3LibEntries.length > 0}<option value="library">FM3 preset from library</option>{/if}
-                        <option value="upload">Upload an FM3 .syx…</option>
+                        {#if connectedIsTarget}<option value="connected">Connected {targetName} (current preset)</option>{/if}
+                        {#if targetLibEntries.length > 0}<option value="library">{targetName} preset from library</option>{/if}
+                        <option value="upload">Upload a {targetName} .syx…</option>
                       </select>
                     </label>
                     {#if baseChoice === 'library'}
                       <select class="export-liblist" bind:value={baseLibId}>
-                        {#each fm3LibEntries as e (e.id)}<option value={e.id}>{e.summary.name || e.id}</option>{/each}
+                        {#each targetLibEntries as e (e.id)}<option value={e.id}>{e.summary.name || e.id}</option>{/each}
                       </select>
                     {:else if baseChoice === 'upload'}
                       <input type="file" accept=".syx" class="export-file" onchange={onBaseFile} />
                     {/if}
                   </details>
-                  <div class="export-hint">File-valid only — load-test the export on a real FM3 before trusting it.</div>
+                  <div class="export-hint">File-valid only — load-test the export on a real {targetName} before trusting it.</div>
                 {/if}
               </div>
             {:else}
-              <button type="button" class="save-export" disabled title="FM3 only for now — other export targets come later">Export .syx (FM3 only for now)</button>
+              <button type="button" class="save-export" disabled title="Export targets: FM3, FM9, Axe-Fx III — AM4/VP4 come later">Export .syx (not available for this target yet)</button>
             {/if}
             <div class="save-actions">
               <button type="button" class="commit-btn" onclick={cancelSave}>Cancel</button>
