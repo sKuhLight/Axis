@@ -2,12 +2,19 @@
   // Full-screen gate for the remote web app (axisapp.live): sign in, then connect to the user's PC over
   // the relay. Shown until the remote session is live; once ready, +page renders the normal Axis UI.
   import { remoteBoot } from './remote.svelte';
+  import { directBoot } from './direct.svelte';
   import { LEGAL } from './legal';
   import { COPYRIGHT } from './support';
 
   let email = $state('');
   let password = $state('');
   const b = $derived(remoteBoot);
+
+  // This browser can reach a device directly (Web MIDI / Web Serial — Chromium desktop; not Safari/iOS).
+  // When it can, offer the in-app switch to Browser Direct mode so users aren't stuck on the relay (the
+  // only mode where the device-definitions walk works). Reuses directBoot's feature probe (DirectGate is
+  // already in the web bundle). Reload into ?mode=direct — the web mode is chosen per page load.
+  const canDirect = directBoot.support.midi || directBoot.support.serial;
 </script>
 
 <div class="bg">
@@ -35,6 +42,12 @@
         <button class="cta" type="submit">Sign in &amp; connect</button>
         {#if b.note}<p class="note">{b.note}</p>{/if}
         <p class="legal">Connects to the Axis running on your own PC — we never touch your presets.</p>
+        {#if canDirect}
+          <div class="alt">
+            Device plugged into <strong>this</strong> computer?
+            <a href="/?mode=direct">Play it directly in this browser →</a>
+          </div>
+        {/if}
       </form>
     {/if}
   </div>
@@ -64,6 +77,9 @@
   .cta:hover { background: var(--accentbright); }
   .note { font: 600 11.5px/1.4 'JetBrains Mono', monospace; color: var(--amber); margin: 4px 0 0; text-align: center; }
   .legal { text-align: center; margin-top: 14px; font-size: 11px; color: var(--textmuted); line-height: 1.55; }
+  .alt { text-align: center; margin-top: 6px; font-size: 11.5px; color: var(--textdim); line-height: 1.55; }
+  .alt a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .alt a:hover { text-decoration: underline; }
   .foot { position: absolute; bottom: 16px; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; font-size: 11px; color: var(--textfaint); }
   .foot a { color: var(--textdim); text-decoration: none; }
   .foot a:hover { color: var(--text2); }
