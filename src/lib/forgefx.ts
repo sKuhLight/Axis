@@ -4,6 +4,7 @@
 import type {
   BlockParams,
   BlockSummary,
+  BlockTypeOption,
   CabState,
   ConnPick,
   DetectResult,
@@ -31,7 +32,11 @@ import type {
   DeviceCacheStatus,
   DeviceCacheImportResult,
   DeviceCacheSources,
-  CloudCacheStatus
+  CloudCacheStatus,
+  ConverterDeviceId,
+  ConvertResponse,
+  ConvertExportResponse,
+  ConverterPreset
 } from './types';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
@@ -198,10 +203,7 @@ export const forgefx = {
 
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),
-  blockTypes: (slug: string) =>
-    req<{ value: number; name: string; manufacturer: string | null; basedOn: string | null }[]>(
-      `/blocks/${slug}/types`
-    ),
+  blockTypes: (slug: string) => req<BlockTypeOption[]>(`/blocks/${slug}/types`),
 
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),
@@ -321,6 +323,8 @@ export const forgefx = {
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data, origin: CLIENT_ID }) }),
   listDocs: <T>(c: string) => req<{ docs: { id: string; data: T; updatedAt: number }[] }>(`/store/${c}`),
+  /** Delete one stored doc. Degrades to null on 404/501 (older server / no store) so callers stay quiet. */
+  deleteDoc: (c: string, id: string) => capOptional(req<{ ok: boolean }>(`/store/${c}/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   /** Decode a device preset by number (non-disruptive) → library summary (name, scenes, blocks). */
   presetSummary: (n: number, full = false) => req<PresetSummary>(`/presets/${n}/summary${full ? '?full=1' : ''}`),
   /** Full per-block decoded params for a device preset (every family/param) — deep search + detail. */
@@ -340,6 +344,40 @@ export const forgefx = {
     if (!res.ok) throw new ForgeError(res.status, (await res.json().catch(() => ({})))?.error ?? res.statusText);
     return res.json();
   },
+  /** Port a preset to another Fractal device (P4a · META-24). `sourceSyx` (base64) converts an imported
+   *  file; omit it to convert the CONNECTED device's current preset (501 if the active device can't
+   *  provide a source). Conversion decodes + remaps a whole preset — give it a generous timeout. */
+  convertPreset: (targetDevice: ConverterDeviceId, sourceSyx?: string) =>
+    req<ConvertResponse>('/preset/convert', {
+      method: 'POST',
+      body: JSON.stringify({ targetDevice, ...(sourceSyx ? { source: { syx: sourceSyx } } : {}) }),
+      signal: AbortSignal.timeout(30000)
+    }),
+  /** Author a target-device preset `.syx` from a converted preset by FULL-BODY SYNTHESIS onto the codec's
+   *  bundled default FM3 scaffold — NO base needed (one-click). `sourceSyx` (base64) converts an imported
+   *  file; omit it to convert the CONNECTED device's current preset. FM3 targets ONLY (server answers 501
+   *  otherwise). `baseSyx` is OPTIONAL — supply it (base64) to use your own FM3 preset as the synthesis
+   *  scaffold override (must be a valid FM3 dump; 400 otherwise). The returned `syx` is FILE-level valid
+   *  only — a hardware load test on a real FM3 is still required. Synthesis re-converts + re-packs a whole
+   *  preset → long timeout. */
+  exportConvertedSyx: (
+    targetDevice: ConverterDeviceId,
+    opts: { preset?: ConverterPreset; sourceSyx?: string; baseSyx?: string; name?: string; slot?: number }
+  ) =>
+    req<ConvertExportResponse>('/preset/convert/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetDevice,
+        // PREFERRED: the EDITED converter IR (carries the user's grid routing/cables + block/param
+        // edits verbatim). The server authors it directly; `source`/`base` become the fallback.
+        ...(opts.preset ? { preset: opts.preset } : {}),
+        ...(opts.baseSyx ? { base: { syx: opts.baseSyx } } : {}),
+        ...(opts.sourceSyx ? { source: { syx: opts.sourceSyx } } : {}),
+        ...(opts.name != null ? { name: opts.name } : {}),
+        ...(opts.slot != null ? { slot: opts.slot } : {})
+      }),
+      signal: AbortSignal.timeout(60000)
+    }),
   /** Foot Controller address model (field bases + config formula + enums); null if not decoded. */
   fcModel: () => req<FcModel | null>(`/fc/model`),
   /** Modifier address model (field → paramId); null if not decoded. */

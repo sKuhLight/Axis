@@ -1,4 +1,4 @@
-export type AxisPresetBrowserSourceId = 'all' | 'device' | 'local' | 'file' | 'cloud' | string;
+export type AxisPresetBrowserSourceId = 'all' | 'device' | 'local' | 'file' | 'cloud' | 'converted' | string;
 
 export interface AxisPresetBrowserBlockSummary {
   effectId?: number | null;
@@ -12,6 +12,8 @@ export interface AxisPresetBrowserLibEntryLike {
   source: AxisPresetBrowserSourceId;
   fav?: boolean;
   folder?: string;
+  /** `converted` entries only: the "FM3 → AM4" provenance line surfaced as a row chip. */
+  provenance?: string | null;
   summary: {
     number?: number | null;
     name?: string | null;
@@ -42,6 +44,11 @@ export interface AxisPresetBrowserEntrySummary {
   syncState: SyncState;
   /** A synthesized cloud-only row (host id starts with `cloud:`). */
   cloudOnly: boolean;
+  /** A saved cross-device conversion (source 'converted') — hides device affordances, offers "Open in
+   *  converter". */
+  converted: boolean;
+  /** Display provenance ("FM3 → AM4") for a converted entry; null for every other source. */
+  provenance: string | null;
 }
 
 export interface AxisPresetBrowserSourceSummary {
@@ -101,7 +108,7 @@ import {
   type AxisPbPresenceViewDef
 } from './presetBrowserWorkbenchPresence';
 
-const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'cloud'];
+const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'cloud', 'converted'];
 
 export function axisPresetBrowserSourceLabel(sourceId: AxisPresetBrowserSourceId): string {
   if (sourceId === 'all') return 'All Presets';
@@ -109,6 +116,7 @@ export function axisPresetBrowserSourceLabel(sourceId: AxisPresetBrowserSourceId
   if (sourceId === 'local') return 'Local';
   if (sourceId === 'file') return 'Files';
   if (sourceId === 'cloud') return 'Cloud';
+  if (sourceId === 'converted') return 'Converted';
   return sourceId.replace(/[-_.]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -207,12 +215,18 @@ function normalizeEntry(
     ?? entry.summary.amps?.[0]
     ?? Object.values(entry.summary.models ?? {}).flat()[0]
     ?? '';
+  const sourceId = normalizeAxisPresetBrowserSourceId(entry.source);
+  const converted = sourceId === 'converted';
+  const rawNumber = entry.summary.number ?? null;
+  // A converted entry's `number` is its chosen slot; a free-form/unset slot (< 0) shows the source label
+  // ("Converted"), never a bogus numeric slot.
+  const number = converted ? (rawNumber != null && rawNumber >= 0 ? rawNumber : null) : rawNumber;
 
   return {
     id: entry.id,
-    sourceId: normalizeAxisPresetBrowserSourceId(entry.source),
+    sourceId,
     sourceLabel: axisPresetBrowserSourceLabel(entry.source),
-    number: entry.summary.number ?? null,
+    number,
     name: entry.summary.name?.trim() || 'Untitled Preset',
     model: firstModel,
     sceneCount: entry.summary.scenes?.length ?? 0,
@@ -222,7 +236,9 @@ function normalizeEntry(
     tags: tagsOf?.(entry.id) ?? [],
     blocks,
     syncState: syncStateOf?.(entry) ?? 'none',
-    cloudOnly: entry.id.startsWith('cloud:')
+    cloudOnly: entry.id.startsWith('cloud:'),
+    converted,
+    provenance: entry.provenance ?? null
   };
 }
 

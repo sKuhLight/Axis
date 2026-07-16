@@ -15,7 +15,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
-import { ensureAxisSeedPages } from './axisWorkbenchPages';
+import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -59,8 +59,12 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // becomes the Grid page and the six other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
   // doc-metadata marker so freshly seeded / default docs are untouched.
+  // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
+  // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
   return ensureAxisMobileBottomNav(
-    pruneAxisRetiredRailWidgets(ensureAxisGridControlWidgets(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+    pruneAxisRetiredRailWidgets(
+      ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+    )
   );
 }
 

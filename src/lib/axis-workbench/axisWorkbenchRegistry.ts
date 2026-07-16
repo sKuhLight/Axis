@@ -3,6 +3,10 @@ import FallbackNavigation from '../workbench/svelte/FallbackNavigation.svelte';
 import FallbackPanel from '../workbench/svelte/FallbackPanel.svelte';
 import FallbackWidget from '../workbench/svelte/FallbackWidget.svelte';
 import AxisBlockEditorPanel from './panels/AxisBlockEditorPanel.svelte';
+import AxisConvertBlockEditorPanel from './panels/AxisConvertBlockEditorPanel.svelte';
+import AxisConvertGridPanel from './panels/AxisConvertGridPanel.svelte';
+import AxisConvertMinimapPanel from './panels/AxisConvertMinimapPanel.svelte';
+import AxisConvertTrayPanel from './panels/AxisConvertTrayPanel.svelte';
 import AxisCustomPanel from './panels/AxisCustomPanel.svelte';
 import AxisDockActionPanel from './panels/AxisDockActionPanel.svelte';
 import AxisFcPanel from './panels/AxisFcPanel.svelte';
@@ -47,6 +51,10 @@ AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) => {
     type === 'axis.customPanel' ? AxisCustomPanel :
     type === 'axis.virtualScreen' ? AxisVirtualScreenPanel :
     type === 'axis.placeholder' ? AxisPlaceholderPanel :
+    type === 'axis.convertGrid' ? AxisConvertGridPanel :
+    type === 'axis.convertBlockEditor' ? AxisConvertBlockEditorPanel :
+    type === 'axis.convertMinimap' ? AxisConvertMinimapPanel :
+    type === 'axis.convertTray' ? AxisConvertTrayPanel :
     AxisDockActionPanel;
   registry.registerPanel({ type, component });
 });

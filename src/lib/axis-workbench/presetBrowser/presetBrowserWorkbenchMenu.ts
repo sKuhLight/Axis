@@ -19,6 +19,9 @@ export type AxisPbMenuActionId =
   | 'audition'
   | 'favorite'
   | 'rename'
+  | 'crossConvert'
+  | 'openConverter'
+  | 'deleteConverted'
   | 'cloudUpload'
   | 'cloudDownload';
 
@@ -32,6 +35,8 @@ export interface AxisPbMenuEntry {
   fav: boolean;
   /** Resolved cloud sync state — decides the cloud action label/direction. */
   syncState: string;
+  /** A saved cross-device conversion (source 'converted') — gets its own reduced menu. */
+  converted?: boolean;
 }
 
 export interface AxisPbMenuCaps {
@@ -70,6 +75,16 @@ function cloudActionFor(entry: AxisPbMenuEntry): AxisPbMenuAction | null {
 
 // Build the ordered action list (pre-render form) for one row's context menu (§4.4 single-row menu).
 export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuCaps): AxisPbMenuAction[] {
+  // Saved cross-device conversions are NOT device slots — they get their own reduced menu: re-open in the
+  // converter, favorite, delete. (A true ".syx export" action is wired in the codec-authoring task — it
+  // needs a codec endpoint, so it is deliberately omitted here rather than shipped as a no-op.)
+  if (entry.converted) {
+    return [
+      { id: 'openConverter', label: 'Open in converter', hint: '↵' },
+      { id: 'favorite', label: entry.fav ? 'Remove from favorites' : 'Add to favorites', separatorBefore: true },
+      { id: 'deleteConverted', label: 'Delete', danger: true, separatorBefore: true }
+    ];
+  }
   const actions: AxisPbMenuAction[] = [
     { id: 'load', label: entry.cloudOnly ? 'Load from cloud' : 'Load preset', hint: '↵' }
   ];
@@ -77,6 +92,9 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
     actions.push({ id: 'audition', label: 'Audition (edit buffer)' });
     if (caps.canRename) actions.push({ id: 'rename', label: 'Rename & save…' });
   }
+  // Cross-device converter (M4): available for every entry — the flow reads the row's .syx and opens the
+  // convert dialog seeded with it. Not gated on caps (the converter is best-effort + offline).
+  actions.push({ id: 'crossConvert', label: 'Convert to another device…', separatorBefore: true });
   actions.push({
     id: 'favorite',
     label: entry.fav ? 'Remove from favorites' : 'Add to favorites',

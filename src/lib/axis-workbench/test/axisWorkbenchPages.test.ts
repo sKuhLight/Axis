@@ -10,6 +10,7 @@ import { createAxisWorkbenchDefaultDocument } from '../axisWorkbenchDefaults';
 import { createAxisLayoutPreset, AXIS_LAYOUT_PRESET_KINDS } from '../axisWorkbenchLayoutPresets';
 import {
   AXIS_PAGE_CONTROLLERS,
+  AXIS_PAGE_CONVERT,
   AXIS_PAGE_FC,
   AXIS_PAGE_GRID,
   AXIS_PAGE_LIVE,
@@ -21,6 +22,8 @@ import {
   ensureAxisSeedPages
 } from '../axisWorkbenchPages';
 
+// The seven nav-bound seed pages plus the nav-less converter page (M4), which is seeded on every layout
+// so it can be activated on demand but carries no navigation entry.
 const ALL_SEED_PAGES = [
   AXIS_PAGE_GRID,
   AXIS_PAGE_PRESET_BROWSER,
@@ -28,7 +31,8 @@ const ALL_SEED_PAGES = [
   AXIS_PAGE_CONTROLLERS,
   AXIS_PAGE_SCENES,
   AXIS_PAGE_LIVE,
-  AXIS_PAGE_SETUP
+  AXIS_PAGE_SETUP,
+  AXIS_PAGE_CONVERT
 ];
 
 describe('ROUND 15 — default document seed pages', () => {

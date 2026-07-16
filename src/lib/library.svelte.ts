@@ -8,6 +8,8 @@ import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
+import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
+import { deviceName } from './convertReport';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
 // letting a malformed cache break the library). Permissive: only the fields the UI relies on.
@@ -40,13 +42,18 @@ export interface ParamQuery {
 
 export interface LibEntry {
   /** stable id: `dev:<n>` for a device preset slot, `file:<name>` for an imported .syx,
-   *  `local:<relPath>` for a preset in the configured local Presets/ folder. */
+   *  `local:<relPath>` for a preset in the configured local Presets/ folder, `conv:<docId>` for a
+   *  cross-device conversion saved to the `converted` store collection. */
   id: string;
-  source: 'device' | 'file' | 'local';
+  source: 'device' | 'file' | 'local' | 'converted';
   summary: PresetSummary;
   fav: boolean;
   /** imported/local presets only: the folder they came from (for grouping/browsing). */
   folder?: string;
+  /** `converted` entries only: the persisted conversion doc (re-open source) + a display provenance
+   *  string ("FM3 → AM4"). Absent for every other source. */
+  converted?: ConvertedPresetDoc;
+  provenance?: string;
 }
 
 /** The FM3 names an uninitialized slot `<EMPTY>` — a valid CRC'd preset, so it must be filtered
@@ -156,6 +163,8 @@ class LibraryStore {
       idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
       idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = b; });
     }
+    // surface any previously-saved cross-device conversions (best-effort; async)
+    void this.loadConverted();
     // Host: republish the local Axis config into the ONE config store on every launch, so the store always
     // reflects THIS PC — that's the source of truth the remote (and cloud sync) read. NEVER on the remote web
     // build: its localStorage is empty and (in dev) shares the host's ForgeFX, so publishing would clobber
@@ -439,6 +448,51 @@ class LibraryStore {
     if (idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
   }
 
+  // ── converted presets (cross-device conversions saved to the `converted` store collection) ──
+  /** Build a lightweight library entry from a stored conversion doc. Summary blocks map the target IR's
+   *  blocks to the browser's block shape so name search + block chips work; `number` carries the chosen
+   *  slot (or -1 when free-form / unset — the UI renders those as "Converted", never a numeric slot). */
+  #convertedEntry(docId: string, doc: ConvertedPresetDoc, favs: Set<string>): LibEntry {
+    const id = `conv:${docId}`;
+    const blocks = doc.preset.blocks.map((b) => ({ effectId: 0, slug: b.family, name: b.typeName ?? b.family, instance: b.instance }));
+    const summary: PresetSummary = {
+      number: doc.slot ?? -1,
+      name: doc.name,
+      model: deviceName(doc.targetDevice),
+      crcValid: true,
+      scenes: doc.preset.sceneNames ?? [],
+      blocks,
+      models: {},
+      amps: []
+    };
+    return { id, source: 'converted', summary, fav: favs.has(id), converted: doc, provenance: `${doc.sourceDevice} → ${deviceName(doc.targetDevice)}` };
+  }
+
+  /** Load every saved conversion from the `converted` store collection into the library (replacing the
+   *  prior `converted` entries in one pass). Best-effort + Zod-validated: a missing/older store or a
+   *  corrupt doc simply yields fewer entries — it never throws. */
+  async loadConverted(): Promise<void> {
+    try {
+      const { docs } = await forgefx.listDocs<unknown>('converted');
+      const favs = new Set(load<string[]>(LS.favs, []));
+      const converted: LibEntry[] = [];
+      for (const d of docs) {
+        const doc = parseConvertedDoc(d.data);
+        if (doc) converted.push(this.#convertedEntry(d.id, doc, favs));
+      }
+      this.entries = [...this.entries.filter((e) => e.source !== 'converted'), ...converted].sort(this.#order);
+    } catch {
+      /* no store / older engine — leave any prior converted entries untouched */
+    }
+  }
+
+  /** Delete a saved conversion (store doc + its library entry). `id` is the `conv:<docId>` entry id. */
+  async removeConverted(id: string): Promise<void> {
+    const docId = id.startsWith('conv:') ? id.slice('conv:'.length) : id;
+    await forgefx.deleteDoc('converted', docId).catch(() => {});
+    this.entries = this.entries.filter((e) => e.id !== id);
+  }
+
   // ── deep param hydration (device presets) ──
   /** Fetch + cache (in-memory) the full params for one device entry, so param search can evaluate it. */
   async hydrateParams(id: string): Promise<void> {
@@ -497,12 +551,12 @@ class LibraryStore {
 
   #order = (a: LibEntry, b: LibEntry) => {
     if (a.source !== b.source) {
-      const rank = (s: LibEntry['source']) => (s === 'device' ? 0 : s === 'local' ? 1 : 2);
+      const rank = (s: LibEntry['source']) => (s === 'device' ? 0 : s === 'local' ? 1 : s === 'file' ? 2 : 3);
       return rank(a.source) - rank(b.source);
     }
     if (a.source === 'device') return a.summary.number - b.summary.number;
     if (a.source === 'local') return a.id.localeCompare(b.id); // path order (folders group naturally)
-    return a.summary.name.localeCompare(b.summary.name);
+    return a.summary.name.localeCompare(b.summary.name); // file + converted → by name
   };
   #cacheDevice() {
     // summaries stay light in localStorage; the heavy `params` live in IndexedDB (IDB_PARAMS)
