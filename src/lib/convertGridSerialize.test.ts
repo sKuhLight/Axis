@@ -72,4 +72,17 @@ describe('applyGridEditsToState', () => {
     expect(gridCells.map((g) => g.effectId).sort()).toEqual([100, 101, 1024]);
     expect(preset.blocks.find((b) => b.key === 'cab1')!.position).toEqual({ row: 0, col: 2 });
   });
+
+  // FORGEFXMID-43: the preset the export path SENDS (scratchToPreset of the committed state) must carry
+  // each cell's routeFlag/fromRows — the drawn cables — so ForgeFX authors them into the .syx grid.
+  it('the exported IR carries per-cell routeFlag + fromRows (the drawn cables) and the shunt', () => {
+    const next = applyGridEditsToState(stateOf(blocks, { seriesChains: [] }), L, MAP);
+    const cells = (scratchToPreset(next).routing as { gridCells: { effectId: number; routeFlag?: number; fromRows?: number[]; isShunt?: boolean }[] }).gridCells;
+    const cab = cells.find((g) => g.effectId === 101)!;
+    expect(cab.routeFlag).toBe(0b1); // fed from row 0
+    expect(cab.fromRows).toEqual([0]);
+    const shunt = cells.find((g) => g.isShunt)!;
+    expect(shunt.routeFlag).toBe(0b1);
+    expect(shunt.fromRows).toEqual([0]);
+  });
 });
