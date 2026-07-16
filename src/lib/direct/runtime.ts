@@ -25,6 +25,7 @@ import { setRemoteTransport, type RemoteResponse } from '../forgefx';
 import { remoteConfigured } from '../cloudBrowser';
 import { FsaFolderAdapter } from './fsaFolder';
 import { createIdbStoreBackend, createBrowserCodec } from './idbStore';
+import { makeDeviceCacheLoader } from './deviceCacheLoader';
 
 /** Environment probes that shape the runtime. Web computes these from `navigator`; mobile hard-codes
  *  them (midi via the native plugin, no serial/folder in WKWebView). */
@@ -96,7 +97,12 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
       else localStorage.removeItem(profileKey);
     },
     autoDetectPath: () => null,
-    midiAvailable: () => support.midi
+    midiAvailable: () => support.midi,
+    // On-connect / post-build device-cache lookup — mirrors the Node registry (drivers/registry.ts) so
+    // the registry adopts the device-true runtime profile after a self-describe walk and on reconnect.
+    // Without it applyRuntimeCache() no-ops and a completed walk is persisted but never used. See
+    // deviceCacheLoader.ts for why this is a named helper rather than an inline closure.
+    loadDeviceCache: makeDeviceCacheLoader(store)
   };
   const registry = rt.createRegistry(deps);
 
@@ -146,7 +152,20 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
       body: typeof r.body === 'string' ? r.body : (r.body.slice().buffer as ArrayBuffer)
     };
   }, 'direct');
-  const unsub = router.subscribe((e: DeviceEvent) => onEvent(e));
+  const unsubRouter = router.subscribe((e: DeviceEvent) => onEvent(e));
+
+  // 5b. Durability: IndexedDB writes are write-behind (idbStore.ts), so a tab closed moments after a
+  //     large write — e.g. a just-completed definitions walk's BuiltCache — could lose the last queued
+  //     flush. Drain the queue when the page is hidden (fires while the page is still alive, unlike
+  //     unload, so flush() can actually complete). Best-effort; the in-memory mirror stays authoritative.
+  const onHide = () => {
+    if (typeof document === 'undefined' || document.visibilityState === 'hidden') void backend.flush();
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onHide);
+  const unsub = () => {
+    unsubRouter();
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide);
+  };
 
   // 6. Probe the device before declaring ready — a wrong port fails here, not in the editor.
   const detect = await router.handle('GET', '/device/detect');
