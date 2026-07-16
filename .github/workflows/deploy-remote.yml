@@ -1,26 +1,29 @@
 name: deploy-remote
 
-# Builds the Axis remote web app (VITE_AXIS_REMOTE=1) and publishes it into the axis-website repo, whose
-# Cloudflare Worker (Static Assets) auto-deploys on push → serves it at axisapp.live. The SPA lands at the
-# site root (index.html + _app/**); the landing (welcome.html) and legal pages stay untouched.
+# Deploys the RELEASED Axis stack to axisapp.live. Since the pipeline rework the site is a
+# RELEASE CHANNEL: it serves the last PUBLISHED Axis release, built at that release's tag with the
+# pinned sibling stack (use-lock 'true') — NOT default-branch HEAD. It builds the remote web app
+# (VITE_AXIS_REMOTE=1) and pushes it into sKuhLight/axis-website, whose Cloudflare Worker
+# auto-deploys on push. The SPA lands at the site root (index.html + _app/**); the landing
+# (welcome.html) and legal pages stay untouched.
+#
+# Rollback: re-run via workflow_dispatch with an earlier release tag in `ref` — the site rebuilds
+# from that tag's checkout + stack.lock.json pins.
 #
 # One-time setup in the Axis repo (Settings → Secrets and variables → Actions):
 #   • Variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  (publishable anon key — safe to expose)
 #   • Secret:    AXIS_WEBSITE_TOKEN  (a token with contents:write on sKuhLight/axis-website)
 # The `gate` job below skips the deploy (never fails) until all three are present.
-#
-# The site tracks default-branch HEAD by design (use-lock 'false'): axisapp.live should always
-# reflect the latest Axis + engine. That's also why a ForgeFX push to main fires a `stack-updated`
-# repository_dispatch here — the Browser Direct runtime bundles forgefx-server, so a server change
-# must re-deploy the site even without an Axis commit.
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
-  repository_dispatch:
-    types: [stack-updated] # ForgeFX main pushes redeploy the site (Browser Direct bundles forgefx-server)
-  push:
-    branches: [main]
-    paths: ['src/**', 'static/**', 'svelte.config.js', 'vite.config.ts', 'package.json', 'package-lock.json']
+    inputs:
+      ref:
+        description: 'Axis release tag to deploy (e.g. v0.9.24-beta). Empty = latest published release.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -53,18 +56,42 @@ jobs:
     needs: gate
     if: needs.gate.outputs.ready == 'true'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
+      # Which release to deploy: the published release's tag, else the workflow_dispatch input,
+      # else the latest published release resolved via gh.
+      - name: Resolve release tag
+        id: rel
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          set -euo pipefail
+          REF="$RELEASE_TAG"
+          if [ -z "$REF" ]; then REF="$INPUT_REF"; fi
+          if [ -z "$REF" ]; then
+            # `release view --latest` excludes prereleases, but Axis ships -beta — list instead.
+            REF="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          fi
+          if [ -z "$REF" ]; then
+            echo "::error::could not resolve a release tag to deploy."; exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Deploying Axis release: $REF" | tee -a "$GITHUB_STEP_SUMMARY"
+
       # Sibling layout for the file: workspace links (forgefx-server → forgefx-midi) — the Browser
-      # Direct runtime is bundled from these packages. The composite action checks them out + builds
-      # them. use-lock 'false': the site tracks each sibling's default-branch HEAD by design.
-      - name: Checkout Axis
+      # Direct runtime is bundled from these packages. Check out Axis at the RELEASE TAG; the
+      # composite action then pins the siblings from that tag's stack.lock.json (use-lock 'true').
+      - name: Checkout Axis at release tag
         uses: actions/checkout@v4
         with:
+          ref: ${{ steps.rel.outputs.ref }}
           path: Axis
-      - name: Build sibling stack (codec + server)
+      - name: Build sibling stack (codec + server, pinned)
         uses: ./Axis/.github/actions/build-stack
         with:
-          use-lock: 'false'
+          use-lock: 'true'
 
       - name: Install Axis deps
         working-directory: Axis

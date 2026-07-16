@@ -1,0 +1,203 @@
+name: release-on-main
+
+# Zero-touch tag+release. When CI passes on `main` (a merged PR or a direct push), read the
+# merged PR's `release:*` label (default: patch), compute the next version from the last tag,
+# and push a `v<version>-beta` tag with the PAT so the tag-driven release.yml fires. Tags pushed
+# with the built-in GITHUB_TOKEN do NOT trigger workflows — hence STACK_DISPATCH_TOKEN.
+#
+# Manual recovery: workflow_dispatch — `version` overrides the computed version (treated as a
+# forced release), `dry_run` prints the computed values and creates nothing.
+# Emergency stop: repo Actions variable RELEASE_AUTOMATION_ENABLED=false halts this workflow.
+on:
+  workflow_run:
+    workflows: [ci] # must match ci.yml `name:` EXACTLY
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'exact version, no leading v (empty = auto)'
+        required: false
+      dry_run:
+        description: 'compute + print only, create nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read # tag push happens via PAT (STACK_DISPATCH_TOKEN), not GITHUB_TOKEN
+
+# Serialize; a queued run recomputes from fresh tags → no version races across parallel merges.
+concurrency:
+  group: release-on-main
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: compute + push release tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # failure-notify issue
+      pull-requests: read # resolve merged PR + labels + files
+    # workflow_dispatch always runs; workflow_run only for a successful CI push on main
+    # (excludes PR CI and CI kicked by repository_dispatch).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
+    steps:
+      # Emergency stop + PAT presence. Both are soft-gates: they skip the rest of the job with a
+      # notice and a green check (nothing to create), never a red X.
+      - name: Gate (emergency stop + PAT presence)
+        id: gate
+        env:
+          PAT: ${{ secrets.STACK_DISPATCH_TOKEN }}
+        run: |
+          if [ "${{ vars.RELEASE_AUTOMATION_ENABLED }}" = "false" ]; then
+            echo "::notice::RELEASE_AUTOMATION_ENABLED=false — release-on-main halted."
+            echo "- release-on-main halted (RELEASE_AUTOMATION_ENABLED=false)" >> "$GITHUB_STEP_SUMMARY"
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -z "$PAT" ]; then
+            echo "::notice::STACK_DISPATCH_TOKEN missing — cannot auto-tag; skipping."
+            echo "- STACK_DISPATCH_TOKEN missing — cannot auto-tag" >> "$GITHUB_STEP_SUMMARY"
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      # Full history + tags for version math; check out the CI run's head SHA. persist-credentials
+      # keeps the PAT for the tag push (PAT-pushed tags DO trigger release.yml).
+      - name: Checkout
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          token: ${{ secrets.STACK_DISPATCH_TOKEN }}
+
+      - name: Resolve label, compute version + push tag
+        id: rel
+        if: steps.gate.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          BASE=""
+
+          # ---- Resolve release label (merged PR for this SHA; default patch) ----
+          LABEL="patch"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$DISPATCH_VERSION" ]; then
+            echo "manual version override: $DISPATCH_VERSION (skipping label resolution)"
+          else
+            PR="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/pulls" \
+                    --jq '[.[] | select(.merged_at != null)][0].number' 2>/dev/null || true)"
+            if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+              echo "no merged PR for $SHA — direct push, defaulting to patch."
+            else
+              echo "merged PR: #$PR"
+              REL_LABELS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
+                              --jq '.labels[].name' | grep -E '^release:' || true)"
+              # Precedence: release:hold / release:none always win over a co-present bump label
+              # (the documented opt-out); only then do we require a single bump label.
+              if echo "$REL_LABELS" | grep -qx 'release:hold'; then
+                echo "::notice::release:hold on PR #$PR — no release."; echo "- held (release:hold)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+              fi
+              if echo "$REL_LABELS" | grep -qx 'release:none'; then
+                echo "::notice::release:none on PR #$PR — no release."; echo "- skipped (release:none)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+              fi
+              BUMP_LABELS="$(echo "$REL_LABELS" | grep -E '^release:(patch|minor|major)$' || true)"
+              COUNT="$(echo -n "$BUMP_LABELS" | grep -c . || true)"
+              if [ "$COUNT" -gt 1 ]; then
+                echo "::error::multiple release:* labels on PR #$PR: $(echo "$BUMP_LABELS" | tr '\n' ' ')"
+                exit 1
+              fi
+              case "$BUMP_LABELS" in
+                release:major) LABEL="major" ;;
+                release:minor) LABEL="minor" ;;
+                release:patch) LABEL="patch" ;;
+                "")
+                  # No release label → docs/CI-only PRs auto-none, everything else defaults patch.
+                  FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename')"
+                  NON_DOCS="$(echo "$FILES" | grep -vE '^(docs/|\.github/|.*\.md$)' || true)"
+                  if [ -z "$NON_DOCS" ]; then
+                    echo "::notice::PR #$PR is docs/CI-only — no release."; echo "- skipped (docs/ci-only)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+                  fi
+                  LABEL="patch"
+                  ;;
+              esac
+            fi
+          fi
+          echo "release label: $LABEL"
+
+          # ---- Compute next version from the highest existing tag ----
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$DISPATCH_VERSION" ]; then
+            if ! echo "$DISPATCH_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$'; then
+              echo "::error::invalid version '$DISPATCH_VERSION'"; exit 1
+            fi
+            NEXT="$DISPATCH_VERSION"
+          else
+            BASE="$(git tag --list 'v[0-9]*' \
+              | sed -E 's/^v//; s/-beta$//' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -t. -k1,1n -k2,2n -k3,3n \
+              | tail -n1)"
+            [ -z "$BASE" ] && BASE="0.0.0"
+            NEXT="$(LABEL="$LABEL" BASE="$BASE" node -e '
+              const [maj, min, pat] = process.env.BASE.split(".").map(Number);
+              const l = process.env.LABEL;
+              let v;
+              if (l === "major") v = `${maj + 1}.0.0`;
+              else if (l === "minor") v = `${maj}.${min + 1}.0`;
+              else v = `${maj}.${min}.${pat + 1}`;
+              process.stdout.write(v);
+            ')"
+            # Repo-fixed channel: Axis always ships -beta.
+            NEXT="${NEXT}-beta"
+          fi
+          echo "next version: v$NEXT"
+
+          # ---- Tag-exists guard ----
+          if git ls-remote --tags origin "refs/tags/v${NEXT}" | grep -q .; then
+            echo "::notice::v${NEXT} already tagged — nothing to do."
+            echo "- already tagged v${NEXT}" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+
+          # ---- Dry run ----
+          if [ "$DRY_RUN" = "true" ]; then
+            { echo "### release-on-main (dry run)";
+              echo "- label: $LABEL";
+              echo "- base: ${BASE:-<manual>}";
+              echo "- next: v$NEXT";
+              echo "- sha: $SHA"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "dry run — no tag created."; exit 0
+          fi
+
+          # ---- Create + push tag (PAT credentials → triggers release.yml) ----
+          git config user.name "sKuhLight"
+          git config user.email "sKuhLight@users.noreply.github.com"
+          git tag "v${NEXT}" "${SHA}"
+          git push origin "v${NEXT}"
+          { echo "### release-on-main";
+            echo "- chainId: Axis@v${NEXT}";
+            echo "- version: v${NEXT}";
+            echo "- sha: $SHA"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "pushed tag v${NEXT}"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BODY="release-on-main failed in \`${GITHUB_REPOSITORY}\`. Stage: tag computation/push. No tag was pushed. Run: ${RUN_URL}"
+          EXISTING="$(gh issue list --label release-failure --state open --search 'release-on-main' --json number --jq '.[0].number // empty' || true)"
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "release chain failure: ${GITHUB_REPOSITORY} release-on-main" --label release-failure --body "$BODY"
+          fi
