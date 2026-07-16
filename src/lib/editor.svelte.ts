@@ -16,6 +16,7 @@ import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -330,6 +331,10 @@ class EditorStore {
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
   presetOpen = $state(false);
+  /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to this
+   *  callback (e.g. the cross-device converter save dialog) INSTEAD of loading the preset onto the
+   *  device, then closes. Null = normal load-a-preset mode. Cleared whenever the picker closes. */
+  presetPick = $state<((slot: number, name: string) => void) | null>(null);
   cabPickerOpen = $state(false);
   deviceToolsOpen = $state(false); // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
   toast = $state<{ text: string; accent: string } | null>(null);
@@ -1603,6 +1608,9 @@ class EditorStore {
   };
 
   // ── cab IR picker ──
+  /** Read a block's current cab/IR state. Routed through the store (not called on `forgefx` directly by
+   *  components) so the editor surface owns it — an offline surface can override with a buffer read. */
+  cabState = (eid: number) => forgefx.cabState(eid);
   openCabPicker = () => {
     if (!this.selected?.pack) return;
     this.cabPickerOpen = true;
@@ -2025,6 +2033,13 @@ class EditorStore {
   };
 
   // ── preset nav ──
+  /** Open the preset picker in "pick a slot" mode: `onPick` receives the chosen slot number + name and
+   *  the picker closes WITHOUT loading the preset (used by the converter save dialog to reuse the real
+   *  device-preset list as a slot chooser). */
+  openSlotPicker = (onPick: (slot: number, name: string) => void) => {
+    this.presetPick = onPick;
+    this.presetOpen = true;
+  };
   selectPreset = async (n: number) => {
     if (!this.isV2 && this.isAm4) return this.loadAm4Preset(n); // legacy v1 fallback: AM4's own codec route
     try {
@@ -2101,3 +2116,9 @@ class EditorStore {
 
 export const editor = new EditorStore();
 export { baseName, packFor };
+
+// Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
+// editor-backed grid components (SignalGrid / GridMap / BlockEditor / ControlSurface / EQGraph /
+// CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
+// (the interface is a subset the singleton satisfies) — never the reverse.
+export const _editorSatisfiesSurface: EditorSurface = editor;

@@ -69,7 +69,22 @@
     return rows;
   });
 
+  // Pick-a-slot mode: when the editor set a pick callback, the picker RETURNS the chosen slot (number +
+  // name) to it and closes, instead of loading the preset onto the device. Used by the cross-device
+  // converter save dialog to reuse this real device-preset list as a slot chooser.
+  const pickMode = $derived(!!editor.presetPick);
+  function close() {
+    editor.presetOpen = false;
+    editor.presetPick = null;
+  }
   async function go(n: number, name = '') {
+    const pick = editor.presetPick;
+    if (pick) {
+      editor.presetOpen = false;
+      editor.presetPick = null;
+      pick(n, name || nameOf(n));
+      return;
+    }
     await editor.selectPreset(n);
     pushRecent(n, name || editor.preset?.name || '');
   }
@@ -78,22 +93,22 @@
       if (typedNum !== null) go(typedNum);
       else if (rows[0]) go(rows[0].n, rows[0].name);
     } else if (e.key === 'Escape') {
-      editor.presetOpen = false;
+      close();
     }
   }
 </script>
 
 {#if editor.presetOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.presetOpen = false)}>
+  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={close}>
     <div class="card" class:sheet={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
       <div class="head">
         <div class="title-row">
-          <span class="title">Presets</span>
+          <span class="title">{pickMode ? 'Choose a slot' : 'Presets'}</span>
           {#if editor.preset && editor.preset.number >= 0}
             <span class="cur mono">PRE {pad(editor.preset.number)}</span>
           {/if}
           <span class="spacer"></span>
-          <button class="close" aria-label="Close" onclick={() => (editor.presetOpen = false)}>✕</button>
+          <button class="close" aria-label="Close" onclick={close}>✕</button>
         </div>
         <div class="search">
           <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
@@ -141,7 +156,7 @@
       </div>
 
       <div class="foot mono">
-        <span>Type # + ⏎ Load</span><span>★ Favorite</span><span>Esc Close</span>
+        <span>Type # + ⏎ {pickMode ? 'Choose' : 'Load'}</span><span>★ Favorite</span><span>Esc Close</span>
       </div>
     </div>
   </div>

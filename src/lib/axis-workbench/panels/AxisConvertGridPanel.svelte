@@ -1,0 +1,657 @@
+<script lang="ts">
+  // Cross-device converter — REAL SignalGrid over the OFFLINE convertEditor surface (M4 · META-24).
+  // Every convert panel sets the offline editor surface into its OWN context (context does not cross
+  // PanelHost subtrees), so the embedded SignalGrid reads the converted scratch buffer, not the device.
+  import { setContext } from 'svelte';
+  import { EDITOR_SURFACE_KEY } from '../../editorSurface';
+  import { convertEditor } from '../../convertEditor.svelte';
+  setContext(EDITOR_SURFACE_KEY, convertEditor);
+
+  import SignalGrid from '../../SignalGrid.svelte';
+  import type { PanelInstance } from '../../workbench';
+  import { convert } from '../../convert.svelte';
+  import { convertScratch } from '../../convertScratch.svelte';
+  import { validateSlot, scratchToPreset } from '../../convertScratch';
+  import { deviceName, deviceIdFromModel } from '../../convertReport';
+  import { editor } from '../../editor.svelte';
+  import { library } from '../../library.svelte';
+  import { forgefx } from '../../forgefx';
+  import { entrySyxBytes, bytesToBase64 } from '../../presetConvertSource';
+  import {
+    canExportTarget,
+    exportTargetName,
+    isModelForTarget,
+    syxFilename,
+    exportToast,
+    exportFidelityToast,
+    exportErrorToast
+  } from '../../convertExport';
+  import { AXIS_DEFAULT_GRID_VIEW } from '../gridView';
+  import { cellDecorationFor, type CellDecoration } from '../../convertDecorations';
+
+  let { panel: _panel }: { panel: PanelInstance } = $props();
+
+  // Render the converted grid with the 'full' view: full-size tiles (floored at the M size, growing to
+  // fill), never the glyph-map. 'auto' would fit-to-pane and — because this pane is shorter than a
+  // full-screen grid (the Source panel + Block Editor share the page) — step DOWN to the 25px glyph-map.
+  // The operator wants the grid to stay big, so we pin 'full'; the pane is wide enough that the full grid
+  // fits without horizontal scroll. (Bare <SignalGrid/> with no view would hit the old-shell mobile pager
+  // via editor.isMobile, which is statically <1366 on the offline surface.)
+  const gridView = { ...AXIS_DEFAULT_GRID_VIEW, mode: 'full' as const };
+
+  // (Re)build the editable grid Layout for grid targets whenever a new conversion is seeded (tracks
+  // convertScratch.seedEpoch inside syncGrid). Runs outside render → safe to mutate the surface's $state.
+  $effect(() => convertEditor.syncGrid());
+
+  const sourceDevice = $derived(convert.result?.source.device ?? 'source');
+  const targetDeviceId = $derived(convert.lastRequest?.targetDevice);
+  const targetDevice = $derived(targetDeviceId ? deviceName(targetDeviceId) : 'target');
+  const presetName = $derived(convert.result?.source.name || '(unnamed preset)');
+  const canCommit = $derived(convertScratch.canCommit);
+  const remaining = $derived(convertScratch.remaining);
+  const applying = $derived(convertScratch.apply.running);
+
+  // ── per-cell conflict decorations (badge + severity ring) fed to SignalGrid's optional overlay prop ──
+  // Transient ok-tick: when a block's conflict newly resolves, flash a ✓ on its cell for ~1.4 s.
+  let tickKey = $state<string | null>(null);
+  let tickT: ReturnType<typeof setTimeout> | null = null;
+  let prevResolved = new Set<string>();
+  $effect(() => {
+    const s = convertScratch.state;
+    const now = new Set<string>(s ? s.conflicts.filter((c) => c.resolved && c.blockKey).map((c) => c.blockKey!) : []);
+    for (const k of now) {
+      if (!prevResolved.has(k)) {
+        tickKey = k;
+        if (tickT) clearTimeout(tickT);
+        tickT = setTimeout(() => (tickKey = null), 1400);
+      }
+    }
+    prevResolved = now;
+  });
+
+  const decorations = $derived.by(() => {
+    const map = new Map<string, CellDecoration>();
+    const s = convertScratch.state;
+    if (!s) return map;
+    const events = convert.result?.events ?? [];
+    for (const cell of convertEditor.layout.cells) {
+      const key = convertEditor.blockKeyAt(cell.row, cell.col);
+      if (!key) continue;
+      const deco = cellDecorationFor(events, s, key, targetDeviceId);
+      const tick = tickKey === key;
+      if (deco || tick) map.set(`${cell.row},${cell.col}`, { ...(deco ?? {}), tick });
+    }
+    return map;
+  });
+
+  // ── save flow: name + slot popover ────────────────────────────────────────────────────────────
+  // The operator names the converted preset and picks an optional target slot before it lands in the
+  // library. The slot is validated against the target device's preset count ONLY when the target IS the
+  // connected device (the only case where the count is locally known); otherwise it's a free-form,
+  // non-negative number. NOTE: a true ".syx export" lives in the separate codec-authoring task — the seam
+  // is left here (a disabled control) but deliberately not implemented as a no-op.
+  let saveOpen = $state(false);
+  let saveName = $state('');
+  let saveSlot = $state('');
+  const targetCount = $derived.by(() => {
+    const tgt = convert.lastRequest?.targetDevice;
+    const connected = deviceIdFromModel(editor.detected?.modelId);
+    return tgt && tgt === connected ? editor.presetCount : undefined;
+  });
+  const slotCheck = $derived(validateSlot(saveSlot, targetCount));
+
+  // Slot chooser: open the real device-preset picker (PresetPicker) in "pick a slot" mode and thread the
+  // chosen slot into `saveSlot` (still validated by `slotCheck`). Falls back gracefully with no device —
+  // the picker shows the library / last-known preset list (presetCount defaults, names from the library).
+  const slotPad = $derived(saveSlot === '' ? '' : String(Number(saveSlot)).padStart(3, '0'));
+  const slotName = $derived(saveSlot === '' ? '' : library.nameOfSlot(Number(saveSlot)));
+  function pickSlot() {
+    editor.openSlotPicker((slot) => {
+      saveSlot = String(slot);
+    });
+  }
+
+  function openSave() {
+    saveName = convertScratch.state?.name ?? presetName;
+    saveSlot = '';
+    initBaseChoice();
+    saveOpen = true;
+  }
+  function cancelSave() {
+    saveOpen = false;
+  }
+  async function confirmSave() {
+    if (!slotCheck.ok) return;
+    const r = await convertScratch.saveToLibrary({ name: saveName.trim() || undefined, slot: slotCheck.slot });
+    editor.showToast(r.ok ? 'Saved to library' : r.error || 'Could not save to the library.', r.ok ? '#33c46b' : '#d6543f');
+    if (r.ok) {
+      saveOpen = false;
+      void library.loadConverted(); // surface it in the preset library immediately
+    }
+  }
+  async function applyToDevice() {
+    await convertScratch.applyToDevice();
+    const summary = convertScratch.apply.summary;
+    if (summary) editor.showToast(summary, convertScratch.apply.failed ? '#f5a623' : '#33c46b');
+  }
+
+  // ── .syx export (gen-3 targets: FM3 / FM9 / Axe-Fx III) ──────────────────────────────────────────
+  // HONESTY: the three gen-3 devices are supported export targets; AM4/VP4 keep the control disabled with
+  // a clear hint. A file-valid .syx is NOT proof of device acceptance — a hardware load test on the real
+  // target device is still required, which the success toast reminds the user of.
+  //
+  // Base template (Option A): the converted preset is AUTHORED ONTO a base of the TARGET device the user
+  // provides. Default = the connected device's current preset when it matches the target; otherwise a
+  // matching preset from the library, or an uploaded .syx. The source is re-authored from the retained
+  // OFFLINE source bytes, or — when the last conversion had no offline source — the connected device
+  // (server dumps its current preset). A re-opened saved doc carries neither, so export is unavailable.
+  const canExportTargetGen3 = $derived(canExportTarget(targetDeviceId));
+  const targetName = $derived(exportTargetName(targetDeviceId));
+  const connectedIsTarget = $derived(!!targetDeviceId && deviceIdFromModel(editor.detected?.modelId) === targetDeviceId);
+  const sourceAvailable = $derived(!!convert.lastSource || convert.lastRequest?.hasSource === false);
+  const targetLibEntries = $derived(library.entries.filter((e) => isModelForTarget(e.summary.model, targetDeviceId)));
+
+  // Full-body synthesis needs NO base — the common path is one-click (baseChoice='none', the codec's
+  // bundled scaffold). The connected/library/upload choices are an OPTIONAL "use my own FM3 as the scaffold"
+  // advanced affordance.
+  type BaseChoice = 'none' | 'connected' | 'library' | 'upload';
+  let baseChoice = $state<BaseChoice>('none');
+  let baseLibId = $state('');
+  let uploadedBase = $state<{ b64: string; name: string } | null>(null);
+  let exporting = $state(false);
+
+  // One-click default: no base override. (The advanced picker still lets the user pick their own scaffold.)
+  function initBaseChoice() {
+    uploadedBase = null;
+    baseChoice = 'none';
+    if (targetLibEntries.length > 0) baseLibId = targetLibEntries[0].id;
+  }
+
+  // A chosen OVERRIDE must resolve; 'none' is always ready (synthesis uses the bundled scaffold).
+  const baseReady = $derived(
+    baseChoice === 'none'
+      ? true
+      : baseChoice === 'connected'
+        ? connectedIsTarget
+        : baseChoice === 'library'
+          ? !!targetLibEntries.find((e) => e.id === baseLibId)
+          : !!uploadedBase
+  );
+  const canExport = $derived(canExportTargetGen3 && sourceAvailable && baseReady && !exporting);
+
+  async function onBaseFile(ev: Event) {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) {
+      uploadedBase = null;
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    uploadedBase = { b64: bytesToBase64(new Uint8Array(buf)), name: file.name.replace(/\.syx$/i, '') };
+  }
+
+  /** Resolve the OPTIONAL base override to base64 FM3 `.syx` bytes, or undefined for the one-click default
+   *  (synthesis uses the codec's bundled scaffold). Throws a user-facing message when a chosen override
+   *  can't be resolved. */
+  async function resolveBaseB64(): Promise<string | undefined> {
+    if (baseChoice === 'none') return undefined;
+    if (baseChoice === 'upload') {
+      if (!uploadedBase) throw new Error(`Choose a ${targetName} .syx to use as the base scaffold.`);
+      return uploadedBase.b64;
+    }
+    if (baseChoice === 'library') {
+      const e = targetLibEntries.find((x) => x.id === baseLibId);
+      if (!e) throw new Error(`Pick a ${targetName} preset from the library.`);
+      return bytesToBase64(new Uint8Array(await entrySyxBytes(e)));
+    }
+    // connected target device: dump the current preset (active buffer) as the base scaffold
+    const b = await forgefx.presetBackup();
+    return bytesToBase64(Uint8Array.from(b.bytes));
+  }
+
+  function downloadSyx(bytes: number[], name: string) {
+    const blob = new Blob([Uint8Array.from(bytes)], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = syxFilename(name);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function exportSyx() {
+    if (!canExport) return;
+    exporting = true;
+    try {
+      const baseSyx = await resolveBaseB64();
+      // Author from the EDITED scratch IR so the user's grid routing/cables + block/param edits are
+      // carried verbatim (commitStateFor folds the live grid layout — routeFlag/fromRows — into it).
+      // Fall back to re-converting the source only when there is no scratch buffer.
+      const editedPreset = convertScratch.state
+        ? scratchToPreset(convertScratch.commitStateFor(convertScratch.state))
+        : undefined;
+      const res = await forgefx.exportConvertedSyx(targetDeviceId!, {
+        preset: editedPreset,
+        sourceSyx: editedPreset ? undefined : convert.lastSource?.b64,
+        baseSyx,
+        name: saveName.trim() || undefined,
+        slot: slotCheck.ok ? slotCheck.slot : undefined
+      });
+      // Defensive: the server refuses a non-ok authored preset with 422 (→ catch), but never download one.
+      if (!res.validation?.ok) {
+        editor.showToast(exportErrorToast(422), '#d6543f');
+        return;
+      }
+      downloadSyx(res.syx, res.name || saveName);
+      const fidelityWarning = exportFidelityToast(res.fidelity);
+      if (fidelityWarning) {
+        // Amber warning: some converted families have no template on the target device yet.
+        editor.showToast(`${fidelityWarning} — load-test on a real ${targetName}`, '#e0a233');
+      } else {
+        // Every block synthesized. File-level valid only — the target must still accept it on a hardware load.
+        editor.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real ${targetName}`, '#33c46b');
+      }
+      saveOpen = false;
+    } catch (e) {
+      // A refusal (400 corrupt base / 422 authored-invalid) throws a ForgeError with a numeric status — no
+      // file was returned, so nothing downloads. Show a clear "pick a different base" toast.
+      const status = (e as { status?: number })?.status;
+      editor.showToast(exportErrorToast(status, (e as Error)?.message), '#d6543f');
+    } finally {
+      exporting = false;
+    }
+  }
+</script>
+
+<div class="axis-convert-grid">
+  <header class="axis-convert-head">
+    <div class="route">
+      <span class="dev">{sourceDevice}</span>
+      <span class="arrow" aria-hidden="true">→</span>
+      <span class="dev tgt">{targetDevice}</span>
+      <span class="pname" title={presetName}>{presetName}</span>
+    </div>
+    <div class="commit">
+      <div class="gate" class:ready={canCommit}>
+        <span class="gate-dot"></span>
+        {canCommit ? '0 unresolved · commit enabled' : `${remaining} unresolved · commit disabled`}
+      </div>
+      <div class="save-wrap">
+        <button type="button" class="commit-btn" class:on={saveOpen} disabled={!canCommit || applying} onclick={() => (saveOpen ? cancelSave() : openSave())}>
+          Save to library…
+        </button>
+        {#if saveOpen}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="save-pop" role="dialog" tabindex="-1" aria-label="Save converted preset" onkeydown={(e) => { if (e.key === 'Escape') cancelSave(); }}>
+            <label class="save-field">
+              <span>Name</span>
+              <!-- svelte-ignore a11y_autofocus -->
+              <input type="text" maxlength="32" autofocus spellcheck="false" bind:value={saveName} onkeydown={(e) => { if (e.key === 'Enter') confirmSave(); }} />
+            </label>
+            <div class="save-field">
+              <span>Slot {targetCount ? `(0–${targetCount - 1}, optional)` : '(optional)'}</span>
+              <!-- Reuse the app's real device-preset picker (PresetPicker, via editor.openSlotPicker) to
+                   choose a slot from the numbered + named preset list — not a bare number spinner. -->
+              <div class="slot-row">
+                <button type="button" class="slot-pick" onclick={pickSlot}>
+                  {#if saveSlot === ''}
+                    <span class="slot-ph">Choose a slot…</span>
+                  {:else}
+                    <span class="slot-num">PRE {slotPad}</span>
+                    <span class="slot-name">{slotName || `Preset ${saveSlot}`}</span>
+                  {/if}
+                </button>
+                {#if saveSlot !== ''}
+                  <button type="button" class="slot-clear" title="Clear slot" onclick={() => (saveSlot = '')}>✕</button>
+                {/if}
+              </div>
+            </div>
+            {#if !slotCheck.ok}<div class="save-err">{slotCheck.error}</div>{/if}
+            <!-- .syx export (gen-3 targets). SYNTHESIZES the whole target preset from the conversion —
+                 one-click, no base needed. The bytes are file-valid only — a hardware load test on the real
+                 target device is still required. A target-device base is an OPTIONAL scaffold override. -->
+            {#if canExportTargetGen3}
+              <div class="export-box">
+                <span class="export-title">Export .syx ({targetName})</span>
+                {#if !sourceAvailable}
+                  <div class="export-hint">Re-open this preset from a source file or device to export it.</div>
+                {:else}
+                  <button type="button" class="save-export" disabled={!canExport} onclick={exportSyx}>
+                    {exporting ? 'Synthesizing…' : 'Export .syx'}
+                  </button>
+                  <details class="export-advanced">
+                    <summary>Advanced: use my own {targetName} as scaffold</summary>
+                    <label class="save-field">
+                      <span>Scaffold</span>
+                      <select bind:value={baseChoice}>
+                        <option value="none">Default (bundled scaffold)</option>
+                        {#if connectedIsTarget}<option value="connected">Connected {targetName} (current preset)</option>{/if}
+                        {#if targetLibEntries.length > 0}<option value="library">{targetName} preset from library</option>{/if}
+                        <option value="upload">Upload a {targetName} .syx…</option>
+                      </select>
+                    </label>
+                    {#if baseChoice === 'library'}
+                      <select class="export-liblist" bind:value={baseLibId}>
+                        {#each targetLibEntries as e (e.id)}<option value={e.id}>{e.summary.name || e.id}</option>{/each}
+                      </select>
+                    {:else if baseChoice === 'upload'}
+                      <input type="file" accept=".syx" class="export-file" onchange={onBaseFile} />
+                    {/if}
+                  </details>
+                  <div class="export-hint">File-valid only — load-test the export on a real {targetName} before trusting it.</div>
+                {/if}
+              </div>
+            {:else}
+              <button type="button" class="save-export" disabled title="Export targets: FM3, FM9, Axe-Fx III — AM4/VP4 come later">Export .syx (not available for this target yet)</button>
+            {/if}
+            <div class="save-actions">
+              <button type="button" class="commit-btn" onclick={cancelSave}>Cancel</button>
+              <button type="button" class="commit-btn primary" disabled={!slotCheck.ok} onclick={confirmSave}>Save</button>
+            </div>
+          </div>
+        {/if}
+      </div>
+      <button type="button" class="commit-btn primary" disabled={!canCommit || applying} onclick={applyToDevice}>
+        {applying ? 'Applying…' : 'Apply to device'}
+      </button>
+    </div>
+  </header>
+  <div class="axis-convert-surface">
+    <SignalGrid view={gridView} cellDecorations={decorations} externalDropPreview={convertEditor.externalDrop} />
+  </div>
+</div>
+
+<style>
+  .axis-convert-grid {
+    position: absolute;
+    inset: 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .axis-convert-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    background: var(--aw-bg-2, var(--bg2));
+    border-bottom: 1px solid var(--aw-border, var(--border));
+  }
+  .route {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .arrow {
+    color: var(--textdim);
+    font-weight: 400;
+  }
+  .dev.tgt {
+    color: var(--accent);
+  }
+  .pname {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--textdim);
+    font: 500 12px/1 var(--font-mono, monospace);
+  }
+  .pname::before {
+    content: '· ';
+  }
+  .commit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gate {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 9px;
+    font: 700 10.5px/1 var(--font-mono, monospace);
+    letter-spacing: 0.02em;
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+    color: var(--danger);
+  }
+  .gate.ready {
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+    border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+    color: var(--ok);
+  }
+  .gate-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .commit-btn {
+    padding: 6px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .commit-btn:hover:not(:disabled) {
+    border-color: var(--border3, var(--border));
+  }
+  .commit-btn.primary {
+    border: none;
+    background: var(--accent);
+    color: var(--accentink, #fff);
+    font-weight: 700;
+  }
+  .commit-btn.primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .commit-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .commit-btn.on {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .save-wrap {
+    position: relative;
+  }
+  .save-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 11px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--surface, var(--bg2));
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  }
+  .save-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .save-field span {
+    font: 700 10px/1 var(--font-mono, monospace);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--textdim);
+  }
+  .save-field input {
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--bg2);
+    color: var(--text);
+    font: 500 13px/1 var(--font-mono, monospace);
+    outline: none;
+  }
+  .save-field input:focus {
+    border-color: var(--accent);
+  }
+  .slot-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .slot-pick {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--bg2);
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+  }
+  .slot-pick:hover {
+    border-color: var(--accent);
+  }
+  .slot-ph {
+    color: var(--textdim);
+    font: 500 12px/1 var(--font-mono, monospace);
+  }
+  .slot-num {
+    flex: none;
+    font: 700 11px/1 var(--font-mono, monospace);
+    color: var(--accent);
+  }
+  .slot-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 600 12px/1 var(--font-mono, monospace);
+    color: var(--text);
+  }
+  .slot-clear {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: transparent;
+    color: var(--textdim);
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .slot-clear:hover {
+    border-color: var(--border3, var(--border));
+    color: var(--text);
+  }
+  .save-err {
+    font-size: 11px;
+    color: var(--danger);
+  }
+  .save-export {
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .save-export:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .save-export:disabled {
+    border-color: var(--border2, var(--border));
+    color: var(--textdim);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .export-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 9px;
+    border-radius: 9px;
+    border: 1px solid var(--border2, var(--border));
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+  .export-title {
+    font: 700 10px/1 var(--font-mono, monospace);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--textdim);
+  }
+  .export-box select,
+  .export-liblist {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border2, var(--border));
+    background: var(--bg2);
+    color: var(--text);
+    font: 500 12px/1 var(--font-mono, monospace);
+    outline: none;
+  }
+  .export-file {
+    font-size: 11px;
+    color: var(--textdim);
+  }
+  .export-hint {
+    font-size: 10.5px;
+    line-height: 1.35;
+    color: var(--textdim);
+  }
+  .export-advanced > summary {
+    font-size: 10.5px;
+    color: var(--textdim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .export-advanced[open] > summary {
+    margin-bottom: 6px;
+  }
+  .save-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .axis-convert-surface {
+    flex: 1;
+    /* MUST be a flex column: the embedded SignalGrid root (.gridwrap) is `flex: 1` and only fills the
+     * height inside a flex parent. As a plain block/relative box it collapsed to content height, so the
+     * grid measured a tiny pane and 'auto' stepped down to the glyph-map (25px cells floating in an empty
+     * pane). Matching the normal grid panel's `.axis-pane-fill` gives SignalGrid the full height → 'auto'
+     * resolves to the full-size grid. */
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+</style>

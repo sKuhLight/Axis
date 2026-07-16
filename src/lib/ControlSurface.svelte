@@ -3,7 +3,8 @@
   // Pages instead of tabs (still a tab strip), per-control view types (knob/fader/slider/number,
   // button/switch, select, eq, action), an Arrange mode (move/resize/retype/remove/add/tidy), and
   // a square responsive grid. Driven by the live editor params; layouts persist per block family.
-  import { editor } from './editor.svelte';
+  import { getEditorSurface } from './editorSurface';
+  const editor = getEditorSurface();
   import EQGraph, { type EQBand } from './EQGraph.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';

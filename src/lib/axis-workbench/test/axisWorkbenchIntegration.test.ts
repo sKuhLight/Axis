@@ -30,7 +30,11 @@ describe('Axis Workbench integration contracts', () => {
       'axis.deviceTools',
       'axis.customPanel',
       'axis.virtualScreen',
-      'axis.placeholder'
+      'axis.placeholder',
+      'axis.convertGrid',
+      'axis.convertBlockEditor',
+      'axis.convertMinimap',
+      'axis.convertTray'
     ]);
 
     expect(AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES).toEqual(AXIS_PRESET_BROWSER_PARTS.map(axisPresetBrowserPanelType));

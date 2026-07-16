@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { editor } from './editor.svelte';
-  import { forgefx } from './forgefx';
+  import { getEditorSurface } from './editorSurface';
   import { catFor } from './catalog';
   import { loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState } from './types';
+
+  const editor = getEditorSurface();
 
   let cs = $state<CabState | null>(null);
   let irs = $state<Record<string, string[]>>({});
@@ -59,7 +60,7 @@
     loadStore();
     loading = true;
     const eid = editor.selected.effectId;
-    Promise.all([forgefx.cabState(eid), loadCabIrsCachedFirst()])
+    Promise.all([editor.cabState(eid), loadCabIrsCachedFirst()])
       .then(([state, banks]) => {
         cs = state;
         irs = banks;
@@ -140,7 +141,7 @@
       editor.showToast(`Slot ${slot + 1}: ${r.name}`, '#35c9d6');
     }
     // refresh so the highlight + header follow the device
-    forgefx
+    editor
       .cabState(editor.selected!.effectId)
       .then((s) => (cs = s))
       .catch(() => {});
