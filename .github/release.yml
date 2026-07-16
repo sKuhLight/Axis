@@ -1,0 +1,13 @@
+# Auto-generated release notes config (GitHub `generate_release_notes`). release.yml's draft job
+# sets generate_release_notes:true, so GitHub categorizes the merged PRs since the last release
+# using the labels below and appends them after the "Shipped stack" footer body.
+changelog:
+  exclude:
+    labels: [release:none, bot/stack-sync]
+  categories:
+    - title: Breaking
+      labels: [release:major]
+    - title: Features
+      labels: [release:minor]
+    - title: Fixes & changes
+      labels: ["*"]
