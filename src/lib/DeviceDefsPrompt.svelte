@@ -19,6 +19,11 @@
   const pct = $derived(building && building.total ? Math.round((building.done / building.total) * 100) : 0);
 
   let dragging = $state(false);
+  // Explicit consent gate for the full (taper) capture — no request is made until the user confirms.
+  let fullConsent = $state(false);
+  // Drop a stale consent if the prompt goes away (dismiss / disconnect / device change) so it never
+  // resurfaces unbidden on the next device.
+  $effect(() => { if (!show) fullConsent = false; });
 
   function onDragOver(e: DragEvent) {
     e.preventDefault();
@@ -65,6 +70,26 @@
           </button>
         {/if}
         <button class="later" onclick={() => deviceDefs.dismiss()}>Done</button>
+      </div>
+    </div>
+  {:else if fullConsent}
+    <!-- Full (taper) capture — explicit consent BEFORE any request. Proceed → build('full'); cancel → nothing. -->
+    <div class="dd">
+      <div class="row top">
+        <span class="ic">⚠</span>
+        <div class="msg">
+          <b>Start the full capture?</b>
+          <span class="sub">Axis briefly writes test values into the current preset on the device and reloads it afterwards — nothing is saved permanently.</span>
+          <span class="sub">Leave the device idle on its Home screen and don't save anything on it while the capture runs.</span>
+          <span class="sub">A full capture takes noticeably longer than the normal read.</span>
+        </div>
+      </div>
+      <div class="acts">
+        <button class="act primary" onclick={() => { fullConsent = false; deviceDefs.build('full'); }}>
+          <span class="alabel">Start full capture</span>
+          <span class="ahint">Also captures the exact knob tapers</span>
+        </button>
+        <button class="later" onclick={() => (fullConsent = false)}>Cancel</button>
       </div>
     </div>
   {:else}
@@ -123,6 +148,11 @@
             <button class="act ghost" disabled={busy} onclick={() => deviceDefs.locateFolder()}>
               <span class="alabel">📂 Locate editor folder</span>
               <span class="ahint">Pick your Fractal editor folder once — Axis finds the file</span>
+            </button>
+          {:else if a === 'fullCapture'}
+            <button class="act ghost" disabled={busy} onclick={() => (fullConsent = true)}>
+              <span class="alabel">⤢ Full capture (knob tapers)</span>
+              <span class="ahint">Also captures the exact knob tapers — takes longer</span>
             </button>
           {/if}
         {/each}

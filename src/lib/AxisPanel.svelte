@@ -441,6 +441,10 @@
             <span class="badge" class:ok={deviceDefs.activeSource.origin !== 'bundled'}>{deviceDefs.activeSource.origin === 'bundled' ? 'BUNDLED' : 'PROFILE'}</span>
             {deviceDefs.activeSource.label}{#if editor.conn.fw} · fw {editor.conn.fw}{/if}
           </p>
+          {#if deviceDefs.canRebuild}
+            <p class="muted">After a firmware update, discard the definitions and read them from the device again.</p>
+            <button class="signout" onclick={() => deviceDefs.rebuild()}>Re-read definitions</button>
+          {/if}
 
           <div class="sec mt">CONNECTION</div>
           <div class="modes">

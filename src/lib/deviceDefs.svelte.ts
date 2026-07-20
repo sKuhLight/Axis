@@ -14,6 +14,7 @@ import {
   dismissKey,
   normalizeModelHex,
   parseFirmware,
+  isBuildProgressPhase,
   type DeviceDefAction,
   type ActiveDefsSource
 } from './deviceDefs';
@@ -96,6 +97,14 @@ class DeviceDefsStore {
   get canPublish(): boolean {
     return this.cloud !== null && !this.publishDenied;
   }
+  /** Whether to offer "Definitionen neu einlesen" (rebuild): a profile is persisted AND this local
+   *  session can re-acquire one (self-describe walk or import). Hidden over a relay — the follow-up
+   *  device read isn't usable there. */
+  get canRebuild(): boolean {
+    return this.activeSource.origin !== 'bundled'
+      && !isRemote()
+      && (!!this.#ctx?.caps?.selfDescribe || !!this.#ctx?.caps?.cacheImport);
+  }
   /** Human-facing readout of where the ACTIVE definitions come from (bundled/device/editor/cloud). */
   get activeSource(): ActiveDefsSource {
     return activeDefsSource(this.status, this.sources);
@@ -131,11 +140,13 @@ class DeviceDefsStore {
     if (!this.#loaded) { this.#loaded = true; void this.#tryPersistedFolder(); }
   };
 
-  /** Start a self-describe build. Progress then streams over `onBuildEvent`. */
-  build = async () => {
+  /** Start a self-describe build. Progress then streams over `onBuildEvent`. `mode` defaults to the
+   *  read-only walk (the unchanged one-click "read from device"); 'full' requests the taper/curve sweep
+   *  and MUST only be called after the user's explicit consent (see DeviceDefsPrompt). */
+  build = async (mode?: 'read-only' | 'full') => {
     this.error = null;
     try {
-      await forgefx.buildDeviceCache();
+      await forgefx.buildDeviceCache(mode ? { mode } : {});
       this.building = { done: 0, total: 0, phase: 'starting' };
     } catch (e) {
       if (e instanceof ForgeError && e.status === 409) { this.building = { done: 0, total: 0, phase: 'building' }; return; } // already building
@@ -146,6 +157,22 @@ class DeviceDefsStore {
   cancel = async () => {
     await forgefx.cancelDeviceCache().catch(() => null);
     this.building = null;
+  };
+
+  /** Firmware-update path: drop the persisted profile so the connect prompt re-offers the normal build
+   *  flow. Deleting flips `status.exists` false → `shouldShow` true → the DeviceDefsPrompt re-appears via
+   *  existing reactivity. Also un-dismisses this device+firmware so the offer can actually surface again. */
+  rebuild = async () => {
+    this.error = null;
+    this.succeeded = false;
+    await forgefx.deleteDeviceCache().catch(() => null);
+    if (this.#dismissed.has(this.key)) {
+      this.#dismissed = new Set([...this.#dismissed].filter((k) => k !== this.key));
+      try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...this.#dismissed])); } catch { /* */ }
+    }
+    // Re-read the authoritative status + sources so the prompt (and the source readout) reflect the drop.
+    this.status = await forgefx.deviceCache().catch(() => this.status);
+    void forgefx.cacheSources().then((s) => { if (s) this.sources = s; }).catch(() => {});
   };
 
   /** Import raw cache bytes (browser drag-drop / folder pick). `force` overrides a firmware mismatch. */
@@ -228,7 +255,9 @@ class DeviceDefsStore {
    *  phases (walking/building) and terminal ones (done/error/cancelled/already-built) — there is no
    *  boolean; terminal detection is by phase. */
   onBuildEvent = (e: Extract<DeviceEvent, { type: 'cacheBuild' }>) => {
-    if (e.phase === 'walking' || e.phase === 'building') {
+    // Any non-terminal phase (walking / building / full-mode 'param-sweep' / any future additive
+    // sub-phase) is progress — keep the bar alive and never mistake it for completion.
+    if (isBuildProgressPhase(e.phase)) {
       this.building = { done: e.done, total: e.total, phase: e.phase };
       return;
     }
