@@ -9,7 +9,10 @@ export interface DispRange {
   log?: boolean;
 }
 
-/** The display value (number) at the current norm, using the device-true range + taper. */
+/** The display value (number) at the current norm, using the device-true range + taper.
+ *  Taper: `log:true` interpolates geometrically, otherwise linearly. NOTE: captured 'custom'
+ *  taper shapes are served by ForgeFX as `log:false` for now, so Axis maps them linearly here
+ *  (a deliberate initial approximation, not a true custom curve). */
 export function paramValue(p: DispRange): number {
   const norm = p.norm ?? 0;
   if (p.min == null || p.max == null) return p.value ?? norm * 10;
@@ -43,4 +46,25 @@ export function fmtNumber(p: DispRange): string {
   const v = paramValue(p);
   if (p.unit === 'Hz' && Math.abs(v) >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   return Math.abs(v) >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
+}
+
+/** Join an already-formatted number with its unit token for a readout.
+ *  Device-true: tokens render verbatim (casing kept, e.g. `dB/OCT`, `SECONDS`) separated by a
+ *  single space — except `%`, which attaches with no space by convention (63%, not 63 %).
+ *  An empty/absent unit yields just the number: never a trailing space, double space, or `undefined`. */
+export function withUnit(num: string, unit?: string): string {
+  if (!unit) return num;
+  return unit === '%' ? num + unit : num + ' ' + unit;
+}
+
+/** Full, readable value for the value bubble — device-true value at the current norm, unit folded in.
+ *  Hz ≥ 1000 compacts to kHz (the ONLY conversion; new tokens like dB/OCT or SECONDS pass through
+ *  verbatim). Uses withUnit() for spacing so every token renders consistently. */
+export function fmtValue(p: DispRange): string {
+  const v = paramValue(p);
+  if (p.unit === 'Hz' && Math.abs(v) >= 1000) {
+    return (v / 1000).toFixed(v >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + ' kHz';
+  }
+  const num = Math.abs(v) >= 100 ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
+  return withUnit(num, paramUnit(p));
 }
