@@ -1,6 +1,7 @@
 <script lang="ts">
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
+  import { withUnit } from '../../format';
   import { LEGAL, openExternal } from '../../legal';
   import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
@@ -178,7 +179,8 @@
   const paramValueText = $derived.by(() => {
     if (paramNamed) {
       const raw = typeof paramNamed.value === 'number' ? formatParamNumber(paramNamed.value) : '--';
-      return `${raw}${paramNamed.unit ? ` ${paramNamed.unit}` : ''}`;
+      // withUnit keeps device tokens verbatim (dB/OCT, SECONDS, …), single-spaced; % attaches with no space.
+      return withUnit(raw, paramNamed.unit);
     }
     if (paramEnum) return paramEnum.options.find((option) => option.value === paramEnum.value)?.label ?? String(paramEnum.value);
     return paramPreview == null ? '--' : String(Math.round(paramPreview));
