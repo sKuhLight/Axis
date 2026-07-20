@@ -537,8 +537,10 @@ export type DeviceEvent =
   | { type: 'telemetryConfig'; mode: TelemetryMode }
   | ({ type: 'traffic' } & TrafficSnapshot)
   // Device-definitions build progress (A4 · META-22): streamed while a self-describe walk builds the
-  // per-firmware definition profile. `building` flips false on completion/cancel/error.
-  | { type: 'cacheBuild'; phase: 'walking' | 'building' | 'done' | 'error' | 'cancelled' | 'already-built'; done: number; total: number; key?: string; model?: number; firmware?: string; error?: string };
+  // per-firmware definition profile. `building` flips false on completion/cancel/error. Full-mode
+  // (taper) builds add a `param-sweep` sub-phase inside the walking stage; `(string & {})` keeps the
+  // union open so any future additive sub-phase parses and is treated as in-progress (see deviceDefs.ts).
+  | { type: 'cacheBuild'; phase: 'walking' | 'building' | 'param-sweep' | 'done' | 'error' | 'cancelled' | 'already-built' | (string & {}); done: number; total: number; key?: string; model?: number; firmware?: string; error?: string };
 
 /** A user-defined parameter tab within a block family (persisted client-side). */
 export interface TabDef {
@@ -622,6 +624,11 @@ export interface DeviceCaps {
   /** Server accepts importing an official editor `effectDefinitions_*.cache` file (POST
    *  /device/cache/import). Absent → the import affordances are hidden. */
   cacheImport?: boolean;
+  /** Device can additionally sweep each parameter's control range to capture full taper/curve data
+   *  during a self-describe build (`POST /device/cache/build` with `mode:'full'`). True only for the
+   *  FM3/FM9/Axe-Fx III; absent/false on units like the VP4. Gates the secondary "full capture"
+   *  affordance — the default read-only build works regardless. */
+  fullCapture?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */

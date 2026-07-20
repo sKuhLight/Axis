@@ -7,7 +7,7 @@
   const editor = getEditorSurface();
   import EQGraph, { type EQBand } from './EQGraph.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
-  import { fmtCompact, normFromValue, paramValue, paramUnit } from './format';
+  import { fmtCompact, normFromValue, fmtValue } from './format';
   import { idealIds } from './layouts';
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { paramHelp, helpSlugForPack } from './help';
@@ -660,15 +660,12 @@
     }
     tip = null;
   }
-  // full, readable value for the bubble — with units (4.0 dB, 470 Hz, 12 kHz, 63%)
+  // full, readable value for the bubble — with units (4 dB, 470 Hz, 12 kHz, 63%, 12 dB/OCT).
+  // Formatting (incl. Hz→kHz compaction and the % no-space rule) lives in format.ts::fmtValue.
   const fullVal = (id: number): string => {
     const p = knob(id);
     if (!p) return '–';
-    const v = paramValue(p);
-    if (p.unit === 'Hz' && Math.abs(v) >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + ' kHz';
-    const u = paramUnit(p);
-    const num = Math.abs(v) >= 100 ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
-    return u ? `${num} ${u}` : num;
+    return fmtValue(p);
   };
 
 

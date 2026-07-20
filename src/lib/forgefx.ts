@@ -406,8 +406,14 @@ export const forgefx = {
   /** Status of the connected device's definition profile (exists / building / progress / meta). */
   deviceCache: () => capOptional(req<DeviceCacheStatus>('/device/cache')),
   /** Start a self-describe build. 202 {key} on success. Throws ForgeError 409 (already building) or
-   *  501 (no capability) — the caller decides how to surface those. */
-  buildDeviceCache: () => req<{ key: string }>('/device/cache/build', { method: 'POST' }),
+   *  501 (no capability) — the caller decides how to surface those. `mode` defaults server-side to
+   *  'read-only'; passing 'full' requests the taper/curve sweep (501 {capability:'fullCapture'} when
+   *  the device can't). Omitting `mode` sends NO body — identical to the original read-only one-click. */
+  buildDeviceCache: (opts: { mode?: 'read-only' | 'full' } = {}) =>
+    req<{ key: string }>('/device/cache/build', {
+      method: 'POST',
+      ...(opts.mode ? { body: JSON.stringify({ mode: opts.mode }) } : {})
+    }),
   /** Cancel an in-flight build (no-op / null when absent). */
   cancelDeviceCache: () => capOptional(req<{ ok: boolean }>('/device/cache/cancel', { method: 'POST' })),
   /** Delete the persisted profile → fall back to bundled definitions (null when absent). */
