@@ -8,6 +8,7 @@ import {
   normalizeModelHex,
   parseFirmware,
   matchEditorCacheFile,
+  isBuildProgressPhase,
   type DeviceDefsInputs
 } from './deviceDefs';
 import type { DeviceCacheStatus } from './types';
@@ -70,6 +71,46 @@ describe('deviceDefsActions — ordered available actions', () => {
       env: { ...baseEnv, isElectron: true }
     }));
     expect(a).toEqual(['cloudPull', 'importCandidate', 'dropFile', 'readFromDevice']);
+  });
+
+  it('offers the full (taper) capture only when the device advertises fullCapture, and always last', () => {
+    // Not advertised → absent, even with self-describe present.
+    expect(deviceDefsActions(inputs({}))).not.toContain('fullCapture');
+    // Advertised → appended after read-from-device as the clearly-secondary, last affordance.
+    const a = deviceDefsActions(inputs({ caps: { selfDescribe: true, cacheImport: true, fullCapture: true } }));
+    expect(a).toContain('fullCapture');
+    expect(a.indexOf('fullCapture')).toBeGreaterThan(a.indexOf('readFromDevice'));
+    expect(a[a.length - 1]).toBe('fullCapture');
+  });
+
+  it('hides the full (taper) capture without self-describe or over a relay', () => {
+    // fullCapture is a superset of the self-describe walk — no walk, no full capture.
+    expect(deviceDefsActions(inputs({ caps: { selfDescribe: false, cacheImport: true, fullCapture: true } }))).not.toContain('fullCapture');
+    // A relay session can't run a usable device read either.
+    expect(deviceDefsActions(inputs({ caps: { selfDescribe: true, fullCapture: true }, env: { ...baseEnv, isRemote: true } }))).not.toContain('fullCapture');
+  });
+
+  it('offers nothing (incl. full capture) while a build is already running', () => {
+    expect(deviceDefsActions(inputs({ caps: { selfDescribe: true, fullCapture: true }, status: { exists: false, building: true } }))).toEqual([]);
+  });
+});
+
+describe('isBuildProgressPhase — SSE phase classification (full-mode tolerant)', () => {
+  it('treats walking / building / the full-mode param-sweep sub-phase as progress', () => {
+    expect(isBuildProgressPhase('walking')).toBe(true);
+    expect(isBuildProgressPhase('building')).toBe(true);
+    expect(isBuildProgressPhase('param-sweep')).toBe(true);
+  });
+
+  it('treats any unknown / future additive sub-phase as progress (never terminal)', () => {
+    expect(isBuildProgressPhase('some-new-phase')).toBe(true);
+    expect(isBuildProgressPhase('')).toBe(true);
+  });
+
+  it('treats the terminal phases as NOT progress', () => {
+    for (const p of ['done', 'error', 'cancelled', 'already-built']) {
+      expect(isBuildProgressPhase(p)).toBe(false);
+    }
   });
 });
 

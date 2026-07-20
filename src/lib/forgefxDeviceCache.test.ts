@@ -53,6 +53,29 @@ describe('forgefx.buildDeviceCache', () => {
     await expect(forgefx.buildDeviceCache()).resolves.toEqual({ key: 'fm3-1p7' });
   });
 
+  it('sends NO body by default — the read-only one-click stays byte-for-byte as before', async () => {
+    fetchMock.mockResolvedValueOnce(res(202, { key: 'fm3-1p7' }));
+    await forgefx.buildDeviceCache();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/device/cache/build');
+    expect((init as RequestInit).method).toBe('POST');
+    expect((init as RequestInit).body).toBeUndefined();
+  });
+
+  it("carries mode:'full' in the POST body when the taper capture is requested", async () => {
+    fetchMock.mockResolvedValueOnce(res(202, { key: 'fm3-1p7' }));
+    await forgefx.buildDeviceCache({ mode: 'full' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as { body: string }).body)).toEqual({ mode: 'full' });
+  });
+
+  it("carries mode:'read-only' when explicitly requested", async () => {
+    fetchMock.mockResolvedValueOnce(res(202, { key: 'fm3-1p7' }));
+    await forgefx.buildDeviceCache({ mode: 'read-only' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as { body: string }).body)).toEqual({ mode: 'read-only' });
+  });
+
   it('throws ForgeError(409) when a build is already running (caller handles, not swallowed)', async () => {
     fetchMock.mockResolvedValueOnce(res(409, { error: 'building' }));
     await expect(forgefx.buildDeviceCache()).rejects.toMatchObject({ status: 409 });
@@ -61,6 +84,13 @@ describe('forgefx.buildDeviceCache', () => {
   it('throws ForgeError(501) when the capability is absent', async () => {
     fetchMock.mockResolvedValueOnce(res(501, {}));
     await expect(forgefx.buildDeviceCache()).rejects.toBeInstanceOf(ForgeError);
+  });
+
+  it("throws ForgeError(501) {capability:'fullCapture'} when full mode is unsupported (mode still sent)", async () => {
+    fetchMock.mockResolvedValueOnce(res(501, { error: 'unsupported', capability: 'fullCapture' }));
+    await expect(forgefx.buildDeviceCache({ mode: 'full' })).rejects.toMatchObject({ status: 501 });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse((init as { body: string }).body)).toEqual({ mode: 'full' });
   });
 });
 

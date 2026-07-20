@@ -8,13 +8,15 @@
 
 import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceDefsOrigin } from './types';
 
-/** The ways a user can obtain a definition profile, most-preferred first. */
-export type DeviceDefAction = 'cloudPull' | 'importCandidate' | 'dropFile' | 'readFromDevice' | 'locateFolder';
+/** The ways a user can obtain a definition profile, most-preferred first. `fullCapture` is the
+ *  secondary taper/curve read — a superset of `readFromDevice`, so it always trails it. */
+export type DeviceDefAction = 'cloudPull' | 'importCandidate' | 'dropFile' | 'readFromDevice' | 'locateFolder' | 'fullCapture';
 
 /** Everything the ordering decision needs — kept as plain data so it's trivial to unit-test. */
 export interface DeviceDefsInputs {
-  /** Relevant device capabilities. `selfDescribe` gates "Read from device"; `cacheImport` gates imports. */
-  caps: { selfDescribe?: boolean; cacheImport?: boolean } | null;
+  /** Relevant device capabilities. `selfDescribe` gates "Read from device"; `cacheImport` gates imports;
+   *  `fullCapture` gates the secondary taper/curve capture (needs `selfDescribe` + a local session). */
+  caps: { selfDescribe?: boolean; cacheImport?: boolean; fullCapture?: boolean } | null;
   status: Pick<DeviceCacheStatus, 'exists' | 'building'> | null;
   sources: Pick<DeviceCacheSources, 'candidates'> | null;
   cloud: Pick<CloudCacheStatus, 'available'> | null;
@@ -46,7 +48,24 @@ export function deviceDefsActions(inp: DeviceDefsInputs): DeviceDefAction[] {
   if (inp.caps?.selfDescribe && !inp.env.isRemote) out.push('readFromDevice');
   // Chromium folder access — only in the browser (Electron uses server-side discovery instead).
   if (canImport && !inp.env.isElectron && inp.env.hasDirectoryPicker) out.push('locateFolder');
+  // Full (taper) capture — an opt-in superset of the self-describe walk, offered LAST as the clearly
+  // secondary affordance. Same local-session gating as readFromDevice, plus the device must advertise it.
+  if (inp.caps?.fullCapture && inp.caps?.selfDescribe && !inp.env.isRemote) out.push('fullCapture');
   return out;
+}
+
+/** Terminal `cacheBuild` SSE phases — the build has stopped (successfully or not). Everything else is
+ *  in-progress. Kept as data so both the store and its tests agree on the classification. */
+export const TERMINAL_BUILD_PHASES: ReadonlySet<string> = new Set(['done', 'error', 'cancelled', 'already-built']);
+
+/**
+ * Is this a mid-build progress phase (as opposed to a terminal one)? Known progress phases are
+ * `walking`/`building`; full-mode adds a `param-sweep` sub-phase inside the walking stage. Any UNKNOWN
+ * phase is treated as progress too (like `walking`) so an additive server sub-phase never trips the
+ * terminal path — the build finishes only on an explicit terminal phase.
+ */
+export function isBuildProgressPhase(phase: string): boolean {
+  return !TERMINAL_BUILD_PHASES.has(phase);
 }
 
 /**
