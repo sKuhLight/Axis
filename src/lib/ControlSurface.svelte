@@ -170,6 +170,7 @@
   let editingKey = $state<string | null>(null);
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
+  let selMenuRect = $state<{ left: number; top: number; width: number } | null>(null);
   let renamingPage = $state<string | null>(null);
   // value bubble: a single fixed-position tooltip (escapes the editor's scroll clipping + stays on top)
   let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
@@ -1147,15 +1148,28 @@
     if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, '#35c9d6');
   }
 
-  // dropdown popover geometry
+  // dropdown popover geometry — measured from the actual trigger element (not grid math: the
+  // card centers its content, so a select field is usually shorter than its grid cell and sits
+  // away from the cell's edges).
+  function toggleSelectMenu(e: MouseEvent, id: string) {
+    if (openSelect === id) {
+      openSelect = null;
+      selMenuRect = null;
+      return;
+    }
+    const board = boardEl?.getBoundingClientRect();
+    const trigger = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (!board) return;
+    selMenuRect = { left: trigger.left - board.left, top: trigger.bottom - board.top + 2, width: Math.max(trigger.width, 160) };
+    openSelect = id;
+  }
   const selMenu = $derived.by(() => {
-    if (!openSelect) return null;
-    const w = find(openSelect);
+    if (!openSelect || !selMenuRect) return null;
+    const w = viewWidgets.find((w) => w.id === openSelect);
     const c = w && catByKey.get(w.key);
     const e = c && enm(c.id);
     if (!w || !c || !e) return null;
-    const step = cell + GAP;
-    return { id: w.id, e, left: w.x * step, top: (w.y + w.h) * step + 2, width: Math.max(w.w * cell + (w.w - 1) * GAP, 160) };
+    return { id: w.id, e, ...selMenuRect };
   });
 
   // svg knob pointer transform
@@ -1437,7 +1451,7 @@
               {:else if c.kind === 'select'}
                 <div class="seltop">{c.label}</div>
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-                <div class="selfield" class:open={openSelect === w.id} onpointerdown={(e) => e.stopPropagation()} onclick={() => !editMode && (openSelect = openSelect === w.id ? null : w.id)}>
+                <div class="selfield" class:open={openSelect === w.id} onpointerdown={(e) => e.stopPropagation()} onclick={(e) => !editMode && toggleSelectMenu(e, w.id)}>
                   <span class="seltxt">{enm(c.id)?.options.find((o) => o.value === enm(c.id)?.value)?.label ?? '–'}</span>
                   <span class="caret">▾</span>
                 </div>

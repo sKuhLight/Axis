@@ -140,4 +140,30 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     expect(ly).toBeTruthy();
     expect(gy!.y).toBeLessThan(ly!.y);
   });
+
+  test('dropdown popover renders directly under its trigger, not the grid cell edge', async ({ page }) => {
+    await bootWithLayout(page);
+    await page.locator('[data-idx="0,0"].cell.block').click();
+    await expect(page.locator('.boardwrap')).toBeVisible();
+
+    // Regression guard (AXIS dropdown-offset bug): the popover used to be positioned from the
+    // widget's grid cell bottom, which sits well below the trigger because `.card` centers its
+    // content — a select field is shorter than the knob-sized cell it lives in. The popover must
+    // track the actual rendered trigger element instead.
+    const trigger = page.locator('.selfield');
+    await trigger.click();
+    const menu = page.locator('.selmenu');
+    await expect(menu).toBeVisible();
+
+    const t = await trigger.boundingBox();
+    const m = await menu.boundingBox();
+    expect(t).toBeTruthy();
+    expect(m).toBeTruthy();
+
+    // Menu top should sit just under the trigger's bottom edge (a couple px, not a whole cell).
+    expect(m!.y - (t!.y + t!.height)).toBeGreaterThanOrEqual(0);
+    expect(m!.y - (t!.y + t!.height)).toBeLessThan(10);
+    // Left edge aligns with the trigger, not an unrelated grid column.
+    expect(Math.abs(m!.x - t!.x)).toBeLessThan(2);
+  });
 });
