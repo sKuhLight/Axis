@@ -12,6 +12,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite dev",
+    "dev:all": "bash scripts/dev-all.sh",
     "dev:remote": "VITE_AXIS_REMOTE=1 vite dev",
     "build": "vite build",
     "preview": "vite preview",
