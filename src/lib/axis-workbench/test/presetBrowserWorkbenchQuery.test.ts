@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   condsEqual,
   condsToQuery,
+  matchEntryFromSummary,
   matchNumeric,
   matchPreset,
   parseQuery,
@@ -11,6 +12,7 @@ import {
   toSimpleConds,
   type AxisPbMatchEntry
 } from '../presetBrowser/presetBrowserWorkbenchQuery';
+import type { AxisPresetBrowserEntrySummary } from '../presetBrowser/presetBrowserWorkbenchData';
 
 const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => ({
   name: 'Studio Clean',
@@ -101,5 +103,50 @@ describe('Preset Browser matching', () => {
   it('combines conditions (all must pass) with simple text', () => {
     expect(matchPreset(entry(), parseQuery('tag:Live + AMP'), 'studio')).toBe(true);
     expect(matchPreset(entry(), parseQuery('tag:Live + COMP'), 'studio')).toBe(false);
+  });
+});
+
+describe('matchEntryFromSummary (regression: decoded models must survive summary normalization)', () => {
+  const summaryEntry = (over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBrowserEntrySummary => ({
+    id: 'dev:1',
+    sourceId: 'device',
+    sourceLabel: 'Device',
+    number: 2,
+    name: '5153 Lead',
+    model: 'FM3', // the device model string — must never leak into the amp model list
+    sceneCount: 0,
+    blockCount: 1,
+    fav: false,
+    folder: null,
+    tags: [],
+    blocks: [{ effectId: 101, slug: 'amp', name: 'Amp 1', instance: 1 }],
+    models: { amp: ['5153 100W Blue'] },
+    amps: ['5153 100W Blue'],
+    syncState: 'none',
+    cloudOnly: false,
+    converted: false,
+    provenance: null,
+    ...over
+  });
+
+  it('matches TYPE against the decoded model name, not the generic block label or device string', () => {
+    const matched = matchEntryFromSummary(summaryEntry());
+    expect(matchPreset(matched, parseQuery('AMP(TYPE=5153)'), '')).toBe(true);
+    expect(matchPreset(matched, parseQuery('AMP(TYPE=marshall)'), '')).toBe(false);
+    expect(matchPreset(matched, parseQuery('AMP(TYPE!=marshall)'), '')).toBe(true);
+    expect(matchPreset(matched, parseQuery('AMP(TYPE!=5153)'), '')).toBe(false);
+    expect(matchPreset(matched, [], '5153')).toBe(true);
+    // the device model string ("FM3") must not be searchable as if it were an amp type.
+    expect(matchPreset(matched, parseQuery('AMP(TYPE=FM3)'), '')).toBe(false);
+  });
+
+  it('falls back to the generic block label when no decoded model exists for that slug', () => {
+    const matched = matchEntryFromSummary(summaryEntry({ models: {}, amps: [] }));
+    expect(matchPreset(matched, parseQuery('AMP(TYPE=Amp 1)'), '')).toBe(true);
+  });
+
+  it('does not throw on an entry with empty models/amps maps (cloud-only shape)', () => {
+    const matched = matchEntryFromSummary(summaryEntry({ blocks: [], models: {}, amps: [] }));
+    expect(matchPreset(matched, parseQuery('AMP(TYPE=5153)'), '')).toBe(false);
   });
 });
