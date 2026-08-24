@@ -31,6 +31,7 @@
   } from './widgetControls';
   import { resolveParamWidgetState } from './paramWidgetState';
   import { isSaveDirty } from './saveDirtyState';
+  import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
   import type { TelemetryMode, TrafficSnapshot } from '../../types';
 
@@ -60,6 +61,9 @@
   const connDot = $derived(editor.conn.state === 'online' ? 'var(--ok)' : editor.conn.state === 'offline' ? 'var(--danger)' : 'var(--amber)');
   const sceneCount = $derived(Math.max(1, editor.sceneCount || 8));
   const activeScene = $derived(Math.max(1, Math.min(sceneCount, editor.scene || 1)));
+  // Active scene's decoded name — TopBar parity (TopBar.svelte:103-120), which the
+  // workbench shell dropped: the chips only ever showed the number.
+  const sceneLabel = $derived(sceneNameDisplay(editor.sceneNames, activeScene));
   const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
   // Bottom-bar status hint (parity with the old StatusBar left slot): the hover-hint for the
   // control under the cursor, falling back to the selection / connection state.
@@ -247,6 +251,39 @@
     void editor.selectPreset(Math.max(0, pnumRaw + delta));
   }
 
+  // ── inline scene rename (active scene) — ported from TopBar.svelte:4-21 ──
+  let editingScene = $state(false);
+  let draftScene = $state('');
+  // The scene the open input belongs to, captured at rename start. Clicking a
+  // different scene chip blurs the input and commits it, and by then
+  // `activeScene` is already the NEW scene — committing against that would write
+  // the draft to the wrong slot.
+  let renameTarget = $state(1);
+  const focusSel = (el: HTMLInputElement) => {
+    el.focus();
+    el.select();
+  };
+  function startSceneRename() {
+    if (editMode || !editor.canRenameScenes) return;
+    renameTarget = activeScene;
+    draftScene = storedSceneName(editor.sceneNames, renameTarget);
+    editingScene = true;
+  }
+  function commitSceneName() {
+    if (!editingScene) return; // Escape already cancelled
+    editingScene = false;
+    const next = draftScene.trim();
+    // Only dispatch when the value actually moved — a rename round-trips to the
+    // device and re-reads the grid (editor.renameScene), which is not free.
+    if (next !== storedSceneName(editor.sceneNames, renameTarget)) {
+      void editor.renameScene(renameTarget, next);
+    }
+  }
+  function onSceneNameKey(event: KeyboardEvent) {
+    if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
+    else if (event.key === 'Escape') editingScene = false; // cancel (blur fires but commit is guarded)
+  }
+
   // hold-to-repeat (spec §1.3: 380ms arm, 100ms repeat) for preset ‹/› and blocksize −/+
   const presetPrevHold = createAxisHoldRepeat(() => presetStep(-1));
   const presetNextHold = createAxisHoldRepeat(() => presetStep(1));
@@ -373,7 +410,7 @@
             class="num-chip"
             class:on={activeScene === s}
             type="button"
-            title={`Scene ${s}`}
+            title={editor.sceneName(s)}
             onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : s)}
           >
             {s}
@@ -381,6 +418,37 @@
         {/if}
       {/each}
     </div>
+    <!-- Name shows at default AND compact, unlike the preset name (`expanded`
+         only). The top zones fit jointly against one shared budget, so a bar
+         with a few extra widgets sits at `compact` — gating the name on
+         `expanded` would silently hide the whole feature there. Mini stays
+         chips-only: it collapses to a single cycling chip with no room. -->
+    {#if notMini}
+      {#if editor.canRenameScenes}
+        {#if editingScene}
+          <input
+            class="scene-name-in mono"
+            bind:value={draftScene}
+            maxlength={SCENE_NAME_MAX}
+            placeholder="Scene {activeScene} name"
+            use:focusSel
+            onkeydown={onSceneNameKey}
+            onblur={commitSceneName}
+          />
+        {:else}
+          <button
+            class="scene-name"
+            class:empty={sceneLabel.empty}
+            type="button"
+            title="Rename scene {activeScene}"
+            onclick={startSceneRename}
+          >{sceneLabel.text}</button>
+        {/if}
+      {:else if !sceneLabel.empty}
+        <!-- names decoded but not writable (AM4 / no sceneNamesWritable cap) — still worth reading -->
+        <span class="scene-name readonly">{sceneLabel.text}</span>
+      {/if}
+    {/if}
   </div>
 {:else if kind === 'view'}
   <div class="axis-widget chips" data-size={size}>
@@ -806,6 +874,60 @@
   .chev {
     color: var(--textmuted);
     font-size: 10px;
+  }
+  /* active scene name — same truncation contract as .preset-name (TopBar .scn-name parity) */
+  .axis-widget .scene-name {
+    max-width: 120px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 600;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 3px 6px;
+    cursor: text;
+  }
+  .axis-widget .scene-name:hover {
+    border-color: var(--border3);
+    color: var(--text);
+  }
+  .axis-widget .scene-name.readonly {
+    cursor: default;
+  }
+  .axis-widget .scene-name.readonly:hover {
+    border-color: transparent;
+    color: var(--text2);
+  }
+  .axis-widget .scene-name.empty {
+    color: var(--textfaint);
+    font-style: italic;
+  }
+  .axis-widget .scene-name-in {
+    width: 120px;
+    color: var(--text);
+    background: var(--bg2);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    outline: none;
+  }
+  /* must follow the .axis-widget rules above — equal specificity, later wins */
+  [data-size='compact'] .scene-name,
+  [data-size='compact'] .scene-name-in {
+    font-size: 11.5px;
+    padding: 2px 5px;
+  }
+  [data-size='compact'] .scene-name {
+    max-width: 96px;
+  }
+  [data-size='compact'] .scene-name-in {
+    width: 96px;
   }
   .mono {
     font-family: var(--font-mono);
