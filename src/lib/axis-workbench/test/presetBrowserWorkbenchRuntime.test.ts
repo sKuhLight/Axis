@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AxisPresetBrowserWorkbenchRuntime } from '../presetBrowser/presetBrowserWorkbenchRuntime';
+import { AxisPresetBrowserWorkbenchRuntime, type AxisPresetBrowserGridLike } from '../presetBrowser/presetBrowserWorkbenchRuntime';
 import type { AxisPresetBrowserLibEntryLike } from '../presetBrowser/presetBrowserWorkbenchData';
 
 const entries: AxisPresetBrowserLibEntryLike[] = [
@@ -45,6 +45,12 @@ const entries: AxisPresetBrowserLibEntryLike[] = [
     }
   }
 ];
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
 
 describe('Preset Browser Workbench runtime', () => {
   it('restores the previous host when multiple Preset Browser panes bind and unbind', async () => {
@@ -162,6 +168,36 @@ describe('Preset Browser Workbench runtime', () => {
     });
     expect(runtime.snapshot.details['dev:10']?.versions.map((version) => version.id)).toEqual(['v1', 'v2']);
   });
+
+  it('drains row detail hydration before loading its device preset', async () => {
+    const runtime = new AxisPresetBrowserWorkbenchRuntime();
+    const gridRead = deferred<AxisPresetBrowserGridLike>();
+    const gridStarted = deferred<void>();
+    const calls: string[] = [];
+    runtime.bindHost({
+      findEntry: (entryId) => entries.find((entry) => entry.id === entryId) ?? null,
+      hydrateParams: async () => {},
+      presetGrid: async () => {
+        calls.push('detail:grid');
+        gridStarted.resolve();
+        return gridRead.promise;
+      },
+      loadDeviceSlot: async (number) => { calls.push(`device:${number}`); }
+    });
+
+    const detail = runtime.loadDetail('dev:10'); // first click
+    await gridStarted.promise;
+    const load = runtime.loadEntry('dev:10'); // dblclick
+    await Promise.resolve();
+
+    expect(calls).toEqual(['detail:grid']);
+
+    gridRead.resolve({ cells: [] });
+    await Promise.all([detail, load]);
+
+    expect(calls).toEqual(['detail:grid', 'device:10']);
+  });
+
 
   it('reports missing entries without calling host load actions', async () => {
     const runtime = new AxisPresetBrowserWorkbenchRuntime();

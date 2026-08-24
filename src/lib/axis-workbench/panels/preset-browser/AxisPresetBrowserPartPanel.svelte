@@ -41,6 +41,10 @@
   import { AXIS_PB_QUICK_TAGS } from '../../presetBrowser/presetBrowserWorkbenchQuery';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
   import {
+    axisPbRowClickIntent,
+    axisPbRowDoubleClickIntent
+  } from '../../presetBrowser/presetBrowserWorkbenchRowGesture';
+  import {
     detailBlockNodes,
     nextBlockFocus
   } from '../../presetBrowser/presetBrowserWorkbenchDetailBlockChips';
@@ -87,6 +91,11 @@
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
   let runtimeSnapshot = $state<AxisPresetBrowserRuntimeSnapshot>(axisPresetBrowserWorkbenchRuntime.snapshot);
   let lastDetailEntryId: string | null = null;
+  let detailHydrateTimer: ReturnType<typeof setTimeout> | null = null;
+  // Comfortably under a native dblclick interval, but enough that a fast double-click's loadEntry
+  // sets loadingEntryId before this fires — the busy check below then skips hydration instead of
+  // racing loadEntry's device-slot load for the presetGrid read (see runtime.ts loadEntry comment).
+  const ROW_DETAIL_HYDRATE_DELAY_MS = 220;
   const part = $derived<AxisPresetBrowserPart>(
     parseAxisPresetBrowserPart(panel.state?.part, axisPresetBrowserPartFromPanelType(panel.type))
   );
@@ -340,9 +349,10 @@
   });
 
   function onRowClick(entry: AxisPresetBrowserEntrySummary, event: MouseEvent) {
-    if (event.metaKey || event.ctrlKey) {
+    const intent = axisPbRowClickIntent(event);
+    if (intent === 'mark') {
       axisPresetBrowserWorkbenchController.toggleMark(entry.id);
-    } else if (event.shiftKey) {
+    } else if (intent === 'markRange') {
       axisPresetBrowserWorkbenchController.markRange(data.order, entry.id);
     } else {
       selectEntry(entry);
@@ -354,14 +364,30 @@
   const showsDetail = $derived(part === 'detail' || part === 'full');
   $effect(() => {
     if (!showsDetail || !snapshot.entryId || snapshot.entryId === lastDetailEntryId) return;
-    lastDetailEntryId = snapshot.entryId;
-    void axisPresetBrowserWorkbenchRuntime.loadDetail(snapshot.entryId);
+    const entryId = snapshot.entryId;
+    // Defer the actual fetch: a plain click here is often the first half of a double-click. Firing
+    // detail hydration immediately means its presetGrid read is already in flight by the time
+    // loadEntry's dblclick handler wants the device slot, which makes every double-click load wait
+    // out the whole hydration. Give a fast dblclick a chance to start loading first (see
+    // presetBrowserWorkbenchRuntime.ts loadEntry, which drains any in-flight detail load before it).
+    detailHydrateTimer = setTimeout(() => {
+      detailHydrateTimer = null;
+      lastDetailEntryId = entryId;
+      void axisPresetBrowserWorkbenchRuntime.loadDetail(entryId);
+    }, ROW_DETAIL_HYDRATE_DELAY_MS);
+    return () => {
+      if (detailHydrateTimer) {
+        clearTimeout(detailHydrateTimer);
+        detailHydrateTimer = null;
+      }
+    };
   });
 
   function selectSource(sourceId: string) {
     axisPresetBrowserWorkbenchController.openSource(sourceId);
   }
 
+  // Plain click: select only. Populates the detail pane + sets the range anchor, no device I/O.
   function selectEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
   }
@@ -761,7 +787,7 @@
           aria-selected={snapshot.entryId === entry.id}
           tabindex="0"
           onclick={(e) => onRowClick(entry, e)}
-          ondblclick={() => (canRename(entry) ? beginRename(entry) : loadEntry(entry))}
+          ondblclick={() => axisPbRowDoubleClickIntent({ canRename: canRename(entry) }) === 'load' && loadEntry(entry)}
           oncontextmenu={(e) => onRowContext(e, entry)}
           onkeydown={(e) => {
             if (e.key === 'Enter') loadEntry(entry);
@@ -1275,6 +1301,8 @@
     border-radius: 8px;
     background: var(--bg2);
     cursor: pointer;
+    /* Double click is the load gesture, so it must not also select the row's text. */
+    user-select: none;
   }
   .preset-row:hover {
     background: color-mix(in srgb, var(--accent) 4%, var(--bg2));
@@ -1311,6 +1339,8 @@
     padding: 0 8px;
     font: 600 12px/1 var(--font-mono);
     outline: none;
+    /* Opt back in — the row suppresses selection, but the rename field is real text entry. */
+    user-select: text;
   }
   .tag-pills {
     display: flex;
@@ -1352,7 +1382,6 @@
     color: color-mix(in srgb, var(--textdim) 65%, transparent);
     font: 600 11px/1 var(--font-ui);
     font-style: normal;
-    user-select: none;
   }
   .chain-node {
     display: inline-flex;

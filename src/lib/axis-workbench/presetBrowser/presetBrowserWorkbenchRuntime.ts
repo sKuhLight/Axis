@@ -70,6 +70,7 @@ export class AxisPresetBrowserWorkbenchRuntime {
     details: {}
   };
   #subscribers = new Set<(snapshot: AxisPresetBrowserRuntimeSnapshot) => void>();
+  #detailLoads = new Map<string, Promise<AxisPresetBrowserDetailState | null>>();
 
   get snapshot(): AxisPresetBrowserRuntimeSnapshot {
     return cloneSnapshot(this.#snapshot);
@@ -119,6 +120,10 @@ export class AxisPresetBrowserWorkbenchRuntime {
       } else {
         const number = entry.summary.number ?? -1;
         if (number < 0 || !host.loadDeviceSlot) throw new Error('Open it on the device to load.');
+        // A row click starts detail hydration before its dblclick loads the preset. Its numbered grid
+        // endpoint reads the active edit buffer, so let that read drain before select invalidates the
+        // live-grid cache; otherwise it can finish after select and restore the previous preset's grid.
+        await this.#detailLoads.get(entryId);
         await host.loadDeviceSlot(number);
       }
 
@@ -161,7 +166,17 @@ export class AxisPresetBrowserWorkbenchRuntime {
     }
   }
 
-  async loadDetail(entryId: string): Promise<AxisPresetBrowserDetailState | null> {
+  loadDetail(entryId: string): Promise<AxisPresetBrowserDetailState | null> {
+    const existing = this.#detailLoads.get(entryId);
+    if (existing) return existing;
+    const loading = this.#loadDetail(entryId).finally(() => {
+      if (this.#detailLoads.get(entryId) === loading) this.#detailLoads.delete(entryId);
+    });
+    this.#detailLoads.set(entryId, loading);
+    return loading;
+  }
+
+  async #loadDetail(entryId: string): Promise<AxisPresetBrowserDetailState | null> {
     const entry = this.#entry(entryId);
     if (!entry) return null;
     this.#set({ hydratingEntryId: entryId, error: null });

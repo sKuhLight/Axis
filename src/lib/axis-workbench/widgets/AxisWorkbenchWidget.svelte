@@ -5,7 +5,7 @@
   import { LEGAL, openExternal } from '../../legal';
   import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
-  import { isPanelWidgetZone } from '../../workbench';
+  import { getOptionalWorkbenchContext, isPanelWidgetZone } from '../../workbench';
   import {
     AXIS_GRID_MODES,
     axisGridMapDots,
@@ -30,6 +30,7 @@
     type AxisFcDevice
   } from './widgetControls';
   import { resolveParamWidgetState } from './paramWidgetState';
+  import { resolvePresetWidgetTarget } from './presetWidgetTarget';
   import { isSaveDirty } from './saveDirtyState';
   import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
@@ -55,6 +56,17 @@
   const pnumRaw = $derived(editor.preset && editor.preset.number >= 0 ? editor.preset.number : -1);
   const pnum = $derived(pnumRaw >= 0 ? String(pnumRaw).padStart(3, '0') : '---');
   const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? 'DEBUG' : 'offline'));
+  // The preset widget needs to know the active page to pick its click destination (Grid ↔ Preset
+  // Browser). Read via the *optional* context accessor, not getWorkbenchContext(), so this widget
+  // stays safe if it's ever rendered outside a WorkbenchProvider. Subscribing is gated on `kind`
+  // like the fcSel/fcModel block below — non-preset widget instances never subscribe at all.
+  const workbench = getOptionalWorkbenchContext()?.controller ?? null;
+  let activePageId = $state<string | undefined>(workbench?.activePage?.id);
+  $effect(() => {
+    if (kind !== 'preset' || !workbench) return;
+    return workbench.subscribe((c) => (activePageId = c.activePage?.id));
+  });
+  const presetTarget = $derived(resolvePresetWidgetTarget(activePageId));
   const cpu = $derived(Math.max(0, Math.min(100, editor.cpu ?? 0)));
   const cpuText = $derived(editor.cpu != null ? `${editor.cpu.toFixed(0)}%` : '--');
   const cpuColor = $derived(cpu > 75 ? 'var(--danger)' : cpu > 55 ? 'var(--amber)' : 'var(--accent)');
@@ -217,7 +229,7 @@
   });
 
   function openWidget() {
-    if (kind === 'preset') editor.presetOpen = true;
+    if (kind === 'preset') dispatch({ type: 'page.activate', pageId: presetTarget.pageId });
     else if (kind === 'addBlock') {
       editor.paletteMode = 'place';
       editor.paletteOpen = true;
@@ -381,11 +393,10 @@
         onpointerleave={presetPrevHold.stop}
       >‹</button>
     {/if}
-    <button class="preset-main" type="button" onclick={openWidget}>
+    <button class="preset-main" type="button" title={presetTarget.title} onclick={openWidget}>
       <span class="mono token">PRE</span>
       <span class="mono preset-num">{pnum}</span>
       {#if expanded}<span class="preset-name">{pname}</span>{/if}
-      {#if !mini}<span class="chev">▾</span>{/if}
     </button>
     {#if !mini}
       <button
@@ -870,10 +881,6 @@
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
-  }
-  .chev {
-    color: var(--textmuted);
-    font-size: 10px;
   }
   /* active scene name — same truncation contract as .preset-name (TopBar .scn-name parity) */
   .axis-widget .scene-name {

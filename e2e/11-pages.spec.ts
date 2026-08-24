@@ -87,3 +87,27 @@ test.describe('Pages: every seed page activates cleanly', () => {
     });
   }
 });
+
+test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
+  // The top-bar preset widget (top.left, every page) used to always open the Preset Browser,
+  // which made it a dead end once already there. It now toggles: Grid → Preset Browser, and
+  // Preset Browser (or any other page) → Grid.
+  test('clicking the preset widget navigates to Preset Browser, then back to Grid', async ({ page }) => {
+    await bootCleanWorkbench(page); // lands on Grid
+
+    await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
+
+    await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
+  });
+
+  test('clicking the preset widget from a non-Grid, non-PB page goes to Grid', async ({ page }) => {
+    await bootCleanWorkbench(page);
+
+    await clickNav(page, 'scenes');
+    await collapseRail(page); // else the expanded rail overlays the top bar widget (see collapseRail doc)
+    await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
+  });
+});
