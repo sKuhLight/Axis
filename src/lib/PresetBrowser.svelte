@@ -1275,7 +1275,7 @@
         <div class="d-blocks">
           <div class="lbl">BLOCK PARAMETERS</div>
           {#if !library.paramsOf(selected)}
-            <div class="empty-s">Full params not loaded for this preset. <button class="link" onclick={() => library.hydrateParams(selected!.id)}>Load params</button> (or Deep scan).</div>
+            <div class="empty-s">Full params not loaded for this preset. <button class="link" onclick={() => library.hydrateParams(selected!.id)}>Load params</button> (a full cache build loads them for every preset).</div>
           {:else}
             {#each library.paramsOf(selected)!.filter((b) => b.slug !== 'input' && b.slug !== 'output' && detailParams(b).length && (focusEid == null || b.effectId === focusEid)) as b, bi}
               <div class="blk">

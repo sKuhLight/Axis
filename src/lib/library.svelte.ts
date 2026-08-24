@@ -128,7 +128,7 @@ class LibraryStore {
   collectionFilter = $state<string | null>(null);
   favOnly = $state(false);
   /** Deep param-search clauses (ANDed). Only match entries whose params are available (files always;
-   *  device entries after `hydrateParams`/`deepScan`). */
+   *  device entries after a cache build, or after `hydrateParams` for a single preset). */
   paramQueries = $state<ParamQuery[]>([]);
   // Both caches below are `$state.raw` ON PURPOSE: they hold the biggest objects in the app (every
   // decoded param of every preset; raw .syx bytes), and a deep `$state` proxy makes every param read
@@ -146,8 +146,6 @@ class LibraryStore {
   #fileBytes = $state.raw<Record<string, number[]>>({});
   /** Folder paths the user has imported presets from (for the sidebar folder list). */
   folders = $state<string[]>([]);
-  hydrating = $state(false);
-  hydrateDone = $state(0);
   /** True once a full cache build has completed (persisted) — drives the startup prompt. */
   cacheBuilt = $state(load<boolean>(LS.built, false));
 
@@ -517,25 +515,6 @@ class LibraryStore {
   }
   #persistParams() {
     if (idb.available()) idb.set(IDB_PARAMS, { ...this.#paramsCache });
-  }
-  /** Hydrate every device entry's params so deep search spans the whole library; persisted to IndexedDB. */
-  async deepScan(): Promise<void> {
-    if (this.hydrating) return;
-    this.hydrating = true;
-    this.hydrateDone = 0;
-    try {
-      const todo = this.entries.filter((e) => e.source === 'device' && !e.summary.params && !this.#paramsCache[e.id]);
-      for (const e of todo) {
-        const { blocks } = await forgefx.presetParams(e.summary.number).catch(() => ({ blocks: null }));
-        // Reassign per entry — the cache is `$state.raw`, so an in-place write would never reach the
-        // param-search derivations (and progress would only land after the whole scan).
-        if (blocks) this.#paramsCache = { ...this.#paramsCache, [e.id]: blocks };
-        this.hydrateDone++;
-      }
-      this.#persistParams();
-    } finally {
-      this.hydrating = false;
-    }
   }
   /** True once every entry the param filter could apply to has its params available. (Non-device
    *  entries never block: file params are embedded; local params aren't indexed — they just won't match.) */

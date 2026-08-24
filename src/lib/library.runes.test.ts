@@ -137,25 +137,26 @@ describe('reassignment still notifies derived readers', () => {
     expect(library.filtered).toEqual([]);
   });
 
-  it('deepScan notifies per entry, not only after the whole loop', async () => {
+  it('notifies after EACH hydration, not only once the last one lands', async () => {
     const [first, second] = [deviceEntry(), deviceEntry()];
     library.entries = [first, second];
-    // Gate each fetch so we can observe the derived state MID-scan — that is the regression this
-    // guards: deepScan used to mutate the cache in place and reassign only after the loop.
+    // Gate each fetch so we can observe the derived state between hydrations — hydrating a library
+    // one preset at a time must publish progressively, which is only true while every write
+    // reassigns the raw cache.
     const gates = new Map([
       [first.summary.number, deferred<{ blocks: DecodedBlock[] }>()],
       [second.summary.number, deferred<{ blocks: DecodedBlock[] }>()]
     ]);
     presetParams.mockImplementation((n) => gates.get(n)!.promise);
 
-    const scan = library.deepScan();
+    const pending = Promise.all([library.hydrateParams(first.id), library.hydrateParams(second.id)]);
 
     gates.get(first.summary.number)!.resolve({ blocks: [block('amp', 'Gain')] });
     await vi.waitFor(() => expect(library.allParamFields).toEqual(['Gain']));
     expect(library.paramsReady).toBe(false); // second entry still outstanding
 
     gates.get(second.summary.number)!.resolve({ blocks: [block('amp', 'Master')] });
-    await scan;
+    await pending;
 
     expect(library.allParamFields).toEqual(['Gain', 'Master']);
     expect(library.paramsReady).toBe(true);
