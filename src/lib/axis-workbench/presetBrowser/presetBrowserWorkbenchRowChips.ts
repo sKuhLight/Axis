@@ -72,9 +72,10 @@ export function axisPbRowBlockChips(entry: AxisPresetBrowserEntrySummary): AxisP
     const slug = (block.slug ?? '').toLowerCase();
     if (!slug || IO_SLUGS.has(slug)) continue;
     const cat = axisPbCatLabel(slug);
-    // The summary block "name" is the model/type name for that slot when decoded (e.g. "USA Clean");
-    // when it just echoes the category we drop it so the chip stays "Cat".
-    const rawType = (block.name ?? '').trim();
+    // The decoded model name for this family (e.g. "USA Clean") is preferred, mirroring the monolith's
+    // blocksOf typeName; `block.name` is only a generic roster instance label ("Amp 1") and is the
+    // fallback when nothing was decoded. When it just echoes the category we drop it so the chip stays "Cat".
+    const rawType = ((entry.models[slug] ?? [])[0] ?? block.name ?? '').trim();
     const type = rawType && rawType.toLowerCase() !== cat.toLowerCase() ? rawType : null;
     const instance = block.instance != null ? `${cat} ${block.instance}` : cat;
     chips.push({
