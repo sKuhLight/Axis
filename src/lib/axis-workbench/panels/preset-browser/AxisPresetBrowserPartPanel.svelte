@@ -40,6 +40,10 @@
   import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
   import { AXIS_PB_QUICK_TAGS } from '../../presetBrowser/presetBrowserWorkbenchQuery';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
+  import {
+    detailBlockNodes,
+    nextBlockFocus
+  } from '../../presetBrowser/presetBrowserWorkbenchDetailBlockChips';
   import { detailStatusItems } from '../../presetBrowser/presetBrowserWorkbenchDetailStatus';
   import { tick } from 'svelte';
   import {
@@ -843,6 +847,7 @@
 
 {#snippet detailBody()}
   {#if data.selectedEntry}
+    {@const blockNodes = detailBlockNodes(data.selectedEntry.blocks, snapshot.focusedBlockEffectId)}
     <article class="axis-preset-detail">
       <div class="detail-title">
         <span>{data.selectedEntry.number == null ? data.selectedEntry.sourceLabel : `Preset ${String(data.selectedEntry.number).padStart(3, '0')}`}</span>
@@ -878,20 +883,6 @@
         </div>
       {/if}
 
-      {#if data.selectedEntry.blocks.length}
-        <div class="block-list">
-          {#each data.selectedEntry.blocks as block, index}
-            <button
-              type="button"
-              class:active={snapshot.focusedBlockEffectId != null && snapshot.focusedBlockEffectId === block.effectId}
-              onclick={() => axisPresetBrowserWorkbenchController.focusBlock(block.effectId ?? null)}
-            >
-              <span>{block.name ?? block.slug ?? `Block ${index + 1}`}</span>
-              {#if block.slug}<em>{block.slug}</em>{/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
       <div class="detail-actions">
         {#if data.selectedEntry.converted}
           <!-- A saved conversion re-opens in the converter (not a device load). True .syx export is wired in
@@ -920,12 +911,36 @@
         {/if}
       </div>
 
+      <!-- Filter strip for the BLOCK PARAMETERS list below (§4). The All node clears the filter —
+           previously, once a block was selected, there was no way to get back to the unfiltered
+           list from this control. -->
+      {#if blockNodes.length}
+        <div class="block-filter">
+          <span class="d-blocks-lbl">Blocks</span>
+          <div class="block-strip" class:filtered={snapshot.focusedBlockEffectId != null}>
+            {#each blockNodes as node (node.key)}
+              <button
+                type="button"
+                class:on={node.active}
+                disabled={!node.selectable}
+                aria-pressed={node.active}
+                data-block-node={node.key}
+                style:--c={node.color}
+                onclick={() => axisPresetBrowserWorkbenchController.focusBlock(nextBlockFocus(node, snapshot.focusedBlockEffectId))}
+              >
+                {#if node.color}<i class="dot"></i>{/if}
+                {node.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       <!-- V13f BLOCK PARAMETERS (§"detail" step 4): every param of every non-IO block with its value.
            Drag or double-click a block header / param cell to add it to the FILTERS row. Cells matched
            by an active block-param condition are highlighted. Reaches the same decoded blocks as the
            monolith via library.paramsOf; when unhydrated, "Load params" pulls them through the runtime. -->
       <div class="d-blocks">
-        <div class="d-blocks-lbl">BLOCK PARAMETERS</div>
         {#if !selectedDecodedBlocks}
           <div class="d-blocks-empty">
             Full params not loaded for this preset.
@@ -2193,10 +2208,6 @@
     color: var(--text2);
     font-size: 10px;
   }
-  .block-list {
-    display: grid;
-    gap: 5px;
-  }
   .detail-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
@@ -2233,25 +2244,58 @@
     font-size: 11px;
     line-height: 1.4;
   }
-  .block-list button {
-    height: 32px;
+  /* The label belongs to the strip, so they share a tight wrapper rather than sitting as two
+     separate children of .axis-preset-detail's 14px grid gap. */
+  .block-filter {
+    display: grid;
+    gap: 6px;
+  }
+  .block-strip {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 9px;
+    gap: 2px 10px;
+  }
+  .block-strip button {
+    height: auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 2px 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     text-transform: none;
+    font: 700 10px/1.2 var(--font-mono);
+    color: var(--c, var(--text2));
+    border-bottom: 2px solid transparent;
   }
-  .block-list span,
-  .block-list em {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .block-strip .dot {
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--c);
   }
-  .block-list em {
-    color: var(--textdim);
-    font-style: normal;
-    font-size: 10px;
+  .block-strip button:hover:not(:disabled) {
+    color: var(--text);
+  }
+  .block-strip button.on {
+    border-bottom-color: var(--accent);
+  }
+  .block-strip.filtered button:not(.on) {
+    color: var(--textfaint);
+  }
+  .block-strip.filtered button:not(.on) .dot {
+    opacity: 0.5;
+  }
+  .block-strip button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  .block-strip button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .axis-part-empty {
     flex: 1;
