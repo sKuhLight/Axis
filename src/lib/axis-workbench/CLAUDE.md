@@ -129,6 +129,11 @@ Interaction and rendering coverage is Playwright e2e: `e2e/*.spec.ts` with
 `VITE_AXIS_WORKBENCH=1`, the `bootCleanWorkbench` helper from `e2e/support/workbench.ts`,
 viewport width ≥ 1366, and stable selectors/data-attributes.
 
+Rune STORES (`*.svelte.ts`) are testable despite the above: name the file
+`*.runes.test.ts` and it runs in the `runes` vitest project, which compiles runes
+against the client runtime. See `src/lib/CLAUDE.md` → Testing reality for the
+constraint that makes the naming load-bearing.
+
 ## Theming
 
 - `workbench/` components use `--aw-*` tokens ONLY. A unit test fails on hex color

@@ -119,11 +119,23 @@ client-gate.
 
 ## Testing reality
 
-- vitest = node environment, no DOM — pure `.ts` modules only.
-- The monolith currently has almost no unit coverage (only `direct/nativeMidi`
+- Two vitest projects (`vitest.config.ts`), both node environment, no DOM:
+  - **`node`** — `src/**/*.test.ts`, the bulk of the suite. Pure `.ts` modules only.
+  - **`runes`** — `src/**/*.runes.test.ts`, for the rune stores (`*.svelte.ts`).
+    A small local plugin compiles rune MODULES with
+    `compileModule(..., { generate: 'client' })`. Do NOT reach for
+    `@sveltejs/vite-plugin-svelte` here: it hardcodes
+    `generate: ssr ? 'server' : 'client'` and vitest transforms in SSR mode, so
+    runes compile to the server runtime where `$state` is an inert plain value —
+    reactivity assertions then pass vacuously against real bugs. Components are
+    still never unit-mounted; this is for stores.
+  - `library.runes.test.ts` is the worked example (proxy-identity + derived
+    invalidation). `editor.svelte.ts` is still `vi.mock`'d out of
+    `editorSurface.test.ts` and is the obvious next candidate.
+- The monolith otherwise has almost no unit coverage (only `direct/nativeMidi`
   and `direct/ota`). New features should extract pure logic and add a co-located
   vitest — an easy win.
-- All 10 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
+- All 19 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
   `bootCleanWorkbench`, viewport ≥ 1366 px). There is NO monolith-shell e2e
   harness — monolith behavior is verified manually.
 - CI now also runs the vitest unit suite; only Playwright e2e stays local. Green CI ≠ passing e2e.

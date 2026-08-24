@@ -1,0 +1,191 @@
+// Reactivity contract for the library store's heavy caches (`*.runes.test.ts` → the `runes` vitest
+// project, which compiles runes against the CLIENT svelte runtime; see vitest.config.ts).
+//
+// `#paramsCache` / `#fileBytes` are `$state.raw` ON PURPOSE — a deep `$state` proxy made the Preset
+// Browser's spec/autocomplete derivations ~85x slower (every param read paying a proxy trap), which is
+// what stalled the query input for seconds on first click. Raw buys that back but moves the burden onto
+// the writers: they MUST reassign the field, because an in-place write no longer notifies anything.
+// These tests pin both halves of that trade — contents stay unproxied, reassignment still propagates.
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { DecodedBlock, DecodedParam, PresetSummary } from './types';
+import type { LibEntry } from './library.svelte';
+
+// ── module mocks ────────────────────────────────────────────────────────────────────────────────
+// The store builds its singleton at import time and reaches for the network, IndexedDB and
+// localStorage on the way. Everything below exists to let that constructor run in node.
+const presetParams = vi.fn<(n: number) => Promise<{ blocks: DecodedBlock[] }>>();
+const decodePresetFile = vi.fn<(buf: ArrayBuffer) => Promise<PresetSummary>>();
+
+vi.mock('./forgefx', () => ({
+  forgefx: {
+    presetParams: (n: number) => presetParams(n),
+    decodePresetFile: (buf: ArrayBuffer) => decodePresetFile(buf),
+    putDoc: vi.fn(async () => ({})),
+    listDocs: vi.fn(async () => ({ docs: [] })),
+    deleteDoc: vi.fn(async () => ({}))
+  },
+  isRemote: () => false
+}));
+// isRemoteBuild() → true short-circuits the constructor's config-publish block.
+vi.mock('./cloudBrowser', () => ({ isRemoteBuild: () => true }));
+// available() → false skips the IndexedDB restore AND every persist call.
+vi.mock('./idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
+vi.mock('./cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
+vi.mock('./syncBus', () => ({ notifyMutation: () => {} }));
+
+function memoryStorage(): Storage {
+  const m = new Map<string, string>();
+  return {
+    get length() { return m.size; },
+    key: (i: number) => [...m.keys()][i] ?? null,
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, String(v)),
+    removeItem: (k: string) => void m.delete(k),
+    clear: () => m.clear()
+  } as Storage;
+}
+vi.stubGlobal('localStorage', memoryStorage());
+
+// Dynamic import so the stubs above are in place before the singleton is constructed.
+const { library } = await import('./library.svelte');
+
+// ── fixtures ────────────────────────────────────────────────────────────────────────────────────
+const param = (label: string, value: number): DecodedParam => ({ paramId: 1, name: label.toUpperCase(), label, kind: 'float', raw: value * 100, value });
+const block = (slug: string, ...labels: string[]): DecodedBlock => ({
+  effectId: 106,
+  family: slug,
+  slug,
+  instance: 1,
+  typeName: 'USA Clean',
+  params: labels.map((l, i) => param(l, i + 1))
+});
+const summary = (number: number, name: string): PresetSummary => ({
+  number,
+  name,
+  model: 'AxisFx3',
+  crcValid: true,
+  crc: number,
+  scenes: ['Scene 1'],
+  blocks: [{ effectId: 106, slug: 'amp', name: 'Amp 1', instance: 1 }],
+  models: { amp: ['USA Clean'] },
+  amps: ['USA Clean']
+});
+// The store is a module singleton and its param cache has no public reset, so every test claims a
+// fresh slot number — reusing an id would hit the cache left behind by an earlier test.
+let nextNumber = 1;
+const deviceEntry = (): LibEntry => {
+  const number = nextNumber++;
+  return { id: `dev:${number}`, source: 'device', summary: summary(number, `Preset ${number}`), fav: false };
+};
+
+/** Node 20 has no `Promise.withResolvers`. */
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+beforeEach(() => {
+  presetParams.mockReset();
+  decodePresetFile.mockReset();
+  library.entries = [];
+  library.paramQueries = [];
+});
+
+describe('paramsCache is raw, not deep-proxied', () => {
+  it('hands back the exact object it was given (no proxy wrapper)', async () => {
+    const entry = deviceEntry();
+    library.entries = [entry];
+    const blocks = [block('amp', 'Gain')];
+    presetParams.mockResolvedValue({ blocks });
+
+    await library.hydrateParams(entry.id);
+
+    // Under deep `$state` this is a Proxy and `toBe` fails; under `$state.raw` it is the same object.
+    // Reference identity is the whole point: it means downstream param walks touch plain properties.
+    expect(library.paramsOf(entry)).toBe(blocks);
+    expect(library.paramsOf(entry)?.[0]).toBe(blocks[0]);
+    expect(library.paramsOf(entry)?.[0].params[0]).toBe(blocks[0].params[0]);
+  });
+});
+
+describe('reassignment still notifies derived readers', () => {
+  it('hydrateParams updates allParamFields and paramsReady', async () => {
+    const entry = deviceEntry();
+    library.entries = [entry];
+    expect(library.allParamFields).toEqual([]);
+    expect(library.paramsReady).toBe(false);
+
+    presetParams.mockResolvedValue({ blocks: [block('amp', 'Gain', 'Master')] });
+    await library.hydrateParams(entry.id);
+
+    expect(library.allParamFields).toEqual(['Gain', 'Master']);
+    expect(library.paramsReady).toBe(true);
+  });
+
+  it('a param query over freshly hydrated params matches', async () => {
+    const entry = deviceEntry();
+    library.entries = [entry];
+    presetParams.mockResolvedValue({ blocks: [block('amp', 'Gain')] });
+    await library.hydrateParams(entry.id);
+
+    library.paramQueries = [{ slug: 'amp', field: 'Gain', op: 'gt', value: 0.5 }];
+    expect(library.filtered.map((e) => e.id)).toEqual([entry.id]);
+
+    library.paramQueries = [{ slug: 'amp', field: 'Gain', op: 'gt', value: 99 }];
+    expect(library.filtered).toEqual([]);
+  });
+
+  it('deepScan notifies per entry, not only after the whole loop', async () => {
+    const [first, second] = [deviceEntry(), deviceEntry()];
+    library.entries = [first, second];
+    // Gate each fetch so we can observe the derived state MID-scan — that is the regression this
+    // guards: deepScan used to mutate the cache in place and reassign only after the loop.
+    const gates = new Map([
+      [first.summary.number, deferred<{ blocks: DecodedBlock[] }>()],
+      [second.summary.number, deferred<{ blocks: DecodedBlock[] }>()]
+    ]);
+    presetParams.mockImplementation((n) => gates.get(n)!.promise);
+
+    const scan = library.deepScan();
+
+    gates.get(first.summary.number)!.resolve({ blocks: [block('amp', 'Gain')] });
+    await vi.waitFor(() => expect(library.allParamFields).toEqual(['Gain']));
+    expect(library.paramsReady).toBe(false); // second entry still outstanding
+
+    gates.get(second.summary.number)!.resolve({ blocks: [block('amp', 'Master')] });
+    await scan;
+
+    expect(library.allParamFields).toEqual(['Gain', 'Master']);
+    expect(library.paramsReady).toBe(true);
+  });
+});
+
+describe('fileBytes lifecycle survives the raw switch', () => {
+  const syx = (name: string, bytes: number[]) => new File([new Uint8Array(bytes)], name);
+
+  it('round-trips imported bytes and clears them on remove', async () => {
+    decodePresetFile.mockResolvedValue(summary(0, 'Imported'));
+
+    const res = await library.importFiles([syx('a.syx', [1, 2, 3]), syx('b.syx', [4, 5])], 'rig');
+    expect(res).toEqual({ ok: 2, failed: 0 });
+    expect(library.fileBytes('file:rig/a.syx')).toEqual(new Uint8Array([1, 2, 3]));
+    expect(library.fileBytes('file:rig/b.syx')).toEqual(new Uint8Array([4, 5]));
+
+    library.removeFile('file:rig/a.syx');
+    expect(library.fileBytes('file:rig/a.syx')).toBeNull();
+    expect(library.fileBytes('file:rig/b.syx')).toEqual(new Uint8Array([4, 5]));
+
+    library.removeFolder('rig');
+    expect(library.fileBytes('file:rig/b.syx')).toBeNull();
+    expect(library.entries).toEqual([]);
+  });
+
+  it('skips non-.syx files without caching bytes', async () => {
+    decodePresetFile.mockResolvedValue(summary(0, 'Imported'));
+    const res = await library.importFiles([syx('notes.txt', [9])]);
+    expect(res).toEqual({ ok: 0, failed: 0 });
+    expect(library.fileBytes('file:notes.txt')).toBeNull();
+  });
+});

@@ -130,12 +130,20 @@ class LibraryStore {
   /** Deep param-search clauses (ANDed). Only match entries whose params are available (files always;
    *  device entries after `hydrateParams`/`deepScan`). */
   paramQueries = $state<ParamQuery[]>([]);
+  // Both caches below are `$state.raw` ON PURPOSE: they hold the biggest objects in the app (every
+  // decoded param of every preset; raw .syx bytes), and a deep `$state` proxy makes every param read
+  // pay a trap + a reactive source. The spec/autocomplete derivations walk EVERY param of EVERY block
+  // of EVERY preset, which measured ~85x slower through the proxy (seconds, not milliseconds, on a
+  // 512-preset library). Raw keeps reassignment reactive but leaves the contents plain.
+  // CONTRACT: to notify readers, REASSIGN the field (`x = { ...x, [id]: v }`) — an in-place write is
+  // invisible to `filtered` / `paramsReady` / `allParamFields` and the Preset Browser derivations.
   /** Hydrated device params, keyed by entry id. Persisted in IndexedDB (too big for localStorage) and
    *  loaded into memory on launch, so the param index survives reloads. */
-  #paramsCache = $state<Record<string, DecodedBlock[]>>({});
+  #paramsCache = $state.raw<Record<string, DecodedBlock[]>>({});
   /** Raw .syx bytes for imported file/folder presets (id → byte array), so they load live to the edit
-   *  buffer. Persisted in IndexedDB. */
-  #fileBytes = $state<Record<string, number[]>>({});
+   *  buffer. Persisted in IndexedDB. No reactive readers — every consumer goes through `fileBytes(id)`
+   *  from imperative code, so the in-place writes below are fine (identity is stable for persistence). */
+  #fileBytes = $state.raw<Record<string, number[]>>({});
   /** Folder paths the user has imported presets from (for the sidebar folder list). */
   folders = $state<string[]>([]);
   hydrating = $state(false);
@@ -519,10 +527,11 @@ class LibraryStore {
       const todo = this.entries.filter((e) => e.source === 'device' && !e.summary.params && !this.#paramsCache[e.id]);
       for (const e of todo) {
         const { blocks } = await forgefx.presetParams(e.summary.number).catch(() => ({ blocks: null }));
-        if (blocks) this.#paramsCache[e.id] = blocks;
+        // Reassign per entry — the cache is `$state.raw`, so an in-place write would never reach the
+        // param-search derivations (and progress would only land after the whole scan).
+        if (blocks) this.#paramsCache = { ...this.#paramsCache, [e.id]: blocks };
         this.hydrateDone++;
       }
-      this.#paramsCache = { ...this.#paramsCache };
       this.#persistParams();
     } finally {
       this.hydrating = false;

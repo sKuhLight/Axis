@@ -324,6 +324,21 @@
 
   $effect(() => axisPresetBrowserWorkbenchController.subscribe((next) => (snapshot = next)));
 
+  // Warm the query vocabulary in IDLE time, never on the click path. `acContext` / `filtersContext`
+  // are read ONLY from recomputeAc() (onfocus) and the picker, so without this the first click on the
+  // query input synchronously builds the spec table over every param of every preset before the
+  // dropdown can paint — the same "expensive build on the open path" bug the monolith's Orama index
+  // hit (PresetBrowser.svelte). Both contexts share specLibEntries + pbSpecs, so this is ONE traversal.
+  $effect(() => {
+    if (part !== 'full' && part !== 'list') return; // only these parts render the query bar + Filters block
+    void baseEntries.length; // track the library set → re-warm after a scan/import, not on every keystroke
+    const warm = () => { void acContext; void filtersContext; };
+    const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const cic = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    const id = ric ? ric(warm, { timeout: 1500 }) : (setTimeout(warm, 250) as unknown as number);
+    return () => { if (ric && cic) cic(id); else clearTimeout(id); };
+  });
+
   function onRowClick(entry: AxisPresetBrowserEntrySummary, event: MouseEvent) {
     if (event.metaKey || event.ctrlKey) {
       axisPresetBrowserWorkbenchController.toggleMark(entry.id);
