@@ -134,4 +134,45 @@ describe('Preset Browser Workbench data view', () => {
       number: null
     });
   });
+
+  it('carries decoded amp/block model names through to AMP(TYPE=...) query matching (regression: the mirror used to drop them)', () => {
+    const fm3: AxisPresetBrowserLibEntryLike = {
+      id: 'dev:fm3-1',
+      source: 'device',
+      summary: {
+        number: 2,
+        name: '5153 Lead',
+        model: 'FM3',
+        scenes: [],
+        blocks: [{ effectId: 101, slug: 'amp', name: 'Amp 1', instance: 1 }],
+        models: { amp: ['5153 100W Blue'] },
+        amps: ['5153 100W Blue']
+      }
+    };
+    const view = (conditions: Parameters<typeof createAxisPresetBrowserDataView>[0]['conditions']) =>
+      createAxisPresetBrowserDataView({ entries: [fm3], conditions }).visibleEntries.map((e) => e.id);
+
+    expect(view([{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: '5153' }] }])).toEqual([
+      'dev:fm3-1'
+    ]);
+    expect(view([{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: 'marshall' }] }])).toEqual([]);
+    expect(view([{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '!=', val: 'marshall' }] }])).toEqual([
+      'dev:fm3-1'
+    ]);
+    expect(view([{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '!=', val: '5153' }] }])).toEqual([]);
+  });
+
+  it('does not throw on cloud-only entries with empty models/amps maps', () => {
+    const cloudOnly: AxisPresetBrowserLibEntryLike = {
+      id: 'cloud:9',
+      source: 'device',
+      summary: { number: 9, name: 'Cloud Only', model: 'FM3', scenes: [], blocks: [], models: {}, amps: [] }
+    };
+    expect(() =>
+      createAxisPresetBrowserDataView({
+        entries: [cloudOnly],
+        conditions: [{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: '5153' }] }]
+      })
+    ).not.toThrow();
+  });
 });

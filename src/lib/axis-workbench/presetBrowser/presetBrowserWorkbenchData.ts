@@ -40,6 +40,10 @@ export interface AxisPresetBrowserEntrySummary {
   folder: string | null;
   tags: string[];
   blocks: AxisPresetBrowserBlockSummary[];
+  /** Decoded per-family model names (e.g. { amp: ["5153 100W Blue"] }) — the source of truth for
+   *  TYPE-style query matching; `blocks[].name` is only a generic roster instance label. */
+  models: Record<string, string[]>;
+  amps: string[];
   /** Resolved cloud sync state (from cloud.stateOf via the host); 'none' when signed out. */
   syncState: SyncState;
   /** A synthesized cloud-only row (host id starts with `cloud:`). */
@@ -235,6 +239,8 @@ function normalizeEntry(
     folder: entry.folder ?? null,
     tags: tagsOf?.(entry.id) ?? [],
     blocks,
+    models: entry.summary.models ?? {},
+    amps: entry.summary.amps ?? [],
     syncState: syncStateOf?.(entry) ?? 'none',
     cloudOnly: entry.id.startsWith('cloud:'),
     converted,

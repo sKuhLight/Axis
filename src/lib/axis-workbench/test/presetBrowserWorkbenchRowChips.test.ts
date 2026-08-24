@@ -25,6 +25,8 @@ function entry(over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBro
     folder: null,
     tags: [],
     blocks: [],
+    models: {},
+    amps: [],
     syncState: 'none',
     cloudOnly: false,
     converted: false,
@@ -51,6 +53,16 @@ describe('row block chips (§4.3)', () => {
     // block name that just echoes the category collapses to the bare category label.
     expect(chips[1].type).toBeNull();
     expect(chips[1].label).toBe('Reverb');
+  });
+
+  it('prefers the decoded model name over the generic block label (regression)', () => {
+    const chips = axisPbRowBlockChips(
+      entry({
+        blocks: [{ effectId: 2, slug: 'amp', name: 'Amp 1', instance: 1 }],
+        models: { amp: ['5153 100W Blue'] }
+      })
+    );
+    expect(chips[0].label).toBe('Amp · 5153 100W Blue');
   });
 
   it('carries a title of "instance — TYPE"', () => {
