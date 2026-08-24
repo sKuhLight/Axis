@@ -2,12 +2,15 @@
   import { onMount } from 'svelte';
   import { library, type LibEntry } from '../../../library.svelte';
   import { editor } from '../../../editor.svelte';
+  import { history } from '../../../history.svelte';
   import { cloud, browseEntries } from '../../../cloud.svelte';
   import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
   import { convert } from '../../../convert.svelte';
   import type { SyncState } from '../../../types';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
+  import { isSaveDirty } from '../../widgets/saveDirtyState';
+  import { loadActionWarning } from '../../presetBrowser/presetBrowserWorkbenchLoadWarning';
   import {
     createAxisPresetBrowserDataView,
     type AxisPresetBrowserEntrySummary,
@@ -170,6 +173,12 @@
   );
   const isOwner = $derived(snapshot.owner === part);
   const selectedDetail = $derived(snapshot.entryId ? runtimeSnapshot.details[snapshot.entryId] : null);
+
+  // Load preset / Audition both replace the edit buffer, so both discard unsaved edits to the
+  // current preset. Same derivation as the Save widget chip, so the two can never disagree.
+  const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
+  const loadWarning = $derived(loadActionWarning(saveDirty, 'load'));
+  const auditionWarning = $derived(loadActionWarning(saveDirty, 'audition'));
 
   // ── V13e/V13f shared vocabulary ─────────────────────────────────────────────────────────────
   // Filter specs (which blocks/params can be filtered, and their enum/numeric domains) are derived from
@@ -935,11 +944,29 @@
             Delete
           </button>
         {:else}
-          <button type="button" class="load-action" data-action="load" onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}>
+          <button
+            type="button"
+            class="load-action"
+            class:warn={loadWarning.warn}
+            data-action="load"
+            title={loadWarning.tooltip}
+            aria-label={loadWarning.warn ? `Load preset. ${loadWarning.tooltip}` : null}
+            onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}
+          >
+            {#if loadWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
             {runtimeSnapshot.loadingEntryId === data.selectedEntry.id ? 'Loading...' : 'Load preset'}
           </button>
           {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null}
-            <button type="button" class="load-action audition" data-action="audition" onclick={() => auditionEntry(data.selectedEntry!)}>
+            <button
+              type="button"
+              class="load-action"
+              class:warn={auditionWarning.warn}
+              data-action="audition"
+              title={auditionWarning.tooltip}
+              aria-label={auditionWarning.warn ? `Audition. ${auditionWarning.tooltip}` : null}
+              onclick={() => auditionEntry(data.selectedEntry!)}
+            >
+              {#if auditionWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
               {runtimeSnapshot.auditioningEntryId === data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
             </button>
           {/if}
@@ -2272,8 +2299,18 @@
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-  .load-action.audition {
-    color: var(--accent);
+  /* Load preset and Audition both replace the edit buffer. When the current preset has unsaved
+     edits, both turn amber with a ⚠ — the same dirty language as the Save widget chip. */
+  .load-action.warn {
+    color: var(--amber, #f5a623);
+    border-color: color-mix(in srgb, var(--amber, #f5a623) 40%, var(--border));
+  }
+  .load-action.warn:hover {
+    border-color: color-mix(in srgb, var(--amber, #f5a623) 60%, var(--border));
+    background: color-mix(in srgb, var(--amber, #f5a623) 6%, var(--bg2));
+  }
+  .warn-glyph {
+    margin-right: 5px;
   }
   .load-action.secondary {
     color: var(--textdim);
