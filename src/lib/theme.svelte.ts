@@ -20,7 +20,7 @@ const KEY = 'axis.theme';
 // those theme too instead of staying hardcoded dark.
 const PALETTES: Record<ThemeBase, Record<string, string>> = {
   dark: { bg: '#0c0c0e', bg2: '#0e0e10', surface: '#141417', surface2: '#1c1c21', border: '#26262c', border2: '#2a2a31', border3: '#3a3a44', text: '#e9e9ee', text2: '#cfcfd6', textdim: '#9a9aa3', textfaint: '#6e6e78', textmuted: '#56565e', input: '#0a0a0c', track: '#16161b' },
-  light: { bg: '#e9ebf0', bg2: '#dfe1e8', surface: '#ffffff', surface2: '#f1f2f6', border: '#e0e2ea', border2: '#cfd2dc', border3: '#b4b8c6', text: '#181a20', text2: '#3d4048', textdim: '#5e626e', textfaint: '#8a8e9c', textmuted: '#a7abb8', input: '#f7f8fb', track: '#e3e5ec' }
+  light: { bg: '#e9ebf0', bg2: '#dfe1e8', surface: '#ffffff', surface2: '#f1f2f6', border: '#d4d6dd', border2: '#cfd2dc', border3: '#b4b8c6', text: '#181a20', text2: '#3d4048', textdim: '#5e626e', textfaint: '#8a8e9c', textmuted: '#a7abb8', input: '#f7f8fb', track: '#e3e5ec' }
 };
 
 export const ACCENT_SWATCHES = ['#35c9d6', '#4f6bed', '#9b8cf0', '#f5a623', '#33c46b', '#e5588f'];
@@ -30,7 +30,7 @@ export const THEME_PRESETS: { id: string; name: string; base: ThemeBase; accent:
   { id: 'stage', name: 'Stage', base: 'dark', accent: '#f5a623', pal: { bg: '#080809', bg2: '#050506', surface: '#151210', surface2: '#221c15', border: '#241f18', border2: '#34291d', border3: '#473b28', text: '#ffffff', text2: '#e8e4dc', textdim: '#b3ac9e', textfaint: '#7f776a', textmuted: '#60594e' } },
   { id: 'nebula', name: 'Nebula', base: 'dark', accent: '#9b8cf0', pal: { bg: '#0b0a10', bg2: '#08070d', surface: '#141320', surface2: '#1e1c2e', border: '#201e30', border2: '#2c2942', border3: '#3b3654', text: '#eceaf5', text2: '#cac6dc', textdim: '#9b96b4', textfaint: '#6e6986', textmuted: '#54506a' } },
   { id: 'daylight', name: 'Daylight', base: 'light', accent: '#1f9fae', pal: {} },
-  { id: 'paper', name: 'Paper', base: 'light', accent: '#b5642a', pal: { bg: '#efe9dd', bg2: '#e5decd', surface: '#fbf7ef', surface2: '#f2ebdd', border: '#e4dccb', border2: '#d6ccb5', border3: '#bcb094', text: '#231f17', text2: '#453f32', textdim: '#6d6553', textfaint: '#9a9179', textmuted: '#b4ab93' } }
+  { id: 'paper', name: 'Paper', base: 'light', accent: '#b5642a', pal: { bg: '#efe9dd', bg2: '#e5decd', surface: '#fbf7ef', surface2: '#f2ebdd', border: '#d5cdbe', border2: '#d6ccb5', border3: '#bcb094', text: '#231f17', text2: '#453f32', textdim: '#6d6553', textfaint: '#9a9179', textmuted: '#b4ab93' } }
 ];
 
 export const FONT_UI: [string, string][] = [
