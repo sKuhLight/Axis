@@ -40,6 +40,7 @@
   import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
   import { AXIS_PB_QUICK_TAGS } from '../../presetBrowser/presetBrowserWorkbenchQuery';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
+  import { detailStatusItems } from '../../presetBrowser/presetBrowserWorkbenchDetailStatus';
   import { tick } from 'svelte';
   import {
     specsBySlug,
@@ -850,9 +851,17 @@
       </div>
 
       <div class="detail-status">
-        <span class:on={selectedDetail?.gridLoaded}>Grid</span>
-        <span class:on={selectedDetail?.paramsLoaded}>Params</span>
-        <span class:on={(selectedDetail?.versions.length ?? 0) > 0}>Versions</span>
+        {#each detailStatusItems(selectedDetail) as item}
+          <span
+            class:on={item.loaded}
+            data-status={item.key}
+            data-loaded={item.loaded}
+            title={item.title}
+            aria-label={item.title}
+          >
+            <i class="dot"></i>{item.label}
+          </span>
+        {/each}
       </div>
 
       <dl>
@@ -887,37 +896,29 @@
         {#if data.selectedEntry.converted}
           <!-- A saved conversion re-opens in the converter (not a device load). True .syx export is wired in
                the separate codec-authoring task. -->
-          <button type="button" class="load-action" onclick={() => openConverter(data.selectedEntry!.id)}>
+          <button type="button" class="load-action" data-action="open-converter" onclick={() => openConverter(data.selectedEntry!.id)}>
             Open in converter
           </button>
-          <button type="button" class="load-action secondary danger" onclick={() => deleteConverted(data.selectedEntry!.id)}>
+          <button type="button" class="load-action secondary danger" data-action="delete" onclick={() => deleteConverted(data.selectedEntry!.id)}>
             Delete
           </button>
         {:else}
-          <button type="button" class="load-action" onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}>
+          <button type="button" class="load-action" data-action="load" onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}>
             {runtimeSnapshot.loadingEntryId === data.selectedEntry.id ? 'Loading...' : 'Load preset'}
           </button>
           {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null}
-            <button type="button" class="load-action audition" onclick={() => auditionEntry(data.selectedEntry!)}>
+            <button type="button" class="load-action audition" data-action="audition" onclick={() => auditionEntry(data.selectedEntry!)}>
               {runtimeSnapshot.auditioningEntryId === data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
             </button>
           {/if}
-          <button type="button" class="load-action secondary" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
+          <button type="button" class="load-action secondary" data-action="refresh" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
             {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Refreshing...' : 'Refresh detail'}
           </button>
-          <button type="button" class="load-action secondary" title="Port this preset to another Fractal device — best-effort, with a full diff report" onclick={() => crossConvert(data.selectedEntry!.id)}>
+          <button type="button" class="load-action secondary" data-action="convert" title="Port this preset to another Fractal device — best-effort, with a full diff report" onclick={() => crossConvert(data.selectedEntry!.id)}>
             ⇄ Convert…
           </button>
         {/if}
       </div>
-
-      {#if selectedDetail}
-        <div class="runtime-detail">
-          <span>{selectedDetail.paramsLoaded ? 'Params loaded' : 'Summary params only'}</span>
-          <span>{selectedDetail.gridLoaded ? 'Grid preview ready' : 'No grid preview'}</span>
-          <span>{selectedDetail.versions.length} version{selectedDetail.versions.length === 1 ? '' : 's'}</span>
-        </div>
-      {/if}
 
       <!-- V13f BLOCK PARAMETERS (§"detail" step 4): every param of every non-IO block with its value.
            Drag or double-click a block header / param cell to add it to the FILTERS row. Cells matched
@@ -2129,26 +2130,32 @@
     color: var(--textdim);
     font-size: 12px;
   }
+  /* Passive status readout, not a control — deliberately not styled like the segmented
+     tab/gate controls elsewhere in this app. Dots inherit currentColor from the pending/on
+     state instead of the accent-bordered pill look, so it doesn't read as an active tab strip. */
   .detail-status {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .detail-status span {
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg2);
-    color: var(--textdim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--textfaint);
     font: 800 10px/1 var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
   .detail-status span.on {
-    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-    color: var(--accent);
+    color: var(--ok);
+  }
+  .detail-status .dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
   }
   dl {
     margin: 0;
@@ -2192,13 +2199,23 @@
   }
   .detail-actions {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
     gap: 7px;
   }
   .load-action {
     height: 34px;
     text-align: center;
-    text-transform: none;
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .load-action:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: color-mix(in srgb, var(--accent) 4%, var(--bg2));
+  }
+  .load-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .load-action.audition {
     color: var(--accent);
@@ -2209,12 +2226,6 @@
   .load-action.danger {
     color: var(--danger, #d6543f);
     border-color: color-mix(in srgb, var(--danger, #d6543f) 40%, var(--border));
-  }
-  .runtime-detail {
-    display: grid;
-    gap: 5px;
-    color: var(--textdim);
-    font-size: 11px;
   }
   .runtime-error {
     margin: 0;
