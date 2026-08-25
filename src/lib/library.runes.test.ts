@@ -192,6 +192,54 @@ describe('fileBytes lifecycle survives the raw switch', () => {
   });
 });
 
+// `allTags` walks `tags` with no idea whether its keys still refer to a preset that exists, so a
+// removed import used to keep feeding ghost tags to every consumer of it — the Frequent Tags row,
+// the monolith's quick tags, `tag:` autocomplete and the tag picker.
+describe('removing a preset forgets its tags', () => {
+  const syx = (name: string, bytes: number[]) => new File([new Uint8Array(bytes)], name);
+
+  it('removeFile drops that preset\'s tags and invalidates allTags', async () => {
+    decodePresetFile.mockResolvedValue(summary(0, 'Imported'));
+    await library.importFiles([syx('ghost.syx', [1]), syx('keep.syx', [2])], 'rig');
+    library.tags = {};
+    library.addTag('file:rig/ghost.syx', 'GhostOnly');
+    library.addTag('file:rig/keep.syx', 'KeptTag');
+    expect(library.allTags).toContain('GhostOnly');
+
+    library.removeFile('file:rig/ghost.syx');
+
+    expect(library.tags['file:rig/ghost.syx']).toBeUndefined();
+    expect(library.allTags).not.toContain('GhostOnly');
+    expect(library.allTags).toContain('KeptTag'); // the surviving preset is untouched
+  });
+
+  it('removeFolder drops the tags of every preset in it', async () => {
+    decodePresetFile.mockResolvedValue(summary(0, 'Imported'));
+    await library.importFiles([syx('one.syx', [1]), syx('two.syx', [2])], 'doomed');
+    await library.importFiles([syx('safe.syx', [3])], 'other');
+    library.tags = {};
+    library.addTag('file:doomed/one.syx', 'DoomedA');
+    library.addTag('file:doomed/two.syx', 'DoomedB');
+    library.addTag('file:other/safe.syx', 'SurvivorTag');
+
+    library.removeFolder('doomed');
+
+    expect(library.allTags).not.toContain('DoomedA');
+    expect(library.allTags).not.toContain('DoomedB');
+    expect(library.allTags).toContain('SurvivorTag');
+  });
+
+  it('removing an untagged preset leaves the tag map alone', async () => {
+    decodePresetFile.mockResolvedValue(summary(0, 'Imported'));
+    await library.importFiles([syx('bare.syx', [1])], 'plain');
+    library.tags = { 'dev:900': ['UnrelatedTag'] };
+
+    library.removeFile('file:plain/bare.syx');
+
+    expect(library.tags).toEqual({ 'dev:900': ['UnrelatedTag'] });
+  });
+});
+
 describe('tag colors registry round-trip (persist → load → hydrate → applyRemoteConfig)', () => {
   it('addTag claims a swatch for a brand-new tag, colorOf reflects the claimed index', () => {
     library.tags = {};

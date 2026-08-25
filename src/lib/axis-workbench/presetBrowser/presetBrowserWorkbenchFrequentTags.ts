@@ -59,21 +59,28 @@ export function renameTagCount(counts: AxisPbTagCounts, from: string, to: string
   return out;
 }
 
-// Displayed row: frequency decides MEMBERSHIP, never POSITION. Candidates are counted tags ranked
-// by count desc (ties broken alphabetically for determinism), padded with any library tags that
-// have no count yet, capped at MAX — then the surviving row is sorted alphabetically for display.
-// Counts are never rendered on the chips, so a count-ordered row reads as arbitrary AND re-sorts
-// under the cursor on every recordTagUsage() (chip click, and both tag pickers): the chip you just
-// hit jumps and the next click lands on the wrong tag. Alphabetical is scannable and stable; the
-// row only shifts when a tag genuinely crosses in or out of the top MAX. Never empty for a library
-// that has any tags at all, and never shows a tag the user's presets don't actually have.
+// Displayed row: frequency decides MEMBERSHIP, never POSITION — and membership is drawn from the
+// LIBRARY's tags, never from the counts. Counts are a separate localStorage map keyed by tag text,
+// so a tag stays counted long after it is removed from the last preset carrying it; seeding the row
+// from the counts (as this did) left those chips on screen forever, filtering to nothing when
+// clicked. Ranking the library's own tags instead makes the row a strict subset of what the presets
+// actually have, which is what the last line of this comment always claimed and never delivered.
+//
+// Counts are deliberately NOT pruned when a tag disappears: re-adding it restores its standing,
+// the same rule tag colors follow (renameTagColorKey pins rather than discards). An unused count is
+// inert — it can only rank a tag the library already has.
+//
+// Order is alphabetical, not count order. Counts are never rendered on the chips, so a count-ordered
+// row reads as arbitrary AND re-sorts under the cursor on every recordTagUsage() (chip click, and
+// both tag pickers): the chip you just hit jumps and the next click lands on the wrong tag. The row
+// only shifts when a tag genuinely crosses in or out of the top MAX. Never empty for a library that
+// has any tags at all, and never shows a tag the user's presets don't actually have.
 export function frequentTagRow(counts: AxisPbTagCounts, libraryTags: string[]): string[] {
-  const counted = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
-  const seen = new Set(counted.map((t) => t.toLowerCase()));
-  const padding = libraryTags
-    .filter((t) => !seen.has(t.toLowerCase()))
-    .sort((a, b) => a.localeCompare(b));
-  return [...counted, ...padding]
-    .slice(0, AXIS_PB_FREQUENT_TAGS_MAX) // membership: frequency-driven
+  // Counts key case-insensitively (the incrementTagCount idiom), so resolve through lowercase.
+  const byLower = new Map(Object.entries(counts).map(([k, v]) => [k.toLowerCase(), v]));
+  const countOf = (t: string) => byLower.get(t.toLowerCase()) ?? 0;
+  return [...libraryTags]
+    .sort((a, b) => countOf(b) - countOf(a) || a.localeCompare(b)) // membership: frequency-driven
+    .slice(0, AXIS_PB_FREQUENT_TAGS_MAX)
     .sort((a, b) => a.localeCompare(b)); // position: alphabetical
 }

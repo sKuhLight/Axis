@@ -41,12 +41,12 @@ describe('Preset Browser frequent tags', () => {
 
   it('frequentTagRow returns the row alphabetically regardless of count', () => {
     const counts: AxisPbTagCounts = { Blues: 2, Lead: 5, Clean: 1 };
-    expect(frequentTagRow(counts, [])).toEqual(['Blues', 'Clean', 'Lead']);
+    expect(frequentTagRow(counts, ['Blues', 'Lead', 'Clean'])).toEqual(['Blues', 'Clean', 'Lead']);
   });
 
   it('frequentTagRow admits equal-count tags deterministically', () => {
     const counts: AxisPbTagCounts = { Zeta: 3, Alpha: 3 };
-    expect(frequentTagRow(counts, [])).toEqual(['Alpha', 'Zeta']);
+    expect(frequentTagRow(counts, ['Zeta', 'Alpha'])).toEqual(['Alpha', 'Zeta']);
   });
 
   it('frequentTagRow pads with unused library tags, interleaved alphabetically', () => {
@@ -54,14 +54,23 @@ describe('Preset Browser frequent tags', () => {
     expect(frequentTagRow(counts, ['Zeta', 'Ambient', 'Lead'])).toEqual(['Ambient', 'Lead', 'Zeta']);
   });
 
-  it('frequentTagRow dedupes library tags against counted tags case-insensitively', () => {
+  it('frequentTagRow shows the library casing, not the casing the count was keyed under', () => {
     const counts: AxisPbTagCounts = { lead: 1 };
-    expect(frequentTagRow(counts, ['Lead', 'Bass'])).toEqual(['Bass', 'lead']);
+    expect(frequentTagRow(counts, ['Lead', 'Bass'])).toEqual(['Bass', 'Lead']);
   });
 
   it('frequentTagRow caps the combined list at AXIS_PB_FREQUENT_TAGS_MAX', () => {
     const libraryTags = Array.from({ length: AXIS_PB_FREQUENT_TAGS_MAX + 5 }, (_, i) => `lib${i}`);
     expect(frequentTagRow({}, libraryTags)).toHaveLength(AXIS_PB_FREQUENT_TAGS_MAX);
+  });
+
+  // THE ghost guard: counts outlive the tags they counted. Untag a preset and its count stays in
+  // localStorage forever — seeding the row from counts left the chip on screen, filtering to nothing
+  // when clicked. Membership comes from the library, so a count alone can never put a tag on screen.
+  it('frequentTagRow never shows a counted tag no preset carries', () => {
+    expect(frequentTagRow({ Ghost: 99 }, ['Lead'])).toEqual(['Lead']);
+    expect(frequentTagRow({ Ghost: 99 }, [])).toEqual([]);
+    expect(frequentTagRow({ GHOST: 4, Lead: 1 }, ['Lead', 'ghost'])).toEqual(['ghost', 'Lead']);
   });
 
   it('frequentTagRow returns an empty row for empty inputs', () => {
@@ -85,7 +94,7 @@ describe('Preset Browser frequent tags', () => {
     const libraryTags = Array.from({ length: AXIS_PB_FREQUENT_TAGS_MAX }, (_, i) =>
       `a-lib${String(i).padStart(2, '0')}`
     );
-    const row = frequentTagRow({ zzz: 99 }, libraryTags);
+    const row = frequentTagRow({ zzz: 99 }, [...libraryTags, 'zzz']);
     expect(row).toHaveLength(AXIS_PB_FREQUENT_TAGS_MAX);
     expect(row).toContain('zzz'); // survives the cap on count alone
     expect(row).not.toContain('a-lib11'); // uncounted, so cut even though it sorts before zzz

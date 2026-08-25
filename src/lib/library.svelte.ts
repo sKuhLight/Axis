@@ -448,14 +448,32 @@ class LibraryStore {
     this.entries = this.entries.filter((e) => e.id !== id);
     delete this.#fileBytes[id];
     this.#persistFiles();
+    this.#dropTagsFor([id]);
   }
   /** Remove every preset imported from a folder. */
   removeFolder(folder: string): void {
-    for (const e of this.entries) if (e.folder === folder) delete this.#fileBytes[e.id];
+    // Collect the ids BEFORE filtering — afterwards there is nothing left to look them up by.
+    const gone: string[] = [];
+    for (const e of this.entries) if (e.folder === folder) { delete this.#fileBytes[e.id]; gone.push(e.id); }
     this.entries = this.entries.filter((e) => e.folder !== folder);
     this.folders = this.folders.filter((f) => f !== folder);
     persist(LS.folders, this.folders);
     this.#persistFiles();
+    this.#dropTagsFor(gone);
+  }
+  /** Forget the tags of presets that no longer exist. `allTags` walks `tags` with no idea whether
+   *  its keys still refer to anything, so without this a deleted import keeps feeding ghost entries
+   *  to every consumer — the Frequent Tags row, the monolith's quick tags, `tag:` autocomplete and
+   *  the tag picker. Persists through persistCfg (not plain persist) so the removal reaches the
+   *  synced config doc too, and only when something actually changed.
+   *
+   *  Only the explicit removal paths call this. The bulk `local`/`converted` category swaps replace
+   *  entries whose ids come back on the next scan, so pruning there would discard tags the user
+   *  still wants; device slots always exist, so `dev:N` tags are never orphaned this way. */
+  #dropTagsFor(ids: string[]): void {
+    let changed = false;
+    for (const id of ids) if (this.tags[id]) { delete this.tags[id]; changed = true; }
+    if (changed) persistCfg('tags', LS.tags, this.tags);
   }
   #persistFiles(): void {
     const files = this.entries.filter((e) => e.source === 'file').map((e) => ({ id: e.id, folder: e.folder, summary: e.summary }));

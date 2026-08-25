@@ -73,6 +73,9 @@ test.describe('Preset Browser tag creation', () => {
     await page.keyboard.press('Escape');
 
     await expect(row(page).locator('.tag-pill')).toHaveCount(0);
+    // …and the Frequent Tags chip goes with it. The chip is driven by usage counts, which outlive
+    // the tag itself, so this is the guard against it lingering as an un-clickable ghost.
+    await expect(page.locator('.quick-tag', { hasText: 'Lush' })).toHaveCount(0);
   });
 
   /**
