@@ -45,6 +45,7 @@
     incrementTagCount,
     loadTagCounts,
     persistTagCounts,
+    renameTagCount,
     frequentTagRow
   } from '../../presetBrowser/presetBrowserWorkbenchFrequentTags';
   import { presetRecency } from '../../../presetRecency.svelte';
@@ -614,6 +615,7 @@
     e.stopPropagation(); // on a row pill, this is what makes the tag win over onRowContext
     picker = null; // mutually exclusive with the filter/edittags picker popover
     const pos = menuPositionFromPointer(e);
+    tagRenameValue = tag;
     tagMenu = { tag, x: pos.x, y: pos.y };
   }
   function pickTagSwatch(i: number) {
@@ -621,12 +623,26 @@
     library.setTagColor(tagMenu.tag, i);
     tagMenu = null;
   }
+  // Rename from the same popover. A tag is a bare string repeated across presets, so the rewrite has
+  // three owners: the assignments + color registry (library.renameTag) and the Frequent Tags counts,
+  // which live here in panel state. Renaming onto an existing tag merges the two. Filters are left
+  // alone by design — see the note in src/lib/tagRename.ts.
+  let tagRenameValue = $state('');
+  function commitTagRename() {
+    const from = tagMenu?.tag;
+    const to = tagRenameValue.trim();
+    tagMenu = null;
+    if (!from || !to || to === from) return;
+    library.renameTag(from, to);
+    tagCounts = renameTagCount(tagCounts, from, to);
+    persistTagCounts(tagCounts);
+  }
   // Long-press on a row shares one gesture with the row menu; if the hold landed on a tag pill,
   // open the tag menu there instead of the preset menu (the `longPress` detail only carries a
   // point, so resolve the pill under it the same way a native contextmenu would hit-test).
   function rowLongPress(entry: AxisPresetBrowserEntrySummary, d: { x: number; y: number }) {
     const pillTag = (document.elementFromPoint(d.x, d.y) as HTMLElement | null)?.closest<HTMLElement>('.tag-pill')?.dataset.tag;
-    if (pillTag) { picker = null; tagMenu = { tag: pillTag, x: d.x, y: d.y }; return; }
+    if (pillTag) { picker = null; tagRenameValue = pillTag; tagMenu = { tag: pillTag, x: d.x, y: d.y }; return; }
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
     openRowMenu(entry, { x: d.x, y: d.y });
   }
@@ -1264,18 +1280,40 @@
     onkeydown={onWindowKey}
   >
     <div class="pk-h">
-      <div class="pk-lbl">Color for {tagMenu.tag}</div>
+      <div class="pk-lbl">Rename</div>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        class="rename-in"
+        type="text"
+        maxlength="32"
+        autofocus
+        spellcheck="false"
+        aria-label="Rename tag"
+        bind:value={tagRenameValue}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commitTagRename();
+          else if (e.key === 'Escape') tagMenu = null;
+        }}
+      />
     </div>
+    <div class="pk-sub"><div class="pk-lbl">Change color</div></div>
     <div class="swatch-grid">
       {#each Array.from({ length: TAG_SWATCH_COUNT }, (_, i) => i) as i}
+        <!-- The current swatch is the one whose CSS matches what colorOf resolves to, so the tick
+             follows the same single resolver every render site uses rather than re-deriving the index. -->
+        {@const on = tagSwatchCss(i) === library.colorOf(tagMenu.tag)}
         <button
           type="button"
           class="swatch"
+          class:on
           style:background={tagSwatchCss(i)}
           aria-label={`Hue ${i * 18}°`}
+          aria-pressed={on}
           title={`Hue ${i * 18}°`}
           onclick={() => pickTagSwatch(i)}
-        ></button>
+        >{#if on}<span class="swatch-tick" aria-hidden="true">✓</span>{/if}</button>
       {/each}
     </div>
   </div>
@@ -2048,7 +2086,13 @@
     gap: 6px;
     padding: 10px;
   }
+  .pk-sub {
+    padding: 10px 10px 0;
+  }
   .swatch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 28px;
     height: 28px;
     padding: 0;
@@ -2057,6 +2101,16 @@
   }
   .swatch:hover {
     border-color: var(--text);
+  }
+  .swatch.on {
+    border-color: var(--text);
+  }
+  /* White glyph + dark shadow so the tick stays legible on every swatch in the table, light or dark,
+     without needing a per-swatch contrast calculation. */
+  .swatch-tick {
+    color: #fff;
+    font: 700 14px/1 var(--font-mono);
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
   }
 
   /* V13f BLOCK PARAMETERS listing (detail §4) */

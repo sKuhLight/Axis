@@ -42,6 +42,23 @@ export function incrementTagCount(counts: AxisPbTagCounts, tag: string): AxisPbT
   return { ...counts, [key]: (counts[key] ?? 0) + 1 };
 }
 
+// Follow a tag rename (see src/lib/tagRename.ts) so a well-used tag keeps its history instead of
+// restarting at zero and dropping out of the row. Merging onto a tag that already has a count SUMS
+// them: both names were the same tag in the user's head, so the survivor inherits the whole history.
+// Keys case-insensitively, like incrementTagCount.
+export function renameTagCount(counts: AxisPbTagCounts, from: string, to: string): AxisPbTagCounts {
+  const keys = Object.keys(counts);
+  const fromKey = keys.find((k) => k.toLowerCase() === from.toLowerCase());
+  if (fromKey === undefined) return counts;
+  const toKey = keys.find((k) => k.toLowerCase() === to.toLowerCase());
+
+  const out = { ...counts };
+  delete out[fromKey];
+  if (toKey !== undefined && toKey !== fromKey) out[toKey] = (counts[toKey] ?? 0) + counts[fromKey];
+  else out[to] = counts[fromKey];
+  return out;
+}
+
 // Displayed row: frequency decides MEMBERSHIP, never POSITION. Candidates are counted tags ranked
 // by count desc (ties broken alphabetically for determinism), padded with any library tags that
 // have no count yet, capped at MAX — then the surviving row is sorted alphabetically for display.

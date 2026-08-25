@@ -11,6 +11,7 @@ import type { PresetSummary, DecodedBlock } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
 import { deviceName } from './convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
+import { renameTagAssignments, renameTagColorKey } from './tagRename';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
 // letting a malformed cache break the library). Permissive: only the fields the UI relies on.
@@ -699,6 +700,25 @@ class LibraryStore {
     this.tags[id] = this.tags[id].filter((x) => x !== tag);
     if (!this.tags[id].length) delete this.tags[id];
     persistCfg('tags', LS.tags, this.tags);
+  }
+  /** Rename a tag everywhere it exists: on every preset, and in the color registry. Case-insensitive
+   *  on `from`, so a pure recase still applies. Renaming onto an existing tag MERGES them (see
+   *  renameTagAssignments). The Frequent Tags usage counts are NOT owned here — they live with the
+   *  workbench panel, which calls `renameTagCount` alongside this. */
+  renameTag(from: string, to: string): void {
+    const next = to.trim();
+    if (!next || next === from) return;
+    if (!this.allTags.some((t) => t.toLowerCase() === from.toLowerCase())) return; // nothing to rename
+    // Assign BOTH maps before persisting EITHER. persistCfg → notifyMutation nudges the config sync,
+    // and an `applyRemoteConfig('tags', …)` landing between the two assignments would see the renamed
+    // tag with no color yet and have ensureTagColors claim a fresh swatch for it — the tag visibly
+    // changes color on rename. Keeping the window closed is what makes the rename atomic to readers.
+    const nextTags = renameTagAssignments(this.tags, from, next);
+    const nextColors = renameTagColorKey(this.tagColors, from, next);
+    this.tags = nextTags;
+    this.tagColors = nextColors;
+    persistCfg('tags', LS.tags, this.tags);
+    persistCfg('tagColors', LS.tagColors, this.tagColors);
   }
   createCollection(name: string): void {
     const n = name.trim();

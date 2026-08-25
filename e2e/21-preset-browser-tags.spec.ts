@@ -125,6 +125,77 @@ test.describe('Preset Browser tag creation', () => {
   });
 
   /**
+   * Rename a tag from the same popover that colors it. A tag is a bare string repeated across every
+   * preset, so one rename has to reach the row pill AND the Frequent Tags chip at once. The popover's
+   * name field is prepopulated and commits on Enter — no separate edit mode to enter first.
+   *
+   * The color travelling with the rename is covered by unit tests (renameTagColorKey, and colorOf in
+   * library.runes.test.ts) rather than asserted here: an unclaimed tag gets a swatch assigned during
+   * boot, so a DOM color comparison across the rename tests claim timing, not the rename.
+   */
+  test('renaming a tag rewrites it on every render site', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate(
+      ({ cache, tags }) => {
+        window.localStorage.setItem('axs.lib.cache', JSON.stringify(cache));
+        window.localStorage.setItem('axs.lib.tags', JSON.stringify(tags));
+      },
+      { cache: [summary(1, 'Studio Clean')], tags: { 'dev:1': ['Cruch'] } }
+    );
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+
+    await collapseRail(page);
+    await page.locator('.quick-tag', { hasText: 'Cruch' }).click({ button: 'right' });
+    const pop = page.locator('.tag-swatch-pop');
+    await expect(pop).toHaveCount(1);
+
+    // Exactly one swatch carries the tick: whichever colour the tag currently resolves to. Asserted
+    // as a count rather than an index, so it does not depend on which swatch got claimed at boot.
+    await expect(pop.locator('.swatch.on')).toHaveCount(1);
+
+    // Prepopulated and ready to edit — no "Rename…" step in between.
+    const input = pop.locator('.rename-in');
+    await expect(input).toHaveValue('Cruch');
+    await input.fill('Crunch');
+    await input.press('Enter');
+    await expect(pop).toHaveCount(0);
+
+    await expect(row(page).locator('.tag-pill')).toHaveText(['Crunch']);
+    await expect(page.locator('.quick-tag')).toHaveText(['Crunch']);
+  });
+
+  /** Renaming onto a name that already exists is a merge, not a duplicate. */
+  test('renaming a tag onto an existing one merges them', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate(
+      ({ cache, tags }) => {
+        window.localStorage.setItem('axs.lib.cache', JSON.stringify(cache));
+        window.localStorage.setItem('axs.lib.tags', JSON.stringify(tags));
+      },
+      {
+        cache: [summary(1, 'Studio Clean'), summary(2, 'Stage Lead')],
+        tags: { 'dev:1': ['Cruch', 'Crunch'], 'dev:2': ['Cruch'] }
+      }
+    );
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+    await collapseRail(page);
+
+    await page.locator('.quick-tag', { hasText: 'Cruch' }).first().click({ button: 'right' });
+    const pop = page.locator('.tag-swatch-pop');
+    await pop.locator('.rename-in').fill('Crunch');
+    await pop.locator('.rename-in').press('Enter');
+    await expect(pop).toHaveCount(0);
+
+    // One chip, and the preset that carried both tags now shows a single pill.
+    await expect(page.locator('.quick-tag')).toHaveText(['Crunch']);
+    await expect(row(page).locator('.tag-pill')).toHaveText(['Crunch']);
+  });
+
+  /**
    * Frequent Tags is ordered alphabetically, NOT by usage count. Counts still choose which tags win
    * the row's slots, but they never choose position — otherwise clicking a chip re-sorts the row
    * under the cursor and the next click lands on a neighbour. The seeded counts here are picked so

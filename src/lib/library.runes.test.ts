@@ -216,6 +216,47 @@ describe('tag colors registry round-trip (persist → load → hydrate → apply
     expect(library.colorOf('NeverClaimed')).toBe(tagSwatchCss(fallbackSwatch('NeverClaimed')));
   });
 
+  // renameTag reassigns BOTH nested maps. `allTags` derives off `tags`, so this is exactly the
+  // shape that fails silently if a writer mutates in place instead of reassigning.
+  it('renameTag rewrites every preset and invalidates allTags', () => {
+    library.tags = { 'dev:r1': ['RenameCruch', 'RenameClean'], 'dev:r2': ['RenameCruch'] };
+    library.tagColors = {};
+    expect(library.allTags).toContain('RenameCruch');
+
+    library.renameTag('RenameCruch', 'RenameCrunch');
+
+    expect(library.tags).toEqual({
+      'dev:r1': ['RenameCrunch', 'RenameClean'],
+      'dev:r2': ['RenameCrunch']
+    });
+    expect(library.allTags).toContain('RenameCrunch');
+    expect(library.allTags).not.toContain('RenameCruch');
+  });
+
+  it('renameTag carries the tag color to the new name', () => {
+    library.tags = { 'dev:r3': ['RenameColored'] };
+    library.tagColors = { RenameColored: 5 };
+    library.renameTag('RenameColored', 'RenameRecolored');
+    expect(library.tagColors).toEqual({ RenameRecolored: 5 });
+    expect(library.colorOf('RenameRecolored')).toBe(tagSwatchCss(5));
+  });
+
+  it('renameTag merges onto an existing tag without duplicating it', () => {
+    library.tags = { 'dev:r4': ['RenameMergeA', 'RenameMergeB'], 'dev:r5': ['RenameMergeA'] };
+    library.tagColors = { RenameMergeA: 1, RenameMergeB: 6 };
+    library.renameTag('RenameMergeA', 'RenameMergeB');
+    expect(library.tags).toEqual({ 'dev:r4': ['RenameMergeB'], 'dev:r5': ['RenameMergeB'] });
+    expect(library.tagColors).toEqual({ RenameMergeB: 6 }); // the survivor keeps its own color
+  });
+
+  it('renameTag ignores an empty name and a tag no preset carries', () => {
+    library.tags = { 'dev:r6': ['RenameKeep'] };
+    library.renameTag('RenameKeep', '   ');
+    expect(library.tags).toEqual({ 'dev:r6': ['RenameKeep'] });
+    library.renameTag('RenameAbsent', 'RenameWhatever');
+    expect(library.tags).toEqual({ 'dev:r6': ['RenameKeep'] });
+  });
+
   it('hydrate() adopts a pushed tagColors doc and persists it to localStorage', async () => {
     library.tags = {};
     library.tagColors = {};

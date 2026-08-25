@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 
 import {
   incrementTagCount,
+  renameTagCount,
   loadTagCounts,
   persistTagCounts,
   frequentTagRow,
@@ -89,6 +90,38 @@ describe('Preset Browser frequent tags', () => {
     expect(row).toContain('zzz'); // survives the cap on count alone
     expect(row).not.toContain('a-lib11'); // uncounted, so cut even though it sorts before zzz
     expect(row.at(-1)).toBe('zzz'); // …and is still displayed in alphabetical position
+  });
+
+  it('renameTagCount moves a count to the new name', () => {
+    expect(renameTagCount({ Cruch: 5, Clean: 1 }, 'Cruch', 'Crunch')).toEqual({ Clean: 1, Crunch: 5 });
+  });
+
+  it('renameTagCount sums both counts when merging onto an existing tag', () => {
+    expect(renameTagCount({ Cruch: 5, Crunch: 2 }, 'Cruch', 'Crunch')).toEqual({ Crunch: 7 });
+  });
+
+  it('renameTagCount re-keys in place on a recase, preserving the count', () => {
+    expect(renameTagCount({ crunch: 4 }, 'crunch', 'Crunch')).toEqual({ Crunch: 4 });
+  });
+
+  it('renameTagCount matches the source name case-insensitively', () => {
+    expect(renameTagCount({ CRUCH: 3 }, 'cruch', 'Crunch')).toEqual({ Crunch: 3 });
+  });
+
+  it('renameTagCount leaves the map alone when the source has no count', () => {
+    const counts: AxisPbTagCounts = { Clean: 1 };
+    expect(renameTagCount(counts, 'Cruch', 'Crunch')).toBe(counts);
+  });
+
+  // The reason this exists: a renamed tag must keep its slot in the row rather than restarting at 0.
+  it('a renamed tag keeps its place in the row', () => {
+    const libraryTags = Array.from({ length: AXIS_PB_FREQUENT_TAGS_MAX }, (_, i) =>
+      `a-lib${String(i).padStart(2, '0')}`
+    );
+    const counts: AxisPbTagCounts = { Cruch: 99 };
+    expect(frequentTagRow(counts, [...libraryTags, 'Cruch'])).toContain('Cruch');
+    const renamed = renameTagCount(counts, 'Cruch', 'Crunch');
+    expect(frequentTagRow(renamed, [...libraryTags, 'Crunch'])).toContain('Crunch');
   });
 
   it('loadTagCounts returns {} when nothing is persisted', () => {
