@@ -2,6 +2,7 @@ import { parseAxisPresetBrowserPart, type AxisPresetBrowserPart, type AxisPreset
 import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
 import { condsToQuery, parseQuery, toAdvancedText, toSimpleConds, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
+import { loadAdvancedMode, persistAdvancedMode } from './presetBrowserWorkbenchSearchMode';
 
 export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu' | 'recent';
 
@@ -44,7 +45,7 @@ export class AxisPresetBrowserWorkbenchController {
     entryId: null,
     focusedBlockEffectId: null,
     detailOpen: false,
-    advanced: true,
+    advanced: loadAdvancedMode(),
     query: '',
     simpleQ: '',
     conditions: [],
@@ -195,10 +196,14 @@ export class AxisPresetBrowserWorkbenchController {
     this.#snapshot = s.advanced
       ? { ...s, advanced: false, conditions: toSimpleConds(s.query), query: '' }
       : { ...s, advanced: true, query: toAdvancedText(s.conditions), conditions: [] };
+    // An explicit toggle is the ONLY thing that makes the mode sticky (see applyQueryText).
+    persistAdvancedMode(this.#snapshot.advanced);
     this.#emit();
   }
 
-  // Apply a saved-filter query string: switch to advanced and load its text (§3.3).
+  // Apply a saved-filter query string: switch to advanced and load its text (§3.3). Deliberately
+  // does NOT persist the mode — the stored preference is the mode the user chose to START in,
+  // not whatever is on screen, so one saved-filter click must not rewrite their default.
   applyQueryText(text: string): void {
     this.#snapshot = { ...this.#snapshot, advanced: true, query: text, conditions: [], saving: false };
     this.#emit();
@@ -210,8 +215,12 @@ export class AxisPresetBrowserWorkbenchController {
     const next = has
       ? this.activeConditions.filter((c) => !(c.kind === 'tag' && c.val.toLowerCase() === tag.toLowerCase()))
       : [...this.activeConditions, { kind: 'tag' as const, val: tag }];
+    // Simple mode keeps the typed text: a tag chip is meant to NARROW what the user has already
+    // searched for. Clearing simpleQ here dropped the free-text filter, so the list visibly widened
+    // on a click meant to filter it — and it disagreed with editConds (the builder chips), which
+    // leaves the text alone. Free text and tag chips both feed the match, so they compose.
     if (this.#snapshot.advanced) this.#snapshot = { ...this.#snapshot, query: condsToQuery(next) };
-    else this.#snapshot = { ...this.#snapshot, conditions: next, simpleQ: '' };
+    else this.#snapshot = { ...this.#snapshot, conditions: next };
     this.#emit();
   }
 

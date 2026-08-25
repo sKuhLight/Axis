@@ -7,6 +7,14 @@ part = "full" | "sources" | "list" | "detail"     (default "full")
 props: accent (color), density ("comfortable"|"compact"), advancedDefault (boolean, default true)
 ```
 
+`advancedDefault` is a **deliberate divergence, not a parity debt.** The workbench Preset Browser
+ships Simple-first and remembers the user's choice from the first time they click the mode toggle
+(`presetBrowserWorkbenchSearchMode.ts`, localStorage key `axs.pb.searchMode`) — the typed query
+language is opt-in rather than the surface a first-time user has to meet. The design source's `true`
+default is therefore not something to implement later. The monolith (`src/lib/PresetBrowser.svelte`)
+intentionally stays Advanced-first and per-session, an accepted exception to the preset-browser
+mirror rule in `src/lib/CLAUDE.md`.
+
 Part gating (verbatim, `renderVals()` line 1133):
 
 ```js
@@ -331,4 +339,4 @@ Production shared state today: controller snapshot `{sourceId, entryId, focusedB
 - [ ] Cloud-state visual language everywhere (chips `☁ Synced / ↑ Local edit / ↓ Update / ☁ Cloud / ▪ Device` with the §5.1 colors) — production has sync concepts server-side; align the chip vocabulary.
 - [ ] Confirm-dialog copy verbatim (delete vs remove vs restore) and danger/non-danger icon chips.
 - [ ] Rename flow (inline input with auto-select, Enter/blur/Esc) and duplicate ("{name} copy") + export-to-disk JSON (single object vs array, filename rules) from rows/menus.
-- [ ] `pbPop/pbFade` animation timings; density prop (`compact` row padding `9px 16px`); accent/density/advancedDefault as panel props.
+- [ ] `pbPop/pbFade` animation timings; density prop (`compact` row padding `9px 16px`); accent/density as panel props. (`advancedDefault` is not listed — see the note above: the workbench deliberately ships Simple-first with a sticky override.)

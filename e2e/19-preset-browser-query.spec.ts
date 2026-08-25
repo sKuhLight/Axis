@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { bootCleanWorkbench, clickNav } from './support/workbench';
 
 /**
@@ -14,14 +14,39 @@ import { bootCleanWorkbench, clickNav } from './support/workbench';
  * No wall-clock assertion — timing is flaky in CI, and the clean-boot fixture has no hydrated params
  * to be slow over. The felt latency is verified by hand; what's automated here is "still works".
  */
+/**
+ * Both modes render an `.query-input input`, so the placeholder is what actually distinguishes
+ * them: the caret-aware advanced field advertises the query grammar, the simple one is a plain
+ * search box.
+ */
+const ADVANCED_PLACEHOLDER = /AMP\(Type=5153/;
+const SIMPLE_PLACEHOLDER = /^Search presets/;
+
+/** Leave the Simple default and switch the bar into the typed query language. */
+async function enterAdvanced(page: Page): Promise<void> {
+  await page.locator('.adv-toggle').click();
+  await expect(page.locator('.adv-toggle')).toHaveText('Advanced');
+  await expect(page.locator('.query-input input')).toHaveAttribute(
+    'placeholder',
+    ADVANCED_PLACEHOLDER,
+  );
+}
+
 test.describe('Preset Browser query bar', () => {
   test('the advanced autocomplete opens on the first click', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
 
-    // Advanced is the controller's default mode — the caret-aware input, not the plain search box.
-    await expect(page.locator('.adv-toggle')).toHaveText('Advanced');
+    // Simple is what a user who has never touched the toggle gets: the plain search box, no query
+    // language. The toggle button is labelled with the mode you are IN, not the one it switches to.
+    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
+    await expect(page.locator('.query-input input')).toHaveAttribute(
+      'placeholder',
+      SIMPLE_PLACEHOLDER,
+    );
+
+    await enterAdvanced(page);
 
     const input = page.locator('.query-input input');
     await expect(input).toHaveCount(1);
@@ -46,6 +71,7 @@ test.describe('Preset Browser query bar', () => {
   test('typing a block name narrows the suggestions and Escape closes them', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
+    await enterAdvanced(page);
 
     const input = page.locator('.query-input input');
     await input.click();
@@ -57,5 +83,36 @@ test.describe('Preset Browser query bar', () => {
 
     await input.press('Escape');
     await expect(page.locator('.ac')).toHaveCount(0);
+  });
+
+  // The mode is sticky from the first deliberate toggle onward (`axs.pb.searchMode`) — a user who
+  // has learned the query language should not be thrown back to the simple box on every reload,
+  // and one who switched back should stay switched back.
+  test('the chosen mode survives a reload', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await clickNav(page, 'library');
+    await enterAdvanced(page);
+
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+    await expect(page.locator('.adv-toggle')).toHaveText('Advanced');
+    await expect(page.locator('.query-input input')).toHaveAttribute(
+      'placeholder',
+      ADVANCED_PLACEHOLDER,
+    );
+
+    // …and the way back is sticky too.
+    await page.locator('.adv-toggle').click();
+    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
+
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
+    await expect(page.locator('.query-input input')).toHaveAttribute(
+      'placeholder',
+      SIMPLE_PLACEHOLDER,
+    );
   });
 });

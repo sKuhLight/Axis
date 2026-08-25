@@ -4,6 +4,13 @@ import { type Page, expect } from '@playwright/test';
 export const WORKBENCH_DOC_KEY = 'axs.workbench.doc';
 
 /**
+ * localStorage key the Preset Browser's sticky simple/advanced search mode lives under
+ * (`presetBrowserWorkbenchSearchMode.ts`). Absent means Simple, the default a fresh user gets.
+ * Cleared on every clean boot so a spec that toggled to Advanced can't leak into the next run.
+ */
+export const PB_SEARCH_MODE_KEY = 'axs.pb.searchMode';
+
+/**
  * First-run popup suppression keys (editor.svelte.ts). On a clean localStorage
  * boot the app opens one-time popups that are NOT part of the workbench chrome
  * under test — most importantly the telemetry-consent modal, a full-screen
@@ -55,11 +62,11 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
 
   await page.goto('/');
   await page.evaluate(
-    ({ docKey, suppress }) => {
-      window.localStorage.removeItem(docKey);
+    ({ clearKeys, suppress }) => {
+      for (const k of clearKeys) window.localStorage.removeItem(k);
       for (const [k, v] of Object.entries(suppress)) window.localStorage.setItem(k, v);
     },
-    { docKey: WORKBENCH_DOC_KEY, suppress: FIRST_RUN_SUPPRESS },
+    { clearKeys: [WORKBENCH_DOC_KEY, PB_SEARCH_MODE_KEY], suppress: FIRST_RUN_SUPPRESS },
   );
   await page.reload();
   await page.waitForSelector('.aw-root');
