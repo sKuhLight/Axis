@@ -41,7 +41,13 @@
   } from '../../presetBrowser/presetBrowserWorkbenchRuntime';
   import { createAxisPresetBrowserWorkbenchHost } from '../../presetBrowser/presetBrowserWorkbenchHost';
   import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
-  import { AXIS_PB_QUICK_TAGS } from '../../presetBrowser/presetBrowserWorkbenchQuery';
+  import {
+    incrementTagCount,
+    loadTagCounts,
+    persistTagCounts,
+    frequentTagColor,
+    frequentTagRow
+  } from '../../presetBrowser/presetBrowserWorkbenchFrequentTags';
   import { presetRecency } from '../../../presetRecency.svelte';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
   import {
@@ -169,6 +175,17 @@
   function applySavedFilter(filter: AxisPbSavedFilter) {
     axisPresetBrowserWorkbenchController.applyQueryText(filter.query);
   }
+  // Frequent tags — local-only usage counts (localStorage["axs.pb.frequentTags"]), padded with the
+  // user's real tag vocabulary so the row is never a canned/irrelevant palette (see
+  // presetBrowserWorkbenchFrequentTags.ts). Counts decide only WHICH tags make the row; the row
+  // itself is always alphabetical, so using a tag never moves a chip out from under the cursor. It
+  // reshuffles only when a tag actually crosses in or out of the top MAX.
+  let tagCounts = $state(loadTagCounts());
+  const tagRow = $derived(frequentTagRow(tagCounts, library.allTags));
+  function recordTagUsage(tag: string) {
+    tagCounts = incrementTagCount(tagCounts, tag);
+    persistTagCounts(tagCounts);
+  }
   // 14-row soft cap + "Show all" expander (§4.1).
   const rowCap = $derived(applyRowCap(data.visibleEntries, snapshot.showAllRows));
   const activeTags = $derived(
@@ -277,7 +294,10 @@
     if (!picker) return;
     const res = applyPick(filtersContext, picker.kind, picker.ctx, v);
     if (res.type === 'chain') { openPickerKind(res.kind, res.ctx); return; }
-    if (res.type === 'edit') { axisPresetBrowserWorkbenchController.editConds(res.edit); }
+    if (res.type === 'edit') {
+      if (picker.kind === 'tag') recordTagUsage(v);
+      axisPresetBrowserWorkbenchController.editConds(res.edit);
+    }
     picker = null;
   }
   function openPickerKind(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx) { if (lastAnchor) openPicker(kind, ctx, lastAnchor); }
@@ -376,14 +396,24 @@
   const showsDetail = $derived(part === 'detail' || part === 'full');
   $effect(() => {
     if (!showsDetail || !snapshot.entryId || snapshot.entryId === lastDetailEntryId) return;
+    // The load/audition burst has priority on the serial device channel — hydrating detail
+    // (grid/params/versions) at the same time queues behind or with it on the ForgeFX server.
+    // This re-runs once the runtime clears the in-flight id (loadingEntryId/auditioningEntryId
+    // are set synchronously before the first await, so the gate is armed by the time this flushes).
+    // Check both independently — a `??` here would miss the case where a DIFFERENT, superseded
+    // entry is still loading (its loadingEntryId lingers) while the selected entry is auditioning.
+    const busy = (entryId: string) =>
+      runtimeSnapshot.loadingEntryId === entryId || runtimeSnapshot.auditioningEntryId === entryId;
+    if (busy(snapshot.entryId)) return;
     const entryId = snapshot.entryId;
     // Defer the actual fetch: a plain click here is often the first half of a double-click. Firing
     // detail hydration immediately means its presetGrid read is already in flight by the time
     // loadEntry's dblclick handler wants the device slot, which makes every double-click load wait
-    // out the whole hydration. Give a fast dblclick a chance to start loading first (see
-    // presetBrowserWorkbenchRuntime.ts loadEntry, which drains any in-flight detail load before it).
+    // out the whole hydration. Give a fast dblclick a chance to set loadingEntryId first — the
+    // re-checked busy() below then skips hydration entirely and it retries once the load completes.
     detailHydrateTimer = setTimeout(() => {
       detailHydrateTimer = null;
+      if (busy(entryId)) return;
       lastDetailEntryId = entryId;
       void axisPresetBrowserWorkbenchRuntime.loadDetail(entryId);
     }, ROW_DETAIL_HYDRATE_DELAY_MS);
@@ -628,18 +658,21 @@
     {/if}
   </div>
 
-  <header class="section-head"><span>Quick tags</span></header>
+  <header class="section-head"><span>Frequent tags</span></header>
   <div class="quick-tags">
-    {#each AXIS_PB_QUICK_TAGS as tag}
-      {@const on = activeTags.has(tag.label.toLowerCase())}
+    {#each tagRow as tag}
+      {@const on = activeTags.has(tag.toLowerCase())}
       <button
         type="button"
         class="quick-tag"
         class:on
-        style:--tag-col={tag.color}
-        onclick={() => axisPresetBrowserWorkbenchController.toggleTag(tag.label)}
+        style:--tag-col={frequentTagColor(tag)}
+        onclick={() => {
+          if (!on) recordTagUsage(tag);
+          axisPresetBrowserWorkbenchController.toggleTag(tag);
+        }}
       >
-        {tag.label}
+        {tag}
       </button>
     {/each}
   </div>
