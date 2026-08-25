@@ -1248,7 +1248,7 @@ class EditorStore {
     else if (id === 'layouts' && data && typeof data === 'object') { this.customLayouts = data as Record<string, TabDef[]>; cache('axis.layouts.v1'); }
     else if (id === 'surface') surfApplyRemote(data);
     else if (id === 'savedFilters') cache('axs.pb.saved');
-    else if (id === 'tags' || id === 'collections' || id === 'favs') library.applyRemoteConfig(id, data);
+    else if (id === 'tags' || id === 'collections' || id === 'favs' || id === 'tagColors') library.applyRemoteConfig(id, data);
   };
   // pull current scene + tempo once at load (device → UI), each gated by its capability so a device
   // without the feature never eats a timeout (legacy v1: skip both on the AM4 — it ignores the frames)

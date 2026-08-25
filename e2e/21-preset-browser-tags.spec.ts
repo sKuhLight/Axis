@@ -74,12 +74,62 @@ test.describe('Preset Browser tag creation', () => {
 
     await expect(row(page).locator('.tag-pill')).toHaveCount(0);
   });
+
+  /**
+   * A color of its own: a tag renders through ONE resolver (`library.colorOf`) everywhere it
+   * appears, instead of every render site inventing its own hash — this is the regression guard
+   * for the reported bug (Frequent Tags amber vs. row pill accent-peach for the same tag). Creating
+   * a tag pins that the row pill and the Frequent Tags chip agree from the moment it's claimed;
+   * right-clicking either and picking a different swatch pins that both move together, and that
+   * the tag menu wins over the preset-actions menu on a pill (stopPropagation).
+   */
+  test('a tag renders the same color everywhere, and a swatch pick recolors it everywhere', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate((cache) => window.localStorage.setItem('axs.lib.cache', JSON.stringify(cache)), [
+      summary(1, 'Studio Clean')
+    ]);
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+
+    await row(page).click({ button: 'right' });
+    await page.locator('.aw-menu-item', { hasText: 'Tags…' }).click();
+    const picker = page.locator('.pk-pop');
+    await picker.locator('.pk-search input').fill('Crunch');
+    await picker.locator('.pk-item', { hasText: 'Create "Crunch"' }).click();
+    await page.keyboard.press('Escape');
+    await expect(picker).toHaveCount(0);
+
+    const pill = row(page).locator('.tag-pill', { hasText: 'Crunch' });
+    const chip = page.locator('.quick-tag', { hasText: 'Crunch' });
+    await expect(pill).toHaveCount(1);
+    await expect(chip).toHaveCount(1);
+
+    const colorOf = (el: import('@playwright/test').Locator) => el.evaluate((n) => getComputedStyle(n).color);
+    const before = await colorOf(pill);
+    expect(before).toBe(await colorOf(chip));
+
+    // Right-click the pill: the tag swatch grid wins over the preset-actions menu (stopPropagation).
+    await pill.click({ button: 'right' });
+    const swatchPop = page.locator('.tag-swatch-pop');
+    await expect(swatchPop).toHaveCount(1);
+    await expect(page.locator('[aria-label="Preset actions"]')).toHaveCount(0);
+
+    // Pick a swatch that isn't the current one — assert it's actually a change below.
+    await swatchPop.locator('.swatch').nth(5).click();
+    await expect(swatchPop).toHaveCount(0);
+
+    const after = await colorOf(pill);
+    expect(after).toBe(await colorOf(chip));
+    expect(after).not.toBe(before);
+  });
+
   /**
    * Frequent Tags is ordered alphabetically, NOT by usage count. Counts still choose which tags win
-   * the row's slots, but they never choose position — otherwise using a tag re-sorts the row under
-   * the cursor and the next click lands on a neighbour. The seeded counts here are picked so that
-   * the click WOULD have reordered the row under a count-descending render: Motown goes 2 → 3,
-   * tying Zeta at 3 and taking the lead on the alphabetical tie-break.
+   * the row's slots, but they never choose position — otherwise clicking a chip re-sorts the row
+   * under the cursor and the next click lands on a neighbour. The seeded counts here are picked so
+   * that the click WOULD have reordered the row under the old count-descending render: Motown goes
+   * 2 → 3, tying Zeta at 3 and taking the lead on the alphabetical tie-break.
    */
   test('Frequent Tags renders alphabetically and does not reorder when a chip is clicked', async ({ page }) => {
     await bootCleanWorkbench(page);

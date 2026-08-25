@@ -45,7 +45,6 @@
     incrementTagCount,
     loadTagCounts,
     persistTagCounts,
-    frequentTagColor,
     frequentTagRow
   } from '../../presetBrowser/presetBrowserWorkbenchFrequentTags';
   import { presetRecency } from '../../../presetRecency.svelte';
@@ -96,6 +95,7 @@
   import ContextMenu from '../../../workbench/svelte/ContextMenu.svelte';
   import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from '../../../workbench/svelte/contextMenu';
   import { longPress } from '../../longPress';
+  import { TAG_SWATCH_COUNT, tagSwatchCss } from '../../../tagColors';
 
   let { panel }: { panel: PanelInstance } = $props();
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
@@ -178,8 +178,9 @@
   // Frequent tags — local-only usage counts (localStorage["axs.pb.frequentTags"]), padded with the
   // user's real tag vocabulary so the row is never a canned/irrelevant palette (see
   // presetBrowserWorkbenchFrequentTags.ts). Counts decide only WHICH tags make the row; the row
-  // itself is always alphabetical, so using a tag never moves a chip out from under the cursor. It
-  // reshuffles only when a tag actually crosses in or out of the top MAX.
+  // itself is always alphabetical, so neither toggling a chip nor tagging a preset (recordTagUsage
+  // fires from all three) can move a chip out from under the cursor. It reshuffles only when a tag
+  // actually crosses in or out of the top MAX.
   let tagCounts = $state(loadTagCounts());
   const tagRow = $derived(frequentTagRow(tagCounts, library.allTags));
   function recordTagUsage(tag: string) {
@@ -220,7 +221,7 @@
   });
   const pbSpecs = $derived(specsBySlug(specLibEntries));
   const acContext = $derived(buildAutocompleteContext(specLibEntries, pbSpecs, library.allTags));
-  const filtersContext = $derived(buildFiltersContext(specLibEntries, pbSpecs, library.allTags));
+  const filtersContext = $derived(buildFiltersContext(specLibEntries, pbSpecs, library.allTags, (t) => library.colorOf(t)));
 
   // ── V13e autocomplete (advanced query bar) ──────────────────────────────────────────────────
   let queryEl: HTMLInputElement | undefined = $state();
@@ -278,7 +279,7 @@
   }
 
   // ── V13e Filters builder-chips + pickers ────────────────────────────────────────────────────
-  const chipDescriptors = $derived(activeConditions.map((c) => ({ cond: c, desc: chipDescriptor(c) })));
+  const chipDescriptors = $derived(activeConditions.map((c) => ({ cond: c, desc: chipDescriptor(c, (t) => library.colorOf(t)) })));
   type PickerState = { kind: AxisPbPickerKind; ctx: AxisPbPickerCtx; x: number; y: number };
   let picker = $state<PickerState | null>(null);
   let pickerSearch = $state('');
@@ -290,6 +291,7 @@
     openPickerAt(kind, ctx, r.left, r.bottom + 6);
   }
   function openPickerAt(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, x: number, y: number) {
+    tagMenu = null; // mutually exclusive with the tag swatch popover
     picker = { kind, ctx, x: Math.min(Math.max(12, x), window.innerWidth - 312), y };
     pickerSearch = ''; pickerHi = 0;
   }
@@ -326,7 +328,9 @@
   // while focus is inside it, which is not guaranteed for the `edittags` picker: it is opened from
   // the row context menu, whose focus trap restores focus to the row as it unmounts.
   function onWindowKey(e: KeyboardEvent) {
-    if (e.key === 'Escape' && picker) picker = null;
+    if (e.key !== 'Escape') return;
+    if (picker) picker = null;
+    if (tagMenu) tagMenu = null;
   }
   function removeCondAt(ci: number) { axisPresetBrowserWorkbenchController.editConds((cc) => cc.splice(ci, 1)); }
   function removeParamAt(ci: number, pi: number) {
@@ -601,6 +605,31 @@
     }
     await editor.loadVersion(versionId);
   }
+
+  // ── §4.5 tag color swatch grid (right-click / long-press a tag anywhere it renders) ───────────
+  // Rendered only on the overlay-owner part (§1 rank rule), same as the row context menu.
+  let tagMenu = $state<{ tag: string; x: number; y: number } | null>(null);
+  function openTagMenu(e: MouseEvent, tag: string) {
+    e.preventDefault();
+    e.stopPropagation(); // on a row pill, this is what makes the tag win over onRowContext
+    picker = null; // mutually exclusive with the filter/edittags picker popover
+    const pos = menuPositionFromPointer(e);
+    tagMenu = { tag, x: pos.x, y: pos.y };
+  }
+  function pickTagSwatch(i: number) {
+    if (!tagMenu) return;
+    library.setTagColor(tagMenu.tag, i);
+    tagMenu = null;
+  }
+  // Long-press on a row shares one gesture with the row menu; if the hold landed on a tag pill,
+  // open the tag menu there instead of the preset menu (the `longPress` detail only carries a
+  // point, so resolve the pill under it the same way a native contextmenu would hit-test).
+  function rowLongPress(entry: AxisPresetBrowserEntrySummary, d: { x: number; y: number }) {
+    const pillTag = (document.elementFromPoint(d.x, d.y) as HTMLElement | null)?.closest<HTMLElement>('.tag-pill')?.dataset.tag;
+    if (pillTag) { picker = null; tagMenu = { tag: pillTag, x: d.x, y: d.y }; return; }
+    axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    openRowMenu(entry, { x: d.x, y: d.y });
+  }
 </script>
 
 {#snippet sourcesBody()}
@@ -694,11 +723,12 @@
         type="button"
         class="quick-tag"
         class:on
-        style:--tag-col={frequentTagColor(tag)}
+        style:--tag-col={library.colorOf(tag)}
         onclick={() => {
           if (!on) recordTagUsage(tag);
           axisPresetBrowserWorkbenchController.toggleTag(tag);
         }}
+        oncontextmenu={(e) => openTagMenu(e, tag)}
       >
         {tag}
       </button>
@@ -820,7 +850,10 @@
             {/each}
             <button type="button" class="faddp" onclick={(e) => onAddParam(e, ci, item.desc.kind === 'block' ? item.desc.block : '')}>+ param</button>
           {:else}
-            <span class="fchip-head">
+            <span
+              class="fchip-head"
+              oncontextmenu={(e) => item.cond.kind === 'tag' && openTagMenu(e, item.cond.val)}
+            >
               <span class="fdot" style:background={item.desc.color}></span>{item.desc.text}
             </span>
           {/if}
@@ -866,12 +899,7 @@
           onkeydown={(e) => {
             if (e.key === 'Enter') loadEntry(entry);
           }}
-          use:longPress={{
-            onLongPress: (d) => {
-              axisPresetBrowserWorkbenchController.selectEntry(entry.id);
-              openRowMenu(entry, { x: d.x, y: d.y });
-            }
-          }}
+          use:longPress={{ onLongPress: (d) => rowLongPress(entry, d) }}
         >
           <button
             type="button"
@@ -911,7 +939,14 @@
             {/if}
             {#if anatomy.tagPills.length}
               <span class="tag-pills">
-                {#each anatomy.tagPills as tag}<em class="tag-pill">{tag}</em>{/each}
+                {#each anatomy.tagPills as tag}
+                  <em
+                    class="tag-pill"
+                    data-tag={tag}
+                    style:--tag-col={library.colorOf(tag)}
+                    oncontextmenu={(e) => openTagMenu(e, tag)}
+                  >{tag}</em>
+                {/each}
               </span>
             {/if}
             {#if anatomy.blockChips.length}
@@ -994,7 +1029,10 @@
 
       {#if data.selectedEntry.tags.length}
         <div class="tag-row">
-          {#each data.selectedEntry.tags as tag}<span>{tag}</span>{/each}
+          {#each data.selectedEntry.tags as tag}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span style:--tag-col={library.colorOf(tag)} oncontextmenu={(e) => openTagMenu(e, tag)}>{tag}</span>
+          {/each}
         </div>
       {/if}
 
@@ -1174,7 +1212,11 @@
 
 <!-- V13e add-filter / param / value picker popover (§2.5, §4.4). Local to the instance that owns the query
      bar (list/full); anchored in viewport coords. A window click or Esc closes it. -->
-<svelte:window onclick={() => { if (picker) picker = null; }} onkeydown={onWindowKey} ondragend={() => (dragOver = false)} />
+<svelte:window
+  onclick={() => { if (picker) picker = null; if (tagMenu) tagMenu = null; }}
+  onkeydown={onWindowKey}
+  ondragend={() => (dragOver = false)}
+/>
 {#if picker}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -1204,6 +1246,37 @@
         </button>
       {/each}
       {#if !pickerList.length}<div class="pk-empty">No matches</div>{/if}
+    </div>
+  </div>
+{/if}
+
+<!-- §4.5 tag color swatch grid — right-click (or long-press) a tag anywhere it renders. Rendered once,
+     on the overlay-owner part, same rank rule as the row context menu. -->
+{#if isOwner && tagMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="pk-pop tag-swatch-pop"
+    style:left={tagMenu.x + 'px'}
+    style:top={tagMenu.y + 'px'}
+    role="dialog"
+    tabindex="-1"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={onWindowKey}
+  >
+    <div class="pk-h">
+      <div class="pk-lbl">Color for {tagMenu.tag}</div>
+    </div>
+    <div class="swatch-grid">
+      {#each Array.from({ length: TAG_SWATCH_COUNT }, (_, i) => i) as i}
+        <button
+          type="button"
+          class="swatch"
+          style:background={tagSwatchCss(i)}
+          aria-label={`Hue ${i * 18}°`}
+          title={`Hue ${i * 18}°`}
+          onclick={() => pickTagSwatch(i)}
+        ></button>
+      {/each}
     </div>
   </div>
 {/if}
@@ -1445,8 +1518,8 @@
   .tag-pill {
     padding: 2px 6px;
     border-radius: 5px;
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    color: var(--accent);
+    background: color-mix(in srgb, var(--tag-col) 14%, transparent);
+    color: var(--tag-col);
     font: 700 9.5px/1 var(--font-mono);
     font-style: normal;
     white-space: nowrap;
@@ -1964,6 +2037,28 @@
     font: 700 12px/1 var(--font-mono);
   }
 
+  /* §4.5 tag color swatch grid — reuses .pk-pop/.pk-h chrome, adds a 3-column grid of swatches
+     (one per named color family — see the TAG_SWATCHES comment in tagColors.ts). */
+  .tag-swatch-pop {
+    width: auto;
+  }
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 10px;
+  }
+  .swatch {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+  }
+  .swatch:hover {
+    border-color: var(--text);
+  }
+
   /* V13f BLOCK PARAMETERS listing (detail §4) */
   .d-blocks {
     display: grid;
@@ -2350,10 +2445,10 @@
     gap: 5px;
   }
   .tag-row span {
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--tag-col) 40%, transparent);
     border-radius: 999px;
     padding: 4px 7px;
-    color: var(--text2);
+    color: var(--tag-col);
     font-size: 10px;
   }
   .detail-actions {

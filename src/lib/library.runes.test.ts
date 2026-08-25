@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { DecodedBlock, DecodedParam, PresetSummary } from './types';
 import type { LibEntry } from './library.svelte';
+import { fallbackSwatch, tagSwatchCss } from './tagColors';
 
 // ── module mocks ────────────────────────────────────────────────────────────────────────────────
 // The store builds its singleton at import time and reaches for the network, IndexedDB and
@@ -188,5 +189,45 @@ describe('fileBytes lifecycle survives the raw switch', () => {
     const res = await library.importFiles([syx('notes.txt', [9])]);
     expect(res).toEqual({ ok: 0, failed: 0 });
     expect(library.fileBytes('file:notes.txt')).toBeNull();
+  });
+});
+
+describe('tag colors registry round-trip (persist → load → hydrate → applyRemoteConfig)', () => {
+  it('addTag claims a swatch for a brand-new tag, colorOf reflects the claimed index', () => {
+    library.tags = {};
+    library.tagColors = {};
+    library.addTag('dev:rt1', 'RoundTripLead');
+    const idx = library.tagColors['RoundTripLead'];
+    expect(idx).toBeTypeOf('number');
+    expect(library.colorOf('RoundTripLead')).toBe(tagSwatchCss(idx));
+  });
+
+  it('setTagColor overrides a claimed swatch and colorOf reflects it', () => {
+    library.tags = {};
+    library.tagColors = {};
+    library.addTag('dev:rt2', 'RoundTripBass');
+    library.setTagColor('RoundTripBass', 7);
+    expect(library.tagColors['RoundTripBass']).toBe(7);
+    expect(library.colorOf('RoundTripBass')).toBe(tagSwatchCss(7));
+  });
+
+  it('colorOf falls back to a deterministic hash for a tag with no stored assignment', () => {
+    library.tagColors = {};
+    expect(library.colorOf('NeverClaimed')).toBe(tagSwatchCss(fallbackSwatch('NeverClaimed')));
+  });
+
+  it('hydrate() adopts a pushed tagColors doc and persists it to localStorage', async () => {
+    library.tags = {};
+    library.tagColors = {};
+    await library.hydrate({ tagColors: { RoundTripPushed: 3 } });
+    expect(library.tagColors).toEqual({ RoundTripPushed: 3 });
+    expect(JSON.parse(localStorage.getItem('axs.lib.tagColors')!)).toEqual({ RoundTripPushed: 3 });
+  });
+
+  it('applyRemoteConfig("tagColors", …) adopts a live push and persists it, without re-broadcasting', () => {
+    library.tagColors = {};
+    library.applyRemoteConfig('tagColors', { RoundTripLive: 4 });
+    expect(library.tagColors).toEqual({ RoundTripLive: 4 });
+    expect(JSON.parse(localStorage.getItem('axs.lib.tagColors')!)).toEqual({ RoundTripLive: 4 });
   });
 });

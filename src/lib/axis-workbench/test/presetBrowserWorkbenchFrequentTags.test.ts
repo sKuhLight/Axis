@@ -4,10 +4,8 @@ import {
   incrementTagCount,
   loadTagCounts,
   persistTagCounts,
-  frequentTagColor,
   frequentTagRow,
   AXIS_PB_FREQUENT_TAGS_MAX,
-  AXIS_PB_FREQUENT_TAG_PALETTE,
   type AxisPbTagCounts
 } from '../presetBrowser/presetBrowserWorkbenchFrequentTags';
 
@@ -69,8 +67,9 @@ describe('Preset Browser frequent tags', () => {
     expect(frequentTagRow({}, [])).toEqual([]);
   });
 
-  // THE regression guard: counting a tag already in the row must not move anything. Under
-  // count-ordering the clicked chip jumped and the next click landed on its neighbour.
+  // THE regression guard: counting a tag that is already in the row must not move anything. This is
+  // the bug the alphabetical order exists to kill — under count-ordering the clicked chip jumped and
+  // the next click landed on its neighbour.
   it.each(['Ambient', 'Lead', 'Zeta'])('frequentTagRow is unchanged after counting %s', (tag) => {
     const libraryTags = ['Zeta', 'Ambient', 'Lead', 'Motown'];
     const counts: AxisPbTagCounts = { Lead: 4, Ambient: 2, Zeta: 1 };
@@ -90,14 +89,6 @@ describe('Preset Browser frequent tags', () => {
     expect(row).toContain('zzz'); // survives the cap on count alone
     expect(row).not.toContain('a-lib11'); // uncounted, so cut even though it sorts before zzz
     expect(row.at(-1)).toBe('zzz'); // …and is still displayed in alphabetical position
-  });
-
-  it('frequentTagColor is stable for the same label', () => {
-    expect(frequentTagColor('Hendrix')).toBe(frequentTagColor('Hendrix'));
-  });
-
-  it('frequentTagColor always picks from the palette', () => {
-    expect(AXIS_PB_FREQUENT_TAG_PALETTE).toContain(frequentTagColor('Worship'));
   });
 
   it('loadTagCounts returns {} when nothing is persisted', () => {

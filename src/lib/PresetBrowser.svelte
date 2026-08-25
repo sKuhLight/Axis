@@ -968,7 +968,6 @@
     return b.params.filter((p) => p.enumLabel != null || (p.value != null && Math.abs(p.value) > 1e-4)).slice(0, 12);
   }
 
-  const tagColor = (t: string) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360; return `hsl(${h} 55% 60%)`; };
   // friendlier operator glyphs in chips (the typed language still uses >=,<=,!=)
   const opGlyph = (op: string): string => ({ '>=': '≥', '<=': '≤', '!=': '≠' })[op] ?? op;
 
@@ -1079,7 +1078,7 @@
           <button class="addp" onclick={(e) => onAddParam(e, ci, c.block)}>+ param</button>
         {:else}
           <span class="chip-head">
-            <span class="cdot" style:background={c.kind === 'tag' ? tagColor(c.val) : c.kind === 'scenes' ? '#4f6bed' : c.kind === 'cpu' ? '#f5a623' : '#9a9aa3'}></span>
+            <span class="cdot" style:background={c.kind === 'tag' ? library.colorOf(c.val) : c.kind === 'scenes' ? '#4f6bed' : c.kind === 'cpu' ? '#f5a623' : '#9a9aa3'}></span>
             {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${opGlyph(c.op)} ${c.val}` : `~CPU ${opGlyph(c.op)} ${c.val}`}
           </span>
         {/if}
@@ -1149,7 +1148,7 @@
         <div class="qtags">
           {#each library.allTags as t}
             {@const on = activeConds.some((c) => c.kind === 'tag' && c.val.toLowerCase() === t.toLowerCase())}
-            <button class="qt" class:on style:--c={tagColor(t)} onclick={() => editConds((c) => { const i = c.findIndex((x) => x.kind === 'tag' && x.val.toLowerCase() === t.toLowerCase()); if (i >= 0) c.splice(i, 1); else c.push({ kind: 'tag', val: t }); })}>{t}</button>
+            <button class="qt" class:on style:--c={library.colorOf(t)} onclick={() => editConds((c) => { const i = c.findIndex((x) => x.kind === 'tag' && x.val.toLowerCase() === t.toLowerCase()); if (i >= 0) c.splice(i, 1); else c.push({ kind: 'tag', val: t }); })}>{t}</button>
           {/each}
         </div>
       {/if}
@@ -1168,7 +1167,7 @@
             <div class="row-top">
               <span class="row-n">{e.summary.name}</span>
               {#if e.source === 'converted' && e.provenance}<span class="conv-prov" title={`Converted from ${e.provenance}`}>{e.provenance}</span>{/if}
-              {#each library.tagsOf(e.id).slice(0, 3) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}
+              {#each library.tagsOf(e.id).slice(0, 3) as tg}<span class="tg" style:--c={library.colorOf(tg)}>{tg}</span>{/each}
             </div>
             <div class="row-blocks">
               {#each blocksOf(e).filter((b) => b.slug !== 'input' && b.slug !== 'output') as b}
@@ -1227,7 +1226,7 @@
         {#if editor.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
         <div class="d-head">
           <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : selected.source === 'converted' ? 'CONV' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span>{#if selected.source === 'converted' && selected.provenance}<span class="conv-prov" title={`Converted from ${selected.provenance}`}>{selected.provenance}</span>{/if}</div>
-          <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={tagColor(tg)}>{tg}</span>{/each}</div>
+          <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={library.colorOf(tg)}>{tg}</span>{/each}</div>
           <div class="d-stats">
             <div class="st"><span class="sk">SOURCE</span><span class="sv2">{selected.source === 'file' ? 'Imported file' : selected.summary.model}</span></div>
             <div class="st"><span class="sk">SCENES</span><span class="sv2">{selected.summary.scenes.length}</span></div>

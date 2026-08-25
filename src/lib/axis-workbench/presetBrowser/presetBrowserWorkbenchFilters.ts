@@ -46,10 +46,13 @@ export interface AxisPbFiltersContext {
   slugs: string[];
   specs: Record<string, Map<string, AxisPbFilterSpec>>;
   tags: string[];
+  /** Resolves a tag to its stored color (library.colorOf) — injected because this module is pure and
+   *  must not import the library store. */
+  colorOf: (tag: string) => string;
 }
 
-export function buildFiltersContext(entries: SpecLibEntry[], specs: Record<string, Map<string, AxisPbFilterSpec>>, tags: string[]): AxisPbFiltersContext {
-  return { slugs: filterableSlugs(entries), specs, tags };
+export function buildFiltersContext(entries: SpecLibEntry[], specs: Record<string, Map<string, AxisPbFilterSpec>>, tags: string[], colorOf: (tag: string) => string): AxisPbFiltersContext {
+  return { slugs: filterableSlugs(entries), specs, tags, colorOf };
 }
 
 // The picker item list for a kind + search fragment (verbatim from monolith `pickerItems`).
@@ -64,13 +67,13 @@ export function pickerItems(ctx: AxisPbFiltersContext, kind: AxisPbPickerKind, p
     return items.filter((i) => i.label.toLowerCase().includes(f) || i.sub.includes(f));
   }
   if (kind === 'tag') {
-    return ctx.tags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: '#6e6e78' }));
+    return ctx.tags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: ctx.colorOf(t) }));
   }
   if (kind === 'edittags') {
     const current = new Set(pctx.entryTags ?? []);
     const items: AxisPbPickerItem[] = ctx.tags
       .filter((t) => t.toLowerCase().includes(f))
-      .map((t) => ({ v: t, label: t, sub: '', dot: true, color: tagColor(t), checked: current.has(t) }));
+      .map((t) => ({ v: t, label: t, sub: '', dot: true, color: ctx.colorOf(t), checked: current.has(t) }));
     const query = search.trim();
     const exact = ctx.tags.some((t) => t.toLowerCase() === query.toLowerCase());
     if (query && !exact) {
@@ -166,19 +169,12 @@ export function opGlyph(op: string): string {
   return ({ '>=': '≥', '<=': '≤', '!=': '≠' } as Record<string, string>)[op] ?? op;
 }
 
-// Stable hash → hue tag color (verbatim from monolith `tagColor`), used for tag chip dots.
-export function tagColor(t: string): string {
-  let h = 0;
-  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) % 360;
-  return `hsl(${h} 55% 60%)`;
-}
-
 export type AxisPbChipDescriptor =
   | { kind: 'block'; block: string; color: string; label: string; params: { name: string; op: string; val: string; glyph: string }[] }
   | { kind: 'scalar'; color: string; text: string };
 
 // Turn a condition into the chip descriptor the FILTERS row renders (mirrors the monolith chip template).
-export function chipDescriptor(c: AxisPbCond): AxisPbChipDescriptor {
+export function chipDescriptor(c: AxisPbCond, colorOf: (tag: string) => string): AxisPbChipDescriptor {
   if (c.kind === 'block') {
     return {
       kind: 'block',
@@ -188,7 +184,7 @@ export function chipDescriptor(c: AxisPbCond): AxisPbChipDescriptor {
       params: c.params.map((p: AxisPbParamCond) => ({ name: p.name, op: p.op, val: p.val, glyph: opGlyph(p.op) }))
     };
   }
-  if (c.kind === 'tag') return { kind: 'scalar', color: tagColor(c.val), text: `Tag: ${c.val}` };
+  if (c.kind === 'tag') return { kind: 'scalar', color: colorOf(c.val), text: `Tag: ${c.val}` };
   if (c.kind === 'name') return { kind: 'scalar', color: '#9a9aa3', text: `Name: ${c.val}` };
   if (c.kind === 'author') return { kind: 'scalar', color: '#9a9aa3', text: `Author: ${c.val}` };
   if (c.kind === 'scenes') return { kind: 'scalar', color: '#4f6bed', text: `Scenes ${opGlyph(c.op)} ${c.val}` };

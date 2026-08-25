@@ -25,7 +25,10 @@ const libEntry: SpecLibEntry = {
   ]
 };
 
-const ctx: AxisPbFiltersContext = buildFiltersContext([libEntry], specsBySlug([libEntry]), ['Lead', 'Ambient']);
+// Deterministic stand-in for library.colorOf in these pure-module tests.
+const colorOf = (tag: string) => `color:${tag}`;
+
+const ctx: AxisPbFiltersContext = buildFiltersContext([libEntry], specsBySlug([libEntry]), ['Lead', 'Ambient'], colorOf);
 
 // apply an applyPick result to an empty cond list, return the mutated list
 function runPick(kind: Parameters<typeof applyPick>[1], pctx: Parameters<typeof applyPick>[2], v: string, seed: AxisPbCond[] = []) {
@@ -58,6 +61,11 @@ describe('Preset Browser filters picker', () => {
     expect(applyPick(ctx, 'addfilter', {}, 'tag')).toEqual({ type: 'chain', kind: 'tag', ctx: {} });
   });
 
+  it('tag picker items resolve color through the injected colorOf', () => {
+    const items = pickerItems(ctx, 'tag', {}, '');
+    expect(items.map((i) => i.color)).toEqual(['color:Lead', 'color:Ambient']);
+  });
+
   it('param pick chains to value; value pick appends the param cond', () => {
     const chain = applyPick(ctx, 'param', { block: 'amp' }, 'Gain');
     expect(chain).toMatchObject({ type: 'chain', kind: 'value', ctx: { block: 'amp', param: 'Gain' } });
@@ -85,9 +93,9 @@ describe('Preset Browser filters picker', () => {
 
   it('edittags lists the tag vocabulary with checked state reflecting the entry\'s current tags', () => {
     const items = pickerItems(ctx, 'edittags', { entryId: 'dev:1', entryTags: ['Lead'] }, '');
-    expect(items.map((i) => [i.v, i.checked])).toEqual([
-      ['Lead', true],
-      ['Ambient', false]
+    expect(items.map((i) => [i.v, i.checked, i.color])).toEqual([
+      ['Lead', true, 'color:Lead'],
+      ['Ambient', false, 'color:Ambient']
     ]);
   });
 
@@ -102,10 +110,10 @@ describe('Preset Browser filters picker', () => {
   });
 
   it('chipDescriptor builds block + scalar chips', () => {
-    const block = chipDescriptor({ kind: 'block', block: 'amp', params: [{ name: 'Gain', op: '>', val: '7' }] });
+    const block = chipDescriptor({ kind: 'block', block: 'amp', params: [{ name: 'Gain', op: '>', val: '7' }] }, colorOf);
     expect(block).toMatchObject({ kind: 'block', block: 'amp', label: 'Amp' });
     expect((block as { params: unknown[] }).params).toEqual([{ name: 'Gain', op: '>', val: '7', glyph: '>' }]);
-    expect(chipDescriptor({ kind: 'tag', val: 'Lead' })).toMatchObject({ kind: 'scalar', text: 'Tag: Lead' });
-    expect(chipDescriptor({ kind: 'cpu', op: '<', val: '55' })).toMatchObject({ kind: 'scalar', text: '~CPU < 55' });
+    expect(chipDescriptor({ kind: 'tag', val: 'Lead' }, colorOf)).toMatchObject({ kind: 'scalar', text: 'Tag: Lead', color: 'color:Lead' });
+    expect(chipDescriptor({ kind: 'cpu', op: '<', val: '55' }, colorOf)).toMatchObject({ kind: 'scalar', text: '~CPU < 55' });
   });
 });

@@ -10,6 +10,7 @@ import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
 import { deviceName } from './convertReport';
+import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
 // letting a malformed cache break the library). Permissive: only the fields the UI relies on.
@@ -60,7 +61,7 @@ export interface LibEntry {
  *  explicitly or it pollutes the library/search as a ghost entry. */
 const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', tagColors: 'axs.lib.tagColors', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
 const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
 const IDB_FILEBYTES = 'lib.fileBytes'; // raw .syx bytes for imported file/folder presets (id → number[]) — for live load
 function load<T>(key: string, fallback: T): T {
@@ -81,7 +82,7 @@ const persist = (key: string, v: unknown) => {
 // User config (tags/collections/favorites): persist to localStorage (instant/offline source of truth)
 // AND mirror to the ForgeFX store under the `config` collection, so it lives in the unified backend and
 // is ready for cloud sync. localStorage stays authoritative for reads → zero data-loss risk.
-const persistCfg = (cfgId: 'tags' | 'collections' | 'favs', lsKey: string, v: unknown) => {
+const persistCfg = (cfgId: 'tags' | 'collections' | 'favs' | 'tagColors', lsKey: string, v: unknown) => {
   persist(lsKey, v);
   forgefx.putDoc('config', cfgId, v).catch(() => {});
   notifyMutation(); // nudge debounced cloud auto-sync
@@ -118,6 +119,8 @@ class LibraryStore {
   tags = $state<Record<string, string[]>>(load(LS.tags, {}));
   /** collection name → member ids (persisted). */
   collections = $state<Record<string, string[]>>(load(LS.collections, {}));
+  /** tag (case as first seen) → swatch hue index (persisted). Assigned only by `ensureTagColors`. */
+  tagColors = $state<Record<string, number>>(normalizeTagColors(load(LS.tagColors, {})));
 
   // filter state the UI binds to
   query = $state('');
@@ -171,6 +174,10 @@ class LibraryStore {
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();
+    // Claim swatches for any tag that predates this feature (or arrived via a cloud-synced `tags`
+    // doc without ever going through `addTag`) — "first sight" for the host's local library is here,
+    // at launch, not only at tag-creation time.
+    this.ensureTagColors();
     // Host: republish the local Axis config into the ONE config store on every launch, so the store always
     // reflects THIS PC — that's the source of truth the remote (and cloud sync) read. NEVER on the remote web
     // build: its localStorage is empty and (in dev) shares the host's ForgeFX, so publishing would clobber
@@ -180,6 +187,7 @@ class LibraryStore {
       forgefx.putDoc('config', 'tags', this.tags).catch(() => {});
       forgefx.putDoc('config', 'collections', this.collections).catch(() => {});
       forgefx.putDoc('config', 'favs', load<string[]>(LS.favs, [])).catch(() => {});
+      forgefx.putDoc('config', 'tagColors', this.tagColors).catch(() => {});
       forgefx.putDoc('config', 'savedFilters', raw('axs.pb.saved') ?? []).catch(() => {});
       forgefx.putDoc('config', 'layouts', raw('axis.layouts.v1') ?? {}).catch(() => {});
       forgefx.putDoc('config', 'swipe', raw('axis.swipe.v1') ?? {}).catch(() => {});
@@ -571,9 +579,10 @@ class LibraryStore {
    *  remote shows the SAME tags, collections, favorites and preset library as the PC — instead of scanning
    *  512 presets over MIDI. Layouts + swipe/quick-actions are hydrated separately (their localStorage keys
    *  are written before editor.init()). */
-  async hydrate(cfg: { tags?: unknown; collections?: unknown; favs?: unknown; index?: { gz?: string } | null }): Promise<void> {
+  async hydrate(cfg: { tags?: unknown; collections?: unknown; favs?: unknown; tagColors?: unknown; index?: { gz?: string } | null }): Promise<void> {
     if (cfg.tags && typeof cfg.tags === 'object') { this.tags = cfg.tags as Record<string, string[]>; persist(LS.tags, this.tags); }
     if (cfg.collections && typeof cfg.collections === 'object') { this.collections = cfg.collections as Record<string, string[]>; persist(LS.collections, this.collections); }
+    if (cfg.tagColors) { this.tagColors = normalizeTagColors(cfg.tagColors); persist(LS.tagColors, this.tagColors); }
     const favSet = new Set(Array.isArray(cfg.favs) ? (cfg.favs as string[]) : []);
     if (cfg.index?.gz && typeof DecompressionStream !== 'undefined') {
       try {
@@ -589,17 +598,21 @@ class LibraryStore {
       } catch { /* bad/absent index — leave the library empty rather than crash */ }
     }
     if (favSet.size) this.entries = this.entries.map((e) => ({ ...e, fav: favSet.has(e.id) })).sort(this.#order);
+    this.ensureTagColors();
   }
 
   /** Apply a live config push from another UI (host↔remote), WITHOUT re-publishing (that would loop).
    *  Updates the in-memory state + the localStorage cache only. */
   applyRemoteConfig(id: string, data: unknown): void {
-    if (id === 'tags' && data && typeof data === 'object') { this.tags = data as Record<string, string[]>; persist(LS.tags, this.tags); }
+    if (id === 'tags' && data && typeof data === 'object') { this.tags = data as Record<string, string[]>; persist(LS.tags, this.tags); this.ensureTagColors(); }
     else if (id === 'collections' && data && typeof data === 'object') { this.collections = data as Record<string, string[]>; persist(LS.collections, this.collections); }
     else if (id === 'favs' && Array.isArray(data)) {
       const s = new Set(data as string[]);
       this.entries = this.entries.map((e) => ({ ...e, fav: s.has(e.id) })).sort(this.#order);
       persist(LS.favs, data);
+    } else if (id === 'tagColors' && data && typeof data === 'object') {
+      this.tagColors = normalizeTagColors(data);
+      persist(LS.tagColors, this.tagColors);
     }
   }
   /** Preset name for a device slot from the cache (for the quick picker). '' if not cached. */
@@ -679,6 +692,7 @@ class LibraryStore {
     if (cur.includes(t)) return;
     this.tags[id] = [...cur, t];
     persistCfg('tags', LS.tags, this.tags);
+    this.ensureTagColors();
   }
   removeTag(id: string, tag: string): void {
     if (!this.tags[id]) return;
@@ -706,6 +720,38 @@ class LibraryStore {
 
   tagsOf = (id: string): string[] => this.tags[id] ?? [];
   inCollection = (name: string, id: string): boolean => (this.collections[name] ?? []).includes(id);
+
+  // ── metadata: tag colors (a tag owns one color everywhere it renders) ──
+  /** Claim a swatch for every tag in `allTags` that doesn't have one yet, persisting once if anything
+   *  changed. The ONLY place assignment happens — never lazily inside a getter (`colorOf` is a pure
+   *  read; writing `$state` during render trips `state_unsafe_mutation`). Call after `hydrate()`, after
+   *  `applyRemoteConfig('tags', …)`, and at the end of `addTag()`. */
+  ensureTagColors(): void {
+    let changed = false;
+    const next = { ...this.tagColors };
+    for (const tag of this.allTags) {
+      if (findTagKey(next, tag) !== undefined) continue;
+      next[tag] = claimSwatch(next, tag);
+      changed = true;
+    }
+    if (changed) {
+      this.tagColors = next;
+      persistCfg('tagColors', LS.tagColors, this.tagColors);
+    }
+  }
+  /** Manual override from the swatch picker. */
+  setTagColor(tag: string, index: number): void {
+    const existingKey = findTagKey(this.tagColors, tag);
+    this.tagColors = { ...this.tagColors, [existingKey ?? tag]: index };
+    persistCfg('tagColors', LS.tagColors, this.tagColors);
+  }
+  /** A tag's color, wherever it renders. Falls back to a deterministic hash for a tag not yet claimed
+   *  by `ensureTagColors` — never colorless, never flickers. */
+  colorOf(tag: string): string {
+    const existingKey = findTagKey(this.tagColors, tag);
+    const idx = existingKey !== undefined ? this.tagColors[existingKey] : fallbackSwatch(tag);
+    return tagSwatchCss(idx);
+  }
 }
 
 export const library = new LibraryStore();

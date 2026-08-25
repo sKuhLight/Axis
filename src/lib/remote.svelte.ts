@@ -21,15 +21,15 @@ async function hydrateRemoteConfig(): Promise<void> {
   const get = async (id: string): Promise<unknown> => {
     try { return (await forgefx.getDoc<unknown>('config', id))?.data ?? null; } catch { return null; }
   };
-  const [tags, collections, favs, savedFilters, layouts, swipe, index] = await Promise.all(
-    ['tags', 'collections', 'favs', 'savedFilters', 'layouts', 'swipe', 'library'].map(get)
+  const [tags, collections, favs, tagColors, savedFilters, layouts, swipe, index] = await Promise.all(
+    ['tags', 'collections', 'favs', 'tagColors', 'savedFilters', 'layouts', 'swipe', 'library'].map(get)
   );
   const put = (k: string, v: unknown) => { if (v != null) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* */ } } };
   put('axis.layouts.v1', layouts);   // editor.init() → loadLayouts() reads this (block editor tab layouts)
   put('axis.swipe.v1', swipe);       // → loadSwipe() (the block quick-actions / swipe controls)
   put('axs.pb.saved', savedFilters); // Preset Browser saved filters
   await Promise.all([
-    library.hydrate({ tags, collections, favs, index: index as { gz?: string } | null }),
+    library.hydrate({ tags, collections, favs, tagColors, index: index as { gz?: string } | null }),
     surfInit() // pull the control-surface boards/arrange/quick-actions (config/surface) from the host
   ]);
 }
