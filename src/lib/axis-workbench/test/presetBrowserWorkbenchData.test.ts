@@ -162,6 +162,43 @@ describe('Preset Browser Workbench data view', () => {
     expect(view([{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '!=', val: '5153' }] }])).toEqual([]);
   });
 
+  it('sorts by recency, sinking never-loaded entries below every loaded one', () => {
+    const stamps: Record<string, number> = { 'dev:1': 100, 'file:ambient': 200 };
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      sort: 'recent',
+      lastLoadedAt: (id) => stamps[id] ?? null
+    });
+
+    // Most recent first; 'local:edge' was never loaded so it lands last.
+    expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient', 'dev:1', 'local:edge']);
+    expect(view.visibleEntries.map((entry) => entry.lastLoadedAt)).toEqual([200, 100, null]);
+  });
+
+  it('breaks recency ties by preset number so the never-loaded bucket stays stable', () => {
+    const slot = (n: number): AxisPresetBrowserLibEntryLike => ({
+      id: `dev:${n}`,
+      source: 'device',
+      summary: { number: n, name: `Slot ${n}`, scenes: [], blocks: [] }
+    });
+    const view = createAxisPresetBrowserDataView({
+      entries: [slot(9), slot(2), slot(5)],
+      sort: 'recent',
+      // Same stamp for two of them — the tiebreak, not sort stability, decides.
+      lastLoadedAt: (id) => (id === 'dev:9' || id === 'dev:5' ? 500 : null)
+    });
+
+    expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['dev:5', 'dev:9', 'dev:2']);
+  });
+
+  it('leaves entries unloaded when no recency source is injected', () => {
+    const view = createAxisPresetBrowserDataView({ entries, sort: 'recent' });
+
+    expect(view.visibleEntries.every((entry) => entry.lastLoadedAt === null)).toBe(true);
+    // All null → pure number order, with the slot-less local entry last.
+    expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+  });
+
   it('does not throw on cloud-only entries with empty models/amps maps', () => {
     const cloudOnly: AxisPresetBrowserLibEntryLike = {
       id: 'cloud:9',

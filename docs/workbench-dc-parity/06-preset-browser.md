@@ -93,6 +93,7 @@ Row `padding:12px 20px; border-bottom:1px solid var(--border); flex-wrap:wrap`:
 - Theme button ◐ (34×34).
 - **DEVICE filter**: `DEVICE` micro-label + button `{dot}{label}▾` (h 34, radius 9; active device tints the border `{devColor}66`); opens the generic picker with counts per device. Devices: `Axe-Fx III #4f6bed / FM9 #2fb0c9 / FM3 #d98a2b / all #8a8a94`.
 - **SORT segment**: `#` (num) / `A-Z` (name) / `CPU` (cpu desc); chips `6px 11px radius 7 mono 700 11`; active = accent bg + `--bg` text.
+  - `RECENT` (last-loaded desc, never-loaded last) is an Axis addition beyond the DC design, backed by `presetRecency.svelte.ts`; both shells carry it.
 - **Advanced search toggle**: pill with dot; on = accent bg/accentink; toggling **converts state**: advanced→simple parses the current text into `conditions[]` and clears the input; simple→advanced serializes `conditions` back into the input via `condsToQuery` (join `"  +  "`).
 
 ### 2.2 Query bar

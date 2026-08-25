@@ -3,7 +3,7 @@ import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
 import { condsToQuery, parseQuery, toAdvancedText, toSimpleConds, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
 
-export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu';
+export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu' | 'recent';
 
 // Shared state across all mounted parts — the typed-controller replacement for `window.__PBBus`
 // (§1 of docs/workbench-dc-parity/06-preset-browser.md). Every key here is in lockstep across

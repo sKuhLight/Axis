@@ -24,6 +24,7 @@ function entry(over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBro
     fav: false,
     folder: null,
     tags: [],
+    lastLoadedAt: null,
     blocks: [],
     models: {},
     amps: [],

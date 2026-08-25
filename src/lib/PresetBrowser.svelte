@@ -8,6 +8,7 @@
   import { create, insertMultiple, search } from '@orama/orama';
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
+  import { presetRecency } from './presetRecency.svelte';
   import { forgefx, ForgeError } from './forgefx';
   import { cloud, SYNC_META, browseEntries } from './cloud.svelte';
   import { notifyMutation } from './syncBus';
@@ -230,7 +231,7 @@
   let query = $state(''); // advanced typed query
   let simpleQ = $state(''); // simple free text
   let conditions = $state<Cond[]>([]); // simple-mode chips
-  let sort = $state<'num' | 'name' | 'cpu'>('num');
+  let sort = $state<'num' | 'name' | 'cpu' | 'recent'>('num');
   let selectedId = $state<string | null>(null);
   let queryEl: HTMLInputElement | undefined = $state();
   let caret = $state(0);
@@ -368,6 +369,7 @@
       useOrama ? (ftRank.get(a.id) ?? 1e9) - (ftRank.get(b.id) ?? 1e9) // free-text → relevance order
       : sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
       : sort === 'cpu' ? estCpu(b) - estCpu(a)
+      : sort === 'recent' ? cmpRecent(a, b)
       : a.summary.number - b.summary.number
     );
   });
@@ -901,6 +903,7 @@
       editor.openBuild();
       try {
         await forgefx.loadVersion(cv.id);
+        presetRecency.record(e.id);
         editor.noteBufferReplaced(`Loaded ${e.summary.name} from cloud`);
         await editor.load(); // the buffer changed under the grid — re-read it
         editor.showToast(`Loaded ${e.summary.name} from cloud`, '#9b8cf0');
@@ -914,6 +917,7 @@
       editor.openBuild();
       try {
         await forgefx.loadBytes(bytes);
+        presetRecency.record(e.id);
         editor.noteBufferReplaced(`Loaded ${e.summary.name}`);
         await editor.load();
         editor.showToast(`Loaded ${e.summary.name}`, '#f5a623');
@@ -927,6 +931,7 @@
         const path = library.localPath(e.id);
         const buf = await forgefx.localPresetFile(path);
         await forgefx.loadBytes(buf);
+        presetRecency.record(e.id);
         editor.noteBufferReplaced(`Loaded ${e.summary.name} from local folder`);
         editor.bufferSource = { path, name: e.summary.name }; // Save can write edits back to this file
         await editor.load();
@@ -977,6 +982,12 @@
     flanger: 5, phaser: 5, chorus: 5, rotary: 5, formant: 5, tremolo: 4, filter: 4, drive: 4,
     enhancer: 3, comp: 3, wah: 3, ringmod: 3, geq: 2, peq: 2, gate: 2, volume: 1, input: 0, output: 0
   };
+  // Recent first; never-loaded entries sink below every loaded one, then slot order so the large
+  // never-loaded bucket stays stable. Mirrors sortEntries('recent') in presetBrowserWorkbenchData.
+  function cmpRecent(a: LibEntry, b: LibEntry) {
+    // `?? 0` is safe: every real stamp is a positive epoch, so never-loaded entries sort last.
+    return (presetRecency.at(b.id) ?? 0) - (presetRecency.at(a.id) ?? 0) || a.summary.number - b.summary.number;
+  }
   const CPU_BASE = 8;
   function estCpu(e: LibEntry): number {
     let sum = CPU_BASE;
@@ -1012,7 +1023,7 @@
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
-        {#each [['num', '#'], ['name', 'A-Z'], ['cpu', 'CPU']] as [id, label]}
+        {#each [['num', '#'], ['name', 'A-Z'], ['cpu', 'CPU'], ['recent', 'RECENT']] as [id, label]}
           <button class="segb" class:on={sort === id} onclick={() => (sort = id as typeof sort)}>{label}</button>
         {/each}
       </div>

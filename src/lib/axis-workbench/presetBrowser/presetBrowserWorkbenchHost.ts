@@ -2,6 +2,7 @@ import { cloud } from '../../cloud.svelte';
 import { editor } from '../../editor.svelte';
 import { forgefx } from '../../forgefx';
 import { library } from '../../library.svelte';
+import { presetRecency } from '../../presetRecency.svelte';
 import type { AxisPresetBrowserRuntimeHost } from './presetBrowserWorkbenchRuntime';
 
 export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntimeHost {
@@ -36,6 +37,7 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     paramsOf: (entry) => library.paramsOf(entry as Parameters<typeof library.paramsOf>[0]),
     presetGrid: forgefx.presetGrid,
     versions: (presetNumber) => forgefx.versions(presetNumber).then((result) => result.versions),
-    notify: editor.showToast
+    notify: editor.showToast,
+    recordLoad: presetRecency.record
   };
 }

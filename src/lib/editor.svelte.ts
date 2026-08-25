@@ -15,6 +15,7 @@ import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, 
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
+import { presetRecency } from './presetRecency.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
 import type { EditorSurface } from './editorSurface';
 
@@ -1932,7 +1933,7 @@ class EditorStore {
     const prevSlot = this.preset?.number ?? -1; // where the user was — we return here afterwards
     const switched = prevSlot !== slot;
     try {
-      if (switched) await this.selectPreset(slot); // load into edit buffer (switches device)
+      if (switched) await this.selectPreset(slot, { recency: false }); // load into edit buffer (switches device)
       const r1 = await forgefx.setPresetName(clean);
       if (!r1.ok) throw new Error('name rejected');
       if (this.preset) this.preset = { ...this.preset, name: clean };
@@ -1946,12 +1947,12 @@ class EditorStore {
       library.applySlotName(slot, clean); // reflect the rename in the list immediately (no racy re-scan)
       if (this.canDeepScan) library.refreshSlot(slot); // deep-scan: reconcile the full summary/CRC
       // return to the preset the user was on before the rename
-      if (switched && prevSlot >= 0) await this.selectPreset(prevSlot);
+      if (switched && prevSlot >= 0) await this.selectPreset(prevSlot, { recency: false });
       else await this.poll();
       this.showToast(`Renamed & saved preset ${String(slot).padStart(3, '0')}`, '#33c46b');
       return true;
     } catch {
-      if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot); } catch { /* */ } } // restore on failure too
+      if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot, { recency: false }); } catch { /* */ } } // restore on failure too
       this.showToast('Rename failed', '#d6543f');
       return false;
     }
@@ -2040,11 +2041,14 @@ class EditorStore {
     this.presetPick = onPick;
     this.presetOpen = true;
   };
-  selectPreset = async (n: number) => {
-    if (!this.isV2 && this.isAm4) return this.loadAm4Preset(n); // legacy v1 fallback: AM4's own codec route
+  /** `recency: false` marks an internal slot hop (the rename round-trip) that must not count as a user
+   *  load — see renameStoredPreset. Optional so every existing single-arg call site is unchanged. */
+  selectPreset = async (n: number, opts?: { recency?: boolean }) => {
+    if (!this.isV2 && this.isAm4) return this.loadAm4Preset(n, opts); // legacy v1 fallback: AM4's own codec route
     try {
       await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
       this.lastPreset = n;
+      if (opts?.recency !== false) presetRecency.record(`dev:${n}`);
       this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
       this.#histSwitch(n);
       this.presetOpen = false;
@@ -2063,9 +2067,10 @@ class EditorStore {
   };
   /** @deprecated legacy v1 fallback — AM4: load a stored location (0..103) into the edit buffer,
    *  then re-read the 4-slot grid. API v2 goes through the unified selectPreset(). */
-  loadAm4Preset = async (location: number) => {
+  loadAm4Preset = async (location: number, opts?: { recency?: boolean }) => {
     try {
       await forgefx.am4SwitchPreset(location);
+      if (opts?.recency !== false) presetRecency.record(`dev:${location}`);
       this.presetOpen = false;
       await this.load();
       if (this.selKey) await this.#loadParams();

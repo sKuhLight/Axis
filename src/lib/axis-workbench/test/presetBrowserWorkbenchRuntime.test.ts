@@ -198,6 +198,29 @@ describe('Preset Browser Workbench runtime', () => {
     expect(calls).toEqual(['detail:grid', 'device:10']);
   });
 
+  it('records a load stamp for every source, but not for a failed load or an audition', async () => {
+    const runtime = new AxisPresetBrowserWorkbenchRuntime();
+    const recorded: string[] = [];
+    runtime.bindHost({
+      findEntry: (entryId) => entries.find((entry) => entry.id === entryId) ?? null,
+      loadDeviceSlot: async () => {},
+      fileBytes: () => new Uint8Array([1]),
+      loadBytes: async () => {},
+      localPath: (entryId) => entryId.slice('local:'.length),
+      localPresetFile: async () => new Uint8Array([2]).buffer,
+      // No latestCloudVersionId → the cloud branch throws, so nothing should be stamped for it.
+      deviceEntryBytes: async () => new Uint8Array([3]).buffer,
+      recordLoad: (entryId) => recorded.push(entryId)
+    });
+
+    await runtime.loadEntry('dev:10');
+    await runtime.loadEntry('file:pad');
+    await runtime.loadEntry('local:Folder/Lead.syx');
+    await expect(runtime.loadEntry('cloud:42')).resolves.toBe(false);
+    await runtime.auditionEntry('dev:10'); // auditioning is not loading
+
+    expect(recorded).toEqual(['dev:10', 'file:pad', 'local:Folder/Lead.syx']);
+  });
 
   it('reports missing entries without calling host load actions', async () => {
     const runtime = new AxisPresetBrowserWorkbenchRuntime();

@@ -36,6 +36,8 @@ export interface AxisPresetBrowserRuntimeHost {
   presetGrid?: (presetNumber: number) => Promise<AxisPresetBrowserGridLike>;
   versions?: (presetNumber: number) => Promise<AxisPresetBrowserVersionLike[]>;
   notify?: (message: string, accent?: string) => void;
+  /** Stamp a successful load for the Recent sort. Host-injected so the runtime stays app-free. */
+  recordLoad?: (entryId: string) => void;
 }
 
 export interface AxisPresetBrowserDetailState {
@@ -127,6 +129,9 @@ export class AxisPresetBrowserWorkbenchRuntime {
         await host.loadDeviceSlot(number);
       }
 
+      // Unconditional across all four branches: the device branch also stamps `dev:<n>` via
+      // editor.selectPreset, but that is the same key at the same instant — idempotent.
+      host.recordLoad?.(entryId);
       this.#set({ loadingEntryId: null, lastLoadedEntryId: entryId });
       return true;
     } catch (e) {

@@ -39,6 +39,8 @@ export interface AxisPresetBrowserEntrySummary {
   fav: boolean;
   folder: string | null;
   tags: string[];
+  /** Epoch ms of the last app-initiated load, or null if never loaded. */
+  lastLoadedAt: number | null;
   blocks: AxisPresetBrowserBlockSummary[];
   /** Decoded per-family model names (e.g. { amp: ["5153 100W Blue"] }) — the source of truth for
    *  TYPE-style query matching; `blocks[].name` is only a generic roster instance label. */
@@ -75,7 +77,7 @@ export interface AxisPresetBrowserDataView {
   order: string[];
 }
 
-export type AxisPresetBrowserSortMode = 'num' | 'name' | 'cpu';
+export type AxisPresetBrowserSortMode = 'num' | 'name' | 'cpu' | 'recent';
 
 export interface AxisPresetBrowserDataInput {
   entries: AxisPresetBrowserLibEntryLike[];
@@ -83,6 +85,8 @@ export interface AxisPresetBrowserDataInput {
   sourceId?: AxisPresetBrowserSourceId | null;
   selectedEntryId?: string | null;
   tagsOf?: (entryId: string) => string[];
+  /** Epoch ms of the entry's last load, for the 'recent' sort (§4.1). Host reads the recency store. */
+  lastLoadedAt?: (entryId: string) => number | null;
   /** Advanced/simple query conditions to filter the visible list (§2, §4.1). */
   conditions?: AxisPbCond[];
   /** Simple-mode free text applied on top of conditions. */
@@ -133,9 +137,10 @@ export function normalizeAxisPresetBrowserSourceId(sourceId: AxisPresetBrowserSo
 export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInput): AxisPresetBrowserDataView {
   const activeSourceId = normalizeAxisPresetBrowserSourceId(input.sourceId);
   const syncStateOf = input.syncStateOf;
-  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, syncStateOf));
+  const lastLoadedAt = input.lastLoadedAt;
+  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt));
   const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) =>
-    normalizeEntry(entry, input.tagsOf, syncStateOf)
+    normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt)
   );
   const counts = new Map<AxisPresetBrowserSourceId, number>([['all', entries.length]]);
 
@@ -203,6 +208,16 @@ function sortEntries(
   } else if (sort === 'cpu') {
     // higher CPU first — summary-level estimate mirrors query.estimateCpu (blockCount-derived).
     list.sort((a, b) => b.blockCount - a.blockCount);
+  } else if (sort === 'recent') {
+    // Most recently loaded first. Never-loaded entries sink below every loaded one; the number
+    // tiebreak keeps that (large) bucket in slot order rather than leaning on sort stability.
+    // `?? 0` rather than -Infinity: every real stamp is a positive epoch, and Infinity - Infinity
+    // would yield NaN for two never-loaded entries.
+    list.sort(
+      (a, b) =>
+        (b.lastLoadedAt ?? 0) - (a.lastLoadedAt ?? 0) ||
+        (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY)
+    );
   } else {
     list.sort((a, b) => (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY));
   }
@@ -212,7 +227,8 @@ function sortEntries(
 function normalizeEntry(
   entry: AxisPresetBrowserLibEntryLike,
   tagsOf?: (entryId: string) => string[],
-  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState
+  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState,
+  lastLoadedAt?: (entryId: string) => number | null
 ): AxisPresetBrowserEntrySummary {
   const blocks = entry.summary.blocks ?? [];
   const firstModel = entry.summary.model
@@ -238,6 +254,7 @@ function normalizeEntry(
     fav: entry.fav === true,
     folder: entry.folder ?? null,
     tags: tagsOf?.(entry.id) ?? [],
+    lastLoadedAt: lastLoadedAt?.(entry.id) ?? null,
     blocks,
     models: entry.summary.models ?? {},
     amps: entry.summary.amps ?? [],
