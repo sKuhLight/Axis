@@ -8,6 +8,7 @@
 //   - audition    → runtime.auditionEntry        (device slots only)
 //   - favorite    → library.toggleFav            (toggles; label flips on entry.fav)
 //   - rename      → editor.renameStoredPreset    (device slots, gated on canRenamePresets)
+//   - tags        → library.addTag/removeTag     (any entry, including cloud-only rows)
 //   - cloudUpload → editor.backupPreset+cloudSync (signed in; "Back up"/"Upload"/"Re-upload" by sync state)
 //   - cloudDownload → runtime cloud-version load  (signed in; outdated/cloudOnly rows)
 // The design's Duplicate / Convert / Export-to-disk / Delete-everywhere are NOT emitted here — they are
@@ -19,6 +20,7 @@ export type AxisPbMenuActionId =
   | 'audition'
   | 'favorite'
   | 'rename'
+  | 'tags'
   | 'crossConvert'
   | 'openConverter'
   | 'deleteConverted'
@@ -82,6 +84,7 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
     return [
       { id: 'openConverter', label: 'Open in converter', hint: '↵' },
       { id: 'favorite', label: entry.fav ? 'Remove from favorites' : 'Add to favorites', separatorBefore: true },
+      { id: 'tags', label: 'Tags…' },
       { id: 'deleteConverted', label: 'Delete', danger: true, separatorBefore: true }
     ];
   }
@@ -100,6 +103,7 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
     label: entry.fav ? 'Remove from favorites' : 'Add to favorites',
     separatorBefore: true
   });
+  actions.push({ id: 'tags', label: 'Tags…' });
   if (caps.cloudOn) {
     const cloud = cloudActionFor(entry);
     if (cloud) actions.push(cloud);

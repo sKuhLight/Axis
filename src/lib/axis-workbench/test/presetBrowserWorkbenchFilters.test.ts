@@ -25,7 +25,7 @@ const libEntry: SpecLibEntry = {
   ]
 };
 
-const ctx: AxisPbFiltersContext = buildFiltersContext([libEntry], specsBySlug([libEntry]), ['Lead']);
+const ctx: AxisPbFiltersContext = buildFiltersContext([libEntry], specsBySlug([libEntry]), ['Lead', 'Ambient']);
 
 // apply an applyPick result to an empty cond list, return the mutated list
 function runPick(kind: Parameters<typeof applyPick>[1], pctx: Parameters<typeof applyPick>[2], v: string, seed: AxisPbCond[] = []) {
@@ -81,6 +81,24 @@ describe('Preset Browser filters picker', () => {
     expect(opGlyph('<=')).toBe('≤');
     expect(opGlyph('!=')).toBe('≠');
     expect(opGlyph('>')).toBe('>');
+  });
+
+  it('edittags lists the tag vocabulary with checked state reflecting the entry\'s current tags', () => {
+    const items = pickerItems(ctx, 'edittags', { entryId: 'dev:1', entryTags: ['Lead'] }, '');
+    expect(items.map((i) => [i.v, i.checked])).toEqual([
+      ['Lead', true],
+      ['Ambient', false]
+    ]);
+  });
+
+  it('edittags omits the Create row when the search matches a tag exactly', () => {
+    const items = pickerItems(ctx, 'edittags', { entryId: 'dev:1', entryTags: [] }, 'Lead');
+    expect(items.map((i) => i.v)).toEqual(['Lead']);
+  });
+
+  it('edittags appends a Create row when the search matches nothing exactly', () => {
+    const items = pickerItems(ctx, 'edittags', { entryId: 'dev:1', entryTags: [] }, 'Solo');
+    expect(items).toEqual([{ v: 'Solo', label: 'Create "Solo"', sub: 'new tag', dot: false, color: '#6e6e78', checked: false }]);
   });
 
   it('chipDescriptor builds block + scalar chips', () => {

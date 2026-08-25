@@ -287,11 +287,23 @@
   const pickerList = $derived(picker ? buildPickerItems(filtersContext, picker.kind, picker.ctx, pickerSearch) : []);
   function openPicker(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, el: HTMLElement) {
     const r = el.getBoundingClientRect();
-    picker = { kind, ctx, x: Math.min(Math.max(12, r.left), window.innerWidth - 312), y: r.bottom + 6 };
+    openPickerAt(kind, ctx, r.left, r.bottom + 6);
+  }
+  function openPickerAt(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, x: number, y: number) {
+    picker = { kind, ctx, x: Math.min(Math.max(12, x), window.innerWidth - 312), y };
     pickerSearch = ''; pickerHi = 0;
   }
   function pickerPick(v: string) {
     if (!picker) return;
+    if (picker.kind === 'edittags') {
+      const entryId = picker.ctx.entryId;
+      if (entryId) {
+        if (library.tagsOf(entryId).includes(v)) library.removeTag(entryId, v);
+        else { library.addTag(entryId, v); recordTagUsage(v); }
+        picker = { ...picker, ctx: { ...picker.ctx, entryTags: library.tagsOf(entryId) } };
+      }
+      return;
+    }
     const res = applyPick(filtersContext, picker.kind, picker.ctx, v);
     if (res.type === 'chain') { openPickerKind(res.kind, res.ctx); return; }
     if (res.type === 'edit') {
@@ -309,6 +321,12 @@
     else if (e.key === 'ArrowUp') { e.preventDefault(); pickerHi = Math.max(0, pickerHi - 1); }
     else if (e.key === 'Enter') { e.preventDefault(); if (items[pickerHi]) pickerPick(items[pickerHi].v); }
     else if (e.key === 'Escape') picker = null;
+  }
+  // Esc closes the picker wherever focus happens to be. The popover's own `onkeydown` only fires
+  // while focus is inside it, which is not guaranteed for the `edittags` picker: it is opened from
+  // the row context menu, whose focus trap restores focus to the row as it unmounts.
+  function onWindowKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && picker) picker = null;
   }
   function removeCondAt(ci: number) { axisPresetBrowserWorkbenchController.editConds((cc) => cc.splice(ci, 1)); }
   function removeParamAt(ci: number, pi: number) {
@@ -538,6 +556,16 @@
       case 'rename':
         beginRename(entry);
         return;
+      case 'tags': {
+        // Deferred a tick: the menu-item click that reaches us here is still bubbling toward the
+        // `<svelte:window onclick>` picker-closer below, which would otherwise null this picker back
+        // out the instant it opens. Capture id/name/tags now (not read from `menuEntry` later) so a
+        // second right-click before the timeout fires can't retarget this picker mid-flight.
+        const pos = { ...menuPos };
+        const ctx = { entryId: entry.id, entryName: entry.name, entryTags: library.tagsOf(entry.id) };
+        setTimeout(() => openPickerAt('edittags', ctx, pos.x, pos.y));
+        return;
+      }
       case 'crossConvert':
         crossConvert(entry.id);
         return;
@@ -1145,8 +1173,8 @@
 {/if}
 
 <!-- V13e add-filter / param / value picker popover (§2.5, §4.4). Local to the instance that owns the query
-     bar (list/full); anchored in viewport coords. A window click closes it. -->
-<svelte:window onclick={() => { if (picker) picker = null; }} ondragend={() => (dragOver = false)} />
+     bar (list/full); anchored in viewport coords. A window click or Esc closes it. -->
+<svelte:window onclick={() => { if (picker) picker = null; }} onkeydown={onWindowKey} ondragend={() => (dragOver = false)} />
 {#if picker}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -1159,7 +1187,7 @@
     onkeydown={onPickerKey}
   >
     <div class="pk-h">
-      <div class="pk-lbl">{picker.kind === 'addfilter' ? 'Add a filter' : picker.kind === 'tag' ? 'Pick a tag' : picker.kind === 'param' ? 'Pick a parameter' : 'Pick a value'}</div>
+      <div class="pk-lbl">{picker.kind === 'addfilter' ? 'Add a filter' : picker.kind === 'tag' ? 'Pick a tag' : picker.kind === 'edittags' ? `Tags for ${picker.ctx.entryName ?? 'preset'}` : picker.kind === 'param' ? 'Pick a parameter' : 'Pick a value'}</div>
       <div class="pk-search">
         <span aria-hidden="true">⌕</span>
         <!-- svelte-ignore a11y_autofocus -->
@@ -1170,7 +1198,9 @@
       {#each pickerList as it, i}
         <button type="button" class="pk-item" class:hi={i === pickerHi} onclick={() => pickerPick(it.v)} onmouseenter={() => (pickerHi = i)}>
           {#if it.dot}<span class="fdot" style:background={it.color}></span>{/if}
-          <span class="pk-l">{it.label}</span><span class="fsp"></span><span class="pk-s">{it.sub}</span>
+          <span class="pk-l">{it.label}</span><span class="fsp"></span>
+          {#if it.checked}<span class="pk-check" aria-hidden="true">✓</span>{/if}
+          <span class="pk-s">{it.sub}</span>
         </button>
       {/each}
       {#if !pickerList.length}<div class="pk-empty">No matches</div>{/if}
@@ -1928,6 +1958,10 @@
   .pk-s {
     color: var(--textdim);
     font: 500 10px/1 var(--font-mono);
+  }
+  .pk-check {
+    color: var(--accent);
+    font: 700 12px/1 var(--font-mono);
   }
 
   /* V13f BLOCK PARAMETERS listing (detail §4) */

@@ -17,24 +17,25 @@ function entry(over: Partial<AxisPbMenuEntry> = {}): AxisPbMenuEntry {
 }
 
 describe('context menu building (§4.4)', () => {
-  it('device slot signed out → Load + Audition + Rename + Convert + Favorite, no cloud items', () => {
+  it('device slot signed out → Load + Audition + Rename + Convert + Favorite + Tags, no cloud items', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: true, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'rename', 'crossConvert', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'rename', 'crossConvert', 'favorite', 'tags']);
     expect(actions[0].label).toBe('Load preset');
     expect(actions.find((a) => a.id === 'favorite')?.label).toBe('Add to favorites');
+    expect(actions.find((a) => a.id === 'tags')?.label).toBe('Tags…');
   });
 
   it('omits Rename when the device cannot rename', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: false, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'crossConvert', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'crossConvert', 'favorite', 'tags']);
   });
 
-  it('non-device rows (files) get Load + Convert + Favorite (no audition/rename)', () => {
+  it('non-device rows (files) get Load + Convert + Favorite + Tags (no audition/rename)', () => {
     const actions = buildAxisPbMenuActions(entry({ deviceSlot: false }), { canRename: true, cloudOn: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite', 'tags']);
   });
 
-  it('cloud-only rows load "from cloud" and skip audition/rename', () => {
+  it('cloud-only rows load "from cloud", skip audition/rename, and still offer Tags', () => {
     const actions = buildAxisPbMenuActions(
       entry({ cloudOnly: true, deviceSlot: false, syncState: 'cloudOnly' }),
       { canRename: true, cloudOn: true }
@@ -42,6 +43,7 @@ describe('context menu building (§4.4)', () => {
     expect(actions[0].label).toBe('Load from cloud');
     expect(actions.map((a) => a.id)).toContain('cloudDownload');
     expect(actions.map((a) => a.id)).not.toContain('audition');
+    expect(actions.map((a) => a.id)).toContain('tags');
   });
 
   it('flips the favorite label for favourited rows', () => {
@@ -65,12 +67,12 @@ describe('context menu building (§4.4)', () => {
     expect(actions.find((a) => a.id === 'cloudUpload')?.separatorBefore).toBe(true);
   });
 
-  it('saved conversions get a reduced menu: Open in converter + Favorite + Delete (no device actions)', () => {
+  it('saved conversions get a reduced menu: Open in converter + Favorite + Tags + Delete (no device actions)', () => {
     const actions = buildAxisPbMenuActions(
       entry({ id: 'conv:x', deviceSlot: false, converted: true }),
       { canRename: true, cloudOn: true }
     );
-    expect(actions.map((a) => a.id)).toEqual(['openConverter', 'favorite', 'deleteConverted']);
+    expect(actions.map((a) => a.id)).toEqual(['openConverter', 'favorite', 'tags', 'deleteConverted']);
     expect(actions.map((a) => a.id)).not.toContain('load'); // not a device slot — no load-to-device
     expect(actions.map((a) => a.id)).not.toContain('crossConvert');
     expect(actions.find((a) => a.id === 'deleteConverted')?.danger).toBe(true);

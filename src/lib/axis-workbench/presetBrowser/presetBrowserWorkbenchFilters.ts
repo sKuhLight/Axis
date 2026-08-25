@@ -16,13 +16,19 @@ import {
 } from './presetBrowserWorkbenchSpecs';
 import type { AxisPbCond, AxisPbParamCond } from './presetBrowserWorkbenchQuery';
 
-export type AxisPbPickerKind = 'addfilter' | 'tag' | 'param' | 'value';
+export type AxisPbPickerKind = 'addfilter' | 'tag' | 'edittags' | 'param' | 'value';
 
 export interface AxisPbPickerCtx {
   block?: string;
   param?: string;
   /** Index of the target block chip in the condition list (for `+ param` on an existing chip). */
   ci?: number;
+  /** `edittags` only: the entry being tagged, its current tags (for the checked state), and its
+   *  display name (for the picker title) — captured at open time so a later menu-open elsewhere
+   *  can't retarget an already-open picker's title out from under it. */
+  entryId?: string;
+  entryTags?: string[];
+  entryName?: string;
 }
 
 export interface AxisPbPickerItem {
@@ -32,6 +38,8 @@ export interface AxisPbPickerItem {
   sub: string;
   dot: boolean;
   color: string;
+  /** `edittags` only: does the entry already have this tag? */
+  checked?: boolean;
 }
 
 export interface AxisPbFiltersContext {
@@ -57,6 +65,18 @@ export function pickerItems(ctx: AxisPbFiltersContext, kind: AxisPbPickerKind, p
   }
   if (kind === 'tag') {
     return ctx.tags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: '#6e6e78' }));
+  }
+  if (kind === 'edittags') {
+    const current = new Set(pctx.entryTags ?? []);
+    const items: AxisPbPickerItem[] = ctx.tags
+      .filter((t) => t.toLowerCase().includes(f))
+      .map((t) => ({ v: t, label: t, sub: '', dot: true, color: tagColor(t), checked: current.has(t) }));
+    const query = search.trim();
+    const exact = ctx.tags.some((t) => t.toLowerCase() === query.toLowerCase());
+    if (query && !exact) {
+      items.push({ v: query, label: `Create "${query}"`, sub: 'new tag', dot: false, color: '#6e6e78', checked: false });
+    }
+    return items;
   }
   if (kind === 'param') {
     const id = pctx.block!;
