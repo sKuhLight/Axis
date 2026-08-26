@@ -182,7 +182,7 @@
                   style="background:{tileBg(ce.accent)}; border-color:{shade(ce.accent, light ? 0.3 : -0.05)}; color:{tileInk(ce.accent)};"
                   onclick={() => onCellClick(r, c)}
                 >
-                  <span class="glyph">{ce.glyph}</span>
+                  <span class="glyph">{@html ce.glyph}</span>
                   <span class="lbl">{ce.short}</span>
                   {#if block.typeName}<span class="ty mono">{block.typeName}</span>{/if}
                   {#if bsev}<span class="badge" style="background:{SEV_COLOR[bsev]};" title="{bsev === 'loss' ? 'Needs attention' : 'Review suggested'}">!</span>{/if}
@@ -219,7 +219,7 @@
             {#each convertScratch.tray as b (b.key)}
               {@const ce = cat(b.family)}
               <div class="trayrow" class:armed={convertScratch.placingKey === b.key}>
-                <span class="tchip" style="background:{tileBg(ce.accent)}; color:{tileInk(ce.accent)};">{ce.glyph}</span>
+                <span class="tchip" style="background:{tileBg(ce.accent)}; color:{tileInk(ce.accent)};">{@html ce.glyph}</span>
                 <span class="tname">{ce.short}{#if b.typeName}<span class="tsub mono">{b.typeName}</span>{/if}</span>
                 <span class="spacer"></span>
                 <button class="mini" class:on={convertScratch.placingKey === b.key} onclick={() => convertScratch.arm(b.key)}>
@@ -235,7 +235,7 @@
           {@const ce = cat(focused.family)}
           <section class="resolve">
             <h3>
-              <span class="rchip" style="background:{tileBg(ce.accent)}; color:{tileInk(ce.accent)};">{ce.glyph}</span>
+              <span class="rchip" style="background:{tileBg(ce.accent)}; color:{tileInk(ce.accent)};">{@html ce.glyph}</span>
               {ce.short}{focused.typeName ? ` · ${focused.typeName}` : ''}
             </h3>
 

@@ -116,7 +116,7 @@
 
       <!-- header -->
       <header class="head">
-        <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</div>
+        <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
         <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
           <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
           <span class="t-wrap">

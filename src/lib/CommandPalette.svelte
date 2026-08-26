@@ -285,7 +285,7 @@
               {@const cat = chipFor(r)}
               <div class="rowwrap" class:hi={r.fi === hi} class:isplaced={isPlaced(r)}>
                 <button class="row" disabled={isPlaced(r)} onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
-                  <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
+                  <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</span>
                   <span class="rtext">
                     <span class="rname">{r.name}</span>
                     {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}

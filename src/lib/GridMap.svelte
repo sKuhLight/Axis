@@ -196,7 +196,7 @@
                   onclick={() => onCell(r, c)}
                   onkeydown={(e) => e.key === 'Enter' && onCell(r, c)}
                 >
-                  <span class="glyph">{cat.glyph}</span>
+                  <span class="glyph">{@html cat.glyph}</span>
                   {#if showPort(cl)}
                     <button
                       class="port"

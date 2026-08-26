@@ -800,7 +800,7 @@
                     <div class="sh-name">{swipeHud.m.name}</div>
                   </div>
                 {/if}
-                <span class="glyph">{cat.glyph}</span>
+                <span class="glyph">{@html cat.glyph}</span>
                 {#if !mapMode}
                   <span class="b-label">{label}</span>
                   {#if showType}{@const tn = editor.typeNameFor(cell.effectId) || (base !== cat.short ? base : '')}{#if tn}<span class="b-type mono">{tn}</span>{/if}{/if}

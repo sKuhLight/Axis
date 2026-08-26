@@ -210,7 +210,7 @@
             {#each s.rows as r (`${r.id}#${r.fi}`)}
               <div class="rowwrap" class:hi={r.fi === hi} class:sel={isCurrent(r)}>
                 <button class="row" onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
-                  <span class="chip" style="background:linear-gradient(180deg,{cat.accent}, {cat.accent}88); border-color:{cat.accent};">{cat.glyph}</span>
+                  <span class="chip" style="background:linear-gradient(180deg,{cat.accent}, {cat.accent}88); border-color:{cat.accent};">{@html cat.glyph}</span>
                   <span class="rtext">
                     <span class="rname">{r.name}</span>
                     <span class="rsub">{r.sub}</span>

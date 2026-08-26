@@ -185,7 +185,7 @@
                   onmousemove={moveTip}
                   onmouseleave={hideTip}
                 >
-                  <span class="glyph">{cat.glyph}</span>
+                  <span class="glyph">{@html cat.glyph}</span>
                   {#if oc}<span class="src-badge" style="background:{badgeFill(oc)};">{oc.icon}</span>{/if}
                 </div>
               {:else if cl?.kind === 'shunt'}
@@ -222,7 +222,7 @@
           onmousemove={moveTip}
           onmouseleave={hideTip}
         >
-          <span class="glyph">{cat.glyph}</span>
+          <span class="glyph">{@html cat.glyph}</span>
           <span class="nm">{name}</span>
           {#if oc}<span class="src-badge row-badge" style="background:{badgeFill(oc)};">{oc.icon}</span>{/if}
         </div>
