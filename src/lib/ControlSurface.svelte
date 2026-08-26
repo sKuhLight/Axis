@@ -76,6 +76,11 @@
     gainReduction: 'Gain Reduction', vu: 'VU', level: 'Level',
     headroom: 'Headroom', supply: 'Supply', detector: 'Detector'
   };
+  /** Short form of the same names, for the per-bar tag under a multi-bar meter (one column wide). */
+  const MON_ROLE_TAG: Record<string, string> = {
+    gainReduction: 'GR', vu: 'VU', level: 'LVL',
+    headroom: 'HR', supply: 'B+', detector: 'DET'
+  };
   /** Display name for a monitor. The device's own label for the leaked param is the most authentic
    *  source ("HEADROOM", "B+", "VU"), but some rows carry the RAW TOKEN as their label (cab pid 60 is
    *  literally `CABINET_GAINMONITOR`, unit `unverified`) — fall back to the role there so a device
@@ -92,7 +97,16 @@
   // short per-bar tag when a block has several monitors (L/R for VU, band number for M-Comp, else role)
   const meterTag = (m: import('./types').LiveMonitor): string =>
     /VUL$/.test(m.paramName) ? 'L' : /VUR$/.test(m.paramName) ? 'R'
-      : (m.paramName.match(/GAINMON(\d)$/)?.[1] ?? (m.role === 'gainReduction' ? 'GR' : m.role === 'vu' ? 'VU' : '·'));
+      : (m.paramName.match(/GAINMON(\d)$/)?.[1] ?? MON_ROLE_TAG[m.role] ?? m.role);
+  /** Title for the multi-bar meter card: the distinct readings it shows, in bar order — `VU` for the
+   *  output's L+R pair, `Level / VU` for the cab, `Gain Reduction` for M-Comp's three bands. Names the
+   *  content instead of the widget, so no card is ever titled just "Meter(s)". Long joins ellipsis in a
+   *  one-column card; the label carries the full text as its tooltip. */
+  const metersLabel = $derived.by<string>(() => {
+    const seen: string[] = [];
+    for (const m of mons) if (!seen.includes(m.role)) seen.push(m.role);
+    return seen.map((r) => MON_ROLE_LABEL[r] ?? r).join(' / ');
+  });
   // bar fill 0..1. Gain-reduction meters read INVERTED on the wire (norm 1.0 = 0 dB = no reduction at
   // idle); show them growing from empty as reduction increases. Level/VU/detector fill with signal.
   const meterFill = (m: import('./types').LiveMonitor | null): number =>
@@ -148,7 +162,7 @@
     out.push({ key: 'bypass', kind: 'action', label: 'Bypass', id: -2, w: 2, h: 1, view: 'action', views: ['action'] });
     // Live audio meter — offered only when this block actually reports a monitor level (INPUT/OUTPUT/
     // COMP/GATE/CAB/DRIVE/FILTER…). Draggable/scalable like any widget; value from editor.monitorFor.
-    if (mon) out.push({ key: 'meter', kind: 'meter', label: mon.role === 'gainReduction' ? 'Gain Reduction' : mon.role === 'vu' ? 'VU' : 'Meter', id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
+    if (mon) out.push({ key: 'meter', kind: 'meter', label: metersLabel, id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
     // Per-monitor horizontal meters, replacing the phantom knobs suppressed above. Wide-and-short to
     // match the device editor (label left, bar, dB readout right); `views` is meterH-only so the
     // view-cycle chip can never retype a read-only meter into an editable knob.
@@ -1515,8 +1529,10 @@
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                 <div class="action" class:byp={editor.selected?.bypassed} onpointerdown={(e) => e.stopPropagation()} onclick={() => !editMode && editor.toggleBypass()}>{editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}</div>
               {:else if c.kind === 'meter'}
-                <div class="kval rel">{meterDbText}</div>
-                <div class="mrow" title="Live level ({c.label})">
+                <!-- READ-ONLY vertical monitor(s). Same reading order as `meterH`: title, then the
+                     bar(s), then the live dB — a block may report several (VU L/R, M-Comp bands). -->
+                <div class="lbl" title={c.label}>{c.label}</div>
+                <div class="mrow" title="Live {c.label} (read-only)">
                   {#each (mons.length ? mons : [null]) as m}
                     <div class="mcol">
                       <div class="mtrack">
@@ -1526,7 +1542,7 @@
                     </div>
                   {/each}
                 </div>
-                <div class="lbl">{c.label}</div>
+                <div class="mhval">{meterDbText}</div>
               {:else if c.kind === 'meterH'}
                 <!-- READ-ONLY horizontal monitor (amp HEADROOM/B+, cab VU, …): title on top like every
                      other card, then bar + live dB. No steppers, no drag: `onWidgetDown` only adjusts
