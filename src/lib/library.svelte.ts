@@ -7,11 +7,12 @@ import { isRemoteBuild } from './cloudBrowser';
 import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
-import type { PresetSummary, DecodedBlock } from './types';
+import type { PresetSummary, DecodedBlock, ColorLabelGroup } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
 import { deviceName } from './convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
 import { renameTagAssignments, renameTagColorKey } from './tagRename';
+import { mapFm3Color } from './fm3ColorMap';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
 // letting a malformed cache break the library). Permissive: only the fields the UI relies on.
@@ -737,6 +738,80 @@ class LibraryStore {
     this.tagColors = nextColors;
     persistCfg('tags', LS.tags, this.tags);
     persistCfg('tagColors', LS.tagColors, this.tagColors);
+  }
+  /** Apply FM3-Edit preset-color groups (replicated-purring-bachman) as Axis tags. Matches by exact
+   *  (case-insensitive) `summary.name` against DEVICE-SLOT entries only — FM3-Edit assigns colors to
+   *  device slots, so a file/local/converted copy of the same name is deliberately not tagged here
+   *  (a name-matching decision, not an oversight; see plan revision #5).
+   *
+   *  `opts.skipIds`: FM3 tag name → preset ids to leave untouched even if matched (the caller's
+   *  provenance record for ids already offered this tag on a prior run — see colorLabels.svelte.ts).
+   *  Skipping here, rather than filtering whole groups out by name, is what lets a NEW preset that
+   *  later picks up an already-seen FM3 color still get tagged, while a preset whose tag the user
+   *  removed or renamed away stays untouched.
+   *
+   *  Builds a name→ids index once (not a nested scan per name), assigns both the tags map and the
+   *  tagColors map before persisting either (mirrors `renameTag`'s atomic build — see plan revision
+   *  #2, avoids the `ensureTagColors` claim-race a separate `setTagColor` call afterward would hit),
+   *  and only persists what actually changed (see plan revision #3 — this runs on every
+   *  `library.entries` reassignment during a progressive scan). Idempotent: skips ids that already
+   *  carry the tag.
+   *
+   *  Returns `matchedIds` (FM3 tag name → every device-slot id the group's names resolved to, whether
+   *  newly tagged, already tagged, or skipped) so the caller can fold it into its provenance record. */
+  applyColorLabelGroups(
+    groups: ColorLabelGroup[],
+    opts: { skipIds?: Record<string, string[]> } = {}
+  ): { tagged: number; unmatched: string[]; matchedIds: Record<string, string[]> } {
+    const nameIndex = new Map<string, string[]>();
+    for (const e of this.entries) {
+      if (e.source !== 'device') continue;
+      const key = e.summary.name.trim().toLowerCase();
+      if (!key) continue;
+      const ids = nameIndex.get(key);
+      if (ids) ids.push(e.id);
+      else nameIndex.set(key, [e.id]);
+    }
+
+    const nextTags = { ...this.tags };
+    const nextColors = { ...this.tagColors };
+    const matchedIds: Record<string, string[]> = {};
+    const unmatched: string[] = [];
+    let tagged = 0;
+    let tagsChanged = false;
+    let colorsChanged = false;
+
+    for (const group of groups) {
+      const { name, swatchIndex } = mapFm3Color(group.hex);
+      const skip = new Set(opts.skipIds?.[name] ?? []);
+      const seen = new Set<string>();
+      for (const presetName of group.names) {
+        const ids = nameIndex.get(presetName.trim().toLowerCase());
+        if (!ids || !ids.length) { unmatched.push(presetName); continue; }
+        for (const id of ids) {
+          if (!seen.has(id)) { seen.add(id); (matchedIds[name] ??= []).push(id); }
+          if (skip.has(id)) continue; // provenance: leave a removed/renamed-away assignment alone
+          const cur = nextTags[id] ?? [];
+          if (cur.some((t) => t.toLowerCase() === name.toLowerCase())) continue; // already tagged
+          nextTags[id] = [...cur, name];
+          tagsChanged = true;
+          tagged++;
+        }
+      }
+      // Deliberate color mapping — claim only if this tag has no color yet (never override a manual
+      // recolor) and the group actually matched at least one preset (skip phantom colors for an
+      // FM3-Edit color the user never assigned to anything), building both maps before persisting
+      // either (see the doc comment above).
+      if ((matchedIds[name]?.length ?? 0) > 0 && findTagKey(nextColors, name) === undefined) {
+        nextColors[name] = swatchIndex;
+        colorsChanged = true;
+      }
+    }
+
+    if (tagsChanged) { this.tags = nextTags; persistCfg('tags', LS.tags, this.tags); }
+    if (colorsChanged) { this.tagColors = nextColors; persistCfg('tagColors', LS.tagColors, this.tagColors); }
+
+    return { tagged, unmatched, matchedIds };
   }
   createCollection(name: string): void {
     const n = name.trim();

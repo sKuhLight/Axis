@@ -711,6 +711,36 @@ export interface DeviceCacheCandidate {
   mtime: number;
 }
 
+/** One `color-assignments*.dat` file discovered on disk (Node/Electron) — GET
+ *  /fm3edit/color-labels/sources → candidates. Not device-coupled (unlike DeviceCacheCandidate) — a
+ *  preset-color file isn't tied to a connected device, so there's no model/firmware/persisted state. */
+export interface ColorLabelCandidate {
+  path: string;
+  /** Editor dir name the file was found under, e.g. "FM3-Edit". */
+  editor: string;
+  size: number;
+  /** ISO timestamp (the server stamps this from fs.statSync mtimeMs, unlike DeviceCacheCandidate). */
+  mtime: string;
+}
+
+/** GET /fm3edit/color-labels/sources — discovered import candidates. Browser sessions get no
+ *  filesystem discovery (empty candidates), same degrade as DeviceCacheSources. */
+export interface ColorLabelSources {
+  candidates: ColorLabelCandidate[];
+}
+
+/** One FM3-Edit preset-color group: the assigned color + every preset name in it. */
+export interface ColorLabelGroup {
+  /** 6-digit hex, e.g. "#febcbc". */
+  hex: string;
+  names: string[];
+}
+
+/** POST /fm3edit/color-labels/import result — the parsed groups, ready for library.applyColorLabelGroups. */
+export interface ColorLabelImportResult {
+  groups: ColorLabelGroup[];
+}
+
 /** GET /device/cache/sources — discovered import candidates + whether a profile is already persisted.
  *  Browser sessions get no filesystem discovery (`discovery: 'unavailable'`, empty candidates). */
 export interface DeviceCacheSources {

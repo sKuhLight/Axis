@@ -32,6 +32,8 @@ import type {
   DeviceCacheStatus,
   DeviceCacheImportResult,
   DeviceCacheSources,
+  ColorLabelSources,
+  ColorLabelImportResult,
   CloudCacheStatus,
   ConverterDeviceId,
   ConvertResponse,
@@ -451,6 +453,30 @@ export const forgefx = {
     }).then((r) => {
       if (!r.ok) { reportFailure(`/device/cache/import`, 'POST', r.status, `import → ${r.status}`); throw new ForgeError(r.status, `import → ${r.status}`); }
       return r.json() as Promise<DeviceCacheImportResult>;
+    });
+  },
+  // ── FM3-Edit preset-color import (replicated-purring-bachman) — not device-coupled, unlike the
+  // definition-cache block above: a preset-color file isn't tied to a connected device. ──
+  /** Discovered `color-assignments*.dat` candidates on disk. Browser sessions get none. Null when absent. */
+  colorLabelSources: () => capOptional(req<ColorLabelSources>('/fm3edit/color-labels/sources')),
+  /** Import a discovered FM3-Edit color-assignments file. `{path}` reads a server-discovered
+   *  candidate off disk (Electron); `{bytes,name}` uploads raw bytes. Throws ForgeError 422 (parse
+   *  failure) or 404 (older ForgeFX without the route) — callers should treat both as a no-op. */
+  importColorLabels: (source: { path: string } | { bytes: Uint8Array; name: string }): Promise<ColorLabelImportResult> => {
+    if ('path' in source) {
+      return req<ColorLabelImportResult>('/fm3edit/color-labels/import', {
+        method: 'POST',
+        body: JSON.stringify({ path: source.path })
+      });
+    }
+    return fetch(`${BASE}/fm3edit/color-labels/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: source.bytes as BodyInit,
+      signal: AbortSignal.timeout(30000)
+    }).then((r) => {
+      if (!r.ok) { reportFailure(`/fm3edit/color-labels/import`, 'POST', r.status, `import → ${r.status}`); throw new ForgeError(r.status, `import → ${r.status}`); }
+      return r.json() as Promise<ColorLabelImportResult>;
     });
   },
   /** Whether a shared cloud profile exists for this device+firmware (null when cloud absent). */

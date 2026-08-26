@@ -22,6 +22,7 @@
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
+  import ColorLabelsPrompt from '$lib/ColorLabelsPrompt.svelte';
   import DeviceDefsPrompt from '$lib/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/AxisPanel.svelte';
   import ThemePicker from '$lib/ThemePicker.svelte';
@@ -39,6 +40,7 @@
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
   import { pollIntervalsFor } from '$lib/pollIntervals';
+  import { colorLabels } from '$lib/colorLabels.svelte';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
   // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
@@ -50,6 +52,7 @@
     void surfInit(); // load control-surface layouts from the config store (host: cache is already seeded)
     editor.init();
     editor.poll();
+    void colorLabels.refresh(); // FM3-Edit preset-color import (replicated-purring-bachman); one-time-ever check, silent no-op if absent
   }
   // Poll/preset-watch loops. The interval depends on the active telemetry polling mode (META-17/AXIS-40):
   // faster modes reflect device changes sooner at the cost of traffic; remote sessions are event-driven
@@ -175,6 +178,7 @@
   <SaveDialog />
   <TunerOverlay />
   <CachePrompt />
+  <ColorLabelsPrompt />
   <DeviceDefsPrompt />
   <AxisPanel />
   {#if editor.themeOpen}<ThemePicker onclose={() => (editor.themeOpen = false)} />{/if}
