@@ -1475,15 +1475,19 @@
                   <div class="hhandle" style:left="calc({pct(c.id)}% - 8px)"></div>
                 </div>
               {:else if c.kind === 'cont' && w.view === 'number'}
+                <!-- A 1-column card cannot fit `− value +`: two 30px steps + gaps + the value need
+                     ~124px against ~32-44px of usable width, and the value paints over the steps.
+                     Drop the steppers there — double-click to type still edits the value. -->
+                {@const steps = w.w >= 2}
                 <div class="numrow">
-                  <button class="step" onpointerdown={(e) => e.stopPropagation()} onclick={() => nudge(c.id, -1)}>−</button>
+                  {#if steps}<button class="step" onpointerdown={(e) => e.stopPropagation()} onclick={() => nudge(c.id, -1)}>−</button>{/if}
                   {#if editingKey === w.key}
                     <input id="cs-input" class="kinput big" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
                   {:else}
                     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                     <div class="kval big" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
                   {/if}
-                  <button class="step" onpointerdown={(e) => e.stopPropagation()} onclick={() => nudge(c.id, 1)}>＋</button>
+                  {#if steps}<button class="step" onpointerdown={(e) => e.stopPropagation()} onclick={() => nudge(c.id, 1)}>＋</button>{/if}
                 </div>
                 <div class="lbl">{c.label}</div>
               {:else if c.kind === 'toggle' && w.view === 'button'}
@@ -2108,7 +2112,12 @@
   .kval.big {
     font-size: 28px;
     font-weight: 700;
-    min-width: 44px;
+    /* No min-width: it used to force 44px and shove the value on top of the step buttons in a narrow
+       card. Shrink and ellipsize instead. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .kinput {
     position: absolute;
@@ -2375,7 +2384,10 @@
   .numrow {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
   }
   .step {
     width: 30px;
