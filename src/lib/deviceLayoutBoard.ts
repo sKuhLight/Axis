@@ -5,7 +5,10 @@
 // flow left→right within a row, rows flow top→bottom. The board model is a flat grid of positioned
 // widgets per page (`SurfaceWidget[]`); we compute each widget's grid cell from the row structure and
 // tag it with its source `row` so the responsive re-pack (ControlSurface.packRows) can preserve the
-// row breaks at any width. This module is UI-free (no Svelte) so the mapping + layout can be unit-tested.
+// row breaks at any width. Widgets also carry a `group` — one band's set of controls (the PEQ's
+// `Frequency 3`/`Type 3`/`Gain 3`/`Q3`/`S3`) — and neither the build nor the re-pack ever breaks a line
+// in the middle of one: the device's own editor keeps a band together, and a set split across two lines
+// is unreadable. This module is UI-free (no Svelte) so the mapping + layout can be unit-tested.
 //
 // Widget-type → view mapping is deliberately conservative: whenever a control resolves to a live
 // catalog entry we start from that entry's own kind/default view (so FM3's mostly-`unknown` migrated
@@ -44,6 +47,9 @@ export interface SurfaceWidget {
   view: string;
   /** Source layout row index (device-authentic boards only) — drives row-preserving re-pack. */
   row?: number;
+  /** Band-set id: controls of one band (`Frequency 3`/`Type 3`/`Gain 3`/`Q3`/`S3`) share it and never
+   *  get split across a wrap. Device-authentic boards only. */
+  group?: number;
 }
 export interface SurfaceBoard {
   pageOrder: string[];
@@ -66,6 +72,15 @@ export interface BoardCtl {
 
 const isBypassControl = (ctl: LayoutControl): boolean =>
   /bypass/i.test(ctl.rawWidget ?? '') || /bypass/i.test(ctl.label ?? '') || /bypass/i.test(ctl.paramName ?? '');
+
+/** The band a control belongs to: the trailing number of its device symbol (`PEQ_FREQ3`, `PEQ_TYPE3`,
+ *  `PEQ_Q3` → 3), falling back to the display label (`Frequency 3` → 3). Controls with no trailing
+ *  number belong to no band and stand alone. Adjacent controls sharing an index are one set — that is
+ *  exactly how the device's own editor groups them, and it is what must not straddle a line break. */
+function bandIndex(ctl: LayoutControl): number | null {
+  const m = /(\d+)\s*$/.exec(ctl.paramName ?? ctl.label ?? '');
+  return m ? Number(m[1]) : null;
+}
 
 /** Pick the view for a control that resolved to a live catalog entry. Falls back to the entry's own
  *  default view (and only ever returns a view the entry actually supports) so an `unknown`/unmapped
@@ -152,6 +167,11 @@ function packSequential(ctls: BoardCtl[], cols: number): SurfaceWidget[] {
   return out;
 }
 
+/** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
+ *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
+ *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
+const BOARD_SCHEMA = 'b2';
+
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
 export function layoutVariantSig(layout: DeviceLayout | null | undefined): string {
@@ -161,6 +181,7 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
     0
   );
   return [
+    BOARD_SCHEMA,
     layout.family ?? '',
     layout.variantName ?? '',
     layout.variantValue ?? '',
@@ -205,37 +226,57 @@ export function buildDeviceLayoutBoard(
     const widgets: SurfaceWidget[] = [];
     const seen = new Set<string>();
     let gridRow = 0;
+    let groupSeq = 0;
     (pg.rows ?? []).forEach((row, rowIndex) => {
+      // Resolve the whole row up front: placing a band set needs its TOTAL width before it can tell
+      // whether the set still fits the current line. A `key: null` slot is a gap (spacer, duplicate, or a
+      // control with no catalog entry) that only advances the cursor so neighbours don't shift left.
+      const slots: { key: string | null; view: string; w: number; h: number; group: number }[] = [];
+      let prevBand: number | null = null;
+      for (const ctl of row.controls ?? []) {
+        const band = bandIndex(ctl);
+        if (band == null || band !== prevBand) groupSeq++; // band change (or no band) opens a new set
+        prevBand = band;
+        const group = groupSeq;
+        const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
+        const base = r === 'gap' ? undefined : byKey.get(r.key);
+        if (r === 'gap' || !base || seen.has(r.key)) {
+          slots.push({ key: null, view: '', w: 1, h: 1, group });
+          continue;
+        }
+        seen.add(r.key);
+        slots.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, group });
+      }
+
       let x = 0;
       let rowH = 1;
       let placed = false;
-      for (const ctl of row.controls ?? []) {
-        const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
-        if (r === 'gap') {
-          x += 1;
-          continue;
-        }
-        if (seen.has(r.key)) {
-          x += 1; // a param listed twice — keep the slot so neighbours don't shift left
-          continue;
-        }
-        const base = byKey.get(r.key);
-        if (!base) {
-          x += 1;
-          continue;
-        }
-        const w = Math.min(base.w, columns);
-        if (x + w > columns) {
-          // control doesn't fit the rest of this line — wrap onto a new grid line (still this row)
+      for (let i = 0; i < slots.length; ) {
+        let end = i + 1;
+        while (end < slots.length && slots[end].group === slots[i].group) end++;
+        const groupW = slots.slice(i, end).reduce((n, s) => n + s.w, 0);
+        // Keep one band's controls on ONE line: wrap the whole set rather than leaving half of it behind
+        // (a set too wide for the grid can't be kept whole — it falls through to per-control wrapping).
+        if (x > 0 && groupW <= columns && x + groupW > columns) {
           gridRow += rowH;
           x = 0;
           rowH = 1;
         }
-        seen.add(r.key);
-        widgets.push({ id: 'w' + r.key, key: r.key, x, y: gridRow, w, h: base.h, view: r.view, row: rowIndex });
-        x += w;
-        rowH = Math.max(rowH, base.h);
-        placed = true;
+        for (; i < end; i++) {
+          const s = slots[i];
+          if (s.key && x > 0 && x + s.w > columns) {
+            // control doesn't fit the rest of this line — wrap onto a new grid line (still this row)
+            gridRow += rowH;
+            x = 0;
+            rowH = 1;
+          }
+          if (s.key) {
+            widgets.push({ id: 'w' + s.key, key: s.key, x, y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group });
+            rowH = Math.max(rowH, s.h);
+            placed = true;
+          }
+          x += s.w;
+        }
       }
       if (placed) gridRow += rowH; // next layout row starts below the tallest widget of this one
     });
@@ -259,9 +300,48 @@ export function buildDeviceLayoutBoard(
   return { pageOrder, page: pageOrder[0]!, boards, variantSig: layoutVariantSig(layout) };
 }
 
+/** Rows never cap vertically — packing only caps horizontally, by `cols`. */
+export const MAX_ROWS = 512;
+
+/** Gravity-pack a list into a `c`×`r` grid: sort by `(y, x)`, drop each widget into the first open gap.
+ *  Used by free-arranged boards' explicit reflow (`tidyUp`/`toggleCompact`) and by the "no source row"
+ *  half of `repackWidgets` below. Ported verbatim from `ControlSurface.svelte` (was a closure there;
+ *  pure here). */
+export function packInto(list: SurfaceWidget[], c: number, r: number): SurfaceWidget[] {
+  const m = Array.from({ length: r }, () => new Array(c).fill(false));
+  const fit = (x: number, y: number, w: number, h: number) => {
+    if (x < 0 || y < 0 || x + w > c || y + h > r) return false;
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (m[j][i]) return false;
+    return true;
+  };
+  const out: SurfaceWidget[] = [];
+  for (const w of list.slice().sort((a, b) => a.y - b.y || a.x - b.x)) {
+    const pw = Math.min(w.w, c),
+      ph = Math.min(w.h, r);
+    let pos: { x: number; y: number } | null = null;
+    for (let y = 0; y <= r - ph && !pos; y++) for (let x = 0; x <= c - pw && !pos; x++) if (fit(x, y, pw, ph)) pos = { x, y };
+    if (!pos) pos = { x: 0, y: 0 };
+    for (let j = pos.y; j < pos.y + ph; j++) for (let i = pos.x; i < pos.x + pw; i++) if (m[j]) m[j][i] = true;
+    out.push({ ...w, x: pos.x, y: pos.y, w: pw, h: ph });
+  }
+  return out;
+}
+
 /** Row-preserving re-pack for a device-authentic board at a narrower column count: groups widgets by
  *  their source `row`, lays each group left→right (wrapping within the group), and starts every source
- *  row on a fresh grid line so the editor's row structure survives responsive reflow. */
+ *  row on a fresh grid line so the editor's row structure survives responsive reflow.
+ *
+ *  A source row that doesn't fit `columns` at build time (`buildDeviceLayoutBoard`) already wraps onto
+ *  extra internal grid lines of its own, still tagged with that one source `row` — e.g. a device that
+ *  reports ALL of a PEQ's 30 band controls as a single editor row. `y` strictly increases across those
+ *  wrapped lines and `x` resets to 0 at each one, so sorting a row-group by `x` ALONE (as this used to)
+ *  collapses same-offset items from different wrapped lines together — the "1st of every line" cluster,
+ *  then the "2nd of every line" cluster, etc. — which reads as scrambled band order. Sorting by `(y, x)`
+ *  reconstructs build order exactly, because within one source row `y` only ever advances forward.
+ *
+ *  Order alone isn't enough — the wrap must also fall BETWEEN bands. Widgets sharing a `group` are one
+ *  band's set and move to the next line together, so a narrow window pushes band 3 down whole instead of
+ *  stranding `Frequency 3` at the end of one line and its type/gain/Q at the start of the next. */
 export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
   const columns = Math.max(1, cols);
   const rows = new Map<number, SurfaceWidget[]>();
@@ -277,19 +357,31 @@ export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
   const out: SurfaceWidget[] = [];
   let gy = 0;
   for (const key of [...rows.keys()].sort((a, b) => a - b)) {
-    const rw = rows.get(key)!.slice().sort((a, b) => a.x - b.x);
+    const rw = rows.get(key)!.slice().sort((a, b) => a.y - b.y || a.x - b.x);
     let x = 0;
     let rowH = 1;
-    for (const w of rw) {
-      const ww = Math.min(w.w, columns);
-      if (x + ww > columns) {
+    for (let i = 0; i < rw.length; ) {
+      // A band set (shared `group`) wraps as a unit, exactly as it was built — see the note above.
+      let end = i + 1;
+      if (rw[i].group != null) while (end < rw.length && rw[end].group === rw[i].group) end++;
+      const groupW = rw.slice(i, end).reduce((n, w) => n + Math.min(w.w, columns), 0);
+      if (x > 0 && groupW <= columns && x + groupW > columns) {
         gy += rowH;
         x = 0;
         rowH = 1;
       }
-      out.push({ ...w, x, y: gy, w: ww });
-      x += ww;
-      rowH = Math.max(rowH, w.h);
+      for (; i < end; i++) {
+        const w = rw[i];
+        const ww = Math.min(w.w, columns);
+        if (x + ww > columns) {
+          gy += rowH;
+          x = 0;
+          rowH = 1;
+        }
+        out.push({ ...w, x, y: gy, w: ww });
+        x += ww;
+        rowH = Math.max(rowH, w.h);
+      }
     }
     gy += rowH;
   }
@@ -298,4 +390,13 @@ export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
     gy += w.h;
   }
   return out;
+}
+
+/** Re-pack a page for `cols`: row-preserving for device-authentic boards (widgets carry a source `row`),
+ *  generic gravity-pack for free-arranged ones. The single decision point for all involuntary re-packs
+ *  (responsive reflow, saved-board reconcile, zoom) — a free-arranged board is never routed through
+ *  `packRows`, which would discard its hand-placed `x`/`y`, and a device-authentic board is never routed
+ *  through `packInto`, which interleaves its band groups (see module banner). */
+export function repackWidgets(list: SurfaceWidget[], cols: number, maxRows = MAX_ROWS): SurfaceWidget[] {
+  return list.some((w) => w.row != null) ? packRows(list, cols) : packInto(list, cols, maxRows);
 }

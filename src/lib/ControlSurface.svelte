@@ -17,7 +17,7 @@
   import { theme } from './theme.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
-  import { buildDeviceLayoutBoard, layoutVariantSig, packRows, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
+  import { buildDeviceLayoutBoard, layoutVariantSig, packInto, repackWidgets, MAX_ROWS, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
   import { AXIS_PIN_SELECTED_PARAMETERS_ACTION, AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION } from './axis-workbench/axisParameterActions';
   import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
   import {
@@ -324,9 +324,7 @@
   // which is what read as tiles scattered at random. A hand-arranged board is left exactly where the user
   // put it — gravity-packing their deliberate placement into new columns would be a regression.
   const repack = $derived(!editMode && (displayCols < cols || (rowGrouped && displayCols > cols)));
-  const viewWidgets = $derived(
-    repack ? (rowGrouped ? packRows(widgets, displayCols) : packInto(widgets, displayCols, 256)) : widgets
-  );
+  const viewWidgets = $derived(repack ? repackWidgets(widgets, displayCols) : widgets);
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   const effCompact = $derived(compact || isMobile);
@@ -491,7 +489,7 @@
       // a board saved at a wider column count would put widgets at x beyond the current `cols`, which
       // overflows/clips on the right. If anything sticks out, re-pack the page so it wraps onto new
       // rows instead (never clip right) — keeps positions otherwise untouched.
-      if (ws.some((w) => w.x < 0 || w.x + w.w > cols)) ws = packInto(ws, cols, MAX_ROWS);
+      if (ws.some((w) => w.x < 0 || w.x + w.w > cols)) ws = repackWidgets(ws, cols);
       boards[pg] = ws;
     }
     const page = b.pageOrder.includes(b.page) ? b.page : b.pageOrder[0] ?? 'Main';
@@ -600,27 +598,9 @@
     for (let y = 0; y <= rows - h; y++) for (let x = 0; x <= cols - w; x++) if (fits(m, x, y, w, h)) return { x, y };
     return null;
   }
-  // gravity-pack a list into a c×r grid (used for the arrange board AND the mobile reflow)
-  function packInto(list: Widget[], c: number, r: number) {
-    const m = Array.from({ length: r }, () => new Array(c).fill(false));
-    const fit = (x: number, y: number, w: number, h: number) => {
-      if (x < 0 || y < 0 || x + w > c || y + h > r) return false;
-      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (m[j][i]) return false;
-      return true;
-    };
-    const out: Widget[] = [];
-    for (const w of list.slice().sort((a, b) => a.y - b.y || a.x - b.x)) {
-      const pw = Math.min(w.w, c),
-        ph = Math.min(w.h, r);
-      let pos: { x: number; y: number } | null = null;
-      for (let y = 0; y <= r - ph && !pos; y++) for (let x = 0; x <= c - pw && !pos; x++) if (fit(x, y, pw, ph)) pos = { x, y };
-      if (!pos) pos = { x: 0, y: 0 };
-      for (let j = pos.y; j < pos.y + ph; j++) for (let i = pos.x; i < pos.x + pw; i++) if (m[j]) m[j][i] = true;
-      out.push({ ...w, x: pos.x, y: pos.y, w: pw, h: ph });
-    }
-    return out;
-  }
-  const MAX_ROWS = 512; // rows grow as needed — packing never caps vertically (only horizontally, by cols)
+  // gravity-pack a list into a c×r grid (used for the arrange board AND explicit user reflow — see
+  // deviceLayoutBoard.ts's module banner for why the involuntary re-pack sites route through
+  // `repackWidgets` instead of calling this directly)
   const packList = (list: Widget[]) => packInto(list, cols, MAX_ROWS);
 
   // ── arrange-mode actions ──
@@ -646,7 +626,7 @@
     for (const s of Object.keys(bySlug)) {
       const b = bySlug[s];
       const boards: Record<string, Widget[]> = {};
-      for (const pg of b.pageOrder) boards[pg] = packInto((b.boards[pg] ?? []).map((w) => ({ ...w, w: Math.min(w.w, cols), h: Math.min(w.h, rows) })), cols, MAX_ROWS);
+      for (const pg of b.pageOrder) boards[pg] = repackWidgets((b.boards[pg] ?? []).map((w) => ({ ...w, w: Math.min(w.w, cols), h: Math.min(w.h, rows) })), cols);
       next[s] = { ...b, boards };
     }
     bySlug = next;

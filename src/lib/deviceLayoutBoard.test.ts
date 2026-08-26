@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDeviceLayoutBoard, layoutVariantSig, monitorsByFamily, packRows, type BoardCtl, type SurfaceWidget } from './deviceLayoutBoard';
+import { buildDeviceLayoutBoard, layoutVariantSig, monitorsByFamily, packInto, packRows, repackWidgets, MAX_ROWS, type BoardCtl, type SurfaceWidget } from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
 // ── catalog builders (mirror ControlSurface's live catalog entries) ──
@@ -171,6 +171,139 @@ describe('packRows — row-preserving responsive reflow', () => {
     expect(at('b')).toMatchObject({ x: 1, y: 0 });
     expect(at('c')).toMatchObject({ x: 0, y: 1 }); // wrapped within row 0 onto a new line
     expect(at('d').y).toBe(2); // row 1 starts strictly below everything from row 0
+  });
+
+  // Regression for the PEQ scramble: the device reports ALL band controls as ONE editor row (verified
+  // live: Freq1,Type1,Gain1,Slope1,Q1,S1 | Freq2,... in a single `row 0`). That row doesn't fit the
+  // build-time column count, so buildDeviceLayoutBoard wraps it onto several internal grid lines — still
+  // tagged `row: 0`, `y` increasing per wrap, `x` resetting to 0 each time. A re-pack at a DIFFERENT
+  // column count must reconstruct the original band order, not interleave "1st item of every wrapped
+  // line" together (the old `sort by x only` bug).
+  it('re-packs a source row that itself wrapped at build time back into its original order', () => {
+    const catalog: BoardCtl[] = [knob(0), knob(1), knob(2), knob(3), knob(4), knob(5)];
+    const oneRow = layout([{ name: 'P', rows: [{ controls: [0, 1, 2, 3, 4, 5].map((id) => ctl('knob', id, `k${id}`)) }] }]);
+    // built at 2 cols: k0,k1 wrap onto line y0; k2,k3 onto y1; k4,k5 onto y2 — all still `row: 0`
+    const built = buildDeviceLayoutBoard(oneRow, catalog, 2)!.boards['P'];
+    expect(built.map((w) => [w.key, w.x, w.y])).toEqual([
+      ['k0', 0, 0],
+      ['k1', 1, 0],
+      ['k2', 0, 1],
+      ['k3', 1, 1],
+      ['k4', 0, 2],
+      ['k5', 1, 2]
+    ]);
+    // re-pack wide enough for one line (6 cols): must come back out in original build order k0..k5
+    const wide = packRows(built, 6);
+    expect(wide.map((w) => w.key)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4', 'k5']);
+    expect(wide.map((w) => w.x)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('wraps a band set as a unit instead of stranding half of it on the previous line', () => {
+    // three 2-wide bands on one source row, 5 columns: band 2 would straddle the wrap if placed control
+    // by control (x=4 has room for `a2` but not `b2`), so the whole set must move down together.
+    const band = (i: number): SurfaceWidget[] => [
+      { id: `a${i}`, key: `ka${i}`, x: 0, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: i },
+      { id: `b${i}`, key: `kb${i}`, x: 0, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: i }
+    ];
+    const out = packRows([...band(1), ...band(2), ...band(3)], 3);
+    const at = (id: string) => out.find((w) => w.id === id)!;
+    expect([at('a1').y, at('b1').y]).toEqual([0, 0]);
+    expect([at('a2').y, at('b2').y]).toEqual([1, 1]); // whole band on the next line, not split
+    expect([at('a3').y, at('b3').y]).toEqual([2, 2]);
+  });
+
+  it('falls back to per-control wrapping for a set too wide to keep whole', () => {
+    const wide: SurfaceWidget[] = [0, 1, 2].map((i) => ({ id: `w${i}`, key: `k${i}`, x: i, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: 7 }));
+    const out = packRows(wide, 2);
+    expect(out.map((w) => [w.x, w.y])).toEqual([
+      [0, 0],
+      [1, 0],
+      [0, 1]
+    ]);
+  });
+});
+
+// Regression for the PEQ band split: the device reports every band's controls as ONE editor row
+// (`Frequency 1, Type 1, Gain 1, Q1, S1, <graph>, Frequency 2, …`). The band index lives in the device
+// symbol, so adjacent controls sharing it are one set and must never straddle a line break.
+describe('buildDeviceLayoutBoard — band sets stay together', () => {
+  // 5 bands × (freq knob, 2-wide type select, gain knob, q knob) = 5 columns per band
+  const bandCtls = (i: number): LayoutControl[] => [
+    ctl('knob', i * 10 + 1, `Frequency ${i}`, { paramName: `PEQ_FREQ${i}` }),
+    ctl('dropdown', i * 10 + 2, `Type ${i}`, { paramName: `PEQ_TYPE${i}` }),
+    ctl('knob', i * 10 + 3, `Gain ${i}`, { paramName: `PEQ_GAIN${i}` }),
+    ctl('knob', i * 10 + 4, `Q${i}`, { paramName: `PEQ_Q${i}` })
+  ];
+  const bandCatalog = (i: number): BoardCtl[] => [knob(i * 10 + 1), select(i * 10 + 2), knob(i * 10 + 3), knob(i * 10 + 4)];
+  const bands = [1, 2, 3, 4, 5];
+  const peq = layout([{ name: 'PEQ', rows: [{ controls: bands.flatMap(bandCtls) }] }], { family: 'PEQ' });
+  const catalog = bands.flatMap(bandCatalog);
+  /** grid line each band's four controls landed on — one entry per band, must be a single value each */
+  const linesPerBand = (ws: SurfaceWidget[]) =>
+    bands.map((i) => [...new Set(bandCtls(i).map((c) => ws.find((w) => w.key === `k${c.paramId}` || w.key === `e${c.paramId}`)!.y))]);
+
+  it('never splits a band across a wrap at build time (12 cols fits 2 bands + change)', () => {
+    const ws = buildDeviceLayoutBoard(peq, catalog, 12)!.boards['PEQ'];
+    expect(linesPerBand(ws)).toEqual([[0], [0], [1], [1], [2]]);
+  });
+
+  it('never splits a band across a wrap on responsive re-pack', () => {
+    const built = buildDeviceLayoutBoard(peq, catalog, 26)!.boards['PEQ']; // all five bands on one line
+    expect(linesPerBand(built)).toEqual([[0], [0], [0], [0], [0]]);
+    for (const cols of [7, 9, 11, 13, 17, 21]) {
+      const ws = packRows(built, cols);
+      // every band occupies exactly one grid line, and band order is preserved
+      expect(linesPerBand(ws).map((ls) => ls.length)).toEqual([1, 1, 1, 1, 1]);
+      expect(linesPerBand(ws).flat()).toEqual([...linesPerBand(ws).flat()].sort((a, b) => a - b));
+    }
+  });
+});
+
+describe('repackWidgets — router between packRows and packInto', () => {
+  // the PEQ band case: three source rows of mixed-width widgets (2-wide dropdown among 1-wide knobs)
+  // overflowing 4 cols — packInto's gravity-fill interleaves these across rows; packRows must not.
+  const bandRows = [
+    { id: 'a', key: 'k0', x: 0, y: 0, w: 1, h: 1, view: 'knob', row: 0 },
+    { id: 'b', key: 'k1', x: 1, y: 0, w: 1, h: 1, view: 'knob', row: 0 },
+    { id: 'c', key: 'e2', x: 2, y: 0, w: 2, h: 1, view: 'select', row: 0 },
+    { id: 'd', key: 'k3', x: 4, y: 0, w: 1, h: 1, view: 'knob', row: 0 },
+    { id: 'e', key: 'k4', x: 0, y: 1, w: 1, h: 1, view: 'knob', row: 1 },
+    { id: 'f', key: 'k5', x: 1, y: 1, w: 1, h: 1, view: 'knob', row: 1 }
+  ];
+
+  it('row-tagged mixed-width widgets overflowing cols: each source row stays contiguous and in order', () => {
+    const out = repackWidgets(bandRows, 4);
+    const at = (id: string) => out.find((w) => w.id === id)!;
+    // row 0 wraps within itself (4 widgets, widths 1/1/2/1 = 5 > 4 cols) but never crosses into row 1's band
+    expect(at('a')).toMatchObject({ x: 0, y: 0 });
+    expect(at('b')).toMatchObject({ x: 1, y: 0 });
+    expect(at('c')).toMatchObject({ x: 2, y: 0 });
+    expect(at('d')).toMatchObject({ x: 0, y: 1 }); // wrapped, still source row 0
+    // source row 1 starts on a fresh grid line below all of row 0's wrapped lines
+    expect(at('e').y).toBe(2);
+    expect(at('f')).toMatchObject({ x: 1, y: 2 });
+    expect(out).toEqual(packRows(bandRows, 4)); // routed to packRows, not packInto
+  });
+
+  it('untagged widgets: output identical to packInto(list, cols, MAX_ROWS) — free-arranged path unchanged', () => {
+    const free: SurfaceWidget[] = [
+      { id: 'a', key: 'k0', x: 3, y: 2, w: 1, h: 1, view: 'knob' },
+      { id: 'b', key: 'k1', x: 0, y: 0, w: 2, h: 1, view: 'knob' },
+      { id: 'c', key: 'k2', x: 5, y: 5, w: 1, h: 1, view: 'knob' }
+    ];
+    expect(repackWidgets(free, 4)).toEqual(packInto(free, 4, MAX_ROWS));
+  });
+
+  it('mixed (some tagged, some not): routes to packRows, untagged land in the trailing single column', () => {
+    const mixed: SurfaceWidget[] = [
+      { id: 'a', key: 'k0', x: 0, y: 0, w: 1, h: 1, view: 'knob', row: 0 },
+      { id: 'b', key: 'k1', x: 1, y: 0, w: 1, h: 1, view: 'knob', row: 0 },
+      { id: 'c', key: 'k2', x: 0, y: 5, w: 1, h: 1, view: 'knob' } // no row — free-arranged extra
+    ];
+    const out = repackWidgets(mixed, 4);
+    expect(out).toEqual(packRows(mixed, 4));
+    // matches packRows' own documented behaviour: untagged widgets trail at x0, stacked below the rows
+    expect(out.find((w) => w.id === 'c')).toMatchObject({ x: 0 });
   });
 });
 
