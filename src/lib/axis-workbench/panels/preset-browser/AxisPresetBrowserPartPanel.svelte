@@ -795,9 +795,16 @@
               </span>
             {/if}
             {#if anatomy.blockChips.length}
-              <span class="block-chips">
-                {#each anatomy.blockChips as chip}
-                  <em class="block-chip" style:--c={chip.color} title={chip.title}>{chip.label}</em>
+              <!-- Signal-chain quick view: a flowing node → node → node strip, deliberately NOT pill-shaped
+                   so it never reads as tags (the tag pills sit directly above it). -->
+              <span class="chain-strip" title="Signal chain">
+                {#each anatomy.blockChips as chip, ci}
+                  {#if ci > 0}<i class="chain-arrow" aria-hidden="true">›</i>{/if}
+                  <em class="chain-node" style:--c={chip.color} title={chip.title}>
+                    <i class="chain-dot"></i>
+                    <b class="chain-cat">{chip.cat}</b>
+                    {#if chip.type}<span class="chain-type">{chip.type}</span>{/if}
+                  </em>
                 {/each}
               </span>
             {/if}
@@ -1274,8 +1281,7 @@
     font: 600 12px/1 var(--font-mono);
     outline: none;
   }
-  .tag-pills,
-  .block-chips {
+  .tag-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -1301,18 +1307,50 @@
     font: 700 9.5px/1 var(--font-mono);
     white-space: nowrap;
   }
-  .block-chip {
-    max-width: 160px;
+  /* §4.3 signal-chain strip. Chip/pill shapes are reserved for tags, so the chain renders as bare
+     nodes (family-coloured dot + category, dim model name) joined by chevrons — the wrap-friendly
+     stand-in for a drawn rail. */
+  .chain-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1px 3px;
+    min-width: 0;
+  }
+  .chain-arrow {
+    color: color-mix(in srgb, var(--textdim) 65%, transparent);
+    font: 600 11px/1 var(--font-ui);
+    font-style: normal;
+    user-select: none;
+  }
+  .chain-node {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    padding: 1px 2px;
+    font-style: normal;
+  }
+  .chain-dot {
+    align-self: center;
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--c);
+  }
+  .chain-cat {
+    color: var(--c);
+    font: 700 10px/1.2 var(--font-mono);
+    white-space: nowrap;
+  }
+  .chain-type {
+    max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 2px 6px;
-    border: 1px solid color-mix(in srgb, var(--c) 33%, transparent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--c) 17%, transparent);
-    color: var(--c);
-    font: 600 10px/1.2 var(--font-mono);
-    font-style: normal;
+    color: var(--textdim);
+    font: 500 10px/1.2 var(--font-mono);
   }
   .preset-meta {
     display: flex;
