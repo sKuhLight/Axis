@@ -1,16 +1,34 @@
-// EQ helpers: PEQ band-type → curve shape, and graphic-EQ band discovery from the device layout.
+// EQ helpers: band-type → curve shape, the EQ graph's band contract, and graphic-EQ band discovery
+// from the device layout.
 
-import type { DeviceLayout } from './types';
+import type { DeviceLayout, NamedParam } from './types';
 
 export type EQShape = 'bell' | 'lowshelf' | 'highshelf' | 'lowcut' | 'highcut';
 
-// PEQ curve shape from the band's device-true type label (Peaking / Shelving / Blocking …) +
-// whether it's a low-side band (→ low shelf/cut) or high-side (→ high shelf/cut).
+/** One band of a frequency-response graph. `gain` is absent for a pure cut (a Low Cut / High Cut knob
+ *  has only a frequency), `freq` for a fixed-frequency graphic-EQ band (which carries `centerHz`). */
+export interface EQBand {
+  key: string;
+  gain?: NamedParam;
+  freq?: NamedParam;
+  q?: NamedParam;
+  centerHz?: number;
+  shape?: EQShape;
+}
+
+// Curve shape from a band's device-true type label. Two label families exist and they must be read in
+// this order: the Filter/Plex/Multitap/amp-input-EQ types NAME their own side (`Low-Pass`, `HIGHSHELF`,
+// spelling and hyphenation vary by family), while PEQ's types are side-agnostic (`Shelving`,
+// `Blocking`) and take their side from the band's position — `isLow` for the low-side bands.
 export function shapeFromLabel(label: string | undefined, isLow: boolean): EQShape {
   const l = (label ?? '').toLowerCase();
+  if (/high[\s-]*pass/.test(l)) return 'lowcut';
+  if (/low[\s-]*pass/.test(l)) return 'highcut';
+  if (/low[\s-]*shelf/.test(l)) return 'lowshelf';
+  if (/high[\s-]*shelf/.test(l)) return 'highshelf';
   if (/block|cut/.test(l)) return isLow ? 'lowcut' : 'highcut';
   if (/shelv/.test(l)) return isLow ? 'lowshelf' : 'highshelf';
-  return 'bell'; // peaking / default
+  return 'bell'; // peaking / notch / tilt / null → flat-or-bell default
 }
 
 // ── graphic-EQ band identification ──

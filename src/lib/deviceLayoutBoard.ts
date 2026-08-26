@@ -88,7 +88,12 @@ type Resolved = { key: string; view: string } | 'gap';
 
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
  *  spacers, labels, and parameters the device did not surface as a knob/enum). */
-function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>, geqBandIds: Set<number>): Resolved {
+function resolveControl(
+  ctl: LayoutControl,
+  byKey: Map<string, BoardCtl>,
+  geqBandIds: Set<number>,
+  graphKey: string | null
+): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
   // Graphic-EQ bands collapse into ONE fader-bank widget (`geq`) — the layout lists them as N separate
   // sliders, so every band resolves to the same key and the caller's `seen` de-dupe drops the repeats.
@@ -116,7 +121,11 @@ function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>, geqBan
   // No live param → the block-level catalog entries the widget hint points at.
   if (ctl.widget === 'meter' && byKey.has('meter')) return { key: 'meter', view: 'meter' };
   if (ctl.widget === 'button' && isBypassControl(ctl) && byKey.has('bypass')) return { key: 'bypass', view: 'action' };
-  if ((ctl.widget === 'graph' || ctl.widget === 'label') && byKey.has('eq')) return { key: 'eq', view: 'eq' };
+  // The response graph THIS page draws (a block can have several — the amp's Input EQ and Speaker
+  // curves are different bands — so the key comes from the page, not from a single global `eq`).
+  if ((ctl.widget === 'graph' || ctl.widget === 'label') && graphKey && byKey.has(graphKey)) {
+    return { key: graphKey, view: 'eq' };
+  }
   // Labels, unresolved dropdowns, and anything else with no binding: leave a gap (matches the pre-v2
   // behaviour of silently skipping unmapped controls, but keeps neighbours' horizontal alignment).
   return 'gap';
@@ -164,12 +173,14 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
 /** Build the device-authentic Default board from a v2 layout, or null when the layout carries no
  *  renderable controls (caller falls back to its curated heuristic board). `catalog` is the live control
  *  set (knobs `k<id>`, enums `e<id>`, plus `eq`/`geq`/`bypass`/`meter`); `cols` is the target grid width.
- *  `geqBandIds` are the param ids that collapse into the `geq` fader bank. */
+ *  `geqBandIds` are the param ids that collapse into the `geq` fader bank; `graphKeyForPage` names the
+ *  response-graph catalog entry each page's graph slot should resolve to (see eqGraphs.ts). */
 export function buildDeviceLayoutBoard(
   layout: DeviceLayout | null | undefined,
   catalog: BoardCtl[],
   cols: number,
-  geqBandIds: Set<number> = new Set()
+  geqBandIds: Set<number> = new Set(),
+  graphKeyForPage: (page: number) => string | null = () => null
 ): SurfaceBoard | null {
   if (!layout?.pages?.length) return null;
   const columns = Math.max(1, cols);
@@ -189,7 +200,8 @@ export function buildDeviceLayoutBoard(
   const boards: Record<string, SurfaceWidget[]> = {};
   const pageOrder: string[] = [];
 
-  for (const pg of layout.pages) {
+  layout.pages.forEach((pg, pageIndex) => {
+    const graphKey = graphKeyForPage(pageIndex);
     const widgets: SurfaceWidget[] = [];
     const seen = new Set<string>();
     let gridRow = 0;
@@ -198,7 +210,7 @@ export function buildDeviceLayoutBoard(
       let rowH = 1;
       let placed = false;
       for (const ctl of row.controls ?? []) {
-        const r = resolveControl(ctl, byKey, geqBandIds);
+        const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
         if (r === 'gap') {
           x += 1;
           continue;
@@ -227,11 +239,11 @@ export function buildDeviceLayoutBoard(
       }
       if (placed) gridRow += rowH; // next layout row starts below the tallest widget of this one
     });
-    if (!widgets.length) continue;
+    if (!widgets.length) return;
     const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
     boards[name] = widgets;
     pageOrder.push(name);
-  }
+  });
 
   if (!pageOrder.length) return null;
 

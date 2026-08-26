@@ -289,3 +289,30 @@ describe('buildDeviceLayoutBoard — graphic-EQ band collapse', () => {
     expect(ws.some((w) => w.key === 'geq')).toBe(false);
   });
 });
+
+describe('buildDeviceLayoutBoard — response graph slots', () => {
+  const EQ2: BoardCtl = { key: 'eq2', kind: 'eq', id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] };
+  const lay = layout([
+    { name: 'Input EQ', rows: [{ controls: [ctl('knob', 0, 'Frequency'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] },
+    { name: 'Speaker', rows: [{ controls: [ctl('knob', 1, 'LF Res Freq'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] }
+  ]);
+  const catalog: BoardCtl[] = [knob(0), knob(1), EQ, EQ2, BYPASS];
+  const perPage = (page: number) => ['eq', 'eq2'][page] ?? null;
+
+  it('resolves each page graph slot to that page own graph', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), perPage)!;
+    expect(find(b.boards['Input EQ'], 'eq')).toBeTruthy();
+    expect(b.boards['Input EQ'].some((w) => w.key === 'eq2')).toBe(false);
+    expect(find(b.boards['Speaker'], 'eq2')).toBeTruthy();
+  });
+
+  it('gaps the slot when the page has no graph (the default)', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12)!;
+    expect(b.boards['Input EQ'].some((w) => w.key.startsWith('eq'))).toBe(false);
+  });
+
+  it('gaps the slot when the named graph is not in the catalog', () => {
+    const b = buildDeviceLayoutBoard(lay, [knob(0), knob(1), BYPASS], 12, new Set(), perPage)!;
+    expect(b.boards['Input EQ'].some((w) => w.key.startsWith('eq'))).toBe(false);
+  });
+});

@@ -1,20 +1,12 @@
 <script lang="ts">
   import type { NamedParam } from './types';
   import { paramValue, normFromValue, fmtCompact } from './format';
-  import type { EQShape } from './eq';
+  import type { EQBand, EQShape } from './eq';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
 
   const mob = $derived(editor.isMobile);
 
-  export interface EQBand {
-    key: string;
-    gain: NamedParam;
-    freq?: NamedParam; // draggable frequency (PEQ); absent for GEQ (fixed)
-    q?: NamedParam;
-    centerHz?: number; // GEQ fixed frequency
-    shape?: EQShape; // curve shape from the band type
-  }
   let {
     bands,
     gainRange = 20,
@@ -41,7 +33,7 @@
     bands.map((b) => ({
       band: b,
       shape: b.shape ?? 'bell',
-      gv: paramValue(b.gain),
+      gv: b.gain ? paramValue(b.gain) : 0,
       fv: b.centerHz ?? (b.freq ? paramValue(b.freq) : 1000),
       qv: b.q ? paramValue(b.q) : 1.4
     }))
@@ -90,7 +82,7 @@
     if (!m) return null;
     return {
       f: fmtCompact(m.band.freq ? m.band.freq : { norm: normFromValue(m.fv, { min: 20, max: 20000, log: true }), value: m.fv, unit: 'Hz', min: 20, max: 20000, log: true }),
-      g: isCut(m.shape) ? '—' : fmtCompact(m.band.gain),
+      g: isCut(m.shape) || !m.band.gain ? '—' : fmtCompact(m.band.gain),
       q: m.band.q ? fmtCompact(m.band.q) : '—',
       hasQ: !!m.band.q,
       band: m.band
@@ -109,7 +101,7 @@
     const py = ((e.clientY - r.top) / r.height) * H;
     const b = drag.band;
     if (b.freq) onSet(b.freq, normFromValue(hzAt(px), b.freq));
-    if (!isCut(drag.shape)) onSet(b.gain, normFromValue(dbAt(py), b.gain));
+    if (!isCut(drag.shape) && b.gain) onSet(b.gain, normFromValue(dbAt(py), b.gain));
   }
   function up() {
     drag = null;
@@ -150,7 +142,7 @@
     <path d="{curve} L{cw},{H / 2} L0,{H / 2} Z" fill={accent} opacity="0.12" />
     <path d={curve} fill="none" stroke={accent} stroke-width="2" />
     {#each model as m (m.band.key)}
-      <g class="node" class:fixed={!m.band.freq} class:sel={activeKey === m.band.key} onpointerdown={(e) => down(e, m)} onwheel={(e) => wheel(e, m.band)} role="button" tabindex="-1" aria-label="{m.band.gain.name} band">
+      <g class="node" class:fixed={!m.band.freq} class:sel={activeKey === m.band.key} onpointerdown={(e) => down(e, m)} onwheel={(e) => wheel(e, m.band)} role="button" tabindex="-1" aria-label="{m.band.gain?.name ?? m.band.freq?.name ?? 'EQ'} band">
         <circle cx={xOf(m.fv)} cy={nodeY(m)} r={mob ? 22 : 13} fill="transparent" />
         {#if activeKey === m.band.key}
           <circle cx={xOf(m.fv)} cy={nodeY(m)} r={mob ? 15 : 12} fill={accent} opacity="0.18" />
@@ -196,10 +188,12 @@
   .node:active {
     cursor: grabbing;
   }
+  /* Top-RIGHT: the surface overlays the widget's title on the top-left corner of the graph
+     (ControlSurface `.eqtitle`), so the readout would sit under it while dragging. */
   .rd {
     position: absolute;
     top: 8px;
-    left: 10px;
+    right: 10px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -216,9 +210,8 @@
   .rd.mob {
     top: 6px;
     bottom: auto;
-    left: 6px;
     right: 6px;
-    justify-content: space-around;
+    justify-content: flex-end;
     padding: 7px 10px;
     font-size: 12px;
     pointer-events: auto;

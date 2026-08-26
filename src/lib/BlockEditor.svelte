@@ -4,8 +4,8 @@
   import { catFor, shade } from './catalog';
   import ControlSurface from './ControlSurface.svelte';
   import GridMap from './GridMap.svelte';
-  import { type EQBand } from './EQGraph.svelte';
-  import { geqBandsFromLayout, shapeFromLabel } from './eq';
+  import { geqBandsFromLayout } from './eq';
+  import { deriveEqGraphs } from './eqGraphs';
   import type { CabState, CabSlot } from './types';
 
   const editor = getEditorSurface();
@@ -14,7 +14,6 @@
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
-  const isEQ = $derived(sel?.pack === 'Peq' || sel?.pack === 'Geq');
   const isCab = $derived(sel?.pack === 'Cab');
 
   // what's actually loaded in each cab slot, shown on the type button so you don't have to
@@ -42,30 +41,16 @@
     if (cs.slots.length === 1) return cabSlotLabel(cs.slots[0], dyna);
     return cs.slots.map((s) => `Slot ${s.slot}: ${cabSlotLabel(s, dyna)}`).join('   ');
   });
-  // EQ bands from the live params (PEQ: freq 0-4 / Q 5-9 / gain 10-14; GEQ: fixed-freq gains 0-9)
-  const eqBands = $derived.by((): EQBand[] => {
-    if (!isEQ) return [];
-    const byId = new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
-    if (sel?.pack === 'Geq') {
-      // Band count and centre frequencies come from the device layout — the param list carries stale
-      // names from a different GEQ model (see geqBandsFromLayout).
-      return geqBandsFromLayout(editor.blockLayout)
-        .map((b) => ({ key: `g${b.paramId}`, gain: byId.get(b.paramId)!, centerHz: b.hz, shape: 'bell' as const }))
-        .filter((b) => !!b.gain);
-    }
-    const enumById = new Map(editor.enums.map((e) => [e.id, e]));
-    const out: EQBand[] = [];
-    for (let i = 0; i < 5; i++) {
-      const g = byId.get(10 + i);
-      const f = byId.get(i);
-      if (g && f) {
-        const te = enumById.get(15 + i);
-        const label = te?.options.find((o) => o.value === te.value)?.label;
-        out.push({ key: `b${i}`, gain: g, freq: f, q: byId.get(5 + i), shape: shapeFromLabel(label, i < 2) });
-      }
-    }
-    return out;
-  });
+  // Frequency-response graphs, bound to the pages the device draws them on (see eqGraphs.ts).
+  const eqGraphs = $derived(
+    deriveEqGraphs({
+      layout: editor.blockLayout,
+      params: editor.params,
+      enums: editor.enums,
+      pack: sel?.pack,
+      blockTypeName: editor.blockType?.name
+    })
+  );
   // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
   // on the control surface, in device order with the device's own band labels.
   const geqBands = $derived.by(() => {
@@ -157,10 +142,9 @@
         <ControlSurface
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
-          eqBands={isEQ ? eqBands : []}
+          {eqGraphs}
           {geqBands}
-          eqGainRange={sel.pack === 'Geq' ? 12 : 20}
-          eqTitle={editor.blockType?.name || (sel.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ')}
+          geqTitle={editor.blockType?.name || 'Graphic EQ'}
           hideIds={isCab ? CAB_PICKER_IDS : []}
         />
       {/if}

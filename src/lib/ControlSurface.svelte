@@ -5,7 +5,8 @@
   // a square responsive grid. Driven by the live editor params; layouts persist per block family.
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
-  import EQGraph, { type EQBand } from './EQGraph.svelte';
+  import EQGraph from './EQGraph.svelte';
+  import type { EqGraphSpec } from './eqGraphs';
   import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, fmtValue } from './format';
@@ -42,12 +43,18 @@
   let {
     slug = '',
     accent = '#35c9d6',
-    eqBands = [] as EQBand[],
+    eqGraphs = [] as EqGraphSpec[],
     geqBands = [] as FaderBand[],
-    eqGainRange = 20,
-    eqTitle = 'EQ',
+    geqTitle = 'Graphic EQ',
     hideIds = [] as number[]
-  }: { slug?: string; accent?: string; eqBands?: EQBand[]; geqBands?: FaderBand[]; eqGainRange?: number; eqTitle?: string; hideIds?: number[] } = $props();
+  }: {
+    slug?: string;
+    accent?: string;
+    eqGraphs?: EqGraphSpec[];
+    geqBands?: FaderBand[];
+    geqTitle?: string;
+    hideIds?: number[];
+  } = $props();
 
   const GAP = 8;
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
@@ -147,13 +154,16 @@
   const catalog = $derived.by<Ctl[]>(() => {
     const hidden = new Set(hideIds);
     const out: Ctl[] = [];
-    if (eqBands.length) out.push({ key: 'eq', kind: 'eq', label: eqTitle, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
+    // One entry per response graph the block draws — the amp has two (Input EQ, Speaker) with
+    // different bands, so this can no longer be a single `eq` key. The first keeps that key so boards
+    // users already arranged stay intact.
+    for (const g of eqGraphs) out.push({ key: g.key, kind: 'eq', label: g.title, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
     // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
     // suppressed from the generic knob catalog below and re-offered here — 1:1, same as the `leaked`
     // monitor swap, so no control is added or lost. Width tracks the band count (clamped by the grid).
     if (geqBands.length) {
       for (const b of geqBands) if (b.gain.id != null) hidden.add(b.gain.id);
-      out.push({ key: 'geq', kind: 'geq', label: eqTitle, id: -5, w: Math.min(8, Math.max(4, geqBands.length)), h: 2, view: 'geq', views: ['geq'] });
+      out.push({ key: 'geq', kind: 'geq', label: geqTitle, id: -5, w: Math.min(8, Math.max(4, geqBands.length)), h: 2, view: 'geq', views: ['geq'] });
     }
     // Monitors the device ALSO surfaced in the param list (amp HEADROOM/B+/Gain, cab VU/gain,
     // comp/input/output Gain…). They are read-only meter readings, not parameters: rendering them as
@@ -186,6 +196,13 @@
     return out;
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
+  const eqGraphById = $derived(new Map(eqGraphs.map((g) => [g.key, g])));
+  // Which graph (if any) each layout page draws — the graph slot on that page resolves to its key.
+  const graphKeyForPage = $derived.by(() => {
+    const byPage = new Map<number, string>();
+    for (const g of eqGraphs) for (const i of g.pages) byPage.set(i, g.key);
+    return (page: number) => byPage.get(page) ?? null;
+  });
   // Band param ids the device layout must collapse onto the single `geq` bank widget.
   const geqBandIds = $derived(new Set(geqBands.map((b) => b.gain.id).filter((id): id is number => id != null)));
 
@@ -447,7 +464,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForPage);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -455,7 +472,7 @@
     const lay = layoutBoard();
     if (lay) return lay;
     const ideal = new Set(idealIds(editor.params));
-    const main = catalog.filter((c) => c.key === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
+    const main = catalog.filter((c) => c.kind === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
     const rest = catalog.filter((c) => !main.includes(c));
     const boards: Record<string, Widget[]> = { Main: packList(main.map(mk)) };
     const pageOrder = ['Main'];
@@ -1541,7 +1558,7 @@
               {:else if c.kind === 'eq'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
-                  <EQGraph bands={eqBands} gainRange={eqGainRange} {accent} onSet={(p, n) => editor.setParam(p, n)} />
+                  <EQGraph bands={eqGraphById.get(c.key)?.bands ?? []} gainRange={eqGraphById.get(c.key)?.gainRange ?? 20} {accent} onSet={(p, n) => editor.setParam(p, n)} />
                 </div>
               {:else if c.kind === 'geq'}
                 <!-- The bank's value readouts sit along its top edge, so the title takes a flow row of
