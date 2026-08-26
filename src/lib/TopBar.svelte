@@ -169,7 +169,7 @@
     {#if !editor.isMobile && (editor.hasTuner || editor.hasTempo || editor.conn.state === 'online')}
       <div class="status">
         {#if editor.hasTuner}
-          <button class="st" class:on={editor.tuner.active} title="Tuner" onclick={() => editor.toggleTuner()}>
+          <button class="st" class:on={editor.tuner.active} title="Tuner (T)" onclick={() => editor.toggleTuner()}>
             <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
           </button>
         {/if}

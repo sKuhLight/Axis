@@ -94,6 +94,13 @@
       } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
         void history.redo();
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T')) {
+        // Bare `t` toggles the tuner. Deliberately NOT ⌘T — Chrome/Safari reserve that for "new tab"
+        // and a page can't preventDefault it, so it would only ever work in the desktop build.
+        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (!editor.hasTuner) return; // same capability gate as the TopBar chip
+        e.preventDefault();
+        editor.toggleTuner();
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
