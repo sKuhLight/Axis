@@ -12,6 +12,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { planConnect, planReplaceShunt } from './gridRouting';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
+import { geqBandsFromLayout } from './eq';
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
@@ -409,8 +410,9 @@ class EditorStore {
     return c?.pack ? c.pack.toLowerCase() : '';
   }
   get tabs(): ResolvedTab[] {
-    // amp exposes a built-in graphic EQ (its ±12 dB band params) on a dedicated EQ tab
-    const eqIds = this.selected?.pack === 'Amp' ? this.params.filter((p) => p.id != null && p.min === -12 && p.max === 12).map((p) => p.id as number) : [];
+    // amp exposes a built-in graphic EQ on a dedicated EQ tab; its bands come from the device layout
+    // (the param list names them `Bass 2`/`Mid 2`/… — see geqBandsFromLayout).
+    const eqIds = this.selected?.pack === 'Amp' ? geqBandsFromLayout(this.blockLayout).map((b) => b.paramId) : [];
     return resolveTabs(this.params, this.enums, this.customLayouts[this.familyKey] ?? [], eqIds);
   }
   #persistLayouts = () => {

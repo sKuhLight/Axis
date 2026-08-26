@@ -5,7 +5,7 @@
   import ControlSurface from './ControlSurface.svelte';
   import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
-  import { geqFreqs, shapeFromLabel } from './eq';
+  import { geqBandsFromLayout, shapeFromLabel } from './eq';
   import type { CabState, CabSlot } from './types';
 
   const editor = getEditorSurface();
@@ -47,14 +47,11 @@
     if (!isEQ) return [];
     const byId = new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
     if (sel?.pack === 'Geq') {
-      // band frequencies depend on the selected GEQ model (10-band vs 7-band, Mark, …)
-      const freqs = geqFreqs(editor.blockType?.name ?? '', 10);
-      const out: EQBand[] = [];
-      for (let i = 0; i < freqs.length && i <= 9; i++) {
-        const g = byId.get(i);
-        if (g) out.push({ key: `g${i}`, gain: g, centerHz: freqs[i], shape: 'bell' });
-      }
-      return out;
+      // Band count and centre frequencies come from the device layout — the param list carries stale
+      // names from a different GEQ model (see geqBandsFromLayout).
+      return geqBandsFromLayout(editor.blockLayout)
+        .map((b) => ({ key: `g${b.paramId}`, gain: byId.get(b.paramId)!, centerHz: b.hz, shape: 'bell' as const }))
+        .filter((b) => !!b.gain);
     }
     const enumById = new Map(editor.enums.map((e) => [e.id, e]));
     const out: EQBand[] = [];
@@ -68,6 +65,14 @@
       }
     }
     return out;
+  });
+  // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
+  // on the control surface, in device order with the device's own band labels.
+  const geqBands = $derived.by(() => {
+    const byId = new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
+    return geqBandsFromLayout(editor.blockLayout)
+      .map((b) => ({ key: `gb${b.paramId}`, label: b.label, gain: byId.get(b.paramId)! }))
+      .filter((b) => !!b.gain);
   });
   // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
   const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
@@ -153,6 +158,7 @@
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
           eqBands={isEQ ? eqBands : []}
+          {geqBands}
           eqGainRange={sel.pack === 'Geq' ? 12 : 20}
           eqTitle={editor.blockType?.name || (sel.pack === 'Geq' ? 'Graphic EQ' : 'Parametric EQ')}
           hideIds={isCab ? CAB_PICKER_IDS : []}

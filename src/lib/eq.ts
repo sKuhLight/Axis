@@ -1,4 +1,6 @@
-// EQ helpers: GEQ band frequencies per type, and PEQ band-type → curve shape.
+// EQ helpers: PEQ band-type → curve shape, and graphic-EQ band discovery from the device layout.
+
+import type { DeviceLayout } from './types';
 
 export type EQShape = 'bell' | 'lowshelf' | 'highshelf' | 'lowcut' | 'highcut';
 
@@ -11,31 +13,54 @@ export function shapeFromLabel(label: string | undefined, isLow: boolean): EQSha
   return 'bell'; // peaking / default
 }
 
-// Standard graphic-EQ centre frequencies by GEQ model. Matched from the type name; the active
-// gain params (0..N-1) map onto these in order.
-const TEN = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-export function geqFreqs(typeName: string, paramCount = 10): number[] {
-  const n = typeName ? parseInt(typeName, 10) : paramCount;
-  if (/mark/i.test(typeName)) return [80, 240, 750, 2200, 6600]; // Mesa Mark graphic
-  if (/console/i.test(typeName)) return [80, 1000, 12000];
-  switch (n) {
-    case 10:
-      return TEN;
-    case 8:
-      return [63, 125, 250, 500, 1000, 2000, 4000, 8000];
-    case 7:
-      return [100, 200, 400, 800, 1600, 3200, 6400];
-    case 5:
-      return [100, 330, 1000, 3300, 10000];
-    case 4:
-      return [80, 250, 2000, 8000];
-    case 3:
-      return [100, 1000, 10000];
-    default: {
-      // even log spacing as a fallback
-      const out: number[] = [];
-      for (let i = 0; i < (Number.isFinite(n) ? n : 10); i++) out.push(Math.round(31 * Math.pow(16000 / 31, i / Math.max(1, (n || 10) - 1))));
-      return out;
+// ── graphic-EQ band identification ──
+// A graphic EQ is a ROW OF FREQUENCY-LABELLED SLIDERS in the block's device layout. That layout is the
+// only trustworthy source: it is variant-selected by the server for the block's current type, so it
+// knows the real band count and the real centre frequencies.
+//
+// The named-parameter list is NOT usable here, and this is not a theoretical concern — on a live FM3:
+//   - the amp's output-EQ bands 62/125/250/500 Hz are named `Bass 2` / `Mid 2` / `Treble 2` /
+//     `Presence 2` in the param list, so a name-based rule finds 4 of the 8 bands and mislabels them;
+//   - a `7 Band Constant Q` GEQ reports SEVEN bands at 100…6400 Hz in its layout, while its param list
+//     still carries ten stale names from a different model (`100, 160, 250, 800, 1.6K, 1000, …`).
+// So both the band set and the band labels come from the layout, and neither is inferred from a pack
+// name, a param id range, or a value range.
+
+/** A device label that names a frequency: `100`, `1.6K`, `8K`. */
+const isFreqLabel = (n: string) => /^\d+(\.\d+)?\s*k?$/i.test(n.trim());
+
+/** Hz for a frequency label (`1.6K` → 1600), for the EQ graph's fixed band centres. */
+export function hzFromLabel(label: string): number {
+  const m = label.trim().match(/^(\d+(?:\.\d+)?)\s*(k?)$/i);
+  return m ? Number(m[1]) * (m[2] ? 1000 : 1) : 0;
+}
+
+export interface GeqBand {
+  paramId: number;
+  label: string;
+  hz: number;
+}
+
+/** Minimum sliders in a row before it counts as a band bank — below this it is an ordinary control row
+ *  that happens to carry a numeric label. */
+const MIN_BANDS = 4;
+
+/** The graphic-EQ bands of a block, in device order, or `[]` when its layout has no band row.
+ *
+ *  Self-selecting: only a graphic EQ presents four-plus frequency-labelled sliders on one row, so this
+ *  needs no per-pack whitelist and stays correct for any block or model that grows one. */
+export function geqBandsFromLayout(layout: DeviceLayout | null | undefined): GeqBand[] {
+  for (const pg of layout?.pages ?? []) {
+    for (const row of pg.rows ?? []) {
+      const bands: GeqBand[] = [];
+      for (const c of row.controls ?? []) {
+        const label = (c.label ?? '').trim();
+        if (c.widget === 'slider' && c.paramId != null && isFreqLabel(label)) {
+          bands.push({ paramId: c.paramId, label, hz: hzFromLabel(label) });
+        }
+      }
+      if (bands.length >= MIN_BANDS) return bands;
     }
   }
+  return [];
 }

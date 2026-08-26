@@ -6,6 +6,7 @@
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
   import EQGraph, { type EQBand } from './EQGraph.svelte';
+  import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtCompact, normFromValue, fmtValue } from './format';
   import { idealIds } from './layouts';
@@ -42,19 +43,20 @@
     slug = '',
     accent = '#35c9d6',
     eqBands = [] as EQBand[],
+    geqBands = [] as FaderBand[],
     eqGainRange = 20,
     eqTitle = 'EQ',
     hideIds = [] as number[]
-  }: { slug?: string; accent?: string; eqBands?: EQBand[]; eqGainRange?: number; eqTitle?: string; hideIds?: number[] } = $props();
+  }: { slug?: string; accent?: string; eqBands?: EQBand[]; geqBands?: FaderBand[]; eqGainRange?: number; eqTitle?: string; hideIds?: number[] } = $props();
 
   const GAP = 8;
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'meterH' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -146,6 +148,13 @@
     const hidden = new Set(hideIds);
     const out: Ctl[] = [];
     if (eqBands.length) out.push({ key: 'eq', kind: 'eq', label: eqTitle, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
+    // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
+    // suppressed from the generic knob catalog below and re-offered here — 1:1, same as the `leaked`
+    // monitor swap, so no control is added or lost. Width tracks the band count (clamped by the grid).
+    if (geqBands.length) {
+      for (const b of geqBands) if (b.gain.id != null) hidden.add(b.gain.id);
+      out.push({ key: 'geq', kind: 'geq', label: eqTitle, id: -5, w: Math.min(8, Math.max(4, geqBands.length)), h: 2, view: 'geq', views: ['geq'] });
+    }
     // Monitors the device ALSO surfaced in the param list (amp HEADROOM/B+/Gain, cab VU/gain,
     // comp/input/output Gain…). They are read-only meter readings, not parameters: rendering them as
     // knobs/steppers both looks wrong and lets a drag WRITE to them. Suppress here, re-offer as
@@ -177,6 +186,8 @@
     return out;
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
+  // Band param ids the device layout must collapse onto the single `geq` bank widget.
+  const geqBandIds = $derived(new Set(geqBands.map((b) => b.gain.id).filter((id): id is number => id != null)));
 
   // ── grid + board state ──
   let containerEl = $state<HTMLElement | null>(null);
@@ -436,7 +447,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -1434,6 +1445,8 @@
               class="card"
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq'}
+              class:geqcard={c.kind === 'geq'}
+              style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
               oncontextmenu={(e) => { if (!editMode && c.kind !== 'meterH') onPinContextMenu(e, c); }}
               onpointerdowncapture={(e) => { if (c.kind !== 'meterH') onPinArm(e, c); }}
@@ -1529,6 +1542,16 @@
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
                   <EQGraph bands={eqBands} gainRange={eqGainRange} {accent} onSet={(p, n) => editor.setParam(p, n)} />
+                </div>
+              {:else if c.kind === 'geq'}
+                <!-- The bank's value readouts sit along its top edge, so the title takes a flow row of
+                     its own instead of the EQ graph's absolute overlay (which would paint over them).
+                     Arrange mode must keep the widget draggable, so the faders go inert there. -->
+                <div class="geqwrap">
+                  <div class="geqtitle" style:padding-left="{editMode ? 26 : 4}px">{c.label}</div>
+                  <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
+                    <FaderBank bands={geqBands} {accent} onSet={(p, n) => editor.setParam(p, n)} />
+                  </div>
                 </div>
               {:else if c.kind === 'action'}
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
@@ -2052,6 +2075,9 @@
     touch-action: none;
     cursor: ns-resize;
   }
+  .card.geqcard {
+    margin: 0 auto;
+  }
   .card.nobg {
     background: transparent;
     border-color: transparent;
@@ -2547,6 +2573,23 @@
     width: 100%;
     height: 100%;
     display: flex;
+    min-height: 0;
+  }
+  .geqwrap {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    gap: 4px;
+  }
+  .geqtitle {
+    flex: none;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .action {
     display: flex;

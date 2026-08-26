@@ -3,12 +3,12 @@
   import { fmtCompact } from './format';
 
   // Vertical gain faders per band — the classic graphic-EQ view (alternative to the graph).
-  interface FB {
+  export interface FaderBand {
     key: string;
     label: string;
     gain: NamedParam;
   }
-  let { bands, accent = '#35c9d6', onSet }: { bands: FB[]; accent?: string; onSet: (p: NamedParam, norm: number) => void } = $props();
+  let { bands, accent = '#35c9d6', onSet }: { bands: FaderBand[]; accent?: string; onSet: (p: NamedParam, norm: number) => void } = $props();
 
   let drag: { p: NamedParam; el: HTMLElement } | null = null;
   function down(e: PointerEvent, p: NamedParam) {
@@ -44,18 +44,20 @@
   .bank {
     display: flex;
     gap: 6px;
+    width: 100%;
+    height: 100%;
     overflow-x: auto;
-    padding: 8px 2px;
+    overflow-y: hidden;
     align-items: stretch;
-    justify-content: space-between;
+    justify-content: center;
   }
   .col {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    flex: 1;
-    min-width: 40px;
+    flex: 0 1 56px;
+    min-width: 26px; /* grid area narrower than the full bank shrinks columns instead of scrolling */
   }
   .v {
     font-size: 11px;
@@ -65,7 +67,8 @@
   .track {
     position: relative;
     width: 18px;
-    height: 150px;
+    flex: 1 1 auto;
+    min-height: 60px;
     border-radius: 8px;
     background: var(--track);
     border: 1px solid var(--border);

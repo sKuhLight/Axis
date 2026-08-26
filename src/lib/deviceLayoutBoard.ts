@@ -88,8 +88,13 @@ type Resolved = { key: string; view: string } | 'gap';
 
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
  *  spacers, labels, and parameters the device did not surface as a knob/enum). */
-function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>): Resolved {
+function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>, geqBandIds: Set<number>): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
+  // Graphic-EQ bands collapse into ONE fader-bank widget (`geq`) — the layout lists them as N separate
+  // sliders, so every band resolves to the same key and the caller's `seen` de-dupe drops the repeats.
+  // Their column advances leave no holes: device-authentic boards are re-packed by `packRows`, which
+  // recomputes `x` per source row.
+  if (ctl.paramId != null && geqBandIds.has(ctl.paramId) && byKey.has('geq')) return { key: 'geq', view: 'geq' };
   // A pid the block reports as a read-only MONITOR beats any same-pid parameter entry. The device
   // surfaces several monitors in the ordinary param list as well (amp `HEADROOM`/`B+`/`Gain`, cab
   // `VU`/gain, comp/input/output `Gain`), so WITHOUT this the `paramId` branch below resolves them to
@@ -158,11 +163,13 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
 
 /** Build the device-authentic Default board from a v2 layout, or null when the layout carries no
  *  renderable controls (caller falls back to its curated heuristic board). `catalog` is the live control
- *  set (knobs `k<id>`, enums `e<id>`, plus `eq`/`bypass`/`meter`); `cols` is the target grid width. */
+ *  set (knobs `k<id>`, enums `e<id>`, plus `eq`/`geq`/`bypass`/`meter`); `cols` is the target grid width.
+ *  `geqBandIds` are the param ids that collapse into the `geq` fader bank. */
 export function buildDeviceLayoutBoard(
   layout: DeviceLayout | null | undefined,
   catalog: BoardCtl[],
-  cols: number
+  cols: number,
+  geqBandIds: Set<number> = new Set()
 ): SurfaceBoard | null {
   if (!layout?.pages?.length) return null;
   const columns = Math.max(1, cols);
@@ -191,7 +198,7 @@ export function buildDeviceLayoutBoard(
       let rowH = 1;
       let placed = false;
       for (const ctl of row.controls ?? []) {
-        const r = resolveControl(ctl, byKey);
+        const r = resolveControl(ctl, byKey, geqBandIds);
         if (r === 'gap') {
           x += 1;
           continue;

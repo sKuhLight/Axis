@@ -246,3 +246,46 @@ describe('buildDeviceLayoutBoard — monitor pids resolve to meters, not knobs',
     expect(find(board.boards['Authentic'], 'k8').view).toBe('knob');
   });
 });
+
+describe('buildDeviceLayoutBoard — graphic-EQ band collapse', () => {
+  const GEQ: BoardCtl = { key: 'geq', kind: 'geq', id: -5, w: 8, h: 2, view: 'geq', views: ['geq'] };
+  const bandIds = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const lay = layout([
+    {
+      name: 'EQ',
+      rows: [
+        { controls: [...[...bandIds].map((id) => ctl('slider', id, `${id * 100}`))] },
+        { controls: [ctl('knob', 20, 'Balance'), ctl('knob', 21, 'Level')] }
+      ]
+    }
+  ]);
+  // ControlSurface suppresses the band params from the catalog and offers `geq` in their place.
+  const catalog: BoardCtl[] = [GEQ, knob(20), knob(21), BYPASS];
+
+  it('collapses a row of band sliders into one bank widget', () => {
+    const ws = buildDeviceLayoutBoard(lay, catalog, 12, bandIds)!.boards['EQ'];
+    expect(ws.filter((w) => w.key === 'geq')).toHaveLength(1);
+    expect(find(ws, 'geq')).toMatchObject({ x: 0, y: 0, w: 8, h: 2, view: 'geq', row: 0 });
+  });
+
+  it('leaves the non-band controls of later rows intact', () => {
+    const ws = buildDeviceLayoutBoard(lay, catalog, 12, bandIds)!.boards['EQ'];
+    expect(find(ws, 'k20')).toMatchObject({ row: 1 });
+    expect(find(ws, 'k21')).toMatchObject({ row: 1 });
+    expect(ws.some((w) => w.key === 'k0')).toBe(false);
+  });
+
+  it("re-pack closes the collapsed bands' column advances", () => {
+    const ws = packRows(buildDeviceLayoutBoard(lay, catalog, 12, bandIds)!.boards['EQ'], 12);
+    expect(find(ws, 'geq')).toMatchObject({ x: 0, y: 0 });
+    expect(find(ws, 'k20')).toMatchObject({ x: 0, y: 2 });
+    expect(find(ws, 'k21')).toMatchObject({ x: 1, y: 2 });
+  });
+
+  it('without band ids the sliders resolve normally (no bank)', () => {
+    const plain: BoardCtl[] = [knob(0), knob(1), knob(20)];
+    const ws = buildDeviceLayoutBoard(lay, plain, 12)!.boards['EQ'];
+    expect(find(ws, 'k0')).toMatchObject({ x: 0, view: 'slider' });
+    expect(ws.some((w) => w.key === 'geq')).toBe(false);
+  });
+});
