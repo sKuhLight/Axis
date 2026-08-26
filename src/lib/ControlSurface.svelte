@@ -1528,13 +1528,13 @@
                 </div>
                 <div class="lbl">{c.label}</div>
               {:else if c.kind === 'meterH'}
-                <!-- READ-ONLY horizontal monitor (amp HEADROOM/B+, cab VU, …): label left, bar, live
-                     dB right — the device editor's own shape. No steppers, no drag: `onWidgetDown`
-                     only adjusts `cont`, so this cannot write. -->
+                <!-- READ-ONLY horizontal monitor (amp HEADROOM/B+, cab VU, …): title on top like every
+                     other card, then bar + live dB. No steppers, no drag: `onWidgetDown` only adjusts
+                     `cont`, so this cannot write. -->
                 {@const lm = liveFor(blockMons.get(c.id)?.token ?? '')}
                 {@const fill = meterFill(lm)}
+                <div class="lbl">{c.label}</div>
                 <div class="mhrow" title="Live {c.label} (read-only)">
-                  <div class="mhlbl">{c.label}</div>
                   <div class="mhtrack">
                     <div class="mhfill" style:width="{Math.round(fill * 100)}%" style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}></div>
                   </div>
