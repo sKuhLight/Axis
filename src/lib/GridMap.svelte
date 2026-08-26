@@ -48,6 +48,7 @@
   const cols = $derived(editor.layout.cols || 12);
   const GAP = 6;
   const PAD_X = 28; // .body horizontal padding (14 + 14)
+  const PAD_TOP = 1; // .body top padding
   let bodyEl = $state<HTMLDivElement | null>(null);
   let bodyW = $state(0); // measured band width (Svelte resize-observes bind:clientWidth)
   /** Uncapped per-cell space: at this size the grid EXACTLY fills the band width. */
@@ -148,10 +149,18 @@
     const el = bodyEl;
     const size = cell; // tracked: re-center on zoom / fit changes
     if (!el || !key || bodyW <= 0) return;
-    const col = Number(key.split(',')[1]);
+    const [row, col] = key.split(',').map(Number);
     if (!Number.isFinite(col) || col < 0) return;
     const x = PAD_X / 2 + col * (size + GAP) + size / 2; // cell center incl. left padding
-    el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: 'smooth' });
+    // `.body` scrolls vertically too now (the map shrinks on a short pane rather than pushing the
+    // editor's footer off), so centre on both axes — otherwise the open block can sit below the fold
+    // with nothing to point at it.
+    const y = PAD_TOP + (Number.isFinite(row) && row >= 0 ? row : 0) * (size + GAP) + size / 2;
+    el.scrollTo({
+      left: Math.max(0, x - el.clientWidth / 2),
+      top: Math.max(0, y - el.clientHeight / 2),
+      behavior: 'smooth'
+    });
   });
 </script>
 
@@ -243,7 +252,18 @@
 
 <style>
   .map {
-    flex: none;
+    /* Shrinkable, NOT `flex: none`. The canvas is `rows × cell` and `cell` is fit-to-WIDTH times a
+       persisted zoom (`zoomMax` only ever clamped against the band's width), so on a wide-but-short pane
+       the map can want more height than the whole Block Editor has. As a rigid flex item it won its
+       claim and pushed `.foot` (Mute / Scene Ignore / Engaged / Remove) out the bottom of the card's
+       `overflow: hidden` — the footer silently vanished with no scrollbar to reveal it. Shrinking here
+       lets flexbox settle the card within its pane; `.body` scrolls whatever doesn't fit. */
+    flex: 0 1 auto;
+    min-height: 0;
+    /* a column, so the height flexbox hands `.map` propagates to `.body` as a scroll budget instead of
+       simply overflowing it */
+    display: flex;
+    flex-direction: column;
     background: var(--bg2);
     border-bottom: 1px solid var(--surface2);
   }
@@ -252,6 +272,8 @@
     align-items: center;
     gap: var(--d-gap);
     padding: var(--d-pad-y) var(--d-pad-x) calc(var(--d-pad-y) * 0.7);
+    /* `.map` is a flex column now — the title/zoom/collapse row keeps its height, `.body` absorbs */
+    flex: none;
   }
   .ttl {
     font: 700 calc(var(--d-font-sm) * 0.9) / 1 var(--font-mono);
@@ -309,6 +331,11 @@
   }
   .body {
     overflow-x: auto;
+    /* vertical too, now that `.map` can be shrunk below the canvas height — the map pans instead of
+       being clipped, which is the same gesture zoomed-in horizontal overflow already uses */
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
     padding: 1px var(--d-pad-x) var(--d-pad-x);
     /* zoomed-in overflow pans by touch/wheel — no scrollbar chrome (auto-centering finds the open block) */
     scrollbar-width: none;
