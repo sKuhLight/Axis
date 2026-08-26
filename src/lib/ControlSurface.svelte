@@ -691,8 +691,10 @@
   // a widget's pixel footprint + the knob dial size that fits it (reserves room for the label)
   const pxOf = (n: number) => n * cell + (n - 1) * GAP;
   // the value lives in the hover/tap bubble now, so the dial fills the tile — but leave room for the
-  // card padding (16) + gap (5) + the label (~16) so the label never clips.
-  const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxOf(w.h) - 38), 30, 260);
+  // card padding (16) + gap (5) + the label so the label never clips. The label is TWO lines
+  // (`.lbl` line-clamps at 2), so the reserve is the two-line worst case: 12px × 1.1 × 2 ≈ 27.
+  // Reserved unconditionally, not per-label, so every dial on the board is the same size.
+  const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxOf(w.h) - 48), 30, 260);
   // anchor the value bubble above an element (knob/card), in screen coords (fixed-position)
   function showTip(el: HTMLElement, id: number, edit: boolean) {
     const r = el.getBoundingClientRect();
@@ -2177,8 +2179,16 @@
     line-height: 1.1;
     width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    /* Two lines, not one. A cell is capped at the density's `tileMax` (104px at compact, surfaceGrid.ts),
+       which fits ~13 characters on a line — and a label is the device's own param name, so
+       "Out Comp Threshold" and "Out Comp Clarity" both ellipsized down to "Out Comp Th…" and became
+       indistinguishable. Clamping at 2 keeps the ellipsis for the genuinely long ones but puts it after
+       the word that tells the controls apart. `dialFor` reserves the matching height. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow-wrap: anywhere;
   }
   .vtrack {
     position: relative;
