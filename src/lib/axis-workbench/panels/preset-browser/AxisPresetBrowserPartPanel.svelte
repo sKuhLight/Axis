@@ -94,7 +94,13 @@
     type AxisPbMenuActionId
   } from '../../presetBrowser/presetBrowserWorkbenchMenu';
   import ContextMenu from '../../../workbench/svelte/ContextMenu.svelte';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from '../../../workbench/svelte/contextMenu';
+  import {
+    effectiveZoom,
+    menuPositionFromPointer,
+    resolveMenuPlacement,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition
+  } from '../../../workbench/svelte/contextMenu';
   import { longPress } from '../../longPress';
   import { TAG_SWATCH_COUNT, tagSwatchCss } from '../../../tagColors';
 
@@ -285,6 +291,44 @@
   let picker = $state<PickerState | null>(null);
   let pickerSearch = $state('');
   let pickerHi = $state(0);
+
+  // ── popover placement ───────────────────────────────────────────────────────────────────────
+  // Both popovers here are `position: fixed` dropped at the pointer. Unclamped, they run off the
+  // bottom of the window — Frequent Tags is the LAST sidebar section, so its chips are the lowest
+  // thing you can right-click, and the swatch grid ended up unreachable. They also ignored the UI
+  // scale: a fixed box in a zoomed subtree positions in LAYOUT px while pointer coords are VISUAL,
+  // so at anything but 100% they drifted from the cursor. `resolveMenuPlacement` fixes both, and is
+  // the same path every workbench menu already takes (see ContextMenu.svelte).
+  //
+  // The popover measures its OWN zoom rather than needing a scrim: it is fixed inside the same
+  // zoomed subtree, so its visual/layout width ratio IS the factor a viewport-spanning probe would
+  // report — the trick ControlSurface uses off its pin layer. `max-width: calc(100vw - 24px)` scales
+  // both measurements alike, so a narrow viewport doesn't skew it.
+  function placePopover(el: HTMLElement | null, at: WorkbenchMenuPosition): WorkbenchMenuPosition {
+    if (!el?.offsetWidth) return at;
+    const rect = el.getBoundingClientRect();
+    return resolveMenuPlacement(
+      at,
+      { width: window.innerWidth, height: window.innerHeight },
+      { width: rect.width, height: rect.height },
+      effectiveZoom(rect.width, el.offsetWidth)
+    );
+  }
+  // Placement needs the mounted box, so it lands one tick after the popover renders: first paint
+  // sits at the raw pointer position (exactly where it sat before this existed), then the measured
+  // clamp corrects it. ContextMenu accepts the same one-frame tradeoff. Do NOT hide the popover for
+  // that frame — `visibility: hidden` cannot hold focus, and both popovers autofocus an input, so
+  // hiding silently swallows the autofocus.
+  let pickerEl = $state<HTMLElement | null>(null);
+  let pickerPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  $effect(() => {
+    const at = picker ? { x: picker.x, y: picker.y } : null;
+    if (!at) return;
+    pickerPos = at;
+    void tick().then(() => {
+      if (picker) pickerPos = placePopover(pickerEl, at);
+    });
+  });
   let lastAnchor: HTMLElement | null = null;
   const pickerList = $derived(picker ? buildPickerItems(filtersContext, picker.kind, picker.ctx, pickerSearch) : []);
   function openPicker(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, el: HTMLElement) {
@@ -293,7 +337,9 @@
   }
   function openPickerAt(kind: AxisPbPickerKind, ctx: AxisPbPickerCtx, x: number, y: number) {
     tagMenu = null; // mutually exclusive with the tag swatch popover
-    picker = { kind, ctx, x: Math.min(Math.max(12, x), window.innerWidth - 312), y };
+    // Raw pointer position — `placePopover` clamps it against the MEASURED box once mounted, which
+    // is what the hardcoded `innerWidth - 312` here used to approximate (badly, and only for x).
+    picker = { kind, ctx, x, y };
     pickerSearch = ''; pickerHi = 0;
   }
   function pickerPick(v: string) {
@@ -610,6 +656,16 @@
   // ── §4.5 tag color swatch grid (right-click / long-press a tag anywhere it renders) ───────────
   // Rendered only on the overlay-owner part (§1 rank rule), same as the row context menu.
   let tagMenu = $state<{ tag: string; x: number; y: number } | null>(null);
+  let tagMenuEl = $state<HTMLElement | null>(null);
+  let tagMenuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  $effect(() => {
+    const at = tagMenu ? { x: tagMenu.x, y: tagMenu.y } : null;
+    if (!at) return;
+    tagMenuPos = at;
+    void tick().then(() => {
+      if (tagMenu) tagMenuPos = placePopover(tagMenuEl, at);
+    });
+  });
   function openTagMenu(e: MouseEvent, tag: string) {
     e.preventDefault();
     e.stopPropagation(); // on a row pill, this is what makes the tag win over onRowContext
@@ -1237,8 +1293,9 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="pk-pop"
-    style:left={picker.x + 'px'}
-    style:top={picker.y + 'px'}
+    bind:this={pickerEl}
+    style:left={pickerPos.x + 'px'}
+    style:top={pickerPos.y + 'px'}
     role="dialog"
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}
@@ -1272,8 +1329,9 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="pk-pop tag-swatch-pop"
-    style:left={tagMenu.x + 'px'}
-    style:top={tagMenu.y + 'px'}
+    bind:this={tagMenuEl}
+    style:left={tagMenuPos.x + 'px'}
+    style:top={tagMenuPos.y + 'px'}
     role="dialog"
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}

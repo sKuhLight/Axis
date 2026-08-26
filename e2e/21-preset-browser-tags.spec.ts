@@ -235,3 +235,55 @@ test.describe('Preset Browser tag creation', () => {
     await expect(chips).toHaveText(['Ambient', 'Motown', 'Zeta']);
   });
 });
+
+/**
+ * The tag popover is `position: fixed` placed at the pointer. Frequent Tags is the LAST section in
+ * the Filters sidebar, so its chips sit low, and without clamping the popover — a name field, a
+ * heading and a 3x3 swatch grid — opens straight off the bottom of the window with its swatches
+ * unreachable. Short viewport so the overflow is forced rather than incidental; the width stays
+ * >=1366 because that is what the workbench viewport-profile resolver keys off.
+ */
+test.describe('Preset Browser tag popover placement', () => {
+  test.use({ viewport: { width: 1440, height: 620 } });
+
+  test('opening the popover from a low Frequent Tags chip keeps it fully on screen', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate(
+      ({ cache, tags }) => {
+        window.localStorage.setItem('axs.lib.cache', JSON.stringify(cache));
+        window.localStorage.setItem('axs.lib.tags', JSON.stringify(tags));
+      },
+      {
+        cache: [summary(1, 'Studio Clean'), summary(2, 'Stage Lead')],
+        tags: { 'dev:1': ['Ambient', 'Blues', 'Clean', 'Drive'], 'dev:2': ['Edge', 'Funk', 'Grit'] }
+      }
+    );
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+    await collapseRail(page);
+
+    // The lowest chip in the row is the worst case for a downward-opening popover.
+    const chips = page.locator('.quick-tag');
+    await expect(chips.first()).toBeVisible();
+    await chips.last().click({ button: 'right' });
+
+    const pop = page.locator('.tag-swatch-pop');
+    await expect(pop).toHaveCount(1);
+    const view = page.viewportSize()!;
+
+    // Placement needs the mounted box, so it lands a tick after the popover renders — retry until
+    // the position settles rather than sampling the pre-clamp frame.
+    await expect(async () => {
+      const box = (await pop.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(view.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(view.height);
+    }).toPass();
+
+    // On screen is the means; usable is the point — every swatch must be reachable.
+    await expect(pop.locator('.swatch')).toHaveCount(9);
+    await expect(pop.locator('.swatch').last()).toBeVisible();
+  });
+});
