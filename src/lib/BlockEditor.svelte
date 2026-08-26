@@ -245,20 +245,20 @@
   .head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 14px;
+    gap: var(--d-gap);
+    padding: var(--d-pad-y) var(--d-pad-x);
     border-bottom: 1px solid var(--surface2);
     flex: none;
   }
   .icon {
-    width: 40px;
-    height: 40px;
+    width: var(--d-ctl-h);
+    height: var(--d-ctl-h);
     flex: none;
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 19px;
+    font-size: var(--d-font-lg);
     color: var(--text);
     border: 1px solid;
   }
@@ -269,8 +269,8 @@
     gap: 11px;
     flex: 1;
     min-width: 0;
-    height: 46px;
-    padding: 0 12px 0 13px;
+    height: var(--d-ctl-h);
+    padding: 0 var(--d-pad-x);
     background: linear-gradient(180deg, var(--bg2), var(--bg));
     border: 1px solid var(--border2);
     border-radius: 11px;
@@ -298,14 +298,14 @@
     text-align: left;
   }
   .t-title {
-    font: 700 9px/1 var(--font-mono);
+    font: 700 calc(var(--d-font-sm) * 0.82) / 1 var(--font-mono);
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-mut);
   }
   .t-type {
     font-weight: 700;
-    font-size: 15px;
+    font-size: var(--d-font-lg);
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
@@ -313,10 +313,10 @@
   }
   .t-go {
     flex: none;
-    font-size: 11px;
+    font-size: var(--d-font-sm);
     font-weight: 700;
     color: var(--accent);
-    padding: 6px 10px;
+    padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.7);
     border-radius: 8px;
     background: color-mix(in srgb, var(--accent) 14%, transparent);
     white-space: nowrap;
@@ -333,15 +333,15 @@
     margin-right: 2px;
   }
   .ch-btn {
-    width: 34px;
-    height: 34px;
+    width: var(--d-ctl-h-sm);
+    height: var(--d-ctl-h-sm);
     flex: none;
     border-radius: 9px;
     background: var(--bg2);
     border: 1px solid var(--surface-3);
     color: var(--text-faint);
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--d-font);
     cursor: pointer;
   }
   .ch-btn.on {
@@ -354,8 +354,8 @@
     min-width: 6px;
   }
   .close {
-    width: 38px;
-    height: 38px;
+    width: var(--d-ctl-h-sm);
+    height: var(--d-ctl-h-sm);
     flex: none;
     display: flex;
     align-items: center;
@@ -364,7 +364,7 @@
     border: 1px solid var(--border-2);
     border-radius: 10px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: var(--d-font-lg);
     color: var(--text-dim);
   }
   .close:hover {
@@ -380,20 +380,20 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
+    gap: var(--d-gap);
+    padding: var(--d-pad-y) var(--d-pad-x);
     border-top: 1px solid var(--surface2);
     background: var(--bg2);
     flex: none;
   }
   .act {
-    height: 44px;
-    padding: 0 16px;
+    height: var(--d-ctl-h);
+    padding: 0 var(--d-pad-x);
     border: 1px solid var(--border-2);
     background: var(--surface);
     color: var(--text-dim);
     border-radius: 10px;
-    font-size: 13px;
+    font-size: var(--d-font);
     font-weight: 700;
     cursor: pointer;
   }

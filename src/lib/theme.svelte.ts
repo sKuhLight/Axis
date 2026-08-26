@@ -3,12 +3,17 @@
 // fonts. Applying it writes CSS custom properties onto <html>, so every `var(--token)` in the app follows.
 // Persisted to localStorage under 'axis.theme'.
 
+import { DEFAULT_DENSITY, densityTokens, readDensity, type Density } from './density';
+
 export type ThemeBase = 'dark' | 'light';
 export interface ThemeCfg {
   base: ThemeBase;
   accent: string;
   custom: Record<string, string>;
   scale: number; // UI zoom %, 80–130
+  // Chrome tightness. Orthogonal to `scale`: zoom shrinks everything (chrome AND knob dials), density
+  // shrinks only headers/toolbars/footers, which is what buys back room for controls in a docked pane.
+  density: Density;
   fontUi: string;
   fontMono: string;
   preset: string; // preset id, or 'custom' once individually tweaked
@@ -68,12 +73,14 @@ function resolveTokens(cfg: ThemeCfg): Record<string, string> {
   base.accentink = readable(acc);
   base['font-ui'] = (FONT_UI.find((x) => x[0] === cfg.fontUi) || FONT_UI[0])[1];
   base['font-mono'] = (FONT_MONO.find((x) => x[0] === cfg.fontMono) || FONT_MONO[0])[1];
+  // density tokens ride the same token map — merged before `custom` so a hand-tweaked override still wins
+  Object.assign(base, densityTokens(cfg.density));
   if (cfg.custom) Object.assign(base, cfg.custom);
   return base;
 }
 
 function defaultCfg(): ThemeCfg {
-  return { base: 'dark', accent: '#35c9d6', custom: {}, scale: 100, fontUi: 'Hanken Grotesk', fontMono: 'JetBrains Mono', preset: 'midnight' };
+  return { base: 'dark', accent: '#35c9d6', custom: {}, scale: 100, density: DEFAULT_DENSITY, fontUi: 'Hanken Grotesk', fontMono: 'JetBrains Mono', preset: 'midnight' };
 }
 
 class ThemeStore {
@@ -84,7 +91,9 @@ class ThemeStore {
     if (typeof localStorage !== 'undefined') {
       try {
         const s = JSON.parse(localStorage.getItem(KEY) || '{}');
-        if (s && typeof s === 'object') this.cfg = { ...defaultCfg(), ...s };
+        // a config saved before density existed has no `density` key — defaultCfg supplies it; readDensity
+        // also sanitizes a garbage value rather than writing it straight through to a CSS custom property
+        if (s && typeof s === 'object') this.cfg = { ...defaultCfg(), ...s, density: readDensity(s.density) };
       } catch { /* keep default */ }
     }
     this.#apply();
@@ -109,6 +118,7 @@ class ThemeStore {
   setAccent(hex: string): void { this.#set({ accent: hex, preset: 'custom' }); }
   setBase(base: ThemeBase): void { this.#set({ base, custom: {}, preset: 'custom' }); }
   setScale(scale: number): void { this.#set({ scale: Math.min(130, Math.max(80, Math.round(scale / 5) * 5)) }); }
+  setDensity(density: Density): void { this.#set({ density: readDensity(density) }); }
   setFontUi(f: string): void { this.#set({ fontUi: f }); }
   setFontMono(f: string): void { this.#set({ fontMono: f }); }
 }

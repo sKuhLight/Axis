@@ -2,18 +2,20 @@
   // Theme & appearance picker (the new global theme engine's UI). Presets, accent, light/dark, UI scale,
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
+  import { DENSITIES } from './density';
   import { editor } from './editor.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
   const cfg = $derived(theme.cfg);
   const mob = $derived(editor.isMobile);
+  const densityLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="bg" class:mob role="presentation" onclick={onclose}>
   <div class="card scroll" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="head">
-      <div><div class="h1">Appearance</div><div class="sub">Theme, accent &amp; scale — saved on this device</div></div>
+      <div><div class="h1">Appearance</div><div class="sub">Theme, accent, scale &amp; density — saved on this device</div></div>
       <button class="x" aria-label="Close" onclick={onclose}>✕</button>
     </div>
 
@@ -51,6 +53,16 @@
     <div class="sec">UI SCALE <span class="val mono">{cfg.scale}%</span></div>
     <input class="range" type="range" min="80" max="130" step="5" value={cfg.scale}
       oninput={(e) => theme.setScale(+(e.currentTarget as HTMLInputElement).value)} />
+
+    <!-- Density is NOT scale: scale zooms everything, density only tightens chrome (headers, toolbars,
+         footers) so a docked panel spends its height on controls instead of headers. -->
+    <div class="sec">DENSITY</div>
+    <div class="seg">
+      {#each DENSITIES as d (d)}
+        <button class:on={cfg.density === d} onclick={() => theme.setDensity(d)}>{densityLabel(d)}</button>
+      {/each}
+    </div>
+    <div class="hint">Tightens headers and toolbars only — control sizes follow UI scale.</div>
 
     <div class="row2">
       <label class="fld">
@@ -93,6 +105,7 @@
   .acc.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
   .acc.custom { display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px dashed var(--border3); }
   .acc.custom input { opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .hint { font-size: 11.5px; color: var(--textfaint); margin-top: 8px; }
   .seg { display: flex; gap: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
   .seg button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--textdim); font-size: 13px; font-weight: 700; cursor: pointer; }
   .seg button.on { background: var(--accent); color: var(--accentink); }

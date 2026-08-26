@@ -428,13 +428,13 @@
   .fhead {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 18px;
+    gap: var(--d-gap);
+    padding: var(--d-pad-y) var(--d-pad-x);
     border-bottom: 1px solid var(--line, var(--border2));
   }
   .fhead h2 {
     margin: 0;
-    font-size: 17px;
+    font-size: calc(var(--d-font-lg) * 1.13);
     font-weight: 600;
   }
   .dot {
@@ -444,7 +444,7 @@
     background: var(--c);
   }
   .sub {
-    font-size: 11px;
+    font-size: var(--d-font-sm);
     color: var(--textdim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -457,8 +457,8 @@
     border: 1px solid var(--line, var(--border2));
     color: var(--text);
     border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.85);
+    font-size: var(--d-font);
     cursor: pointer;
   }
   .back:hover {
@@ -470,7 +470,7 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 16px 18px;
+    padding: var(--d-pad-x) calc(var(--d-pad-x) * 1.3);
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -489,14 +489,14 @@
   }
   .chip {
     min-width: 34px;
-    height: 32px;
-    padding: 0 11px;
+    height: var(--d-ctl-h-sm);
+    padding: 0 calc(var(--d-pad-x) * 0.8);
     border-radius: 9px;
     border: 1px solid var(--border2);
     background: var(--track);
     color: var(--text2);
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--d-font);
     cursor: pointer;
   }
   .chip.mini {

@@ -126,7 +126,7 @@
       <span class="ic">↶</span>
       <span class="sh">History</span>
     </button>
-    <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent & scale" onclick={() => (editor.themeOpen = true)}>
+    <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent, scale & density" onclick={() => (editor.themeOpen = true)}>
       <span class="ic">◐</span>
       <span class="sh">Theme</span>
     </button>

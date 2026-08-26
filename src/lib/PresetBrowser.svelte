@@ -1374,25 +1374,25 @@
   .title { display: flex; flex-direction: column; gap: 2px; }
   .t1 { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
   .t2 { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.04em; }
-  .ghost { height: 32px; padding: 0 12px; border-radius: 9px; background: var(--track); border: 1px solid var(--border2); color: var(--text2); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+  .ghost { height: var(--d-ctl-h-sm); padding: 0 calc(var(--d-pad-x) * 0.85); border-radius: 9px; background: var(--track); border: 1px solid var(--border2); color: var(--text2); font-size: var(--d-font-sm); font-weight: 700; cursor: pointer; }
   .ghost:hover:not(:disabled) { border-color: var(--border3); color: var(--text); }
   .ghost:disabled { opacity: 0.6; cursor: default; }
   .sort { display: flex; align-items: center; gap: 7px; }
   .seg { display: flex; gap: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
-  .segb { padding: 6px 11px; border-radius: 7px; font: 700 11px/1 'JetBrains Mono', monospace; cursor: pointer; color: var(--textdim); background: transparent; border: none; }
+  .segb { padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.8); border-radius: 7px; font: 700 var(--d-font-sm) / 1 'JetBrains Mono', monospace; cursor: pointer; color: var(--textdim); background: transparent; border: none; }
   .segb.on { color: var(--bg); background: var(--accent, var(--accent)); }
-  .adv { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); }
+  .adv { display: inline-flex; align-items: center; gap: var(--d-gap); height: var(--d-ctl-h-sm); padding: 0 var(--d-pad-x); border-radius: 9px; cursor: pointer; font-size: var(--d-font); font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); }
   .adv.on { color: var(--accentink); background: var(--accent, var(--accent)); border-color: var(--accent, var(--accent)); }
   .adv .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--textmuted); }
   .adv .dot.on { background: var(--accentink); }
   /* query bar */
   .qbar { padding: 13px 20px 12px; border-bottom: 1px solid var(--surface2); flex: none; position: relative; z-index: 60; background: var(--bg2); display: flex; gap: 9px; align-items: stretch; }
-  .qwrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; transition: border-color 0.12s; }
+  .qwrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: var(--d-ctl-h); padding: 0 var(--d-pad-x); background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; transition: border-color 0.12s; }
   .qwrap.focus { border-color: var(--accent, var(--accent)); }
   .qwrap input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text); font: 500 14px/1 'JetBrains Mono', monospace; }
   .clr { width: 24px; height: 24px; border: none; background: transparent; border-radius: 7px; cursor: pointer; color: var(--textfaint); font-size: 15px; }
   .clr:hover { background: var(--surface2); color: var(--text); }
-  .save { padding: 0 16px; border-radius: 12px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); white-space: nowrap; }
+  .save { padding: 0 var(--d-pad-x); border-radius: 12px; cursor: pointer; font-size: var(--d-font); font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); white-space: nowrap; }
   .save:hover { border-color: var(--border3); color: var(--text); }
   /* autocomplete */
   .ac { position: absolute; top: calc(100% + 2px); left: 20px; right: 130px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); z-index: 200; padding: 6px; }

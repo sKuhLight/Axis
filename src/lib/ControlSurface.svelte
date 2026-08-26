@@ -10,6 +10,9 @@
   import { fmtCompact, normFromValue, fmtValue } from './format';
   import { idealIds } from './layouts';
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
+  import { resolveSurfaceCols } from './surfaceGrid';
+  import { densityTileMax } from './density';
+  import { theme } from './theme.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
   import { buildDeviceLayoutBoard, layoutVariantSig, packRows, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
@@ -275,26 +278,26 @@
   const tray = $derived(catalog.filter((c) => !onPage.has(c.key)));
 
   // Display grid: `cols` is the user's PREFERRED column count (their zoom on a wide monitor, e.g. 18/19
-  // on 32:9). But the board must fit whatever width it's actually in, so in USE mode we cap the shown
-  // columns to what fits legibly (fitCols) and re-pack the layout — ultrawide shows the full cols, a
-  // narrow window or phone scales down to 3–4. Arrange (editMode) keeps the full `cols` you're editing.
-  const fitCols = $derived(Math.max(isMobile ? 2 : 3, Math.floor((containerW + GAP) / ((isMobile ? 84 : 104) + GAP))));
-  const displayCols = $derived(
-    editMode ? cols : isMobile ? Math.min(cols, Math.max(2, Math.min(6, fitCols))) : Math.min(cols, fitCols)
+  // on 32:9), and it sets the FLOOR on how many columns show. It used to be the ceiling too, which meant a
+  // wide pane could not add columns — it only made each tile fatter, up to 171px cells with a 133px knob
+  // dial. resolveSurfaceCols now caps the cell at the active density's tileMax and adds columns instead.
+  // Arrange (editMode) still authors at exactly `cols`; only the cell is capped there.
+  const maxCell = $derived(densityTileMax(theme.cfg.density));
+  const surfaceCols = $derived(
+    resolveSurfaceCols({ containerW, cols, gap: GAP, maxCell, editMode, isMobile })
   );
-  // cell = exactly the width split across the shown columns, so the board ALWAYS fills the width
-  // (fewer cols = bigger tiles). Min keeps tiles legible; the col count drops before tiles get tiny.
-  const cell = $derived(Math.max(isMobile ? 60 : 48, Math.floor((containerW - (displayCols - 1) * GAP) / displayCols)));
+  const displayCols = $derived(surfaceCols.displayCols);
+  const cell = $derived(surfaceCols.cell);
   // a device-authentic Default board tags its widgets with a source `row`; the free-arranged boards don't
   const rowGrouped = $derived(widgets.some((w) => w.row != null));
-  // re-pack the arranged widgets into the shown columns whenever we're showing fewer than the layout uses.
-  // Row-grouped (device) boards reflow row-by-row so the editor's rows survive; free boards gravity-pack.
+  // Narrowing always re-packs (otherwise widgets hang off the right edge) — unchanged. Widening re-packs
+  // ONLY device-authentic boards: packRows keeps the editor's row breaks while closing the holes the
+  // layout leaves behind (buildDeviceLayoutBoard advances a column for every control it cannot resolve),
+  // which is what read as tiles scattered at random. A hand-arranged board is left exactly where the user
+  // put it — gravity-packing their deliberate placement into new columns would be a regression.
+  const repack = $derived(!editMode && (displayCols < cols || (rowGrouped && displayCols > cols)));
   const viewWidgets = $derived(
-    !editMode && displayCols < cols
-      ? rowGrouped
-        ? packRows(widgets, displayCols)
-        : packInto(widgets, displayCols, 256)
-      : widgets
+    repack ? (rowGrouped ? packRows(widgets, displayCols) : packInto(widgets, displayCols, 256)) : widgets
   );
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
@@ -1730,8 +1733,8 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap; /* same chip-row pattern as the preset browser's filter chips — wrap, don't scroll */
-    gap: 8px;
-    padding: 10px 14px 6px;
+    gap: var(--d-gap);
+    padding: var(--d-pad-y) var(--d-pad-x) calc(var(--d-pad-y) * 0.6);
     flex: none;
   }
   /* phones: the search takes the first line, the page tabs wrap as chips below it */
@@ -1742,9 +1745,9 @@
   }
   .tab {
     flex: none;
-    padding: 8px 14px;
+    padding: calc(var(--d-pad-y) * 0.8) var(--d-pad-x);
     border-radius: 9px;
-    font-size: 13px;
+    font-size: var(--d-font);
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
@@ -1781,11 +1784,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    height: 36px;
-    padding: 0 11px;
+    height: var(--d-ctl-h-sm);
+    padding: 0 calc(var(--d-pad-x) * 0.8);
     border-radius: 10px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--d-font);
     font-weight: 700;
     white-space: nowrap;
     background: var(--surface);
@@ -1874,11 +1877,11 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    height: 36px;
-    padding: 0 13px;
+    height: var(--d-ctl-h-sm);
+    padding: 0 var(--d-pad-x);
     border-radius: 10px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--d-font);
     font-weight: 700;
     white-space: nowrap;
     background: var(--surface);
@@ -1971,7 +1974,7 @@
        form a feedback loop: the scrollbar appears → width drops → height drops → scrollbar hides → repeat,
        which shows up as the whole board jittering left/right a few px in arrange mode. */
     scrollbar-gutter: stable;
-    padding: 16px;
+    padding: var(--d-pad-x);
     display: flex;
     justify-content: center;
     align-items: flex-start;

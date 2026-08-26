@@ -50,6 +50,23 @@
   --r-lg: 14px;
   --rail-w: 66px;
   --topbar-h: 52px;
+
+  /* ── UI density ── chrome tightness (headers, toolbars, chip rows, footers). theme.svelte.ts overwrites
+     all of these on <html> from density.ts at boot; these are the COMFORTABLE values, kept here so the
+     stylesheet is legible on its own and so anything rendered before the theme applies is not unstyled.
+     Density is deliberately separate from the theme's `scale` (html zoom): zoom shrinks everything
+     including knob dials, density shrinks only chrome. Never hardcode a chrome height that has a token. */
+  --d-ctl-h: 44px; /* primary buttons — footer actions, block type button */
+  --d-ctl-h-sm: 34px; /* secondary chips — channel buttons, layout profile, arrange */
+  --d-ctl-h-xs: 28px; /* inline chips — +Add, grid toolbar widgets */
+  --d-pad-x: 14px;
+  --d-pad-y: 10px;
+  --d-gap: 8px;
+  --d-font: 13px; /* chip / button label */
+  --d-font-sm: 11px; /* meta + mono labels */
+  --d-font-lg: 15px; /* band title */
+  --d-widget-h: 38px; /* workbench toolbar widget chip (compact/mini fit ladder derives from this) */
+  --d-tile-max: 132px; /* ControlSurface board cell cap (mirrored in JS via density.ts) */
   --axis-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --axis-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --axis-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));

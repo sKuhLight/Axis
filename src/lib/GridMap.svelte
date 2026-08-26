@@ -250,17 +250,17 @@
   .head {
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 9px 14px 7px;
+    gap: var(--d-gap);
+    padding: var(--d-pad-y) var(--d-pad-x) calc(var(--d-pad-y) * 0.7);
   }
   .ttl {
-    font: 700 10px/1 var(--font-mono);
+    font: 700 calc(var(--d-font-sm) * 0.9) / 1 var(--font-mono);
     letter-spacing: 0.14em;
     color: var(--textfaint);
     flex: none;
   }
   .hint {
-    font: 500 10px/1.3 var(--font-mono);
+    font: 500 calc(var(--d-font-sm) * 0.9) / 1.3 var(--font-mono);
     color: var(--textmuted);
     min-width: 0;
     overflow: hidden;
@@ -279,19 +279,19 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    height: 28px;
-    padding: 0 11px;
+    height: var(--d-ctl-h-xs);
+    padding: 0 calc(var(--d-pad-x) * 0.8);
     border-radius: 8px;
     cursor: pointer;
-    font: 700 11px/1 var(--font-ui);
+    font: 700 var(--d-font-sm) / 1 var(--font-ui);
     background: var(--accent-tint);
     border: 1px solid var(--accent-border);
     color: var(--accent);
     white-space: nowrap;
   }
   .fold {
-    width: 28px;
-    height: 28px;
+    width: var(--d-ctl-h-xs);
+    height: var(--d-ctl-h-xs);
     flex: none;
     display: flex;
     align-items: center;
@@ -309,7 +309,7 @@
   }
   .body {
     overflow-x: auto;
-    padding: 1px 14px 12px;
+    padding: 1px var(--d-pad-x) var(--d-pad-x);
     /* zoomed-in overflow pans by touch/wheel — no scrollbar chrome (auto-centering finds the open block) */
     scrollbar-width: none;
   }

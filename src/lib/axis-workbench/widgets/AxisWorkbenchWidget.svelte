@@ -799,19 +799,19 @@
   .axis-widget {
     max-width: 100%;
     min-width: 0;
-    height: 38px;
+    height: var(--d-widget-h);
     display: inline-flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 8px;
-    padding: 0 13px;
+    gap: var(--d-gap);
+    padding: 0 var(--d-pad-x);
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--bg2);
     color: var(--text2);
     cursor: pointer;
     overflow: hidden;
-    font: 700 12px/1 var(--font-ui);
+    font: 700 var(--d-font) / 1 var(--font-ui);
     white-space: nowrap;
   }
   button.axis-widget,
@@ -834,13 +834,13 @@
     border-color: var(--border3);
   }
   .axis-widget[data-size='compact'] {
-    height: 34px;
-    padding-inline: 10px;
-    gap: 8px;
+    height: calc(var(--d-widget-h) - 4px);
+    padding-inline: calc(var(--d-pad-x) * 0.75);
+    gap: var(--d-gap);
   }
   .axis-widget[data-size='mini'] {
-    height: 28px;
-    padding: 0 7px;
+    height: calc(var(--d-widget-h) - 10px);
+    padding: 0 calc(var(--d-pad-x) * 0.5);
     gap: 5px;
     border-radius: 8px;
   }
