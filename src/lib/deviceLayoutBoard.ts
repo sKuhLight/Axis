@@ -90,6 +90,17 @@ type Resolved = { key: string; view: string } | 'gap';
  *  spacers, labels, and parameters the device did not surface as a knob/enum). */
 function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
+  // A pid the block reports as a read-only MONITOR beats any same-pid parameter entry. The device
+  // surfaces several monitors in the ordinary param list as well (amp `HEADROOM`/`B+`/`Gain`, cab
+  // `VU`/gain, comp/input/output `Gain`), so WITHOUT this the `paramId` branch below resolves them to
+  // an editable knob — discarding the meter hint and letting a drag write to a read-only value.
+  // Family-safe: `m<pid>` keys are built from the OPEN block's family-scoped monitor table, so amp
+  // pid 8 (`Bass 1`) can never match INPUT_GAINMONITOR's pid 8.
+  if (ctl.paramId != null) {
+    const monKey = `m${ctl.paramId}`;
+    const monBase = byKey.get(monKey);
+    if (monBase) return { key: monKey, view: monBase.view };
+  }
   // A live param → its catalog entry (knob `k<id>` or enum `e<id>`), refined by the widget hint.
   if (ctl.paramId != null) {
     const knobKey = `k${ctl.paramId}`;

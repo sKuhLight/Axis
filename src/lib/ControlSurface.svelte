@@ -51,7 +51,7 @@
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -65,7 +65,30 @@
   // M-Comp 3 bands, cab gain+VU); `mon` is the primary (first) for the label/dB text, `mons` is all bars.
   const mons = $derived(editor.monitorsFor(editor.selected?.effectId ?? -1));
   const mon = $derived(mons[0] ?? null);
-  const meterDbText = $derived(mon?.db != null ? `${mon.db >= 0 ? '+' : ''}${mon.db.toFixed(1)} dB` : mon ? `${Math.round(mon.norm * 100)}%` : '—');
+  // Read-only MONITORS for the open block, keyed by pid (family-scoped — pids repeat across families,
+  // so a pid-only match would turn the amp's `Bass 1` into INPUT's level meter). The device surfaces
+  // some of these in the ordinary param list too; they must never render as editable knobs.
+  const blockMons = $derived(editor.openBlockMonitors);
+  /** Live row for a monitor pid, matched by device token (LiveMonitor carries no pid). */
+  const liveFor = (token: string): import('./types').LiveMonitor | null =>
+    mons.find((m) => m.paramName === token) ?? null;
+  const MON_ROLE_LABEL: Record<string, string> = {
+    gainReduction: 'Gain Reduction', vu: 'VU', level: 'Level',
+    headroom: 'Headroom', supply: 'Supply', detector: 'Detector'
+  };
+  /** Display name for a monitor. The device's own label for the leaked param is the most authentic
+   *  source ("HEADROOM", "B+", "VU"), but some rows carry the RAW TOKEN as their label (cab pid 60 is
+   *  literally `CABINET_GAINMONITOR`, unit `unverified`) — fall back to the role there so a device
+   *  token never reaches the UI. */
+  const monLabel = (m: import('./types').MonitorEntry, paramName?: string): string =>
+    paramName && !/^[A-Z0-9]+_[A-Z0-9_]+$/.test(paramName)
+      ? paramName
+      : (MON_ROLE_LABEL[m.role] ?? m.token);
+  /** dB readout for ONE monitor. Falls back to % when the device reports no dB mapping — 5 of the 16
+   *  monitors (incl. amp `B+`/`Gain`) carry no minDb/maxDb, so `db` is null for them. */
+  const monDbText = (m: import('./types').LiveMonitor | null): string =>
+    m?.db != null ? `${m.db >= 0 ? '+' : ''}${m.db.toFixed(1)} dB` : m ? `${Math.round(m.norm * 100)}%` : '—';
+  const meterDbText = $derived(monDbText(mon));
   // short per-bar tag when a block has several monitors (L/R for VU, band number for M-Comp, else role)
   const meterTag = (m: import('./types').LiveMonitor): string =>
     /VUL$/.test(m.paramName) ? 'L' : /VUR$/.test(m.paramName) ? 'R'
@@ -106,8 +129,15 @@
     const hidden = new Set(hideIds);
     const out: Ctl[] = [];
     if (eqBands.length) out.push({ key: 'eq', kind: 'eq', label: eqTitle, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
+    // Monitors the device ALSO surfaced in the param list (amp HEADROOM/B+/Gain, cab VU/gain,
+    // comp/input/output Gain…). They are read-only meter readings, not parameters: rendering them as
+    // knobs/steppers both looks wrong and lets a drag WRITE to them. Suppress here, re-offer as
+    // horizontal meters below — 1:1, so nothing is added or lost.
+    const leaked: { pid: number; label: string }[] = [];
     for (const p of editor.params) {
       if (p.id == null || hidden.has(p.id)) continue;
+      const m = blockMons.get(p.id);
+      if (m) { leaked.push({ pid: p.id, label: monLabel(m, p.name) }); continue; }
       out.push({ key: `k${p.id}`, kind: 'cont', label: p.name, id: p.id, w: 1, h: 1, view: 'knob', views: CONT_VIEWS });
     }
     for (const e of editor.enums) {
@@ -119,6 +149,12 @@
     // Live audio meter — offered only when this block actually reports a monitor level (INPUT/OUTPUT/
     // COMP/GATE/CAB/DRIVE/FILTER…). Draggable/scalable like any widget; value from editor.monitorFor.
     if (mon) out.push({ key: 'meter', kind: 'meter', label: mon.role === 'gainReduction' ? 'Gain Reduction' : mon.role === 'vu' ? 'VU' : 'Meter', id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
+    // Per-monitor horizontal meters, replacing the phantom knobs suppressed above. Wide-and-short to
+    // match the device editor (label left, bar, dB readout right); `views` is meterH-only so the
+    // view-cycle chip can never retype a read-only meter into an editable knob.
+    for (const l of leaked) {
+      out.push({ key: `m${l.pid}`, kind: 'meterH', label: l.label, id: l.pid, w: 4, h: 1, view: 'meterH', views: ['meterH'] });
+    }
     // Looper waveform — offered only for the Looper block (when live waveform data is present).
     if (hasWave) out.push({ key: 'wave', kind: 'wave', label: 'Loop', id: -4, w: 4, h: 2, view: 'wave', views: ['wave'] });
     return out;
@@ -1321,6 +1357,17 @@
           {:else if c.kind === 'action'}
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
             <div class="action" class:byp={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>{editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}</div>
+          {:else if c.kind === 'meterH'}
+            <!-- read-only monitor: searchable like any control, but never editable -->
+            {@const lm = liveFor(blockMons.get(c.id)?.token ?? '')}
+            {@const fill = meterFill(lm)}
+            <div class="mhrow" title="Live {c.label} (read-only)">
+              <div class="mhlbl">{c.label}</div>
+              <div class="mhtrack">
+                <div class="mhfill" style:width="{Math.round(fill * 100)}%" style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}></div>
+              </div>
+              <div class="mhval">{monDbText(lm)}</div>
+            </div>
           {/if}
         </div>
       {/each}
@@ -1369,11 +1416,11 @@
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq'}
               class:dragging={drag?.id === w.id}
-              oncontextmenu={(e) => { if (!editMode) onPinContextMenu(e, c); }}
-              onpointerdowncapture={(e) => onPinArm(e, c)}
-              use:longPress={{ onLongPress: (d) => { if (!editMode) onPinLongPress(c, d); } }}
+              oncontextmenu={(e) => { if (!editMode && c.kind !== 'meterH') onPinContextMenu(e, c); }}
+              onpointerdowncapture={(e) => { if (c.kind !== 'meterH') onPinArm(e, c); }}
+              use:longPress={{ onLongPress: (d) => { if (!editMode && c.kind !== 'meterH') onPinLongPress(c, d); } }}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
-              onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0) showParamHelp(c.id, c.label); }}
+              onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0 && c.kind !== 'meterH') showParamHelp(c.id, c.label); }}
               onmouseleave={clearParamHelp}
             >
               {#if !editMode && c.kind === 'cont'}
@@ -1476,6 +1523,19 @@
                   {/each}
                 </div>
                 <div class="lbl">{c.label}</div>
+              {:else if c.kind === 'meterH'}
+                <!-- READ-ONLY horizontal monitor (amp HEADROOM/B+, cab VU, …): label left, bar, live
+                     dB right — the device editor's own shape. No steppers, no drag: `onWidgetDown`
+                     only adjusts `cont`, so this cannot write. -->
+                {@const lm = liveFor(blockMons.get(c.id)?.token ?? '')}
+                {@const fill = meterFill(lm)}
+                <div class="mhrow" title="Live {c.label} (read-only)">
+                  <div class="mhlbl">{c.label}</div>
+                  <div class="mhtrack">
+                    <div class="mhfill" style:width="{Math.round(fill * 100)}%" style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}></div>
+                  </div>
+                  <div class="mhval">{monDbText(lm)}</div>
+                </div>
               {:else if c.kind === 'wave'}
                 <!-- looper waveform: envelope bars around the centre + a live playhead line -->
                 <div class="wavebox" title="Looper waveform">
@@ -2176,6 +2236,53 @@
     justify-content: center;
     align-items: stretch;
     min-height: 24px;
+  }
+  /* Horizontal read-only monitor (meterH): label left, bar takes the slack, dB readout right —
+     mirrors the device editor. Everything flexes so it degrades instead of overflowing the card the
+     way the `number` view did. */
+  .mhrow {
+    display: flex;
+    flex: 1;
+    align-self: stretch;
+    width: 100%;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  }
+  .mhlbl {
+    flex: none;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--textmuted);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 45%;
+  }
+  .mhtrack {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 10px;
+    border-radius: 6px;
+    background: var(--track);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .mhfill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 6px;
+  }
+  .mhval {
+    flex: none;
+    font: 700 11px/1 var(--font-mono);
+    color: var(--text);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   .mcol {
     display: flex;

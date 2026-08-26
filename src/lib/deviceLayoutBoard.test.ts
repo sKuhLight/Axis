@@ -177,6 +177,8 @@ describe('packRows — row-preserving responsive reflow', () => {
 // ── monitors (read-only meters) ──────────────────────────────────────────────
 // The device surfaces some MONITORS in the ordinary block param list too (amp `HEADROOM`/`B+`/`Gain`,
 // cab `VU`/gain, comp/input/output `Gain`), where they used to resolve to editable knobs/steppers.
+const meterH = (pid: number): BoardCtl => ({ key: `m${pid}`, kind: 'meterH', id: pid, w: 4, h: 1, view: 'meterH', views: ['meterH'] });
+
 describe('monitorsByFamily — pid scoping', () => {
   // Shape mirrors GET /preset/monitors.
   const table = {
@@ -212,5 +214,35 @@ describe('monitorsByFamily — pid scoping', () => {
     const supply = monitorsByFamily(table, 'DISTORT').get(120)!;
     expect(supply.minDb).toBeUndefined();
     expect(supply.maxDb).toBeUndefined();
+  });
+});
+
+describe('buildDeviceLayoutBoard — monitor pids resolve to meters, not knobs', () => {
+  const authentic = (controls: LayoutControl[]) =>
+    layout([{ name: 'Authentic', rows: [{ controls }] }], { family: 'DISTORT' });
+
+  it('prefers the meterH entry over a same-pid knob entry', () => {
+    // amp HEADROOM: pid 132 is BOTH a named param (min 0 / max 1) and DISTORT_VPLATEMON.
+    const board = buildDeviceLayoutBoard(authentic([ctl('readout', 132, 'HEADROOM')]), [knob(132), meterH(132), BYPASS], 12)!;
+    const ws = board.boards['Authentic'];
+    expect(find(ws, 'm132').view).toBe('meterH');
+    expect(ws.some((w) => w.key === 'k132')).toBe(false);
+  });
+
+  it('routes the `meter` hint the same way (cab VU, comp gain reduction)', () => {
+    const board = buildDeviceLayoutBoard(authentic([ctl('meter', 120, 'B+')]), [knob(120), meterH(120), BYPASS], 12)!;
+    expect(find(board.boards['Authentic'], 'm120').view).toBe('meterH');
+  });
+
+  it('gives the meter its wide/short footprint instead of the knob 1x1', () => {
+    const board = buildDeviceLayoutBoard(authentic([ctl('readout', 132, 'HEADROOM')]), [knob(132), meterH(132), BYPASS], 12)!;
+    const w = find(board.boards['Authentic'], 'm132');
+    expect([w.w, w.h]).toEqual([4, 1]);
+  });
+
+  it('leaves an ordinary param a knob when the block has no monitor for that pid', () => {
+    // Same pid 8 as INPUT_GAINMONITOR, but the amp catalog carries no `m8` — must stay editable.
+    const board = buildDeviceLayoutBoard(authentic([ctl('knob', 8, 'Bass 1')]), [knob(8), meterH(132), BYPASS], 12)!;
+    expect(find(board.boards['Authentic'], 'k8').view).toBe('knob');
   });
 });
