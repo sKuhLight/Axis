@@ -18,6 +18,7 @@ import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
 import type { EditorSurface } from './editorSurface';
+import { monitorsByFamily } from './deviceLayoutBoard';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
@@ -179,6 +180,36 @@ class EditorStore {
   monitorFor = (effectId: number): import('./types').LiveMonitor | null => this.liveMeters[effectId]?.[0] ?? null;
   /** ALL live meters a block reports (e.g. OUTPUT VU L+R, M-Comp 3 bands, cab gain+VU). */
   monitorsFor = (effectId: number): import('./types').LiveMonitor[] => this.liveMeters[effectId] ?? [];
+  /** Per-preset monitor (meter) param table (GET /preset/monitors): device token → pid + role + dB
+   *  range. This is how we know which paramIds are read-only MONITORS rather than editable params —
+   *  the device also surfaces several of them in the ordinary block param list (amp `HEADROOM`/`B+`/
+   *  `Gain`, cab `VU`, comp/input/output `Gain`…), where they would otherwise render as writable knobs.
+   *
+   *  Deliberately NOT gated on `meteringOn`/`canMeterBlocks`: it drives suppression of those phantom
+   *  params, which has to hold even when live metering is switched off. */
+  monitorParams = $state<import('./types').MonitorParams | null>(null);
+  #monitorParamsLoad: Promise<void> | null = null;
+  /** Load the monitor table once (deduped, best-effort — on failure we fall back to the previous
+   *  behaviour rather than blocking the editor). */
+  loadMonitorParams = (): Promise<void> => {
+    if (this.monitorParams) return Promise.resolve();
+    this.#monitorParamsLoad ??= forgefx
+      .monitors()
+      .then((t) => { this.monitorParams = t ?? {}; })
+      .catch(() => { this.monitorParams = {}; }) // treat "no table" as "no monitors"
+      .finally(() => { this.#monitorParamsLoad = null; });
+    return this.#monitorParamsLoad;
+  };
+  /** Monitor rows for ONE device family (e.g. `DISTORT`), keyed by device-true pid.
+   *  MUST be family-scoped: pids repeat across families, so matching on pid alone would turn the amp's
+   *  `Bass 1` (pid 8) into `INPUT_GAINMONITOR`'s level meter. */
+  monitorsByPid = (family: string | null | undefined): Map<number, import('./types').MonitorEntry> =>
+    monitorsByFamily(this.monitorParams, family);
+  /** Monitor rows for the OPEN block, keyed by pid — family comes from its device layout
+   *  (`DeviceLayout.family` is the DEVICE family `DISTORT`, unlike `familyKey` which is the pack slug). */
+  get openBlockMonitors(): Map<number, import('./types').MonitorEntry> {
+    return this.monitorsByPid(this.blockLayout?.family);
+  }
   /** Toggle a looper transport control (record/play/stop/overdub/undo/once/reverse/half) on the open block. */
   looperControl = async (action: string, on: boolean) => {
     const eid = this.selected?.effectId;
@@ -1488,7 +1519,13 @@ class EditorStore {
       // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
       // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
       // way, so the rest of this method is model-agnostic.
-      const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(c.effectId) : await forgefx.blockParams(c.effectId);
+      // Fetch the monitor table alongside the params (deduped after the first block open) so the very
+      // first render already knows which paramIds are read-only monitors — otherwise they flash as
+      // editable knobs before the table lands.
+      const [r] = await Promise.all([
+        !this.isV2 && this.isAm4 ? forgefx.am4BlockParams(c.effectId) : forgefx.blockParams(c.effectId),
+        this.loadMonitorParams()
+      ]);
       this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
       this.enums = r.enums ?? [];
       this.blockType = r.type ?? null;

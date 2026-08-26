@@ -266,15 +266,21 @@ export interface ModModel {
   bindingSupported?: boolean;
 }
 
-/** Per-block monitor (meter) param table (GET /preset/monitors): paramName → pid + role + dB range. */
-export type MonitorParams = Record<string, {
+/** One row of the monitor (meter) param table. */
+export interface MonitorParam {
   family: string;
+  /** Device-true paramId — UNIQUE ONLY WITHIN `family`. Amp pid 8 is `Bass 1`; INPUT pid 8 is
+   *  `INPUT_GAINMONITOR`. Never match a monitor on pid alone — always scope by family too. */
   pid: number;
   role: string;
   minDb?: number;
   maxDb?: number;
   widgetConfirmed: boolean;
-}>;
+}
+/** Per-block monitor (meter) param table (GET /preset/monitors): paramName → pid + role + dB range. */
+export type MonitorParams = Record<string, MonitorParam>;
+/** A monitor row plus the device token it was keyed by (e.g. `DISTORT_VPLATEMON`). */
+export type MonitorEntry = MonitorParam & { token: string };
 
 /** Live per-block audio meter (GET /preset/monitors/live): normalized 0..1 level + mapped dB. */
 export interface LiveMonitor {

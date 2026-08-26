@@ -11,7 +11,7 @@
 import { getContext, hasContext } from 'svelte';
 import { editor } from './editor.svelte';
 import type { Cell, Layout } from './grid';
-import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState } from './types';
+import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, MonitorEntry, CabState } from './types';
 import type { SwipeCtrl } from './layouts';
 
 export const EDITOR_SURFACE_KEY = Symbol('axis.editorSurface');
@@ -83,6 +83,8 @@ export interface EditorSurface {
   typeNameFor: (effectId: number) => string;
   monitorFor: (effectId: number) => LiveMonitor | null;
   monitorsFor: (effectId: number) => LiveMonitor[];
+  /** Read-only monitor rows for the OPEN block, keyed by device-true pid (family-scoped). */
+  openBlockMonitors: Map<number, MonitorEntry>;
   controlsFor: (cell: Cell) => SwipeCtrl[];
   meterFor: (cell: Cell) => {
     norm: number;

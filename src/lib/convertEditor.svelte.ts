@@ -422,6 +422,8 @@ class ConvertEditor {
   typeNameFor = (_effectId: number): string => '';
   monitorFor = (_effectId: number): LiveMonitor | null => null;
   monitorsFor = (_effectId: number): LiveMonitor[] => [];
+  /** Offline conversion has no connected device, so no monitors — every param is an ordinary param. */
+  readonly openBlockMonitors = new Map<number, import('./types').MonitorEntry>();
   controlsFor = (_cell: Cell): SwipeCtrl[] => [];
   meterFor = (
     _cell: Cell
