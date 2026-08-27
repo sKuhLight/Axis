@@ -145,6 +145,9 @@ class EditorStore {
   /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
   looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
+  /** effectId the currently-held params/enums/layout were read for, so #loadParams can tell a FIRST
+   *  read of a block (blank the surface) from a refresh of the one already on screen (update in place). */
+  #paramsEid: number | null = null;
   /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
@@ -1474,6 +1477,7 @@ class EditorStore {
     // pidLow from the catalog) — don't gate the editor on a gen-3 `pack` there.
     if (!c.pack && !this.paramsWithoutPack) {
       this.sheetState = 'nopack';
+      this.#paramsEid = null; // surface is blank now — the next real read must repaint from scratch
       this.params = [];
       this.enums = [];
       return;
@@ -1516,7 +1520,15 @@ class EditorStore {
   #loadParams = async () => {
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
-    this.sheetState = 'loading';
+    // Blank the surface ONLY when nothing on screen belongs to this block. 'loading' swaps the
+    // ControlSurface out for the "Reading parameters…" hint, and that unmount wipes its component
+    // state — live search, arrange mode, open dropdowns, measured width, scroll position, active page.
+    // The background refresh paths (#refreshScene, the SSE 'changed' debounce, the preset-watch tick)
+    // re-read the block ALREADY open, so there they must update the values in place instead.
+    if (this.#paramsEid !== c.effectId) {
+      this.#paramsEid = null;
+      this.sheetState = 'loading';
+    }
     try {
       // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
       // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
@@ -1551,8 +1563,10 @@ class EditorStore {
           this.meters = { ...this.meters, [c.effectId]: { ...m } };
         }
       }
+      this.#paramsEid = c.effectId ?? null;
       this.sheetState = 'ready';
     } catch (e) {
+      this.#paramsEid = null; // nothing trustworthy on screen — the next attempt blanks and re-reads
       this.sheetState = 'error';
       if (e instanceof ForgeError) console.warn(e.message);
     }
