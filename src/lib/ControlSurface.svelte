@@ -558,6 +558,12 @@
   function setPage(pg: string) {
     if (!board) return;
     bySlug = { ...bySlug, [slug]: { ...board, page: pg } };
+    // Persist, like every other board mutation. `bySlug`/`loadedSig` are component state, so any
+    // remount — `sheetState` flips to 'loading' on EVERY background #loadParams() (scene refresh,
+    // SSE 'changed', preset watch), which swaps ControlSurface out for the "Reading parameters…"
+    // hint — re-runs the load effect and restores `page` from storage. Without this the user's tab
+    // silently snapped back to the stored one seconds after they picked it.
+    saveBoard(slug);
     openSelect = null;
     editingKey = null;
   }

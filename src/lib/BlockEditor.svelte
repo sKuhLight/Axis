@@ -88,12 +88,16 @@
   }
 </script>
 
-{#if (embedded || editor.editorOpen) && sel && cat}
+<!-- The GRID MAP is the editor's block navigator, so it has to outlive the selection — otherwise the
+     one control that lets you PICK a block is hidden exactly when nothing is picked. Embedded (the
+     workbench panel) the card therefore always renders and only the block-specific header / control
+     surface / footer gate on `sel`. The docked/mobile shell still opens on a selection only. -->
+{#if embedded || (editor.editorOpen && sel && cat)}
   <div
     class="ed"
     class:mob={editor.isMobile && !embedded}
     class:embedded
-    style="--c:{cat.accent}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
+    style="--c:{cat?.accent ?? 'var(--accent)'}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
     data-screen="Block Editor"
   >
     {#if editor.isMobile && !embedded}<div class="overlaybg" role="presentation" onclick={() => editor.closeEditor()}></div>{/if}
@@ -104,35 +108,45 @@
         </div>
       {/if}
 
-      <!-- header -->
-      <header class="head">
-        <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
-        <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
-          <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
-          <span class="t-wrap">
-            <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
-            <span class="t-type">{isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel.pack || '—')}</span>
-          </span>
-          {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
-        </button>
-
-        {#if sel.pack && sel.channel != null}
-          <div class="ch">
-            <span class="ch-lbl mono">CH</span>
-            {#each CHAN as id}
-              <button class="ch-btn" class:on={sel.channel === id} onclick={() => editor.setChannel(id)}>{id}</button>
-            {/each}
-          </div>
-        {/if}
-
-        {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
-      </header>
-
-      <!-- grid map navigator: hop between blocks / add / route without leaving the editor -->
+      <!-- grid map navigator: hop between blocks / add / route without leaving the editor.
+           Deliberately OUTSIDE the `sel` gates — it's how you pick a block in the first place, and
+           it sits ABOVE the header so selecting a block grows the card downwards from the map
+           instead of shoving the map down the pane. -->
       <GridMap />
 
+      <!-- header -->
+      {#if sel && cat}
+        <header class="head">
+          <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
+          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
+            <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+            <span class="t-wrap">
+              <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
+              <span class="t-type">{isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel.pack || '—')}</span>
+            </span>
+            {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
+          </button>
+
+          {#if sel.pack && sel.channel != null}
+            <div class="ch">
+              <span class="ch-lbl mono">CH</span>
+              {#each CHAN as id}
+                <button class="ch-btn" class:on={sel.channel === id} onclick={() => editor.setChannel(id)}>{id}</button>
+              {/each}
+            </div>
+          {/if}
+
+          {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
+        </header>
+      {/if}
+
       <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
-      {#if editor.sheetState === 'nopack'}
+      {#if !sel || !cat}
+        <div class="empty">
+          <strong>Block Editor</strong>
+          <span>Select a block in the grid to edit its parameters.</span>
+        </div>
+      {:else if editor.sheetState === 'nopack'}
         <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
       {:else if editor.sheetState === 'loading'}
         <div class="content scroll"><p class="hint">Reading parameters…</p></div>
@@ -150,15 +164,17 @@
       {/if}
 
       <!-- footer -->
-      <footer class="foot">
-        <button class="act" onclick={() => editor.showToast('Mute — coming soon', '#35c9d6')}>Mute</button>
-        <button class="act" onclick={() => editor.showToast('Scene Ignore — coming soon', '#35c9d6')}>Scene Ignore</button>
-        <span class="spacer"></span>
-        <button class="act byp" class:on={sel.bypassed} disabled={!sel.pack} onclick={() => editor.toggleBypass()}>
-          {sel.bypassed ? 'Bypassed' : 'Engaged'}
-        </button>
-        <button class="act rem" onclick={() => editor.removeSelected()}>Remove</button>
-      </footer>
+      {#if sel}
+        <footer class="foot">
+          <button class="act" onclick={() => editor.showToast('Mute — coming soon', '#35c9d6')}>Mute</button>
+          <button class="act" onclick={() => editor.showToast('Scene Ignore — coming soon', '#35c9d6')}>Scene Ignore</button>
+          <span class="spacer"></span>
+          <button class="act byp" class:on={sel.bypassed} disabled={!sel.pack} onclick={() => editor.toggleBypass()}>
+            {sel.bypassed ? 'Bypassed' : 'Engaged'}
+          </button>
+          <button class="act rem" onclick={() => editor.removeSelected()}>Remove</button>
+        </footer>
+      {/if}
     </div>
   </div>
 {/if}
@@ -364,6 +380,24 @@
 
   .hint {
     color: var(--text-dim);
+  }
+
+  /* no selection: the grid map keeps its band, this fills whatever is left below it */
+  .empty {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    place-content: center;
+    gap: 8px;
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .empty strong {
+    color: var(--text);
+    font-size: var(--d-font-lg);
+  }
+  .empty span {
+    font-size: var(--d-font-sm);
   }
 
   .foot {

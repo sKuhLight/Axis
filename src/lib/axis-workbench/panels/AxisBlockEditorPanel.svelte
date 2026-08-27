@@ -14,28 +14,23 @@
 </script>
 
 <div class="axis-pane-fill">
-  {#if editor.selected}
-    {#if isPhone && editor.editorOpen}
-      <div class="axis-be-minbar">
-        <button
-          type="button"
-          class="axis-be-minimize"
-          title="Minimize block editor"
-          aria-label="Minimize block editor"
-          onclick={minimize}
-        >
-          <span class="axis-be-chevron" aria-hidden="true"></span>
-          Minimize
-        </button>
-      </div>
-    {/if}
-    <BlockEditor embedded />
-  {:else}
-    <div class="axis-pane-empty">
-      <strong>Block Editor</strong>
-      <span>Select a block in the grid to edit its parameters.</span>
+  <!-- Always mounted: BlockEditor carries the GRID MAP navigator, which has to stay reachable
+       with nothing selected (it's how you select). It renders its own empty state below the map. -->
+  {#if isPhone && editor.editorOpen && editor.selected}
+    <div class="axis-be-minbar">
+      <button
+        type="button"
+        class="axis-be-minimize"
+        title="Minimize block editor"
+        aria-label="Minimize block editor"
+        onclick={minimize}
+      >
+        <span class="axis-be-chevron" aria-hidden="true"></span>
+        Minimize
+      </button>
     </div>
   {/if}
+  <BlockEditor embedded />
 </div>
 
 <style>
@@ -48,14 +43,6 @@
     flex-direction: column;
     overflow: hidden;
     background: var(--bg2);
-  }
-  .axis-pane-empty {
-    flex: 1;
-    display: grid;
-    place-content: center;
-    gap: 8px;
-    text-align: center;
-    color: var(--textdim);
   }
   .axis-be-minbar {
     flex: none;
@@ -92,12 +79,5 @@
     border-bottom: 2px solid currentColor;
     transform: rotate(45deg);
     margin-top: -3px;
-  }
-  strong {
-    color: var(--text);
-    font-size: 15px;
-  }
-  span {
-    font-size: 12px;
   }
 </style>
