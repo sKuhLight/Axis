@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyWorkbenchDocument } from '../defaults';
+import { createEmptyWorkbenchDocument, createEmptyWorkbenchPage } from '../defaults';
 import { repairWorkbenchDocument } from '../invariants';
 import { reduceWorkbenchDocument } from '../reducer';
-import type { PanelInstance, WidgetInstance, WorkbenchDocument } from '../schema';
+import type { PanelInstance, WidgetInstance, WorkbenchDocument, WorkbenchPage } from '../schema';
 import { activeWorkbenchPage, selectActiveLayout } from '../selectors';
 
 const panel = (id: string, extra: Partial<PanelInstance> = {}): PanelInstance => ({
@@ -20,6 +20,8 @@ const widget = (id: string, zone = 'top.left', order = 0, extra: Partial<WidgetI
   size: 'default',
   ...extra
 });
+
+const page = (id: string, label = id): WorkbenchPage => createEmptyWorkbenchPage({ id, label });
 
 const doc = (): WorkbenchDocument =>
   createEmptyWorkbenchDocument({
@@ -689,6 +691,79 @@ describe('reduceWorkbenchDocument — profiles', () => {
     expect(activated.next.activeProfileId).toBe('profile.stage');
     expect(renamed.success).toBe(true);
     expect(renamed.next.profiles['profile.stage'].label).toBe('Performance');
+  });
+
+  // A resize crossing 760/1366 activates another profile, and every profile owns its
+  // own layout with its own `activePageId`. Without the carry, the user is silently
+  // moved to whatever page that layout was last left on (the reported bug: Block
+  // Editor -> Preset Browser on narrowing).
+  describe('profile.activate carries the active page', () => {
+    /** Two profiles, distinct layouts, both carrying pages `page.one` and `page.p`. */
+    function twoProfileDoc(): WorkbenchDocument {
+      let d = doc();
+      d = reduceWorkbenchDocument(d, { type: 'page.add', page: page('page.p', 'P') }).next;
+      d = reduceWorkbenchDocument(d, { type: 'page.add', page: page('page.q', 'Q') }).next;
+      // Clone the active layout as the incoming profile's own layout, parked on Q.
+      const source = layout(d);
+      d.layouts['layout.other'] = JSON.parse(JSON.stringify({ ...source, id: 'layout.other', label: 'Other', activePageId: 'page.q' }));
+      d.profiles['profile.other'] = { id: 'profile.other', label: 'Other', layoutId: 'layout.other', breakpoint: 'tablet' };
+      // Outgoing profile sits on P.
+      d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.p' }).next;
+      return d;
+    }
+
+    it('moves the incoming layout onto the page the user was looking at', () => {
+      const r = reduceWorkbenchDocument(twoProfileDoc(), { type: 'profile.activate', profileId: 'profile.other' });
+
+      expect(r.success).toBe(true);
+      expect(r.next.activeProfileId).toBe('profile.other');
+      expect(r.next.layouts['layout.other'].activePageId).toBe('page.p');
+      // The outgoing layout keeps its own selection, so widening back is symmetric.
+      expect(r.next.layouts['layout.test'].activePageId).toBe('page.p');
+    });
+
+    it('leaves a layout that has no such page on its own page', () => {
+      const d = twoProfileDoc();
+      // Diverged layout: no `page.p` at all.
+      const other = d.layouts['layout.other'];
+      delete other.pages['page.p'];
+      other.pageOrder = other.pageOrder.filter((id) => id !== 'page.p');
+
+      const r = reduceWorkbenchDocument(d, { type: 'profile.activate', profileId: 'profile.other' });
+
+      expect(r.success).toBe(true);
+      expect(r.next.layouts['layout.other'].activePageId).toBe('page.q');
+      expect(r.next.layouts['layout.other'].pages['page.q']).toBeDefined();
+    });
+
+    it('is a no-op when the profile is already active', () => {
+      const before = twoProfileDoc();
+      const r = reduceWorkbenchDocument(before, { type: 'profile.activate', profileId: 'profile.test' });
+
+      expect(r.success).toBe(true);
+      expect(r.next).toEqual(before);
+    });
+
+    it('does not mutate the document when the profile is missing', () => {
+      const before = twoProfileDoc();
+      const snapshot = JSON.parse(JSON.stringify(before));
+      const r = reduceWorkbenchDocument(before, { type: 'profile.activate', profileId: 'missing' });
+
+      expect(r.success).toBe(false);
+      expect(r.error?.code).toBe('missing-profile');
+      expect(r.next).toEqual(snapshot);
+    });
+
+    it('does not mutate the document when the target layout is missing', () => {
+      const before = twoProfileDoc();
+      before.profiles['profile.other'].layoutId = 'layout.gone';
+      const snapshot = JSON.parse(JSON.stringify(before));
+      const r = reduceWorkbenchDocument(before, { type: 'profile.activate', profileId: 'profile.other' });
+
+      expect(r.success).toBe(false);
+      expect(r.error?.code).toBe('missing-layout');
+      expect(r.next).toEqual(snapshot);
+    });
   });
 
   it('sets a profile layout only when the profile and layout exist', () => {

@@ -293,8 +293,10 @@ export class WorkbenchController {
   /**
    * Resolve the profile that matches the given viewport width (honouring any user
    * override) and, **only when it differs from the active profile**, dispatch
-   * `profile.activate`. Never writes layout contents — a resize swaps the active
-   * profile id, it does not mutate the layout the user is on.
+   * `profile.activate`. A resize swaps the active profile id and carries the active
+   * PAGE onto the incoming profile's layout (reducer, `profile.activate`) so the user
+   * stays on the view they were looking at; it does not otherwise mutate layout
+   * contents — panels, widgets and docks are untouched.
    *
    * Returns `true` when the active profile changed.
    */

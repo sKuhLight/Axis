@@ -109,7 +109,10 @@ describe('WorkbenchController', () => {
     expect(result).toEqual({ handled: true, success: true, value: 'layout.test:level' });
   });
 
-  it('switches the active profile by viewport width without mutating layouts', () => {
+  // Panels/widgets/docks stay untouched by a resize. (The active PAGE is deliberately
+  // carried onto the incoming layout — covered by the next test; here every profile's
+  // layout is a clone with the same single page, so the carry is a no-op.)
+  it('switches the active profile by viewport width without mutating layout contents', () => {
     const controller = createWorkbenchController(multiProfileDoc());
     const layoutsBefore = JSON.stringify(controller.document.layouts);
 
@@ -133,6 +136,36 @@ describe('WorkbenchController', () => {
     expect(controller.document.activeProfileId).toBe('profile.desktop');
 
     expect(JSON.stringify(controller.document.layouts)).toBe(layoutsBefore);
+  });
+
+  it('carries the active page across a viewport-driven profile switch', () => {
+    const doc = multiProfileDoc();
+    // Give every layout the same two pages, each parked on a different one — the real
+    // shape of the reported bug (desktop on Preset Browser, tablet left on Grid).
+    const grid = doc.layouts['layout.desktop'].activePageId;
+    for (const id of ['layout.desktop', 'layout.tablet', 'layout.phone']) {
+      const l = doc.layouts[id];
+      l.pages['page.presets'] = { id: 'page.presets', label: 'Preset Browser', dock: JSON.parse(JSON.stringify(l.pages[grid].dock)) };
+      l.pageOrder = [grid, 'page.presets'];
+      l.activePageId = grid;
+    }
+    doc.layouts['layout.desktop'].activePageId = 'page.presets';
+
+    const controller = createWorkbenchController(doc);
+
+    // Narrow past the tablet breakpoint — the view must not move.
+    expect(controller.resolveProfileForWidth(1024)).toBe(true);
+    expect(controller.document.activeProfileId).toBe('profile.tablet');
+    expect(controller.document.layouts['layout.tablet'].activePageId).toBe('page.presets');
+
+    // Narrow past the phone breakpoint — still the same view.
+    expect(controller.resolveProfileForWidth(390)).toBe(true);
+    expect(controller.document.layouts['layout.phone'].activePageId).toBe('page.presets');
+
+    // Widen all the way back — and a page chosen at phone width follows you up.
+    controller.dispatch({ type: 'page.activate', pageId: grid });
+    expect(controller.resolveProfileForWidth(1920)).toBe(true);
+    expect(controller.document.layouts['layout.desktop'].activePageId).toBe(grid);
   });
 
   it('honours a persisted user override over viewport resolution and clears it', () => {
