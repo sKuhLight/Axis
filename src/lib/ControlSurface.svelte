@@ -1439,7 +1439,7 @@
               <input id="cs-input" class="kinput rel" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
             {:else}
               <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-              <div class="kval rel" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+              <div class="kval" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
             {/if}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="vtrack" onpointerdown={(e) => onTrackDown(e, c.key, c.id, true)}>
@@ -1464,7 +1464,7 @@
             <div class="srow">
               <span class="slbl">{c.label}</span>
               {#if editingKey === c.key}
-                <input id="cs-input" class="kinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
+                <input id="cs-input" class="kinput inrow" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
               {:else}
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                 <div class="kval cy" ondblclick={() => startType(c.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
@@ -1575,7 +1575,7 @@
                   <input id="cs-input" class="kinput rel" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
                 {:else}
                   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-                  <div class="kval rel" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
+                  <div class="kval" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
                 {/if}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div class="vtrack" onpointerdown={(e) => onTrackDown(e, w.id, c.id, true)}>
@@ -1587,7 +1587,7 @@
                 <div class="srow">
                   <span class="slbl">{c.label}</span>
                   {#if editingKey === w.key}
-                    <input id="cs-input" class="kinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
+                    <input id="cs-input" class="kinput inrow" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
                   {:else}
                     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                     <div class="kval cy" ondblclick={() => startType(w.key, c.id)} title="Double-click to type">{valText(c.id)}</div>
@@ -2309,8 +2309,6 @@
     pointer-events: auto;
   }
   .kval {
-    position: absolute;
-    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2318,19 +2316,16 @@
     color: var(--text);
     cursor: text;
   }
-  .kval.rel,
-  .kinput.rel {
-    position: relative;
-    inset: auto;
-  }
   .kval.cy {
     color: var(--accentbright);
+    flex: none;
+    white-space: nowrap;
   }
   .kval.big {
     font-size: 28px;
     font-weight: 700;
-    /* No min-width: it used to force 44px and shove the value on top of the step buttons in a narrow
-       card. Shrink and ellipsize instead. */
+    /* The value is in flow now (see .kval above), so in a narrow card it must shrink
+       and ellipsize instead of shoving into the step buttons or overflowing the card. */
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2357,6 +2352,14 @@
     top: auto;
     transform: none;
     width: 70%;
+  }
+  .kinput.inrow {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    flex: none;
+    width: 70px;
   }
   .kinput.big {
     position: relative;
