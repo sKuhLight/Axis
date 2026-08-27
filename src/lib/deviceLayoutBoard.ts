@@ -67,8 +67,10 @@ export interface SurfaceWidget {
   /** Effective device-authored column (from `placement.col`, gaps filled forward — see `authoredX`).
    *  Present only on rows the device actually authored; `packRows` honours it instead of re-flowing. */
   col?: number;
-  /** This widget belongs to the page's coalesced `mixer` strip (Level/Balance/Bypass/Scene Ignore). */
-  strip?: boolean;
+  /** This widget is a block-level control (Level/Balance/Bypass Mode/Bypass/Scene Ignore) rather than a
+   *  page parameter. ControlSurface renders these as a fixed right-hand rail outside the page area, so
+   *  they do not move when the page tab changes. See `railControls`. */
+  rail?: boolean;
 }
 export interface SurfaceBoard {
   pageOrder: string[];
@@ -237,10 +239,47 @@ function packSequential(ctls: BoardCtl[], cols: number): SurfaceWidget[] {
   return out;
 }
 
+/** Rail membership for layouts the device did NOT tag with a `mixer` section — the paramIds of the
+ *  block-level controls, as the set of controls that appear on EVERY page.
+ *
+ *  Most families (35 of the FM3's 43) mark the block-level strip with `section: 'mixer'` and need no
+ *  inference; this is the fallback for the ones that don't. In practice FILTER is the only real
+ *  consumer — the other untagged families are virtual effects with no rail, or single-page blocks.
+ *
+ *  Intersection rather than a name list, because no name list can be right: FILTER's `LOWCUT`/`HIGHCUT`
+ *  are page knobs while PITCH's identically-named params are rail members. Intersection gets both right
+ *  without knowing any names. It is safe ONLY as this fallback — used generally it over-collects (GATE
+ *  repeats `THRESH`/`RATIO`/`ATTACK` on every page), but every such family tags its mixer rows and so
+ *  never reaches here.
+ *
+ *  Returns an empty set for mixer-tagged layouts and for single-page blocks, which keep today's layout. */
+export function railControls(layout: DeviceLayout | null | undefined): Set<number> {
+  const pages = layout?.pages ?? [];
+  if (pages.length < 2) return new Set();
+  const idsOf = (pg: (typeof pages)[number]): Set<number> => {
+    const out = new Set<number>();
+    for (const r of pg.rows ?? []) {
+      if (r.section === 'mixer') return new Set(); // tagged layout — caller uses the section instead
+      for (const c of r.controls ?? []) if (c.paramId != null) out.add(c.paramId);
+    }
+    return out;
+  };
+  const first = idsOf(pages[0]!);
+  if (!first.size) return new Set();
+  let acc = first;
+  for (let i = 1; i < pages.length; i++) {
+    const ids = idsOf(pages[i]!);
+    if (!ids.size) return new Set();
+    acc = new Set([...acc].filter((id) => ids.has(id)));
+    if (!acc.size) return acc;
+  }
+  return acc;
+}
+
 /** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
  *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
  *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
-const BOARD_SCHEMA = 'b3';
+const BOARD_SCHEMA = 'b4';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -288,6 +327,8 @@ export function buildDeviceLayoutBoard(
     return name;
   };
 
+  const railIds = railControls(layout);
+
   const boards: Record<string, SurfaceWidget[]> = {};
   const pageOrder: string[] = [];
 
@@ -301,7 +342,7 @@ export function buildDeviceLayoutBoard(
       // Resolve the whole row up front: placing a band set needs its TOTAL width before it can tell
       // whether the set still fits the current line. A `key: null` slot is a gap (spacer, duplicate, or a
       // control with no catalog entry) that only advances the cursor so neighbours don't shift left.
-      const slots: { key: string | null; view: string; w: number; h: number; group: number; col: number | null }[] = [];
+      const slots: { key: string | null; view: string; w: number; h: number; group: number; col: number | null; rail: boolean }[] = [];
       let prevBand: number | null = null;
       for (const ctl of row.controls) {
         const band = bandIndex(ctl);
@@ -309,14 +350,15 @@ export function buildDeviceLayoutBoard(
         prevBand = band;
         const group = groupSeq;
         const col = ctl.placement?.col ?? null;
+        const rail = row.strip || (ctl.paramId != null && railIds.has(ctl.paramId));
         const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
         const base = r === 'gap' ? undefined : byKey.get(r.key);
         if (r === 'gap' || !base || seen.has(r.key)) {
-          slots.push({ key: null, view: '', w: 1, h: 1, group, col });
+          slots.push({ key: null, view: '', w: 1, h: 1, group, col, rail });
           continue;
         }
         seen.add(r.key);
-        slots.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, group, col });
+        slots.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, group, col, rail });
       }
 
       // Device-authored columns (see `authoredX`). Gaps are dropped rather than allowed to consume a
@@ -338,7 +380,7 @@ export function buildDeviceLayoutBoard(
           let h = 1;
           anchored.forEach((a, i) => {
             const s = a.slot;
-            widgets.push({ id: 'w' + s.key, key: s.key!, x: xs[i], y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, col: xs[i], ...(row.strip ? { strip: true } : {}) });
+            widgets.push({ id: 'w' + s.key, key: s.key!, x: xs[i], y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, col: xs[i], ...(s.rail ? { rail: true } : {}) });
             h = Math.max(h, s.h);
           });
           gridRow += h;
@@ -369,7 +411,7 @@ export function buildDeviceLayoutBoard(
             rowH = 1;
           }
           if (s.key) {
-            widgets.push({ id: 'w' + s.key, key: s.key, x, y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, ...(row.strip ? { strip: true } : {}) });
+            widgets.push({ id: 'w' + s.key, key: s.key, x, y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, ...(s.rail ? { rail: true } : {}) });
             rowH = Math.max(rowH, s.h);
             placed = true;
           }

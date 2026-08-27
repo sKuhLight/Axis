@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDeviceLayoutBoard, layoutVariantSig, monitorsByFamily, packInto, packRows, repackWidgets, MAX_ROWS, type BoardCtl, type SurfaceWidget } from './deviceLayoutBoard';
+import { buildDeviceLayoutBoard, layoutVariantSig, railControls, monitorsByFamily, packInto, packRows, repackWidgets, MAX_ROWS, type BoardCtl, type SurfaceWidget } from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
 // ── catalog builders (mirror ControlSurface's live catalog entries) ──
@@ -25,6 +25,56 @@ const layout = (pages: DeviceLayout['pages'], extra: Partial<DeviceLayout> = {})
 });
 
 const find = (ws: SurfaceWidget[], key: string): SurfaceWidget => ws.find((w) => w.key === key)!;
+
+describe('railControls — the block-level rail for layouts with no `mixer` section', () => {
+  const page = (name: string, ids: number[], section = 'parameters') => ({
+    name,
+    rows: [{ section, controls: ids.map((id) => ctl('knob', id, `P${id}`)) }]
+  });
+
+  it('returns the controls present on every page (the FILTER shape)', () => {
+    // Filter's two pages: per-page knobs differ, the block-level six repeat verbatim.
+    const rail = railControls(
+      layout([page('Filter', [10, 11, 20, 21, 22, 23]), page('Modifiers', [12, 13, 20, 21, 22, 23])])
+    );
+    expect([...rail].sort((a, b) => a - b)).toEqual([20, 21, 22, 23]);
+  });
+
+  it('defers to the `mixer` section when the layout tags one (the AMP/CAB/REVERB shape)', () => {
+    // GATE is the reason this matters: it repeats THRESH/RATIO/ATTACK on every page, so the
+    // intersection would sweep real page parameters into the rail. It tags its mixer rows, so it
+    // never takes this path.
+    const gate = layout([
+      { name: 'Gate 1', rows: [{ section: 'parameters', controls: [ctl('knob', 1, 'Thresh'), ctl('knob', 2, 'Ratio')] }, { section: 'mixer', controls: [ctl('knob', 9, 'Level')] }] },
+      { name: 'Gate 2', rows: [{ section: 'parameters', controls: [ctl('knob', 1, 'Thresh'), ctl('knob', 2, 'Ratio')] }, { section: 'mixer', controls: [ctl('knob', 9, 'Level')] }] }
+    ]);
+    expect(railControls(gate).size).toBe(0);
+  });
+
+  it('returns nothing for a single-page block (PEQ, Tremolo, GEQ… keep the current layout)', () => {
+    expect(railControls(layout([page('PEQ', [1, 2, 3])])).size).toBe(0);
+  });
+
+  it('returns nothing when the pages share no control at all', () => {
+    expect(railControls(layout([page('A', [1, 2]), page('B', [3, 4])])).size).toBe(0);
+  });
+
+  it('tags the intersection as rail widgets on every page', () => {
+    const catalog: BoardCtl[] = [knob(10), knob(12), knob(20), knob(21)];
+    const board = buildDeviceLayoutBoard(
+      layout([page('One', [10, 20, 21]), page('Two', [12, 20, 21])]),
+      catalog,
+      12
+    )!;
+    for (const name of ['One', 'Two']) {
+      const ws = board.boards[name]!;
+      expect(find(ws, 'k20').rail).toBe(true);
+      expect(find(ws, 'k21').rail).toBe(true);
+    }
+    expect(find(board.boards['One']!, 'k10').rail).toBeUndefined();
+    expect(find(board.boards['Two']!, 'k12').rail).toBeUndefined();
+  });
+});
 
 describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
   const catalog: BoardCtl[] = [knob(0), knob(1), select(4), toggle(9), knob(5), METER, BYPASS];
@@ -581,9 +631,9 @@ describe('buildDeviceLayoutBoard — the mixer strip is one row', () => {
   });
 
   it('tags the strip widgets and leaves parameter widgets untagged', () => {
-    expect(find(b, 'k28').strip).toBe(true);
-    expect(find(b, 'bypass').strip).toBe(true);
-    expect(find(b, 'k1').strip).toBeUndefined();
+    expect(find(b, 'k28').rail).toBe(true);
+    expect(find(b, 'bypass').rail).toBe(true);
+    expect(find(b, 'k1').rail).toBeUndefined();
   });
 
   it('does not merge mixer rows that are not adjacent', () => {

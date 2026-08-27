@@ -57,6 +57,7 @@
   } = $props();
 
   const GAP = 8;
+  const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
   const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
@@ -209,7 +210,7 @@
   // ── grid + board state ──
   let containerEl = $state<HTMLElement | null>(null);
   let boardEl = $state<HTMLElement | null>(null);
-  let containerW = $state(900);
+  let paneW = $state(900);
   let vw = $state(typeof window !== 'undefined' ? window.innerWidth : 1100);
   let cols = $state(12);
   let rows = $state(4);
@@ -305,26 +306,118 @@
   const onPage = $derived(new Set(widgets.map((w) => w.key)));
   const tray = $derived(catalog.filter((c) => !onPage.has(c.key)));
 
+  const maxCell = $derived(densityTileMax(theme.cfg.density));
+  // ── block-level rail ──────────────────────────────────────────────────────────────────────────
+  // Every page of a device-authentic board repeats the same block-level controls (Level/Balance/Bypass
+  // Mode/Bypass/Scene Ignore). Rendered inside the page grid they land at a different `y` on every tab
+  // (pages differ in height), which reads as flicker on each page change. The device's own editor pins
+  // them to a fixed rail on the right, outside the tab content; so do we.
+  //
+  // The split is render-time ONLY — the widgets stay in their page boards, so persistence, `reconcile`,
+  // the arrange tray and `onPage`/`tray` all keep working against one canvas.
+  const railZone = (key: string): 'knobs' | 'drops' | 'btns' => {
+    const k = catByKey.get(key)?.kind;
+    if (k === 'select') return 'drops';
+    if (k === 'toggle' || k === 'action') return 'btns';
+    return 'knobs';
+  };
+  const zoneOf = (ws: Widget[], z: 'knobs' | 'drops' | 'btns') => ws.filter((w) => railZone(w.key) === z);
+  const pageRail = (ws: Widget[]) => ws.filter((w) => w.rail && catByKey.has(w.key));
+  // The trailing "More" page (controls the layout never referenced) carries no rail widgets of its own,
+  // and letting the rail vanish there is the same jump this change exists to remove. These are
+  // BLOCK-level controls, so borrow the first page that has them — same live params either way.
+  const blockRail = $derived.by(() => {
+    if (!board) return [] as Widget[];
+    for (const p of board.pageOrder) {
+      const r = pageRail(board.boards[p] ?? []);
+      if (r.length) return r;
+    }
+    return [] as Widget[];
+  });
+  // No rail while arranging (the drag/resize math is written against the board canvas) and none on
+  // mobile, where vertical space — not horizontal — is the constraint.
+  const railWidgets = $derived.by(() => {
+    if (editMode || isMobile) return [] as Widget[];
+    const own = pageRail(widgets);
+    return own.length ? own : blockRail;
+  });
+  const railOn = $derived(railWidgets.length > 0);
+  // Width is per BLOCK, not per page: Cab's rail carries no dropdowns on the Cab tab but two on Preamp,
+  // so sizing off the current page would make the rail breathe between tabs — the very thing this fixes.
+  const railCols = $derived.by(() => {
+    if (!board) return 1;
+    let n = 1;
+    for (const pg of Object.values(board.boards)) {
+      const r = pageRail(pg);
+      for (const z of ['knobs', 'drops', 'btns'] as const) n = Math.max(n, zoneOf(r, z).length);
+    }
+    return Math.min(n, 3);
+  });
+  // Fixed cell, deliberately NOT the board's `cell`: `cell` is derived from `containerW`, and feeding it
+  // back into the rail width would recreate the measure→resize→measure loop `.content` warns about.
+  const railCell = $derived(maxCell);
+  const railW = $derived(railOn ? railCols * railCell + (railCols - 1) * GAP + RAIL_PAD : 0);
+  // Rail HEIGHT is block-constant too, and for the same reason: the bottom-anchored groups can only
+  // hold still if the edge they hang from holds still. Sizing off the flex line won't do — `.content`
+  // is a scroll pane whose own height is unrelated to the board's — so measure the tallest the rail
+  // ever gets across the block's pages and hold it there.
+  const zoneRows = (ws: Widget[], cols: number) => {
+    if (!ws.length) return 0;
+    let total = 0;
+    let x = 0;
+    let h = 1;
+    for (const w of ws) {
+      const span = Math.min(w.w, cols);
+      if (x > 0 && x + span > cols) {
+        total += h;
+        x = 0;
+        h = 1;
+      }
+      x += span;
+      h = Math.max(h, w.h);
+    }
+    return total + h;
+  };
+  const railH = $derived.by(() => {
+    if (!board || !railOn) return 0;
+    let px = 0;
+    for (const pg of Object.values(board.boards)) {
+      const r = pageRail(pg);
+      let sum = 0;
+      let parts = 1; // the slack spacer is always present
+      for (const z of ['knobs', 'drops', 'btns'] as const) {
+        const rows = zoneRows(zoneOf(r, z), railCols);
+        if (!rows) continue;
+        sum += rows * railCell + (rows - 1) * GAP;
+        parts++;
+      }
+      px = Math.max(px, sum + (parts - 1) * GAP);
+    }
+    return px;
+  });
+
+  const boardWidgets = $derived(railOn ? widgets.filter((w) => !railWidgets.includes(w)) : widgets);
+  const containerW = $derived(Math.max(120, paneW - railW));
+
   // Display grid: `cols` is the user's PREFERRED column count (their zoom on a wide monitor, e.g. 18/19
   // on 32:9), and it sets the FLOOR on how many columns show. It used to be the ceiling too, which meant a
   // wide pane could not add columns — it only made each tile fatter, up to 171px cells with a 133px knob
   // dial. resolveSurfaceCols now caps the cell at the active density's tileMax and adds columns instead.
   // Arrange (editMode) still authors at exactly `cols`; only the cell is capped there.
-  const maxCell = $derived(densityTileMax(theme.cfg.density));
   const surfaceCols = $derived(
     resolveSurfaceCols({ containerW, cols, gap: GAP, maxCell, editMode, isMobile })
   );
   const displayCols = $derived(surfaceCols.displayCols);
   const cell = $derived(surfaceCols.cell);
   // a device-authentic Default board tags its widgets with a source `row`; the free-arranged boards don't
-  const rowGrouped = $derived(widgets.some((w) => w.row != null));
+  const rowGrouped = $derived(boardWidgets.some((w) => w.row != null));
   // Narrowing always re-packs (otherwise widgets hang off the right edge) — unchanged. Widening re-packs
   // ONLY device-authentic boards: packRows keeps the editor's row breaks while closing the holes the
   // layout leaves behind (buildDeviceLayoutBoard advances a column for every control it cannot resolve),
   // which is what read as tiles scattered at random. A hand-arranged board is left exactly where the user
   // put it — gravity-packing their deliberate placement into new columns would be a regression.
   const repack = $derived(!editMode && (displayCols < cols || (rowGrouped && displayCols > cols)));
-  const viewWidgets = $derived(repack ? repackWidgets(widgets, displayCols) : widgets);
+  const viewWidgets = $derived(repack ? repackWidgets(boardWidgets, displayCols) : boardWidgets);
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   // Board WIDTH = content extent too, for device-authentic boards. `displayCols` is derived from the pane
@@ -555,7 +648,7 @@
     if (!containerEl || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
       const w = (containerEl?.clientWidth ?? 0) - 32;
-      if (w > 0 && Math.abs(w - containerW) > 1) containerW = w;
+      if (w > 0 && Math.abs(w - paneW) > 1) paneW = w;
     });
     ro.observe(containerEl);
     return () => ro.disconnect();
@@ -1436,25 +1529,9 @@
   </div>
 {/if}
 
-<!-- board -->
-<div class="content scroll" bind:this={containerEl}>
-  <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
-    {#if editMode}
-      <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
-        {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
-      </div>
-    {/if}
-
-    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
-      {#if drag}
-        <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
-      {/if}
-
-      {#each viewWidgets as w (w.id)}
-        {@const c = catByKey.get(w.key)}
-        {#if c}
-          <div style:grid-column="{w.x + 1} / span {w.w}" style:grid-row="{w.y + 1} / span {w.h}" style:min-width="0" style:min-height="0" style:position="relative">
+<!-- One control card. Rendered by the page grid AND by the block-level rail, which places the same
+     cards outside the tab content so they do not move when the page changes. -->
+{#snippet widgetCard(w: Widget, c: Ctl)}
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
             <div
               class="card"
@@ -1640,6 +1717,32 @@
                 </button>
               {/if}
             </div>
+{/snippet}
+
+<!-- board -->
+<div class="content scroll" bind:this={containerEl}>
+  <!-- The board is centred inside its own column so that the rail can sit at a FIXED distance from the
+       pane's right edge. Centring the board and the rail together would slide the rail sideways every
+       time a narrower page came up — the same flicker, on the other axis. -->
+  <div class="boardcol">
+  <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
+    {#if editMode}
+      <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
+        {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
+      </div>
+    {/if}
+
+    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
+      {#if drag}
+        <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
+      {/if}
+
+      {#each viewWidgets as w (w.id)}
+        {@const c = catByKey.get(w.key)}
+        {#if c}
+          <div style:grid-column="{w.x + 1} / span {w.w}" style:grid-row="{w.y + 1} / span {w.h}" style:min-width="0" style:min-height="0" style:position="relative">
+            {@render widgetCard(w, c)}
           </div>
         {/if}
       {/each}
@@ -1660,6 +1763,34 @@
   {#if widgets.length === 0}
     <div class="boardempty">{editMode ? 'Empty page — add controls below' : 'Empty page — unlock to arrange'}</div>
   {/if}
+  </div>
+
+  {#if railOn}
+    <!-- Block-level rail: two anchored groups. Knobs sit at the top; dropdowns and buttons are pinned to
+         the BOTTOM and grow upward, because the controls that vary between pages are exactly the
+         dropdowns (the amp's Speaker tab drops Input Select and Bypass Mode). Losing them then changes
+         only the slack in the middle — the knobs and the buttons do not move. Keyed by widget id so the
+         DOM is reused across a tab switch rather than torn down. -->
+    <div class="rail" style:width="{railCols * railCell + (railCols - 1) * GAP}px" style:height="{railH}px">
+      {#each ['knobs', 'drops', 'btns'] as const as zone, zi (zone)}
+        {@const zws = zoneOf(railWidgets, zone)}
+        {#if zi === 1}<div class="railslack"></div>{/if}
+        {#if zws.length}
+          <div class="railgrid" style:grid-template-columns="repeat({railCols}, {railCell}px)" style:gap="{GAP}px">
+            {#each zws as w (w.id)}
+              {@const c = catByKey.get(w.key)}
+              {#if c}
+                <div style:grid-column="span {Math.min(w.w, railCols)}" style:min-width="0" style:min-height="0" style:position="relative" style:height="{w.h * railCell + (w.h - 1) * GAP}px">
+                  {@render widgetCard(w, c)}
+                </div>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      {/each}
+    </div>
+  {/if}
+
 </div>
 
 <!-- widget tray -->
@@ -2018,6 +2149,30 @@
     display: flex;
     justify-content: center;
     align-items: flex-start;
+  }
+  .boardcol {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .rail {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid var(--surface);
+  }
+  .railgrid {
+    display: grid;
+    grid-auto-rows: min-content;
+  }
+  .railslack {
+    flex: 1;
+    min-height: 0;
   }
   /* styled scrollbars (vertical) across the surface's scroll areas */
   .content::-webkit-scrollbar,

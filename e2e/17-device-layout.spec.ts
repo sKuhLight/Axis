@@ -41,7 +41,7 @@ const GRID = {
 //   row 0: Gain (knob, col 2), Tone (knob, col 0), <spacer>, Gain meter (dropped — no monitor → gap)
 //          — authored `placement.col`: Gain is FIRST in the array but the device puts it RIGHT of Tone.
 //   row 1: Mode (dropdown → select), Bright (toggle), Level (slider) — no cols, flows as before
-//   row 2 + row 3: two consecutive `mixer` rows → coalesced into ONE footer strip
+//   row 2 + row 3: two consecutive `mixer` rows → the block-level RAIL, rendered right of the page
 const knob = (id: number, name: string) => ({ id, name, value: 0, norm: 0.5, min: 0, max: 10 });
 const BLOCK_PARAMS = {
   block: 'Drive',
@@ -50,7 +50,8 @@ const BLOCK_PARAMS = {
   named: [knob(0, 'Gain'), knob(1, 'Tone'), knob(5, 'Level'), knob(7, 'Balance')],
   enums: [
     { id: 4, name: 'Mode', value: 0, options: [{ value: 0, label: 'Fat' }, { value: 1, label: 'Thick' }, { value: 2, label: 'Bright' }] },
-    { id: 9, name: 'Bright', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }
+    { id: 9, name: 'Bright', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] },
+    { id: 10, name: 'Bypass Mode', value: 0, options: [{ value: 0, label: 'Mute' }, { value: 1, label: 'Thru' }, { value: 2, label: 'Mute In' }] }
   ],
   type: { value: 3, name: 'FET Boost' },
   layout: {
@@ -85,7 +86,28 @@ const BLOCK_PARAMS = {
           },
           {
             section: 'mixer',
-            controls: [{ label: 'Bypass', paramName: 'DRIVE_BYP', paramId: 6, widget: 'button', rawWidget: 'btnBypass' }]
+            controls: [
+              { label: 'Bypass Mode', paramName: 'DRIVE_BYPMODE', paramId: 10, widget: 'dropdown', rawWidget: 'dropdown1Tight' },
+              { label: 'Bypass', paramName: 'DRIVE_BYP', paramId: 6, widget: 'button', rawWidget: 'btnBypass' }
+            ]
+          }
+        ]
+      },
+      {
+        // Page 2 repeats the rail MINUS the dropdown — exactly how the amp's "Speaker" tab drops Input
+        // Select and Bypass Mode. The knobs and the button must not move when this page is selected.
+        name: 'Tone',
+        rows: [
+          {
+            section: 'parameters',
+            controls: [{ label: 'Tone', paramName: 'DRIVE_TONE', paramId: 1, widget: 'knob', rawWidget: 'knob' }]
+          },
+          {
+            section: 'mixer',
+            controls: [
+              { label: 'Balance', paramName: 'DRIVE_BAL', paramId: 7, widget: 'knob', rawWidget: 'knob' },
+              { label: 'Bypass', paramName: 'DRIVE_BYP', paramId: 6, widget: 'button', rawWidget: 'btnBypass' }
+            ]
           }
         ]
       }
@@ -134,7 +156,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
     // Widget mapping: the multi-option enum (Mode) becomes a dropdown/select field; the slider (Level)
     // renders as a horizontal slider row.
-    await expect(page.locator('.selfield')).toHaveCount(1);
+    await expect(page.locator('.boardwrap .selfield')).toHaveCount(1);
     const level = page.locator('.slbl', { hasText: 'Level' }).first();
     await expect(level).toBeVisible();
 
@@ -165,27 +187,40 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     expect(g!.x - (t!.x + t!.width)).toBeGreaterThan(t!.width * 0.5);
   });
 
-  test('consecutive mixer rows coalesce into one footer strip', async ({ page }) => {
+  test('block-level controls render as a fixed rail, right of the page, that does not move on page change', async ({ page }) => {
     await bootWithLayout(page);
     await page.locator('[data-idx="0,0"].cell.block').click();
     await expect(page.locator('.boardwrap')).toBeVisible();
 
-    // The device splits its mixer across two rows to suit a fixed-width canvas; rendering each as its
-    // own grid line stranded the block's master control alone at the far left (the Cab "Level 3" bug).
-    // Compare the GRID CARDS, not their inner text: a knob card and the bypass action card lay their
-    // contents out differently, so only the cards themselves share the strip's grid row.
-    // `.boardwrap` scope matters: BlockEditor's own shell wrapper is also `.card`.
-    const balance = page.locator('.boardwrap .card').filter({ has: page.locator('.lbl', { hasText: 'Balance' }) }).first();
-    const bypass = page.locator('.boardwrap .card').filter({ has: page.locator('.action') }).first(); // "Engaged"/"Bypassed"
+    // The mixer-section controls leave the page grid entirely and render in `.rail`.
+    const rail = page.locator('.rail');
+    await expect(rail).toBeVisible();
+    const balance = rail.locator('.card').filter({ has: page.locator('.lbl', { hasText: 'Balance' }) }).first();
+    const bypass = rail.locator('.card').filter({ has: page.locator('.action') }).first(); // "Engaged"/"Bypassed"
     await expect(balance).toBeVisible();
     await expect(bypass).toBeVisible();
+    // …and nowhere else: they must not still be sitting in the page grid.
+    await expect(page.locator('.boardwrap .card').filter({ has: page.locator('.action') })).toHaveCount(0);
 
-    const b = await balance.boundingBox();
-    const y = await bypass.boundingBox();
-    expect(b).toBeTruthy();
-    expect(y).toBeTruthy();
-    expect(Math.abs(b!.y - y!.y)).toBeLessThan(4); // one strip, not two stacked rows
-    expect(b!.x).toBeLessThan(y!.x); // Balance first, Bypass after it — array order within the strip
+    // The rail sits to the RIGHT of every page card.
+    const railBox = (await rail.boundingBox())!;
+    const boardBox = (await page.locator('.boardwrap').boundingBox())!;
+    expect(railBox.x).toBeGreaterThanOrEqual(boardBox.x + boardBox.width - 1);
+
+    // Buttons are bottom-anchored below the knobs; the dropdown zone sits between them.
+    const before = { bal: (await balance.boundingBox())!, byp: (await bypass.boundingBox())! };
+    expect(before.bal.y).toBeLessThan(before.byp.y);
+    await expect(rail.locator('.selfield')).toHaveCount(1); // Bypass Mode
+
+    // Switch to page 2, which drops the dropdown. Only the slack changes — the knob and the button
+    // stay exactly where they were. This is the whole point of the rail.
+    await page.locator('.tab', { hasText: 'Tone' }).first().click();
+    await expect(rail.locator('.selfield')).toHaveCount(0);
+    const after = { bal: (await balance.boundingBox())!, byp: (await bypass.boundingBox())! };
+    expect(Math.abs(after.bal.x - before.bal.x)).toBeLessThan(1);
+    expect(Math.abs(after.bal.y - before.bal.y)).toBeLessThan(1);
+    expect(Math.abs(after.byp.x - before.byp.x)).toBeLessThan(1);
+    expect(Math.abs(after.byp.y - before.byp.y)).toBeLessThan(1);
   });
 
   test('dropdown popover renders directly under its trigger, not the grid cell edge', async ({ page }) => {
@@ -197,7 +232,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     // widget's grid cell bottom, which sits well below the trigger because `.card` centers its
     // content — a select field is shorter than the knob-sized cell it lives in. The popover must
     // track the actual rendered trigger element instead.
-    const trigger = page.locator('.selfield');
+    const trigger = page.locator('.boardwrap .selfield');
     await trigger.click();
     const menu = page.locator('.selmenu');
     await expect(menu).toBeVisible();
