@@ -38,15 +38,16 @@ const GRID = {
 };
 
 // Drive block params + a v2 DeviceLayout:
-//   row 0: Gain (knob), Tone (knob), <spacer>, Gain meter (dropped — no live monitor → gap)
-//   row 1: Mode (dropdown → select), Bright (toggle), Level (slider)
-//   row 2: Bypass (button → bypass action)
+//   row 0: Gain (knob, col 2), Tone (knob, col 0), <spacer>, Gain meter (dropped — no monitor → gap)
+//          — authored `placement.col`: Gain is FIRST in the array but the device puts it RIGHT of Tone.
+//   row 1: Mode (dropdown → select), Bright (toggle), Level (slider) — no cols, flows as before
+//   row 2 + row 3: two consecutive `mixer` rows → coalesced into ONE footer strip
 const knob = (id: number, name: string) => ({ id, name, value: 0, norm: 0.5, min: 0, max: 10 });
 const BLOCK_PARAMS = {
   block: 'Drive',
   slug: 'drive',
   page: 12,
-  named: [knob(0, 'Gain'), knob(1, 'Tone'), knob(5, 'Level')],
+  named: [knob(0, 'Gain'), knob(1, 'Tone'), knob(5, 'Level'), knob(7, 'Balance')],
   enums: [
     { id: 4, name: 'Mode', value: 0, options: [{ value: 0, label: 'Fat' }, { value: 1, label: 'Thick' }, { value: 2, label: 'Bright' }] },
     { id: 9, name: 'Bright', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }
@@ -64,9 +65,9 @@ const BLOCK_PARAMS = {
           {
             section: 'parameters',
             controls: [
-              { label: 'Gain', paramName: 'DRIVE_GAIN', paramId: 0, widget: 'knob', rawWidget: 'knob' },
-              { label: 'Tone', paramName: 'DRIVE_TONE', paramId: 1, widget: 'knob', rawWidget: 'knob' },
-              { label: '', paramName: null, paramId: null, widget: 'spacer', rawWidget: 'spacer' },
+              { label: 'Gain', paramName: 'DRIVE_GAIN', paramId: 0, widget: 'knob', rawWidget: 'knob', placement: { col: 2 } },
+              { label: 'Tone', paramName: 'DRIVE_TONE', paramId: 1, widget: 'knob', rawWidget: 'knob', placement: { col: 0 } },
+              { label: '', paramName: null, paramId: null, widget: 'spacer', rawWidget: 'spacer', placement: { col: 1 } },
               { label: 'Gain', paramName: 'DRIVE_GAINMON', paramId: 8, widget: 'meter', rawWidget: 'meterGainVert' }
             ]
           },
@@ -77,6 +78,10 @@ const BLOCK_PARAMS = {
               { label: 'Bright', paramName: 'DRIVE_BRIGHT', paramId: 9, widget: 'toggle', rawWidget: 'toggle' },
               { label: 'Level', paramName: 'DRIVE_LEVEL', paramId: 5, widget: 'slider', rawWidget: 'slider' }
             ]
+          },
+          {
+            section: 'mixer',
+            controls: [{ label: 'Balance', paramName: 'DRIVE_BAL', paramId: 7, widget: 'knob', rawWidget: 'knob' }]
           },
           {
             section: 'mixer',
@@ -139,6 +144,48 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     expect(gy).toBeTruthy();
     expect(ly).toBeTruthy();
     expect(gy!.y).toBeLessThan(ly!.y);
+  });
+
+  test('places controls at the columns the device authored, not in array order', async ({ page }) => {
+    await bootWithLayout(page);
+    await page.locator('[data-idx="0,0"].cell.block').click();
+    await expect(page.locator('.boardwrap')).toBeVisible();
+
+    // `placement.col` carries the TRUE visual order: Gain is listed first but authored at col 2, Tone
+    // second but authored at col 0. Flowing the array (the old behaviour) would put Gain on the left.
+    const gain = page.locator('.lbl', { hasText: 'Gain' }).first();
+    const tone = page.locator('.lbl', { hasText: 'Tone' }).first();
+    const g = await gain.boundingBox();
+    const t = await tone.boundingBox();
+    expect(g).toBeTruthy();
+    expect(t).toBeTruthy();
+    expect(t!.x).toBeLessThan(g!.x); // Tone (col 0) left of Gain (col 2)
+    expect(Math.abs(t!.y - g!.y)).toBeLessThan(4); // same row
+    // col 1 is a spacer, so the two knobs are NOT adjacent — there is a real hole between them.
+    expect(g!.x - (t!.x + t!.width)).toBeGreaterThan(t!.width * 0.5);
+  });
+
+  test('consecutive mixer rows coalesce into one footer strip', async ({ page }) => {
+    await bootWithLayout(page);
+    await page.locator('[data-idx="0,0"].cell.block').click();
+    await expect(page.locator('.boardwrap')).toBeVisible();
+
+    // The device splits its mixer across two rows to suit a fixed-width canvas; rendering each as its
+    // own grid line stranded the block's master control alone at the far left (the Cab "Level 3" bug).
+    // Compare the GRID CARDS, not their inner text: a knob card and the bypass action card lay their
+    // contents out differently, so only the cards themselves share the strip's grid row.
+    // `.boardwrap` scope matters: BlockEditor's own shell wrapper is also `.card`.
+    const balance = page.locator('.boardwrap .card').filter({ has: page.locator('.lbl', { hasText: 'Balance' }) }).first();
+    const bypass = page.locator('.boardwrap .card').filter({ has: page.locator('.action') }).first(); // "Engaged"/"Bypassed"
+    await expect(balance).toBeVisible();
+    await expect(bypass).toBeVisible();
+
+    const b = await balance.boundingBox();
+    const y = await bypass.boundingBox();
+    expect(b).toBeTruthy();
+    expect(y).toBeTruthy();
+    expect(Math.abs(b!.y - y!.y)).toBeLessThan(4); // one strip, not two stacked rows
+    expect(b!.x).toBeLessThan(y!.x); // Balance first, Bypass after it — array order within the strip
   });
 
   test('dropdown popover renders directly under its trigger, not the grid cell edge', async ({ page }) => {

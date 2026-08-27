@@ -70,7 +70,7 @@ export interface LayoutPlacement {
   col?: number;
   offsetX?: number;
   offsetY?: number;
-  positionExact?: boolean;
+  positionExact?: string;
 }
 
 /** One control on a device-authentic editor page: a display label + widget kind bound to a paramId. */

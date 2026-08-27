@@ -449,3 +449,158 @@ describe('buildDeviceLayoutBoard — response graph slots', () => {
     expect(b.boards['Input EQ'].some((w) => w.key.startsWith('eq'))).toBe(false);
   });
 });
+
+describe('buildDeviceLayoutBoard — device-authored columns (placement.col)', () => {
+  const at = (col: number) => ({ placement: { col } });
+  const catalog: BoardCtl[] = [knob(7), knob(8), knob(9), knob(10), knob(26), knob(22), knob(11), knob(41), knob(49), knob(38), knob(90), knob(82), knob(35)];
+
+  const build = (controls: LayoutControl[], cols = 12) =>
+    buildDeviceLayoutBoard(layout([{ name: 'Authentic', rows: [{ controls }] }]), catalog, cols)!.boards['Authentic']!;
+
+  it('honours a deliberate hole: Master Volume at col 8 leaves col 7 empty', () => {
+    // amp Authentic row 0 verbatim: cols [0,1,2,3,4,5,6,8,null]
+    const ws = build([
+      ctl('knob', 7, 'Gain', at(0)),
+      ctl('knob', 8, 'Bass', at(2)),
+      ctl('knob', 9, 'Mid', at(3)),
+      ctl('knob', 10, 'Treble', at(4)),
+      ctl('knob', 26, 'Presence', at(5)),
+      ctl('knob', 22, 'Depth', at(6)),
+      ctl('knob', 11, 'Master Volume', at(8))
+    ]);
+    expect(find(ws, 'k7').x).toBe(0);
+    expect(find(ws, 'k22').x).toBe(6);
+    expect(find(ws, 'k11').x).toBe(8);
+    expect(ws.some((w) => w.x === 7)).toBe(false); // the gap the device asked for survives
+  });
+
+  it('array order is NOT visual order — col wins', () => {
+    // amp Authentic row 1 verbatim: Bright arrives FIRST but sits at col 4; Input Trim at col 0.
+    const ws = build([ctl('toggle', 41, 'Bright', at(4)), ctl('knob', 49, 'Input Trim', at(0))]);
+    expect(find(ws, 'k49').x).toBe(0);
+    expect(find(ws, 'k41').x).toBe(4);
+  });
+
+  it('aligns a partial row under the row above it (Cathode Follower case)', () => {
+    // amp "Pwr Tubes + CF": row 0 cols [null,0,1,2,3,4,5]; row 1 cols [null,3,4].
+    // The leading nulls are decorative labels — they must NOT consume col 0 and shove the row right.
+    const b = buildDeviceLayoutBoard(
+      layout([
+        {
+          name: 'CF',
+          rows: [
+            { controls: [ctl('label', null, 'POWER TUBES'), ctl('knob', 38, 'Grid Bias', at(0)), ctl('knob', 90, 'Hardness', at(1))] },
+            { controls: [ctl('label', null, 'CATHODE FOLLOWER'), ctl('knob', 82, 'Compression', at(3)), ctl('knob', 35, 'Harmonics', at(4))] }
+          ]
+        }
+      ]),
+      catalog,
+      12
+    )!.boards['CF']!;
+    expect(find(b, 'k38').x).toBe(0);
+    expect(find(b, 'k82').x).toBe(3);
+    expect(find(b, 'k35').x).toBe(4);
+    expect(find(b, 'k82').y).toBeGreaterThan(find(b, 'k38').y); // still its own row
+  });
+
+  it('an un-authored control anchors after the last authored column, not at 0', () => {
+    const ws = build([ctl('knob', 7, 'Gain', at(0)), ctl('knob', 8, 'Bass', at(4)), ctl('knob', 9, 'Trailing')]);
+    expect(find(ws, 'k8').x).toBe(4);
+    expect(find(ws, 'k9').x).toBe(5);
+  });
+
+  it('shifts right rather than overlapping when a wide widget occupies an authored column', () => {
+    // Axis dropdowns are 2 cells wide; the editor grid is one control per column.
+    const wide: BoardCtl[] = [select(4), knob(8)];
+    const b = buildDeviceLayoutBoard(
+      layout([{ name: 'P', rows: [{ controls: [ctl('dropdown', 4, 'Type', at(0)), ctl('knob', 8, 'Bass', at(1))] }] }]),
+      wide,
+      12
+    )!.boards['P']!;
+    expect(find(b, 'e4').x).toBe(0);
+    expect(find(b, 'k8').x).toBe(2); // not 1 — e4 spans 0..1
+  });
+
+  it('falls back to flow when the authored extent cannot fit the pane', () => {
+    const ws = build([ctl('knob', 7, 'Gain', at(0)), ctl('knob', 11, 'Master Volume', at(8))], 4);
+    expect(find(ws, 'k7').x).toBe(0);
+    expect(find(ws, 'k11').x).toBe(1); // flowed, never overflowing 4 columns
+    expect(ws.every((w) => w.x + w.w <= 4)).toBe(true);
+  });
+
+  it('a row with no authored column anywhere is byte-identical to the flow path', () => {
+    const controls = [ctl('knob', 7, 'Gain'), ctl('knob', 8, 'Bass'), ctl('knob', 9, 'Mid')];
+    expect(build(controls)).toEqual([
+      { id: 'wk7', key: 'k7', x: 0, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: 1 },
+      { id: 'wk8', key: 'k8', x: 1, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: 2 },
+      { id: 'wk9', key: 'k9', x: 2, y: 0, w: 1, h: 1, view: 'knob', row: 0, group: 3 }
+    ]);
+  });
+
+  it('packRows replays authored columns exactly instead of re-flowing them', () => {
+    const ws = build([ctl('knob', 7, 'Gain', at(0)), ctl('knob', 11, 'Master Volume', at(8))]);
+    expect(packRows(ws, 12)).toEqual(ws);
+  });
+
+  it('packRows falls back to flow when the pane can no longer fit the authored extent', () => {
+    const ws = build([ctl('knob', 7, 'Gain', at(0)), ctl('knob', 11, 'Master Volume', at(8))]);
+    const narrow = packRows(ws, 4);
+    expect(narrow.map((w) => w.x)).toEqual([0, 1]);
+    expect(narrow.every((w) => w.x + w.w <= 4)).toBe(true);
+  });
+});
+
+describe('buildDeviceLayoutBoard — the mixer strip is one row', () => {
+  const catalog: BoardCtl[] = [knob(1), knob(2), knob(28), BYPASS];
+
+  // cab "Cab" page verbatim: the device splits its mixer across two rows for a fixed-width canvas.
+  const b = buildDeviceLayoutBoard(
+    layout([
+      {
+        name: 'Cab',
+        rows: [
+          { section: 'parameters', controls: [ctl('knob', 1, 'Level 1')] },
+          { section: 'mixer', controls: [ctl('knob', 28, 'Level 3')] },
+          { section: 'mixer', controls: [ctl('knob', 2, 'Balance'), ctl('button', 6, 'Bypass', { rawWidget: 'btnBypass' })] }
+        ]
+      }
+    ]),
+    catalog,
+    12
+  )!.boards['Cab']!;
+
+  it('coalesces consecutive mixer rows onto one grid line', () => {
+    expect(find(b, 'k28').y).toBe(find(b, 'k2').y);
+    expect(find(b, 'k28').row).toBe(find(b, 'k2').row);
+    expect(find(b, 'k28').x).toBe(0);
+    expect(find(b, 'k2').x).toBe(1);
+  });
+
+  it('keeps the strip below the parameters row it follows', () => {
+    expect(find(b, 'k28').y).toBeGreaterThan(find(b, 'k1').y);
+  });
+
+  it('tags the strip widgets and leaves parameter widgets untagged', () => {
+    expect(find(b, 'k28').strip).toBe(true);
+    expect(find(b, 'bypass').strip).toBe(true);
+    expect(find(b, 'k1').strip).toBeUndefined();
+  });
+
+  it('does not merge mixer rows that are not adjacent', () => {
+    const split = buildDeviceLayoutBoard(
+      layout([
+        {
+          name: 'P',
+          rows: [
+            { section: 'mixer', controls: [ctl('knob', 28, 'Level 3')] },
+            { section: 'parameters', controls: [ctl('knob', 1, 'Level 1')] },
+            { section: 'mixer', controls: [ctl('knob', 2, 'Balance')] }
+          ]
+        }
+      ]),
+      catalog,
+      12
+    )!.boards['P']!;
+    expect(find(split, 'k28').row).not.toBe(find(split, 'k2').row);
+  });
+});

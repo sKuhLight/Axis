@@ -327,6 +327,18 @@
   const viewWidgets = $derived(repack ? repackWidgets(widgets, displayCols) : widgets);
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
+  // Board WIDTH = content extent too, for device-authentic boards. `displayCols` is derived from the pane
+  // (width ÷ the density's tileMax), which has nothing to do with how wide the device's rows actually are:
+  // a 2-control row on a 16-column board left 14 columns of dead air, and every page read as "shoved to
+  // the left". Narrowing the grid to what the page actually occupies is free — `gridCols <= displayCols`
+  // by construction, so the widgets already fit and nothing re-packs — and `.content` is already
+  // `justify-content: center`, so the board simply centres itself. No CSS change.
+  //
+  // Arrange is excluded (it authors at exactly `cols`, and the drag/resize math is written against that
+  // canvas), as are free-arranged boards, whose trailing empty columns are the user's own deliberate
+  // spacing rather than an artifact of the pane.
+  const contentCols = $derived(Math.max(1, ...viewWidgets.map((w) => w.x + w.w)));
+  const gridCols = $derived(!editMode && rowGrouped ? Math.min(displayCols, contentCols) : displayCols);
   const effCompact = $derived(compact || isMobile);
 
   // persisted global grid prefs
@@ -1427,14 +1439,14 @@
 <!-- board -->
 <div class="content scroll" bind:this={containerEl}>
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{displayCols * cell + (displayCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
+  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
     {#if editMode}
       <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
         {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
       </div>
     {/if}
 
-    <div class="gridlayer" style:grid-template-columns="repeat({displayCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
+    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
       {#if drag}
         <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
       {/if}
