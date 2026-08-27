@@ -198,7 +198,7 @@
                   class:open
                   class:byp={cl.bypassed}
                   class:tgt={isTarget(c)}
-                  style="--c:{cat.accent};"
+                  style="--c:{cat.accent}; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px;"
                   role="button"
                   tabindex="0"
                   title={cl.display}
@@ -378,7 +378,7 @@
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
   }
   .mc.block .glyph {
-    font-size: 13px;
+    font-size: var(--glyph-size, 13px);
     line-height: 1;
     color: var(--text);
   }
