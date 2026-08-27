@@ -2635,10 +2635,10 @@
     gap: 7px;
     width: 100%;
     min-height: 30px;
-    padding: 0 10px;
+    padding: 6px 10px;
     border-radius: 9px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 10px;
     font-weight: 700;
     background: var(--track);
     border: 1px solid var(--border2);
@@ -2650,9 +2650,13 @@
     color: var(--ok);
   }
   .onoff-l {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    text-align: left;
     min-width: 0;
   }
   .onoff .dot {
