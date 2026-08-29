@@ -9,7 +9,7 @@
   import type { EqGraphSpec } from './eqGraphs';
   import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
-  import { fmtCompact, normFromValue, fmtValue } from './format';
+  import { fmtCompact, normFromValue } from './format';
   import { idealIds } from './layouts';
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { resolveSurfaceCols } from './surfaceGrid';
@@ -293,7 +293,6 @@
   function resKnobDown(e: PointerEvent, id: number) {
     vd = { id, sy: e.clientY, sn: knob(id)?.norm ?? 0 };
     dragging = true;
-    showTip(e.currentTarget as HTMLElement, id, false);
   }
   function openResSel(e: MouseEvent, id: number) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -409,6 +408,9 @@
   );
   const displayCols = $derived(surfaceCols.displayCols);
   const cell = $derived(surfaceCols.cell);
+  // Knob cards carry a value readout, dial, and up-to-two-line name. Keep rows modestly taller than
+  // columns so those three pieces stay legible without making each control consume a second grid unit.
+  const rowCell = $derived(cell + 20);
   // a device-authentic Default board tags its widgets with a source `row`; the free-arranged boards don't
   const rowGrouped = $derived(boardWidgets.some((w) => w.row != null));
   // Narrowing always re-packs (otherwise widgets hang off the right edge) — unchanged. Widening re-packs
@@ -809,11 +811,11 @@
 
   // a widget's pixel footprint + the knob dial size that fits it (reserves room for the label)
   const pxOf = (n: number) => n * cell + (n - 1) * GAP;
-  // the value lives in the hover/tap bubble now, so the dial fills the tile — but leave room for the
-  // card padding (16) + gap (5) + the label so the label never clips. The label is TWO lines
-  // (`.lbl` line-clamps at 2), so the reserve is the two-line worst case: 12px × 1.1 × 2 ≈ 27.
+  const pxHeightOf = (n: number) => n * rowCell + (n - 1) * GAP;
+  // Leave room for the card padding (16), value row (11), two gaps (10), and label so neither
+  // readout nor label clips. The knob label is TWO lines, about 29px.
   // Reserved unconditionally, not per-label, so every dial on the board is the same size.
-  const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxOf(w.h) - 48), 30, 260);
+  const dialFor = (w: Widget) => clamp(Math.min(pxOf(w.w) - 14, pxHeightOf(w.h) - 67), 30, 260);
   // anchor the value bubble above an element (knob/card), in screen coords (fixed-position)
   function showTip(el: HTMLElement, id: number, edit: boolean) {
     const r = el.getBoundingClientRect();
@@ -835,15 +837,6 @@
     }
     tip = null;
   }
-  // full, readable value for the bubble — with units (4 dB, 470 Hz, 12 kHz, 63%, 12 dB/OCT).
-  // Formatting (incl. Hz→kHz compaction and the % no-space rule) lives in format.ts::fmtValue.
-  const fullVal = (id: number): string => {
-    const p = knob(id);
-    if (!p) return '–';
-    return fmtValue(p);
-  };
-
-
   // move a widget to an adjacent page (drag to the left/right edge of the board)
   function migrateWidget(id: string, dir: number) {
     if (!board) return false;
@@ -873,7 +866,7 @@
 
   function metrics() {
     const r = boardEl?.getBoundingClientRect() ?? ({ left: 0, top: 0 } as DOMRect);
-    return { left: r.left, top: r.top, step: cell + GAP };
+    return { left: r.left, top: r.top, xStep: cell + GAP, yStep: rowCell + GAP };
   }
   function onWidgetDown(e: PointerEvent, id: string, kind: Kind, pid: number, key: string) {
     if (editMode) {
@@ -882,14 +875,13 @@
       if (!w) return;
       const m = metrics();
       // px offset from the tile's own top-left to the grab point → the grabbed point stays under the cursor
-      mv = { id, w: w.w, h: w.h, grabDX: e.clientX - (m.left + w.x * m.step), grabDY: e.clientY - (m.top + w.y * m.step), left: m.left, top: m.top, armed: false };
+      mv = { id, w: w.w, h: w.h, grabDX: e.clientX - (m.left + w.x * m.xStep), grabDY: e.clientY - (m.top + w.y * m.yStep), left: m.left, top: m.top, armed: false };
       drag = { id, x: w.x, y: w.y, w: w.w, h: w.h, valid: true };
       return;
     }
     if (kind === 'cont') {
       vd = { id: pid, sy: e.clientY, sn: knob(pid)?.norm ?? 0 };
-      dragging = true; // keep the value bubble alive for the whole adjust, even if the cursor leaves
-      showTip(e.currentTarget as HTMLElement, pid, false);
+      dragging = true;
       e.stopPropagation();
     }
   }
@@ -938,16 +930,14 @@
             const w = find(mv.id);
             if (w) {
               // re-grab from the tile centre so it sits under the cursor on the new page
-              const step = cell + GAP;
-              mv = { ...mv, w: w.w, h: w.h, grabDX: (w.w * step) / 2, grabDY: (w.h * step) / 2, armed: false };
+              mv = { ...mv, w: w.w, h: w.h, grabDX: (w.w * (cell + GAP)) / 2, grabDY: (w.h * (rowCell + GAP)) / 2, armed: false };
               drag = { id: mv.id, x: w.x, y: w.y, w: w.w, h: w.h, valid: true };
             }
             return;
           }
         }
-        const step = cell + GAP;
-        let nx = Math.round((e.clientX - mv.left - mv.grabDX) / step);
-        let ny = Math.round((e.clientY - mv.top - mv.grabDY) / step);
+        let nx = Math.round((e.clientX - mv.left - mv.grabDX) / (cell + GAP));
+        let ny = Math.round((e.clientY - mv.top - mv.grabDY) / (rowCell + GAP));
         nx = clamp(nx, 0, cols - mv.w);
         ny = clamp(ny, 0, rows - mv.h);
         const occ = occupancy(mv.id);
@@ -957,9 +947,8 @@
       }
       if (rz) {
         e.preventDefault();
-        const step = cell + GAP;
-        const dw = Math.round((e.clientX - rz.sx) / step),
-          dh = Math.round((e.clientY - rz.sy) / step);
+        const dw = Math.round((e.clientX - rz.sx) / (cell + GAP)),
+          dh = Math.round((e.clientY - rz.sy) / (rowCell + GAP));
         const w = find(rz.id);
         if (!w) return;
         const nw = clamp(rz.ow + dw, 1, cols - w.x),
@@ -1420,11 +1409,10 @@
           use:longPress={{ onLongPress: (d) => onPinLongPress(c, d) }}
         >
           {#if c.kind === 'cont' && view === 'knob'}
+            <div class="kval knobval">{valText(c.id)}</div>
             <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
             <div class="dialwrap" style:width="60px" style:height="60px"
               onpointerdown={(e) => resKnobDown(e, c.id)}
-              onmouseenter={(e) => { if (!isMobile) showTip(e.currentTarget, c.id, false); }}
-              onmouseleave={() => { if (!dragging && !tip?.edit) tip = null; }}
               ondblclick={(e) => showTip(e.currentTarget, c.id, true)}>
               <svg width="60" height="60" viewBox="0 0 64 64" style="display:block">
                 <circle cx="32" cy="32" r="25" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="117.8 300" transform="rotate(135 32 32)" />
@@ -1433,7 +1421,7 @@
                 <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
               </svg>
             </div>
-            <div class="lbl">{c.label}</div>
+            <div class="lbl knoblabel">{c.label}</div>
           {:else if c.kind === 'cont' && view === 'fader'}
             {#if editingKey === c.key}
               <input id="cs-input" class="kinput rel" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null)} onblur={() => commitType(c.id)} />
@@ -1553,13 +1541,12 @@
               {/if}
               {#if c.kind === 'cont' && w.view === 'knob'}
                 {@const d = dialFor(w)}
+                <div class="kval knobval">{valText(c.id)}</div>
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
                 <div
                   class="dialwrap"
                   style:width="{d}px"
                   style:height="{d}px"
-                  onmouseenter={(e) => { if (!isMobile && !editMode) showTip(e.currentTarget, c.id, false); }}
-                  onmouseleave={() => { if (!dragging && !tip?.edit) tip = null; }}
                   ondblclick={(e) => { if (!editMode) showTip(e.currentTarget, c.id, true); }}
                 >
                   <svg width={d} height={d} viewBox="0 0 64 64" style="display:block">
@@ -1569,7 +1556,7 @@
                     <g transform="rotate({knobRot(pct(c.id))} 32 32)"><circle cx="32" cy="20" r="2.8" fill="#f5a623" /></g>
                   </svg>
                 </div>
-                <div class="lbl">{c.label}</div>
+                <div class="lbl knoblabel">{c.label}</div>
               {:else if c.kind === 'cont' && w.view === 'fader'}
                 {#if editingKey === w.key}
                   <input id="cs-input" class="kinput rel" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => e.key === 'Enter' ? commitType(c.id) : e.key === 'Escape' ? (editingKey = null) : null} onblur={() => commitType(c.id)} onpointerdown={(e) => e.stopPropagation()} />
@@ -1726,14 +1713,14 @@
        time a narrower page came up — the same flicker, on the other axis. -->
   <div class="boardcol">
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * cell + (viewRows - 1) * GAP}px">
+  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * rowCell + (viewRows - 1) * GAP}px">
     {#if editMode}
-      <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {cell}px)" style:gap="{GAP}px">
+      <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {rowCell}px)" style:gap="{GAP}px">
         {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
       </div>
     {/if}
 
-    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {cell}px)" style:gap="{GAP}px">
+    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {rowCell}px)" style:gap="{GAP}px">
       {#if drag}
         <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
       {/if}
@@ -1811,14 +1798,10 @@
 {/if}
 {/if}
 
-<!-- value bubble: one fixed-position tooltip, above everything, never clipped -->
+<!-- value editor: fixed-position above the control, never clipped -->
 {#if tip}
   <div class="tip" style:left="{tip.cx}px" style:top="{tip.cy}px">
-    {#if tip.edit}
-      <input id="cs-input" class="tipinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitTip() : e.key === 'Escape' ? (tip = null) : null)} onblur={commitTip} onpointerdown={(e) => e.stopPropagation()} />
-    {:else}
-      {fullVal(tip.id)}
-    {/if}
+    <input id="cs-input" class="tipinput" value={editBuf} oninput={(e) => (editBuf = e.currentTarget.value)} onkeydown={(e) => (e.key === 'Enter' ? commitTip() : e.key === 'Escape' ? (tip = null) : null)} onblur={commitTip} onpointerdown={(e) => e.stopPropagation()} />
   </div>
 {/if}
 
@@ -2330,6 +2313,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .kval.knobval {
+    flex: none;
+    font-size: 11px;
+    color: var(--text2);
+    min-width: 42px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background: var(--input);
+    white-space: nowrap;
+  }
+  .lbl.knoblabel {
+    flex: none;
+    font-size: 13px;
+    font-weight: 700;
   }
   .kinput {
     position: absolute;
