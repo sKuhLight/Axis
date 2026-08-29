@@ -891,6 +891,11 @@
     tk = { id: pid, rect: (e.currentTarget as HTMLElement).getBoundingClientRect(), vertical };
     trackMove(e);
   }
+  function onControlWheel(e: WheelEvent, c: Ctl) {
+    if (editMode || c.kind !== 'cont' || e.deltaY === 0) return;
+    e.preventDefault();
+    setNorm(c.id, (knob(c.id)?.norm ?? 0) + e.deltaY / 1600);
+  }
   function trackMove(e: PointerEvent) {
     if (!tk) return;
     const frac = tk.vertical ? clamp(1 - (e.clientY - tk.rect.top) / tk.rect.height, 0, 1) : clamp((e.clientX - tk.rect.left) / tk.rect.width, 0, 1);
@@ -1406,6 +1411,7 @@
           aria-label={c.label}
           oncontextmenu={(e) => onPinContextMenu(e, c)}
           onpointerdowncapture={(e) => onPinArm(e, c)}
+          onwheel={(e) => onControlWheel(e, c)}
           use:longPress={{ onLongPress: (d) => onPinLongPress(c, d) }}
         >
           {#if c.kind === 'cont' && view === 'knob'}
@@ -1530,6 +1536,7 @@
               class:dragging={drag?.id === w.id}
               oncontextmenu={(e) => { if (!editMode && c.kind !== 'meterH') onPinContextMenu(e, c); }}
               onpointerdowncapture={(e) => { if (c.kind !== 'meterH') onPinArm(e, c); }}
+              onwheel={(e) => onControlWheel(e, c)}
               use:longPress={{ onLongPress: (d) => { if (!editMode && c.kind !== 'meterH') onPinLongPress(c, d); } }}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
               onmouseenter={() => { if (!isMobile && !editMode && c.id >= 0 && c.kind !== 'meterH') showParamHelp(c.id, c.label); }}

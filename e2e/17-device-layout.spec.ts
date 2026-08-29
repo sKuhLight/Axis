@@ -168,6 +168,21 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     expect(gy!.y).toBeLessThan(ly!.y);
   });
 
+  test('mouse wheel over a continuous control changes its value without pinning it', async ({ page }) => {
+    await bootWithLayout(page);
+    await page.locator('[data-idx="0,0"].cell.block').click();
+    await expect(page.locator('.boardwrap')).toBeVisible();
+
+    const gain = page.locator('.boardwrap .card').filter({ has: page.locator('.lbl', { hasText: 'Gain' }) }).first();
+    const valueArc = gain.locator('svg circle').nth(1);
+    const before = await valueArc.getAttribute('stroke-dasharray');
+
+    await gain.hover();
+    await page.mouse.wheel(0, -120);
+    await expect.poll(() => valueArc.getAttribute('stroke-dasharray')).not.toBe(before);
+    await expect(page.locator('.pindrag-layer')).toHaveCount(0);
+  });
+
   test('places controls at the columns the device authored, not in array order', async ({ page }) => {
     await bootWithLayout(page);
     await page.locator('[data-idx="0,0"].cell.block').click();
