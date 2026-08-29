@@ -1854,3 +1854,12 @@ state that a transfer curve is unavailable rather than inventing a ratio from th
 
 Board schema `b7` re-seeds Default profiles so they acquire the Compressor widget; custom profiles remain
 unchanged. `compressorGraphs.test.ts` covers both threshold/ratio and Sustain-style variants.
+
+## Cabinet Timing Alignment — graph_cab*
+
+`CabAlignmentGraph.svelte` renders the Cabinet Align-page variants (`graph_cab`, `graph_cabZoom`,
+`graph_cab_mm`, and `graph_cabZoom_mm`) as read-only timing markers. It binds the layout-local Delay 1,
+Delay 2, and Zoom controls. Axis has no cabinet impulse-response sample data, so the display intentionally
+shows the known timing relationship rather than inventing response waveforms.
+
+Board schema `b8` re-seeds Default profiles for the new widget; custom profiles remain unchanged.

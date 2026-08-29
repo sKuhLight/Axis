@@ -280,7 +280,7 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
 /** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
  *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
  *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
-const BOARD_SCHEMA = 'b7';
+const BOARD_SCHEMA = 'b8';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
