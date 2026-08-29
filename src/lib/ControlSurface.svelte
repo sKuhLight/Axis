@@ -2233,7 +2233,6 @@
     overflow: visible; /* let the value bubble pop above the tile */
     user-select: none;
     touch-action: none;
-    cursor: ns-resize;
   }
   .card.geqcard {
     margin: 0 auto;
