@@ -8,10 +8,13 @@
   const H = 130;
   const MIN = -60;
   const MAX = 20;
+  // Inset by the rect's corner radius (rx=10 below) so the curve/reference-line endpoints — which
+  // sit exactly at (MIN,MIN) and (MAX,MAX) — land inside the rounded corners instead of poking past them.
+  const PAD = 10;
   const hasTransfer = $derived(!!graph.threshold && !!graph.ratio);
   const kneeLabel = $derived(graph.knee?.options.find((option) => option.value === graph.knee?.value)?.label);
-  const xOf = (db: number) => ((db - MIN) / (MAX - MIN)) * W;
-  const yOf = (db: number) => H - ((db - MIN) / (MAX - MIN)) * H;
+  const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
+  const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
   const curve = $derived.by(() => {
     if (!hasTransfer) return '';
     const threshold = paramValue(graph.threshold!);
@@ -46,8 +49,6 @@
       <text x={W / 2} y={H / 2 - 4} text-anchor="middle" fill="var(--textdim)" font-size="12">Sustain-style compressor</text>
       <text x={W / 2} y={H / 2 + 13} text-anchor="middle" fill="var(--textmuted)" font-size="10">Transfer curve unavailable</text>
     {/if}
-    <text x="7" y={H - 7} fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">INPUT</text>
-    <text x="7" y="13" fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">OUTPUT</text>
   </svg>
   <div class="hud mono">{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>

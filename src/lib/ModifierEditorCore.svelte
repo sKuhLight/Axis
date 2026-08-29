@@ -464,9 +464,11 @@
 {/snippet}
 
 <style>
-  /* ── flyout chrome (old shell): fixed right-anchored slide-in over a scrim ── */
+  /* ── flyout chrome: pane-local right-anchored slide-in over a scrim ──
+       ControlSurface can live in a workbench dock, so viewport-fixed positioning
+       would place this under a sibling right dock instead of inside its pane. */
   .scrim {
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 190;
     background: rgba(6, 6, 8, 0.45);
@@ -479,7 +481,7 @@
     pointer-events: auto;
   }
   .panel.flyout {
-    position: fixed;
+    position: absolute;
     top: 0;
     bottom: 0;
     right: 0;
