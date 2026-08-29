@@ -202,7 +202,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b9\|/);
+    expect(a.variantSig).toMatch(/^b10\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });

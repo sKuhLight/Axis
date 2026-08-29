@@ -13,6 +13,8 @@
   import type { CompressorGraphSpec } from './compressorGraphs';
   import CabAlignmentGraph from './CabAlignmentGraph.svelte';
   import type { CabAlignmentGraphSpec } from './cabAlignmentGraphs';
+  import AdsrGraph from './AdsrGraph.svelte';
+  import type { AdsrGraphSpec } from './adsrGraphs';
   import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtControlValue, normFromValue } from './format';
@@ -53,6 +55,7 @@
     modulationGraphs = [] as ModulationGraphSpec[],
     compressorGraphs = [] as CompressorGraphSpec[],
     cabAlignmentGraphs = [] as CabAlignmentGraphSpec[],
+    adsrGraphs = [] as AdsrGraphSpec[],
     geqBands = [] as FaderBand[],
     geqTitle = 'Graphic EQ',
     hideIds = [] as number[]
@@ -63,6 +66,7 @@
     modulationGraphs?: ModulationGraphSpec[];
     compressorGraphs?: CompressorGraphSpec[];
     cabAlignmentGraphs?: CabAlignmentGraphSpec[];
+    adsrGraphs?: AdsrGraphSpec[];
     geqBands?: FaderBand[];
     geqTitle?: string;
     hideIds?: number[];
@@ -72,11 +76,11 @@
   const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', adsr: '⌁', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'adsr' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -174,6 +178,7 @@
     for (const g of modulationGraphs) out.push({ key: g.key, kind: 'mod', label: g.title, id: -1, w: 4, h: 2, view: 'mod', views: ['mod'] });
     for (const g of compressorGraphs) out.push({ key: g.key, kind: 'comp', label: 'Compression', id: -1, w: 4, h: 2, view: 'comp', views: ['comp'] });
     for (const g of cabAlignmentGraphs) out.push({ key: g.key, kind: 'cab', label: 'Cab Alignment', id: -1, w: 4, h: 2, view: 'cab', views: ['cab'] });
+    for (const g of adsrGraphs) out.push({ key: g.key, kind: 'adsr', label: g.title, id: -1, w: 4, h: 2, view: 'adsr', views: ['adsr'] });
     // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
     // suppressed from the generic knob catalog below and re-offered here — 1:1, same as the `leaked`
     // monitor swap, so no control is added or lost. Width tracks the band count (clamped by the grid).
@@ -216,6 +221,7 @@
   const modulationGraphById = $derived(new Map(modulationGraphs.map((g) => [g.key, g])));
   const compressorGraphById = $derived(new Map(compressorGraphs.map((g) => [g.key, g])));
   const cabAlignmentGraphById = $derived(new Map(cabAlignmentGraphs.map((g) => [g.key, g])));
+  const adsrGraphById = $derived(new Map(adsrGraphs.map((g) => [g.key, g])));
   // Each graph slot resolves to its own catalog entry. Most pages have one slot, but Controllers has LFO
   // 1 and LFO 2 on one page, so page index alone is not sufficient.
   const graphKeyForSlot = $derived.by(() => {
@@ -224,6 +230,7 @@
     for (const g of modulationGraphs) bySlot.set(`${g.page}:${g.slot}`, g.key);
     for (const g of compressorGraphs) bySlot.set(`${g.page}:${g.slot}`, g.key);
     for (const g of cabAlignmentGraphs) bySlot.set(`${g.page}:${g.slot}`, g.key);
+    for (const g of adsrGraphs) bySlot.set(`${g.page}:${g.slot}`, g.key);
     return (page: number, slot: number) => bySlot.get(`${page}:${slot}`) ?? null;
   });
   // Band param ids the device layout must collapse onto the single `geq` bank widget.
@@ -599,7 +606,7 @@
     const lay = layoutBoard();
     if (lay) return lay;
     const ideal = new Set(idealIds(editor.params));
-    const main = catalog.filter((c) => c.kind === 'eq' || c.kind === 'mod' || c.kind === 'comp' || c.kind === 'cab' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
+    const main = catalog.filter((c) => c.kind === 'eq' || c.kind === 'mod' || c.kind === 'comp' || c.kind === 'cab' || c.kind === 'adsr' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
     const rest = catalog.filter((c) => !main.includes(c));
     const boards: Record<string, Widget[]> = { Main: packList(main.map(mk)) };
     const pageOrder = ['Main'];
@@ -1552,7 +1559,7 @@
             <div
               class="card"
               class:editing={editMode}
-              class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod' || w.view === 'comp' || w.view === 'cab'}
+              class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod' || w.view === 'comp' || w.view === 'cab' || w.view === 'adsr'}
               class:geqcard={c.kind === 'geq'}
               style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
@@ -1660,6 +1667,9 @@
               {:else if c.kind === 'cab'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><CabAlignmentGraph graph={cabAlignmentGraphById.get(c.key)!} {accent} /></div>
+              {:else if c.kind === 'adsr'}
+                <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
+                <div class="eqbox"><AdsrGraph graph={adsrGraphById.get(c.key)!} {accent} /></div>
               {:else if c.kind === 'geq'}
                 <!-- The bank's value readouts sit along its top edge, so the title takes a flow row of
                      its own instead of the EQ graph's absolute overlay (which would paint over them).

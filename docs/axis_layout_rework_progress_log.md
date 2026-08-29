@@ -1869,3 +1869,12 @@ Board schema `b8` re-seeds Default profiles for the new widget; custom profiles 
 `VirtualScreen.svelte` now derives and passes Controllers LFO graph specs into its shared control surface.
 Board schema `b9` re-seeds Default profiles so existing Controllers boards acquire those graph widgets;
 custom profiles remain unchanged.
+
+## Controllers ADSR Envelopes — graph_adsr*
+
+`AdsrGraph.svelte` renders the Controllers block's ADSR 1 and ADSR 2 pages for both legacy
+`graph_adsr` and current `graph_adsr_marker` slots. The read-only envelope derives its segment widths
+from Attack, Decay, Sustain, and Release, its plateau from Sustain Level, and its trigger guide from
+Threshold.
+
+Board schema `b10` re-seeds Default profiles for the new widgets; custom profiles remain unchanged.
