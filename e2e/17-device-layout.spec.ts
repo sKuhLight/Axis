@@ -138,6 +138,17 @@ async function bootWithLayout(page: Page): Promise<void> {
 }
 
 test.describe('ControlSurface device-layout board (AXIS-36)', () => {
+  test('starts the block editor map collapsed on a clean boot', async ({ page }) => {
+    await bootWithLayout(page);
+    await page.locator('[data-idx="0,0"].cell.block').click();
+
+    await expect(page.getByRole('button', { name: 'Expand map' })).toBeVisible();
+    await expect(page.locator('.map .body')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Expand map' }).click();
+    await expect(page.locator('.map .body')).toBeVisible();
+  });
+
   test('renders the layout page as a tab with rows top→bottom and mapped widget views', async ({ page }) => {
     await bootWithLayout(page);
 

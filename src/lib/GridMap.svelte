@@ -14,8 +14,9 @@
   const COLLAPSE_KEY = 'axs.gridmap.collapsed';
   const ZOOM_KEY = 'axs.gridmap.zoom';
   const loadCollapsed = (): boolean => {
-    try { return localStorage.getItem(COLLAPSE_KEY) === '1'; }
-    catch { return false; }
+    // Start focused on block controls; only an explicit user expansion opens the map.
+    try { return localStorage.getItem(COLLAPSE_KEY) !== '0'; }
+    catch { return true; }
   };
   let collapsed = $state(loadCollapsed());
   const toggle = () => {

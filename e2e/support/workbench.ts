@@ -10,6 +10,9 @@ export const WORKBENCH_DOC_KEY = 'axs.workbench.doc';
  */
 export const PB_SEARCH_MODE_KEY = 'axs.pb.searchMode';
 
+/** LocalStorage key for the Block Editor Grid Map's expanded/collapsed state. */
+export const GRID_MAP_COLLAPSE_KEY = 'axs.gridmap.collapsed';
+
 /**
  * First-run popup suppression keys (editor.svelte.ts). On a clean localStorage
  * boot the app opens one-time popups that are NOT part of the workbench chrome
@@ -66,7 +69,7 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
       for (const k of clearKeys) window.localStorage.removeItem(k);
       for (const [k, v] of Object.entries(suppress)) window.localStorage.setItem(k, v);
     },
-    { clearKeys: [WORKBENCH_DOC_KEY, PB_SEARCH_MODE_KEY], suppress: FIRST_RUN_SUPPRESS },
+    { clearKeys: [WORKBENCH_DOC_KEY, PB_SEARCH_MODE_KEY, GRID_MAP_COLLAPSE_KEY], suppress: FIRST_RUN_SUPPRESS },
   );
   await page.reload();
   await page.waitForSelector('.aw-root');
