@@ -182,7 +182,7 @@
       const tog = e.options.length <= 2;
       out.push({ key: `e${e.id}`, kind: tog ? 'toggle' : 'select', label: e.name, id: e.id, w: tog ? 1 : 2, h: 1, view: tog ? 'button' : 'select', views: tog ? TOG_VIEWS : ['select'] });
     }
-    out.push({ key: 'bypass', kind: 'action', label: 'Bypass', id: -2, w: 2, h: 1, view: 'action', views: ['action'] });
+    out.push({ key: 'bypass', kind: 'action', label: 'Bypass', id: -2, w: 1, h: 1, view: 'action', views: ['action'] });
     // Live audio meter — offered only when this block actually reports a monitor level (INPUT/OUTPUT/
     // COMP/GATE/CAB/DRIVE/FILTER…). Draggable/scalable like any widget; value from editor.monitorFor.
     if (mon) out.push({ key: 'meter', kind: 'meter', label: metersLabel, id: -3, w: 1, h: 2, view: 'meter', views: ['meter'] });
