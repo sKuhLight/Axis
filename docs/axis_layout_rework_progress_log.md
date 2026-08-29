@@ -1878,3 +1878,9 @@ from Attack, Decay, Sustain, and Release, its plateau from Sustain Level, and it
 Threshold.
 
 Board schema `b10` re-seeds Default profiles for the new widgets; custom profiles remain unchanged.
+
+## MegaTap Pattern — graph_megatap
+
+`MegaTapGraph.svelte` renders the Tap Control page's tap timing and amplitude pattern from Number of Taps,
+Predelay, Time Alpha, and Amplitude Alpha. Time and amplitude shape labels remain visible in the HUD.
+Board schema `b11` re-seeds Default profiles for the new widget; custom profiles remain unchanged.

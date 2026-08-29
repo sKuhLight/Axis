@@ -10,6 +10,7 @@
   import { deriveCompressorGraphs } from './compressorGraphs';
   import { deriveCabAlignmentGraphs } from './cabAlignmentGraphs';
   import { deriveAdsrGraphs } from './adsrGraphs';
+  import { deriveMegaTapGraphs } from './megaTapGraphs';
   import type { CabState, CabSlot } from './types';
 
   const editor = getEditorSurface();
@@ -59,6 +60,7 @@
   const compressorGraphs = $derived(deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const cabAlignmentGraphs = $derived(deriveCabAlignmentGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
+  const megaTapGraphs = $derived(deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
   // on the control surface, in device order with the device's own band labels.
   const geqBands = $derived.by(() => {
@@ -169,6 +171,7 @@
           {compressorGraphs}
           {cabAlignmentGraphs}
           {adsrGraphs}
+          {megaTapGraphs}
           {geqBands}
           geqTitle={editor.blockType?.name || 'Graphic EQ'}
           hideIds={isCab ? CAB_PICKER_IDS : []}
