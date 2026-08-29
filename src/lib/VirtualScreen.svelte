@@ -4,6 +4,7 @@
   // pages come from the served layout, reads/writes go through the normal param path.
   import { editor } from './editor.svelte';
   import ControlSurface from './ControlSurface.svelte';
+  import { deriveModulationGraphs } from './modulationGraphs';
 
   // accent per context (matches the rail's visual language)
   const ACCENT: Record<string, string> = {
@@ -13,6 +14,8 @@
     fc: '#f5a623'
   };
   const accent = $derived(ACCENT[editor.virtual?.slug ?? ''] ?? '#35c9d6');
+  // Virtual Controllers uses the same served layout and live params as a block editor.
+  const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
 </script>
 
 {#if editor.virtual}
@@ -33,7 +36,7 @@
       <div class="msg"><p>No parameters available for {editor.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <ControlSurface slug={editor.virtual.slug} {accent} />
+        <ControlSurface slug={editor.virtual.slug} {accent} {modulationGraphs} />
       </div>
     {/if}
   </section>

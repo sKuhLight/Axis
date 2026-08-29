@@ -1863,3 +1863,9 @@ Delay 2, and Zoom controls. Axis has no cabinet impulse-response sample data, so
 shows the known timing relationship rather than inventing response waveforms.
 
 Board schema `b8` re-seeds Default profiles for the new widget; custom profiles remain unchanged.
+
+## Controllers Virtual-Screen Graph Wiring
+
+`VirtualScreen.svelte` now derives and passes Controllers LFO graph specs into its shared control surface.
+Board schema `b9` re-seeds Default profiles so existing Controllers boards acquire those graph widgets;
+custom profiles remain unchanged.
