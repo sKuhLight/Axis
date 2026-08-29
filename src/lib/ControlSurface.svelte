@@ -9,7 +9,7 @@
   import type { EqGraphSpec } from './eqGraphs';
   import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
-  import { fmtCompact, normFromValue } from './format';
+  import { fmtControlValue, normFromValue } from './format';
   import { idealIds } from './layouts';
   import { surfGet, surfSet, surfRemove, surfRev } from './surfaceStore.svelte';
   import { resolveSurfaceCols } from './surfaceGrid';
@@ -786,7 +786,7 @@
   const pct = (id: number) => Math.round((knob(id)?.norm ?? 0) * 100);
   const valText = (id: number) => {
     const p = knob(id);
-    return p ? fmtCompact(p) : '–';
+    return p ? fmtControlValue(p) : '–';
   };
   function setNorm(id: number, n: number) {
     const p = knob(id);

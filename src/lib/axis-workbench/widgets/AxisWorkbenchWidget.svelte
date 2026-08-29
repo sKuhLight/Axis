@@ -1,7 +1,7 @@
 <script lang="ts">
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
-  import { paramValue, withUnit } from '../../format';
+  import { fmtControlValue } from '../../format';
   import { LEGAL, openExternal } from '../../legal';
   import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
@@ -194,10 +194,7 @@
   });
   const paramValueText = $derived.by(() => {
     if (paramNamed) {
-      // `value` is refreshed by device hydration, while `norm` changes on every dial drag.
-      const raw = formatParamNumber(paramValue(paramNamed));
-      // withUnit keeps device tokens verbatim (dB/OCT, SECONDS, …), single-spaced; % attaches with no space.
-      return withUnit(raw, paramNamed.unit);
+      return fmtControlValue(paramNamed);
     }
     if (paramEnum) return paramEnum.options.find((option) => option.value === paramEnum.value)?.label ?? String(paramEnum.value);
     return paramPreview == null ? '--' : String(Math.round(paramPreview));
@@ -319,13 +316,6 @@
 
   function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
-  }
-
-  function formatParamNumber(value: number): string {
-    if (!Number.isFinite(value)) return '--';
-    if (Math.abs(value) >= 100) return value.toFixed(0);
-    if (Math.abs(value) >= 10) return value.toFixed(1);
-    return value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
   }
 
   function nudgeParam(delta: number) {

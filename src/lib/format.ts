@@ -57,6 +57,18 @@ export function withUnit(num: string, unit?: string): string {
   return unit === '%' ? num + unit : num + ' ' + unit;
 }
 
+/** Precise, unit-bearing value for a continuously adjustable control. */
+export function fmtControlValue(p: DispRange): string {
+  const value = paramValue(p);
+  if (!Number.isFinite(value)) return '--';
+  const raw = Math.abs(value) >= 100
+    ? value.toFixed(0)
+    : Math.abs(value) >= 10
+      ? value.toFixed(1)
+      : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return withUnit(raw, p.unit);
+}
+
 /** Full, readable value for the value bubble — device-true value at the current norm, unit folded in.
  *  Hz ≥ 1000 compacts to kHz (the ONLY conversion; new tokens like dB/OCT or SECONDS pass through
  *  verbatim). Uses withUnit() for spacing so every token renders consistently. */

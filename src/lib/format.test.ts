@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtValue, paramValue, withUnit, type DispRange } from './format';
+import { fmtControlValue, fmtValue, paramValue, withUnit, type DispRange } from './format';
 
 // A ranged param whose linear taper lands exactly on `value` at norm 0.5 (min/max straddle it).
 // Lets each case declare the device-true value + unit token it should render.
@@ -83,5 +83,16 @@ describe('fmtValue', () => {
       expect(s).not.toMatch(/ {2}/);
       expect(s).not.toContain('undefined');
     }
+  });
+});
+
+describe('fmtControlValue', () => {
+  it('keeps two decimals for small values so all continuous controls agree', () => {
+    expect(fmtControlValue(at(2.82, '%'))).toBe('2.82%');
+  });
+
+  it('reduces precision as values grow while preserving units', () => {
+    expect(fmtControlValue(at(12.34, 'dB'))).toBe('12.3 dB');
+    expect(fmtControlValue(at(123.4, 'Hz'))).toBe('123 Hz');
   });
 });
