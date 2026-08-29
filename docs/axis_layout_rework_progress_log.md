@@ -1844,3 +1844,13 @@ The board resolver now addresses graph slots by `(page, ordinal)`, rather than p
 LFO 1 and LFO 2 graph slots on one page. `modulationGraphs.test.ts` and `deviceLayoutBoard.test.ts` lock
 the row-local bindings and dual-slot placement. Board schema `b6` re-seeds existing Default profiles so
 they acquire the new graph widgets; custom profiles remain unchanged.
+
+## Compressor Transfer Graphs — graph_comp_studio
+
+`CompressorGraph.svelte` renders the Compressor Basic-page slot for every FM3 compressor model. It binds
+Threshold, Ratio, Knee, Attack, and Release from the selected layout page and draws a read-only static
+transfer curve only when Threshold and Ratio are live. Sustain-style models retain their graph slot but
+state that a transfer curve is unavailable rather than inventing a ratio from the Compression knob.
+
+Board schema `b7` re-seeds Default profiles so they acquire the Compressor widget; custom profiles remain
+unchanged. `compressorGraphs.test.ts` covers both threshold/ratio and Sustain-style variants.
