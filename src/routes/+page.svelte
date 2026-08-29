@@ -104,6 +104,10 @@
         if (!editor.hasTuner) return; // same capability gate as the TopBar chip
         e.preventDefault();
         editor.toggleTuner();
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
+        // toggleBypass is a no-op unless a real block is selected.
+        e.preventDefault();
+        void editor.toggleBypass();
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
