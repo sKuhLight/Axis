@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtValue, withUnit, type DispRange } from './format';
+import { fmtValue, paramValue, withUnit, type DispRange } from './format';
 
 // A ranged param whose linear taper lands exactly on `value` at norm 0.5 (min/max straddle it).
 // Lets each case declare the device-true value + unit token it should render.
@@ -58,6 +58,10 @@ describe('fmtValue', () => {
     expect(fmtValue(at(5, undefined))).toBe('5');
     // coarse knob: no min/max → value used directly, no unit
     expect(fmtValue({ value: 42 })).toBe('42');
+  });
+
+  it('uses the current norm instead of a stale hydrated value', () => {
+    expect(paramValue({ min: 0, max: 100, norm: 0.75, value: 25, unit: '%' })).toBe(75);
   });
 
   it('never emits a double space or the literal "undefined"', () => {

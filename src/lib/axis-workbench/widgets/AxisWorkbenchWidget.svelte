@@ -1,7 +1,7 @@
 <script lang="ts">
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
-  import { withUnit } from '../../format';
+  import { paramValue, withUnit } from '../../format';
   import { LEGAL, openExternal } from '../../legal';
   import { KOFI_URL, COPYRIGHT } from '../../support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
@@ -194,7 +194,8 @@
   });
   const paramValueText = $derived.by(() => {
     if (paramNamed) {
-      const raw = typeof paramNamed.value === 'number' ? formatParamNumber(paramNamed.value) : '--';
+      // `value` is refreshed by device hydration, while `norm` changes on every dial drag.
+      const raw = formatParamNumber(paramValue(paramNamed));
       // withUnit keeps device tokens verbatim (dB/OCT, SECONDS, …), single-spaced; % attaches with no space.
       return withUnit(raw, paramNamed.unit);
     }
