@@ -44,7 +44,7 @@
     {/each}
     <line x1={xOf(MIN)} y1={yOf(MIN)} x2={xOf(MAX)} y2={yOf(MAX)} stroke="var(--border3)" stroke-dasharray="4 4" />
     {#if hasTransfer}
-      <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+      <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
     {:else}
       <text x={W / 2} y={H / 2 - 4} text-anchor="middle" fill="var(--textdim)" font-size="12">Sustain-style compressor</text>
       <text x={W / 2} y={H / 2 + 13} text-anchor="middle" fill="var(--textmuted)" font-size="10">Transfer curve unavailable</text>

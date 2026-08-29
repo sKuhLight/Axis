@@ -38,7 +38,7 @@
     <rect x="0.5" y="0.5" width={W - 1} height={H - 1} rx="10" fill="var(--bg)" stroke="var(--border)" />
     {#each [0.25, 0.5, 0.75] as x}<line x1={W * x} y1="0" x2={W * x} y2={H} stroke="var(--border)" />{/each}
     <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="var(--border2)" />
-    <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
   </svg>
   <div class="hud mono"><b>{currentLabel(graph.type) ?? 'Sine'}</b>{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
