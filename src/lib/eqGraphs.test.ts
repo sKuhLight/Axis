@@ -155,7 +155,7 @@ describe('deriveEqGraphs — reverb EQ', () => {
       c('knob', 'REVERB_Q2', 29, 'Q 2'),
       c('knob', 'REVERB_GAIN2', 31, 'Gain 2'),
       c('knob', 'REVERB_HICUT', 2, 'High Cut'),
-      graph('graph_eq')
+      graph('graph_reverb')
     ])
   ]);
 

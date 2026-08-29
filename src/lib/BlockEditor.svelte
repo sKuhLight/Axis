@@ -6,6 +6,7 @@
   import GridMap from './GridMap.svelte';
   import { geqBandsFromLayout } from './eq';
   import { deriveEqGraphs } from './eqGraphs';
+  import { deriveModulationGraphs } from './modulationGraphs';
   import type { CabState, CabSlot } from './types';
 
   const editor = getEditorSurface();
@@ -51,6 +52,7 @@
       blockTypeName: editor.blockType?.name
     })
   );
+  const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
   // on the control surface, in device order with the device's own band labels.
   const geqBands = $derived.by(() => {
@@ -157,6 +159,7 @@
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
           {eqGraphs}
+          {modulationGraphs}
           {geqBands}
           geqTitle={editor.blockType?.name || 'Graphic EQ'}
           hideIds={isCab ? CAB_PICKER_IDS : []}

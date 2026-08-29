@@ -7,6 +7,8 @@
   const editor = getEditorSurface();
   import EQGraph from './EQGraph.svelte';
   import type { EqGraphSpec } from './eqGraphs';
+  import ModulationGraph from './ModulationGraph.svelte';
+  import type { ModulationGraphSpec } from './modulationGraphs';
   import FaderBank, { type FaderBand } from './FaderBank.svelte';
   import ModifierFlyout from './ModifierFlyout.svelte';
   import { fmtControlValue, normFromValue } from './format';
@@ -44,6 +46,7 @@
     slug = '',
     accent = '#35c9d6',
     eqGraphs = [] as EqGraphSpec[],
+    modulationGraphs = [] as ModulationGraphSpec[],
     geqBands = [] as FaderBand[],
     geqTitle = 'Graphic EQ',
     hideIds = [] as number[]
@@ -51,6 +54,7 @@
     slug?: string;
     accent?: string;
     eqGraphs?: EqGraphSpec[];
+    modulationGraphs?: ModulationGraphSpec[];
     geqBands?: FaderBand[];
     geqTitle?: string;
     hideIds?: number[];
@@ -60,11 +64,11 @@
   const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -159,6 +163,7 @@
     // different bands, so this can no longer be a single `eq` key. The first keeps that key so boards
     // users already arranged stay intact.
     for (const g of eqGraphs) out.push({ key: g.key, kind: 'eq', label: g.title, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
+    for (const g of modulationGraphs) out.push({ key: g.key, kind: 'mod', label: g.title, id: -1, w: 4, h: 2, view: 'mod', views: ['mod'] });
     // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
     // suppressed from the generic knob catalog below and re-offered here — 1:1, same as the `leaked`
     // monitor swap, so no control is added or lost. Width tracks the band count (clamped by the grid).
@@ -198,11 +203,14 @@
   });
   const catByKey = $derived(new Map(catalog.map((c) => [c.key, c])));
   const eqGraphById = $derived(new Map(eqGraphs.map((g) => [g.key, g])));
-  // Which graph (if any) each layout page draws — the graph slot on that page resolves to its key.
-  const graphKeyForPage = $derived.by(() => {
-    const byPage = new Map<number, string>();
-    for (const g of eqGraphs) for (const i of g.pages) byPage.set(i, g.key);
-    return (page: number) => byPage.get(page) ?? null;
+  const modulationGraphById = $derived(new Map(modulationGraphs.map((g) => [g.key, g])));
+  // Each graph slot resolves to its own catalog entry. Most pages have one slot, but Controllers has LFO
+  // 1 and LFO 2 on one page, so page index alone is not sufficient.
+  const graphKeyForSlot = $derived.by(() => {
+    const bySlot = new Map<string, string>();
+    for (const g of eqGraphs) for (const page of g.pages) bySlot.set(`${page}:0`, g.key);
+    for (const g of modulationGraphs) bySlot.set(`${g.page}:${g.slot}`, g.key);
+    return (page: number, slot: number) => bySlot.get(`${page}:${slot}`) ?? null;
   });
   // Band param ids the device layout must collapse onto the single `geq` bank widget.
   const geqBandIds = $derived(new Set(geqBands.map((b) => b.gain.id).filter((id): id is number => id != null)));
@@ -569,7 +577,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForPage);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -577,7 +585,7 @@
     const lay = layoutBoard();
     if (lay) return lay;
     const ideal = new Set(idealIds(editor.params));
-    const main = catalog.filter((c) => c.kind === 'eq' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
+    const main = catalog.filter((c) => c.kind === 'eq' || c.kind === 'mod' || c.key === 'bypass' || (c.kind === 'cont' && ideal.has(c.id)));
     const rest = catalog.filter((c) => !main.includes(c));
     const boards: Record<string, Widget[]> = { Main: packList(main.map(mk)) };
     const pageOrder = ['Main'];
@@ -1530,7 +1538,7 @@
             <div
               class="card"
               class:editing={editMode}
-              class:nobg={w.view === 'action' || w.view === 'eq'}
+              class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod'}
               class:geqcard={c.kind === 'geq'}
               style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
@@ -1629,6 +1637,9 @@
                 <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
                   <EQGraph bands={eqGraphById.get(c.key)?.bands ?? []} gainRange={eqGraphById.get(c.key)?.gainRange ?? 20} {accent} onSet={(p, n) => editor.setParam(p, n)} />
                 </div>
+              {:else if c.kind === 'mod'}
+                <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
+                <div class="eqbox"><ModulationGraph graph={modulationGraphById.get(c.key)!} {accent} /></div>
               {:else if c.kind === 'geq'}
                 <!-- The bank's value readouts sit along its top edge, so the title takes a flow row of
                      its own instead of the EQ graph's absolute overlay (which would paint over them).

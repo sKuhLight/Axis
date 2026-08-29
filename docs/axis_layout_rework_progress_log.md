@@ -1833,3 +1833,14 @@ new spec passes chromium + firefox in isolation; full-suite result recorded at c
 firefox 06-persistence = AXIS-28, unrelated). Version bump to 0.8.20-beta + commit are the main session's.
 NEVER wrote a param value to the live FM3; dev servers on :5173/:5056 left running.
 - **Committed+pushed** ROUND 24 on `layout-rework` (v0.8.20-beta) — chain complete: codec 753ba45 (v0.3.13) → ForgeFX a4030c6 (v0.6.6-beta, dev :5056 runs this branch) → Axis. Operator sees editor-true Default boards on next block open.
+
+## Modulation Waveforms — graph_lfo, graph_phaser, graph_trem
+
+`ModulationGraph.svelte` renders the parameter-driven waveform slots used by the FM3 Controllers LFOs,
+Flanger, Phaser, and Tremolo/Panner. `modulationGraphs.ts` binds Type, Rate/Frequency, Depth, Duty, Shape,
+and Phase through the served layout's symbols and device-true ids, never a family-wide id table.
+
+The board resolver now addresses graph slots by `(page, ordinal)`, rather than page alone: Controllers has
+LFO 1 and LFO 2 graph slots on one page. `modulationGraphs.test.ts` and `deviceLayoutBoard.test.ts` lock
+the row-local bindings and dual-slot placement. Board schema `b6` re-seeds existing Default profiles so
+they acquire the new graph widgets; custom profiles remain unchanged.

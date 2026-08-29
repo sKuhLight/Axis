@@ -280,7 +280,7 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
 /** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
  *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
  *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
-const BOARD_SCHEMA = 'b5';
+const BOARD_SCHEMA = 'b6';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -303,15 +303,16 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
 
 /** Build the device-authentic Default board from a v2 layout, or null when the layout carries no
  *  renderable controls (caller falls back to its curated heuristic board). `catalog` is the live control
- *  set (knobs `k<id>`, enums `e<id>`, plus `eq`/`geq`/`bypass`/`meter`); `cols` is the target grid width.
- *  `geqBandIds` are the param ids that collapse into the `geq` fader bank; `graphKeyForPage` names the
- *  response-graph catalog entry each page's graph slot should resolve to (see eqGraphs.ts). */
+ *  set (knobs `k<id>`, enums `e<id>`, plus graph/`geq`/`bypass`/`meter`); `cols` is the target grid width.
+ *  `geqBandIds` are the param ids that collapse into the `geq` fader bank; `graphKeyForSlot` names the
+ *  graph catalog entry each page/slot should resolve to. Slots are ordinal because a page may host more
+ *  than one graph (the Controllers page has LFO 1 and LFO 2). */
 export function buildDeviceLayoutBoard(
   layout: DeviceLayout | null | undefined,
   catalog: BoardCtl[],
   cols: number,
   geqBandIds: Set<number> = new Set(),
-  graphKeyForPage: (page: number) => string | null = () => null
+  graphKeyForSlot: (page: number, slot: number) => string | null = () => null
 ): SurfaceBoard | null {
   if (!layout?.pages?.length) return null;
   const columns = Math.max(1, cols);
@@ -334,7 +335,7 @@ export function buildDeviceLayoutBoard(
   const pageOrder: string[] = [];
 
   layout.pages.forEach((pg, pageIndex) => {
-    const graphKey = graphKeyForPage(pageIndex);
+    let graphSlot = 0;
     const widgets: SurfaceWidget[] = [];
     const seen = new Set<string>();
     let gridRow = 0;
@@ -352,6 +353,7 @@ export function buildDeviceLayoutBoard(
         const group = groupSeq;
         const col = ctl.placement?.col ?? null;
         const rail = row.strip || (ctl.paramId != null && railIds.has(ctl.paramId));
+        const graphKey = graphKeyForSlot(pageIndex, ctl.widget === 'graph' ? graphSlot++ : 0);
         const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
         const base = r === 'gap' ? undefined : byKey.get(r.key);
         if (r === 'gap' || !base || seen.has(r.key)) {

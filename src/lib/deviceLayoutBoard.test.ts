@@ -202,6 +202,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
+    expect(a.variantSig).toMatch(/^b6\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -497,6 +498,12 @@ describe('buildDeviceLayoutBoard — response graph slots', () => {
   it('gaps the slot when the named graph is not in the catalog', () => {
     const b = buildDeviceLayoutBoard(lay, [knob(0), knob(1), BYPASS], 12, new Set(), perPage)!;
     expect(b.boards['Input EQ'].some((w) => w.key.startsWith('eq'))).toBe(false);
+  });
+
+  it('addresses multiple graph slots on one page independently', () => {
+    const two = layout([{ name: 'Controllers', rows: [{ controls: [ctl('graph', null, 'Graph'), ctl('graph', null, 'Graph')] }] }]);
+    const b = buildDeviceLayoutBoard(two, [EQ, EQ2], 12, new Set(), (_page, slot) => ['eq', 'eq2'][slot] ?? null)!;
+    expect(b.boards['Controllers'].map((w) => w.key)).toEqual(['eq', 'eq2']);
   });
 });
 

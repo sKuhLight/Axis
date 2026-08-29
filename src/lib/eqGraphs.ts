@@ -38,7 +38,7 @@ export interface EqGraphSpec {
 /** `rawWidget` tokens that mean "log-frequency response curve". The device's other graph kinds (LFO,
  *  ADSR, cab align, tremolo, phaser, RTA, megatap, modifier) plot something else entirely and are not
  *  handled here — they resolve to no graph, exactly as every graph did before this module. */
-const FREQ_GRAPHS = new Set(['graph_eq', 'graph_peq', 'graph_filter', 'graph3', 'graph4']);
+const FREQ_GRAPHS = new Set(['graph_eq', 'graph_reverb', 'graph_peq', 'graph_filter', 'graph3', 'graph4']);
 
 interface BandSpec {
   freq: string;
