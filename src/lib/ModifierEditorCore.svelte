@@ -180,6 +180,13 @@
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     drag = null;
   }
+  function knobWheel(e: WheelEvent, key: keyof Vals) {
+    if (e.deltaY === 0) return;
+    e.preventDefault();
+    const nv = clamp((m[key] as number) - e.deltaY / 16);
+    m = { ...m, [key]: nv };
+    writeField(key as string, nv);
+  }
 
   // ── knob formatting (ported from the design's modKnobFmt) ──
   function knobFmt(key: keyof Vals, v: number): string {
@@ -451,7 +458,7 @@
   <div class="knob" class:dim={!k.live}>
     <div class="kval">{knobFmt(k.key, v)}</div>
     <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-    <div class="kbox" onpointerdown={(e) => knobDown(e, k.key)} title={k.live ? '' : 'pending decode — local preview only'}>
+    <div class="kbox" onpointerdown={(e) => knobDown(e, k.key)} onwheel={(e) => knobWheel(e, k.key)} title={k.live ? '' : 'pending decode — local preview only'}>
       <svg width="54" height="54" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
         <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--accent)" stroke-width="5" stroke-linecap="round" stroke-dasharray={dashFor(v)} transform="rotate(135 32 32)" />
@@ -818,7 +825,6 @@
     color: var(--text2);
   }
   .kbox {
-    cursor: ns-resize;
     touch-action: none;
     user-select: none;
   }
