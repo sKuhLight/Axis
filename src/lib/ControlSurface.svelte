@@ -13,6 +13,8 @@
   import type { CompressorGraphSpec } from './compressorGraphs';
   import CabAlignmentGraph from './CabAlignmentGraph.svelte';
   import type { CabAlignmentGraphSpec } from './cabAlignmentGraphs';
+  import CabMicGraphic from './CabMicGraphic.svelte';
+  import type { CabMicGraphSpec } from './cabMicGraphs';
   import AdsrGraph from './AdsrGraph.svelte';
   import type { AdsrGraphSpec } from './adsrGraphs';
   import MegaTapGraph from './MegaTapGraph.svelte';
@@ -57,6 +59,7 @@
     modulationGraphs = [] as ModulationGraphSpec[],
     compressorGraphs = [] as CompressorGraphSpec[],
     cabAlignmentGraphs = [] as CabAlignmentGraphSpec[],
+    cabMicGraphs = [] as CabMicGraphSpec[],
     adsrGraphs = [] as AdsrGraphSpec[],
     megaTapGraphs = [] as MegaTapGraphSpec[],
     geqBands = [] as FaderBand[],
@@ -69,6 +72,7 @@
     modulationGraphs?: ModulationGraphSpec[];
     compressorGraphs?: CompressorGraphSpec[];
     cabAlignmentGraphs?: CabAlignmentGraphSpec[];
+    cabMicGraphs?: CabMicGraphSpec[];
     adsrGraphs?: AdsrGraphSpec[];
     megaTapGraphs?: MegaTapGraphSpec[];
     geqBands?: FaderBand[];
@@ -80,11 +84,11 @@
   const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', adsr: '⌁', taps: '┊', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', dynacab: '◎', adsr: '⌁', taps: '┊', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'adsr' | 'taps' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'dynacab' | 'adsr' | 'taps' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -182,6 +186,13 @@
     for (const g of modulationGraphs) out.push({ key: g.key, kind: 'mod', label: g.title, id: -1, w: 4, h: 2, view: 'mod', views: ['mod'] });
     for (const g of compressorGraphs) out.push({ key: g.key, kind: 'comp', label: 'Compression', id: -1, w: 4, h: 2, view: 'comp', views: ['comp'] });
     for (const g of cabAlignmentGraphs) out.push({ key: g.key, kind: 'cab', label: 'Cab Alignment', id: -1, w: 4, h: 2, view: 'cab', views: ['cab'] });
+    // Dynacab mic graphic — like geqBands below, the device never flags this as a graph slot: it's
+    // Axis re-presenting the slot's own Pan/Position knobs. `cabMicGraphs` is already gated on the cab
+    // being in DynaCab mode (deriveCabMicGraphs returns [] for legacy IRs), so this only appears for
+    // dyna slots. Sized as a compact hero (not a 1-column card) and placed at the top of its page by the
+    // board builder, so it reads as the DynaCab view FM3-Edit shows rather than a small widget below
+    // the knobs. Additive — it does not hide the knobs it draws from the generic catalog.
+    for (const g of cabMicGraphs) out.push({ key: g.key, kind: 'dynacab', label: g.title, id: -1, w: 4, h: 2, view: 'dynacab', views: ['dynacab'] });
     for (const g of adsrGraphs) out.push({ key: g.key, kind: 'adsr', label: g.title, id: -1, w: 4, h: 2, view: 'adsr', views: ['adsr'] });
     for (const g of megaTapGraphs) out.push({ key: g.key, kind: 'taps', label: 'MegaTap', id: -1, w: 4, h: 2, view: 'taps', views: ['taps'] });
     // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
@@ -226,6 +237,7 @@
   const modulationGraphById = $derived(new Map(modulationGraphs.map((g) => [g.key, g])));
   const compressorGraphById = $derived(new Map(compressorGraphs.map((g) => [g.key, g])));
   const cabAlignmentGraphById = $derived(new Map(cabAlignmentGraphs.map((g) => [g.key, g])));
+  const cabMicGraphById = $derived(new Map(cabMicGraphs.map((g) => [g.key, g])));
   const adsrGraphById = $derived(new Map(adsrGraphs.map((g) => [g.key, g])));
   const megaTapGraphById = $derived(new Map(megaTapGraphs.map((g) => [g.key, g])));
   // Each graph slot resolves to its own catalog entry. Most pages have one slot, but Controllers has LFO
@@ -242,6 +254,14 @@
   });
   // Band param ids the device layout must collapse onto the single `geq` bank widget.
   const geqBandIds = $derived(new Set(geqBands.map((b) => b.gain.id).filter((id): id is number => id != null)));
+  // Dynacab graphics have no device row of their own — prepended at the TOP of the page that carries the
+  // mic slot's own knobs (see `deriveCabMicGraphs`'s `page` field), so the graphic reads as the DynaCab
+  // hero rather than stranding below the knobs (the builder places extra keys first, before the page's rows).
+  const cabMicKeyForPage = $derived.by(() => {
+    const byPage = new Map<number, string[]>();
+    for (const g of cabMicGraphs) byPage.set(g.page, [...(byPage.get(g.page) ?? []), g.key]);
+    return (page: number) => byPage.get(page) ?? [];
+  });
 
   // ── grid + board state ──
   let containerEl = $state<HTMLElement | null>(null);
@@ -605,7 +625,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot, cabMicKeyForPage);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -1566,7 +1586,7 @@
             <div
               class="card"
               class:editing={editMode}
-              class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod' || w.view === 'comp' || w.view === 'cab' || w.view === 'adsr' || w.view === 'taps'}
+              class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod' || w.view === 'comp' || w.view === 'cab' || w.view === 'dynacab' || w.view === 'adsr' || w.view === 'taps'}
               class:geqcard={c.kind === 'geq'}
               style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
@@ -1674,6 +1694,11 @@
               {:else if c.kind === 'cab'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><CabAlignmentGraph graph={cabAlignmentGraphById.get(c.key)!} {accent} /></div>
+              {:else if c.kind === 'dynacab'}
+                <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
+                <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
+                  <CabMicGraphic graph={cabMicGraphById.get(c.key)!} {accent} onSet={(p, n) => editor.setParam(p, n)} />
+                </div>
               {:else if c.kind === 'adsr'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><AdsrGraph graph={adsrGraphById.get(c.key)!} {accent} /></div>

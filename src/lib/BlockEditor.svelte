@@ -9,6 +9,7 @@
   import { deriveModulationGraphs } from './modulationGraphs';
   import { deriveCompressorGraphs } from './compressorGraphs';
   import { deriveCabAlignmentGraphs } from './cabAlignmentGraphs';
+  import { deriveCabMicGraphs } from './cabMicGraphs';
   import { deriveAdsrGraphs } from './adsrGraphs';
   import { deriveMegaTapGraphs } from './megaTapGraphs';
   import type { CabState, CabSlot } from './types';
@@ -20,6 +21,11 @@
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
   const isCab = $derived(sel?.pack === 'Cab');
+  // DynaCab is a per-block MODE value (param 31 "MODE" = 0 LEGACY / 1 DYNA-CAB) on the OPEN block. Derive it
+  // from editor.enums — reloaded on every preset/block read — rather than the async `cabState` snapshot below,
+  // which is only re-fetched when the effectId or the picker changes and so goes stale across preset switches
+  // (Cab 1 keeps the same effectId in every preset, so the fetch effect never re-runs).
+  const dynaMode = $derived(editor.enums.find((e) => e.name === 'MODE')?.value === 1);
 
   // what's actually loaded in each cab slot, shown on the type button so you don't have to
   // open the picker to see it. Re-read on select + whenever the picker closes (a pick may have changed it).
@@ -59,6 +65,9 @@
   const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const compressorGraphs = $derived(deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const cabAlignmentGraphs = $derived(deriveCabAlignmentGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
+  // DynaCab is a per-slot MODE (see `dynaMode` above), not a separate layout — gate the mic graphic on it
+  // so a legacy IR cab never draws one.
+  const cabMicGraphs = $derived(deriveCabMicGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums, dyna: dynaMode }));
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
   const megaTapGraphs = $derived(deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
@@ -71,6 +80,11 @@
   });
   // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
   const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
+  // Legacy-only Cab params that DynaCab mode does not use: IR Length (70/71) and Proximity (20/21). Hidden
+  // when the cab is a DynaCab so the surface shows only the controls the DynaCab actually exposes — the
+  // mic graphic + Level/Pan/Low Cut/High Cut/slopes + the Position/Distance knobs.
+  const CAB_LEGACY_ONLY_IDS = [70, 71, 20, 21];
+  const hideIds = $derived(isCab ? (dynaMode ? [...CAB_PICKER_IDS, ...CAB_LEGACY_ONLY_IDS] : CAB_PICKER_IDS) : []);
 
   const CHAN = ['A', 'B', 'C', 'D'];
 
@@ -170,11 +184,12 @@
           {modulationGraphs}
           {compressorGraphs}
           {cabAlignmentGraphs}
+          {cabMicGraphs}
           {adsrGraphs}
           {megaTapGraphs}
           {geqBands}
           geqTitle={editor.blockType?.name || 'Graphic EQ'}
-          hideIds={isCab ? CAB_PICKER_IDS : []}
+          {hideIds}
         />
       {/if}
 

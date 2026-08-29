@@ -280,7 +280,7 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
 /** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
  *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
  *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
-const BOARD_SCHEMA = 'b11';
+const BOARD_SCHEMA = 'b14';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -312,7 +312,13 @@ export function buildDeviceLayoutBoard(
   catalog: BoardCtl[],
   cols: number,
   geqBandIds: Set<number> = new Set(),
-  graphKeyForSlot: (page: number, slot: number) => string | null = () => null
+  graphKeyForSlot: (page: number, slot: number) => string | null = () => null,
+  /** Catalog keys with no row of their own to anchor to (the Dynacab mic graphic re-presents knobs
+   *  that keep their own separate widgets, so it can't collapse onto one like `geq` does) — placed at
+   *  the TOP of that page, ahead of its own rows, instead of falling through to the trailing "More"
+   *  sweep, so the graphic reads as a first-class hero rather than stranding below the knobs. Tagged
+   *  `row: -1` so the responsive re-pack (`packRows`) also keeps them ahead of the page's own rows. */
+  extraKeysForPage: (page: number) => string[] = () => []
 ): SurfaceBoard | null {
   if (!layout?.pages?.length) return null;
   const columns = Math.max(1, cols);
@@ -340,6 +346,29 @@ export function buildDeviceLayoutBoard(
     const seen = new Set<string>();
     let gridRow = 0;
     let groupSeq = 0;
+    // Widgets with no device row of their own (the Dynacab hero graphic) — placed FIRST, packed
+    // left→right and wrapping at `columns`, so they sit above the page's own rows instead of below them.
+    // `row: -1` sorts ahead of the authored rows in `packRows`, keeping the hero on top through reflow.
+    {
+      let ex = 0;
+      let eh = 1;
+      for (const key of extraKeysForPage(pageIndex)) {
+        if (seen.has(key)) continue;
+        const base = byKey.get(key);
+        if (!base) continue;
+        seen.add(key);
+        const w = Math.min(base.w, columns);
+        if (ex > 0 && ex + w > columns) {
+          gridRow += eh;
+          ex = 0;
+          eh = 1;
+        }
+        widgets.push({ id: 'w' + key, key, x: ex, y: gridRow, w, h: base.h, view: base.view, row: -1 });
+        ex += w;
+        eh = Math.max(eh, base.h);
+      }
+      if (ex > 0) gridRow += eh; // advance past the hero row(s) so the page's own rows start below them
+    }
     coalesceRows(pg.rows).forEach((row, rowIndex) => {
       // Resolve the whole row up front: placing a band set needs its TOTAL width before it can tell
       // whether the set still fits the current line. A `key: null` slot is a gap (spacer, duplicate, or a

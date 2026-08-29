@@ -202,7 +202,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b11\|/);
+    expect(a.variantSig).toMatch(/^b14\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -504,6 +504,41 @@ describe('buildDeviceLayoutBoard — response graph slots', () => {
     const two = layout([{ name: 'Controllers', rows: [{ controls: [ctl('graph', null, 'Graph'), ctl('graph', null, 'Graph')] }] }]);
     const b = buildDeviceLayoutBoard(two, [EQ, EQ2], 12, new Set(), (_page, slot) => ['eq', 'eq2'][slot] ?? null)!;
     expect(b.boards['Controllers'].map((w) => w.key)).toEqual(['eq', 'eq2']);
+  });
+});
+
+describe('buildDeviceLayoutBoard — extraKeysForPage (Dynacab hero graphic: no device row of its own)', () => {
+  const CABMIC: BoardCtl = { key: 'cabmic1', kind: 'dynacab', id: -1, w: 8, h: 4, view: 'dynacab', views: ['dynacab'] };
+  const lay = layout([
+    { name: 'Cab', rows: [{ controls: [ctl('knob', 12, 'Pan 1'), ctl('knob', 20, 'Proximity 1')] }] },
+    { name: 'Room/Air', rows: [{ controls: [ctl('knob', 35, 'Room Level')] }] }
+  ]);
+  const catalog: BoardCtl[] = [knob(12), knob(20), knob(35), CABMIC];
+
+  it('places the extra widget at the TOP of its page, ahead of the page own rows', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
+    expect(find(b.boards['Cab'], 'cabmic1')).toBeTruthy();
+    expect(find(b.boards['Cab'], 'cabmic1').y).toBeLessThan(find(b.boards['Cab'], 'k12').y);
+    expect(b.boards['Room/Air'].some((w) => w.key === 'cabmic1')).toBe(false);
+  });
+
+  it('tags the hero with row -1 so the responsive re-pack keeps it on top', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
+    const hero = find(b.boards['Cab'], 'cabmic1');
+    expect(hero.row).toBe(-1);
+    const repacked = packRows(b.boards['Cab'], 8);
+    expect(repacked.find((w) => w.key === 'cabmic1')!.y).toBeLessThan(repacked.find((w) => w.key === 'k12')!.y);
+  });
+
+  it('does not fall through to the trailing "More" sweep once placed', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
+    expect(b.pageOrder).not.toContain('More');
+  });
+
+  it('falls back to the "More" sweep when no page claims the key (unchanged default behaviour)', () => {
+    const b = buildDeviceLayoutBoard(lay, catalog, 12)!;
+    expect(b.boards['Cab'].some((w) => w.key === 'cabmic1')).toBe(false);
+    expect(find(b.boards['More'], 'cabmic1')).toBeTruthy();
   });
 });
 
