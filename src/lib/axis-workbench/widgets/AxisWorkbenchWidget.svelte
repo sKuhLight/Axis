@@ -352,7 +352,7 @@
   function paramWheel(event: WheelEvent) {
     if (editMode || !paramNamed) return;
     event.preventDefault();
-    nudgeParam(event.deltaY < 0 ? 0.015 : -0.015);
+    nudgeParam(event.deltaY < 0 ? -0.015 : 0.015);
   }
 
   function openParamBlock() {

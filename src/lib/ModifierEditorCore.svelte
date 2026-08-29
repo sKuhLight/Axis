@@ -183,7 +183,7 @@
   function knobWheel(e: WheelEvent, key: keyof Vals) {
     if (e.deltaY === 0) return;
     e.preventDefault();
-    const nv = clamp((m[key] as number) - e.deltaY / 16);
+    const nv = clamp((m[key] as number) + e.deltaY / 16);
     m = { ...m, [key]: nv };
     writeField(key as string, nv);
   }
