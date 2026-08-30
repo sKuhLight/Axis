@@ -3,6 +3,9 @@
 // Prod: ForgeFX.Server serves Axis, so /api is same-origin (set VITE_FORGEFX_BASE to override).
 import type {
   BlockParams,
+  BlockApplyResult,
+  BlockLibraryCandidate,
+  DecodedBlockFile,
   BlockSummary,
   BlockTypeOption,
   CabState,
@@ -40,6 +43,7 @@ import type {
   ConvertExportResponse,
   ConverterPreset
 } from './types';
+import { blockLibraryApplyPayload } from './blockLibraryApply';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
@@ -123,6 +127,14 @@ async function transportBinary(path: string, method: string, body?: Uint8Array):
 const asArrayBuffer = (b: string | ArrayBuffer): ArrayBuffer =>
   typeof b === 'string' ? (new TextEncoder().encode(b).buffer as ArrayBuffer) : b;
 
+function errorDetail(body: string | ArrayBuffer): string {
+  if (typeof body !== 'string') return '';
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+    return typeof parsed.message === 'string' ? parsed.message : typeof parsed.error === 'string' ? parsed.error : '';
+  } catch { return ''; }
+}
+
 /** One relay round-trip with identical parsing + failure reporting as local mode. */
 async function relayReq<T>(path: string, method: string, init?: RequestInit): Promise<T> {
   let r: RemoteResponse;
@@ -134,7 +146,8 @@ async function relayReq<T>(path: string, method: string, init?: RequestInit): Pr
   }
   if (r.status < 200 || r.status >= 300) {
     reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`); // self-filters to 5xx/0
-    throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
+    const detail = errorDetail(r.body);
+    throw new ForgeError(r.status, `${method} ${path} → ${r.status}${detail ? `: ${detail}` : ''}`);
   }
   return (r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : r.body) as T;
 }
@@ -172,7 +185,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     reportFailure(path, method, res.status, `${method} ${path} → ${res.status}`);
-    throw new ForgeError(res.status, `${method} ${path} → ${res.status}`);
+    const detail = errorDetail(await res.text());
+    throw new ForgeError(res.status, `${method} ${path} → ${res.status}${detail ? `: ${detail}` : ''}`);
   }
   const ct = res.headers.get('content-type') ?? '';
   return (ct.includes('json') ? res.json() : (res.arrayBuffer() as unknown)) as Promise<T>;
@@ -206,6 +220,8 @@ export const forgefx = {
   // ── catalog (static) ──
   blocks: () => req<BlockSummary[]>('/blocks'),
   blockTypes: (slug: string) => req<BlockTypeOption[]>(`/blocks/${slug}/types`),
+  blockLibrarySources: (libraryPath: string) => req<{ candidates: BlockLibraryCandidate[] }>(`/fm3edit/blocks/sources?libraryPath=${encodeURIComponent(libraryPath)}`),
+  decodeBlockLibrarySource: (path: string, libraryPath: string) => req<DecodedBlockFile>('/fm3edit/blocks/decode', { method: 'POST', body: JSON.stringify({ path, libraryPath }) }),
 
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),
@@ -233,6 +249,7 @@ export const forgefx = {
   presetGrid: (n: number) => req<PresetGrid>(`/presets/${n}/grid`),
   /** Placed blocks: position + routing + live bypass/channel. */
   presetBlocks: () => req<PresetBlock[]>('/preset/blocks'),
+  applyBlockLibrarySource: (effectId: number, block: DecodedBlockFile) => req<BlockApplyResult>(`/preset/blocks/${effectId}/apply`, { method: 'POST', body: JSON.stringify(blockLibraryApplyPayload(block)) }),
   /** LIGHTWEIGHT per-block bypass+channel (no preset dump) — for reflecting a scene change without a
    *  full reload. 501 on devices without it (caller falls back to load()). */
   sceneState: () => req<{ effectId: number; bypassed: boolean | null; channel: string | null }[]>('/preset/scene-state'),

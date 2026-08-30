@@ -292,7 +292,7 @@ const actionNavEntry = (
 
 /**
  * The Axis seed navigation: the seven page-bound entries (each activates its page)
- * plus the two ACTION entries — Theme (opens the appearance modal) and Axis Cloud
+ * plus the two ACTION entries — Settings (opens the settings modal) and Axis Cloud
  * (account modal, pinned to the rail footer). Page entries carry NO `target`; their
  * `pageId` binding drives `page.activate` in the generic `NavigationHost`.
  */
@@ -307,7 +307,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
       scenes: pageNavEntry('scenes', NAV_LABELS.scenes, AXIS_PAGE_SCENES),
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
       setup: pageNavEntry('setup', NAV_LABELS.setup, AXIS_PAGE_SETUP),
-      theme: actionNavEntry('theme', 'Theme', 'axis.openTheme'),
+      theme: actionNavEntry('theme', 'Settings', 'axis.openTheme'),
       account: actionNavEntry('account', 'Axis Cloud', 'axis.openAccount', {
         locked: true,
         fixedSlot: 'rail.footer'
@@ -379,7 +379,10 @@ function layoutAlreadySeeded(layout: WorkbenchLayout): boolean {
  * default-seeded documents carry the marker and are left untouched.
  */
 export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
-  if (doc.metadata?.[AXIS_SEED_PAGES_MARKER]) return doc;
+  if (doc.metadata?.[AXIS_SEED_PAGES_MARKER]) {
+    ensureSettingsNavigationLabel(doc);
+    return doc;
+  }
 
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object') continue;
@@ -401,7 +404,16 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
   }
 
   doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_PAGES_MARKER]: 'v1' };
+  ensureSettingsNavigationLabel(doc);
   return doc;
+}
+
+/** Rename the persisted action without changing its stable navigation/action ids. */
+function ensureSettingsNavigationLabel(doc: WorkbenchDocument): void {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    const entry = layout?.navigation?.entries?.theme;
+    if (entry?.target?.command === 'axis.openTheme') entry.label = 'Settings';
+  }
 }
 
 /**

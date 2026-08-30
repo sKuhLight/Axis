@@ -1,9 +1,13 @@
 <script lang="ts">
   import '../app.css';
   import { onMount } from 'svelte';
+  import { appSettings } from '$lib/appSettings.svelte';
   import { theme } from '$lib/theme.svelte';
-  // Apply the saved theme ASAP on the client (SSR is off) so the whole app renders in it.
-  if (typeof document !== 'undefined') theme.init();
+  // Apply saved global settings ASAP on the client (SSR is off).
+  if (typeof document !== 'undefined') {
+    theme.init();
+    appSettings.init();
+  }
   let { children } = $props();
 
   // PWA: register the service worker ONLY in the remote web build (axisapp.live). The desktop app is

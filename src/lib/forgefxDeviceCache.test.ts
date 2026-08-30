@@ -9,6 +9,7 @@ function res(status: number, body: unknown, ct = 'application/json') {
     status,
     headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? ct : null) },
     json: async () => body,
+    text: async () => JSON.stringify(body),
     arrayBuffer: async () => new ArrayBuffer(0)
   };
 }

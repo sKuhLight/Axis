@@ -124,7 +124,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // minimal first-contact layout (operator decision 2026-07-06): Signal Grid main +
   // Block Editor bottom — the two things a new user needs. Preset Browser, FC,
   // Setup, Controllers, Scenes, and Live each get their own seed page (full-size
-  // panel in main); Theme + Axis Cloud stay ACTION nav entries. Pages are identical
+   // panel in main); Settings + Axis Cloud stay ACTION nav entries. Pages are identical
   // across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
   gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.signalGrid']);
@@ -162,7 +162,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   };
 
   // Nav entries bind to the seed pages (grid/library/fc/controllers/scenes/live/
-  // setup); Theme + Axis Cloud stay ACTION entries. Triggering a page entry
+   // setup); Settings + Axis Cloud stay ACTION entries. Triggering a page entry
   // activates its page via the generic NavigationHost (`page.activate`).
   layout.navigation = createAxisSeedNavigation('side');
 

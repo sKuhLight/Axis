@@ -1,8 +1,13 @@
 <script lang="ts">
   import { editor, baseName } from './editor.svelte';
+  import { appSettings } from './appSettings.svelte';
+  import { defaultBlockLibraryPath } from './blockLibraryPath';
+  import { blockLibrary } from './blockLibrary.svelte';
   import { forgefx } from './forgefx';
+  import { detailParams, fmtVal } from './axis-workbench/presetBrowser/presetBrowserWorkbenchParams';
   import { catFor, shade } from './catalog';
   import { categoryOf, packFor } from './blocks';
+  import type { BlockLibraryCandidate, DecodedBlockFile } from './types';
 
   const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };
   const catOf = (name: string) => categoryOf(packFor(name) ?? name);
@@ -17,6 +22,12 @@
   let hi = $state(0);
   let realNames = $state(false);
   let inputEl = $state<HTMLInputElement | null>(null);
+  let paletteTab = $state<'types' | 'library'>('types');
+  let preview = $state<DecodedBlockFile | null>(null);
+  let previewLoading = $state(false);
+  let previewError = $state('');
+  let applying = $state(false);
+  let wasOpen = false;
   // effect ids already on the grid — placed instances are greyed out + non-pickable (no point re-placing)
   const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
   const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
@@ -62,6 +73,20 @@
 
   // per-family TYPE recents + favorites (retype mode), keyed by block slug
   const blockSlug = $derived(retype ? (editor.selected?.pack?.toLowerCase() ?? '') : '');
+  const libraryPath = $derived(appSettings.cfg.blockLibraryPath || defaultBlockLibraryPath(editor.detected?.connected ? editor.detected.name : null) || '');
+  const libraryEntries = $derived.by(() => {
+    const queryText = query.trim().toLowerCase();
+    return blockLibrary.candidates.filter((candidate) =>
+      candidate.category?.trim().toLowerCase() === blockSlug &&
+      (!queryText || candidate.name.toLowerCase().includes(queryText))
+    );
+  });
+  const previewChannel = $derived.by(() => {
+    const block = preview;
+    if (!block) return null;
+    return block.channels.find((channel) => channel.channel === block.activeChannel) ?? block.channels[0] ?? null;
+  });
+  const previewCompatible = $derived(!!preview && preview.slug.toLowerCase() === blockSlug);
   let typeRec = $state<number[]>([]);
   let typeFav = $state<number[]>([]);
   let brand = $state('all');
@@ -106,6 +131,12 @@
   // load catalog when opened
   $effect(() => {
     if (!editor.paletteOpen) return;
+    if (!wasOpen) {
+      wasOpen = true;
+      paletteTab = 'types';
+      preview = null;
+      previewError = '';
+    }
     query = '';
     hi = 0;
     cat = 'all';
@@ -130,6 +161,14 @@
         .catch(() => (families = []))
         .finally(() => (loading = false));
     }
+  });
+
+  $effect(() => {
+    if (!editor.paletteOpen) {
+      wasOpen = false;
+      return;
+    }
+    if (paletteTab === 'library' && libraryPath) void blockLibrary.load(libraryPath);
   });
 
   const typeLabel = (t: TypeOpt) =>
@@ -215,6 +254,33 @@
     editor.paletteOpen = false;
   }
 
+  async function previewLibrarySource(candidate: BlockLibraryCandidate) {
+    if (!libraryPath) return;
+    preview = null;
+    previewError = '';
+    previewLoading = true;
+    try {
+      const decoded = await forgefx.decodeBlockLibrarySource(candidate.path, libraryPath);
+      if (decoded.slug.toLowerCase() !== blockSlug) {
+        previewError = `${decoded.name} is a ${decoded.slug} block, not ${blockSlug}.`;
+      } else {
+        preview = decoded;
+      }
+    } catch {
+      previewError = `Could not decode ${candidate.name}.`;
+    } finally {
+      previewLoading = false;
+    }
+  }
+
+  async function applyPreview() {
+    if (!preview || !previewCompatible || applying) return;
+    applying = true;
+    editor.paletteOpen = false;
+    await editor.applyBlockLibrarySource(preview);
+    applying = false;
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -240,6 +306,14 @@
 {#if editor.paletteOpen}
   <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
     <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+      {#if retype}
+        <div class="tabs" role="tablist" aria-label="Block change options">
+          <button class:on={paletteTab === 'types'} role="tab" aria-selected={paletteTab === 'types'} onclick={() => (paletteTab = 'types')}>Types</button>
+          <button class:on={paletteTab === 'library'} role="tab" aria-selected={paletteTab === 'library'} onclick={() => (paletteTab = 'library')}>Library</button>
+        </div>
+      {/if}
+
+      {#if paletteTab === 'types'}
       <div class="search">
         <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
         <input
@@ -308,6 +382,49 @@
       <div class="foot mono">
         <span>↑↓ Navigate</span><span>⏎ {retype ? 'Change' : 'Place'}</span>{#if !retype}<span>★ Favorite</span>{/if}<span>Esc Close</span>
       </div>
+      {:else}
+        <div class="search">
+          <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
+          <input bind:value={query} placeholder={`Search ${blockSlug} library…`} />
+          <span class="count mono">{libraryEntries.length} item{libraryEntries.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="library" role="tabpanel" aria-label="Block library">
+          <div class="library-list scroll">
+            {#if !libraryPath}
+              <div class="empty">Set a block library path in Settings to browse saved blocks.</div>
+            {:else if blockLibrary.status === 'loading'}
+              <div class="empty">Loading library…</div>
+            {:else if blockLibrary.status === 'error'}
+              <div class="empty">Could not read the configured block library.</div>
+            {:else if libraryEntries.length === 0}
+              <div class="empty">No saved {blockSlug} blocks found.</div>
+            {:else}
+              {#each libraryEntries as candidate (candidate.path)}
+                <button class="library-row" class:on={preview?.name === candidate.name} onclick={() => previewLibrarySource(candidate)}>
+                  <span class="rtext"><span class="rname">{candidate.name}</span><span class="rsub">{candidate.category ?? 'Block'} · {new Date(candidate.mtime).toLocaleDateString()}</span></span>
+                </button>
+              {/each}
+            {/if}
+          </div>
+          <div class="preview scroll">
+            {#if previewLoading}
+              <div class="empty">Decoding block…</div>
+            {:else if previewError}
+              <div class="empty">{previewError}</div>
+            {:else if preview && previewChannel}
+              <div class="preview-head"><div><div class="preview-name">{preview.name}</div><div class="rsub">{preview.device} · {previewChannel.typeName ?? preview.slug} · Channel {String.fromCharCode(65 + (previewChannel.channel ?? preview.activeChannel))}</div></div></div>
+              <div class="params">
+                {#each detailParams(previewChannel) as param (param.paramId)}
+                  <div class="param"><span>{param.label || param.name}</span><strong>{fmtVal(param)}</strong></div>
+                {/each}
+              </div>
+              <button class="apply" disabled={!previewCompatible || applying} onclick={applyPreview}>{applying ? 'Applying…' : 'Use Block'}</button>
+            {:else}
+              <div class="empty">Select a saved block to preview it.</div>
+            {/if}
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -352,6 +469,9 @@
     padding-bottom: var(--axis-safe-bottom);
     animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
+  .tabs { display: flex; gap: 3px; margin: 14px 16px 0; padding: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; }
+  .tabs button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--textdim); font: 700 13px var(--font-ui); cursor: pointer; }
+  .tabs button.on { background: var(--accent); color: var(--accentink); }
   .search {
     display: flex;
     align-items: center;
@@ -577,4 +697,19 @@
     color: var(--text-faint);
     font-size: 13px;
   }
+  .library { flex: 1; min-height: 280px; display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr); }
+  .library-list { overflow-y: auto; border-right: 1px solid var(--surface2); padding: 8px; }
+  .library-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 11px 10px; border: 0; border-radius: 9px; background: transparent; text-align: left; cursor: pointer; }
+  .library-row:hover, .library-row.on { background: var(--bg2); }
+  .preview { min-width: 0; overflow-y: auto; padding: 16px; }
+  .preview-head { padding-bottom: 13px; border-bottom: 1px solid var(--border); }
+  .preview-name { color: var(--text); font-size: 16px; font-weight: 800; }
+  .params { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  .param { min-width: 0; padding: 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+  .param:nth-child(2n) { border-right: 0; }
+  .param span { color: var(--textfaint); font: 700 10px var(--font-mono); letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .param strong { color: var(--text); font: 700 13px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .apply { width: 100%; height: 40px; margin-top: 14px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accentink); font: 800 13px var(--font-ui); cursor: pointer; }
+  .apply:disabled { opacity: 0.55; cursor: default; }
+  @media (max-width: 640px) { .library { grid-template-columns: 1fr; } .library-list { max-height: 220px; border-right: 0; border-bottom: 1px solid var(--surface2); } }
 </style>

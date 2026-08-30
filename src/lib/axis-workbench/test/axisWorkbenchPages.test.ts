@@ -69,15 +69,16 @@ describe('ROUND 15 — default document seed pages', () => {
     }
   });
 
-  it('binds the seven nav entries to their pages and keeps Theme/Account as actions', () => {
+  it('binds the seven nav entries to their pages and keeps Settings/Account as actions', () => {
     const entries = layout.navigation.entries;
     expect(entries.grid.pageId).toBe(AXIS_PAGE_GRID);
     expect(entries.grid.target).toBeUndefined();
     expect(entries.library.pageId).toBe(AXIS_PAGE_PRESET_BROWSER);
     expect(entries.fc.pageId).toBe(AXIS_PAGE_FC);
     expect(entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
-    // Theme + Axis Cloud stay ACTION entries (no page binding).
+    // Settings + Axis Cloud stay ACTION entries (no page binding).
     expect(entries.theme.pageId).toBeUndefined();
+    expect(entries.theme.label).toBe('Settings');
     expect(entries.theme.target?.command).toBe('axis.openTheme');
     expect(entries.account.pageId).toBeUndefined();
     expect(entries.account.target?.command).toBe('axis.openAccount');
@@ -90,6 +91,13 @@ describe('ROUND 15 — default document seed pages', () => {
 
   it('carries the seed-pages migration marker so migration is a no-op on it', () => {
     expect(doc.metadata?.[AXIS_SEED_PAGES_MARKER]).toBe('v1');
+  });
+
+  it('renames the persisted Theme action without changing its command', () => {
+    layout.navigation.entries.theme.label = 'Theme';
+    ensureAxisSeedPages(doc);
+    expect(layout.navigation.entries.theme.label).toBe('Settings');
+    expect(layout.navigation.entries.theme.target?.command).toBe('axis.openTheme');
   });
 });
 

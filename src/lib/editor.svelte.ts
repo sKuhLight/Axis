@@ -4,6 +4,9 @@
 // cables, params, bypass, channel, retype).
 import { forgefx, ForgeError, setRequestFailureReporter, isRemote, isDirect, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
+import { appSettings } from './appSettings.svelte';
+import { defaultBlockLibraryPath } from './blockLibraryPath';
+import { blockLibrary } from './blockLibrary.svelte';
 import { cloud } from './cloud.svelte';
 import { deviceDefs } from './deviceDefs.svelte';
 import { history } from './history.svelte';
@@ -17,7 +20,7 @@ import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from './types';
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from './deviceLayoutBoard';
 
@@ -691,6 +694,7 @@ class EditorStore {
     // warn if it isn't a model we have a live codec for
     try {
       this.detected = await forgefx.detect();
+      blockLibrary.preloadWhenIdle(appSettings.cfg.blockLibraryPath || defaultBlockLibraryPath(this.detected.connected ? this.detected.name : null) || '');
       if (this.detected.connected && !this.detected.supported) this.showToast(`${this.detected.name} detected — not yet supported`, '#d6543f');
     } catch {
       /* detect failed — proceed; load() falls back to the gen-3 path */
@@ -1658,6 +1662,25 @@ class EditorStore {
     } catch (e) {
       this.showToast('Type change rejected by device', '#d6543f');
       if (e instanceof ForgeError) console.warn(e.message);
+    }
+  };
+
+  /** Apply the exact saved-block data previewed in the library picker. The device writes are not safely undoable. */
+  applyBlockLibrarySource = async (block: DecodedBlockFile): Promise<boolean> => {
+    const c = this.selected;
+    if (!c?.pack || block.slug.toLowerCase() !== c.pack.toLowerCase()) return false;
+    try {
+      await forgefx.applyBlockLibrarySource(c.effectId, block);
+      history.checkpoint(`${block.name} applied to ${c.display}`, false);
+      await this.#loadParams();
+      await this.load();
+      this.showToast(`${block.name} applied`, '#5fc46b');
+      return true;
+    } catch (e) {
+      const message = e instanceof ForgeError ? e.message.replace(/^POST \/preset\/blocks\/\d+\/apply → \d+:?\s*/, '') : 'Block apply rejected by device';
+      this.showToast(message || 'Block apply rejected by device', '#d6543f');
+      if (e instanceof ForgeError) console.warn(e.message);
+      return false;
     }
   };
 

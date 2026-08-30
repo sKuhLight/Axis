@@ -384,6 +384,35 @@ export interface DecodedBlock {
   params: DecodedParam[];
 }
 
+/** Metadata for one `.blk` source discovered in the configured Fractal Edit library. */
+export interface BlockLibraryCandidate {
+  path: string;
+  blocksDir: string;
+  category: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+}
+/** A decoded saved block, suitable for previewing and applying to a compatible placed block. */
+export interface DecodedBlockFile {
+  name: string;
+  device: string;
+  effectTypeId: number;
+  slug: string;
+  activeChannel: number;
+  /** The burst head's blockId (diagnostic — the grid slot the block occupied when saved). */
+  blockId: number;
+  /** Channel-blocked raw value count + the positional wire values themselves. */
+  itemCount: number;
+  values: number[];
+  channels: DecodedBlock[];
+}
+export interface BlockApplyResult {
+  ok: boolean;
+  params: number;
+  activeChannel: number;
+}
+
 /** A stored preset version snapshot (GET /versions). */
 export interface VersionInfo {
   id: string;
