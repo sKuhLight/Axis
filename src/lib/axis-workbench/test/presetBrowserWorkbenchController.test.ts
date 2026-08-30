@@ -93,6 +93,31 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     expect(c.snapshot.marked).toEqual({});
   });
 
+  it('resets direction to the field natural default when the sort field changes', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    expect(c.snapshot.sort).toBe('num');
+    expect(c.snapshot.sortDir).toBe('asc');
+
+    c.setSortDir('desc');
+    expect(c.snapshot.sortDir).toBe('desc');
+
+    c.setSort('cpu'); // CPU naturally sorts high-first
+    expect(c.snapshot.sort).toBe('cpu');
+    expect(c.snapshot.sortDir).toBe('desc');
+
+    c.setSort('name'); // A-Z naturally sorts ascending
+    expect(c.snapshot.sortDir).toBe('asc');
+  });
+
+  it('flips the direction without touching the sort field', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setSortDir('desc');
+    expect(c.snapshot.sort).toBe('num');
+    expect(c.snapshot.sortDir).toBe('desc');
+    c.setSortDir('asc');
+    expect(c.snapshot.sortDir).toBe('asc');
+  });
+
   it('elects the lowest-rank registered part as overlay owner', () => {
     const c = new AxisPresetBrowserWorkbenchController();
     const unSources = c.registerPart('sources');

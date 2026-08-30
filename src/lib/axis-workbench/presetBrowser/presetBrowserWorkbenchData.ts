@@ -78,6 +78,16 @@ export interface AxisPresetBrowserDataView {
 }
 
 export type AxisPresetBrowserSortMode = 'num' | 'name' | 'cpu' | 'recent';
+export type AxisPresetBrowserSortDir = 'asc' | 'desc';
+
+// Natural direction per field, so omitting `sortDir` preserves the historical ordering (A-Z ascending,
+// CPU high-first, RECENT newest-first).
+const SORT_DIR_DEFAULTS: Record<AxisPresetBrowserSortMode, AxisPresetBrowserSortDir> = {
+  num: 'asc',
+  name: 'asc',
+  cpu: 'desc',
+  recent: 'desc'
+};
 
 export interface AxisPresetBrowserDataInput {
   entries: AxisPresetBrowserLibEntryLike[];
@@ -93,6 +103,8 @@ export interface AxisPresetBrowserDataInput {
   simpleQuery?: string;
   /** Result ordering (§4.1). Defaults to preset number. */
   sort?: AxisPresetBrowserSortMode;
+  /** Result direction (§4.1). 'asc' unless overridden; CPU/RECENT naturally sort descending. */
+  sortDir?: AxisPresetBrowserSortDir;
   /** Resolve an entry's cloud sync state (host reads the reactive cloud store). Defaults to 'none'. */
   syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState;
   /** Active cloud-presence view (§3). When set (and not 'all'), the list is filtered by it. */
@@ -178,7 +190,8 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     ? byPresence.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery))
     : byPresence;
 
-  const visibleEntries = sortEntries(queried, input.sort ?? 'num');
+  const sortMode = input.sort ?? 'num';
+  const visibleEntries = sortEntries(queried, sortMode, input.sortDir ?? SORT_DIR_DEFAULTS[sortMode]);
   const order = visibleEntries.map((entry) => entry.id);
   const selectedEntry = entries.find((entry) => entry.id === input.selectedEntryId) ?? null;
 
@@ -200,26 +213,38 @@ function toPresenceRow(entry: AxisPresetBrowserEntrySummary): AxisPbPresenceRow 
 
 function sortEntries(
   entries: AxisPresetBrowserEntrySummary[],
-  sort: AxisPresetBrowserSortMode
+  sort: AxisPresetBrowserSortMode,
+  dir: AxisPresetBrowserSortDir
 ): AxisPresetBrowserEntrySummary[] {
   const list = entries.slice();
+  const desc = dir === 'desc';
   if (sort === 'name') {
-    list.sort((a, b) => a.name.localeCompare(b.name));
+    list.sort((a, b) => (desc ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name)));
   } else if (sort === 'cpu') {
-    // higher CPU first — summary-level estimate mirrors query.estimateCpu (blockCount-derived).
-    list.sort((a, b) => b.blockCount - a.blockCount);
+    // higher CPU first by default — summary-level estimate mirrors query.estimateCpu (blockCount-derived).
+    list.sort((a, b) => (desc ? b.blockCount - a.blockCount : a.blockCount - b.blockCount));
   } else if (sort === 'recent') {
-    // Most recently loaded first. Never-loaded entries sink below every loaded one; the number
-    // tiebreak keeps that (large) bucket in slot order rather than leaning on sort stability.
+    // Primary key is the recency stamp (flipped by direction); the number tiebreak stays ASCENDING in
+    // both directions so the never-loaded bucket keeps stable slot order (pins the e2e ordering contract).
     // `?? 0` rather than -Infinity: every real stamp is a positive epoch, and Infinity - Infinity
     // would yield NaN for two never-loaded entries.
-    list.sort(
-      (a, b) =>
-        (b.lastLoadedAt ?? 0) - (a.lastLoadedAt ?? 0) ||
-        (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY)
-    );
+    list.sort((a, b) => {
+      const primary = desc
+        ? (b.lastLoadedAt ?? 0) - (a.lastLoadedAt ?? 0)
+        : (a.lastLoadedAt ?? 0) - (b.lastLoadedAt ?? 0);
+      return primary || (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY);
+    });
   } else {
-    list.sort((a, b) => (a.number ?? Number.POSITIVE_INFINITY) - (b.number ?? Number.POSITIVE_INFINITY));
+    // Slot-less entries (no number) always sink below numbered ones in BOTH directions — the `+Infinity`
+    // sentinel only works for ascending, so the null case is handled explicitly here.
+    list.sort((a, b) => {
+      const an = a.number;
+      const bn = b.number;
+      if (an == null && bn == null) return 0;
+      if (an == null) return 1;
+      if (bn == null) return -1;
+      return desc ? bn - an : an - bn;
+    });
   }
   return list;
 }

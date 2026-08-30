@@ -155,6 +155,7 @@
     conditions: activeConditions,
     simpleQuery: snapshot.advanced ? '' : snapshot.simpleQ,
     sort: snapshot.sort,
+    sortDir: snapshot.sortDir,
     syncStateOf,
     presenceView: snapshot.presenceView,
     presenceViews
@@ -871,11 +872,29 @@
       >
         <i></i>{snapshot.advanced ? 'Advanced' : 'Simple'}
       </button>
-      <div class="sort-seg" role="group" aria-label="Sort">
-        <button type="button" class:on={snapshot.sort === 'num'} onclick={() => axisPresetBrowserWorkbenchController.setSort('num')}>#</button>
-        <button type="button" class:on={snapshot.sort === 'name'} onclick={() => axisPresetBrowserWorkbenchController.setSort('name')}>A-Z</button>
-        <button type="button" class:on={snapshot.sort === 'cpu'} onclick={() => axisPresetBrowserWorkbenchController.setSort('cpu')}>CPU</button>
-        <button type="button" class:on={snapshot.sort === 'recent'} onclick={() => axisPresetBrowserWorkbenchController.setSort('recent')}>RECENT</button>
+      <div class="sort-group">
+        <div class="sort-seg" role="group" aria-label="Sort">
+          <button type="button" class:on={snapshot.sort === 'num'} onclick={() => axisPresetBrowserWorkbenchController.setSort('num')}>#</button>
+          <button type="button" class:on={snapshot.sort === 'name'} onclick={() => axisPresetBrowserWorkbenchController.setSort('name')}>A-Z</button>
+          <button type="button" class:on={snapshot.sort === 'cpu'} onclick={() => axisPresetBrowserWorkbenchController.setSort('cpu')}>CPU</button>
+          <button type="button" class:on={snapshot.sort === 'recent'} onclick={() => axisPresetBrowserWorkbenchController.setSort('recent')}>RECENT</button>
+        </div>
+        <div class="sort-dir" role="group" aria-label="Sort direction">
+          <button
+            type="button"
+            class:on={snapshot.sortDir === 'asc'}
+            title="Ascending"
+            aria-label="Sort ascending"
+            onclick={() => axisPresetBrowserWorkbenchController.setSortDir('asc')}
+          >▲</button>
+          <button
+            type="button"
+            class:on={snapshot.sortDir === 'desc'}
+            title="Descending"
+            aria-label="Sort descending"
+            onclick={() => axisPresetBrowserWorkbenchController.setSortDir('desc')}
+          >▼</button>
+        </div>
       </div>
       <!-- §2.2/§3.3 Save filter → opens the inline name input in the sources sidebar. -->
       <button
@@ -1811,8 +1830,11 @@
        the buttons into unreadable slivers. */
     flex-wrap: wrap;
   }
-  .query-controls > .sort-seg {
+  .query-controls > .sort-group {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .adv-toggle {
     display: flex;
@@ -1849,6 +1871,31 @@
     text-transform: none;
   }
   .sort-seg button.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accentink, var(--bg));
+  }
+  /* Two half-height stacked ASC/DESC buttons beside the sort segments. */
+  .sort-dir {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sort-dir button {
+    height: 13px;
+    width: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 6px;
+    font: 700 9px/1 var(--font-mono);
+    line-height: 1;
+    text-align: center;
+    text-transform: none;
+  }
+  .sort-dir button.on {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accentink, var(--bg));

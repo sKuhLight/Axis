@@ -199,6 +199,58 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
   });
 
+  it('sorts by name ascending and descending', () => {
+    const asc = createAxisPresetBrowserDataView({ entries, sort: 'name', sortDir: 'asc' });
+    expect(asc.visibleEntries.map((e) => e.name)).toEqual(['Ambient Wash', 'Edge Of Breakup', 'Studio Clean']);
+
+    const desc = createAxisPresetBrowserDataView({ entries, sort: 'name', sortDir: 'desc' });
+    expect(desc.visibleEntries.map((e) => e.name)).toEqual(['Studio Clean', 'Edge Of Breakup', 'Ambient Wash']);
+  });
+
+  it('sorts by slot number ascending and descending', () => {
+    const asc = createAxisPresetBrowserDataView({ entries, sort: 'num', sortDir: 'asc' });
+    expect(asc.visibleEntries.map((e) => e.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+
+    // slot-less (local) entries sink last in both directions
+    const desc = createAxisPresetBrowserDataView({ entries, sort: 'num', sortDir: 'desc' });
+    expect(desc.visibleEntries.map((e) => e.id)).toEqual(['file:ambient', 'dev:1', 'local:edge']);
+  });
+
+  it('sorts by CPU ascending (low first) and descending (high first)', () => {
+    const asc = createAxisPresetBrowserDataView({ entries, sort: 'cpu', sortDir: 'asc' });
+    expect(asc.visibleEntries.map((e) => e.blockCount)).toEqual([0, 1, 2]);
+
+    const desc = createAxisPresetBrowserDataView({ entries, sort: 'cpu', sortDir: 'desc' });
+    expect(desc.visibleEntries.map((e) => e.blockCount)).toEqual([2, 1, 0]);
+  });
+
+  it('recent desc keeps the number-ascending tiebreak while recent asc flips only the primary key', () => {
+    const slot = (n: number): AxisPresetBrowserLibEntryLike => ({
+      id: `dev:${n}`,
+      source: 'device',
+      summary: { number: n, name: `Slot ${n}`, scenes: [], blocks: [] }
+    });
+    const lastLoadedAt = (id: string) => (id === 'dev:9' || id === 'dev:5' ? 500 : null);
+
+    const desc = createAxisPresetBrowserDataView({
+      entries: [slot(9), slot(2), slot(5)],
+      sort: 'recent',
+      sortDir: 'desc',
+      lastLoadedAt
+    });
+    // equal stamps break by number ascending; never-loaded sinks last
+    expect(desc.visibleEntries.map((e) => e.id)).toEqual(['dev:5', 'dev:9', 'dev:2']);
+
+    const asc = createAxisPresetBrowserDataView({
+      entries: [slot(9), slot(2), slot(5)],
+      sort: 'recent',
+      sortDir: 'asc',
+      lastLoadedAt
+    });
+    // oldest first: never-loaded sinks below loaded ones, still number-ascending among equals
+    expect(asc.visibleEntries.map((e) => e.id)).toEqual(['dev:2', 'dev:5', 'dev:9']);
+  });
+
   it('does not throw on cloud-only entries with empty models/amps maps', () => {
     const cloudOnly: AxisPresetBrowserLibEntryLike = {
       id: 'cloud:9',

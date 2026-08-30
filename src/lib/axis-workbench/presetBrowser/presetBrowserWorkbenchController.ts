@@ -5,6 +5,16 @@ import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
 import { loadAdvancedMode, persistAdvancedMode } from './presetBrowserWorkbenchSearchMode';
 
 export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu' | 'recent';
+export type AxisPresetBrowserSortDir = 'asc' | 'desc';
+
+// Each sort field's natural direction: switching fields resets the direction so the old
+// default ordering (A-Z ascending, CPU high-first, RECENT newest-first) is preserved.
+export const AXIS_PRESET_BROWSER_SORT_DEFAULTS: Record<AxisPresetBrowserSort, AxisPresetBrowserSortDir> = {
+  num: 'asc',
+  name: 'asc',
+  cpu: 'desc',
+  recent: 'desc'
+};
 
 // Shared state across all mounted parts — the typed-controller replacement for `window.__PBBus`
 // (§1 of docs/workbench-dc-parity/06-preset-browser.md). Every key here is in lockstep across
@@ -23,6 +33,7 @@ export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSe
   saving: boolean;
   // list part (§4)
   sort: AxisPresetBrowserSort;
+  sortDir: AxisPresetBrowserSortDir;
   showAllRows: boolean;
   marked: Record<string, boolean>;
   anchorId: string | null;
@@ -52,6 +63,7 @@ export class AxisPresetBrowserWorkbenchController {
     presenceView: 'all',
     saving: false,
     sort: 'num',
+    sortDir: 'asc',
     showAllRows: false,
     marked: {},
     anchorId: null,
@@ -252,7 +264,13 @@ export class AxisPresetBrowserWorkbenchController {
   // ===================== list part (§4) =====================
 
   setSort(sort: AxisPresetBrowserSort): void {
-    this.#snapshot = { ...this.#snapshot, sort };
+    // Switching fields resets the direction to that field's natural default.
+    this.#snapshot = { ...this.#snapshot, sort, sortDir: AXIS_PRESET_BROWSER_SORT_DEFAULTS[sort] };
+    this.#emit();
+  }
+
+  setSortDir(sortDir: AxisPresetBrowserSortDir): void {
+    this.#snapshot = { ...this.#snapshot, sortDir };
     this.#emit();
   }
 
