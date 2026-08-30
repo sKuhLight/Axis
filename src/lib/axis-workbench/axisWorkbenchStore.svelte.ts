@@ -14,7 +14,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisAddBlockWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
@@ -54,7 +54,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // Normalization chain (must stay idempotent — runs on every load over
   // already-normalized docs):
   //   migrate → ensureSeedPages (ROUND 15 Pages migration) → ensureGridControls →
-  //   pruneRetiredRail → ensureMobileBottomNav.
+  //   pruneRetiredRail → pruneAddBlock → ensureMobileBottomNav.
   // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
   // becomes the Grid page and the six other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
@@ -62,8 +62,10 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
   return ensureAxisMobileBottomNav(
-    pruneAxisRetiredRailWidgets(
-      ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+    pruneAxisAddBlockWidgets(
+      pruneAxisRetiredRailWidgets(
+        ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+      )
     )
   );
 }

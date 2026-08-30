@@ -45,7 +45,6 @@ describe('Axis Workbench integration contracts', () => {
       'axis.preset',
       'axis.scenes',
       'axis.view',
-      'axis.addBlock',
       'axis.tuner',
       'axis.tempo',
       'axis.cpu',

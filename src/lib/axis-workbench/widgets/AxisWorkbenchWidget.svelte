@@ -228,10 +228,7 @@
 
   function openWidget() {
     if (kind === 'preset') dispatch({ type: 'page.activate', pageId: presetTarget.pageId });
-    else if (kind === 'addBlock') {
-      editor.paletteMode = 'place';
-      editor.paletteOpen = true;
-    } else if (kind === 'tuner') editor.toggleTuner();
+    else if (kind === 'tuner') editor.toggleTuner();
     else if (kind === 'tempo') editor.tapTempo();
     else if (kind === 'save') editor.openSave();
     else if (kind === 'search') editor.openLibrary();
@@ -601,14 +598,6 @@
   >
     <span class="save-dot"></span>
     {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
-  </button>
-{:else if kind === 'addBlock'}
-  <button class="axis-widget add" data-size={size} type="button" onclick={openWidget} title="Add block">
-    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
-      <path d="M10.6 10.6 L14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
-    </svg>
-    {#if expanded}<span>Add block</span><span class="shortcut mono">⌘K</span>{/if}
   </button>
 {:else if kind === 'search'}
   <button class="axis-widget search" data-size={size} type="button" onclick={openWidget} title="Search presets">
@@ -1061,18 +1050,6 @@
     color: var(--accentink);
     font-weight: 800;
     font-size: 10px;
-  }
-  .add {
-    color: #4fd1dc;
-  }
-  .shortcut {
-    padding: 4px 6px;
-    border: 1px solid #234142;
-    border-radius: 5px;
-    background: #0d1516;
-    color: #5e8a8c;
-    font-size: 10px;
-    font-weight: 700;
   }
   .search {
     color: var(--textfaint);

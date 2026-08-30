@@ -7,7 +7,7 @@ import type { WidgetInstance } from '../../workbench/core';
  * `workbench/core/widgetFit.ts`, which holds no widget-type knowledge itself.
  *
  * Design kind → Axis type mapping:
- *   preset→axis.preset, scenes→axis.scenes, view→axis.view, add→axis.addBlock,
+ *   preset→axis.preset, scenes→axis.scenes, view→axis.view,
  *   tuner→axis.tuner, tempo→axis.tempo, cpu→axis.cpu, save→axis.save,
  *   search→axis.search, history→axis.history, map→axis.gridMap,
  *   undo→axis.undoRedo, account→axis.account, conn→axis.connection,
@@ -26,7 +26,6 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   // by bumping the number — re-measure first.
   'axis.scenes': 240,
   'axis.view': 170,
-  'axis.addBlock': 132,
   'axis.tuner': 78,
   'axis.tempo': 82,
   'axis.cpu': 124,

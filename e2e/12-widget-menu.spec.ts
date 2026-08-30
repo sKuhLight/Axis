@@ -61,7 +61,7 @@ test.describe('Widget customize menu', () => {
 
   test('tapping a group grip opens the group menu with Save Group', async ({ page }) => {
     await bootCleanWorkbench(page);
-    await seedGroup(page, 'axis.group.spec', ['axis.widget.view', 'axis.widget.addBlock']);
+    await seedGroup(page, 'axis.group.spec', ['axis.widget.view', 'axis.widget.tuner']);
     await enterEditMode(page);
 
     const group = page.locator('[data-widget-group="axis.group.spec"]');

@@ -32,7 +32,6 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.preset',
   'axis.scenes',
   'axis.view',
-  'axis.addBlock',
   'axis.tuner',
   'axis.tempo',
   'axis.cpu',
