@@ -33,6 +33,7 @@
   aria-current={active ? 'page' : undefined}
   aria-label={entry.label ?? entry.id}
   onclick={runAction}
+  onmouseleave={(event) => (event.currentTarget as HTMLElement).blur()}
   title={entry.label ?? entry.id}
 >
   <span class="ic">{glyphs[entry.id] ?? '•'}</span>
