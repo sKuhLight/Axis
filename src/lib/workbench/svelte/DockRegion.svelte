@@ -99,7 +99,10 @@
   .aw-region-left,
   .aw-region-right {
     width: 320px;
-    flex: none;
+    /* Shrinkable + capped so a fixed-size region can never overflow the
+       workspace and be covered by the footer/bottom bar. */
+    flex: 0 1 auto;
+    max-width: 100%;
     border-color: var(--aw-border);
     background: var(--aw-bg-2);
   }
@@ -112,7 +115,8 @@
   .aw-region-top,
   .aw-region-bottom {
     height: 240px;
-    flex: none;
+    flex: 0 1 auto;
+    max-height: 100%;
     border-color: var(--aw-border);
     background: var(--aw-bg-2);
   }
@@ -222,9 +226,6 @@
     }
     .aw-region-bottom {
       max-height: 90%;
-    }
-    .aw-region-main {
-      min-height: 90px;
     }
   }
 </style>
