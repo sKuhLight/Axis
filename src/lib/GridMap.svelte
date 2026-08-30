@@ -113,11 +113,9 @@
     return list;
   });
 
-  // ✛ Add — same palette flow the grid uses; no explicit cell = the palette targets the first free one
+  // ✛ Quick Build — opens the Quick Build bottom sheet (the block palette) instead of the old palette flow
   function openAdd() {
-    editor.paletteMode = 'place';
-    editor.placeTarget = null;
-    editor.paletteOpen = true;
+    editor.quickBuildOpen = true;
   }
 
   function onCell(r: number, c: number) {
@@ -175,7 +173,7 @@
       <button class="fold" title="Zoom in (max = grid fills the map)" aria-label="Zoom in" disabled={Math.min(zoom, zoomMax) >= zoomMax} onclick={() => setZoom(1)}>+</button>
     {/if}
     {#if editor.canGridRoute}
-      <button class="add" title="Add a block" onclick={openAdd}>✛ Add</button>
+      <button class="add" title="Quick Build" onclick={openAdd}>Quick Build</button>
     {/if}
     <button class="fold" title={collapsed ? 'Expand map' : 'Collapse map'} aria-label={collapsed ? 'Expand map' : 'Collapse map'} onclick={toggle}>{collapsed ? '▾' : '▴'}</button>
   </div>

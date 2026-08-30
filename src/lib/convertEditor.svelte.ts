@@ -109,6 +109,7 @@ class ConvertEditor {
   paletteOpen = $state(false);
   placeTarget = $state<{ row: number; col: number } | null>(null);
   cabPickerOpen = $state(false);
+  quickBuildOpen = $state(false); // Quick Build is a live-editor sheet; unused offline
   params = $state<NamedParam[]>([]);
   enums = $state<EnumParam[]>([]);
 
