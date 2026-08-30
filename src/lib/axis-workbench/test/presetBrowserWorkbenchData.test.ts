@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAxisPresetBrowserDataView,
+  buildEmptyDeviceSlotEntries,
   normalizeAxisPresetBrowserSourceId,
   type AxisPresetBrowserLibEntryLike
 } from '../presetBrowser/presetBrowserWorkbenchData';
@@ -263,5 +264,54 @@ describe('Preset Browser Workbench data view', () => {
         conditions: [{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: '5153' }] }]
       })
     ).not.toThrow();
+  });
+
+  it('builds <EMPTY> slot entries for every cleared slot', () => {
+    const empty = new Set([0, 2, 5]);
+    const slots = buildEmptyDeviceSlotEntries(6, (n) => empty.has(n));
+    expect(slots.map((s) => s.id)).toEqual(['dev:0', 'dev:2', 'dev:5']);
+    expect(slots[0]).toMatchObject({
+      id: 'dev:0',
+      source: 'device',
+      empty: true,
+      summary: { number: 0, name: '<EMPTY>', scenes: [], blocks: [], amps: [], models: {}, crc: null }
+    });
+  });
+
+  it('injects empty slots only into the device view (not "all", never into data.entries)', () => {
+    const emptySlots = buildEmptyDeviceSlotEntries(3, (n) => n === 0 || n === 2);
+
+    const device = createAxisPresetBrowserDataView({ entries, emptySlots, sourceId: 'device' });
+    // num-ascending: the cleared slots sort in by slot number among the real device entry.
+    expect(device.visibleEntries.map((e) => e.id)).toEqual(['dev:0', 'dev:1', 'dev:2']);
+    // data.entries + source counts stay real-preset only.
+    expect(device.entries.map((e) => e.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+    expect(device.sources.find((s) => s.id === 'device')?.count).toBe(1);
+
+    const all = createAxisPresetBrowserDataView({ entries, emptySlots, sourceId: 'all' });
+    expect(all.visibleEntries.map((e) => e.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+  });
+
+  it('resolves an empty slot as the selected entry', () => {
+    const emptySlots = buildEmptyDeviceSlotEntries(3, (n) => n === 2);
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      emptySlots,
+      sourceId: 'device',
+      selectedEntryId: 'dev:2'
+    });
+    expect(view.selectedEntry).toMatchObject({ id: 'dev:2', empty: true, number: 2, name: '<EMPTY>' });
+  });
+
+  it('forces empty slots to syncState "none" + cloudOnly false regardless of resolver', () => {
+    const emptySlots = buildEmptyDeviceSlotEntries(1, (n) => n === 0);
+    const view = createAxisPresetBrowserDataView({
+      entries: [],
+      emptySlots,
+      sourceId: 'device',
+      syncStateOf: () => 'synced'
+    });
+    const empty = view.visibleEntries.find((e) => e.empty);
+    expect(empty).toMatchObject({ syncState: 'none', cloudOnly: false });
   });
 });

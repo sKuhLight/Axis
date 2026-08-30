@@ -78,6 +78,15 @@ describe('context menu building (§4.4)', () => {
     expect(actions.find((a) => a.id === 'deleteConverted')?.danger).toBe(true);
   });
 
+  it('empty slots collapse to a single Load action (no audition/rename/tags/cloud/favorite/convert)', () => {
+    const actions = buildAxisPbMenuActions(
+      entry({ id: 'dev:2', deviceSlot: true, empty: true, syncState: 'modified' }),
+      { canRename: true, cloudOn: true }
+    );
+    expect(actions.map((a) => a.id)).toEqual(['load']);
+    expect(actions[0].label).toBe('Load preset');
+  });
+
   it('adapts to WorkbenchMenuItems whose run dispatches the action id', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: true, cloudOn: false });
     const dispatch = vi.fn();

@@ -1348,7 +1348,13 @@ class EditorStore {
         const t0 = performance.now();
         const p = await forgefx.currentPreset().catch(() => null);
         this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
-        if (p && p.number >= 0) { this.preset = p; this.#histSwitch(p.number); }
+        if (p && p.number >= 0) {
+          this.preset = p;
+          this.#histSwitch(p.number);
+          // the current slot was just read cheaply — if the device reports it empty, drop the stale
+          // cached name so a preset cleared on the hardware stops showing up without a full rescan
+          library.clearSlotIfEmpty(p.number, p.name);
+        }
       }
     } catch {
       this.conn = { state: 'offline' };

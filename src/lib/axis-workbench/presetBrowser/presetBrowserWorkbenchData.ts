@@ -12,6 +12,8 @@ export interface AxisPresetBrowserLibEntryLike {
   source: AxisPresetBrowserSourceId;
   fav?: boolean;
   folder?: string;
+  /** True for a synthesized cleared/empty device slot (not a real library entry). */
+  empty?: boolean;
   /** `converted` entries only: the "FM3 → AM4" provenance line surfaced as a row chip. */
   provenance?: string | null;
   summary: {
@@ -55,6 +57,8 @@ export interface AxisPresetBrowserEntrySummary {
   converted: boolean;
   /** Display provenance ("FM3 → AM4") for a converted entry; null for every other source. */
   provenance: string | null;
+  /** A cleared/empty device slot synthesized as a muted, loadable row. */
+  empty?: boolean;
 }
 
 export interface AxisPresetBrowserSourceSummary {
@@ -92,6 +96,9 @@ const SORT_DIR_DEFAULTS: Record<AxisPresetBrowserSortMode, AxisPresetBrowserSort
 export interface AxisPresetBrowserDataInput {
   entries: AxisPresetBrowserLibEntryLike[];
   filteredEntries?: AxisPresetBrowserLibEntryLike[];
+  /** Cleared/empty device slots synthesized by the host. Injected into the visible list only when the
+   *  active source is 'device' (never counted in `entries`/`sources`/presence totals). */
+  emptySlots?: AxisPresetBrowserLibEntryLike[];
   sourceId?: AxisPresetBrowserSourceId | null;
   selectedEntryId?: string | null;
   tagsOf?: (entryId: string) => string[];
@@ -146,12 +153,33 @@ export function normalizeAxisPresetBrowserSourceId(sourceId: AxisPresetBrowserSo
   return sourceId;
 }
 
+/** Build synthesized `<EMPTY>` slot entries for every device slot `isEmpty` reports as cleared. */
+export function buildEmptyDeviceSlotEntries(
+  count: number,
+  isEmpty: (number: number) => boolean
+): AxisPresetBrowserLibEntryLike[] {
+  const out: AxisPresetBrowserLibEntryLike[] = [];
+  for (let n = 0; n < count; n++) {
+    if (!isEmpty(n)) continue;
+    out.push({
+      id: `dev:${n}`,
+      source: 'device',
+      empty: true,
+      summary: { number: n, name: '<EMPTY>', scenes: [], blocks: [], amps: [], models: {}, crc: null }
+    });
+  }
+  return out;
+}
+
 export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInput): AxisPresetBrowserDataView {
   const activeSourceId = normalizeAxisPresetBrowserSourceId(input.sourceId);
   const syncStateOf = input.syncStateOf;
   const lastLoadedAt = input.lastLoadedAt;
   const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt));
   const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) =>
+    normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt)
+  );
+  const emptySlots = (input.emptySlots ?? []).map((entry) =>
     normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt)
   );
   const counts = new Map<AxisPresetBrowserSourceId, number>([['all', entries.length]]);
@@ -179,10 +207,14 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     ? filteredEntries
     : filteredEntries.filter((entry) => entry.sourceId === activeSourceId);
 
+  // Empty slots render ONLY in the device view (they are device slots, not real entries), injected after
+  // the source filter but before presence/query/sort so they respect search + slot-number sort.
+  const withEmpty = activeSourceId === 'device' ? [...bySource, ...emptySlots] : bySource;
+
   const byPresence =
     activePresenceView === 'all'
-      ? bySource
-      : bySource.filter((entry) => entryInPresenceView(toPresenceRow(entry), activePresenceView));
+      ? withEmpty
+      : withEmpty.filter((entry) => entryInPresenceView(toPresenceRow(entry), activePresenceView));
 
   const conditions = input.conditions ?? [];
   const simpleQuery = (input.simpleQuery ?? '').trim();
@@ -193,7 +225,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
   const sortMode = input.sort ?? 'num';
   const visibleEntries = sortEntries(queried, sortMode, input.sortDir ?? SORT_DIR_DEFAULTS[sortMode]);
   const order = visibleEntries.map((entry) => entry.id);
-  const selectedEntry = entries.find((entry) => entry.id === input.selectedEntryId) ?? null;
+  const selectedEntry = [...entries, ...emptySlots].find((entry) => entry.id === input.selectedEntryId) ?? null;
 
   return {
     sources,
@@ -262,6 +294,7 @@ function normalizeEntry(
     ?? '';
   const sourceId = normalizeAxisPresetBrowserSourceId(entry.source);
   const converted = sourceId === 'converted';
+  const empty = entry.empty === true;
   const rawNumber = entry.summary.number ?? null;
   // A converted entry's `number` is its chosen slot; a free-form/unset slot (< 0) shows the source label
   // ("Converted"), never a bogus numeric slot.
@@ -278,15 +311,16 @@ function normalizeEntry(
     blockCount: blocks.length,
     fav: entry.fav === true,
     folder: entry.folder ?? null,
-    tags: tagsOf?.(entry.id) ?? [],
+    tags: empty ? [] : (tagsOf?.(entry.id) ?? []),
     lastLoadedAt: lastLoadedAt?.(entry.id) ?? null,
     blocks,
     models: entry.summary.models ?? {},
     amps: entry.summary.amps ?? [],
-    syncState: syncStateOf?.(entry) ?? 'none',
-    cloudOnly: entry.id.startsWith('cloud:'),
+    syncState: empty ? 'none' : (syncStateOf?.(entry) ?? 'none'),
+    cloudOnly: empty ? false : entry.id.startsWith('cloud:'),
     converted,
-    provenance: entry.provenance ?? null
+    provenance: entry.provenance ?? null,
+    empty
   };
 }
 

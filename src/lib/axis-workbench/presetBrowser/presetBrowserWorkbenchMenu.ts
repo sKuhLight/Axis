@@ -39,6 +39,8 @@ export interface AxisPbMenuEntry {
   syncState: string;
   /** A saved cross-device conversion (source 'converted') — gets its own reduced menu. */
   converted?: boolean;
+  /** A cleared/empty device slot — gets only a "Load preset" action. */
+  empty?: boolean;
 }
 
 export interface AxisPbMenuCaps {
@@ -77,6 +79,11 @@ function cloudActionFor(entry: AxisPbMenuEntry): AxisPbMenuAction | null {
 
 // Build the ordered action list (pre-render form) for one row's context menu (§4.4 single-row menu).
 export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuCaps): AxisPbMenuAction[] {
+  // Cleared/empty slots are not real entries: every other action (audition/rename/tags/cloud/favorite/
+  // crossConvert) would no-op or ghost-tag a non-entry, so they collapse to a single Load action.
+  if (entry.empty) {
+    return [{ id: 'load', label: 'Load preset', hint: '↵' }];
+  }
   // Saved cross-device conversions are NOT device slots — they get their own reduced menu: re-open in the
   // converter, favorite, delete. (A true ".syx export" action is wired in the codec-authoring task — it
   // needs a codec endpoint, so it is deliberately omitted here rather than shipped as a no-op.)

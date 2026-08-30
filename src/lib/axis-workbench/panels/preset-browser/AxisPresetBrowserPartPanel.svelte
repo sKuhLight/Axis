@@ -13,6 +13,7 @@
   import { loadActionWarning } from '../../presetBrowser/presetBrowserWorkbenchLoadWarning';
   import {
     createAxisPresetBrowserDataView,
+    buildEmptyDeviceSlotEntries,
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserLibEntryLike
   } from '../../presetBrowser/presetBrowserWorkbenchData';
@@ -142,11 +143,18 @@
     );
   }
   const presenceViews = $derived(presenceViewsForAuth(cloudOn));
+  // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful once a
+  // device scan has run (slotIsEmpty reads cacheBuilt + entries); no scan → no empty rows.
+  const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
+    if (!library.cacheBuilt) return [];
+    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => library.slotIsEmpty(n));
+  });
   const data = $derived(createAxisPresetBrowserDataView({
     entries: baseEntries,
     // When a presence view is active, filter over the full base set (the presence predicate needs the
     // cloud-only rows too); otherwise reuse the library's pre-filtered list.
     filteredEntries: snapshot.presenceView === 'all' && !cloudOn ? library.filtered : baseEntries,
+    emptySlots: emptyDeviceSlots,
     sourceId: snapshot.sourceId,
     selectedEntryId: snapshot.entryId,
     tagsOf: library.tagsOf,
@@ -466,6 +474,8 @@
   const showsDetail = $derived(part === 'detail' || part === 'full');
   $effect(() => {
     if (!showsDetail || !snapshot.entryId || snapshot.entryId === lastDetailEntryId) return;
+    // Empty slots have no preset to hydrate — findEntry would resolve null and loadDetail would no-op/error.
+    if (data.selectedEntry?.empty) return;
     // The load/audition burst has priority on the serial device channel — hydrating detail
     // (grid/params/versions) at the same time queues behind or with it on the ForgeFX server.
     // This re-runs once the runtime clears the in-flight id (loadingEntryId/auditioningEntryId
@@ -508,6 +518,8 @@
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
     // A saved conversion isn't a device slot — its primary action re-opens it in the converter.
     if (entry.converted) { openConverter(entry.id); return; }
+    // An empty slot has no preset to read — load the slot itself to start a fresh preset.
+    if (entry.empty) { void editor.selectPreset(entry.number ?? 0, { recency: false }); return; }
     void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
   }
 
@@ -541,7 +553,7 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state('');
   function canRename(entry: AxisPresetBrowserEntrySummary): boolean {
-    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.cloudOnly && (entry.number ?? -1) >= 0;
+    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.cloudOnly && !entry.empty && (entry.number ?? -1) >= 0;
   }
   function beginRename(entry: AxisPresetBrowserEntrySummary) {
     if (!canRename(entry)) return;
@@ -578,7 +590,8 @@
         deviceSlot: entry.sourceId === 'device' && (entry.number ?? -1) >= 0,
         fav: entry.fav,
         syncState: entry.syncState,
-        converted: entry.converted
+        converted: entry.converted,
+        empty: entry.empty
       },
       { canRename: editor.canRenamePresets, cloudOn }
     );
@@ -597,7 +610,7 @@
     if (!entry) return;
     switch (id) {
       case 'load':
-        void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
+        loadEntry(entry);
         return;
       case 'audition':
         void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
@@ -896,6 +909,7 @@
           >▼</button>
         </div>
       </div>
+      <div class="query-actions">
       <!-- §2.2/§3.3 Save filter → opens the inline name input in the sources sidebar. -->
       <button
         type="button"
@@ -905,6 +919,19 @@
         onclick={() => axisPresetBrowserWorkbenchController.setSaving(!snapshot.saving)}
       >
         ☆ Save filter
+      </button>
+      <!-- Library (re)scan — the workbench mirror of the monolith's "Build cache" button. Re-indexing the
+           device is what drops presets the user cleared on the hardware (their slot now reads <EMPTY>). -->
+      <button
+        type="button"
+        class="rebuild-cache"
+        disabled={library.scanning}
+        title={editor.scanNamesOnly
+          ? 'Scan the stored-preset locations (names) into the local library'
+          : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}
+        onclick={() => library.buildCache()}
+      >
+        {library.scanning ? `Building ${library.scanDone}/${library.scanTotal}…` : '↻ Re-scan device'}
       </button>
       <!-- General cross-device converter entry point (not only the per-row menu): opens the ConvertDialog
            FRESH (no pre-seeded source) so the user picks a target device + Chooses a .syx directly. -->
@@ -916,6 +943,7 @@
       >
         ⇄ Convert Preset…
       </button>
+      </div>
     </div>
     <!-- V13e FILTERS builder-chips row (§2.5) — also a drop target for params/blocks dragged from detail -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -981,6 +1009,7 @@
           class:active={snapshot.entryId === entry.id}
           class:marked={snapshot.marked[entry.id]}
           class:fav={entry.fav}
+          class:empty={entry.empty}
           role="option"
           aria-selected={snapshot.entryId === entry.id}
           tabindex="0"
@@ -1040,7 +1069,7 @@
                 {/each}
               </span>
             {/if}
-            {#if anatomy.blockChips.length}
+            {#if anatomy.blockChips.length && !entry.empty}
               <!-- Signal-chain quick view: a flowing node → node → node strip, deliberately NOT pill-shaped
                    so it never reads as tags (the tag pills sit directly above it). -->
               <span class="chain-strip" title="Signal chain">
@@ -1145,12 +1174,12 @@
             data-action="load"
             title={loadWarning.tooltip}
             aria-label={loadWarning.warn ? `Load preset. ${loadWarning.tooltip}` : null}
-            onclick={() => axisPresetBrowserWorkbenchRuntime.loadEntry(data.selectedEntry!.id)}
+            onclick={() => loadEntry(data.selectedEntry!)}
           >
             {#if loadWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
             {runtimeSnapshot.loadingEntryId === data.selectedEntry.id ? 'Loading...' : 'Load preset'}
           </button>
-          {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null}
+          {#if data.selectedEntry.sourceId === 'device' && data.selectedEntry.number != null && !data.selectedEntry.empty}
             <button
               type="button"
               class="load-action"
@@ -1164,15 +1193,21 @@
               {runtimeSnapshot.auditioningEntryId === data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
             </button>
           {/if}
-          <button type="button" class="load-action secondary" data-action="refresh" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
-            {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Refreshing...' : 'Refresh detail'}
-          </button>
-          <button type="button" class="load-action secondary" data-action="convert" title="Port this preset to another Fractal device — best-effort, with a full diff report" onclick={() => crossConvert(data.selectedEntry!.id)}>
-            ⇄ Convert…
-          </button>
+          {#if !data.selectedEntry.empty}
+            <button type="button" class="load-action secondary" data-action="refresh" onclick={() => axisPresetBrowserWorkbenchRuntime.loadDetail(data.selectedEntry!.id)}>
+              {runtimeSnapshot.hydratingEntryId === data.selectedEntry.id ? 'Refreshing...' : 'Refresh detail'}
+            </button>
+            <button type="button" class="load-action secondary" data-action="convert" title="Port this preset to another Fractal device — best-effort, with a full diff report" onclick={() => crossConvert(data.selectedEntry!.id)}>
+              ⇄ Convert…
+            </button>
+          {/if}
         {/if}
       </div>
 
+      <!-- Cleared/empty slot: no blocks or params to list — surface the load affordance instead. -->
+      {#if data.selectedEntry.empty}
+        <div class="d-blocks-empty">Empty slot — load to start a fresh preset.</div>
+      {:else}
       <!-- Filter strip for the BLOCK PARAMETERS list below (§4). The All node clears the filter —
            previously, once a block was selected, there was no way to get back to the unfiltered
            list from this control. -->
@@ -1249,6 +1284,7 @@
           <div class="d-blocks-empty">No filterable block parameters in this preset.</div>
         {/if}
       </div>
+      {/if}
 
       {#if runtimeSnapshot.error && isOwner}
         <!-- shared runtime error renders only on the overlay-owner part (§1) so split layouts
@@ -1649,6 +1685,14 @@
     color: var(--amber, #f5a623);
     font: 700 9.5px/1 var(--font-mono);
     white-space: nowrap;
+  }
+  /* Cleared/empty device slot row — muted. */
+  .preset-row.empty {
+    opacity: 0.55;
+  }
+  .preset-row.empty .preset-main strong {
+    color: var(--textdim);
+    font-weight: 600;
   }
   /* §4.3 signal-chain strip. Chip/pill shapes are reserved for tags, so the chain renders as bare
      nodes (family-coloured dot + category, dim model name) joined by chevrons — the wrap-friendly
@@ -2447,6 +2491,13 @@
     color: var(--textdim);
     font: 500 11px/1.3 var(--font-mono);
   }
+  .query-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .save-filter {
     height: 30px;
     padding: 0 11px;
@@ -2458,6 +2509,17 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accentink, var(--bg));
+  }
+  .rebuild-cache {
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 999px;
+    text-transform: none;
+    font: 700 11px/1 var(--font-mono);
+  }
+  .rebuild-cache:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .convert-preset {
     height: 30px;

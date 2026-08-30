@@ -51,6 +51,7 @@
   });
   function nameOf(n: number): string {
     if (editor.preset?.number === n && editor.preset.name) return editor.preset.name;
+    if (library.slotIsEmpty(n)) return ''; // scanned + cleared on the device — don't fall back to stale recents
     return library.nameOfSlot(n) || recents.find((r) => r.n === n)?.name || '';
   }
   // full slot list, filtered by number or known name

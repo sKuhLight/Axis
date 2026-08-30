@@ -63,6 +63,12 @@ export interface LibEntry {
  *  explicitly or it pollutes the library/search as a ghost entry. */
 const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
 
+/** True when a decoded preset is effectively empty. "Clear preset" on the FM3 empties the grid and
+ *  scenes but LEAVES the name header intact (the old name still decodes), so the name is NOT a
+ *  reliable cleared signal — the empty block list is. An empty grid decodes to `blocks: []` because
+ *  `#summarizeDump` skips shunts/unplaced cells. */
+const isEmptySummary = (s: PresetSummary): boolean => !(s.blocks?.length);
+
 const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', tagColors: 'axs.lib.tagColors', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
 const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
 const IDB_FILEBYTES = 'lib.fileBytes'; // raw .syx bytes for imported file/folder presets (id → number[]) — for live load
@@ -158,7 +164,7 @@ class LibraryStore {
     // restore the cached device scan so the library isn't empty on launch
     const favs = new Set(load<string[]>(LS.favs, []));
     const cached = (load<unknown[]>(LS.cache, []).filter((s) => summarySchema.safeParse(s).success) as PresetSummary[])
-      .filter((s) => !isEmptyName(s.name)); // self-heal: drop ghost <EMPTY> entries from older caches
+      .filter((s) => !isEmptyName(s.name) && !isEmptySummary(s)); // self-heal: drop ghost/cleared entries from older caches
     const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
     const files = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
@@ -312,8 +318,10 @@ class LibraryStore {
           ? (await forgefx.presetLocations()).locations
           : (await forgefx.am4Presets()).presets;
         this.scanTotal = locations.length;
+        const seen = new Set<number>();
         for (const p of locations) {
           if (p.isEmpty || !p.name.trim()) continue;
+          seen.add(p.location);
           const id = `dev:${p.location}`;
           byId.set(id, {
             id,
@@ -322,6 +330,9 @@ class LibraryStore {
             fav: byId.get(id)?.fav ?? false
           });
         }
+        // drop device entries for slots that came back empty/absent this scan, so presets cleared on
+        // the hardware don't linger with a stale cached name.
+        for (const [id, e] of byId) if (e.source === 'device' && !seen.has(e.summary.number)) byId.delete(id);
         this.entries = [...byId.values()].sort(this.#order);
         this.#cacheDevice();
         this.cacheBuilt = true;
@@ -334,13 +345,18 @@ class LibraryStore {
       for (let n = from; n <= to; n++) {
         try {
           const s = await forgefx.presetSummary(n, true); // full=1 → summary + params in one dump
-          if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
+          if (s.crcValid && s.name.trim() && !isEmptyName(s.name) && !isEmptySummary(s)) {
             const id = `dev:${n}`;
             if (s.params) { params[id] = s.params; delete s.params; } // params → idb; keep summary light
             byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
+          } else {
+            // slot cleared/emptied — drop the stale cached entry + params (a cleared FM3 preset still
+            // carries its old name, but its grid decodes to zero blocks → isEmptySummary)
+            byId.delete(`dev:${n}`);
+            delete params[`dev:${n}`];
           }
         } catch {
-          /* unreadable / empty slot — skip */
+          /* unreadable — keep the cached copy (could be a transient read error, not a clear) */
         }
         this.scanDone = n - from + 1;
         if (n % 8 === 0 || n === to) this.entries = [...byId.values()].sort(this.#order); // progressive UI
@@ -609,7 +625,7 @@ class LibraryStore {
         const summaries = (await gunzipB64<unknown[]>(cfg.index.gz))
           .filter((s) => summarySchema.safeParse(s).success) as PresetSummary[];
         const device = summaries
-          .filter((s) => !isEmptyName(s.name))
+          .filter((s) => !isEmptyName(s.name) && !isEmptySummary(s))
           .map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favSet.has(`dev:${s.number}`) }));
         this.entries = [...device, ...this.entries.filter((e) => e.source !== 'device')].sort(this.#order);
         this.cacheBuilt = true;
@@ -637,6 +653,31 @@ class LibraryStore {
   }
   /** Preset name for a device slot from the cache (for the quick picker). '' if not cached. */
   nameOfSlot = (n: number): string => this.entries.find((e) => e.source === 'device' && e.summary.number === n)?.summary.name ?? '';
+
+  /** A device slot is definitively empty once the library has been scanned and the slot has no entry.
+   *  False before any scan (no device entries at all = ambiguity, not empty). */
+  slotIsEmpty = (n: number): boolean =>
+    this.cacheBuilt && !this.entries.some((e) => e.source === 'device' && e.summary.number === n);
+
+  /** Drop a device slot's cached entry + params. No-op if the slot isn't cached. */
+  dropSlot(n: number): void {
+    const id = `dev:${n}`;
+    if (!this.entries.some((e) => e.id === id && e.source === 'device')) return;
+    this.entries = this.entries.filter((e) => e.id !== id);
+    delete this.#paramsCache[id];
+    this.#cacheDevice();
+    if (idb.available()) idb.set(IDB_PARAMS, { ...this.#paramsCache });
+  }
+
+  /** Reconcile the cache against a FRESH device name read (the cheap live current-preset query): a slot
+   *  the device now reports as empty/`<EMPTY>` is dropped, so a preset cleared on the hardware stops
+   *  showing its stale name without a full rescan. Non-empty names are left alone (renames flow through
+   *  applySlotName/refreshSlot). */
+  clearSlotIfEmpty(n: number, name: string): void {
+    const clean = name.trim();
+    if (clean && !isEmptyName(clean)) return;
+    this.dropSlot(n);
+  }
 
   /** Optimistically set a device slot's cached name after a CONFIRMED rename — no wire read.
    *  Name-scan devices (AM4) rename the stored slot directly, but a follow-up locations re-scan
@@ -685,11 +726,11 @@ class LibraryStore {
       // unchanged + already fully cached → nothing to do (skip the IndexedDB write + reactivity churn)
       if (cached && cached.summary.crc != null && cached.summary.crc === s.crc && this.#paramsCache[id]) return;
       const byId = new Map(this.entries.map((e) => [e.id, e] as const));
-      if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
+      if (s.crcValid && s.name.trim() && !isEmptyName(s.name) && !isEmptySummary(s)) {
         if (s.params) { this.#paramsCache = { ...this.#paramsCache, [id]: s.params }; delete s.params; this.#persistParams(); }
         byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
       } else {
-        byId.delete(id); // slot was cleared/emptied (or holds the FM3 <EMPTY> sentinel)
+        byId.delete(id); // slot was cleared/emptied (a cleared FM3 preset keeps its old name but has no blocks)
       }
       this.entries = [...byId.values()].sort(this.#order);
       this.#cacheDevice();

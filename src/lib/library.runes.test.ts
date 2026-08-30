@@ -17,11 +17,17 @@ import { fallbackSwatch, tagSwatchCss } from './tagColors';
 // localStorage on the way. Everything below exists to let that constructor run in node.
 const presetParams = vi.fn<(n: number) => Promise<{ blocks: DecodedBlock[] }>>();
 const decodePresetFile = vi.fn<(buf: ArrayBuffer) => Promise<PresetSummary>>();
+const device = vi.fn<() => Promise<unknown>>();
+const presetSummary = vi.fn<(n: number, full: number) => Promise<PresetSummary>>();
+const presetLocations = vi.fn<() => Promise<{ count: number; locations: { location: number; code: string | null; name: string; isEmpty: boolean }[] }>>();
 
 vi.mock('./forgefx', () => ({
   forgefx: {
     presetParams: (n: number) => presetParams(n),
     decodePresetFile: (buf: ArrayBuffer) => decodePresetFile(buf),
+    device: () => device(),
+    presetSummary: (n: number, full: number) => presetSummary(n, full),
+    presetLocations: () => presetLocations(),
     putDoc: vi.fn(async () => ({})),
     listDocs: vi.fn(async () => ({ docs: [] })),
     deleteDoc: vi.fn(async () => ({}))
@@ -90,6 +96,9 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
 beforeEach(() => {
   presetParams.mockReset();
   decodePresetFile.mockReset();
+  device.mockReset();
+  presetSummary.mockReset();
+  presetLocations.mockReset();
   library.entries = [];
   library.paramQueries = [];
 });
@@ -189,6 +198,113 @@ describe('fileBytes lifecycle survives the raw switch', () => {
     const res = await library.importFiles([syx('notes.txt', [9])]);
     expect(res).toEqual({ ok: 0, failed: 0 });
     expect(library.fileBytes('file:notes.txt')).toBeNull();
+  });
+});
+
+// `buildCache` rebuilds the device index from the hardware. A slot the user cleared on the FM3 (or
+// AM4) comes back as an empty/<EMPTY> preset, so a rescan must DROP the stale cached name — not just
+// skip re-adding it (which left the ghost entry behind and kept cleared slots showing names).
+describe('buildCache drops presets cleared on the device', () => {
+  const v2Deep = { apiVersion: 2, model: 'FM3', capabilities: { presets: { canScanNames: false, canDeepScan: true, count: 512 } } };
+  const v2Name = { apiVersion: 2, model: 'AM4', capabilities: { presets: { canScanNames: true, canDeepScan: false, count: 512 } } };
+  const emptySummary = (n: number): PresetSummary => ({ number: n, name: '<EMPTY>', model: 'FM3', crcValid: true, scenes: [], blocks: [], models: {}, amps: [] });
+
+  it('full scan removes a cached entry whose slot now reads empty', async () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    device.mockResolvedValue(v2Deep);
+    presetSummary.mockResolvedValue(emptySummary(n));
+
+    await library.buildCache(n, n);
+
+    expect(library.entries).toEqual([]);
+  });
+
+  // The real FM3 "clear preset" leaves the NAME header intact (still decodes the old name) while the
+  // grid empties to zero blocks — so the cleared signal is `blocks: []`, not an empty name.
+  it('full scan drops a cleared slot that keeps its old name but has no blocks', async () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    device.mockResolvedValue(v2Deep);
+    presetSummary.mockResolvedValue({
+      number: n,
+      name: '====== Plexis ======',
+      model: 'FM3',
+      crcValid: true,
+      crc: 21527,
+      scenes: ['', '', '', '', '', '', '', ''],
+      blocks: [],
+      models: {},
+      amps: []
+    });
+
+    await library.buildCache(n, n);
+
+    expect(library.entries).toEqual([]);
+  });
+
+  it('full scan keeps the cached entry when the slot read throws (transient, not a clear)', async () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    device.mockResolvedValue(v2Deep);
+    presetSummary.mockRejectedValue(new Error('busy'));
+
+    await library.buildCache(n, n);
+
+    expect(library.entries.map((e) => e.summary.number)).toContain(n);
+  });
+
+  it('name scan removes a cached entry whose stored location comes back empty', async () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    device.mockResolvedValue(v2Name);
+    presetLocations.mockResolvedValue({ count: 1, locations: [{ location: n, code: null, name: '', isEmpty: true }] });
+
+    await library.buildCache(n, n);
+
+    expect(library.entries).toEqual([]);
+  });
+});
+
+// The live current-preset poll hands the store a fresh slot name. `clearSlotIfEmpty` turns a cleared
+// slot (device reads `<EMPTY>`/blank) into an immediate cache drop — the path that fixes "I cleared a
+// preset on the hardware but Axis still shows its old name" without waiting for a full rescan.
+describe('clearSlotIfEmpty drops a slot the device reports empty', () => {
+  it('drops a cached entry whose fresh name is the <EMPTY> sentinel', () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    library.cacheBuilt = true;
+
+    library.clearSlotIfEmpty(n, '<EMPTY>');
+
+    expect(library.entries).toEqual([]);
+    expect(library.slotIsEmpty(n)).toBe(true);
+  });
+
+  it('drops a cached entry whose fresh name is blank', () => {
+    library.entries = [deviceEntry()];
+    const n = library.entries[0].summary.number;
+    library.cacheBuilt = true;
+
+    library.clearSlotIfEmpty(n, '   ');
+
+    expect(library.entries).toEqual([]);
+  });
+
+  it('leaves a non-empty name untouched', () => {
+    const entry = deviceEntry();
+    library.entries = [entry];
+    library.cacheBuilt = true;
+
+    library.clearSlotIfEmpty(entry.summary.number, 'RealName');
+
+    expect(library.entries.map((e) => e.summary.name)).toEqual([entry.summary.name]);
+  });
+
+  it('slotIsEmpty is false before any scan, even for an absent slot', () => {
+    library.entries = [];
+    library.cacheBuilt = false;
+    expect(library.slotIsEmpty(7)).toBe(false);
   });
 });
 
