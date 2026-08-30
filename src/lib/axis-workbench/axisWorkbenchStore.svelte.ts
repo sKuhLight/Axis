@@ -14,7 +14,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, pruneAxisAddBlockWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisAddBlockWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
@@ -61,10 +61,12 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // doc-metadata marker so freshly seeded / default docs are untouched.
   // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
-  return ensureAxisMobileBottomNav(
-    pruneAxisAddBlockWidgets(
-      pruneAxisRetiredRailWidgets(
-        ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+  return ensureAxisMeterWidgetLibrary(
+    ensureAxisMobileBottomNav(
+      pruneAxisAddBlockWidgets(
+        pruneAxisRetiredRailWidgets(
+          ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+        )
       )
     )
   );

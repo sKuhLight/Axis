@@ -196,6 +196,9 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.library.widget.tools': widgetTemplate('axis.library.widget.tools', 'Tuner + Tempo', [
       layout.widgets['axis.widget.tuner'],
       layout.widgets['axis.widget.tempo']
+    ]),
+    'axis.library.widget.meter': widgetTemplate('axis.library.widget.meter', 'Meter', [
+      layout.widgets['axis.widget.meterToggle']
     ])
   };
 
@@ -291,6 +294,24 @@ export function ensureAxisGridControlWidgets(doc: WorkbenchDocument): WorkbenchD
     const gridbarCount = Object.values(widgets).filter((instance) => instance?.zone === 'gridbar').length;
     widgets['axis.widget.gridMode'] = widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', gridbarCount, { state: { mode: 'auto' } });
     widgets['axis.widget.blockSize'] = widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', gridbarCount + 1, { state: { size: 'M' } });
+  }
+  return doc;
+}
+
+/**
+ * Ensure the Meter toggle is offered in the widget library (Customize → Widgets → "Saved Widgets").
+ * Marker-free and idempotent, like `ensureAxisConvertPage`: a document that already carries the
+ * `axis.library.widget.meter` template is left untouched, so a persisted doc minted before the
+ * library entry shipped self-heals on the next load. The widget instance is constructed fresh here
+ * (not sourced from `layout.widgets['axis.widget.meterToggle']`) because a preset-applied or
+ * hand-built layout may not carry that instance.
+ */
+export function ensureAxisMeterWidgetLibrary(doc: WorkbenchDocument): WorkbenchDocument {
+  doc.widgetLibrary = doc.widgetLibrary ?? {};
+  if (!doc.widgetLibrary['axis.library.widget.meter']) {
+    doc.widgetLibrary['axis.library.widget.meter'] = widgetTemplate('axis.library.widget.meter', 'Meter', [
+      widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 0, { state: widgetState(40) })
+    ]);
   }
   return doc;
 }
