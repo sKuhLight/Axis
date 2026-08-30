@@ -9,6 +9,7 @@
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
   import { catFor } from './catalog';
+  import { setGridHover, clearGridHover } from './gridHover.svelte';
   import type { Cell } from './grid';
 
   const COLLAPSE_KEY = 'axs.gridmap.collapsed';
@@ -125,6 +126,7 @@
     }
     const cl = cellAt.get(`${r},${c}`);
     if (cl?.kind === 'block') editor.openCell(cl); // fast swap — stays in the editor
+    else if (cl?.kind === 'shunt') editor.openCell(cl); // select the shunt (no editor) — Backspace removes it
     else if (!cl) {
       editor.selectCellOnDevice(r, c);
       editor.openPaletteAt(r, c);
@@ -204,6 +206,8 @@
                   title={cl.display}
                   onclick={() => onCell(r, c)}
                   onkeydown={(e) => e.key === 'Enter' && onCell(r, c)}
+                  onmouseenter={() => setGridHover(r, c)}
+                  onmouseleave={() => clearGridHover(r, c)}
                 >
                   <span class="glyph">{@html cat.glyph}</span>
                   {#if showPort(cl)}
@@ -219,6 +223,7 @@
               {:else if cl?.kind === 'shunt'}
                 <div
                   class="mc shunt"
+                  class:open={editor.selKey === `${r},${c}`}
                   class:tgt={isTarget(c)}
                   data-idx="{r},{c}"
                   role="button"
@@ -226,6 +231,8 @@
                   title="Shunt"
                   onclick={() => onCell(r, c)}
                   onkeydown={(e) => e.key === 'Enter' && onCell(r, c)}
+                  onmouseenter={() => setGridHover(r, c)}
+                  onmouseleave={() => clearGridHover(r, c)}
                 >
                   <span class="dash"></span>
                   {#if showPort(cl)}
@@ -394,6 +401,11 @@
   .mc.shunt {
     background: var(--surface);
     border: 1px solid var(--border2);
+  }
+  .mc.shunt.open {
+    box-shadow: 0 0 0 2px var(--amber), 0 0 10px color-mix(in srgb, var(--amber) 45%, transparent);
+    transform: scale(1.04);
+    z-index: 2;
   }
   .dash {
     width: 52%;

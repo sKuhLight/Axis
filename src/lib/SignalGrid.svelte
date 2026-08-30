@@ -9,6 +9,7 @@
   import { planConnect } from './gridRouting';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
+  import { setGridHover, clearGridHover } from './gridHover.svelte';
   import { resolveAxisGridMetrics, resolveAxisGridPresentation, type AxisGridView } from './axis-workbench/gridView';
 
   // optional grid-view override (workbench gridbar). 'full' fixes tiles at the block-size px and
@@ -590,8 +591,8 @@
 
   function tap(cell: Cell) {
     if (cell.kind === 'shunt') {
-      editor.removeAt(cell.row, cell.col);
-      editor.showToast('Shunt removed', '#9a9aa3');
+      // select the shunt (no editor) — Backspace removes it
+      void editor.openCell(cell);
       return;
     }
     const key = `${cell.row},${cell.col}`;
@@ -793,8 +794,8 @@
                 style="background:{tileBg(cat.accent)}; border-color:{shade(cat.accent, light ? 0.3 : -0.05)}; --tile-ink:{tileInk(cat.accent)}; --tile-ink-dim:{tileInkDim(cat.accent)}; --tile-shadow:{light ? '0 1px 1px rgba(255,255,255,0.4)' : '0 1px 2px rgba(0,0,0,0.4)'};"
                 onpointerdown={(e) => onBlockDown(cell, e)}
                 onwheel={(e) => onBlockWheel(cell, e)}
-                onmouseenter={() => showBlockHelp(cell)}
-                onmouseleave={clearBlockHelp}
+                onmouseenter={() => { showBlockHelp(cell); setGridHover(r, c); }}
+                onmouseleave={() => { clearBlockHelp(); clearGridHover(r, c); }}
               >
                 {#if meter && !mapMode}<span class="lvlfill" style="height:{Math.round(meter.norm * 100)}%; background:linear-gradient(180deg,{shade(cat.accent, 0.35)},{cat.accent});"></span>{/if}
                 {#if cell.bypassed}<span class="hatch"></span>{/if}
@@ -850,6 +851,8 @@
                 role="button"
                 tabindex="0"
                 onpointerdown={(e) => onBlockDown(cell, e)}
+                onmouseenter={() => setGridHover(r, c)}
+                onmouseleave={() => clearGridHover(r, c)}
               >
                 <span class="sh-bar"></span>
                 {#if c < cols - 1}

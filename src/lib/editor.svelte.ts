@@ -20,6 +20,7 @@ import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';
+import { gridHover } from './gridHover.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from './types';
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from './deviceLayoutBoard';
@@ -1475,7 +1476,12 @@ class EditorStore {
   openCell = async (c: Cell) => {
     this.virtual = null; // leaving any rail/virtual screen — back to a real grid block
     this.selectCellOnDevice(c.row, c.col);
-    if (c.kind === 'shunt') return; // shunts have no editor
+    if (c.kind === 'shunt') {
+      // shunts have no editor, but they are selectable so Backspace can remove them
+      this.selKey = `${c.row},${c.col}`;
+      this.editorOpen = false;
+      return;
+    }
     this.selKey = `${c.row},${c.col}`;
     this.editorOpen = true;
     this.editingTabs = false;
@@ -1781,6 +1787,19 @@ class EditorStore {
     this.closeEditor();
     await this.removeAt(c.row, c.col);
     this.showToast('Block removed', '#d6543f');
+  };
+  /** Backspace: remove the hovered cell when the pointer is over one, else the selected cell. */
+  removeHoveredOrSelected = async () => {
+    if (this.virtual) return; // a virtual screen has no removable grid cell
+    const h = gridHover.cell;
+    const target =
+      (h && [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === h.row && c.col === h.col)) ??
+      this.selected;
+    if (!target || target.row < 0 || target.col < 0) return;
+    const wasSelected = this.selected && this.selected.row === target.row && this.selected.col === target.col;
+    if (wasSelected) this.closeEditor();
+    await this.removeAt(target.row, target.col);
+    this.showToast(target.kind === 'shunt' ? 'Shunt removed' : 'Block removed', target.kind === 'shunt' ? '#9a9aa3' : '#d6543f');
   };
 
   // Move a block to any empty cell. Same-column → re-cable (preserve wires). Cross-column →

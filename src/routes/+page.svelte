@@ -86,12 +86,7 @@
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
       const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        editor.paletteMode = 'place';
-        editor.placeTarget = null;
-        editor.paletteOpen = true;
-      } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void (e.shiftKey ? history.redo() : history.undo());
       } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
@@ -108,6 +103,10 @@
         // toggleBypass is a no-op unless a real block is selected.
         e.preventDefault();
         void editor.toggleBypass();
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Backspace') {
+        // removeHoveredOrSelected is a no-op unless a cell is hovered or selected.
+        e.preventDefault();
+        void editor.removeHoveredOrSelected();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
         // Bare `q` toggles the Quick Build block sidecar (drag blocks onto the grid).
         if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
