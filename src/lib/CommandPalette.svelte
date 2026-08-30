@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { editor, baseName } from './editor.svelte';
   import { appSettings } from './appSettings.svelte';
   import { defaultBlockLibraryPath } from './blockLibraryPath';
@@ -28,6 +29,8 @@
   let previewError = $state('');
   let applying = $state(false);
   let wasOpen = false;
+  // thumbtack: keep the palette open after a retype pick so you can audition several models
+  let pinned = $state(false);
   // effect ids already on the grid — placed instances are greyed out + non-pickable (no point re-placing)
   const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
   const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
@@ -136,6 +139,7 @@
       paletteTab = 'types';
       preview = null;
       previewError = '';
+      pinned = false;
     }
     query = '';
     hi = 0;
@@ -144,12 +148,15 @@
     loadBlockStore();
     setTimeout(() => inputEl?.focus(), 0);
     if (retype) {
-      const c = editor.selected;
-      if (!c?.pack) return;
-      loadTypeStore(c.pack.toLowerCase());
+      // untrack the selected cell — a retype reloads the grid, so `editor.selected` changes
+      // identity on every pick and would re-run this effect (resetting the query + flashing
+      // "Loading…"). The block family (pack) never changes on retype, so fetch by untracked pack.
+      const pack = untrack(() => editor.selected?.pack);
+      if (!pack) return;
+      loadTypeStore(pack.toLowerCase());
       loading = true;
       forgefx
-        .blockTypes(c.pack.toLowerCase())
+        .blockTypes(pack.toLowerCase())
         .then((t) => (types = t))
         .catch(() => (types = []))
         .finally(() => (loading = false));
@@ -251,7 +258,7 @@
       }
     }
     editor.placeTarget = null;
-    editor.paletteOpen = false;
+    if (!(retype && pinned)) editor.paletteOpen = false;
   }
 
   async function previewLibrarySource(candidate: BlockLibraryCandidate) {
@@ -324,6 +331,11 @@
           placeholder={retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
         />
         <span class="count mono">{results.length} result{results.length === 1 ? '' : 's'}</span>
+        {#if retype}
+          <button class="pin" class:on={pinned} aria-pressed={pinned} title={pinned ? 'Unpin — close after changing' : 'Pin — keep open after changing'} onclick={() => (pinned = !pinned)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5h5L13.4 9l2.3 2.3v2H8.3v-2L10.6 9l-1.1-5.5Z" /><path d="M12 13.5V20" /></svg>
+          </button>
+        {/if}
       </div>
 
       <div class="chips">
@@ -494,6 +506,28 @@
     font-size: 12px;
     color: var(--textmuted);
     white-space: nowrap;
+  }
+  .pin {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid var(--border-2);
+    background: var(--surface2);
+    color: var(--textdim);
+    cursor: pointer;
+  }
+  .pin:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .pin.on {
+    background: var(--accent-tint);
+    border-color: var(--accent-border);
+    color: var(--accent);
   }
   .chips {
     display: flex;
