@@ -108,12 +108,18 @@
         // toggleBypass is a no-op unless a real block is selected.
         e.preventDefault();
         void editor.toggleBypass();
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
+        // Bare `q` toggles the Quick Build block sidecar (drag blocks onto the grid).
+        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        editor.quickBuildOpen = !editor.quickBuildOpen;
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
         else if (history.panelOpen) history.panelOpen = false;
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
         else if (editor.paletteOpen) editor.paletteOpen = false;
+        else if (editor.quickBuildOpen) editor.quickBuildOpen = false;
         else if (convertScratch.open) convertScratch.close();
         else if (convert.open) convert.close();
         else if (editor.presetOpen) editor.presetOpen = false;

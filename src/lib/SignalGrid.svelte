@@ -203,6 +203,10 @@
     return m;
   });
 
+  // external drop preview: the converter passes it as a prop; the live editor exposes it via the
+  // surface (Quick Build sidecar). Prop wins when both are present.
+  const extDrop = $derived(externalDropPreview ?? editor.externalDrop ?? null);
+
   // ── measurement → cables ──
   let wrapEl = $state<HTMLDivElement | null>(null);
   let vpEl = $state<HTMLDivElement | null>(null); // the clipping viewport (grid area between the page arrows)
@@ -776,7 +780,7 @@
               {@const label = inst && (inst !== '1' || sameFam > 1) ? `${cat.short} ${inst}` : cat.short}
               {@const meter = editor.meterFor(cell)}
               {@const deco = cellDecorations?.get(`${r},${c}`) ?? null}
-              {@const edp = externalDropPreview && externalDropPreview.row === r && externalDropPreview.col === c ? externalDropPreview : null}
+              {@const edp = extDrop && extDrop.row === r && extDrop.col === c ? extDrop : null}
               <div
                 class="cell block"
                 class:byp={cell.bypassed}
@@ -853,7 +857,7 @@
                 {/if}
               </div>
             {:else}
-              {@const edp = externalDropPreview && externalDropPreview.row === r && externalDropPreview.col === c ? externalDropPreview : null}
+              {@const edp = extDrop && extDrop.row === r && extDrop.col === c ? extDrop : null}
               <button
                 class="cell empty"
                 class:drop-valid={edp?.valid}
@@ -1359,8 +1363,8 @@
     display: none;
   }
 
-  /* ── converter conflict overlay (only present when SignalGrid is given cellDecorations /
-     externalDropPreview — the live editor never renders these) ── */
+  /* ── converter conflict / external-drop overlay (present when SignalGrid is given cellDecorations
+     or an externalDropPreview prop, OR the live editor exposes an external drop via the surface) ── */
   .deco-ring {
     position: absolute;
     inset: 0;

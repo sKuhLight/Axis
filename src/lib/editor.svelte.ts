@@ -369,6 +369,9 @@ class EditorStore {
   paletteOpen = $state(false);
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
+  quickBuildOpen = $state(false);
+  /** The cell a Quick Build (or other external) drag is currently over + whether the drop is valid. */
+  externalDrop = $state<{ row: number; col: number; valid: boolean } | null>(null);
   presetOpen = $state(false);
   /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to this
    *  callback (e.g. the cross-device converter save dialog) INSTEAD of loading the preset onto the
@@ -1699,6 +1702,17 @@ class EditorStore {
     for (const w of writes) await forgefx.setParam(c.effectId, w.paramId, w.value, false).catch(() => {});
     history.checkpoint(`${c.display} cab changed`, false); // logged, not undoable (old slot state isn't captured) — v1 limitation
     await this.#loadParams();
+  };
+
+  // ── external drop preview (Quick Build sidecar → grid) ──
+  // Dumb setter: the writer (QuickBuild) computes validity from the layout. Coalesced so a steady
+  // hover over one cell doesn't churn $state on every pointermove.
+  setExternalDrop = (row: number, col: number, valid: boolean) => {
+    const cur = this.externalDrop;
+    if (!cur || cur.row !== row || cur.col !== col || cur.valid !== valid) this.externalDrop = { row, col, valid };
+  };
+  clearExternalDrop = () => {
+    if (this.externalDrop) this.externalDrop = null;
   };
 
   // ── palette openers ──

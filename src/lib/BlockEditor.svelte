@@ -4,6 +4,7 @@
   import { catFor, shade } from './catalog';
   import ControlSurface from './ControlSurface.svelte';
   import GridMap from './GridMap.svelte';
+  import QuickBuild from './QuickBuild.svelte';
   import { geqBandsFromLayout } from './eq';
   import { deriveEqGraphs } from './eqGraphs';
   import { deriveModulationGraphs } from './modulationGraphs';
@@ -206,6 +207,10 @@
         </footer>
       {/if}
     </div>
+
+    <!-- Quick Build: q toggles this bottom sheet of placeable blocks, anchored to the Block Editor pane
+         so it works docked or embedded. -->
+    <QuickBuild />
   </div>
 {/if}
 

@@ -200,6 +200,7 @@
                   class:byp={cl.bypassed}
                   class:tgt={isTarget(c)}
                   style="--c:{cat.accent}; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px;"
+                  data-idx="{r},{c}"
                   role="button"
                   tabindex="0"
                   title={cl.display}
@@ -221,6 +222,7 @@
                 <div
                   class="mc shunt"
                   class:tgt={isTarget(c)}
+                  data-idx="{r},{c}"
                   role="button"
                   tabindex="0"
                   title="Shunt"
@@ -239,7 +241,7 @@
                   {/if}
                 </div>
               {:else}
-                <button class="mc empty" class:tgt={isTarget(c)} title="Add a block here" onclick={() => onCell(r, c)}>
+                <button class="mc empty" class:tgt={isTarget(c)} data-idx="{r},{c}" title="Add a block here" onclick={() => onCell(r, c)}>
                   <span class="plus">+</span>
                 </button>
               {/if}

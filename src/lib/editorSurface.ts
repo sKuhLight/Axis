@@ -36,6 +36,8 @@ export interface EditorSurface {
   paletteOpen: boolean;
   placeTarget: { row: number; col: number } | null;
   cabPickerOpen: boolean;
+  /** The cell an external drag (Quick Build sidecar / convert source grid) is over + drop validity. */
+  externalDrop: { row: number; col: number; valid: boolean } | null;
   params: NamedParam[];
   enums: EnumParam[];
 
