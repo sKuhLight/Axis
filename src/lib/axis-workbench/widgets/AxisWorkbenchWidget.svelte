@@ -328,9 +328,14 @@
     }
   }
 
+  // Hide the hover tooltip the instant the control is acted on (drag or wheel);
+  // it stays out of the way until the next pointerleave clears the flag.
+  let paramInteracting = $state(false);
+
   function paramPointerDown(event: PointerEvent) {
     if (editMode || !paramNamed || paramEffectId == null || event.button !== 0) return;
     event.preventDefault();
+    paramInteracting = true;
     const startY = event.clientY;
     const startNorm = paramNamed.norm ?? 0;
     const eid = paramEffectId;
@@ -341,6 +346,7 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      paramInteracting = false;
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -349,8 +355,30 @@
   function paramWheel(event: WheelEvent) {
     if (editMode || !paramNamed) return;
     event.preventDefault();
+    paramInteracting = true;
     nudgeParam(event.deltaY < 0 ? -0.015 : 0.015);
   }
+
+  // Fixed-position tooltip: a purely-CSS `:hover` `.axtip` sat inside the panel's
+  // `overflow: hidden` body, so the leftmost control's tooltip was clipped/hidden
+  // behind the dock on its left. Position it against the viewport (like
+  // ControlSurface's value bubble) and clamp it on-screen.
+  let paramEl = $state<HTMLElement | null>(null);
+  let paramTipEl = $state<HTMLElement | null>(null);
+  let paramTipHover = $state(false);
+  let paramTipFocus = $state(false);
+  const paramTipVisible = $derived(!paramInteracting && (paramTipHover || paramTipFocus));
+  let paramTipPos = $state<{ left: number; top: number } | null>(null);
+
+  $effect(() => {
+    if (!paramTipVisible || !paramEl || !paramTipEl) return;
+    const rect = paramEl.getBoundingClientRect();
+    const width = paramTipEl.offsetWidth;
+    const height = paramTipEl.offsetHeight;
+    const left = Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 8));
+    const top = Math.min(rect.bottom + 6, window.innerHeight - height - 8);
+    paramTipPos = { left, top };
+  });
 
   function openParamBlock() {
     if (editMode || !paramCell) return;
@@ -528,15 +556,29 @@
     data-param-state={paramState}
     type="button"
     disabled={!editMode && paramMissing}
-    title={paramTip}
     aria-label={paramTip}
     style:--param-color={paramColor}
+    bind:this={paramEl}
     onpointerdown={paramPointerDown}
     onwheel={paramWheel}
     onclick={paramClick}
+    onpointerenter={() => (paramTipHover = true)}
+    onpointerleave={() => {
+      paramTipHover = false;
+      paramInteracting = false;
+    }}
+    onpointercancel={() => (paramInteracting = false)}
+    onfocus={() => (paramTipFocus = true)}
+    onblur={() => (paramTipFocus = false)}
   >
-    <!-- control-surface-style tooltip: which block this control belongs to -->
-    <span class="axtip">{paramBlock} · {paramLabel}</span>
+    <!-- control-surface-style tooltip: which block this control belongs to + how to act -->
+    <span
+      class="axtip"
+      class:show={paramTipVisible && paramTipPos !== null}
+      bind:this={paramTipEl}
+      style:left={paramTipPos ? `${paramTipPos.left}px` : undefined}
+      style:top={paramTipPos ? `${paramTipPos.top}px` : undefined}
+    >{paramTip}</span>
     <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramRingPx}px`} style:height={`${paramRingPx}px`}>
       <svg width={paramRingPx} height={paramRingPx} viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
@@ -1159,10 +1201,7 @@
     position: relative;
   }
   .axtip {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
     white-space: nowrap;
     background: var(--aw-surface-2, var(--surface2));
     border: 1px solid var(--aw-border-3, var(--border3));
@@ -1177,8 +1216,7 @@
     z-index: 400;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
   }
-  .axtipwrap:hover .axtip,
-  .axtipwrap:focus-visible .axtip {
+  .axtip.show {
     opacity: 1;
   }
   /* Block-Editor square control-tile look: touch-friendly, always shows the
