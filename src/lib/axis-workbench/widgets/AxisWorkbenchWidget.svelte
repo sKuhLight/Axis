@@ -322,8 +322,11 @@
       return;
     }
     if (paramEnum) {
+      const count = paramEnum.options.length;
+      if (!count) return;
       const index = paramEnum.options.findIndex((option) => option.value === paramEnum.value);
-      const next = paramEnum.options[Math.max(0, Math.min(paramEnum.options.length - 1, index + Math.sign(delta)))];
+      const nextIndex = (((index + Math.sign(delta)) % count) + count) % count;
+      const next = paramEnum.options[nextIndex];
       if (next) editor.setPinnedEnum(paramEffectId, paramEnum, next.value);
     }
   }
