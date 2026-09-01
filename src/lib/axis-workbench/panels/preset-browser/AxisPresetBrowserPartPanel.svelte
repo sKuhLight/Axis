@@ -252,6 +252,22 @@
     const r = suggest(acContext, queryEl?.value ?? snapshot.query, c);
     acItems = r.items; acLabel = r.label; acIndex = 0; acOpen = true;
   }
+  // Tab return re-fires focus on the query input and would reopen the dropdown on
+  // its own (same lingering-focus pattern as the nav rail). Unlike the rail we must
+  // keep focus to type, so suppress the reopen only for the document-just-hidden case.
+  let suppressAcOnFocus = $state(false);
+  $effect(() => {
+    const onVis = () => {
+      if (document.hidden) suppressAcOnFocus = true;
+      else setTimeout(() => (suppressAcOnFocus = false), 50);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  });
+  function onQueryFocus() {
+    if (suppressAcOnFocus) { suppressAcOnFocus = false; return; }
+    recomputeAc();
+  }
   const closeAc = () => { acOpen = false; };
   function onQueryInput(e: Event) {
     const el = e.target as HTMLInputElement;
@@ -837,7 +853,7 @@
           value={snapshot.query}
           oninput={onQueryInput}
           onkeydown={onQueryKey}
-          onfocus={recomputeAc}
+          onfocus={onQueryFocus}
           onblur={onQueryBlur}
           onclick={onQuerySelect}
           onkeyup={onQuerySelect}
