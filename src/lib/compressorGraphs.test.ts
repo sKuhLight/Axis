@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveCompressorGraphs } from './compressorGraphs';
+import { compressorDotPosition, deriveCompressorGraphs } from './compressorGraphs';
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget?: string): LayoutControl => ({
@@ -29,5 +29,26 @@ describe('deriveCompressorGraphs', () => {
     const [graph] = deriveCompressorGraphs({ layout, params: [param(13, 'Compression')], enums: [] });
     expect(graph).toMatchObject({ sustain: { id: 13 } });
     expect(graph.ratio).toBeUndefined();
+  });
+});
+
+describe('compressorDotPosition', () => {
+  it('inverts the transfer curve to the point producing the given gain reduction', () => {
+    const pos = compressorDotPosition(-10, 4, 6);
+    expect(pos).not.toBeNull();
+    expect(pos!.input).toBeCloseTo(-2);
+    expect(pos!.output).toBeCloseTo(-8);
+    expect(pos!.input - pos!.output).toBeCloseTo(6); // reproduces the gain reduction it was given
+  });
+
+  it('returns null for a sustain-style compressor (ratio <= 1)', () => {
+    expect(compressorDotPosition(-10, 1, 6)).toBeNull();
+  });
+
+  it('returns null when there is no reduction to place (idle, or a makeup-gain-flavored reading)', () => {
+    expect(compressorDotPosition(-10, 4, 0)).toBeNull();
+    expect(compressorDotPosition(-10, 4, -3)).toBeNull();
+    // real hardware's idle GR noise floor (never bit-exact 0) shouldn't resolve to a point either
+    expect(compressorDotPosition(-10, 4, 0.04)).toBeNull();
   });
 });

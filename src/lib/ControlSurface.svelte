@@ -1690,7 +1690,8 @@
                 <div class="eqbox"><ModulationGraph graph={modulationGraphById.get(c.key)!} {accent} /></div>
               {:else if c.kind === 'comp'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
-                <div class="eqbox"><CompressorGraph graph={compressorGraphById.get(c.key)!} {accent} /></div>
+                {@const grMon = mons.find((m) => m.role === 'gainReduction') ?? null}
+                <div class="eqbox"><CompressorGraph graph={compressorGraphById.get(c.key)!} {accent} live={grMon} /></div>
               {:else if c.kind === 'cab'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><CabAlignmentGraph graph={cabAlignmentGraphById.get(c.key)!} {accent} /></div>

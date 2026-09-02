@@ -1,8 +1,9 @@
 <script lang="ts">
   import { fmtControlValue, paramValue } from './format';
-  import type { CompressorGraphSpec } from './compressorGraphs';
+  import { compressorDotPosition, type CompressorGraphSpec } from './compressorGraphs';
+  import type { LiveMonitor } from './types';
 
-  let { graph, accent = '#35c9d6' }: { graph: CompressorGraphSpec; accent?: string } = $props();
+  let { graph, accent = '#35c9d6', live = null }: { graph: CompressorGraphSpec; accent?: string; live?: LiveMonitor | null } = $props();
 
   const W = 360;
   const H = 130;
@@ -27,6 +28,28 @@
     }
     return points.join(' ');
   });
+  // Live signal position on the curve, inferred from gain reduction (the only live value the device
+  // reports for a compressor — confirmed against FM3-Edit's own wire traffic, it has no richer data
+  // either). `live.db` is 0 at idle/unity and negative as reduction increases; a non-negative reading
+  // (idle, or the COMP_GAINMONITOR pid's alternate 0..+40 makeup-gain display mode on some Comp Types)
+  // has no reduction to place on the curve, so the dot rests at the silent corner (MIN,MIN) instead —
+  // only the total absence of a live reading (metering off) hides it outright.
+  const dot = $derived.by(() => {
+    if (!hasTransfer || live?.db == null) return null;
+    const threshold = paramValue(graph.threshold!);
+    const ratio = Math.max(1, paramValue(graph.ratio!));
+    const pos = compressorDotPosition(threshold, ratio, -live.db);
+    if (!pos) return { input: MIN, output: MIN };
+    // Clamp ALONG the curve (recompute via the same formula `curve` samples), not per-axis — heavy
+    // reduction can push the inferred input past the graph's right edge, and clamping x alone while
+    // keeping the unclamped y would float the dot above the line instead of riding it to the edge.
+    if (pos.input > MAX) return { input: MAX, output: threshold + (MAX - threshold) / ratio };
+    return pos;
+  });
+  // Percent-of-box position for the CSS dot overlay — kept out of the SVG's own coordinate space
+  // (which uses preserveAspectRatio="none" to stretch to the box) because a <circle> drawn in that
+  // stretched space renders as an ellipse, not a dot.
+  const dotPct = $derived(dot && { left: (xOf(dot.input) / W) * 100, top: (yOf(dot.output) / H) * 100 });
   const readouts = $derived([
     graph.threshold && `THRESH ${fmtControlValue(graph.threshold)}`,
     graph.ratio && `RATIO ${fmtControlValue(graph.ratio)}`,
@@ -50,6 +73,9 @@
       <text x={W / 2} y={H / 2 + 13} text-anchor="middle" fill="var(--textmuted)" font-size="10">Transfer curve unavailable</text>
     {/if}
   </svg>
+  {#if dotPct}
+    <div class="livedot" style:left="{dotPct.left}%" style:top="{dotPct.top}%" style:background={accent}></div>
+  {/if}
   <div class="hud mono">{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
 
@@ -57,5 +83,6 @@
   .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
   .hud { position: absolute; top: 8px; right: 10px; display: flex; gap: 10px; align-items: center; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 7px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--textdim); font-size: 10px; pointer-events: none; }
+  .livedot { position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border2); pointer-events: none; transition: left 90ms linear, top 90ms linear; }
   @media (max-width: 600px) { .hud span:nth-of-type(n + 3) { display: none; } }
 </style>

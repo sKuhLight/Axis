@@ -16,6 +16,22 @@ export interface CompressorGraphSpec {
 
 const COMP_GRAPH = 'graph_comp_studio';
 
+// Real hardware never reports bit-exact 0 dB GR at idle (detector noise floor/quantization), so a
+// strict `grDb <= 0` guard almost never fires — it keeps resolving a "real" point a hair above
+// threshold instead of recognizing silence. Treat anything under this as imperceptible/no reduction.
+const GR_NOISE_FLOOR_DB = 0.1;
+
+/** Invert the piecewise-linear transfer curve to find the point currently producing `grDb` of gain
+ *  reduction. There's no live "input level" telemetry for compressors (the device reports gain
+ *  reduction only), so this only resolves a point while gr is meaningfully above zero (input above
+ *  threshold) — below threshold the real input is unknowable and callers should treat `null` as
+ *  "resting/idle" rather than guessing a spot on the curve. */
+export function compressorDotPosition(threshold: number, ratio: number, grDb: number): { input: number; output: number } | null {
+  if (ratio <= 1 || grDb <= GR_NOISE_FLOOR_DB) return null;
+  const input = threshold + (grDb * ratio) / (ratio - 1);
+  return { input, output: input - grDb };
+}
+
 /** Resolve a compressor graph from its entire page because Knee may live below the Basic-row slot. */
 export function deriveCompressorGraphs(input: {
   layout: DeviceLayout | null | undefined;
