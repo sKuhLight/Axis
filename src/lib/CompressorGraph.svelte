@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtControlValue, paramValue } from './format';
+  import { paramValue } from './format';
   import { compressorDotPosition, type CompressorGraphSpec } from './compressorGraphs';
   import type { LiveMonitor } from './types';
 
@@ -13,7 +13,6 @@
   // sit exactly at (MIN,MIN) and (MAX,MAX) — land inside the rounded corners instead of poking past them.
   const PAD = 10;
   const hasTransfer = $derived(!!graph.threshold && !!graph.ratio);
-  const kneeLabel = $derived(graph.knee?.options.find((option) => option.value === graph.knee?.value)?.label);
   const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
   const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
   const curve = $derived.by(() => {
@@ -50,12 +49,6 @@
   // (which uses preserveAspectRatio="none" to stretch to the box) because a <circle> drawn in that
   // stretched space renders as an ellipse, not a dot.
   const dotPct = $derived(dot && { left: (xOf(dot.input) / W) * 100, top: (yOf(dot.output) / H) * 100 });
-  const readouts = $derived([
-    graph.threshold && `THRESH ${fmtControlValue(graph.threshold)}`,
-    graph.ratio && `RATIO ${fmtControlValue(graph.ratio)}`,
-    kneeLabel && `KNEE ${kneeLabel}`,
-    graph.sustain && `COMP ${fmtControlValue(graph.sustain)}`
-  ].filter((value): value is string => !!value));
 </script>
 
 <div class="wrap">
@@ -76,13 +69,10 @@
   {#if dotPct}
     <div class="livedot" style:left="{dotPct.left}%" style:top="{dotPct.top}%" style:background={accent}></div>
   {/if}
-  <div class="hud mono">{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
 
 <style>
   .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
-  .hud { position: absolute; top: 8px; right: 10px; display: flex; gap: 10px; align-items: center; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 7px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--textdim); font-size: 10px; pointer-events: none; }
   .livedot { position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border2); pointer-events: none; transition: left 90ms linear, top 90ms linear; }
-  @media (max-width: 600px) { .hud span:nth-of-type(n + 3) { display: none; } }
 </style>

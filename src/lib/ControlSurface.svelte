@@ -184,7 +184,7 @@
     // users already arranged stay intact.
     for (const g of eqGraphs) out.push({ key: g.key, kind: 'eq', label: g.title, id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] });
     for (const g of modulationGraphs) out.push({ key: g.key, kind: 'mod', label: g.title, id: -1, w: 4, h: 2, view: 'mod', views: ['mod'] });
-    for (const g of compressorGraphs) out.push({ key: g.key, kind: 'comp', label: 'Compression', id: -1, w: 4, h: 2, view: 'comp', views: ['comp'] });
+    for (const g of compressorGraphs) out.push({ key: g.key, kind: 'comp', label: 'Compression', id: -1, w: 3, h: 2, view: 'comp', views: ['comp'] });
     for (const g of cabAlignmentGraphs) out.push({ key: g.key, kind: 'cab', label: 'Cab Alignment', id: -1, w: 4, h: 2, view: 'cab', views: ['cab'] });
     // Dynacab mic graphic — like geqBands below, the device never flags this as a graph slot: it's
     // Axis re-presenting the slot's own Pan/Position knobs. `cabMicGraphs` is already gated on the cab
@@ -1689,7 +1689,6 @@
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><ModulationGraph graph={modulationGraphById.get(c.key)!} {accent} /></div>
               {:else if c.kind === 'comp'}
-                <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 {@const grMon = mons.find((m) => m.role === 'gainReduction') ?? null}
                 <div class="eqbox"><CompressorGraph graph={compressorGraphById.get(c.key)!} {accent} live={grMon} /></div>
               {:else if c.kind === 'cab'}
