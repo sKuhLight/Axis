@@ -22,16 +22,23 @@
   const hidden = $derived(empty && !$controller.editMode && region !== 'main');
   const horizontalRegion = $derived(region === 'top' || region === 'bottom');
 
+  // Clamp on the read side rather than rewriting storage: a region collapsed
+  // before regionsCollapsible was turned off (or synced from an older client)
+  // renders expanded, and re-enabling the option later restores it exactly —
+  // same rule as the layoutEditable gate.
+  const collapsed = $derived(!!state?.collapsed && $controller.regionsCollapsible);
+
   const regionStyle = $derived.by(() => {
     if (overlay) return '';
     if (region === 'main') return '';
     const px = state?.sizePx;
-    if (!px || state?.collapsed) return '';
+    if (!px || collapsed) return '';
     return horizontalRegion ? `height:${px}px;` : `width:${px}px;`;
   });
 
   function toggleCollapse() {
-    controller.dispatch({ type: 'region.collapse', region, collapsed: !state?.collapsed });
+    if (!$controller.regionsCollapsible) return;
+    controller.dispatch({ type: 'region.collapse', region, collapsed: !collapsed });
   }
 
   function resizeDown(e: PointerEvent) {
@@ -58,19 +65,21 @@
 {#if !hidden}
   <section
     class="aw-region aw-region-{region}"
-    class:collapsed={state?.collapsed}
+    class:collapsed
     class:empty
     class:mobile-inline-hidden={mobileInlineHidden}
     class:overlay
     data-region={region}
     style={regionStyle}
   >
-    {#if state?.collapsed}
+    {#if collapsed}
       <button class="aw-region-strip" type="button" onclick={toggleCollapse}>{region}</button>
     {:else if node}
       <DockNodeView {node} {region} />
       {#if region !== 'main' && !overlay}
-        <button class="aw-region-collapse" type="button" title="Collapse {region}" onclick={toggleCollapse}>−</button>
+        {#if $controller.regionsCollapsible}
+          <button class="aw-region-collapse" type="button" title="Collapse {region}" onclick={toggleCollapse}>−</button>
+        {/if}
         <div class="aw-region-resize" role="separator" onpointerdown={resizeDown}></div>
       {/if}
     {:else}

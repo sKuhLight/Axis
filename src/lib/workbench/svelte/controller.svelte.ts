@@ -42,6 +42,15 @@ export interface WorkbenchControllerOptions {
    * each of its ~40 gated call sites.
    */
   layoutEditable?: boolean;
+  /**
+   * Whether dock regions (left/right/top/bottom) can be collapsed to a strip.
+   * Defaults to `true` — the framework's own behavior is unchanged for any
+   * host that does not opt out. Read on the render side by `DockRegion.svelte`
+   * (hides the collapse control and treats any already-collapsed region as
+   * expanded); storage is never rewritten, so re-enabling later restores
+   * whatever was persisted.
+   */
+  regionsCollapsible?: boolean;
 }
 
 export interface SetWorkbenchDocumentOptions {
@@ -68,6 +77,8 @@ export class WorkbenchController {
    * below, so no gated affordance is reachable even via a new call site.
    */
   readonly layoutEditable: boolean;
+  /** Host capability, fixed at construction: can dock regions be collapsed? */
+  readonly regionsCollapsible: boolean;
   lastResult: WorkbenchCommandResult | null = null;
   drag: WorkbenchDragState | null = null;
   #onChange?: (doc: WorkbenchDocument) => void;
@@ -85,6 +96,7 @@ export class WorkbenchController {
   constructor(document: WorkbenchDocument, options: WorkbenchControllerOptions = {}) {
     this.document = repairWorkbenchDocument(document);
     this.layoutEditable = options.layoutEditable ?? true;
+    this.regionsCollapsible = options.regionsCollapsible ?? true;
     this.#onChange = options.onChange;
     this.#bindingRegistry = options.bindingRegistry ?? createWorkbenchBindingRegistry();
     this.#layoutHistory = new LayoutHistory(options.layoutHistory);

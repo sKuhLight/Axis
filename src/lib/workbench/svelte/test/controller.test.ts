@@ -373,6 +373,18 @@ describe('WorkbenchController — layoutEditable', () => {
   });
 });
 
+describe('WorkbenchController — regionsCollapsible', () => {
+  it('defaults to true so the framework is unchanged for hosts that do not opt out', () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument());
+    expect(controller.regionsCollapsible).toBe(true);
+  });
+
+  it('is false when a host opts out at construction', () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument(), { regionsCollapsible: false });
+    expect(controller.regionsCollapsible).toBe(false);
+  });
+});
+
 describe('WorkbenchController — pages', () => {
   const pagedDoc = () =>
     createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test', pageId: 'page.one', pageLabel: 'One' });

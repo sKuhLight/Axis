@@ -191,7 +191,12 @@ export const axisWorkbenchController = createWorkbenchController(mem, {
   // Layout editing is OFF unless VITE_AXIS_LAYOUT_EDIT=1. This is the single
   // construction site, and the framework itself never reads the gate (it must
   // keep zero app imports) — the flag is resolved here and handed in.
-  layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)
+  layoutEditable: isAxisLayoutEditingEnabled(import.meta.env),
+  // Dock-region collapse (the sidebar-to-strip toggle) is permanently off for
+  // Axis — a fixed product decision, not an experimental opt-in, so unlike the
+  // two VITE_* gates above this has no env flag. Per-panel collapse (the −/+
+  // button on an individual panel's tab header) is untouched.
+  regionsCollapsible: false
 });
 // The controller repairs the document it was constructed with; adopt the repaired copy so the
 // cache push in axisWorkbenchInit never re-uploads an unrepaired document.
