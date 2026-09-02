@@ -598,9 +598,11 @@ class EditorStore {
 
   // ── live audio meters (per-block monitor level, normalized→dB) ──
   // GENTLE poll: reads ONLY the currently-selected block's monitor (one serial round-trip per tick),
-  // and ONLY while metering is actually enabled + the block editor is open. Polling every placed
-  // block flooded the FM3's serial link and caused audio dropouts — never do a full-preset sweep here.
-  meteringOn = $state(false); // opt-in; off by default so it can't disturb the device unnoticed
+  // and ONLY while the block editor is open. Never sweep every placed block: a full-preset sweep
+  // serializes behind every other read on the shared request chain. (The one evidenced audio-dropout
+  // incident was AM4 background block re-reads every 1.5 s — FORGEFX-25, CHANGELOG 0.9.x — not
+  // metering; captures show FM3-Edit itself polls its meters round-robin at a ~60 ms tick.)
+  meteringOn = $state(true); // on by default, like the official editors; canMeterBlocks still gates it
   /** Per-block metering is only offered when the device supports live monitors, over a fast link
    *  (never a slow 5-pin-DIN MIDI adapter). The global IN/OUT display is separate. */
   get canMeterBlocks(): boolean {
