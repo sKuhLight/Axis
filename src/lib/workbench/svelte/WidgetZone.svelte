@@ -123,6 +123,12 @@
   const renderedUnits = $derived(units.filter((unit) => !overflowKeys.has(unitKey(unit))));
   const overflowUnits = $derived(units.filter((unit) => overflowKeys.has(unitKey(unit))));
 
+  // A full-width band at the very top (a section header) has nothing above it to
+  // separate from, so its row should collapse to the band's own height instead of
+  // keeping the grid's `minmax(rowHeight, auto)` floor — otherwise the floor's
+  // slack reads as dead padding between the header and the first control.
+  const leadIsFullWidth = $derived(renderedUnits.length > 0 && readFullWidth(renderedUnits[0]));
+
   // ── In-flow drop gap (V14 follow-up; design shell `isGap` unit) ──────────
   // While a widget drag targets this zone, a REAL dashed spacer element is
   // spliced into the zone's flow at the live unit index — neighbours physically
@@ -196,7 +202,18 @@
     return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.round(value)) : null;
   }
 
-  function gridCellStyle(unit: WidgetUnit, isFirst: boolean): string {
+  // `colSpan: 'full'` claims the whole row whatever the zone's column count is.
+  // A unit that must read as a full-width band (a rule, a heading) otherwise has
+  // to hardcode the panel's `grid.columns`, which silently breaks the moment
+  // that panel setting changes.
+  function readFullWidth(unit: WidgetUnit): boolean {
+    const layout = $controller.activeLayout;
+    const widget = layout?.widgets[unit.widgetIds[0]];
+    const placement = readPlacementObject(widget?.state?.grid) ?? readPlacementObject(widget?.state?.placement);
+    return !!placement && (placement.colSpan === 'full' || placement.w === 'full');
+  }
+
+  function gridCellStyle(unit: WidgetUnit): string {
     const layout = $controller.activeLayout;
     const widget = layout?.widgets[unit.widgetIds[0]];
     const placement = readPlacementObject(widget?.state?.grid) ?? readPlacementObject(widget?.state?.placement);
@@ -204,21 +221,16 @@
 
     const column = readPlacementNumber(placement.column) ?? (readPlacementNumber(placement.x, 0) != null ? readPlacementNumber(placement.x, 0)! + 1 : null);
     const row = readPlacementNumber(placement.row) ?? (readPlacementNumber(placement.y, 0) != null ? readPlacementNumber(placement.y, 0)! + 1 : null);
-    // `colSpan: 'full'` claims the whole row whatever the zone's column count is.
-    // A unit that must read as a full-width band (a rule, a heading) otherwise has
-    // to hardcode the panel's `grid.columns`, which silently breaks the moment
-    // that panel setting changes.
-    const fullWidth = placement.colSpan === 'full' || placement.w === 'full';
+    const fullWidth = readFullWidth(unit);
     const colSpan = readPlacementNumber(placement.colSpan ?? placement.w);
     const rowSpan = readPlacementNumber(placement.rowSpan ?? placement.h);
     const rules: string[] = [];
     if (fullWidth) {
       rules.push('grid-column: 1 / -1');
       // A full-width band (a section header) is short but sits in a normal-height
-      // row. Hug the bottom so its whitespace separates it from the PREVIOUS group
-      // instead of leaving it floating up against the row above. The first band
-      // has no group above it, so it stays top-aligned.
-      if (!isFirst) rules.push('align-self: end');
+      // row. Hug the bottom so its whitespace separates it from the group above,
+      // leaving the header tight against its own controls below.
+      rules.push('align-self: end');
     }
     else if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
     else if (colSpan != null) rules.push(`grid-column: span ${colSpan}`);
@@ -249,6 +261,7 @@
     class:panel={variant === 'panel'}
     class:grid={variant === 'grid'}
     class:auto-columns={variant === 'grid' && gridMinColumnWidth > 0}
+    class:lead-full-width={leadIsFullWidth}
     class:overflow-open={overflowOpen}
     class:drop-target={!!zoneSlot}
     bind:this={zoneEl}
@@ -270,7 +283,7 @@
         ></span>
       {/if}
       {#if variant === 'grid'}
-        <div class="aw-widget-grid-cell" style={gridCellStyle(unit, unitPos === 0)}>
+        <div class="aw-widget-grid-cell" style={gridCellStyle(unit)}>
           {#if unit.groupId}
             <WidgetGroupHost groupId={unit.groupId} />
           {:else}
@@ -411,6 +424,13 @@
     align-content: flex-start;
     overflow: auto;
     padding: 1px;
+  }
+  /* A full-width band leading the grid has nothing above it to separate from, so
+     its first row collapses to the band's own height instead of the minmax floor —
+     no dead gap between the header and the first control. `grid-template-rows`
+     sets the one explicit row; `grid-auto-rows` still floors the rows after it. */
+  .aw-widget-zone.grid.lead-full-width {
+    grid-template-rows: auto;
   }
   /* Auto-fill mode: as many columns of at least --aw-zone-grid-min-column as fit.
      `min(…, 100%)` keeps a single tile from overflowing a panel narrower than one
