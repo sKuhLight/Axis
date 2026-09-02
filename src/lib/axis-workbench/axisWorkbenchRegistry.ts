@@ -25,7 +25,8 @@ import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths'
 import { createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
-import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds } from './myControlsSections';
+import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds, axisSectionHeaderLabel, isAxisSectionHeader } from './myControlsSections';
+import { AXIS_MY_CONTROLS_ZONE } from './myControlsPanel';
 import { editor } from '../editor.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
@@ -92,6 +93,18 @@ registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidget
 registry.registerWidgetRemoval({
   idsForRemoval: (widget, doc) =>
     widget.type === AXIS_SECTION_HEADER_TYPE ? axisMyControlsSectionRemovalIds(doc, widget.id) : [widget.id]
+});
+
+// My Controls is a pin board, not a layout surface — the size / move / save
+// items are layout-editing chrome the pin flow retired, so its widgets get a
+// context menu of just removal. A named header cascades to its controls, so it
+// reads "Remove whole section"; a divider or control is a plain "Remove".
+registry.registerWidgetMenu({
+  filterItems: (widget, _doc, items) => {
+    if (widget.zone !== AXIS_MY_CONTROLS_ZONE) return items;
+    const label = isAxisSectionHeader(widget) && axisSectionHeaderLabel(widget) ? 'Remove whole section' : 'Remove';
+    return items.filter((item) => item.id === 'remove').map((item) => ({ ...item, label }));
+  }
 });
 
 // Active-section tint (01-shell.md §9). ROUND 15: the seven page-bound nav entries

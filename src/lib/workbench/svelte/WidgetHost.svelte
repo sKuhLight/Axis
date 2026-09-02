@@ -61,7 +61,7 @@
   const removalIds = $derived(registry.idsForWidgetRemoval(widget, $controller.document));
   const removalLocked = $derived(removalIds.some((id) => $controller.activeLayout?.widgets[id]?.locked));
 
-  const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
+  const standardMenuItems = $derived.by<WorkbenchMenuItem[]>(() => [
     {
       id: 'size-default',
       label: 'Default Size',
@@ -117,6 +117,12 @@
       run: () => controller.dispatch({ type: 'widget.hide', widgetIds: removalIds })
     }
   ]);
+
+  // An app may narrow this per-widget (Axis: My Controls offers only "Remove") —
+  // the registry seam filters the standard list above and defaults to it intact.
+  const menuItems = $derived(
+    registry.menuItemsForWidget(widget, $controller.document, standardMenuItems)
+  );
 
   function saveWidgetTemplate() {
     const template = createWidgetTemplateFromWidget($controller.document, widget.id);

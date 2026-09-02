@@ -133,7 +133,9 @@
   .aw-context-menu {
     position: fixed;
     z-index: 120;
-    min-width: 188px;
+    /* Shrink to the widest item rather than a fixed floor, so a single-item
+       menu (My Controls' lone "Remove") isn't padded out to a wide band. */
+    width: max-content;
     max-width: min(280px, calc(100vw - 16px));
     padding: 6px;
     border: 1px solid var(--aw-border-2);

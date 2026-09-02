@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 import type { JsonObject, NavigationEntryState, PanelInstance, WidgetInstance, WorkbenchCommand, WorkbenchDocument } from '../core';
 import type { WorkbenchController } from './controller.svelte';
+import type { WorkbenchMenuItem } from './contextMenu';
 
 export type WorkbenchPanelComponent = Component<any>;
 export type WorkbenchWidgetComponent = Component<any>;
@@ -86,6 +87,21 @@ export interface WorkbenchWidgetRemovalProvider {
   idsForRemoval: (widget: WidgetInstance, doc: WorkbenchDocument) => string[];
 }
 
+/**
+ * App-provided narrowing of the widget context menu. The generic menu offers
+ * size / move / save / remove; an app can filter that list per-widget (Axis:
+ * My Controls offers only "Remove"). Falls back to the full list when no
+ * provider is registered.
+ */
+export interface WorkbenchWidgetMenuProvider {
+  /** The menu items to show for `widget`, in order, from the standard `items`. */
+  filterItems: (
+    widget: WidgetInstance,
+    doc: WorkbenchDocument,
+    items: WorkbenchMenuItem[]
+  ) => WorkbenchMenuItem[];
+}
+
 export class WorkbenchRenderRegistry {
   #panels = new Map<string, WorkbenchPanelComponent>();
   #widgets = new Map<string, WorkbenchWidgetComponent>();
@@ -94,6 +110,7 @@ export class WorkbenchRenderRegistry {
   #widgetSizing: WorkbenchWidgetSizingProvider | null = null;
   #navigationState: WorkbenchNavigationStateProvider | null = null;
   #widgetRemoval: WorkbenchWidgetRemovalProvider | null = null;
+  #widgetMenu: WorkbenchWidgetMenuProvider | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
   constructor(
@@ -138,9 +155,24 @@ export class WorkbenchRenderRegistry {
     this.#widgetRemoval = provider;
   }
 
+  registerWidgetMenu(provider: WorkbenchWidgetMenuProvider): void {
+    this.#widgetMenu = provider;
+  }
+
   /** Ids to hide for removing `widget` — just itself when no provider is registered. */
   idsForWidgetRemoval(widget: WidgetInstance, doc: WorkbenchDocument): string[] {
     return this.#widgetRemoval?.idsForRemoval(widget, doc) ?? [widget.id];
+  }
+
+  /** The items to show in `widget`'s menu — the standard list when no provider is registered. */
+  menuItemsForWidget(widget: WidgetInstance, doc: WorkbenchDocument, items: WorkbenchMenuItem[]): WorkbenchMenuItem[] {
+    const result = this.#widgetMenu?.filterItems(widget, doc, items) ?? items;
+    // A filter that drops earlier groups can strand a leading separator; a menu
+    // never wants its first item visually separated from a group above it.
+    if (result.length && result[0].separatorBefore) {
+      return [{ ...result[0], separatorBefore: false }, ...result.slice(1)];
+    }
+    return result;
   }
 
   /** Whether a nav entry is the active section. False when no provider is registered. */

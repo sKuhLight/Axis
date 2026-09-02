@@ -44,6 +44,25 @@ describe('WorkbenchRenderRegistry', () => {
     expect(registry.idsForWidgetRemoval(widget, doc)).toEqual(['w1', 'w2', 'w3']);
   });
 
+  it('filters widget menu items via the registered provider, defaulting to the full list', () => {
+    const registry = createWorkbenchRenderRegistry();
+    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    const items = [
+      { id: 'size-default', label: 'Default Size', run: () => {} },
+      { id: 'remove', label: 'Remove Widget', separatorBefore: true, danger: true, run: () => {} }
+    ];
+    // No provider registered → the standard list passes through unchanged.
+    expect(registry.menuItemsForWidget(widget, doc, items)).toBe(items);
+
+    registry.registerWidgetMenu({
+      filterItems: (w) => (w.zone === 'panel' ? items.filter((item) => item.id === 'remove') : items)
+    });
+    // Narrowed to "Remove" only, with the now-stranding leading separator stripped.
+    expect(registry.menuItemsForWidget(widget, doc, items)).toEqual([
+      { id: 'remove', label: 'Remove Widget', separatorBefore: false, danger: true, run: items[1].run }
+    ]);
+  });
+
   it('registers and runs host action handlers', () => {
     const registry = createWorkbenchRenderRegistry();
     const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));
