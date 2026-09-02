@@ -120,16 +120,18 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
 
   layout.panels = createAxisWorkbenchPanels();
 
-  // Pages (ROUND 15): every nav point is its own page. The GRID page keeps the
-  // minimal first-contact layout (operator decision 2026-07-06): Signal Grid main +
-  // Block Editor bottom — the two things a new user needs. Preset Browser, FC,
-  // Setup, Controllers, Scenes, and Live each get their own seed page (full-size
-   // panel in main); Settings + Axis stay ACTION nav entries. Pages are identical
-  // across profiles (operator: "same seeds").
+  // Pages (ROUND 15): every nav point is its own page. The GRID page opens on the
+  // Block Editor (operator decision 2026-09-02): Block Editor main + History docked
+  // right, with the Signal Grid panel UNDOCKED (still in the roster, so it can be
+  // re-added from the panel picker) — the editor already carries the GRID MAP
+  // navigator, so the full signal grid is not needed for first contact. Preset
+  // Browser, FC, Setup, Controllers, Scenes, and Live each get their own seed page
+  // (full-size panel in main); Settings + Axis stay ACTION nav entries. Pages are
+  // identical across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
-  gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.signalGrid']);
-  gridDock.root.bottom = tabs('axis.tabs.grid.bottom', ['axis.blockEditor']);
-  gridDock.regions.bottom.sizePx = 360;
+  gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.blockEditor']);
+  gridDock.root.right = tabs('axis.tabs.grid.right', ['axis.history']);
+  gridDock.regions.right.sizePx = 560;
   const seeded = buildAxisSeedPages(gridDock);
   layout.pages = seeded.pages;
   layout.pageOrder = seeded.pageOrder;
