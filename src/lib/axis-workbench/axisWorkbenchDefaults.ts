@@ -124,7 +124,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // minimal first-contact layout (operator decision 2026-07-06): Signal Grid main +
   // Block Editor bottom — the two things a new user needs. Preset Browser, FC,
   // Setup, Controllers, Scenes, and Live each get their own seed page (full-size
-   // panel in main); Settings + Axis Cloud stay ACTION nav entries. Pages are identical
+   // panel in main); Settings + Axis stay ACTION nav entries. Pages are identical
   // across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
   gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.signalGrid']);
@@ -146,7 +146,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.right', 6, { state: widgetState(95) }),
     'axis.widget.search': widget('axis.widget.search', 'axis.search', 'hidden', 0),
     // V13c: the rail no longer carries a History widget (History is reachable as a
-    // dock panel) nor the "AX" account avatar (the 'account' nav entry / Axis Cloud
+    // dock panel) nor the "AX" account avatar (the 'account' nav entry / Axis hub
     // is the single account entry). Only the connection status remains on the rail.
     'axis.widget.connection': widget('axis.widget.connection', 'axis.connection', 'rail', 0, { size: 'compact', state: widgetState(90) }),
     'axis.widget.gridMode': widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', 0, { state: { mode: 'auto' } }),
@@ -161,7 +161,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   };
 
   // Nav entries bind to the seed pages (grid/library/fc/controllers/scenes/live/
-   // setup); Settings + Axis Cloud stay ACTION entries. Triggering a page entry
+   // setup); Settings + Axis stay ACTION entries. Triggering a page entry
   // activates its page via the generic NavigationHost (`page.activate`).
   layout.navigation = createAxisSeedNavigation('side');
 

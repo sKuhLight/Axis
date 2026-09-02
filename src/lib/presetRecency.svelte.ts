@@ -5,7 +5,7 @@
 // would clobber another machine's history. Follows the light MRU idiom of
 // presetBrowserWorkbenchFrequentTags / PresetPicker `recents`, not library's heavier persistCfg dual-write.
 //
-// Keyed by `LibEntry.id` (`dev:<n>` / `file:<name>` / `local:<relPath>` / `conv:<docId>` / `cloud:<n>`)
+// Keyed by `LibEntry.id` (`dev:<n>` / `file:<name>` / `local:<relPath>` / `conv:<docId>`)
 // so a device slot and an imported file of the same preset stay distinct.
 
 const KEY = 'axs.presets.lastLoaded';
@@ -41,7 +41,7 @@ function coerce(parsed: unknown): PresetRecencyMap {
 
 /** One-time carry-over from PresetPicker's `{ rec: [{ n, name }] }` MRU (newest-first, capped at 12), so
  *  upgrading users don't start with an empty Recent sort. Slot-only by nature — the picker never knew
- *  about file/local/cloud entries. */
+ *  about file/local entries. */
 export function seedFromPickerRecents(parsed: unknown): PresetRecencyMap {
   const rec = (parsed as { rec?: unknown } | null)?.rec;
   if (!Array.isArray(rec)) return {};

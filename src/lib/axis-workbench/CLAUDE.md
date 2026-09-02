@@ -45,7 +45,7 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   handler; also calls `registerWidgetSizing({ estWidth, isKeep })` and
   `registerNavigationState`.
 - `axisWorkbenchStore.svelte.ts` — singleton controller + persistence (localStorage key
-  `axs.workbench.doc`, 150 ms debounce; cloud `putDoc`, 1500 ms) and the normalization
+  `axs.workbench.doc`, 150 ms debounce; ForgeFX store `putDoc`, 1500 ms) and the normalization
   chain (migrate → ensureGridControls → pruneRetiredRail → ensureMobileBottomNav).
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
@@ -172,7 +172,7 @@ normalization step needs an idempotence check in its unit test.
 - `../../forgefx` — device runtime hosts + store persistence.
 - `../../history.svelte`, `../../types`.
 - Directly embedded app components: `SignalGrid`, `BlockEditor`, `FcEditor`,
-  `VirtualScreen`, `ModifierEditorCore`, `library.svelte`, `cloud.svelte`.
+  `VirtualScreen`, `ModifierEditorCore`, `library.svelte`.
 
 The host-factory seam is the decoupling model: push all editor/device-runtime access into
 the host factories, keep runtimes/controllers/data pure. If a future extraction moves

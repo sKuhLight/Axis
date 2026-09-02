@@ -6,7 +6,7 @@
  * controllers / scenes / live / setup) resolve their active tint GENERICALLY in
  * `NavigationHost` via `pageNavigationEntryActive` — the entry is active while its
  * bound page is the layout's `activePageId`. So this app-side provider only needs to
- * cover the remaining ACTION entries — Theme and Axis Cloud — whose open-state lives
+ * cover the remaining ACTION entries — Theme and Axis — whose open-state lives
  * on the editor store. Passed in via {@link AxisNavigationActiveSnapshot} so the
  * resolver stays pure (no Svelte, no `editor` import) and directly unit-testable.
  *
@@ -16,7 +16,7 @@
 export interface AxisNavigationActiveSnapshot {
   /** editor.themeOpen — the Appearance/Theme modal is open. */
   themeOpen: boolean;
-  /** editor.axisOpen — the Axis Cloud/account modal is open. */
+  /** editor.axisOpen — the Axis hub modal is open. */
   accountOpen: boolean;
 }
 

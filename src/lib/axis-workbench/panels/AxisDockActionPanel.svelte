@@ -5,7 +5,7 @@
   let { panel }: { panel: PanelInstance } = $props();
 
   function open() {
-    if (panel.type === 'axis.account') editor.openAxis('account');
+    if (panel.type === 'axis.account') editor.openAxis('about');
     else if (panel.type === 'axis.deviceTools') editor.deviceToolsOpen = true;
   }
 </script>

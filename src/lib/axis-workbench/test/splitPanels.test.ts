@@ -23,15 +23,15 @@ describe('Axis Workbench split panel contracts', () => {
     const seen: string[] = [];
     const unsubscribe = controller.subscribe((snapshot) => seen.push(`${snapshot.sourceId}:${snapshot.entryId ?? 'none'}`));
 
-    controller.openSource('cloud');
+    controller.openSource('file');
     controller.selectEntry('preset.001');
     controller.focusBlock(123);
     controller.closeDetail();
     unsubscribe();
 
-    expect(seen).toEqual(['device:none', 'cloud:none', 'cloud:preset.001', 'cloud:preset.001', 'cloud:preset.001']);
+    expect(seen).toEqual(['device:none', 'file:none', 'file:preset.001', 'file:preset.001', 'file:preset.001']);
     expect(controller.snapshot).toMatchObject({
-      sourceId: 'cloud',
+      sourceId: 'file',
       entryId: 'preset.001',
       focusedBlockEffectId: 123,
       detailOpen: false
@@ -55,7 +55,7 @@ describe('Axis Workbench split panel contracts', () => {
     controller.openDetail();
     expect(controller.loadSelected()).toBe(true);
     unbind();
-    controller.openSource('cloud');
+    controller.openSource('file');
 
     expect(calls).toEqual(['source:local', 'entry:preset.002', 'block:42', 'detail:preset.002', 'load:preset.002']);
   });

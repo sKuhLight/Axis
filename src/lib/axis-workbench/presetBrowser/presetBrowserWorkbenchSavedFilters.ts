@@ -2,7 +2,7 @@
 //
 // PERSISTENCE REUSE: the monolith (src/lib/PresetBrowser.svelte lines 850-871) is the source of truth for
 // where saved filters live — localStorage["axs.pb.saved"], mirrored to the unified config store via
-// `forgefx.putDoc('config', 'savedFilters', …)` (which the cloud auto-sync then carries). We reuse the SAME
+// `forgefx.putDoc('config', 'savedFilters', …)`. We reuse the SAME
 // key + mirror here so the docked browser and the monolith share one list; there is no second store.
 //
 // The classification/matching bits (active-filter highlight via parsed-query equality) are pure and unit
@@ -38,12 +38,12 @@ export function seedSavedFilters(): AxisPbSavedFilter[] {
   return AXIS_PB_SEED_SAVED_FILTERS.map((f, i) => ({ id: `seed-${i}`, name: f.name, query: f.query }));
 }
 
-// Persist through the same two mirrors the monolith uses so both surfaces agree and cloud sync picks it up.
+// Persist through the same two mirrors the monolith uses so both surfaces agree.
 export function persistSavedFilters(filters: AxisPbSavedFilter[]): void {
   try {
     localStorage.setItem(AXIS_PB_SAVED_FILTERS_KEY, JSON.stringify(filters));
   } catch {
-    /* storage unavailable (private mode / SSR) — the cloud mirror still runs */
+    /* storage unavailable (private mode / SSR) — the store mirror still runs */
   }
   // mirror to the unified store (sync-ready), matching PresetBrowser.svelte persistSaved().
   forgefx.putDoc('config', 'savedFilters', filters).catch(() => {});

@@ -76,7 +76,7 @@ describe('ROUND 15 — default document seed pages', () => {
     expect(entries.library.pageId).toBe(AXIS_PAGE_PRESET_BROWSER);
     expect(entries.fc.pageId).toBe(AXIS_PAGE_FC);
     expect(entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
-    // Settings + Axis Cloud stay ACTION entries (no page binding).
+    // Settings + Axis stay ACTION entries (no page binding).
     expect(entries.theme.pageId).toBeUndefined();
     expect(entries.theme.label).toBe('Settings');
     expect(entries.theme.target?.command).toBe('axis.openTheme');

@@ -452,7 +452,7 @@ function insertNavigationEntry(layout: WorkbenchLayout, entry: NavigationEntrySt
 
 /**
  * Re-order the page-bound navigation entries so they follow `pageOrder`, while
- * leaving every non-page entry (Theme/Cloud actions, hidden restores) anchored
+ * leaving every non-page entry (Theme/Axis actions, hidden restores) anchored
  * in its current slot. Backs `page.move`: the visible nav IS the pages, so a
  * page reorder must reorder its menu entries too. Each page-bound slot in
  * `navigation.order` is filled, in place, with the next entry from the

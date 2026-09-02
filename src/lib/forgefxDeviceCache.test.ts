@@ -123,14 +123,3 @@ describe('forgefx.importEditorCache', () => {
   });
 });
 
-describe('forgefx.cloudCachePublish', () => {
-  it('throws ForgeError(401) when not signed in', async () => {
-    fetchMock.mockResolvedValueOnce(res(401, { error: 'auth' }));
-    await expect(forgefx.cloudCachePublish()).rejects.toMatchObject({ status: 401 });
-  });
-
-  it('resolves on success', async () => {
-    fetchMock.mockResolvedValueOnce(res(200, { ok: true, deduped: false }));
-    await expect(forgefx.cloudCachePublish()).resolves.toEqual({ ok: true, deduped: false });
-  });
-});

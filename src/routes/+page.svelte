@@ -31,10 +31,8 @@
   import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
   import AxisWorkbenchShell from '$lib/axis-workbench/AxisWorkbenchShell.svelte';
-  import RemoteGate from '$lib/RemoteGate.svelte';
   import DirectGate from '$lib/DirectGate.svelte';
   import MobileGate from '$lib/MobileGate.svelte';
-  import { remoteBoot } from '$lib/remote.svelte';
   import { directBoot } from '$lib/direct.svelte';
   import { mobileBoot } from '$lib/mobile.svelte';
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
@@ -42,8 +40,8 @@
   import { pollIntervalsFor } from '$lib/pollIntervals';
   import { colorLabels } from '$lib/colorLabels.svelte';
 
-  // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
-  // remote transport is live. In the desktop build (remoteBoot.active=false) it starts immediately.
+  // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
+  // live. In the desktop build (directBoot.active=false) it starts immediately.
   let started = $state(false);
   const workbenchEnabled = isAxisWorkbenchFeatureEnabled(import.meta.env);
   function startApp() {
@@ -55,19 +53,18 @@
     void colorLabels.refresh(); // FM3-Edit preset-color import (replicated-purring-bachman); one-time-ever check, silent no-op if absent
   }
   // Poll/preset-watch loops. The interval depends on the active telemetry polling mode (META-17/AXIS-40):
-  // faster modes reflect device changes sooner at the cost of traffic; remote sessions are event-driven
-  // and clamp to a slow relay floor (pollIntervals.ts). Rebuild BOTH intervals whenever the mode changes
+  // faster modes reflect device changes sooner at the cost of traffic
+  // (pollIntervals.ts). Rebuild BOTH intervals whenever the mode changes
   // (this $effect re-runs on editor.pollingMode / started) — clearing + re-creating the two setIntervals.
   $effect(() => {
     if (!started) return;
-    const { pollMs, watchMs } = pollIntervalsFor(editor.pollingMode, remoteBoot.active);
+    const { pollMs, watchMs } = pollIntervalsFor(editor.pollingMode);
     const tp = setInterval(() => editor.poll(), pollMs);
     const tw = setInterval(() => editor.watchPreset(), watchMs);
     return () => { clearInterval(tp); clearInterval(tw); };
   });
-  // Web build: start the app the moment the relay session (remote) or the in-page runtime (direct)
+  // Web build: start the app the moment the in-page runtime (direct)
   // goes live. Desktop starts immediately in onMount.
-  $effect(() => { if (remoteBoot.active && remoteBoot.phase === 'ready') startApp(); });
   $effect(() => { if (directBoot.active && directBoot.phase === 'ready') startApp(); });
   $effect(() => { if (mobileBoot.active && mobileBoot.phase === 'ready') startApp(); });
 
@@ -77,8 +74,7 @@
       // Confirm the running web bundle so Capgo doesn't roll it back, then check for an OTA update.
       // MobileGate drives connect; startApp() fires when ready.
       void otaNotifyReady().then(() => otaCheck());
-    } else if (remoteBoot.active) remoteBoot.init(); // resume session / show the gate; startApp() fires when ready
-    else if (directBoot.active) { /* DirectGate drives connect; startApp() fires when ready */ }
+    } else if (directBoot.active) { /* DirectGate drives connect; startApp() fires when ready */ }
     else startApp();
 
     const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
@@ -152,8 +148,6 @@
 
 {#if mobileBoot.active && mobileBoot.phase !== 'ready'}
   <MobileGate />
-{:else if remoteBoot.active && remoteBoot.phase !== 'ready'}
-  <RemoteGate />
 {:else if directBoot.active && directBoot.phase !== 'ready'}
   <DirectGate />
 {:else}

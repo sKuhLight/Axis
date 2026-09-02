@@ -1,17 +1,15 @@
 // Mobile shell boot (Capacitor build, VITE_AXIS_MOBILE=1): assemble the same in-page ForgeFX runtime
 // as Browser Direct, but over the native CoreMIDI transport instead of Web MIDI (which doesn't exist
-// in WKWebView). Sibling of direct.svelte.ts / remote.svelte.ts: +page shows MobileGate until
-// phase === 'ready', then starts the normal editor.
+// in WKWebView). Sibling of direct.svelte.ts: +page shows MobileGate until phase === 'ready', then
+// starts the normal editor.
 //
-// The device is reached three ways, in order of directness: USB MIDI (Camera/USB-C), BLE MIDI
-// (paired via the native Bluetooth sheet), or — when neither is available — Axis Remote, which relays
-// to the user's PC exactly like the web remote build (we hand off to remoteBoot).
+// The device is reached two ways: USB MIDI (Camera/USB-C) or BLE MIDI (paired via the native
+// Bluetooth sheet).
 import type { Conn, Transport, Store, DeviceEvent } from 'forgefx-server/runtime';
-import { isMobileBuild } from './cloudBrowser';
+import { isMobileBuild } from './buildMode';
 import { editor } from './editor.svelte';
 import { assembleRuntime, type RuntimeSupport } from './direct/runtime';
 import { AxisMidi, NativeMidiTransport, type AxisMidiEndpoint } from './direct/nativeMidi';
-import { remoteBoot } from './remote.svelte';
 
 type Phase = 'pick' | 'connecting' | 'ready' | 'error';
 
@@ -84,13 +82,6 @@ class MobileBoot {
     } catch (e) {
       this.#fail(e);
     }
-  };
-
-  /** Fall back to Axis Remote (relay to the user's PC) — hand off to the existing remote boot. */
-  useRemote = async () => {
-    remoteBoot.active = true;
-    this.active = false; // yield the gate to RemoteGate
-    await remoteBoot.init();
   };
 
   retry = () => {

@@ -3,7 +3,7 @@
 // actually tags their presets with) with a row driven by real usage frequency: how often the user
 // has picked a tag via a tag chip or the "Pick a tag" picker. The most-used tags win the row's
 // slots; they are displayed in alphabetical order, not count order (see frequentTagRow). Local-only
-// (no cloud mirror — matches the lighter MRU idiom used by CabPicker/PresetPicker/CommandPalette
+// (no store mirror — matches the lighter MRU idiom used by CabPicker/PresetPicker/CommandPalette
 // `recents`, not the heavier saved-filters dual-write).
 const AXIS_PB_FREQUENT_TAGS_KEY = 'axs.pb.frequentTags';
 export const AXIS_PB_FREQUENT_TAGS_MAX = 12; // same chip count the old quick-tags row showed

@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The single "Axis" hub — one rail button opens this, replacing the separate Cloud + Privacy panels.
-  // Three tabs: Account (sign-in / register / sync / contact / delete), Privacy (diagnostics consent +
-  // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
+  // The single "Axis" hub — one rail button opens this. Tabs: Storage (local folder + backups),
+  // Connection, Performance, Privacy (diagnostics consent + send debug report), About
+  // (version · support · legal).
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
@@ -13,28 +13,9 @@
 
   const mob = $derived(editor.isMobile);
 
-  // Badge label for a granted account. Shown only when the account has an active plan.
-  const planLabel = (p: string | null | undefined): string => (p === 'early_supporter' ? 'Early Supporter' : p || 'Supporter');
-
-  const c = $derived(editor.cloud);
   const t = $derived(editor.telemetry);
 
-  let tab = $state<'signin' | 'register'>('signin');
-  let email = $state('');
-  let password = $state('');
-  let confirmDelete = $state(false);
   let showDetail = $state(false); // Privacy: "View what's sent" disclosure
-
-  const view = $derived<'auth' | 'verify' | 'account'>(c.user ? 'account' : c.pendingEmail ? 'verify' : 'auth');
-  const initials = $derived((c.user?.email ?? c.pendingEmail ?? '?').replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?');
-  const ago = $derived(c.lastSync ? `${Math.round((Date.now() - c.lastSync) / 1000)}s ago` : '');
-
-  // Free tier: everything synced lives in the `config` bundle (no preset blobs / device backups).
-  const SCOPES: { id: 'scenes' | 'fc' | 'settings'; label: string; meta: string }[] = [
-    { id: 'settings', label: 'Library & settings', meta: 'tags · filters · favorites' },
-    { id: 'fc', label: 'Footswitch & controllers', meta: 'layouts' },
-    { id: 'scenes', label: 'Scenes & setlists', meta: 'setlists' }
-  ];
 
   const version = (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev';
 
@@ -69,16 +50,6 @@
   const applyMidi = () => { if (inSel && outSel) editor.pickPort({ transport: 'midi', id: inSel, inId: inSel, outId: outSel }); };
   const detName = $derived(editor.detected?.connected ? `${editor.detected.name}` : 'No device detected');
 
-  function submit() {
-    if (!email.trim() || !password) return;
-    if (tab === 'signin') editor.cloudLogin(email.trim(), password);
-    else editor.cloudRegister(email.trim(), password);
-  }
-  function confirmed() {
-    if (c.pendingEmail) email = c.pendingEmail;
-    tab = 'signin';
-    editor.cloud = { ...editor.cloud, pendingEmail: null };
-  }
   const close = () => (editor.axisOpen = false);
   const soon = (what: string) => editor.showToast(`${what} — coming soon`, '#9b8cf0');
   async function sendReport() { await editor.uploadDebugReport({ kind: 'manual' }); }
@@ -105,11 +76,6 @@
   }
   function restoreFromFolder() {
     if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void editor.localRestore();
-  }
-  /** Full device backup — on the free plan a new backup replaces the retained one in the cloud. */
-  function fullBackup() {
-    if (!c.paid && !confirm('The free plan keeps your most recent full backup in the cloud — this backup replaces the previous one there. (Your local versions and the local folder keep everything.) Continue?')) return;
-    void editor.cloudFullBackup();
   }
 </script>
 
@@ -138,7 +104,6 @@
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar">
-        <button class="tb" class:on={editor.axisTab === 'account'} onclick={() => (editor.axisTab = 'account')}>Account</button>
         {#if loc.available}
           <button class="tb" class:on={editor.axisTab === 'storage'} onclick={() => (editor.axisTab = 'storage')}>Storage</button>
         {/if}
@@ -150,148 +115,7 @@
         <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
       </div>
 
-      {#if editor.axisTab === 'account'}
-        {#if !c.enabled}
-          <div class="pad"><p class="muted">Cloud sync isn't enabled on this engine. The editor and local backups work fully offline.</p></div>
-
-        {:else if view === 'auth'}
-          <div class="pad">
-            <div class="hero">
-              <div class="logo"><Icon name="cloud" size={24} /></div>
-              <div class="h1">{tab === 'signin' ? 'Welcome back' : 'Create your account'}</div>
-              <div class="sub">Sync your Axis config across every device — free</div>
-            </div>
-            <div class="tabs">
-              <button class="tab" class:on={tab === 'signin'} onclick={() => (tab = 'signin')}>Sign in</button>
-              <button class="tab" class:on={tab === 'register'} onclick={() => (tab = 'register')}>Create account</button>
-            </div>
-            <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
-              <div class="field">
-                <div class="lbl">EMAIL</div>
-                <input class="in" type="email" placeholder="you@band.com" bind:value={email} autocomplete="email" />
-              </div>
-              <div class="field">
-                <div class="lbl-row"><span class="lbl">PASSWORD</span>{#if tab === 'signin'}<button type="button" class="link" onclick={() => soon('Password reset')}>Forgot?</button>{/if}</div>
-                <input class="in" type="password" placeholder="••••••••" bind:value={password} autocomplete={tab === 'signin' ? 'current-password' : 'new-password'} />
-              </div>
-              <button class="cta" type="submit">{tab === 'signin' ? 'Sign in' : 'Create account'}</button>
-            </form>
-            {#if c.note}<p class="note">{c.note}</p>{/if}
-            {#if tab === 'register'}<p class="legal">By creating an account you agree to the <button type="button" class="link" onclick={() => openExternal(LEGAL.terms)}>Terms of Service</button> &amp; <button type="button" class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>{/if}
-          </div>
-
-        {:else if view === 'verify'}
-          <div class="pad verify">
-            <div class="mailbox"><Icon name="mail" size={28} /></div>
-            <div class="h1">Check your email</div>
-            <div class="sub">We sent a confirmation link to</div>
-            <div class="email-chip">{c.pendingEmail}</div>
-            <button class="cta" onclick={confirmed}>I've confirmed — continue</button>
-            <div class="verify-actions">
-              <button class="link" onclick={() => editor.cloudRegister(c.pendingEmail ?? '', password)}>Resend email</button>
-              <span class="dotsep"></span>
-              <button class="link dim" onclick={() => (editor.cloud = { ...editor.cloud, pendingEmail: null })}>Use a different email</button>
-            </div>
-          </div>
-
-        {:else}
-          <div class="profile">
-            <div class="avatar">{initials}</div>
-            <div class="who">
-              <div class="name-row"><span class="name">{c.user?.email}</span>{#if c.paid}<span class="plan pro">{planLabel(c.plan)}</span>{/if}</div>
-              <div class="email">{c.user?.email}</div>
-            </div>
-          </div>
-
-          <div class="pad">
-            <div class="sec">CLOUD SYNC</div>
-            <div class="sync-card">
-              <div class="sync-head">
-                <span class="dot" style="background:{c.syncing ? '#f5a623' : '#33c46b'}; box-shadow:0 0 8px {c.syncing ? '#f5a623' : '#33c46b'}"></span>
-                <div class="sync-txt">
-                  <div class="st">{c.syncing ? 'Syncing…' : c.lastSync ? 'All synced' : 'Not synced yet'}</div>
-                  <div class="ss">{c.syncing ? 'Pushing & pulling your config' : c.lastSync ? `Last synced ${ago}` : 'Sync to back up your Axis config'}</div>
-                </div>
-              </div>
-              {#if c.syncing}
-                <div class="bar"><div class="fill"></div></div>
-              {:else}
-                <button class="sync-now" onclick={() => editor.cloudSync()}><Icon name="refresh" size={15} /> Sync now</button>
-              {/if}
-              {#if c.note}<p class="note">{c.note}</p>{/if}
-            </div>
-
-            <button class="item auto" onclick={() => editor.setAutoSync(!c.autoSync)}>
-              <span class="chk" class:on={c.autoSync}>{#if c.autoSync}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
-              <span class="item-body">
-                <span class="item-label">Auto-sync</span>
-                <span class="item-desc">Sync config changes to the cloud automatically, shortly after you make them</span>
-              </span>
-            </button>
-
-            <div class="items">
-              {#each SCOPES as s}
-                <button class="item" onclick={() => editor.setCloudScope(s.id, !c.scopes[s.id])}>
-                  <span class="chk" class:on={c.scopes[s.id]}>{#if c.scopes[s.id]}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
-                  <span class="item-label">{s.label}</span>
-                  <span class="item-meta">{s.meta}</span>
-                </button>
-              {/each}
-              <button class="item" onclick={() => editor.setCloudScope('presets', !c.scopes.presets)}>
-                <span class="chk" class:on={c.scopes.presets}>{#if c.scopes.presets}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
-                <span class="item-label">Presets</span>
-                <span class="item-meta">{c.paid ? 'preset versions' : 'newest backup + snapshots'}</span>
-              </button>
-              <button class="item backup" onclick={fullBackup} disabled={c.syncing}>
-                <span class="chk action"><Icon name="cloud" size={13} /></span>
-                <span class="item-body">
-                  <span class="item-label">Full device backup</span>
-                  <span class="item-desc">Snapshot every preset on the device, then sync{c.paid ? '' : ' — the free plan keeps your most recent full backup in the cloud'}</span>
-                </span>
-              </button>
-            </div>
-
-            {#if !c.paid && c.quota?.limits}
-              {@const q = c.quota}
-              {@const pct = Math.min(100, Math.round((q.usedBytes / q.limits!.maxStoredBytes) * 100))}
-              <div class="quota" class:warn={pct >= 80} class:full={pct >= 100}>
-                <div class="q-row">
-                  <span class="q-lbl">CLOUD STORAGE</span>
-                  <span class="q-val mono">{(q.usedBytes / 1048576).toFixed(2)} / {(q.limits!.maxStoredBytes / 1048576).toFixed(0)} MB · {q.snapshots} of {q.limits!.maxSnapshots} snapshots</span>
-                </div>
-                <div class="q-bar"><div class="q-fill" style="width:{pct}%"></div></div>
-              </div>
-            {/if}
-
-            <div class="sec mt">CONTACT</div>
-            <p class="muted">Optional — leave a way to reach you if we need to follow up on a bug report. Stored with your synced config; never used for marketing.</p>
-            {@render contactField('acct-contact')}
-
-            <div class="sec mt">REMOTE CONTROL <span class="soon">beta</span></div>
-            <button class="item box" onclick={() => editor.setRemoteAccess(!editor.remote.enabled)}>
-              <span class="chk" class:on={editor.remote.enabled}>{#if editor.remote.enabled}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
-              <span class="item-body">
-                <span class="item-label">Allow remote control {#if editor.remote.enabled && editor.remote.connected}<span class="soon on">LIVE</span>{/if}</span>
-                <span class="item-desc">Control this device from any browser at axisapp.live while signed into the same account. Off by default; only you can connect. Turn off any time.</span>
-              </span>
-            </button>
-
-            <button class="signout" onclick={() => editor.cloudLogout()}>Sign out</button>
-            {#if confirmDelete}
-              <div class="danger">
-                <p class="muted sm">Permanently delete your account and <strong>all</strong> cloud data (synced config, contact). This cannot be undone.</p>
-                <div class="drow">
-                  <button class="del" onclick={() => { editor.cloudDeleteAccount(); confirmDelete = false; }}>Delete permanently</button>
-                  <button class="link" onclick={() => (confirmDelete = false)}>Cancel</button>
-                </div>
-              </div>
-            {:else}
-              <button class="dellink" onclick={() => (confirmDelete = true)}>Delete account &amp; data</button>
-            {/if}
-          </div>
-        {/if}
-
-      {:else if editor.axisTab === 'storage'}
+      {#if editor.axisTab === 'storage'}
         <!-- Local storage folder: Presets/ (library on disk) + Sync/ (plain-syx version mirror) -->
         <div class="pad">
           <div class="head">
@@ -300,7 +124,7 @@
           </div>
 
           <div class="sec">FOLDER</div>
-          <p class="muted">Pick a folder and Axis manages two subfolders inside it: <strong>Presets/</strong> — a browsable .syx library (drop your collections in, audition without touching device slots) — and <strong>Sync/</strong> — plain .syx backups of your preset versions, readable by FM3-Edit and Fractal-Bot. Works with or without cloud sync.</p>
+          <p class="muted">Pick a folder and Axis manages two subfolders inside it: <strong>Presets/</strong> — a browsable .syx library (drop your collections in, audition without touching device slots) — and <strong>Sync/</strong> — plain .syx backups of your preset versions, readable by FM3-Edit and Fractal-Bot.</p>
           {#if loc.configured}
             <p class="statline">
               {#if loc.exists}<span class="badge ok">SET</span>{:else}<span class="badge warn">MISSING</span>{/if}
@@ -353,6 +177,10 @@
                 <span class="item-desc">Mirror new snapshots &amp; backups to Sync/ automatically, shortly after they're made. Unlimited — no tier restrictions.</span>
               </span>
             </button>
+
+            <div class="sec mt">FULL DEVICE BACKUP</div>
+            <p class="muted">Snapshot every preset on the device into this PC's version store, then mirror it to Sync/ when a folder is set. Takes a few minutes on a full unit.</p>
+            <button class="sync-now" disabled={loc.syncing} onclick={() => editor.fullDeviceBackup()}><Icon name="device" size={15} /> Back up every preset</button>
 
             <div class="sec mt">RESTORE</div>
             <p class="muted">On a fresh machine (or after data loss), re-import every version from the folder's Sync/ back into Axis. Verified against the index; never overwrites existing versions.</p>
@@ -532,21 +360,12 @@
 
   .pad { padding: 18px 24px 24px; }
   .muted { font-size: 12px; color: var(--textdim); line-height: 1.5; margin: 6px 0 12px; }
-  .muted.sm { font-size: 11px; margin-top: 4px; }
 
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; margin: 8px 0 22px; }
   .logo { width: 46px; height: 46px; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); }
   .logo.sm { flex: none; }
   .h1 { font-size: 20px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
-  .tabs { display: flex; gap: 4px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
-  .tab { flex: 1; height: 38px; border-radius: 9px; border: none; background: transparent; color: var(--textdim); font-size: 13px; font-weight: 700; cursor: pointer; }
-  .tab.on { background: var(--accent); color: var(--accentink); }
-  form { display: flex; flex-direction: column; gap: 16px; }
-  .field { display: flex; flex-direction: column; gap: 8px; }
-  .lbl { font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; }
-  .lbl-row { display: flex; justify-content: space-between; align-items: center; }
   .in { width: 100%; height: 46px; padding: 0 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 11px; color: var(--text); font-size: 14px; outline: none; }
   .in.sm { height: 40px; font-size: 13px; }
   .in:focus { border-color: var(--accent); }
@@ -566,23 +385,9 @@
   .opt { color: var(--textmuted); margin-left: 4px; }
 
   /* verify */
-  .verify { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 26px; }
-  .mailbox { width: 66px; height: 66px; border-radius: 50%; background: rgba(53, 201, 214, 0.1); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--accent); margin-bottom: 20px; }
-  .verify .h1 { margin-bottom: 10px; }
-  .email-chip { margin-top: 14px; padding: 10px 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font: 600 13px/1 'JetBrains Mono', monospace; color: var(--accent); }
-  .verify .cta { margin-top: 24px; }
-  .verify-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
   .dotsep { width: 3px; height: 3px; border-radius: 50%; background: var(--border3); display: inline-block; }
 
   /* account */
-  .profile { display: flex; align-items: center; gap: 15px; padding: 18px 24px 18px; border-bottom: 1px solid var(--surface2); }
-  .avatar { width: 52px; height: 52px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accentink); font: 800 19px/1 'JetBrains Mono', monospace; }
-  .who { flex: 1; min-width: 0; }
-  .name-row { display: flex; align-items: center; gap: 9px; }
-  .name { font-size: 15px; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .plan { flex: none; font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: var(--accentink); background: var(--ok); border-radius: 5px; padding: 4px 7px; }
-  .plan.pro { background: var(--amber); }
-  .email { font-size: 12.5px; color: var(--textdim); margin-top: 4px; }
   .sec { font: 700 9px/1 'JetBrains Mono', monospace; color: var(--textmuted); letter-spacing: 0.14em; margin-bottom: 12px; }
   .sec.mt { margin-top: 22px; }
   .sync-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
@@ -596,7 +401,6 @@
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
   .sync-now { width: 100%; margin-top: 15px; height: 42px; background: transparent; border: 1px solid var(--accent-border); border-radius: 11px; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 700; }
   .sync-now:hover { background: var(--accent-tint); border-color: var(--accent); }
-  .items { margin-top: 16px; display: flex; flex-direction: column; }
   .item { display: flex; align-items: center; gap: 13px; padding: 11px 2px; cursor: pointer; background: none; border: none; text-align: left; width: 100%; }
   .item.box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; align-items: flex-start; }
   .item.box:hover { border-color: var(--border3); }
@@ -604,19 +408,11 @@
   .chk { width: 20px; height: 20px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--border3); color: transparent; }
   .chk.on { background: var(--accent); border-color: var(--accent); color: var(--accentink); }
   .item-label { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); }
-  .item-meta { font: 600 10px/1 'JetBrains Mono', monospace; color: var(--textfaint); }
   .item-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   .item-desc { font-size: 11px; color: var(--textfaint); line-height: 1.45; }
-  .soon { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; color: var(--accentink); background: var(--textfaint); border-radius: 4px; padding: 3px 5px; margin-left: 6px; vertical-align: middle; }
-  .soon.on { background: var(--amber); }
   .signout { width: 100%; margin-top: 22px; height: 44px; background: transparent; border: 1px solid var(--border2); color: var(--text2); border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700; }
   .signout:hover { border-color: var(--border3); color: var(--text); }
-  .dellink { display: block; width: 100%; margin-top: 10px; background: none; border: none; color: var(--danger-border); font-size: 12px; font-weight: 600; cursor: pointer; }
-  .dellink:hover { color: var(--danger); }
-  .danger { margin-top: 12px; padding: 14px; background: rgba(214, 84, 63, 0.06); border: 1px solid rgba(214, 84, 63, 0.35); border-radius: 11px; }
   .drow { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-  .del { flex: 1; height: 40px; background: var(--danger); color: var(--text); border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
-  .del:hover { background: var(--danger); }
 
   /* diagnostics disclosure */
   .incl { list-style: none; margin: 10px 0 0; padding: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text2); line-height: 1.7; }
@@ -655,14 +451,4 @@
   .pathtxt { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 
   /* free-tier quota bar */
-  .quota { margin-top: 14px; padding: 12px 14px; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; }
-  .quota.warn { border-color: rgba(245, 166, 35, 0.45); }
-  .quota.full { border-color: rgba(214, 84, 63, 0.55); }
-  .q-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .q-lbl { font: 700 9px/1 'JetBrains Mono', monospace; letter-spacing: 0.12em; color: var(--textmuted); }
-  .q-val { font-size: 10.5px; color: var(--textdim); }
-  .q-bar { height: 6px; margin-top: 9px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
-  .q-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
-  .quota.warn .q-fill { background: var(--amber); }
-  .quota.full .q-fill { background: var(--danger); }
 </style>

@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Full-screen gate for Browser Direct mode (axisapp.live/?mode=direct): pick how the device is
+  // Full-screen gate for Browser Direct mode (axisapp.live): pick how the device is
   // attached, grant the browser permission, connect. Shown until the in-page runtime is live; once
-  // ready, +page renders the normal Axis UI. Sibling of RemoteGate.svelte.
+  // ready, +page renders the normal Axis UI.
   import { directBoot } from './direct.svelte';
   import { LEGAL } from './legal';
   import { COPYRIGHT } from './support';
@@ -32,7 +32,7 @@
       <div class="state">
         <div class="st warn">This browser can't reach devices</div>
         <div class="ss">Web MIDI / Web Serial aren't available here (iOS and Safari don't support them).</div>
-        <div class="hint">Use <strong>Chrome or Edge on a computer</strong> for the full experience — or <a href="/?mode=remote">Axis Remote</a> to control the Axis desktop app from this browser.</div>
+        <div class="hint">Use <strong>Chrome or Edge on a computer</strong> for the full experience.</div>
       </div>
     {:else if b.midiChoices.length > 0}
       <div class="pick">
@@ -60,7 +60,7 @@
           <div class="miss">FM3 over USB needs Chrome/Edge on desktop (Web Serial). An FM3 on a MIDI interface works here too.</div>
         {/if}
         {#if b.note}<p class="note">{b.note}</p>{/if}
-        <p class="legal">Your presets stay in this browser — nothing is uploaded unless you sign in and turn on cloud sync.</p>
+        <p class="legal">Your presets stay in this browser — nothing is uploaded.</p>
       </div>
     {/if}
   </div>
@@ -105,7 +105,6 @@
   .st.warn { color: var(--amber); }
   .ss { font-size: 12.5px; color: var(--textdim); }
   .hint { font-size: 12px; color: var(--text2); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; line-height: 1.5; }
-  .hint a { color: var(--accent); }
   .spinner { width: 34px; height: 34px; border: 3px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 4px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

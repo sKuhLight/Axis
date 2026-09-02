@@ -11,10 +11,9 @@ vi.mock('./forgefx', () => ({
     putDoc: vi.fn(async () => ({})),
     listDocs: vi.fn(async () => ({ docs: [] })),
     deleteDoc: vi.fn(async () => ({}))
-  },
-  isRemote: () => false
+  }
 }));
-vi.mock('./cloudBrowser', () => ({ isRemoteBuild: () => true }));
+vi.mock('./buildMode', () => ({ isWebBuild: () => true }));
 vi.mock('./idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
 vi.mock('./cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
 vi.mock('./syncBus', () => ({ notifyMutation: () => {} }));

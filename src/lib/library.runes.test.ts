@@ -31,11 +31,10 @@ vi.mock('./forgefx', () => ({
     putDoc: vi.fn(async () => ({})),
     listDocs: vi.fn(async () => ({ docs: [] })),
     deleteDoc: vi.fn(async () => ({}))
-  },
-  isRemote: () => false
+  }
 }));
-// isRemoteBuild() → true short-circuits the constructor's config-publish block.
-vi.mock('./cloudBrowser', () => ({ isRemoteBuild: () => true }));
+// isWebBuild() → true short-circuits the constructor's config-publish block.
+vi.mock('./buildMode', () => ({ isWebBuild: () => true }));
 // available() → false skips the IndexedDB restore AND every persist call.
 vi.mock('./idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
 vi.mock('./cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
@@ -356,7 +355,7 @@ describe('removing a preset forgets its tags', () => {
   });
 });
 
-describe('tag colors registry round-trip (persist → load → hydrate → applyRemoteConfig)', () => {
+describe('tag colors registry round-trip (persist → load → applyRemoteConfig)', () => {
   it('addTag claims a swatch for a brand-new tag, colorOf reflects the claimed index', () => {
     library.tags = {};
     library.tagColors = {};
@@ -419,14 +418,6 @@ describe('tag colors registry round-trip (persist → load → hydrate → apply
     expect(library.tags).toEqual({ 'dev:r6': ['RenameKeep'] });
     library.renameTag('RenameAbsent', 'RenameWhatever');
     expect(library.tags).toEqual({ 'dev:r6': ['RenameKeep'] });
-  });
-
-  it('hydrate() adopts a pushed tagColors doc and persists it to localStorage', async () => {
-    library.tags = {};
-    library.tagColors = {};
-    await library.hydrate({ tagColors: { RoundTripPushed: 3 } });
-    expect(library.tagColors).toEqual({ RoundTripPushed: 3 });
-    expect(JSON.parse(localStorage.getItem('axs.lib.tagColors')!)).toEqual({ RoundTripPushed: 3 });
   });
 
   it('applyRemoteConfig("tagColors", …) adopts a live push and persists it, without re-broadcasting', () => {

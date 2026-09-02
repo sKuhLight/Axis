@@ -2,19 +2,17 @@
 //
 // The Control Surface used to scatter its state across many localStorage keys
 // (`axs.surface2.grid`, `axs.surface3meta.<slug>`, `axs.surface3.<slug>.<profile>`) and never mirrored
-// them to the cloud. That's why arrange/layout changes never reached the remote. This module folds ALL of
+// them into the shared config store. This module folds ALL of
 // that into a single `config/surface` document (the same config store that holds tags/layouts/swipe), with
 // localStorage kept only as an offline cache for instant, no-flash loads on the host.
 //
 // - Host: `mem` seeds synchronously from the localStorage cache at import (so the surface renders instantly),
 //   then `surfInit()` folds any legacy scattered keys into the doc and publishes/refreshes against the store.
-// - Remote: the cache is empty; `surfInit()` (awaited in hydrateRemoteConfig, after the relay is live) pulls
-//   `config/surface` from the host over the relay so the remote shows the EXACT same boards/quick-actions.
 //
 // The public surfGet/surfSet/surfRemove keep the string key/value shape the ControlSurface already used, so
 // migrating it is a mechanical getItem→surfGet swap.
-import { forgefx, isRemote } from './forgefx';
-import { isRemoteBuild } from './cloudBrowser';
+import { forgefx } from './forgefx';
+import { isWebBuild } from './buildMode';
 import { notifyMutation } from './syncBus';
 
 const DOC = 'surface'; // config/surface — the single doc holding the whole control-surface state
@@ -50,7 +48,7 @@ function persist(): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     forgefx.putDoc('config', DOC, mem).catch(() => {});
-    notifyMutation(); // nudge debounced cloud auto-sync
+    notifyMutation(); // nudge debounced local folder auto-sync
   }, 400);
 }
 
@@ -86,7 +84,7 @@ export function surfInit(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     // Host only: fold any legacy scattered localStorage keys into the doc (so existing boards migrate in).
-    if (!isRemoteBuild() && typeof localStorage !== 'undefined') {
+    if (!isWebBuild() && typeof localStorage !== 'undefined') {
       let migrated = false;
       const next = { ...mem };
       for (let i = 0; i < localStorage.length; i++) {
@@ -99,19 +97,19 @@ export function surfInit(): Promise<void> {
       }
       if (migrated) { mem = next; }
     }
-    // Refresh from the store. On the remote this IS the host's live config (pulled over the relay).
+    // Refresh from the store.
     try {
       const doc = (await forgefx.getDoc<Record<string, string>>('config', DOC))?.data;
       if (doc && typeof doc === 'object') {
         // remote: store wins outright; host: keep newer local edits, fill any gaps from the store.
-        mem = isRemoteBuild() ? { ...doc } : { ...doc, ...mem };
+        mem = isWebBuild() ? { ...doc } : { ...doc, ...mem };
         if (typeof localStorage !== 'undefined') {
           try { localStorage.setItem(CACHE, JSON.stringify(mem)); } catch { /* */ }
         }
       }
     } catch { /* offline / no backend — keep the cache */ }
-    // Host: publish the (possibly migrated / cache-only) state so the store reflects this PC for the remote.
-    if (!isRemoteBuild() && !isRemote() && Object.keys(mem).length) {
+    // Host: publish the (possibly migrated / cache-only) state so the store reflects this PC.
+    if (!isWebBuild() && Object.keys(mem).length) {
       forgefx.putDoc('config', DOC, mem).catch(() => {});
     }
   })();

@@ -5,7 +5,7 @@ import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench'
  * Preset Browser — tag creation (row context menu → Tags…).
  *
  * `library.addTag`/`removeTag` had zero UI callers before this: the only way a tag ever appeared
- * was via the cloud `config/tags` doc or seeded localStorage. This spec pins the new path: right-click
+ * was via the stored `config/tags` doc or seeded localStorage. This spec pins the new path: right-click
  * a row, open the Tags… picker, create a tag, and see it land as both a row pill and a Frequent Tags
  * chip — then untoggle it and see both disappear.
  */

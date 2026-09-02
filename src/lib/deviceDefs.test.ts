@@ -13,7 +13,7 @@ import {
 } from './deviceDefs';
 import type { DeviceCacheStatus } from './types';
 
-const baseEnv = { isElectron: false, hasDirectoryPicker: false, isRemote: false };
+const baseEnv = { isElectron: false, hasDirectoryPicker: false };
 const inputs = (o: Partial<DeviceDefsInputs>): DeviceDefsInputs => ({
   caps: { selfDescribe: true, cacheImport: true },
   status: { exists: false, building: false },
@@ -43,10 +43,6 @@ describe('deviceDefsActions — ordered available actions', () => {
     expect(a).toContain('dropFile');
     expect(a).toContain('readFromDevice');
     expect(a.indexOf('dropFile')).toBeLessThan(a.indexOf('readFromDevice'));
-  });
-
-  it('hides read-from-device over a relay (remote) session', () => {
-    expect(deviceDefsActions(inputs({ env: { ...baseEnv, isRemote: true } }))).not.toContain('readFromDevice');
   });
 
   it('offers folder access only in a browser with the directory picker', () => {
@@ -83,11 +79,9 @@ describe('deviceDefsActions — ordered available actions', () => {
     expect(a[a.length - 1]).toBe('fullCapture');
   });
 
-  it('hides the full (taper) capture without self-describe or over a relay', () => {
+  it('hides the full (taper) capture without self-describe', () => {
     // fullCapture is a superset of the self-describe walk — no walk, no full capture.
     expect(deviceDefsActions(inputs({ caps: { selfDescribe: false, cacheImport: true, fullCapture: true } }))).not.toContain('fullCapture');
-    // A relay session can't run a usable device read either.
-    expect(deviceDefsActions(inputs({ caps: { selfDescribe: true, fullCapture: true }, env: { ...baseEnv, isRemote: true } }))).not.toContain('fullCapture');
   });
 
   it('offers nothing (incl. full capture) while a build is already running', () => {

@@ -28,7 +28,7 @@ import {
  * Operator directive (2026-07-12): every nav point becomes its own freely
  * configurable layout page. Seven predefined pages ship — Grid (today's default
  * layout), Preset Browser (full-size PB), Scenes, Live, Setup, Controllers, FC —
- * each renamable / deletable / reorderable. Theme + Axis Cloud stay ACTION entries
+ * each renamable / deletable / reorderable. Theme + Axis stay ACTION entries
  * (no page). Pages are per device profile (desktop/tablet/phone), same seeds — but
  * the ACTIVE page is carried across a profile switch (see the reducer's
  * `profile.activate`), so it reads as one page selection shared by all three
@@ -292,7 +292,7 @@ const actionNavEntry = (
 
 /**
  * The Axis seed navigation: the seven page-bound entries (each activates its page)
- * plus the two ACTION entries — Settings (opens the settings modal) and Axis Cloud
+ * plus the two ACTION entries — Settings (opens the settings modal) and Axis
  * (account modal, pinned to the rail footer). Page entries carry NO `target`; their
  * `pageId` binding drives `page.activate` in the generic `NavigationHost`.
  */
@@ -308,7 +308,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
       setup: pageNavEntry('setup', NAV_LABELS.setup, AXIS_PAGE_SETUP),
       theme: actionNavEntry('theme', 'Settings', 'axis.openTheme'),
-      account: actionNavEntry('account', 'Axis Cloud', 'axis.openAccount', {
+      account: actionNavEntry('account', 'Axis', 'axis.openAccount', {
         locked: true,
         fixedSlot: 'rail.footer'
       })
@@ -372,7 +372,7 @@ function layoutAlreadySeeded(layout: WorkbenchLayout): boolean {
  *    Scenes / Live), which are pulled out so they land cleanly on their own pages;
  *  - the other six seed pages + the full-size Preset Browser page are added;
  *  - the navigation is rebuilt with the seven page bindings (preserving the layout's
- *    nav `mode`), Theme + Axis Cloud staying action entries.
+ *    nav `mode`), Theme + Axis staying action entries.
  *
  * A schema-v1 doc has already been wrapped into a single `main` page by the framework
  * repair before this runs, so "the existing dock tree" is that page's dock. New /

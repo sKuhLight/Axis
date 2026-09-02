@@ -1,7 +1,7 @@
 // Sticky simple/advanced search mode for the docked preset browser's query bar. The typed query
 // language is opt-in: a first-time user meets the plain search box, and only a deliberate click on
 // the mode toggle switches them over — from then on the choice survives reloads. Local-only (no
-// cloud mirror — a per-device UI preference, matching the lighter MRU idiom used by frequent tags
+// store mirror — a per-device UI preference, matching the lighter MRU idiom used by frequent tags
 // and the CabPicker/PresetPicker/CommandPalette `recents`, not the heavier saved-filters dual-write).
 export const AXIS_PB_SEARCH_MODE_KEY = 'axs.pb.searchMode';
 

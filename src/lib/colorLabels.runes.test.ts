@@ -13,8 +13,7 @@ const applyColorLabelGroups = vi.fn<
 const showToast = vi.fn();
 
 vi.mock('./forgefx', () => ({
-  forgefx: { colorLabelSources: () => colorLabelSources(), importColorLabels: (s: { path: string }) => importColorLabels(s) },
-  isRemote: () => false
+  forgefx: { colorLabelSources: () => colorLabelSources(), importColorLabels: (s: { path: string }) => importColorLabels(s) }
 }));
 vi.mock('./library.svelte', () => ({ library: { applyColorLabelGroups: (g: ColorLabelGroup[], o?: unknown) => applyColorLabelGroups(g, o as never) } }));
 vi.mock('./editor.svelte', () => ({ editor: { showToast: (t: string, a?: string) => showToast(t, a) } }));

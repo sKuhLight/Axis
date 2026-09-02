@@ -1,6 +1,6 @@
 <script lang="ts">
   // Full-screen gate for the native mobile shell (VITE_AXIS_MOBILE): pick how the device is attached
-  // — USB MIDI, Bluetooth MIDI, or Axis Remote — grant native access, connect. Shown until the in-page
+  // — USB MIDI or Bluetooth MIDI — grant native access, connect. Shown until the in-page
   // runtime is live; once ready, +page renders the normal Axis UI. Sibling of DirectGate.svelte.
   import { mobileBoot } from './mobile.svelte';
   import { LEGAL } from './legal';
@@ -49,13 +49,9 @@
           <span class="ot">Bluetooth MIDI</span>
           <span class="od">Pair a BLE MIDI adapter</span>
         </button>
-        <button class="opt" onclick={() => b.useRemote()}>
-          <span class="ot">Axis Remote</span>
-          <span class="od">Control the Axis desktop app on your PC over the internet</span>
-        </button>
-        <div class="miss">FM3 connects via a DIN or Bluetooth MIDI adapter, or through Axis Remote — its USB port isn't reachable on iOS.</div>
+        <div class="miss">FM3 connects via a DIN or Bluetooth MIDI adapter — its USB port isn't reachable on iOS.</div>
         {#if b.note}<p class="note">{b.note}</p>{/if}
-        <p class="legal">Your presets stay on this device — nothing is uploaded unless you sign in and turn on cloud sync.</p>
+        <p class="legal">Your presets stay on this device — nothing is uploaded.</p>
       </div>
     {/if}
   </div>

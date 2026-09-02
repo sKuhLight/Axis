@@ -63,7 +63,6 @@ describe('Preset Browser Workbench data view', () => {
       ['device', 1],
       ['local', 1],
       ['file', 1],
-      ['cloud', 0],
       ['converted', 0]
     ]);
     expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient']);
@@ -252,15 +251,15 @@ describe('Preset Browser Workbench data view', () => {
     expect(asc.visibleEntries.map((e) => e.id)).toEqual(['dev:2', 'dev:5', 'dev:9']);
   });
 
-  it('does not throw on cloud-only entries with empty models/amps maps', () => {
-    const cloudOnly: AxisPresetBrowserLibEntryLike = {
-      id: 'cloud:9',
+  it('does not throw on entries with empty models/amps maps', () => {
+    const sparse: AxisPresetBrowserLibEntryLike = {
+      id: 'dev:9',
       source: 'device',
-      summary: { number: 9, name: 'Cloud Only', model: 'FM3', scenes: [], blocks: [], models: {}, amps: [] }
+      summary: { number: 9, name: 'Sparse', model: 'FM3', scenes: [], blocks: [], models: {}, amps: [] }
     };
     expect(() =>
       createAxisPresetBrowserDataView({
-        entries: [cloudOnly],
+        entries: [sparse],
         conditions: [{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: '5153' }] }]
       })
     ).not.toThrow();

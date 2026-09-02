@@ -10,7 +10,7 @@
   }
   let { children } = $props();
 
-  // PWA: register the service worker ONLY in the remote web build (axisapp.live). The desktop app is
+  // PWA: register the service worker ONLY in the web build (axisapp.live). The desktop app is
   // served same-origin over http://localhost, where an SW would intercept the ForgeFX API/SSE — so it
   // must stay off there. VITE_AXIS_REMOTE is a build-time constant, so this branch is tree-shaken out
   // of the desktop bundle entirely.

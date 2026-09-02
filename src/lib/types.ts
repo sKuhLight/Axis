@@ -201,7 +201,7 @@ export interface FcReadState {
 }
 
 /** GET /telemetry/status — telemetry gate state. `enabled` = live RUM (AXIS_TELEMETRY=1); `uploadEnabled`
- *  = the on-demand debug-report upload is available (Supabase configured), independent of live telemetry. */
+ *  = the on-demand debug-report upload is available (server configured), independent of live telemetry. */
 export interface TelemetryStatus {
   enabled: boolean;
   faroUrl: string;
@@ -427,20 +427,6 @@ export interface VersionInfo {
   stored: number;
 }
 
-/** A version as the cloud sees it (GET /cloud/index) — metadata only, used to compute per-preset sync state.
- *  Version ids are deterministic (location+crc+ts), so a local VersionInfo is "in cloud" iff its id is here. */
-export interface CloudVersion {
-  id: string;
-  location: number;
-  crc: number;
-  name: string;
-  model: string;
-  capturedAt: number;
-  source: string;
-  bytes: number;
-  stored: number;
-}
-
 // ── local storage folder (ForgeFX /local/*: Presets/ library + Sync/ plain-syx mirror) ──
 export interface LocalConfig {
   configured: boolean;
@@ -464,11 +450,6 @@ export interface LocalSyncResult {
   total: number;
   backups: number;
 }
-
-/** Per-preset cloud sync state, computed from device CRC + local versions + the cloud index.
- *  'unknown' = the preset IS on the device and a cloud version exists, but the entry carries no
- *  CRC to compare (name-scan devices, stale cache rows) — never mislabel that as cloud-only. */
-export type SyncState = 'synced' | 'modified' | 'outdated' | 'cloudOnly' | 'deviceOnly' | 'unknown' | 'none';
 
 /** A unique effect block in a preset (for the library/browser). */
 export interface PresetSummaryBlock {
@@ -557,7 +538,7 @@ export type DeviceEvent =
   | { type: 'scene'; index: number }
   | { type: 'cpu'; percent: number }
   | { type: 'meters'; out1L: number; out1R: number; out2L: number; out2R: number }
-  // Live cross-UI change sync (multi-window + Axis Cloud Remote): `param` = another UI moved a knob;
+  // Live cross-UI change sync (multi-window): `param` = another UI moved a knob;
   // `changed` = a structural change (grid/preset) → reload.
   | { type: 'param'; effectId: number; paramId: number; norm: number }
   | { type: 'blockState'; effectId?: number }
@@ -779,7 +760,7 @@ export interface DeviceCacheSources {
 }
 
 /** GET /device/cache/cloud — whether a shared cloud profile exists for this device+firmware.
- *  `enabled:false` = the server has no cloud configured at all (AXIS_CLOUD off). */
+ *  `enabled:false` = the server has no shared-profile store configured. */
 export interface CloudCacheStatus {
   enabled?: boolean;
   available: boolean;

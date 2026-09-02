@@ -2,8 +2,8 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { z } from 'zod';
-import { forgefx, isRemote } from './forgefx';
-import { isRemoteBuild } from './cloudBrowser';
+import { forgefx } from './forgefx';
+import { isWebBuild } from './buildMode';
 import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
 import { notifyMutation } from './syncBus';
@@ -89,32 +89,12 @@ const persist = (key: string, v: unknown) => {
 };
 // User config (tags/collections/favorites): persist to localStorage (instant/offline source of truth)
 // AND mirror to the ForgeFX store under the `config` collection, so it lives in the unified backend and
-// is ready for cloud sync. localStorage stays authoritative for reads → zero data-loss risk.
+// other UIs on this PC see it live. localStorage stays authoritative for reads → zero data-loss risk.
 const persistCfg = (cfgId: 'tags' | 'collections' | 'favs' | 'tagColors', lsKey: string, v: unknown) => {
   persist(lsKey, v);
   forgefx.putDoc('config', cfgId, v).catch(() => {});
-  notifyMutation(); // nudge debounced cloud auto-sync
+  notifyMutation(); // nudge debounced local folder auto-sync
 };
-
-// The device library index (512 preset summaries) is far too big for a plain config doc, so we gzip it to
-// base64 before storing it in the `config/library` doc. The host pushes it after every scan; a remote web
-// client pulls + gunzips it (over the relay) instead of re-scanning 512 presets over MIDI. CompressionStream
-// is available in every browser + Electron we ship on.
-async function gzipB64(obj: unknown): Promise<string> {
-  const data = new TextEncoder().encode(JSON.stringify(obj));
-  const buf = await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
-  return btoa(bin);
-}
-async function gunzipB64<T>(b64: string): Promise<T> {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const buf = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-  return JSON.parse(new TextDecoder().decode(buf)) as T;
-}
 
 class LibraryStore {
   entries = $state<LibEntry[]>([]);
@@ -172,9 +152,6 @@ class LibraryStore {
     const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
     this.entries = [...deviceEntries, ...fileEntries].sort(this.#order);
     this.folders = load<string[]>(LS.folders, []);
-    // Host: publish the existing device index to the cloud so remote clients get it without a re-scan.
-    // (no-op in remote mode; debounced; idempotent.)
-    if (deviceEntries.length) this.#pushIndex(cached.map((s) => ({ ...s, params: undefined })));
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
       idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
@@ -182,15 +159,15 @@ class LibraryStore {
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();
-    // Claim swatches for any tag that predates this feature (or arrived via a cloud-synced `tags`
+    // Claim swatches for any tag that predates this feature (or arrived via a pushed `tags`
     // doc without ever going through `addTag`) — "first sight" for the host's local library is here,
     // at launch, not only at tag-creation time.
     this.ensureTagColors();
     // Host: republish the local Axis config into the ONE config store on every launch, so the store always
-    // reflects THIS PC — that's the source of truth the remote (and cloud sync) read. NEVER on the remote web
+    // reflects THIS PC — the source of truth other UIs on this machine read. NEVER in the web
     // build: its localStorage is empty and (in dev) shares the host's ForgeFX, so publishing would clobber
-    // the host's real config. The remote PULLS this config in hydrateRemoteConfig() instead.
-    if (!isRemoteBuild() && typeof localStorage !== 'undefined') {
+    // the host's real config.
+    if (!isWebBuild() && typeof localStorage !== 'undefined') {
       const raw = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
       forgefx.putDoc('config', 'tags', this.tags).catch(() => {});
       forgefx.putDoc('config', 'collections', this.collections).catch(() => {});
@@ -294,9 +271,6 @@ class LibraryStore {
    *  This is the single "index everything" action — no separate light-scan vs deep-scan. */
   async buildCache(from = 0, to = 511): Promise<void> {
     if (this.scanning) return;
-    // Remote mode: scanning 512 full preset dumps over the relay (+ the host's slow link) is unusable —
-    // that's the host's job. The remote browses via live queries; the library cache stays a local/host thing.
-    if (isRemote()) { this.scanError = 'Library scan runs on your PC, not remotely.'; return; }
     this.scanning = true;
     this.scanError = null;
     this.scanDone = 0;
@@ -432,7 +406,6 @@ class LibraryStore {
   /** Re-scan the local Presets/ folder and swap all `local:` entries in one pass. The server cache
    *  (mtime-keyed) is the source of truth — no bytes or summaries are persisted client-side. */
   async refreshLocal(refresh = false): Promise<void> {
-    if (isRemote()) return; // local folder lives on the host PC — hidden in remote sessions
     try {
       const r = await forgefx.localPresets(refresh);
       const favs = new Set(load<string[]>(LS.favs, []));
@@ -594,50 +567,9 @@ class LibraryStore {
     // summaries stay light in localStorage; the heavy `params` live in IndexedDB (IDB_PARAMS)
     const summaries = this.entries.filter((e) => e.source === 'device').map((e) => ({ ...e.summary, params: undefined }));
     persist(LS.cache, summaries);
-    this.#pushIndex(summaries);
   }
 
-  #pushIndexTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Mirror the device library index to the cloud (gzipped) so a remote web client gets it without a scan.
-   *  Debounced + skipped in remote mode (the remote pulls this doc; it must never overwrite it). */
-  #pushIndex(summaries: unknown[]): void {
-    if (isRemoteBuild() || isRemote() || typeof CompressionStream === 'undefined') return;
-    if (this.#pushIndexTimer) clearTimeout(this.#pushIndexTimer);
-    this.#pushIndexTimer = setTimeout(() => {
-      gzipB64(summaries)
-        .then((gz) => forgefx.putDoc('config', 'library', { v: 1, n: summaries.length, gz }))
-        .then(() => notifyMutation())
-        .catch(() => {});
-    }, 1500);
-  }
-
-  /** Remote/fresh web client: adopt the host's synced Axis config (pulled over the relay/cloud) so the
-   *  remote shows the SAME tags, collections, favorites and preset library as the PC — instead of scanning
-   *  512 presets over MIDI. Layouts + swipe/quick-actions are hydrated separately (their localStorage keys
-   *  are written before editor.init()). */
-  async hydrate(cfg: { tags?: unknown; collections?: unknown; favs?: unknown; tagColors?: unknown; index?: { gz?: string } | null }): Promise<void> {
-    if (cfg.tags && typeof cfg.tags === 'object') { this.tags = cfg.tags as Record<string, string[]>; persist(LS.tags, this.tags); }
-    if (cfg.collections && typeof cfg.collections === 'object') { this.collections = cfg.collections as Record<string, string[]>; persist(LS.collections, this.collections); }
-    if (cfg.tagColors) { this.tagColors = normalizeTagColors(cfg.tagColors); persist(LS.tagColors, this.tagColors); }
-    const favSet = new Set(Array.isArray(cfg.favs) ? (cfg.favs as string[]) : []);
-    if (cfg.index?.gz && typeof DecompressionStream !== 'undefined') {
-      try {
-        const summaries = (await gunzipB64<unknown[]>(cfg.index.gz))
-          .filter((s) => summarySchema.safeParse(s).success) as PresetSummary[];
-        const device = summaries
-          .filter((s) => !isEmptyName(s.name) && !isEmptySummary(s))
-          .map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favSet.has(`dev:${s.number}`) }));
-        this.entries = [...device, ...this.entries.filter((e) => e.source !== 'device')].sort(this.#order);
-        this.cacheBuilt = true;
-        persist(LS.built, true);
-        this.#cacheDevice(); // keep locally; #pushIndex is a no-op in remote mode
-      } catch { /* bad/absent index — leave the library empty rather than crash */ }
-    }
-    if (favSet.size) this.entries = this.entries.map((e) => ({ ...e, fav: favSet.has(e.id) })).sort(this.#order);
-    this.ensureTagColors();
-  }
-
-  /** Apply a live config push from another UI (host↔remote), WITHOUT re-publishing (that would loop).
+  /** Apply a live config push from another UI on this machine, WITHOUT re-publishing (that would loop).
    *  Updates the in-memory state + the localStorage cache only. */
   applyRemoteConfig(id: string, data: unknown): void {
     if (id === 'tags' && data && typeof data === 'object') { this.tags = data as Record<string, string[]>; persist(LS.tags, this.tags); this.ensureTagColors(); }
@@ -878,8 +810,8 @@ class LibraryStore {
   // ── metadata: tag colors (a tag owns one color everywhere it renders) ──
   /** Claim a swatch for every tag in `allTags` that doesn't have one yet, persisting once if anything
    *  changed. The ONLY place assignment happens — never lazily inside a getter (`colorOf` is a pure
-   *  read; writing `$state` during render trips `state_unsafe_mutation`). Call after `hydrate()`, after
-   *  `applyRemoteConfig('tags', …)`, and at the end of `addTag()`. */
+   *  read; writing `$state` during render trips `state_unsafe_mutation`). Call after
+   *  `applyRemoteConfig('tags', …)` and at the end of `addTag()`. */
   ensureTagColors(): void {
     let changed = false;
     const next = { ...this.tagColors };

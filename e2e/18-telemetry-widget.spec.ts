@@ -68,7 +68,7 @@ async function bootTelemetry(page: Page, telemetryControl: boolean): Promise<Tel
       }
       return json(route, TELEMETRY_CONFIG);
     }
-    // everything else (telemetry/status, cloud/status, meters, …) → benign empty; boot reads are guarded.
+    // everything else (telemetry/status, meters, …) → benign empty; boot reads are guarded.
     return json(route, {});
   });
   await page.route('**/api/events', (route) => route.abort());

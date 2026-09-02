@@ -1,4 +1,4 @@
-export type AxisPresetBrowserSourceId = 'all' | 'device' | 'local' | 'file' | 'cloud' | 'converted' | string;
+export type AxisPresetBrowserSourceId = 'all' | 'device' | 'local' | 'file' | 'converted' | string;
 
 export interface AxisPresetBrowserBlockSummary {
   effectId?: number | null;
@@ -24,7 +24,7 @@ export interface AxisPresetBrowserLibEntryLike {
     blocks?: AxisPresetBrowserBlockSummary[] | null;
     amps?: string[] | null;
     models?: Record<string, string[]> | null;
-    /** Device-slot CRC — used to resolve cloud sync state via cloud.stateOf (§3). */
+    /** Device-slot CRC. */
     crc?: number | null;
   };
 }
@@ -48,8 +48,6 @@ export interface AxisPresetBrowserEntrySummary {
    *  TYPE-style query matching; `blocks[].name` is only a generic roster instance label. */
   models: Record<string, string[]>;
   amps: string[];
-  /** Resolved cloud sync state (from cloud.stateOf via the host); 'none' when signed out. */
-  /** A synthesized cloud-only row (host id starts with `cloud:`). */
   /** A saved cross-device conversion (source 'converted') — hides device affordances, offers "Open in
    *  converter". */
   converted: boolean;
@@ -110,7 +108,6 @@ export interface AxisPresetBrowserDataInput {
   sort?: AxisPresetBrowserSortMode;
   /** Result direction (§4.1). 'asc' unless overridden; CPU/RECENT naturally sort descending. */
   sortDir?: AxisPresetBrowserSortDir;
-  /** Resolve an entry's cloud sync state (host reads the reactive cloud store). Defaults to 'none'. */
   /** Active library view (§3). When set (and not 'all'), the list is filtered by it. */
   presenceView?: AxisPbPresenceView;
   /** Per-view counts (respecting the presence filter) for the sources sidebar. */
@@ -131,14 +128,13 @@ import {
   type AxisPbPresenceViewDef
 } from './presetBrowserWorkbenchPresence';
 
-const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'cloud', 'converted'];
+const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'file', 'converted'];
 
 export function axisPresetBrowserSourceLabel(sourceId: AxisPresetBrowserSourceId): string {
   if (sourceId === 'all') return 'All Presets';
   if (sourceId === 'device') return 'Device';
   if (sourceId === 'local') return 'Local';
   if (sourceId === 'file') return 'Files';
-  if (sourceId === 'cloud') return 'Cloud';
   if (sourceId === 'converted') return 'Converted';
   return sourceId.replace(/[-_.]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -146,6 +142,9 @@ export function axisPresetBrowserSourceLabel(sourceId: AxisPresetBrowserSourceId
 export function normalizeAxisPresetBrowserSourceId(sourceId: AxisPresetBrowserSourceId | null | undefined): AxisPresetBrowserSourceId {
   if (!sourceId) return 'all';
   if (sourceId === 'files') return 'file';
+  // A persisted sidebar selection naming the retired cloud source falls back rather than
+  // filtering the list to nothing.
+  if (sourceId === 'cloud') return 'all';
   return sourceId;
 }
 

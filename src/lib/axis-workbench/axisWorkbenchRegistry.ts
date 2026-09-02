@@ -86,7 +86,7 @@ registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidget
 // Active-section tint (01-shell.md §9). ROUND 15: the seven page-bound nav entries
 // resolve their tint generically in NavigationHost (pageNavigationEntryActive — the
 // entry's page is the layout's activePageId). This app provider only covers the two
-// ACTION entries — Theme / Axis Cloud — whose open-state lives on the editor store.
+// ACTION entries — Theme / Axis — whose open-state lives on the editor store.
 // NavigationHost reads this inside a reactive $derived, so the editor runes below
 // are tracked and the tint stays live.
 registry.registerNavigationState({
@@ -123,7 +123,7 @@ registry.registerAction({
     editor.openVirtual(fc.eid, fc.slug, fc.name);
   }
 });
-registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('account') });
+registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('about') });
 registry.registerAction({ id: 'axis.openTheme', run: async () => { (await axisEditor()).themeOpen = true; } });
 // Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
 // Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels

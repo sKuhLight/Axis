@@ -1,11 +1,11 @@
 // Device-definitions store (A4, AXIS-17/44 · META-22). Orchestrates the server-side definition-profile
 // cache: status refresh on connect, self-describe builds (with live SSE progress), editor-cache imports
-// (drag-drop bytes, discovered candidates, or a browser-picked folder), and cloud pull/publish. All
+// (drag-drop bytes, discovered candidates, or a browser-picked folder), and shared-profile pull. All
 // ordering / gating / filename logic is delegated to the pure `deviceDefs.ts`; this file is the runes
 // shell + the (small) impure device/browser plumbing. It deliberately does NOT import the editor store
 // (the editor imports IT, to route `cacheBuild` SSE events) — device context is passed in on refresh.
 
-import { forgefx, isRemote, ForgeError } from './forgefx';
+import { forgefx, ForgeError } from './forgefx';
 import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceCaps, DeviceEvent } from './types';
 import {
   deviceDefsActions,
@@ -52,11 +52,8 @@ class DeviceDefsStore {
   /** Live build progress (from the `cacheBuild` SSE / the POST /build response), or null when idle. */
   building = $state<{ done: number; total: number; phase: string } | null>(null);
   importing = $state(false);
-  publishing = $state(false);
   /** Set after any successful acquisition (build/import/pull) so the prompt shows its success state. */
   succeeded = $state(false);
-  /** True once a publish returned 401 (not signed in) — hides the "Share to cloud" affordance. */
-  publishDenied = $state(false);
   error = $state<string | null>(null);
   /** The device model+firmware mismatch case (import 409) awaiting a force retry, or null. */
   mismatch = $state<{ bytes: Uint8Array; name: string } | { path: string } | null>(null);
@@ -88,21 +85,14 @@ class DeviceDefsStore {
       cloud: this.cloud,
       env: {
         isElectron: typeof globalThis !== 'undefined' && !!(globalThis as { axisDesktop?: unknown }).axisDesktop,
-        hasDirectoryPicker: hasDirectoryPicker(),
-        isRemote: isRemote()
+        hasDirectoryPicker: hasDirectoryPicker()
       }
     });
   }
-  /** Whether the "Share to cloud" publish affordance can be offered (cloud endpoint present, not denied). */
-  get canPublish(): boolean {
-    return this.cloud !== null && !this.publishDenied;
-  }
-  /** Whether to offer "Definitionen neu einlesen" (rebuild): a profile is persisted AND this local
-   *  session can re-acquire one (self-describe walk or import). Hidden over a relay — the follow-up
-   *  device read isn't usable there. */
+  /** Whether to offer "Definitionen neu einlesen" (rebuild): a profile is persisted AND this session
+   *  can re-acquire one (self-describe walk or import). */
   get canRebuild(): boolean {
     return this.activeSource.origin !== 'bundled'
-      && !isRemote()
       && (!!this.#ctx?.caps?.selfDescribe || !!this.#ctx?.caps?.cacheImport);
   }
   /** Human-facing readout of where the ACTIVE definitions come from (bundled/device/editor/cloud). */
@@ -225,17 +215,6 @@ class DeviceDefsStore {
     }
   };
 
-  cloudPublish = async () => {
-    this.publishing = true;
-    try {
-      await forgefx.cloudCachePublish();
-    } catch (e) {
-      if (e instanceof ForgeError && e.status === 401) { this.publishDenied = true; return; } // hide the affordance
-      this.error = 'Could not share the definitions.';
-    } finally {
-      this.publishing = false;
-    }
-  };
 
   /** Browser Chromium: pick an editor folder, scan it (+ one level of subdirs), import a match. */
   locateFolder = async () => {

@@ -2,7 +2,7 @@
 // Minimal, safe PWA service worker (auto-registered by SvelteKit in the built app). Its job is
 // installability + a fast/offline app shell — NOT caching live data. Content-hashed build assets are
 // cache-first; navigations are network-first (so the shell is never stale) with an offline fallback;
-// cross-origin requests (Supabase relay, ForgeFX API, fonts) are never intercepted.
+// cross-origin requests (ForgeFX API, fonts) are never intercepted.
 import { build, files, version } from '$service-worker';
 
 const CACHE = `axis-${version}`;
@@ -25,7 +25,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return; // relay / API / fonts → leave untouched
+  if (url.origin !== self.location.origin) return; // API / fonts → leave untouched
 
   event.respondWith(
     (async () => {

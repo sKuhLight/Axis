@@ -76,7 +76,7 @@
   // Active scene's decoded name — TopBar parity (TopBar.svelte:103-120), which the
   // workbench shell dropped: the chips only ever showed the number.
   const sceneLabel = $derived(sceneNameDisplay(editor.sceneNames, activeScene));
-  const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
+  const initials = 'AX';
   // Bottom-bar status hint (parity with the old StatusBar left slot): the hover-hint for the
   // control under the cursor, falling back to the selection / connection state.
   const hintText = $derived(
@@ -233,7 +233,7 @@
     else if (kind === 'save') editor.openSave();
     else if (kind === 'search') editor.openLibrary();
     else if (kind === 'history') history.panelOpen = true;
-    else if (kind === 'account') editor.openAxis('account');
+    else if (kind === 'account') editor.openAxis('about');
     else if (kind === 'connection') editor.openPorts();
     else if (kind === 'undoRedo') void history.undo();
   }
@@ -622,7 +622,7 @@
     {#if expanded}<span class="mono token">{editor.conn.fw ? `AX-3 · FW${editor.conn.fw}` : editor.conn.state}</span>{/if}
   </button>
 {:else if kind === 'account'}
-  <button class="axis-widget square account" data-size={size} type="button" onclick={openWidget} title="Account and cloud sync">
+  <button class="axis-widget square account" data-size={size} type="button" onclick={openWidget} title="Axis — storage, privacy &amp; about">
     <span>{initials}</span>
   </button>
 {:else if kind === 'history'}

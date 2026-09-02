@@ -144,7 +144,7 @@ describe('matchEntryFromSummary (regression: decoded models must survive summary
     expect(matchPreset(matched, parseQuery('AMP(TYPE=Amp 1)'), '')).toBe(true);
   });
 
-  it('does not throw on an entry with empty models/amps maps (cloud-only shape)', () => {
+  it('does not throw on an entry with empty models/amps maps', () => {
     const matched = matchEntryFromSummary(summaryEntry({ blocks: [], models: {}, amps: [] }));
     expect(matchPreset(matched, parseQuery('AMP(TYPE=5153)'), '')).toBe(false);
   });

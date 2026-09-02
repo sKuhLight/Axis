@@ -7,7 +7,7 @@
 //
 // The codec matches the desktop's blob format: brotli (WASM — CompressionStream
 // has no brotli) + sha256 content addressing, so versions/blobs sync to the
-// same cloud rows a desktop install produces, and local restores are portable.
+// same rows a desktop install produces, and local restores are portable.
 import type { StoreBackend, StoreCodec, Doc, PresetVersion, JsonWriteOpts } from 'forgefx-server/runtime';
 
 const DB = 'axis-direct-store';

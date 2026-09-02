@@ -238,7 +238,7 @@ export class AxisPresetBrowserWorkbenchController {
 
   // ===================== library view (§3) =====================
 
-  // Select a LIBRARY view (All presets / On this device / In cloud / …). Shared across parts so the list
+  // Select a LIBRARY view (All presets / On this device). Shared across parts so the list
   // filters and the sources highlight stay in lockstep.
   setPresenceView(view: AxisPbPresenceView): void {
     this.#snapshot = { ...this.#snapshot, presenceView: view };

@@ -27,10 +27,10 @@ private generic `req<T>(path, init?)`:
   verb-prefixed (`set*` / `select*` / `place*`).
 - Canonical read: `blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`)`.
   Canonical write: `setParam` — PUT with `{ value, continuous }`.
-- **Three `TransportMode`s: `'local' | 'remote' | 'direct'`.** SSE `events()` runs
-  ONLY in local mode (remote/direct receive events via the relay / runtime bus),
-  and binary helpers branch on `isDirect()`. Any new SSE or binary feature must
-  handle all three modes, or it silently no-ops in remote/direct builds.
+- **Two `TransportMode`s: `'local' | 'direct'`.** SSE `events()` runs ONLY in
+  local mode (Browser Direct receives events via the in-page runtime bus), and
+  binary helpers branch on `isDirect()`. Any new SSE or binary feature must
+  handle both modes, or it silently no-ops in the web build.
 
 ## Types contract (`src/lib/types.ts`)
 
@@ -72,8 +72,7 @@ import it directly — no context or props threading.
   };
   ```
 
-Other stores: `cloud.svelte.ts` (true `$derived`, pure derivation + refresh),
-`library.svelte.ts` (device scan, `.syx` import, Zod-validated persisted
+Other stores: `library.svelte.ts` (device scan, `.syx` import, Zod-validated persisted
 summaries, Orama index), `history.svelte.ts` (undo/redo, IndexedDB; binds a
 narrow host interface to avoid an editor↔history import cycle).
 
@@ -112,10 +111,12 @@ Prefer a `DeviceCaps` capability gate: add the field to `DeviceCaps` in
 `types.ts` → ForgeFX populates it from forgefx-midi → add a `get hasX()` getter →
 gate the UI on it. Features then auto-appear per device and degrade gracefully on
 legacy servers. Use `VITE_*` build flags only for whole-shell/build modes
-(workbench/remote/mobile), wired through a small pure, testable gate function
+(workbench/web/mobile), wired through a small pure, testable gate function
 (pattern: `featureGate.ts`) with a defined gate-off behavior. Server-gated
-features (cloud): discover via the API (`cloudStatus().enabled`) — do not
-client-gate.
+There is no cloud: Axis Cloud (preset sync, accounts, and the Axis Remote relay)
+was removed — see the "Retire" commits on `feature-deletion`. `putDoc`/`getDoc`
+are the ForgeFX LOCAL config store, not a cloud API, and the `/device/cache/cloud`
+endpoints are the shared device-definition profiles, which stay.
 
 Three `VITE_` gates exist today, all in `src/lib/axis-workbench/featureGate.ts`:
 
@@ -188,8 +189,8 @@ sidebar divider — this is a decision, not an oversight.
   that silently ignore frames cause 5 s serial-queue timeouts.
 - **Own-echo loops in synced config** — ignore events where
   `e.origin === CLIENT_ID`, and never re-save on apply.
-- **TransportMode divergence** — SSE/binary paths must handle
-  local/remote/direct or the feature silently no-ops in some builds.
+- **TransportMode divergence** — SSE/binary paths must handle local AND direct
+  or the feature silently no-ops in the web build.
 
 ## Cross-repo change chain
 

@@ -5,7 +5,7 @@
 //
 // It creates the IndexedDB store + browser codec, the ForgeFX registry (fn 0x00 detection over
 // the one granted transport), an optional File System Access local-folder adapter, an optional
-// cloud client, and installs the router via setRemoteTransport(..., 'direct') so the entire
+// and installs the router via setRemoteTransport(...) so the entire
 // existing editor UI drives the device with no other changes. It then probes the device once so a
 // wrong port fails here, not in the editor.
 //
@@ -22,7 +22,6 @@ import type {
   DeviceEvent
 } from 'forgefx-server/runtime';
 import { setRemoteTransport, type RemoteResponse } from '../forgefx';
-import { remoteConfigured } from '../cloudBrowser';
 import { FsaFolderAdapter } from './fsaFolder';
 import { createIdbStoreBackend, createBrowserCodec } from './idbStore';
 import { makeDeviceCacheLoader } from './deviceCacheLoader';
@@ -125,25 +124,8 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
       }
     : undefined;
 
-  // 4. Cloud sync — same Supabase project as the desktop build (publishable anon key).
-  const cloud = remoteConfigured()
-    ? rt.createCloud(
-        {
-          url: import.meta.env.VITE_SUPABASE_URL as string,
-          anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-          // Email-confirmation link lands here. In the web build the origin IS the stable public domain
-          // (axisapp.live), so derive it — no localhost, no per-build value. Must be on the Supabase
-          // redirect allow-list. Override via VITE_AXIS_AUTH_CONFIRM_URL if a fixed URL is preferred.
-          confirmRedirectUrl:
-            (import.meta.env.VITE_AXIS_AUTH_CONFIRM_URL as string | undefined) ??
-            `${location.origin}/auth/confirmed`
-        },
-        store
-      )
-    : undefined;
-
-  // 5. Router in, SSE out: install as the forgefx transport, events via subscription.
-  const router = rt.createRouter({ registry, store, local, cloud } satisfies RuntimeDeps);
+  // 4. Router in, SSE out: install as the forgefx transport, events via subscription.
+  const router = rt.createRouter({ registry, store, local } satisfies RuntimeDeps);
   setRemoteTransport(async (rq): Promise<RemoteResponse> => {
     const r = await router.handle(rq.method, rq.path, rq.body);
     return {
@@ -151,7 +133,7 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
       contentType: r.contentType,
       body: typeof r.body === 'string' ? r.body : (r.body.slice().buffer as ArrayBuffer)
     };
-  }, 'direct');
+  });
   const unsubRouter = router.subscribe((e: DeviceEvent) => onEvent(e));
 
   // 5b. Durability: IndexedDB writes are write-behind (idbStore.ts), so a tab closed moments after a

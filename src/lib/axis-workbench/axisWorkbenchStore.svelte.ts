@@ -1,5 +1,5 @@
-import { forgefx, isRemote } from '../forgefx';
-import { isRemoteBuild } from '../cloudBrowser';
+import { forgefx } from '../forgefx';
+import { isWebBuild } from '../buildMode';
 import { notifyMutation } from '../syncBus';
 import { createWorkbenchController, migrateWorkbenchDocument, type WorkbenchDocument } from '../workbench';
 import { isAxisLayoutEditingEnabled } from './featureGate';
@@ -34,8 +34,8 @@ export { AXIS_WORKBENCH_CACHE_KEY };
  * visibilitychange flush guarantees no edit is lost on tab close.
  */
 export const AXIS_WORKBENCH_CACHE_DEBOUNCE_MS = 150;
-/** Cloud push trailing debounce (was 400 ms — modest widening, item 3). */
-export const AXIS_WORKBENCH_CLOUD_DEBOUNCE_MS = 1500;
+/** Config-store push trailing debounce (was 400 ms — modest widening, item 3). */
+export const AXIS_WORKBENCH_CONFIG_DEBOUNCE_MS = 1500;
 
 let cacheTimer: ReturnType<typeof setTimeout> | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -134,8 +134,8 @@ function scheduleCacheSave(): void {
   }, AXIS_WORKBENCH_CACHE_DEBOUNCE_MS);
 }
 
-/** Push to the cloud immediately, cancelling any pending debounced push. */
-function pushCloudNow(): void {
+/** Push to the ForgeFX config store immediately, cancelling any pending debounced push. */
+function pushConfigNow(): void {
   if (pushTimer) {
     clearTimeout(pushTimer);
     pushTimer = null;
@@ -144,9 +144,9 @@ function pushCloudNow(): void {
   notifyMutation();
 }
 
-function scheduleCloudPush(): void {
+function scheduleConfigPush(): void {
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(pushCloudNow, AXIS_WORKBENCH_CLOUD_DEBOUNCE_MS);
+  pushTimer = setTimeout(pushConfigNow, AXIS_WORKBENCH_CONFIG_DEBOUNCE_MS);
 }
 
 // Session-start backup rotation (item 1): the previous session's cached doc
@@ -164,14 +164,14 @@ function persist(doc: WorkbenchDocument): void {
   // freshly-cloned document, never shared with a previous revision.
   mem = { ...doc, rev: (mem.rev ?? 0) + 1, updatedAt: new Date().toISOString() };
   scheduleCacheSave();
-  scheduleCloudPush();
+  scheduleConfigPush();
 }
 
 /** Flush pending debounced writes (tab close / backgrounding — no edit may be lost). */
 function flushPendingPersist(): void {
   if (cacheTimer) cacheSaveNow();
   // Best-effort: the fetch may be cancelled by unload; localStorage is authoritative.
-  if (pushTimer) pushCloudNow();
+  if (pushTimer) pushConfigNow();
 }
 
 if (typeof window !== 'undefined') {
@@ -210,7 +210,7 @@ export function axisWorkbenchApplyRemote(doc: unknown): void {
     });
     // Converge: the source still holds the older copy — push the newer doc so
     // the next fetch doesn't reject (and toast) again.
-    scheduleCloudPush();
+    scheduleConfigPush();
     return;
   }
   const next = normalizeAxisWorkbenchDocument(doc);
@@ -247,7 +247,7 @@ export function axisWorkbenchRestoreBackup(slot: number): boolean {
     updatedAt: new Date().toISOString()
   };
   cacheSaveNow();
-  scheduleCloudPush();
+  scheduleConfigPush();
   uiRev += 1;
   return true;
 }
@@ -265,7 +265,7 @@ export function axisWorkbenchInit(): Promise<void> {
       /* offline / no backend: keep cache */
     }
 
-    if (!isRemoteBuild() && !isRemote()) {
+    if (!isWebBuild()) {
       forgefx.putDoc('config', AXIS_WORKBENCH_CONFIG_DOC, mem).catch(() => {});
     }
   })();

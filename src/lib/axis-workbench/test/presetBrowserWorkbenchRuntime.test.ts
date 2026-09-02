@@ -190,7 +190,6 @@ describe('Preset Browser Workbench runtime', () => {
       loadBytes: async () => {},
       localPath: (entryId) => entryId.slice('local:'.length),
       localPresetFile: async () => new Uint8Array([2]).buffer,
-      // No latestCloudVersionId → the cloud branch throws, so nothing should be stamped for it.
       deviceEntryBytes: async () => new Uint8Array([3]).buffer,
       recordLoad: (entryId) => recorded.push(entryId)
     });

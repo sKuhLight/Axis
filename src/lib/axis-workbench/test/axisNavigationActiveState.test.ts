@@ -12,7 +12,7 @@ describe('isAxisNavigationEntryActive (ROUND 15 — ACTION entries only)', () =>
     expect(isAxisNavigationEntryActive(CLEAN, 'theme')).toBe(false);
   });
 
-  it('tints Axis Cloud (account) purely from the editor overlay snapshot', () => {
+  it('tints Axis (account) purely from the editor overlay snapshot', () => {
     expect(isAxisNavigationEntryActive({ ...CLEAN, accountOpen: true }, 'account')).toBe(true);
     expect(isAxisNavigationEntryActive(CLEAN, 'account')).toBe(false);
   });

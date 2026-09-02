@@ -2,12 +2,11 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter, isRemote, isDirect, CLIENT_ID } from './forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter, isDirect, CLIENT_ID } from './forgefx';
 import { library } from './library.svelte';
 import { appSettings } from './appSettings.svelte';
 import { defaultBlockLibraryPath } from './blockLibraryPath';
 import { blockLibrary } from './blockLibrary.svelte';
-import { cloud } from './cloud.svelte';
 import { deviceDefs } from './deviceDefs.svelte';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
@@ -17,7 +16,7 @@ import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { geqBandsFromLayout } from './eq';
 import { surfApplyRemote } from './surfaceStore.svelte';
-import { isRemoteBuild } from './cloudBrowser';
+import { isWebBuild } from './buildMode';
 import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';
 import { gridHover } from './gridHover.svelte';
@@ -27,18 +26,9 @@ import { monitorsByFamily } from './deviceLayoutBoard';
 
 export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
-type CloudScopes = { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
-const SCOPES_KEY = 'axs.cloud.scopes';
-function loadScopes(): CloudScopes {
-  try { return { presets: true, scenes: true, fc: true, settings: true, ...(JSON.parse(localStorage.getItem(SCOPES_KEY) || '{}')) }; }
-  catch { return { presets: true, scenes: true, fc: true, settings: true }; }
-}
-const saveScopes = (s: CloudScopes) => { try { localStorage.setItem(SCOPES_KEY, JSON.stringify(s)); } catch { /* */ } };
-const AUTOSYNC_KEY = 'axs.cloud.autosync';
-const loadAutoSync = (): boolean => { try { return localStorage.getItem(AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
 const loadLocalAutoSync = (): boolean => { try { return localStorage.getItem(LOCAL_AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
-// Telemetry consent defaults OFF (inverse of auto-sync). Anonymous instance id is a random uuid — never PII.
+// Telemetry consent defaults OFF. Anonymous instance id is a random uuid — never PII.
 const TELEMETRY_KEY = 'axs.telemetry.consent';
 const INSTANCE_KEY = 'axs.telemetry.instanceId';
 const loadTelemetryConsent = (): boolean => { try { return localStorage.getItem(TELEMETRY_KEY) === '1'; } catch { return false; } };
@@ -296,25 +286,6 @@ class EditorStore {
   update = $state<{ version: string; url: string } | null>(null); // newer release (web fallback / non-desktop)
   /** Desktop auto-update status (Electron). idle until the updater reports something. */
   autoUpdate = $state<{ state: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; percent?: number }>({ state: 'idle' });
-  /** Cloud sync (Supabase). enabled only when the engine has AXIS_CLOUD set; user null until logged in.
-   *  `scopes` mirror the account panel's per-item toggles; `plan` is the billing tier (Free until billing
-   *  lands); `pendingEmail` drives the email-confirmation screen after register. */
-  cloud = $state<{
-    enabled: boolean;
-    user: { email: string } | null;
-    syncing: boolean;
-    lastSync: number | null;
-    note: string | null;
-    plan: string;
-    /** Active paid subscription (authoritative flag from the server; drives preset-sync + backup UI). */
-    paid: boolean;
-    scopes: { presets: boolean; scenes: boolean; fc: boolean; settings: boolean };
-    fullBackup: boolean;
-    autoSync: boolean;
-    pendingEmail: string | null;
-    /** Free-tier quota readout (server RPC) — null for paid users, signed-out, or a pre-quota server. */
-    quota: { usedBytes: number; snapshots: number; backups: number; limits: { maxStoredBytes: number; maxSnapshots: number; maxBackups: number } | null } | null;
-  }>({ enabled: false, user: null, syncing: false, lastSync: null, note: null, plan: 'Free', paid: false, scopes: loadScopes(), fullBackup: false, autoSync: loadAutoSync(), pendingEmail: null, quota: null });
   /** Local storage folder (ForgeFX /local/*): a user-picked root with Presets/ (library) + Sync/
    *  (plain-syx version mirror, unlimited). `available` = the engine serves the routes (404 = old
    *  engine → feature hidden); `exists` = the configured root is still mounted. */
@@ -328,9 +299,9 @@ class EditorStore {
     note: string | null;
     autoSync: boolean;
   }>({ available: false, configured: false, root: null, exists: true, syncing: false, lastSync: null, note: null, autoSync: loadLocalAutoSync() });
-  // ── Axis hub (single rail entry point: Account · Privacy · About) ──
+  // ── Axis hub (single rail entry point: Storage · Connection · Privacy · About) ──
   axisOpen = $state(false);
-  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance'>('account');
+  axisTab = $state<'storage' | 'privacy' | 'about' | 'device' | 'performance'>('about');
   themeOpen = $state(false); // Appearance / theme picker modal
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
@@ -345,9 +316,6 @@ class EditorStore {
   /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
   tourActive = $state(false);
   tourStep = $state(0);
-  /** Axis Cloud Remote (host side): is this PC exposing remote control, and is a remote session live?
-   *  Off by default — the user opts in per device. Only meaningful when signed in. */
-  remote = $state<{ enabled: boolean; connected: boolean }>({ enabled: false, connected: false });
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
   // upload is per-incident consent and works even when `consent` is false.
@@ -634,9 +602,9 @@ class EditorStore {
   // block flooded the FM3's serial link and caused audio dropouts — never do a full-preset sweep here.
   meteringOn = $state(false); // opt-in; off by default so it can't disturb the device unnoticed
   /** Per-block metering is only offered when the device supports live monitors, over a fast link
-   *  (never a slow 5-pin-DIN MIDI adapter, never remote). The global IN/OUT display is separate. */
+   *  (never a slow 5-pin-DIN MIDI adapter). The global IN/OUT display is separate. */
   get canMeterBlocks(): boolean {
-    return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink && !isRemote();
+    return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink;
   }
   #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
   startLiveMeters = () => {
@@ -687,11 +655,11 @@ class EditorStore {
     // Desktop-only first-run + update flows: the remote web app has no desktop to update, and the tour /
     // telemetry-consent / Ko-fi first-run popups belong to the PC install (the host handles telemetry), so
     // skip them in the remote build — otherwise every browser session nags with banners it can't act on.
-    if (!isRemoteBuild()) {
+    if (!isWebBuild()) {
       this.#initUpdater();
       this.#initTelemetry();
     }
-    this.#initCloud();
+    this.#initLocalSync();
     this.#initLocal();
     this.#openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
@@ -781,56 +749,27 @@ class EditorStore {
     }
   };
 
-  // ── cloud sync ──
+  // ── local folder sync ──
   #autoSyncT: ReturnType<typeof setTimeout> | null = null;
-  #initCloud = async () => {
-    // Any local config/version mutation (tags, collections, layouts, snapshots…) nudges a debounced sync.
+  #initLocalSync = async () => {
+    // Any local config/version mutation (tags, collections, layouts, snapshots…) nudges a debounced sync
+    // of the local Sync/ folder.
     onMutation(() => this.scheduleAutoSync());
-    try {
-      const s = await forgefx.cloudStatus();
-      const paid = !!s.subscription?.active;
-      this.cloud = { ...this.cloud, enabled: s.enabled, user: s.user ? { email: s.user.email } : null, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free', quota: !paid && s.quota ? s.quota : null };
-      if (s.user) { await this.cloudSync(); await this.#loadProfile(); await this.refreshRemote(); cloud.refresh(); } // pull latest + profile + remote state + sync-state index on launch
-    } catch {
-      /* cloud disabled / engine not ready */
-    }
-  };
-  /** Axis Cloud Remote (host side): reflect + toggle whether this PC exposes remote control. Off by
-   *  default; only works when signed in (the private channel is keyed to the user). */
-  refreshRemote = async () => {
-    try { const s = await forgefx.remoteStatus(); this.remote = { enabled: s.enabled, connected: s.connected }; } catch { /* remote unavailable */ }
-  };
-  setRemoteAccess = async (on: boolean) => {
-    try {
-      const s = await forgefx.remoteEnable(on);
-      this.remote = { enabled: s.enabled, connected: s.connected };
-      if (s.error) this.showToast(`Remote: ${s.error}`, '#f5a623');
-      else this.showToast(on ? 'Remote control enabled — reachable from axisapp.live when signed in' : 'Remote control turned off', on ? '#33c46b' : '#9a9aa3');
-    } catch {
-      this.showToast('Could not change remote access', '#d6543f');
-    }
+    await this.#loadProfile();
   };
   /** Debounced background sync after a local change — batches rapid edits, skips if off/in-flight.
-   *  Drives BOTH mirrors: cloud (signed-in + enabled) and the local Sync/ folder (configured + auto). */
+   *  Drives the local Sync/ folder mirror (configured + auto). */
   scheduleAutoSync = () => {
-    const doCloud = this.cloud.enabled && !!this.cloud.user && this.cloud.autoSync;
     const doLocal = this.local.configured && this.local.exists && this.local.autoSync;
-    if (!doCloud && !doLocal) return;
+    if (!doLocal) return;
     if (this.#autoSyncT) clearTimeout(this.#autoSyncT);
     this.#autoSyncT = setTimeout(() => {
-      if (doCloud && !this.cloud.syncing) this.cloudSync();
-      if (doLocal && !this.local.syncing) this.localSync();
+      if (!this.local.syncing) this.localSync();
     }, 8000);
-  };
-  setAutoSync = (on: boolean) => {
-    this.cloud = { ...this.cloud, autoSync: on };
-    try { localStorage.setItem(AUTOSYNC_KEY, on ? '1' : '0'); } catch { /* */ }
-    if (on) this.scheduleAutoSync();
   };
 
   // ── local storage folder (Presets/ library + Sync/ version mirror) ──
   #initLocal = async () => {
-    if (isRemote()) return; // the folder lives on the host PC — hidden in remote sessions
     try {
       const s = await forgefx.localConfig();
       this.local = { ...this.local, available: true, configured: s.configured, root: s.root, exists: s.exists, lastSync: s.lastSync };
@@ -871,7 +810,6 @@ class EditorStore {
     try {
       const r = await forgefx.localRestore();
       this.showToast(r.imported ? `Restored ${r.imported} version(s) from folder` : 'Nothing new to restore', '#33c46b');
-      cloud.refresh(); // version list changed → refresh sync-state index
     } catch (e) {
       this.showToast('Restore failed: ' + (e as Error).message, '#d6543f');
     } finally {
@@ -971,7 +909,7 @@ class EditorStore {
   };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
+  openAxis = (tab: 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'about') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };
@@ -989,16 +927,8 @@ class EditorStore {
       .then(() => notifyMutation())
       .catch(() => { /* store unavailable (engine not ready) — the local mirror still holds the value */ });
   };
-  /** Pull the synced profile after login and reconcile: adopt a cloud-set contact, and if the cloud has a
-   *  telemetry choice, honour it (updating the local mirror + Faro state to match). */
-  /** Re-read the subscription (paid flag + plan) + free-tier quota from the server after auth/sync. */
-  #refreshSubscription = async () => {
-    try {
-      const s = await forgefx.cloudStatus();
-      const paid = !!s.subscription?.active;
-      this.cloud = { ...this.cloud, paid, plan: paid ? (s.subscription?.plan ?? 'Supporter') : 'Free', quota: !paid && s.quota ? s.quota : null };
-    } catch { /* engine not ready */ }
-  };
+  /** Pull the stored profile on boot and reconcile: adopt a stored contact, and honour a stored
+   *  telemetry choice (updating the local mirror + Faro state to match). */
   #loadProfile = async () => {
     try {
       const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean; pollingMode?: TelemetryMode }>('config', 'profile');
@@ -1011,7 +941,7 @@ class EditorStore {
       if (typeof p.telemetryConsent === 'boolean' && p.telemetryConsent !== this.telemetry.consent) {
         this.setTelemetryConsent(p.telemetryConsent);
       }
-      // Adopt a cloud-set polling mode: update state + local mirror, then push it to the device (if the
+      // Adopt a stored polling mode: update state + local mirror, then push it to the device (if the
       // control is available). Not a fresh user action, so we don't re-persist the profile.
       if (isTelemetryMode(p.pollingMode) && p.pollingMode !== this.pollingMode) {
         this.pollingMode = p.pollingMode;
@@ -1021,7 +951,7 @@ class EditorStore {
     } catch { /* no profile yet / engine not ready */ }
   };
   /** Silently report a failure to Faro with device context (model/firmware/route/status) + record it for
-   *  the debug-report trail. This is the FLEET signal — the real device/cloud bugs are server-side 5xx, not
+   *  the debug-report trail. This is the FLEET signal — the real device bugs are server-side 5xx, not
    *  JS crashes, so we report every one. No UI; opt-in gated (only sends when the user enabled telemetry). */
   reportFailure = (trigger: NonNullable<typeof this.reportPrompt>) => {
     this.recordEvent('error', `${trigger.kind} ${trigger.route ?? ''} ${trigger.status ?? ''} ${trigger.message ?? ''}`.trim());
@@ -1031,10 +961,9 @@ class EditorStore {
   };
   /** Every ForgeFX request failure (5xx or network) auto-reports here — registered on the client so we
    *  don't have to remember to instrument each call site. Classifies the route into a coarse `kind` so the
-   *  Grafana dashboard can group (device-comm / cloud / telemetry / engine). */
+   *  Grafana dashboard can group (device-comm / telemetry / engine). */
   #onReqFailure = (info: { route: string; method: string; status: number; message: string }) => {
-    const kind = info.route.startsWith('/cloud') ? 'cloud'
-      : info.route.startsWith('/telemetry') ? 'telemetry'
+    const kind = info.route.startsWith('/telemetry') ? 'telemetry'
       : info.status === 0 ? 'engine' : 'device-comm';
     this.reportFailure({ kind, route: info.route, status: info.status, message: info.message });
   };
@@ -1086,91 +1015,25 @@ class EditorStore {
       this.telemetry = { ...this.telemetry, sending: false };
     }
   };
-  cloudLogin = async (email: string, password: string) => {
-    this.cloud.note = null;
-    try {
-      const r = await forgefx.cloudLogin(email, password);
-      this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null };
-      await this.#refreshSubscription();
-      await this.cloudSync();
-      await this.#loadProfile();
-      cloud.refresh();
-    } catch (e) {
-      this.cloud.note = (e as Error).message || 'Login failed';
-    }
-  };
-  cloudRegister = async (email: string, password: string) => {
-    this.cloud.note = null;
-    try {
-      const r = await forgefx.cloudRegister(email, password);
-      if (r.needsConfirmation) this.cloud = { ...this.cloud, pendingEmail: email, note: null };
-      else if (r.user) { this.cloud = { ...this.cloud, user: { email: r.user.email }, pendingEmail: null }; await this.#refreshSubscription(); await this.cloudSync(); await this.#loadProfile(); this.#persistProfile(); cloud.refresh(); }
-    } catch (e) {
-      this.cloud.note = (e as Error).message || 'Sign-up failed';
-    }
-  };
-  cloudLogout = async () => {
-    try { await forgefx.cloudLogout(); } catch { /* */ }
-    this.cloud = { ...this.cloud, user: null, lastSync: null, pendingEmail: null };
-    cloud.clear();
-  };
-  /** GDPR erasure: permanently delete the account + all cloud data, then sign out locally. */
-  cloudDeleteAccount = async () => {
-    try {
-      await forgefx.cloudDeleteAccount();
-      this.cloud = { ...this.cloud, user: null, lastSync: null, pendingEmail: null, note: null };
-      cloud.clear();
-      this.showToast('Account and cloud data deleted', '#9a9aa3');
-    } catch (e) {
-      this.showToast('Delete failed: ' + (e as Error).message, '#d6543f');
-    }
-  };
-  /** Toggle a sync scope (presets/scenes/fc/settings) and persist the choice. */
-  setCloudScope = (key: keyof CloudScopes, on: boolean) => {
-    this.cloud = { ...this.cloud, scopes: { ...this.cloud.scopes, [key]: on } };
-    saveScopes(this.cloud.scopes);
-  };
-  cloudSync = async () => {
-    if (!this.cloud.user) return;
-    this.cloud.syncing = true;
-    this.cloud.note = null;
-    try {
-      // Preset sync is open to every tier since 0.7.1 — free accounts are quota-limited (3 MB / 1 full
-      // backup / N snapshots), reconciled client-side in ForgeFX and enforced by the server's quota
-      // trigger as a backstop. Config (tags/collections/favorites/filters/layouts + profile) is free.
-      const r = await forgefx.cloudSync({ presets: this.cloud.scopes.presets, config: true });
-      const up = r.config.pushed + r.versions.pushed, down = r.config.pulled + r.versions.pulled;
-      this.cloud = { ...this.cloud, lastSync: Date.now(), note: `Synced · ↑${up} ↓${down}` };
-      cloud.refresh();
-      void this.#refreshSubscription(); // quota bar tracks the sync
-    } catch (e) {
-      this.cloud.note = (e as Error).message || 'Sync failed';
-    } finally {
-      this.cloud.syncing = false;
-    }
-  };
-  /** Full device backup → version store, then sync it up. Drives the account panel's "Full device backup". */
-  cloudFullBackup = async () => {
-    this.cloud = { ...this.cloud, fullBackup: true, syncing: true, note: null };
+  /** Full device backup → the LOCAL version store, then mirror into the Sync/ folder when configured.
+   *  Minutes on a full unit (the client override raises the request timeout accordingly). */
+  fullDeviceBackup = async () => {
+    if (this.local.syncing) return;
     this.showToast('Backing up the whole device — this can take a few minutes…', '#f5a623');
     try {
       const r = await forgefx.backupDevice();
       this.showToast(`Backed up ${r.count} presets`, '#33c46b');
       if (this.local.configured) void this.localSync(); // land the backup in the local folder immediately
-      await this.cloudSync();
     } catch (e) {
-      this.cloud.note = (e as Error).message || 'Backup failed';
-    } finally {
-      this.cloud = { ...this.cloud, syncing: false };
+      this.showToast('Backup failed: ' + ((e as Error).message || ''), '#d6543f');
     }
   };
 
-  // live tuner/tempo/scene/cpu pushes from the device (local: SSE). Remote mode gets the same CHANGE events
-  // over the relay channel (see remote.svelte.ts → applyDeviceEvent); Browser Direct subscribes to the
-  // in-page runtime's event bus (see direct.svelte.ts) — SSE is skipped in both.
+  // live tuner/tempo/scene/cpu pushes from the device (local: SSE). Browser Direct subscribes to the
+  // in-page runtime's event bus instead (see direct.svelte.ts) — SSE is skipped there.
   #openEvents = () => {
     if (this.#events) return;
-    if (isRemote() || isDirect()) return; // events arrive via relay channel / runtime subscription instead
+    if (isDirect()) return; // events arrive via the in-page runtime subscription instead
     try {
       this.#events = forgefx.events((e) => this.applyDeviceEvent(e));
     } catch {
@@ -1216,8 +1079,8 @@ class EditorStore {
     if (this.#eventReload) clearTimeout(this.#eventReload);
     this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
   };
-  /** Apply one live device event — from SSE (local) or the remote relay channel. Drives cross-UI sync:
-   *  another window / the remote / the device itself changed something, so this UI follows. */
+  /** Apply one live device event — from SSE (local) or the in-page runtime (Browser Direct). Drives
+   *  cross-UI sync: another window or the device itself changed something, so this UI follows. */
   applyDeviceEvent = (e: DeviceEvent) => {
     switch (e.type) {
       case 'tempo': this.bpm = e.bpm; break;

@@ -10,7 +10,7 @@
 // gone from that preset now. A NEW preset that later picks up an already-seen FM3 color still gets
 // tagged, because provenance is per-id, not per-tag-name (see library.applyColorLabelGroups's
 // `skipIds` doc comment).
-import { forgefx, isRemote } from './forgefx';
+import { forgefx } from './forgefx';
 import { library } from './library.svelte';
 import { editor } from './editor.svelte';
 import type { ColorLabelGroup } from './types';
@@ -64,7 +64,6 @@ class ColorLabelsStore {
    *  parse failure / 404 older ForgeFX). */
   async refresh(): Promise<void> {
     if (this.#autoChecked) return; // already ran its one-and-only check on a prior launch
-    if (isRemote()) return; // only makes sense on the machine that has FM3-Edit installed; don't consume the one-shot
     const sources = await forgefx.colorLabelSources().catch(() => null);
     if (!sources?.candidates.length) return; // FM3-Edit not installed (yet) — don't consume the one-shot either
     const newest = [...sources.candidates].sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime())[0]!;

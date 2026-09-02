@@ -11,7 +11,7 @@
  *
  * The ring lives on the controller instance, NOT on the {@link WorkbenchDocument}.
  * It holds structural clones of the document taken around dispatches; those
- * clones are never written back to the schema, localStorage, or the cloud. A
+ * clones are never written back to the schema or localStorage. A
  * controller that has been undone/redone many times serialises byte-identical to
  * one that never had a history — the document object is the only thing that
  * persists, and the ring is invisible to it.

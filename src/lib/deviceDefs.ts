@@ -25,8 +25,6 @@ export interface DeviceDefsInputs {
     isElectron: boolean;
     /** Browser exposes the File System Access API (Chromium) → "Locate editor folder" is possible. */
     hasDirectoryPicker: boolean;
-    /** Relayed remote session — a full device walk over the relay is unusable, so hide device reads. */
-    isRemote: boolean;
   };
 }
 
@@ -44,13 +42,13 @@ export function deviceDefsActions(inp: DeviceDefsInputs): DeviceDefAction[] {
   if (canImport && inp.env.isElectron && (inp.sources?.candidates?.length ?? 0) > 0) out.push('importCandidate');
   // Drag-drop is always available when the server accepts imports (works in browser AND desktop).
   if (canImport) out.push('dropFile');
-  // Reading off the device is the universal fallback (needs the self-describe capability; not over a relay).
-  if (inp.caps?.selfDescribe && !inp.env.isRemote) out.push('readFromDevice');
+  // Reading off the device is the universal fallback (needs the self-describe capability).
+  if (inp.caps?.selfDescribe) out.push('readFromDevice');
   // Chromium folder access — only in the browser (Electron uses server-side discovery instead).
   if (canImport && !inp.env.isElectron && inp.env.hasDirectoryPicker) out.push('locateFolder');
   // Full (taper) capture — an opt-in superset of the self-describe walk, offered LAST as the clearly
   // secondary affordance. Same local-session gating as readFromDevice, plus the device must advertise it.
-  if (inp.caps?.fullCapture && inp.caps?.selfDescribe && !inp.env.isRemote) out.push('fullCapture');
+  if (inp.caps?.fullCapture && inp.caps?.selfDescribe) out.push('fullCapture');
   return out;
 }
 

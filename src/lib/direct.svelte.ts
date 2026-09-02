@@ -1,14 +1,14 @@
-// Browser Direct boot (web build, ?mode=direct): assemble a full in-page ForgeFX runtime — device
-// registry over Web MIDI / Web Serial, IndexedDB-backed store, File System Access local folder,
-// cloud sync — and install its router as the forgefx transport. The sibling of remote.svelte.ts:
-// +page shows DirectGate until phase === 'ready', then starts the normal editor.
+// Browser Direct boot (web build): assemble a full in-page ForgeFX runtime — device registry over
+// Web MIDI / Web Serial, IndexedDB-backed store, File System Access local folder — and install its
+// router as the forgefx transport. +page shows DirectGate until phase === 'ready', then starts the
+// normal editor.
 //
 // Everything device-shaped comes from forgefx-server/runtime (the same code the desktop server runs;
 // see docs/browser-direct-runtime-plan.md). This module only supplies the browser adapters.
 // Types only at module scope — the runtime itself is dynamic-imported in #assemble() so the desktop
-// and remote-mode bundles never carry it (Vite splits it into a chunk loaded on first connect).
+// bundle never carries it (Vite splits it into a chunk loaded on first connect).
 import type { Conn, Transport, Store } from 'forgefx-server/runtime';
-import { isRemoteBuild, webMode } from './cloudBrowser';
+import { isWebBuild } from './buildMode';
 import { editor } from './editor.svelte';
 import { WebMidiTransport, pairFractalPorts } from './direct/webmidi';
 import { WebSerialTransport, requestFractalSerialPort } from './direct/webserial';
@@ -20,8 +20,8 @@ type Phase = 'pick' | 'connecting' | 'ready' | 'error';
 const PROFILE_KEY = 'axs.direct.profile';
 
 class DirectBoot {
-  /** True when this page load is the Browser Direct web mode (?mode=direct). */
-  active = $state(isRemoteBuild() && webMode() === 'direct');
+  /** True in the web build — Browser Direct is its only mode. */
+  active = $state(isWebBuild());
   phase = $state<Phase>('pick');
   note = $state<string | null>(null);
   /** Feature support of THIS browser — drives the gate's buttons + hints. */

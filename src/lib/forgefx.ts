@@ -28,7 +28,6 @@ import type {
   PresetSummary,
   DecodedBlock,
   VersionInfo,
-  CloudVersion,
   LocalConfig,
   LocalPresetEntry,
   LocalSyncResult,
@@ -70,20 +69,18 @@ const reportFailure = (route: string, method: string, status: number, message: s
   try { if (status >= 500 || status === 0) onReqFailure?.({ route, method, status, message }); } catch { /* never let reporting break a request */ }
 };
 
-// ── Pluggable transport (Axis Cloud Remote) ────────────────────────────────────────────────────────
-// The same client can run over HTTP (local ForgeFX) or a relay (a remote browser controlling the user's
-// PC via the Supabase Realtime channel). A remote transport takes a request and returns a response
-// envelope; req() applies identical parsing + failure reporting either way. null = local HTTP (default,
-// unchanged). NOTE: only req()-based calls route through this; the SSE `events()` stream and the few
-// direct-fetch helpers (binary upload/restore) get their own relay handling in a later increment.
+// ── Pluggable transport ────────────────────────────────────────────────────────────────────────────
+// The same client can run over HTTP (local ForgeFX) or through an in-page runtime (Browser Direct). A
+// transport takes a request and returns a response envelope; req() applies identical parsing + failure
+// reporting either way. null = local HTTP (default, unchanged). NOTE: only req()-based calls route
+// through this; the SSE `events()` stream has its own handling.
 export type RemoteResponse = { status: number; contentType: string; body: string | ArrayBuffer };
-/** Binary bodies (Uint8Array) are only produced/consumed in Browser Direct mode — the Realtime relay
- *  envelope stays string-only (remote.svelte.ts never sends binary). */
+/** Binary bodies (Uint8Array) are produced/consumed in Browser Direct mode. */
 export type RemoteTransport = (rq: { method: string; path: string; body?: string | Uint8Array }) => Promise<RemoteResponse>;
 let remote: RemoteTransport | null = null;
-// Latency layer for remote mode: coalesce identical in-flight GETs into one relay round-trip, and keep a
-// session cache for device-static endpoints (catalogs/help/address models) so opening blocks + dropdowns
-// doesn't re-hit the relay every time. Cleared whenever the transport changes (connect / reconnect).
+// Latency layer for the pluggable transport: coalesce identical in-flight GETs into one round-trip, and
+// keep a session cache for device-static endpoints (catalogs/help/address models) so opening blocks +
+// dropdowns doesn't re-issue them. Cleared whenever the transport changes (connect / reconnect).
 const remoteInflight = new Map<string, Promise<unknown>>();
 /** GET endpoints whose result is fixed for the connected device — safe to cache for the whole session. */
 function remoteCacheable(path: string): boolean {
@@ -97,20 +94,17 @@ function remoteCacheable(path: string): boolean {
     /^\/help\//.test(p)
   );
 }
-/** How requests reach ForgeFX: 'local' = HTTP to a local server (desktop/dev), 'remote' = relayed to a
- *  host PC over the Realtime channel, 'direct' = an in-page ForgeFX runtime talking to the device over
- *  Web MIDI / Web Serial (Browser Direct). remote + direct share the transport-function plumbing; the
- *  mode matters for feature gating (session caching + relay latency tricks are remote-only, the local
- *  storage folder exists in local AND direct, SSE only in local). */
-export type TransportMode = 'local' | 'remote' | 'direct';
+/** How requests reach ForgeFX: 'local' = HTTP to a local server (desktop/dev), 'direct' = an in-page
+ *  ForgeFX runtime talking to the device over Web MIDI / Web Serial (Browser Direct). The mode matters
+ *  for feature gating (the local storage folder exists in both; SSE only in local). */
+export type TransportMode = 'local' | 'direct';
 let mode: TransportMode = 'local';
-export function setRemoteTransport(fn: RemoteTransport | null, as: Exclude<TransportMode, 'local'> = 'remote'): void {
+export function setRemoteTransport(fn: RemoteTransport | null): void {
   remote = fn;
-  mode = fn ? as : 'local';
+  mode = fn ? 'direct' : 'local';
   remoteInflight.clear();
 }
-export const isRemote = (): boolean => mode === 'remote';
-/** True in Browser Direct mode (in-page runtime; no local server, no relay). */
+/** True in Browser Direct mode (in-page runtime; no local server). */
 export const isDirect = (): boolean => mode === 'direct';
 
 /** Binary round-trip through the installed transport — Browser Direct only. The four raw-fetch helpers
@@ -135,13 +129,13 @@ function errorDetail(body: string | ArrayBuffer): string {
   } catch { return ''; }
 }
 
-/** One relay round-trip with identical parsing + failure reporting as local mode. */
-async function relayReq<T>(path: string, method: string, init?: RequestInit): Promise<T> {
+/** One transport round-trip with identical parsing + failure reporting as local mode. */
+async function transportReq<T>(path: string, method: string, init?: RequestInit): Promise<T> {
   let r: RemoteResponse;
   try {
     r = await remote!({ method, path, body: typeof init?.body === 'string' ? init.body : undefined });
   } catch (e) {
-    reportFailure(path, method, 0, (e as Error)?.message ?? 'relay error');
+    reportFailure(path, method, 0, (e as Error)?.message ?? 'transport error');
     throw e;
   }
   if (r.status < 200 || r.status >= 300) {
@@ -154,18 +148,18 @@ async function relayReq<T>(path: string, method: string, init?: RequestInit): Pr
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET';
-  // ── remote mode: route the request through the relay transport (with cache + in-flight dedup) ──
+  // ── Browser Direct: route the request through the installed transport (cache + in-flight dedup) ──
   if (remote) {
     if (method === 'GET') {
       const hit = remoteInflight.get(path);
       if (hit) return hit as Promise<T>;
-      const p = relayReq<T>(path, method, init);
+      const p = transportReq<T>(path, method, init);
       const keep = remoteCacheable(path); // session-cache static endpoints; otherwise just dedup in-flight
       remoteInflight.set(path, p);
       p.then(() => { if (!keep) remoteInflight.delete(path); }, () => remoteInflight.delete(path));
       return p;
     }
-    return relayReq<T>(path, method, init);
+    return transportReq<T>(path, method, init);
   }
   // ── local mode: HTTP to ForgeFX (default) ──
   // Serial-backed requests are serialized on the server; under load a few can queue.
@@ -317,27 +311,6 @@ export const forgefx = {
   /** Re-import Sync/ versions into the version store (fresh machine / data recovery), sha256-verified. */
   localRestore: () => req<{ ok: boolean; imported: number; skippedExisting: number; skippedBad: number }>('/local/restore', { method: 'POST', signal: AbortSignal.timeout(600000) }),
 
-  // ── cloud sync (gated server-side by AXIS_CLOUD) ──
-  cloudStatus: () => req<{
-    enabled: boolean;
-    url?: string;
-    user: { id: string; email: string } | null;
-    subscription?: { active: boolean; plan: string | null };
-    /** Free-tier quota readout (null when signed out or the server predates the quota migration). */
-    quota?: { paid: boolean; usedBytes: number; snapshots: number; backups: number; limits: { maxStoredBytes: number; maxSnapshots: number; maxBackups: number } | null } | null;
-  }>('/cloud/status'),
-  cloudRegister: (email: string, password: string) => req<{ user: { id: string; email: string } | null; needsConfirmation?: boolean }>('/cloud/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  cloudLogin: (email: string, password: string) => req<{ user: { id: string; email: string } }>('/cloud/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  cloudLogout: () => req<{ ok: boolean }>('/cloud/logout', { method: 'POST' }),
-  cloudDeleteAccount: () => req<{ ok: boolean }>('/cloud/delete-account', { method: 'POST' }),
-  // The first sync after a full-device backup uploads 100+ blobs — minutes of work. Long timeout so
-  // the client doesn't abort a sync that's still making progress.
-  cloudSync: (scopes?: { config?: boolean; presets?: boolean }) => req<{ config: { pushed: number; pulled: number }; versions: { pushed: number; pulled: number } }>('/cloud/sync', { method: 'POST', body: JSON.stringify(scopes ? { scopes } : {}), signal: AbortSignal.timeout(600000) }),
-  /** The cloud's view of every backed-up preset version (metadata only) — for computing per-preset sync state. */
-  cloudIndex: () => req<{ versions: CloudVersion[] }>('/cloud/index'),
-  // ── Axis Cloud Remote (host side): let a remote browser control this device (off by default) ──
-  remoteStatus: () => req<{ enabled: boolean; connected: boolean; userId: string | null }>('/remote/status'),
-  remoteEnable: (on: boolean) => req<{ enabled: boolean; connected: boolean; userId: string | null; error?: string }>('/remote/enable', { method: 'POST', body: JSON.stringify({ on }) }),
   // ── persistent store (Axis config / metadata) ──
   getDoc: <T>(c: string, id: string) => req<{ data: T } | null>(`/store/${c}/${id}`).catch(() => null),
   putDoc: (c: string, id: string, data: unknown) => req(`/store/${c}/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ data, origin: CLIENT_ID }) }),
@@ -500,9 +473,6 @@ export const forgefx = {
   cloudCacheCheck: () => capOptional(req<CloudCacheStatus>('/device/cache/cloud')),
   /** Pull the shared cloud profile and persist it locally → fresh cache status. */
   cloudCachePull: () => req<DeviceCacheImportResult>('/device/cache/cloud/pull', { method: 'POST' }),
-  /** Publish the local profile to the cloud so others on the same firmware can pull it. Throws
-   *  ForgeError 401 when the user isn't signed in; 200 (deduped or stored) on success. */
-  cloudCachePublish: () => req<{ ok: boolean; deduped?: boolean }>('/device/cache/cloud/publish', { method: 'POST' }),
   /** Bind a modifier slot to a target parameter (writes targetEffectId + targetParam + source). */
   modBind: (slot: number, targetEffectId: number, targetParam: number, source: number) =>
     req<{ ok: boolean; slotEid?: number; error?: string }>(`/mod/bind`, {
@@ -623,7 +593,7 @@ export const forgefx = {
   validateFirmware: (bytes: number[]) =>
     req<import('./types').FirmwareValidateResult>('/firmware/validate', { method: 'POST', body: JSON.stringify({ bytes }) }),
   /** Offline decode of a preset .syx via JSON bytes — model-sniffed server-side (gen-3 → summary;
-   *  AM4 → location/name listing). Rides the relay transport, unlike the octet-stream decode. */
+   *  AM4 → location/name listing). Rides the pluggable transport, unlike the octet-stream decode. */
   decodeSyxBytes: (bytes: number[]) =>
     req<import('./types').SyxDecodeResult>('/preset/decode', { method: 'POST', body: JSON.stringify({ bytes }) }),
 

@@ -43,9 +43,9 @@ export function pauseFaro(): void { faro?.pause(); }
 export function resumeFaro(): void { faro?.unpause(); }
 
 /** Push a server-side failure as a Faro error with device context. This is the fleet signal that actually
- *  finds bugs — the real failures (device decode 5xx, cloud/telemetry 5xx, transport/network errors) are
+ *  finds bugs — the real failures (device decode 5xx, telemetry 5xx, transport/network errors) are
  *  handled server-side and never surface as uncaught JS errors, so we report them explicitly. `kind`
- *  (device-comm | cloud | telemetry | engine) groups them; route/status/model/firmware drive the dashboard. */
+ *  (device-comm | telemetry | engine) groups them; route/status/model/firmware drive the dashboard. */
 export function faroDeviceError(info: { kind: string; route?: string; status?: number; message?: string; model?: string; firmware?: string }): void {
   if (!faro) return;
   const err = new Error(`${info.kind}:${info.route ? ' ' + info.route : ''}${info.status ? ' ' + info.status : ''}`);

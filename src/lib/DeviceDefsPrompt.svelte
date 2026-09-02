@@ -7,15 +7,14 @@
   // CachePrompt bottom-sheet UX. All ordering/gating lives in deviceDefs.ts (pure, tested).
   import { editor } from './editor.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
-  import { isRemote } from './forgefx';
-
+  
   const online = $derived(editor.conn.state === 'online');
   const building = $derived(deviceDefs.building);
   const busy = $derived(deviceDefs.importing);
   const actions = $derived(deviceDefs.actions);
   const candidates = $derived(deviceDefs.sources?.candidates ?? []);
   // Show while: a build is running · a source was just acquired (success state) · the prompt is offered.
-  const show = $derived(online && !isRemote() && (!!building || deviceDefs.succeeded || deviceDefs.shouldShow));
+  const show = $derived(online && (!!building || deviceDefs.succeeded || deviceDefs.shouldShow));
   const pct = $derived(building && building.total ? Math.round((building.done / building.total) * 100) : 0);
 
   let dragging = $state(false);
@@ -64,11 +63,6 @@
           <b>Definitions ready</b>
           <span class="sub">Axis is now using definitions matched to this device &amp; firmware.</span>
         </div>
-        {#if deviceDefs.canPublish}
-          <button class="go" disabled={deviceDefs.publishing} onclick={() => deviceDefs.cloudPublish()}>
-            {deviceDefs.publishing ? 'Sharing…' : 'Share to cloud'}
-          </button>
-        {/if}
         <button class="later" onclick={() => deviceDefs.dismiss()}>Done</button>
       </div>
     </div>
@@ -222,20 +216,6 @@
     color: var(--textdim);
     line-height: 1.35;
   }
-  .go {
-    flex: none;
-    height: 34px;
-    padding: 0 15px;
-    border-radius: 9px;
-    border: none;
-    background: var(--accent);
-    color: var(--accentink);
-    font-size: 12.5px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .go:hover:not(:disabled) { filter: brightness(1.08); }
-  .go:disabled { opacity: 0.6; cursor: default; }
   .later {
     flex: none;
     height: 30px;

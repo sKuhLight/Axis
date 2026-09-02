@@ -130,13 +130,8 @@
       <span class="ic">◐</span>
       <span class="sh">Theme</span>
     </button>
-    <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title={editor.cloud.user ? `Axis · ${editor.cloud.user.email}` : 'Axis — account, privacy & about'} onclick={() => editor.openAxis('account')}>
-      {#if editor.cloud.user}
-        <span class="av">{editor.cloud.user.email.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || '?'}</span>
-        {#if editor.cloud.syncing}<span class="syncdot"></span>{/if}
-      {:else}
-        <span class="ic">◈</span>
-      {/if}
+    <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title="Axis — storage, privacy & about" onclick={() => editor.openAxis('about')}>
+      <span class="ic">◈</span>
       <span class="sh">Axis</span>
     </button>
     <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
@@ -207,8 +202,8 @@
     <div class="d-foot">
       <button class="d-foot-b" onclick={() => { closeDrawer(); history.panelOpen = true; }}><span class="d-ic">↶</span>History</button>
       <button class="d-foot-b" onclick={() => { closeDrawer(); editor.themeOpen = true; }}><span class="d-ic">◐</span>Theme</button>
-      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openAxis('account'); }}>
-        <span class="d-ic">◈</span>{editor.cloud.user ? 'Account' : 'Sign in'}
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openAxis('about'); }}>
+        <span class="d-ic">◈</span>Axis
       </button>
       <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openPorts(); }}><span class="d-led" style="background:{dot}"></span>Connection</button>
     </div>
@@ -282,26 +277,6 @@
     border-color: var(--accent-border);
   }
   .acct { position: relative; }
-  .av {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--accentink);
-    font: 800 11px/28px 'JetBrains Mono', monospace;
-    text-align: center;
-  }
-  .syncdot {
-    position: absolute;
-    top: 6px;
-    right: 9px;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--amber);
-    border: 2px solid var(--surface, var(--bg2));
-    box-shadow: 0 0 6px var(--amber);
-  }
   .ic {
     font-size: 19px;
     line-height: 1;

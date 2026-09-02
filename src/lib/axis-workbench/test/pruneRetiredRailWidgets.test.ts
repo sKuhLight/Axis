@@ -13,9 +13,9 @@ describe('V13c rail cleanup — default document', () => {
     expect(layout.widgets['axis.widget.account']).toBeUndefined();
   });
 
-  it('keeps the single account entry on the nav rail (Axis Cloud)', () => {
+  it('keeps the single account entry on the nav rail (Axis)', () => {
     const layout = selectActiveLayout(createAxisWorkbenchDefaultDocument())!;
-    expect(layout.navigation.entries.account).toMatchObject({ label: 'Axis Cloud', fixedSlot: 'rail.footer' });
+    expect(layout.navigation.entries.account).toMatchObject({ label: 'Axis', fixedSlot: 'rail.footer' });
     expect(layout.navigation.order).toContain('account');
   });
 
