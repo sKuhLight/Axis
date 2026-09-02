@@ -178,8 +178,6 @@
     <span class="dot"></span>
     <h2>Footswitches</h2>
     <span class="sub mono">FC EDIT · effect 199</span>
-    <span class="spacer"></span>
-    <button class="back" onclick={() => editor.openBuild()}>← Grid</button>
   </header>
 
   {#if err}
@@ -448,22 +446,6 @@
     color: var(--textdim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-  }
-  .spacer {
-    flex: 1;
-  }
-  .back {
-    background: transparent;
-    border: 1px solid var(--line, var(--border2));
-    color: var(--text);
-    border-radius: 8px;
-    padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.85);
-    font-size: var(--d-font);
-    cursor: pointer;
-  }
-  .back:hover {
-    border-color: var(--c);
-    color: var(--c);
   }
   .body {
     flex: 1;

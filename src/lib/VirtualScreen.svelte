@@ -26,8 +26,6 @@
       <span class="dot" style="background:{accent}"></span>
       <h2>{editor.virtual.name}</h2>
       <span class="sub mono">effect {editor.virtual.eid}</span>
-      <span class="spacer"></span>
-      <button class="back" onclick={() => editor.openBuild()}>← Grid</button>
     </header>
 
     {#if editor.sheetState === 'loading'}
@@ -75,22 +73,6 @@
     color: var(--muted, var(--textdim));
     text-transform: uppercase;
     letter-spacing: 0.04em;
-  }
-  .spacer {
-    flex: 1;
-  }
-  .back {
-    background: transparent;
-    border: 1px solid var(--line, var(--border2));
-    color: var(--text);
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .back:hover {
-    border-color: var(--c);
-    color: var(--c);
   }
   .vbody {
     flex: 1;
