@@ -852,8 +852,9 @@ export interface PresetGrid {
   cols: number;
   scenes: string[];
   cells: GridCell[];
-  /** ADDITIVE (API v2): how the grid was read. Currently always 'dump' (whole-preset read). */
-  source?: 'dump';
+  /** ADDITIVE (API v2): how the grid was read — 'dump' = whole-preset read (carries a verified CRC),
+   *  'live' = the FM3's sub-0x2E layout query (fast, no CRC over the grid). */
+  source?: 'dump' | 'live';
 }
 
 // ── Cross-device preset converter (P4a · META-24 · AXIS-47/48) ──
