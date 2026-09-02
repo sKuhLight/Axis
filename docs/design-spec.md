@@ -41,10 +41,6 @@ Body:
 - **Output EQ page**: on/off toggle · type segments · **graphic EQ** curve with **draggable band nodes (green, ns-resize)** · Zero All.
 - Unbuilt pages show a tasteful **stub**.
 
-Footer (sticky):
-- **Common knobs** (Level / Mix) with ⚡ swipe-assign.
-- **Mute · Scene Ignore · Bypass · Remove** action chips.
-
 ## Mapping to ForgeFX API
 
 - Type picker / model name ↔ `GET /blocks/{slug}/types` (`name` + `manufacturer` + `basedOn`); the real-names toggle swaps Fractal ↔ real label.

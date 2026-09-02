@@ -116,7 +116,7 @@
 <!-- The GRID MAP is the editor's block navigator, so it has to outlive the selection — otherwise the
      one control that lets you PICK a block is hidden exactly when nothing is picked. Embedded (the
      workbench panel) the card therefore always renders and only the block-specific header / control
-     surface / footer gate on `sel`. The docked/mobile shell still opens on a selection only. -->
+     surface gate on `sel`. The docked/mobile shell still opens on a selection only. -->
 {#if embedded || (editor.editorOpen && sel && cat)}
   <div
     class="ed"
@@ -194,18 +194,6 @@
         />
       {/if}
 
-      <!-- footer -->
-      {#if sel}
-        <footer class="foot">
-          <button class="act" onclick={() => editor.showToast('Mute — coming soon', '#35c9d6')}>Mute</button>
-          <button class="act" onclick={() => editor.showToast('Scene Ignore — coming soon', '#35c9d6')}>Scene Ignore</button>
-          <span class="spacer"></span>
-          <button class="act byp" class:on={sel.bypassed} disabled={!sel.pack} onclick={() => editor.toggleBypass()}>
-            {sel.bypassed ? 'Bypassed' : 'Engaged'}
-          </button>
-          <button class="act rem" onclick={() => editor.removeSelected()}>Remove</button>
-        </footer>
-      {/if}
     </div>
 
     <!-- Quick Build: q toggles this bottom sheet of placeable blocks, anchored to the Block Editor pane
@@ -390,10 +378,6 @@
     border-color: var(--accent);
     color: var(--amber);
   }
-  .spacer {
-    flex: 1;
-    min-width: 6px;
-  }
   .close {
     width: var(--d-ctl-h-sm);
     height: var(--d-ctl-h-sm);
@@ -435,43 +419,4 @@
     font-size: var(--d-font-sm);
   }
 
-  .foot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--d-gap);
-    padding: var(--d-pad-y) var(--d-pad-x);
-    border-top: 1px solid var(--surface2);
-    background: var(--bg2);
-    flex: none;
-  }
-  .act {
-    height: var(--d-ctl-h);
-    padding: 0 var(--d-pad-x);
-    border: 1px solid var(--border-2);
-    background: var(--surface);
-    color: var(--text-dim);
-    border-radius: 10px;
-    font-size: var(--d-font);
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .act:hover {
-    border-color: var(--border-strong);
-  }
-  .act.byp {
-    background: var(--ok-tint);
-    border-color: var(--ok-border);
-    color: var(--ok);
-  }
-  .act.byp.on {
-    background: var(--surface2);
-    border-color: var(--danger-border);
-    color: var(--danger);
-  }
-  .act.rem {
-    background: var(--surface);
-    border-color: var(--danger-tint);
-    color: var(--danger);
-  }
 </style>

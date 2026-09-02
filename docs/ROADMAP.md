@@ -56,7 +56,7 @@ are. Realistic paths:
 Scene **switching** is wired. Missing the management surface:
 - **Scene naming** — `buildSetSceneName` / `buildQuerySceneName` are **Available** (names already
   decode into `PresetGridDTO.scenes`). Just need edit UI.
-- Per-scene **copy / clear / reset**, "scene ignore" per block (the BlockEditor footer stub),
+- Per-scene **copy / clear / reset**, "scene ignore" per block (not built anywhere in the UI yet),
   scene-level bypass/channel matrix view, **scene controllers** (per-scene values).
   **Effort:** naming = easy; copy/ignore/controllers = moderate (touches modifiers, see §5).
 
