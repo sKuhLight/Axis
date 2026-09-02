@@ -131,7 +131,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // re-added from the panel picker) — the editor already carries the GRID MAP
   // navigator, so the full signal grid is not needed for first contact. Preset
   // Browser, FC, Setup, Controllers, Scenes, and Live each get their own seed page
-  // (full-size panel in main); Settings + Axis stay ACTION nav entries. Pages are
+  // (full-size panel in main); Theme + Axis stay ACTION nav entries. Pages are
   // identical across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
   gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.blockEditor']);
@@ -168,7 +168,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   };
 
   // Nav entries bind to the seed pages (grid/library/fc/controllers/scenes/live/
-   // setup); Settings + Axis stay ACTION entries. Triggering a page entry
+  // setup); Theme + Axis stay ACTION entries. Triggering a page entry
   // activates its page via the generic NavigationHost (`page.activate`).
   layout.navigation = createAxisSeedNavigation('side');
 

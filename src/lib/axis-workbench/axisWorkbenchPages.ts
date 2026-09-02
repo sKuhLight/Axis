@@ -292,7 +292,7 @@ const actionNavEntry = (
 
 /**
  * The Axis seed navigation: the seven page-bound entries (each activates its page)
- * plus the two ACTION entries — Settings (opens the settings modal) and Axis
+ * plus the two ACTION entries — Theme (opens the appearance modal) and Axis
  * (account modal, pinned to the rail footer). Page entries carry NO `target`; their
  * `pageId` binding drives `page.activate` in the generic `NavigationHost`.
  */
@@ -307,7 +307,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
       scenes: pageNavEntry('scenes', NAV_LABELS.scenes, AXIS_PAGE_SCENES),
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
       setup: pageNavEntry('setup', NAV_LABELS.setup, AXIS_PAGE_SETUP),
-      theme: actionNavEntry('theme', 'Settings', 'axis.openTheme'),
+      theme: actionNavEntry('theme', 'Theme', 'axis.openTheme'),
       account: actionNavEntry('account', 'Axis', 'axis.openAccount', {
         locked: true,
         fixedSlot: 'rail.footer'
@@ -380,7 +380,7 @@ function layoutAlreadySeeded(layout: WorkbenchLayout): boolean {
  */
 export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
   if (doc.metadata?.[AXIS_SEED_PAGES_MARKER]) {
-    ensureSettingsNavigationLabel(doc);
+    ensureActionNavigationLabels(doc);
     return doc;
   }
 
@@ -404,15 +404,25 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
   }
 
   doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_PAGES_MARKER]: 'v1' };
-  ensureSettingsNavigationLabel(doc);
+  ensureActionNavigationLabels(doc);
   return doc;
 }
 
-/** Rename the persisted action without changing its stable navigation/action ids. */
-function ensureSettingsNavigationLabel(doc: WorkbenchDocument): void {
+/** The two ACTION entries have been renamed since they shipped — "Theme" was briefly "Settings",
+ *  and "Axis" was "Axis Cloud" before the cloud was removed. Renaming the seed only fixes NEW
+ *  documents, so repair the persisted label on load, keyed on the stable command (never the entry
+ *  id or the label itself, which is what went stale). */
+const ACTION_NAV_LABELS: Record<string, string> = {
+  'axis.openTheme': 'Theme',
+  'axis.openAccount': 'Axis'
+};
+
+function ensureActionNavigationLabels(doc: WorkbenchDocument): void {
   for (const layout of Object.values(doc.layouts ?? {})) {
-    const entry = layout?.navigation?.entries?.theme;
-    if (entry?.target?.command === 'axis.openTheme') entry.label = 'Settings';
+    for (const entry of Object.values(layout?.navigation?.entries ?? {})) {
+      const label = entry?.target?.command ? ACTION_NAV_LABELS[entry.target.command] : undefined;
+      if (label) entry.label = label;
+    }
   }
 }
 

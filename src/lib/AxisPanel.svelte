@@ -3,6 +3,9 @@
   // Connection, Performance, Privacy (diagnostics consent + send debug report), About
   // (version · support · legal).
   import { editor } from './editor.svelte';
+  import { appSettings } from './appSettings.svelte';
+  import { blockLibrary } from './blockLibrary.svelte';
+  import { defaultBlockLibraryPath } from './blockLibraryPath';
   import { library } from './library.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
   import { isDirect } from './forgefx';
@@ -74,6 +77,14 @@
     const p = await pick();
     if (p) await editor.setLocalRoot(p);
   }
+  // ── Storage tab (block library: the folder of saved .blk files the block picker reads) ──
+  // `cfg.blockLibraryPath` holds ONLY an explicit override — an empty value keeps tracking the
+  // connected unit's Fractal Edit folder, which is shown as the placeholder.
+  const detectedUnit = $derived(editor.detected?.connected ? editor.detected.name : null);
+  const blockLibraryDefault = $derived(defaultBlockLibraryPath(detectedUnit));
+  const setBlockLibraryPath = (path: string) => appSettings.setBlockLibraryPath(path);
+  const preloadBlockLibrary = (path: string) => blockLibrary.preloadWhenIdle(path.trim() || blockLibraryDefault || '');
+
   function restoreFromFolder() {
     if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void editor.localRestore();
   }
@@ -186,6 +197,16 @@
             <p class="muted">On a fresh machine (or after data loss), re-import every version from the folder's Sync/ back into Axis. Verified against the index; never overwrites existing versions.</p>
             <button class="signout" disabled={!loc.exists || loc.syncing} onclick={restoreFromFolder}>Restore from folder…</button>
           {/if}
+
+          <div class="sec mt">BLOCK LIBRARY</div>
+          <p class="muted">Where Axis looks for saved <strong>.blk</strong> blocks — the Library tab in the block picker reads from here. Defaults to the connected unit's Fractal Edit blocks folder.</p>
+          <label class="fld" for="blk-path"><span class="flbl">FOLDER</span>
+            <input id="blk-path" class="in sm" type="text"
+                   placeholder={blockLibraryDefault ?? 'Connect an FM3, FM9, or Axe-Fx III to set a default'}
+                   value={appSettings.cfg.blockLibraryPath}
+                   oninput={(e) => setBlockLibraryPath((e.currentTarget as HTMLInputElement).value)}
+                   onchange={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
+          </label>
         </div>
 
       {:else if editor.axisTab === 'performance' && editor.hasTelemetryControl}

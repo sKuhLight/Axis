@@ -71,18 +71,19 @@ describe('ROUND 15 — default document seed pages', () => {
     }
   });
 
-  it('binds the seven nav entries to their pages and keeps Settings/Account as actions', () => {
+  it('binds the seven nav entries to their pages and keeps Theme/Account as actions', () => {
     const entries = layout.navigation.entries;
     expect(entries.grid.pageId).toBe(AXIS_PAGE_GRID);
     expect(entries.grid.target).toBeUndefined();
     expect(entries.library.pageId).toBe(AXIS_PAGE_PRESET_BROWSER);
     expect(entries.fc.pageId).toBe(AXIS_PAGE_FC);
     expect(entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
-    // Settings + Axis stay ACTION entries (no page binding).
+    // Theme + Axis stay ACTION entries (no page binding).
     expect(entries.theme.pageId).toBeUndefined();
-    expect(entries.theme.label).toBe('Settings');
+    expect(entries.theme.label).toBe('Theme');
     expect(entries.theme.target?.command).toBe('axis.openTheme');
     expect(entries.account.pageId).toBeUndefined();
+    expect(entries.account.label).toBe('Axis');
     expect(entries.account.target?.command).toBe('axis.openAccount');
     expect(entries.account.fixedSlot).toBe('rail.footer');
   });
@@ -95,10 +96,13 @@ describe('ROUND 15 — default document seed pages', () => {
     expect(doc.metadata?.[AXIS_SEED_PAGES_MARKER]).toBe('v1');
   });
 
-  it('renames the persisted Theme action without changing its command', () => {
-    layout.navigation.entries.theme.label = 'Theme';
+  it('repairs stale action labels ("Settings" → Theme, "Axis Cloud" → Axis) without changing commands', () => {
+    layout.navigation.entries.theme.label = 'Settings';
+    layout.navigation.entries.account.label = 'Axis Cloud';
     ensureAxisSeedPages(doc);
-    expect(layout.navigation.entries.theme.label).toBe('Settings');
+    expect(layout.navigation.entries.theme.label).toBe('Theme');
+    expect(layout.navigation.entries.account.label).toBe('Axis');
+    expect(layout.navigation.entries.account.target?.command).toBe('axis.openAccount');
     expect(layout.navigation.entries.theme.target?.command).toBe('axis.openTheme');
   });
 });

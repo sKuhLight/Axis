@@ -1,20 +1,13 @@
 <script lang="ts">
   // Theme & appearance picker (the new global theme engine's UI). Presets, accent, light/dark, UI scale,
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
-  import { appSettings } from './appSettings.svelte';
-  import { defaultBlockLibraryPath } from './blockLibraryPath';
-  import { blockLibrary } from './blockLibrary.svelte';
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
   import { DENSITIES } from './density';
   import { editor } from './editor.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
-  let activeTab = $state<'appearance' | 'settings'>('appearance');
   const cfg = $derived(theme.cfg);
   const mob = $derived(editor.isMobile);
-  const detectedUnit = $derived(editor.detected?.connected ? editor.detected.name : null);
-  const blockLibraryPath = $derived(appSettings.cfg.blockLibraryPath || defaultBlockLibraryPath(detectedUnit));
-  const preloadBlockLibrary = (path: string) => blockLibrary.preloadWhenIdle(path || defaultBlockLibraryPath(detectedUnit) || '');
   const densityLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1);
 </script>
 
@@ -22,16 +15,10 @@
 <div class="bg" class:mob role="presentation" onclick={onclose}>
   <div class="card scroll" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="head">
-      <div><div class="h1">Settings</div><div class="sub">Customize Axis on this device</div></div>
+      <div><div class="h1">Appearance</div><div class="sub">Theme, accent, scale &amp; density — saved on this device</div></div>
       <button class="x" aria-label="Close" onclick={onclose}>✕</button>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="Settings sections">
-      <button class:on={activeTab === 'appearance'} role="tab" aria-selected={activeTab === 'appearance'} onclick={() => activeTab = 'appearance'}>Appearance</button>
-      <button class:on={activeTab === 'settings'} role="tab" aria-selected={activeTab === 'settings'} onclick={() => activeTab = 'settings'}>Settings</button>
-    </div>
-
-    {#if activeTab === 'appearance'}
     <div class="sec">PRESETS</div>
     <div class="presets">
       {#each THEME_PRESETS as p (p.id)}
@@ -91,17 +78,6 @@
         </select>
       </label>
     </div>
-    {:else}
-      <div class="settings" role="tabpanel" aria-label="Settings">
-        <label class="fld">
-          <span class="flbl">BLOCK LIBRARY PATH</span>
-          <input type="text" value={blockLibraryPath ?? ''} placeholder="Connect an FM3, FM9, or Axe-Fx III to set a default"
-            oninput={(e) => appSettings.setBlockLibraryPath((e.currentTarget as HTMLInputElement).value)}
-            onchange={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
-        </label>
-        <div class="hint">Defaults to the connected unit's Fractal Edit blocks folder. Entering a path saves an override on this device.</div>
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -115,10 +91,6 @@
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }
   .x { width: 30px; height: 30px; flex: none; border: 0; border-radius: 8px; background: var(--bg2); color: var(--textdim); font-size: 14px; cursor: pointer; }
   .x:hover { color: var(--text); background: var(--surface2); }
-  .tabs { display: flex; gap: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
-  .tabs button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--textdim); font-size: 13px; font-weight: 700; cursor: pointer; }
-  .tabs button.on { background: var(--accent); color: var(--accentink); }
-  .settings { min-height: 180px; padding-top: 18px; }
   .sec { font: 700 9px/1 var(--font-mono); letter-spacing: 0.12em; color: var(--textfaint); margin: 18px 0 10px; display: flex; align-items: center; gap: 8px; }
   .sec .val { color: var(--textdim); }
   .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
@@ -142,6 +114,5 @@
   .fld { flex: 1; display: flex; flex-direction: column; gap: 7px; }
   .flbl { font: 700 9px/1 var(--font-mono); letter-spacing: 0.1em; color: var(--textfaint); }
   .fld select { height: 40px; padding: 0 10px; background: var(--input); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: var(--font-ui); font-size: 13px; cursor: pointer; }
-  .fld input { height: 40px; padding: 0 10px; background: var(--input); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-family: var(--font-mono); font-size: 12px; }
-  .fld select:focus, .fld input:focus { border-color: var(--accent); outline: none; }
+  .fld select:focus { border-color: var(--accent); outline: none; }
 </style>
