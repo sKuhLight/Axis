@@ -196,7 +196,7 @@
     return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.round(value)) : null;
   }
 
-  function gridCellStyle(unit: WidgetUnit): string {
+  function gridCellStyle(unit: WidgetUnit, isFirst: boolean): string {
     const layout = $controller.activeLayout;
     const widget = layout?.widgets[unit.widgetIds[0]];
     const placement = readPlacementObject(widget?.state?.grid) ?? readPlacementObject(widget?.state?.placement);
@@ -212,7 +212,14 @@
     const colSpan = readPlacementNumber(placement.colSpan ?? placement.w);
     const rowSpan = readPlacementNumber(placement.rowSpan ?? placement.h);
     const rules: string[] = [];
-    if (fullWidth) rules.push('grid-column: 1 / -1');
+    if (fullWidth) {
+      rules.push('grid-column: 1 / -1');
+      // A full-width band (a section header) is short but sits in a normal-height
+      // row. Hug the bottom so its whitespace separates it from the PREVIOUS group
+      // instead of leaving it floating up against the row above. The first band
+      // has no group above it, so it stays top-aligned.
+      if (!isFirst) rules.push('align-self: end');
+    }
     else if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
     else if (colSpan != null) rules.push(`grid-column: span ${colSpan}`);
     if (row != null) rules.push(`grid-row: ${row} / span ${rowSpan ?? 1}`);
@@ -263,7 +270,7 @@
         ></span>
       {/if}
       {#if variant === 'grid'}
-        <div class="aw-widget-grid-cell" style={gridCellStyle(unit)}>
+        <div class="aw-widget-grid-cell" style={gridCellStyle(unit, unitPos === 0)}>
           {#if unit.groupId}
             <WidgetGroupHost groupId={unit.groupId} />
           {:else}
