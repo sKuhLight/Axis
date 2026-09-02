@@ -480,25 +480,6 @@
       {/if}
     {/if}
   </div>
-{:else if kind === 'view'}
-  <div class="axis-widget chips" data-size={size}>
-    {#if expanded}<span class="mono token">VIEW</span>{/if}
-    <div class="chip-row">
-      <button
-        class="pill-chip"
-        class:on={editor.globalMode === 'basic' || mini}
-        type="button"
-        onclick={() => editor.setGlobalMode(mini ? (editor.globalMode === 'basic' ? 'advanced' : 'basic') : 'basic')}
-      >
-        {mini ? (editor.globalMode === 'basic' ? 'Basic' : 'Adv') : 'Basic'}
-      </button>
-      {#if !mini}
-        <button class="pill-chip" class:on={editor.globalMode === 'advanced'} type="button" onclick={() => editor.setGlobalMode('advanced')}>
-          {compact ? 'Adv' : 'Advanced'}
-        </button>
-      {/if}
-    </div>
-  </div>
 {:else if kind === 'gridMode'}
   <div class="axis-widget chips" data-size={size}>
     {#if expanded}<span class="mono token">GRID</span>{/if}

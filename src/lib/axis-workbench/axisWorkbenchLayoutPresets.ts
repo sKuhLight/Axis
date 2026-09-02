@@ -31,7 +31,7 @@ import { axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel
  * Design → Axis conventions:
  *   - Zones: `tl→top.left`, `tc→top.center`, `tr→top.right`, `rail→rail`,
  *     `bottom→bottom`, `gridbar→gridbar`, `right→right`, `hidden→hidden`.
- *   - Widget kinds → types: preset→axis.preset, scenes→axis.scenes, view→axis.view,
+ *   - Widget kinds → types: preset→axis.preset, scenes→axis.scenes,
  *     tuner→axis.tuner, tempo→axis.tempo, cpu→axis.cpu,
  *     save→axis.save, search→axis.search, history→axis.history, map→axis.gridMap,
  *     undo→axis.undoRedo, account→axis.account, gridmode→axis.gridMode,
@@ -78,7 +78,6 @@ const ZONE: Record<string, string> = {
 const WIDGET_TYPE: Record<string, string> = {
   preset: 'axis.preset',
   scenes: 'axis.scenes',
-  view: 'axis.view',
   tuner: 'axis.tuner',
   tempo: 'axis.tempo',
   cpu: 'axis.cpu',
@@ -135,7 +134,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
     widgets: {
       preset: W('tl', 0),
       scenes: W('tl', 1),
-      view: W('tr', 0),
       tuner: W('tr', 2, 'expanded', 'status'),
       tempo: W('tr', 3, 'expanded', 'status'),
       cpu: W('tr', 4, 'expanded', 'status'),
@@ -164,7 +162,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       scenes: W('tc', 0),
       tempo: W('tr', 0),
       save: W('tr', 1),
-      view: W('hidden', 0),
       cpu: W('hidden', 0),
       search: W('hidden', 0),
       history: W('hidden', 0),
@@ -183,7 +180,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       preset: W('tl', 0),
       search: W('tl', 1),
       scenes: W('tl', 2),
-      view: W('tr', 0),
       cpu: W('tr', 2),
       save: W('tr', 3),
       gridmode: W('gridbar', 0),
@@ -206,7 +202,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       preset: W('tl', 0, 'compact'),
       scenes: W('tl', 1, 'compact'),
       save: W('tr', 1, 'compact'),
-      view: W('hidden', 0),
       tuner: W('hidden', 0),
       tempo: W('hidden', 0),
       cpu: W('hidden', 0),
@@ -228,7 +223,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       scenes: W('tc', 0),
       tuner: W('tr', 0),
       save: W('tr', 1),
-      view: W('hidden', 0),
       tempo: W('hidden', 0),
       cpu: W('hidden', 0),
       search: W('hidden', 0),
@@ -250,7 +244,6 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       preset: W('tl', 0, 'compact'),
       save: W('tr', 0, 'mini'),
       scenes: W('bottom', 0, 'compact'),
-      view: W('hidden', 0),
       tuner: W('hidden', 0),
       tempo: W('hidden', 0),
       cpu: W('hidden', 0),
@@ -272,7 +265,6 @@ const densityToSize = (density: Density): WidgetSize =>
 const WIDGET_INSTANCE_ID: Record<string, string> = {
   preset: 'axis.widget.preset',
   scenes: 'axis.widget.scenes',
-  view: 'axis.widget.view',
   tuner: 'axis.widget.tuner',
   tempo: 'axis.widget.tempo',
   cpu: 'axis.widget.cpu',

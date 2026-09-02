@@ -148,16 +148,6 @@
 
   <!-- right region (always visible) -->
   <div class="right">
-    {#if !editor.isMobile}
-      <div class="view" title="Default editor detail for every block">
-        <span class="mono v-lbl">VIEW</span>
-        <div class="seg">
-          <button class="sg" class:on={editor.globalMode === 'basic'} onclick={() => editor.setGlobalMode('basic')}>Basic</button>
-          <button class="sg" class:on={editor.globalMode === 'advanced'} onclick={() => editor.setGlobalMode('advanced')}>Advanced</button>
-        </div>
-      </div>
-    {/if}
-
     <button class="addblk" class:icon={editor.isMobile} title="Add block" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
       <svg width="16" height="16" viewBox="0 0 16 16">
         <circle cx="7" cy="7" r="5" fill="none" stroke="var(--accent)" stroke-width="1.6" />
@@ -532,43 +522,6 @@
     color: var(--accent-ink);
   }
 
-  /* view switch */
-  .view {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    flex: none;
-  }
-  .v-lbl {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--text-mut);
-    letter-spacing: 0.12em;
-  }
-  .seg {
-    display: flex;
-    gap: 3px;
-    background: var(--panel-2);
-    border: 1px solid var(--surface-3);
-    border-radius: 9px;
-    padding: 3px;
-  }
-  .sg {
-    height: 26px;
-    padding: 0 11px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--textdim);
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .sg.on {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-
   /* add block */
   .addblk {
     display: flex;
@@ -760,9 +713,6 @@
   }
   @media (max-width: 1060px) {
     .status .tempo {
-      display: none;
-    }
-    .view {
       display: none;
     }
   }

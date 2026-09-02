@@ -145,7 +145,6 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   layout.widgets = {
     'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),
     'axis.widget.scenes': widget('axis.widget.scenes', 'axis.scenes', 'top.left', 1, { state: widgetState(60) }),
-    'axis.widget.view': widget('axis.widget.view', 'axis.view', 'top.right', 0, { state: widgetState(60) }),
     'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
     'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
@@ -265,16 +264,20 @@ export function pruneAxisRetiredRailWidgets(doc: WorkbenchDocument): WorkbenchDo
 }
 
 /**
- * Drop every `axis.addBlock` widget instance from a (possibly persisted) document.
- * The Add Block widget was removed from the shell (T-series) but persisted docs
- * minted earlier still carry `axis.widget.addBlock` in a top/bottom zone, where
- * the retired-rail prune (above) can't reach it. Unlike the rail prune this is
- * unconditional on zone — the widget type no longer exists, so any instance is dead.
+ * Drop every instance of a retired widget TYPE from a (possibly persisted) document.
+ * These widgets were removed from the shell but persisted docs minted earlier still
+ * carry their instances in a top/bottom zone, where the retired-rail prune (above)
+ * can't reach them. Unlike the rail prune this is unconditional on zone — the type is
+ * no longer registered, so any instance is dead: it renders nothing, yet would still
+ * be listed as an addable entry in the Customize → Widgets library drawer.
  * Idempotent.
+ *
+ *   - `axis.addBlock` — the Add Block widget (T-series).
+ *   - `axis.view` — the Basic/Advanced VIEW chip; blocks now always open on Ideal.
  */
-const AXIS_RETIRED_WIDGET_TYPES = ['axis.addBlock'] as const;
+const AXIS_RETIRED_WIDGET_TYPES = ['axis.addBlock', 'axis.view'] as const;
 
-export function pruneAxisAddBlockWidgets(doc: WorkbenchDocument): WorkbenchDocument {
+export function pruneAxisRetiredWidgetTypes(doc: WorkbenchDocument): WorkbenchDocument {
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
     for (const [id, instance] of Object.entries(layout.widgets)) {

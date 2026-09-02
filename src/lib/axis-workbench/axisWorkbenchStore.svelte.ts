@@ -15,7 +15,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisAddBlockWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
@@ -67,7 +67,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // tabbed next to History. Same ordering reason, same idempotence requirement.
   return ensureAxisMeterWidgetLibrary(
     ensureAxisMobileBottomNav(
-      pruneAxisAddBlockWidgets(
+      pruneAxisRetiredWidgetTypes(
         pruneAxisRetiredRailWidgets(
           ensureAxisGridControlWidgets(
             ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))

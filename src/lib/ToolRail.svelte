@@ -176,12 +176,6 @@
         </div>
       {/if}
 
-      <div class="d-sec">DEFAULT VIEW</div>
-      <div class="d-seg">
-        <button class:on={editor.globalMode === 'basic'} onclick={() => editor.setGlobalMode('basic')}>Basic</button>
-        <button class:on={editor.globalMode === 'advanced'} onclick={() => editor.setGlobalMode('advanced')}>Advanced</button>
-      </div>
-
       {#if editor.hasTuner || editor.hasTempo}
         <div class="d-sec">STATUS</div>
         <div class="d-status">
@@ -445,29 +439,6 @@
     background: var(--accent);
     color: var(--accentink);
     border-color: var(--accent);
-  }
-  .d-seg {
-    display: flex;
-    gap: 6px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 11px;
-    padding: 4px;
-  }
-  .d-seg button {
-    flex: 1;
-    height: 36px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--textdim);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .d-seg button.on {
-    background: var(--accent);
-    color: var(--accentink);
   }
   .d-status {
     display: flex;

@@ -24,7 +24,6 @@ import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from './deviceLayoutBoard';
 
-export type ViewMode = 'basic' | 'advanced';
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
 const loadLocalAutoSync = (): boolean => { try { return localStorage.getItem(LOCAL_AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
@@ -150,7 +149,6 @@ class EditorStore {
   inLibrary = $state(false);
 
   // ── view + chrome ──
-  globalMode = $state<ViewMode>('basic');
   activePage = $state<string>(''); // active tab id for the open block
 
   // ── parameter tabs (per-family custom layouts) ──
@@ -1356,7 +1354,7 @@ class EditorStore {
     this.selKey = `${c.row},${c.col}`;
     this.editorOpen = true;
     this.editingTabs = false;
-    this.activePage = this.#defaultPage();
+    this.activePage = '__ideal'; // blocks always open on the Ideal tab; Advanced is one click away
     // Devices with caps.paramsWithoutPack serve params for any placed block (AM4 slots read by
     // pidLow from the catalog) — don't gate the editor on a gen-3 `pack` there.
     if (!c.pack && !this.paramsWithoutPack) {
@@ -1398,8 +1396,6 @@ class EditorStore {
     this.activePage = '';
     await this.#loadParams();
   };
-  // default tab when opening a block: Ideal in Basic view, Advanced in Advanced view
-  #defaultPage = () => (this.globalMode === 'basic' ? '__ideal' : '__advanced');
 
   #loadParams = async () => {
     const c = this.selected;
@@ -1838,14 +1834,6 @@ class EditorStore {
     } catch {
       /* */
     }
-  };
-
-  // ── view mode ──
-  // Basic/Advanced now picks the default tab (Ideal vs Advanced) for the open block.
-  setGlobalMode = (m: ViewMode) => {
-    this.globalMode = m;
-    if (this.selected) this.activePage = this.#defaultPage();
-    this.showToast(m === 'basic' ? 'Blocks open on Ideal' : 'Blocks open on Advanced', '#35c9d6');
   };
 
   // ── telemetry actions ──
