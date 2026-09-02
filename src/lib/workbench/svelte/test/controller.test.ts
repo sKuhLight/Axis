@@ -337,6 +337,42 @@ describe('WorkbenchController', () => {
   });
 });
 
+describe('WorkbenchController — layoutEditable', () => {
+  it('defaults to true so the framework is unchanged for hosts that do not opt out', () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument());
+    expect(controller.layoutEditable).toBe(true);
+    controller.setEditMode(true);
+    expect(controller.editMode).toBe(true);
+    controller.toggleEditMode();
+    expect(controller.editMode).toBe(false);
+  });
+
+  it('clamps editMode to false at every entry point when layout editing is off', () => {
+    const controller = createWorkbenchController(createEmptyWorkbenchDocument(), { layoutEditable: false });
+    expect(controller.layoutEditable).toBe(false);
+
+    controller.setEditMode(true);
+    expect(controller.editMode).toBe(false);
+
+    controller.toggleEditMode();
+    expect(controller.editMode).toBe(false);
+  });
+
+  it('ignores a persisted profile override when layout editing is off', () => {
+    const doc = multiProfileDoc();
+    doc.profileOverrideId = 'profile.phone';
+
+    const editable = createWorkbenchController(doc, { layoutEditable: true });
+    expect(editable.profileOverride).toBe('profile.phone');
+
+    // The pin is only settable from the edit ribbon, so with editing off it must
+    // not strand the user on a phone layout. Read-side only — the document keeps it.
+    const locked = createWorkbenchController(doc, { layoutEditable: false });
+    expect(locked.profileOverride).toBeUndefined();
+    expect(locked.document.profileOverrideId).toBe('profile.phone');
+  });
+});
+
 describe('WorkbenchController — pages', () => {
   const pagedDoc = () =>
     createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test', pageId: 'page.one', pageLabel: 'One' });

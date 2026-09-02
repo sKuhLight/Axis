@@ -2,6 +2,7 @@ import { forgefx, isRemote } from '../forgefx';
 import { isRemoteBuild } from '../cloudBrowser';
 import { notifyMutation } from '../syncBus';
 import { createWorkbenchController, migrateWorkbenchDocument, type WorkbenchDocument } from '../workbench';
+import { isAxisLayoutEditingEnabled } from './featureGate';
 import { enqueueToast } from '../workbench/svelte/toasts';
 import {
   AXIS_WORKBENCH_CACHE_KEY,
@@ -181,7 +182,11 @@ if (typeof window !== 'undefined') {
 }
 
 export const axisWorkbenchController = createWorkbenchController(mem, {
-  onChange: persist
+  onChange: persist,
+  // Layout editing is OFF unless VITE_AXIS_LAYOUT_EDIT=1. This is the single
+  // construction site, and the framework itself never reads the gate (it must
+  // keep zero app imports) — the flag is resolved here and handed in.
+  layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)
 });
 // The controller repairs the document it was constructed with; adopt the repaired copy so the
 // cache push in axisWorkbenchInit never re-uploads an unrepaired document.

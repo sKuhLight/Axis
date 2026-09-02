@@ -50,7 +50,20 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
-  the Axis theme and ribbon extras. `featureGate.ts` gates on `VITE_AXIS_WORKBENCH === '1'`.
+  the Axis theme and ribbon extras. `featureGate.ts` holds all three build gates:
+  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`), `VITE_AXIS_LAYOUT_EDIT`
+  and `VITE_AXIS_CONTROL_ARRANGE` (both **off** unless `'1'`).
+- **Layout editing is off by default.** `axisWorkbenchStore.svelte.ts` passes
+  `layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)` to
+  `createWorkbenchController` — the ONE construction site. `workbench/` must keep
+  zero app imports, so the framework never reads the gate itself; it takes the
+  boolean as a construction option (defaulting to `true`) and clamps `editMode`
+  in `setEditMode`/`toggleEditMode`. That single clamp is what retires floating
+  widgets, widget groups, layout import/export, page/panel/dock customization,
+  profiles and layout presets — every one of them is gated on `editMode`.
+  Components read it as `$controller.layoutEditable` from the existing context;
+  do NOT widen `WorkbenchContext` for it. Nothing is deleted, and
+  `playwright.config.ts` sets both flags so the code stays e2e-covered.
 - `panels/` — one component per panel type.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
   widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one

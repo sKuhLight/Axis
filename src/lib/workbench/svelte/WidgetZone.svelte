@@ -295,9 +295,11 @@
               <i>{zone}</i>
             </div>
           {/each}
-          <button type="button" class="aw-overflow-customize" onclick={() => { controller.setEditMode(true); overflowOpen = false; }}>
-            ✥ Rearrange in Customize
-          </button>
+          {#if $controller.layoutEditable}
+            <button type="button" class="aw-overflow-customize" onclick={() => { controller.setEditMode(true); overflowOpen = false; }}>
+              ✥ Rearrange in Customize
+            </button>
+          {/if}
         </div>
       {/if}
     {/if}

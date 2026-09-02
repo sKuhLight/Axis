@@ -117,6 +117,42 @@ legacy servers. Use `VITE_*` build flags only for whole-shell/build modes
 features (cloud): discover via the API (`cloudStatus().enabled`) — do not
 client-gate.
 
+Three `VITE_` gates exist today, all in `src/lib/axis-workbench/featureGate.ts`:
+
+| Gate | Env | Default | Off means |
+|---|---|---|---|
+| `isAxisWorkbenchFeatureEnabled` | `VITE_AXIS_WORKBENCH` | **on** (`'0'` opts out) | monolith shell |
+| `isAxisLayoutEditingEnabled` | `VITE_AXIS_LAYOUT_EDIT` | **off** (`'1'` opts in) | no workbench layout editing |
+| `isAxisControlArrangeEnabled` | `VITE_AXIS_CONTROL_ARRANGE` | **off** (`'1'` opts in) | no ControlSurface Arrange mode |
+
+The latter two are **retirements, not deletions** — the code is intact and stays
+e2e-covered (`playwright.config.ts` turns both on). They are clamped at a single
+choke point each, so a new entry point cannot resurrect the feature by accident:
+`WorkbenchController.setEditMode`/`toggleEditMode` (via the `layoutEditable`
+construction option) and `ControlSurface.svelte`'s `toggleEdit`. If you add UI
+that would enter either mode, gate the affordance too — do not remove the clamp.
+
+Two consequences worth knowing:
+
+- `ControlSurface`'s Arrange block is the only entry point for **swipe-control
+  mapping** (the ⚡ badge → `editor.toggleSwipeControl`, which also drives
+  `fetchMeters`' subscription). With arranging off the Signal Grid swipe set is
+  read-only; already-mapped params keep working.
+- Both gates **clamp on the read side** rather than rewriting storage, so a doc
+  saved while the feature was on cannot strand the user: `profileOverride`
+  returns undefined (`controller.svelte.ts`) and `ControlSurface`'s
+  `activeProfile` / board load pin to `'Default'` — otherwise a doc left on the
+  "Blank" layout profile would show an empty board with the picker hidden.
+  Persisted values are untouched, so re-enabling a flag restores them exactly.
+  Do not "simplify" these into a migration that mutates the document.
+
+**Deliberately still reachable with layout editing off:** dock region
+collapse/resize (`DockRegion.svelte:72-74`), split-ratio drag (`SplitHandle.svelte`),
+and panel collapse (`TabStack.svelte:389-396`). These size what already exists,
+add/remove/move nothing, and are all reversible without the ribbon (a collapsed
+region leaves a click-to-restore strip). Treated as normal app usage, like an IDE
+sidebar divider — this is a decision, not an oversight.
+
 ## Testing reality
 
 - Two vitest projects (`vitest.config.ts`), both node environment, no DOM:

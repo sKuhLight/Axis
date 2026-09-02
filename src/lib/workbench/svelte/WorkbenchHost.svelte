@@ -208,17 +208,19 @@
              leftmost element in BOTH nav modes. Toggling opens the expanded
              EditRibbon overlay. Icon-only below a narrow width (label hidden by
              CSS) so it never forces the bar to overflow. -->
-        <button
-          class="aw-bottom-customize"
-          class:active={$controller.editMode}
-          type="button"
-          title={$controller.editMode ? 'Finish editing layout' : 'Customize layout'}
-          aria-pressed={$controller.editMode}
-          onclick={() => controller.toggleEditMode()}
-        >
-          <span class="aw-bottom-customize-glyph" aria-hidden="true">◆</span>
-          <span class="aw-bottom-customize-label">{$controller.editMode ? 'Done' : 'Customize'}</span>
-        </button>
+        {#if $controller.layoutEditable}
+          <button
+            class="aw-bottom-customize"
+            class:active={$controller.editMode}
+            type="button"
+            title={$controller.editMode ? 'Finish editing layout' : 'Customize layout'}
+            aria-pressed={$controller.editMode}
+            onclick={() => controller.toggleEditMode()}
+          >
+            <span class="aw-bottom-customize-glyph" aria-hidden="true">◆</span>
+            <span class="aw-bottom-customize-label">{$controller.editMode ? 'Done' : 'Customize'}</span>
+          </button>
+        {/if}
         {#if navMode === 'bottom'}
           <!-- Bottom-nav mode: nav row sits to the left of the bottom-zone widgets,
                divided by a 1px separator (design §9). -->
@@ -234,7 +236,13 @@
       <WidgetZone zone="floating" floating />
     {/if}
 
-    <EditRibbon extras={ribbonExtras} />
+    {#if $controller.layoutEditable}
+      <!-- Sole mount point for the Layouts drawer (layout import/export), the
+           Pages/Widgets drawer, the edit undo/redo keybinding, and ribbonExtras
+           (Axis profile switcher + layout presets). Gating it here retires all
+           of them together. -->
+      <EditRibbon extras={ribbonExtras} />
+    {/if}
     <DragLayer />
     <WorkbenchToasts />
   </div>

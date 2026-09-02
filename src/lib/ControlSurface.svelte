@@ -31,6 +31,7 @@
   import type { NamedParam, EnumParam } from './types';
   import { buildDeviceLayoutBoard, layoutVariantSig, packInto, repackWidgets, MAX_ROWS, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
   import { AXIS_PIN_SELECTED_PARAMETERS_ACTION, AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION } from './axis-workbench/axisParameterActions';
+  import { isAxisControlArrangeEnabled } from './axis-workbench/featureGate';
   import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
   import {
     createParameterWidgetCommand,
@@ -515,10 +516,23 @@
   // from the served layout), "Blank" = empty canvas, plus user-created copies. The ACTIVE profile's
   // board is bySlug[slug] (so every mutator below is unchanged); switching just swaps it + repoints
   // persistence. Boards persist at axs.surface3.<slug>.<profile>; meta (active + names) at the meta key.
+  // Control re-arranging is OFF unless VITE_AXIS_CONTROL_ARRANGE=1. Clamped at
+  // `toggleEdit` and at the Arrange button, so `editMode` stays false even if
+  // another call site appears. NOTE: the arrange block is also the only entry
+  // point for swipe-control mapping (the ⚡ badge) — with arranging off the
+  // Signal Grid swipe set is read-only, but already-mapped params keep working.
+  const arrangeEnabled = isAxisControlArrangeEnabled(import.meta.env);
   const LEGACY_KEY = (s: string) => `axs.surface2.${s}`; // pre-profile single board → migrated into Default
   const PMKEY = (s: string) => `axs.surface3meta.${s}`;
   const bKey = (s: string, prof: string) => `axs.surface3.${s}.${prof}`;
-  const activeProfile = $derived(profileMeta[slug]?.active ?? 'Default');
+  // With arranging off, named layout profiles can no longer be authored, and the
+  // picker that switches them is hidden — so a doc left on "Blank" (an empty
+  // canvas) or on a custom layout would strand the user with no way back. Pin the
+  // read to the device-authentic Default instead. Storage is NOT rewritten, so
+  // re-enabling the flag restores the saved profile exactly as it was.
+  const activeProfile = $derived(
+    arrangeEnabled ? (profileMeta[slug]?.active ?? 'Default') : 'Default'
+  );
   const profileNames = $derived(profileMeta[slug]?.names ?? ['Default', 'Blank']);
   function emptyBoard(): Board {
     return { pageOrder: ['Page 1'], page: 'Page 1', boards: { 'Page 1': [] } };
@@ -683,7 +697,7 @@
       if (!meta) meta = { active: 'Default', names: ['Default', 'Blank'] };
       profileMeta = { ...profileMeta, [slug]: meta };
     }
-    bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, meta.active) };
+    bySlug = { ...bySlug, [slug]: loadProfileBoard(slug, arrangeEnabled ? meta.active : 'Default') };
   });
 
   // arrange is a desktop affordance — never leave it on when we drop to the phone layout
@@ -774,6 +788,7 @@
 
   // ── arrange-mode actions ──
   const toggleEdit = () => {
+    if (!arrangeEnabled) return;
     editMode = !editMode;
     drag = null;
     editingKey = null;
@@ -1422,6 +1437,10 @@
     {/if}
     <span class="tab-sp"></span>
     <!-- Axis-Layouts: switch between named layout profiles (Default = device-authentic, Blank, custom) -->
+    <!-- Layout profiles are the persistence side of control re-arranging: with
+         arranging off nothing new can be authored, "Blank" is a one-way trip to
+         an empty board, and delete manages layouts you cannot edit. -->
+    {#if arrangeEnabled}
     <div class="profwrap">
       <button class="profbtn" class:on={profMenuOpen} onclick={toggleProfMenu} title="Layout profile">
         <span class="prof-ic">▤</span><span class="prof-name">{activeProfile}</span><span class="prof-caret">▾</span>
@@ -1445,7 +1464,8 @@
         </div>
       {/if}
     </div>
-    {#if !isMobile}
+    {/if}
+    {#if !isMobile && arrangeEnabled}
       <button class="arrange" class:on={editMode} onclick={toggleEdit} title="Lock = use · Unlock = arrange">
         <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
       </button>

@@ -370,14 +370,19 @@
     <span class="aw-pane-spacer"></span>
     {#if activePanel}
       <div class="aw-pane-actions">
-        <button
-          class="aw-pane-btn"
-          type="button"
-          title="Panel actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onclick={(e) => openButtonMenu(activePanel.id, e)}
-        >⋯</button>
+        {#if $controller.layoutEditable}
+          <!-- Every item in this menu is `disabled: !editMode` (see the builder
+               above), so without layout editing it would open a menu of dead
+               entries. -->
+          <button
+            class="aw-pane-btn"
+            type="button"
+            title="Panel actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onclick={(e) => openButtonMenu(activePanel.id, e)}
+          >⋯</button>
+        {/if}
         {#if $controller.editMode && !activePanel.locked}
           <button
             class="aw-pane-btn"

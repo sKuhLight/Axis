@@ -33,6 +33,15 @@ export interface WorkbenchControllerOptions {
   bindingRegistry?: WorkbenchBindingRegistry;
   /** Tuning for the in-memory layout undo/redo ring (depth / coalesce / clock). */
   layoutHistory?: LayoutHistoryOptions;
+  /**
+   * Whether this host offers layout editing at all. Defaults to `true` — the
+   * framework's own behavior is unchanged for any host that does not opt out.
+   * When `false`, `editMode` can never become true, which is what retires the
+   * entire editing surface (floating widgets, widget groups, layout
+   * import/export, page/panel/dock customization) in one place rather than at
+   * each of its ~40 gated call sites.
+   */
+  layoutEditable?: boolean;
 }
 
 export interface SetWorkbenchDocumentOptions {
@@ -53,6 +62,12 @@ export interface WorkbenchCommandBatchResult {
 export class WorkbenchController {
   document: WorkbenchDocument;
   editMode = false;
+  /**
+   * Host capability, fixed at construction: does this workbench offer layout
+   * editing? When false, `editMode` is clamped to false at every entry point
+   * below, so no gated affordance is reachable even via a new call site.
+   */
+  readonly layoutEditable: boolean;
   lastResult: WorkbenchCommandResult | null = null;
   drag: WorkbenchDragState | null = null;
   #onChange?: (doc: WorkbenchDocument) => void;
@@ -69,6 +84,7 @@ export class WorkbenchController {
 
   constructor(document: WorkbenchDocument, options: WorkbenchControllerOptions = {}) {
     this.document = repairWorkbenchDocument(document);
+    this.layoutEditable = options.layoutEditable ?? true;
     this.#onChange = options.onChange;
     this.#bindingRegistry = options.bindingRegistry ?? createWorkbenchBindingRegistry();
     this.#layoutHistory = new LayoutHistory(options.layoutHistory);
@@ -109,11 +125,12 @@ export class WorkbenchController {
   }
 
   setEditMode(editMode: boolean): void {
-    this.editMode = editMode;
+    this.editMode = this.layoutEditable && editMode;
     this.#emit();
   }
 
   toggleEditMode(): void {
+    if (!this.layoutEditable) return;
     this.editMode = !this.editMode;
     if (!this.editMode) this.drag = null;
     this.#emit();
@@ -287,6 +304,12 @@ export class WorkbenchController {
 
   /** The currently-persisted, still-valid user profile override id (or undefined). */
   get profileOverride(): string | undefined {
+    // A pinned profile is only settable from the edit ribbon, so when layout
+    // editing is off the pin has no way back — a doc saved with a phone profile
+    // pinned would strand the user on a phone layout forever. Ignore it on the
+    // read side (the document is left untouched, so enabling editing restores
+    // the pin exactly as saved).
+    if (!this.layoutEditable) return undefined;
     return selectProfileOverride(this.document);
   }
 
