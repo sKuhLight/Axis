@@ -25,6 +25,7 @@ import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths'
 import { createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
+import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds } from './myControlsSections';
 import { editor } from '../editor.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
@@ -84,6 +85,14 @@ AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, co
 // Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table
 // + keep-set. The generic layer stays widget-type agnostic.
 registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
+
+// Removing a My Controls section header cascades to the controls under it —
+// see myControlsSections.ts. Every other widget type removes just itself,
+// which axisMyControlsSectionRemovalIds also returns for a blank divider.
+registry.registerWidgetRemoval({
+  idsForRemoval: (widget, doc) =>
+    widget.type === AXIS_SECTION_HEADER_TYPE ? axisMyControlsSectionRemovalIds(doc, widget.id) : [widget.id]
+});
 
 // Active-section tint (01-shell.md §9). ROUND 15: the seven page-bound nav entries
 // resolve their tint generically in NavigationHost (pageNavigationEntryActive — the

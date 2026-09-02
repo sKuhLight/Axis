@@ -83,14 +83,19 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   container: `axis.sectionHeader` is a marker widget in the same zone that claims a
   full grid row via `state.grid.colSpan: 'full'` (read by `WidgetZone.gridCellStyle`
   — the only generic-layer support this needed). Controls after a marker merely read
-  as belonging to it, so ordering, persistence and `Remove Widget` are unchanged and
-  removing a header leaves its controls. One type covers both affordances: a
-  labelled header renders a titled rule, a blank one a bare divider. The label is
-  edited INLINE in the widget — do not add a rename item to `WidgetHost`'s generic
-  menu. `args.sectionId` on the pin action names a header widget and only moves the
-  INSERT INDEX inside the one panel; it is not a second pin target and must not
-  become one. `axisMyControlsWidgetCount` excludes headers, or the pin menu's hint
-  inflates by one per section.
+  as belonging to it, so ordering and persistence are unchanged. One type covers both
+  affordances: a labelled header renders a titled rule, a blank one a bare divider.
+  The label is edited INLINE in the widget — do not add a rename item to
+  `WidgetHost`'s generic menu. `args.sectionId` on the pin action names a header
+  widget and only moves the INSERT INDEX inside the one panel; it is not a second pin
+  target and must not become one. `axisMyControlsWidgetCount` excludes headers, or
+  the pin menu's hint inflates by one per section.
+  Removing a **named** header cascades: `axisMyControlsSectionRemovalIds` collects the
+  header plus every control up to the next marker, and `axisWorkbenchRegistry.ts`
+  registers that as the generic `registerWidgetRemoval` provider (`renderRegistry.ts`
+  — `WidgetHost`'s "Remove Widget" defers to it, defaulting to just the widget itself
+  when no provider is registered). A **blank divider** is not a section — it cascades
+  nothing, same as removing an ordinary control.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
   widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one
   `activate()` click dispatcher. `widgets/widgetEstWidths.ts` holds

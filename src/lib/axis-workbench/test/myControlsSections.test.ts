@@ -11,6 +11,7 @@ import { AXIS_PARAM_CONTROL_BINDING } from '../axisWorkbenchBindings';
 import { AXIS_MY_CONTROLS_ZONE } from '../myControlsPanel';
 import {
   axisMyControlsSectionInsertIndex,
+  axisMyControlsSectionRemovalIds,
   axisMyControlsSections,
   axisMyControlsWidgetCount,
   axisSectionHeaderLabel,
@@ -139,6 +140,41 @@ describe('axisMyControlsSections', () => {
     expect(axisMyControlsSections(controller.document)).toEqual([
       { headerWidgetId: amp, label: 'Amp', controlCount: 1, endIndex: 3 }
     ]);
+  });
+});
+
+describe('axisMyControlsSectionRemovalIds', () => {
+  it('includes the header plus every control under it', async () => {
+    const controller = newController();
+    const amp = addSection(controller, 'Amp');
+    await pin(controller, '1', 'Gain');
+    await pin(controller, '2', 'Master');
+    const drive = addSection(controller, 'Drive');
+    await pin(controller, '3', 'Level');
+
+    const ids = axisMyControlsSectionRemovalIds(controller.document, amp);
+    const widgets = selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE);
+    expect(ids).toEqual([amp, widgets[1].id, widgets[2].id]);
+    expect(ids).not.toContain(drive);
+  });
+
+  it('cascades nothing for a blank divider — just its own id', async () => {
+    const controller = newController();
+    const amp = addSection(controller, 'Amp');
+    await pin(controller, '1', 'Gain');
+    const widgets = selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE);
+    const dividerWidget = createAxisSectionHeaderWidget('');
+    controller.dispatch({ type: 'widget.add', widget: dividerWidget, zone: AXIS_MY_CONTROLS_ZONE, index: widgets.length });
+    await pin(controller, '2', 'Loose');
+
+    expect(axisMyControlsSectionRemovalIds(controller.document, dividerWidget.id)).toEqual([dividerWidget.id]);
+    // The named section above the divider is untouched.
+    expect(axisMyControlsSectionRemovalIds(controller.document, amp)).toContain(widgets[1].id);
+  });
+
+  it('returns just its own id for a header that no longer exists', () => {
+    const controller = newController();
+    expect(axisMyControlsSectionRemovalIds(controller.document, 'widget-gone')).toEqual(['widget-gone']);
   });
 });
 

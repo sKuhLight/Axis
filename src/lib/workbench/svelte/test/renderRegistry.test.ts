@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyWorkbenchDocument } from '../../core';
+import { createEmptyWorkbenchDocument, type WidgetInstance } from '../../core';
 import { createWorkbenchController } from '../controller.svelte';
 import { createWorkbenchRenderRegistry } from '../renderRegistry';
+
+const widget: WidgetInstance = { id: 'w1', type: 'test.widget', zone: 'panel', order: 0, size: 'default' };
 
 const fallback = (() => null) as never;
 const specific = (() => null) as never;
@@ -30,6 +32,16 @@ describe('WorkbenchRenderRegistry', () => {
     registry.registerNavigationState({ isActive: (id) => id === 'grid' });
     expect(registry.isNavigationEntryActive('grid')).toBe(true);
     expect(registry.isNavigationEntryActive('fc')).toBe(false);
+  });
+
+  it('resolves widget removal via the registered provider, falling back to just the widget itself', () => {
+    const registry = createWorkbenchRenderRegistry();
+    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
+    // No provider registered → just this widget.
+    expect(registry.idsForWidgetRemoval(widget, doc)).toEqual(['w1']);
+
+    registry.registerWidgetRemoval({ idsForRemoval: (w) => [w.id, 'w2', 'w3'] });
+    expect(registry.idsForWidgetRemoval(widget, doc)).toEqual(['w1', 'w2', 'w3']);
   });
 
   it('registers and runs host action handlers', () => {

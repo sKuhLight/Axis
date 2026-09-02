@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { JsonObject, NavigationEntryState, PanelInstance, WidgetInstance, WorkbenchCommand } from '../core';
+import type { JsonObject, NavigationEntryState, PanelInstance, WidgetInstance, WorkbenchCommand, WorkbenchDocument } from '../core';
 import type { WorkbenchController } from './controller.svelte';
 
 export type WorkbenchPanelComponent = Component<any>;
@@ -73,6 +73,19 @@ export interface WorkbenchNavigationStateProvider {
   isActive: (entryId: string) => boolean;
 }
 
+/**
+ * App-provided expansion of "Remove Widget" to more than the one widget under
+ * the pointer — e.g. Axis section headers, which are chrome markers, not
+ * containers (`myControlsSections.ts`): removing one also removes the controls
+ * it reads as owning. The generic layer holds no notion of what a widget type
+ * "owns", so it defers to this seam and falls back to just the widget itself
+ * when no provider is registered.
+ */
+export interface WorkbenchWidgetRemovalProvider {
+  /** Ids to hide when the user removes `widget` (must include its own id). */
+  idsForRemoval: (widget: WidgetInstance, doc: WorkbenchDocument) => string[];
+}
+
 export class WorkbenchRenderRegistry {
   #panels = new Map<string, WorkbenchPanelComponent>();
   #widgets = new Map<string, WorkbenchWidgetComponent>();
@@ -80,6 +93,7 @@ export class WorkbenchRenderRegistry {
   #actions = new Map<string, WorkbenchActionHandler['run']>();
   #widgetSizing: WorkbenchWidgetSizingProvider | null = null;
   #navigationState: WorkbenchNavigationStateProvider | null = null;
+  #widgetRemoval: WorkbenchWidgetRemovalProvider | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
   constructor(
@@ -118,6 +132,15 @@ export class WorkbenchRenderRegistry {
 
   get navigationState(): WorkbenchNavigationStateProvider | null {
     return this.#navigationState;
+  }
+
+  registerWidgetRemoval(provider: WorkbenchWidgetRemovalProvider): void {
+    this.#widgetRemoval = provider;
+  }
+
+  /** Ids to hide for removing `widget` — just itself when no provider is registered. */
+  idsForWidgetRemoval(widget: WidgetInstance, doc: WorkbenchDocument): string[] {
+    return this.#widgetRemoval?.idsForRemoval(widget, doc) ?? [widget.id];
   }
 
   /** Whether a nav entry is the active section. False when no provider is registered. */

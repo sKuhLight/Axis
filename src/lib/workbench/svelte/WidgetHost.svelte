@@ -53,6 +53,14 @@
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 
+  // Ids "Remove Widget" will hide — possibly more than this widget (see
+  // `registerWidgetRemoval` in renderRegistry.ts). `widget.hide` fails the WHOLE
+  // command if any id in it is locked, so the menu item must disable on any
+  // locked member of the cascade, not just this widget — otherwise a locked
+  // control pinned under a section makes removing the section silently no-op.
+  const removalIds = $derived(registry.idsForWidgetRemoval(widget, $controller.document));
+  const removalLocked = $derived(removalIds.some((id) => $controller.activeLayout?.widgets[id]?.locked));
+
   const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
     {
       id: 'size-default',
@@ -105,8 +113,8 @@
       label: 'Remove Widget',
       separatorBefore: true,
       danger: true,
-      disabled: widget.locked,
-      run: () => controller.dispatch({ type: 'widget.hide', widgetIds: [widget.id] })
+      disabled: widget.locked || removalLocked,
+      run: () => controller.dispatch({ type: 'widget.hide', widgetIds: removalIds })
     }
   ]);
 

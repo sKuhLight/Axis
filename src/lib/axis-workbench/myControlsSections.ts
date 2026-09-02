@@ -11,9 +11,12 @@ import { AXIS_MY_CONTROLS_ZONE } from './myControlsPanel';
  *
  * A section is NOT a container: it is a marker widget in the panel's one widget
  * zone that claims a full grid row. Everything after it, up to the next marker,
- * reads as belonging to it. Nothing is nested, so ordering, persistence and
- * `Remove Widget` keep working exactly as they do for a pinned control — and
- * removing a header leaves its controls in place rather than deleting them.
+ * reads as belonging to it. Nothing is nested, so ordering and persistence keep
+ * working exactly as they do for a pinned control. Removing a named header IS a
+ * cascade, though — see `axisMyControlsSectionRemovalIds` — since leaving its
+ * controls behind, orphaned under whatever section happens to precede it, reads
+ * as silent data loss dressed up as a no-op. A blank divider isn't a section, so
+ * removing one stays a plain single-widget removal.
  *
  * One widget type covers both affordances: with a label it renders as a titled
  * rule, without one as a bare divider bar.
@@ -94,6 +97,21 @@ export function axisMyControlsSections(doc: WorkbenchDocument): AxisMyControlsSe
   });
 
   return sections;
+}
+
+/**
+ * Widget ids to remove along with a section header — the header itself plus
+ * every control between it and the next marker. A blank divider isn't a
+ * section (`axisMyControlsSections` skips it), so it cascades nothing: this
+ * returns just its own id, same as removing an ordinary control.
+ */
+export function axisMyControlsSectionRemovalIds(doc: WorkbenchDocument, headerWidgetId: string): string[] {
+  const section = axisMyControlsSections(doc).find((entry) => entry.headerWidgetId === headerWidgetId);
+  if (!section) return [headerWidgetId];
+  const widgets = selectVisibleWidgetsByZone(doc, AXIS_MY_CONTROLS_ZONE);
+  const headerIndex = widgets.findIndex((widget) => widget.id === headerWidgetId);
+  if (headerIndex < 0) return [headerWidgetId];
+  return widgets.slice(headerIndex, section.endIndex).map((widget) => widget.id);
 }
 
 /**

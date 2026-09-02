@@ -214,9 +214,21 @@ test.describe('My Controls sections', () => {
     await expect(panel.locator('.axis-widget.section-header.divider')).toHaveCount(1);
   });
 
-  test('removing a header leaves its controls behind', async ({ page }) => {
+  test('removing a named section removes its controls with it', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedMyControls(page, [{ section: 'Amp' }, GAIN, LEVEL]);
+    const panel = await openMyControls(page);
+
+    await panel.locator('.axis-widget.section-header').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Remove Widget' }).click();
+
+    await expect(panel.locator('.axis-widget.section-header')).toHaveCount(0);
+    await expect(panel.locator('.axis-widget.param')).toHaveCount(0);
+  });
+
+  test('removing a blank divider leaves its controls behind', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedMyControls(page, [{ section: '' }, GAIN, LEVEL]);
     const panel = await openMyControls(page);
 
     await panel.locator('.axis-widget.section-header').click({ button: 'right' });
