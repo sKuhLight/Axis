@@ -33,10 +33,6 @@
 </script>
 
 <section class="custom-panel" role="group" aria-label={panel.title ?? 'My Controls'}>
-  <div class="section-tools">
-    <button type="button" onclick={() => addSectionMarker(AXIS_SECTION_DEFAULT_LABEL)}>＋ Section</button>
-    <button type="button" onclick={() => addSectionMarker('')}>＋ Divider</button>
-  </div>
   <WidgetZone
     {zone}
     variant="grid"
@@ -52,6 +48,10 @@
          My Controls to a blank rectangle with no clue how to fill it. -->
     <p class="empty">{AXIS_MY_CONTROLS_EMPTY_LABEL}</p>
   {/if}
+  <div class="section-tools">
+    <button type="button" onclick={() => addSectionMarker(AXIS_SECTION_DEFAULT_LABEL)}>＋ Section</button>
+    <button type="button" onclick={() => addSectionMarker('')}>＋ Divider</button>
+  </div>
 </section>
 
 <style>
@@ -66,12 +66,18 @@
       linear-gradient(rgba(255, 255, 255, 0.018), transparent 110px),
       var(--bg);
   }
-  /* Sits above the grid rather than in it: adding a section is panel chrome, not
-     a widget, and it must stay reachable when the panel is empty. */
+  /* Sits below the grid rather than in it: adding a section is panel chrome, not
+     a widget, and it must stay reachable when the panel is empty. Sticky to the
+     panel's own bottom edge — a long control list must not bury it below a
+     scroll the user has no reason to make just to add another section. */
   .section-tools {
+    position: sticky;
+    bottom: 0;
     display: flex;
     gap: 6px;
-    margin: 0 0 10px;
+    margin: 10px 0 0;
+    padding: 8px 0 2px;
+    background: var(--bg);
   }
   .section-tools button {
     padding: 4px 9px;
