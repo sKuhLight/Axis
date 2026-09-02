@@ -49,9 +49,7 @@ export interface AxisPresetBrowserEntrySummary {
   models: Record<string, string[]>;
   amps: string[];
   /** Resolved cloud sync state (from cloud.stateOf via the host); 'none' when signed out. */
-  syncState: SyncState;
   /** A synthesized cloud-only row (host id starts with `cloud:`). */
-  cloudOnly: boolean;
   /** A saved cross-device conversion (source 'converted') — hides device affordances, offers "Open in
    *  converter". */
   converted: boolean;
@@ -73,7 +71,7 @@ export interface AxisPresetBrowserDataView {
   visibleEntries: AxisPresetBrowserEntrySummary[];
   selectedEntry: AxisPresetBrowserEntrySummary | null;
   activeSourceId: AxisPresetBrowserSourceId;
-  /** Cloud-presence views with live counts for the sources sidebar (§3). */
+  /** Library views with live counts for the sources sidebar (§3). */
   presenceViews: AxisPresetBrowserPresenceViewSummary[];
   /** The active presence view (§3). */
   activePresenceView: AxisPbPresenceView;
@@ -113,8 +111,7 @@ export interface AxisPresetBrowserDataInput {
   /** Result direction (§4.1). 'asc' unless overridden; CPU/RECENT naturally sort descending. */
   sortDir?: AxisPresetBrowserSortDir;
   /** Resolve an entry's cloud sync state (host reads the reactive cloud store). Defaults to 'none'. */
-  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState;
-  /** Active cloud-presence view (§3). When set (and not 'all'), the list is filtered by it. */
+  /** Active library view (§3). When set (and not 'all'), the list is filtered by it. */
   presenceView?: AxisPbPresenceView;
   /** Per-view counts (respecting the presence filter) for the sources sidebar. */
   presenceViews?: AxisPbPresenceViewDef[];
@@ -125,7 +122,6 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
 }
 
 import { matchEntryFromSummary, matchPreset, type AxisPbCond } from './presetBrowserWorkbenchQuery';
-import type { SyncState } from '../../types';
 import {
   AXIS_PB_PRESENCE_VIEWS,
   entryInPresenceView,
@@ -173,14 +169,13 @@ export function buildEmptyDeviceSlotEntries(
 
 export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInput): AxisPresetBrowserDataView {
   const activeSourceId = normalizeAxisPresetBrowserSourceId(input.sourceId);
-  const syncStateOf = input.syncStateOf;
   const lastLoadedAt = input.lastLoadedAt;
-  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt));
+  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, lastLoadedAt));
   const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) =>
-    normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt)
+    normalizeEntry(entry, input.tagsOf, lastLoadedAt)
   );
   const emptySlots = (input.emptySlots ?? []).map((entry) =>
-    normalizeEntry(entry, input.tagsOf, syncStateOf, lastLoadedAt)
+    normalizeEntry(entry, input.tagsOf, lastLoadedAt)
   );
   const counts = new Map<AxisPresetBrowserSourceId, number>([['all', entries.length]]);
 
@@ -197,7 +192,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
 
   // Presence-view counts (§3) run over the full entry set (only device-filter/deletions would trim it,
   // handled upstream) so the sidebar shows the honest totals; the design shows counts regardless of the
-  // active source/query. Signed-out (no syncStateOf) leaves cloud views at count 0.
+  // active source/query.
   const presenceRows: AxisPbPresenceRow[] = entries.map(toPresenceRow);
   const presenceDefs = input.presenceViews ?? AXIS_PB_PRESENCE_VIEWS;
   const presenceViews = presenceDefs.map((def) => ({ ...def, count: presenceViewCount(presenceRows, def.id) }));
@@ -240,7 +235,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
 }
 
 function toPresenceRow(entry: AxisPresetBrowserEntrySummary): AxisPbPresenceRow {
-  return { source: entry.sourceId, cloudOnly: entry.cloudOnly, syncState: entry.syncState };
+  return { source: entry.sourceId };
 }
 
 function sortEntries(
@@ -284,7 +279,6 @@ function sortEntries(
 function normalizeEntry(
   entry: AxisPresetBrowserLibEntryLike,
   tagsOf?: (entryId: string) => string[],
-  syncStateOf?: (entry: AxisPresetBrowserLibEntryLike) => SyncState,
   lastLoadedAt?: (entryId: string) => number | null
 ): AxisPresetBrowserEntrySummary {
   const blocks = entry.summary.blocks ?? [];
@@ -316,8 +310,6 @@ function normalizeEntry(
     blocks,
     models: entry.summary.models ?? {},
     amps: entry.summary.amps ?? [],
-    syncState: empty ? 'none' : (syncStateOf?.(entry) ?? 'none'),
-    cloudOnly: empty ? false : entry.id.startsWith('cloud:'),
     converted,
     provenance: entry.provenance ?? null,
     empty

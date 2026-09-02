@@ -303,15 +303,4 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.selectedEntry).toMatchObject({ id: 'dev:2', empty: true, number: 2, name: '<EMPTY>' });
   });
 
-  it('forces empty slots to syncState "none" + cloudOnly false regardless of resolver', () => {
-    const emptySlots = buildEmptyDeviceSlotEntries(1, (n) => n === 0);
-    const view = createAxisPresetBrowserDataView({
-      entries: [],
-      emptySlots,
-      sourceId: 'device',
-      syncStateOf: () => 'synced'
-    });
-    const empty = view.visibleEntries.find((e) => e.empty);
-    expect(empty).toMatchObject({ syncState: 'none', cloudOnly: false });
-  });
 });

@@ -3,10 +3,8 @@
   import { library, type LibEntry } from '../../../library.svelte';
   import { editor } from '../../../editor.svelte';
   import { history } from '../../../history.svelte';
-  import { cloud, browseEntries } from '../../../cloud.svelte';
   import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
   import { convert } from '../../../convert.svelte';
-  import type { SyncState } from '../../../types';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
   import { isSaveDirty } from '../../widgets/saveDirtyState';
@@ -17,7 +15,7 @@
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserLibEntryLike
   } from '../../presetBrowser/presetBrowserWorkbenchData';
-  import { presenceViewsForAuth } from '../../presetBrowser/presetBrowserWorkbenchPresence';
+  import { presenceViews as presenceViewDefs } from '../../presetBrowser/presetBrowserWorkbenchPresence';
   import {
     loadSavedFilters,
     persistSavedFilters,
@@ -122,27 +120,8 @@
     void snapshot; // re-derive on any snapshot change
     return axisPresetBrowserWorkbenchController.activeConditions;
   });
-  // Cloud is live only when the engine has cloud enabled AND the user is signed in (mirrors the monolith's
-  // `cloudOn`, PresetBrowser.svelte). Signed out → base library only + honest 'none' sync state (no dead
-  // cloud rows); signed in → device library + cloud-only presets merged (browseEntries) so cloud-only rigs
-  // are browseable, and each entry's sync state resolves through the reactive cloud store.
-  const cloudOn = $derived(editor.cloud.enabled && !!editor.cloud.user);
-  const baseEntries = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    void cloud.index; // re-derive when the cloud index refreshes
-    return (cloudOn ? browseEntries() : library.entries) as AxisPresetBrowserLibEntryLike[];
-  });
-  function syncStateOf(entry: AxisPresetBrowserLibEntryLike): SyncState {
-    if (!cloudOn) return 'none';
-    if (entry.id.startsWith('cloud:')) return 'cloudOnly';
-    // dev: entries came from a device scan — they ARE on the unit even without a comparable CRC; never let
-    // those read as cloud-only (verbatim rule from the monolith syncStateOf).
-    return cloud.stateOf(
-      entry.summary.number ?? -1,
-      entry.summary.crc ?? undefined,
-      entry.id.startsWith('dev:') || entry.summary.crc != null
-    );
-  }
-  const presenceViews = $derived(presenceViewsForAuth(cloudOn));
+  const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
+  const presenceViews = presenceViewDefs();
   // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful once a
   // device scan has run (slotIsEmpty reads cacheBuilt + entries); no scan → no empty rows.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
@@ -151,9 +130,9 @@
   });
   const data = $derived(createAxisPresetBrowserDataView({
     entries: baseEntries,
-    // When a presence view is active, filter over the full base set (the presence predicate needs the
-    // cloud-only rows too); otherwise reuse the library's pre-filtered list.
-    filteredEntries: snapshot.presenceView === 'all' && !cloudOn ? library.filtered : baseEntries,
+    // When a library view is active, filter over the full base set; otherwise reuse the library's
+    // pre-filtered list.
+    filteredEntries: snapshot.presenceView === 'all' ? library.filtered : baseEntries,
     emptySlots: emptyDeviceSlots,
     sourceId: snapshot.sourceId,
     selectedEntryId: snapshot.entryId,
@@ -164,7 +143,6 @@
     simpleQuery: snapshot.advanced ? '' : snapshot.simpleQ,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
-    syncStateOf,
     presenceView: snapshot.presenceView,
     presenceViews
   }));
@@ -569,7 +547,7 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state('');
   function canRename(entry: AxisPresetBrowserEntrySummary): boolean {
-    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.cloudOnly && !entry.empty && (entry.number ?? -1) >= 0;
+    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.empty && (entry.number ?? -1) >= 0;
   }
   function beginRename(entry: AxisPresetBrowserEntrySummary) {
     if (!canRename(entry)) return;
@@ -590,8 +568,7 @@
   // ── §4.4 row context menu (right-click / long-press) ────────────────────────────────────────
   // The generic workbench ContextMenu, rendered by the overlay OWNER instance only (§1 rank rule) so a
   // split sources|list|detail layout never double-renders the menu. Actions carry real backing:
-  // Load/Audition (runtime), Favorite (library.toggleFav), Rename (editor.renameStoredPreset), and the
-  // cloud up/down actions (editor.backupPreset+cloudSync / runtime cloud-version load) only when signed in.
+  // Load/Audition (runtime), Favorite (library.toggleFav) and Rename (editor.renameStoredPreset).
   let menuOpen = $state(false);
   let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
   let menuItems = $state<WorkbenchMenuItem[]>([]);
@@ -602,14 +579,12 @@
     const actions = buildAxisPbMenuActions(
       {
         id: entry.id,
-        cloudOnly: entry.cloudOnly,
         deviceSlot: entry.sourceId === 'device' && (entry.number ?? -1) >= 0,
         fav: entry.fav,
-        syncState: entry.syncState,
         converted: entry.converted,
         empty: entry.empty
       },
-      { canRename: editor.canRenamePresets, cloudOn }
+      { canRename: editor.canRenamePresets }
     );
     menuItems = toWorkbenchMenuItems(actions, dispatchMenuAction);
     menuPos = pos;
@@ -656,33 +631,8 @@
       case 'deleteConverted':
         deleteConverted(entry.id);
         return;
-      case 'cloudUpload':
-        void cloudUpload(entry);
-        return;
-      case 'cloudDownload':
-        void cloudDownload(entry);
-        return;
     }
   }
-  // Cloud actions mirror the monolith cloudAction() verbatim: upload = snapshot the slot to the version
-  // store then push to cloud; download = load the latest cloud version into the edit buffer.
-  async function cloudUpload(entry: AxisPresetBrowserEntrySummary) {
-    if (entry.number == null || entry.number < 0) {
-      editor.showToast('No device slot to back up', '#f5a623');
-      return;
-    }
-    await editor.backupPreset(entry.number);
-    await editor.cloudSync();
-  }
-  async function cloudDownload(entry: AxisPresetBrowserEntrySummary) {
-    const versionId = cloud.latestCloud(entry.number ?? -1)?.id;
-    if (!versionId) {
-      editor.showToast('No cloud version to download', '#d6543f');
-      return;
-    }
-    await editor.loadVersion(versionId);
-  }
-
   // ── §4.5 tag color swatch grid (right-click / long-press a tag anywhere it renders) ───────────
   // Rendered only on the overlay-owner part (§1 rank rule), same as the row context menu.
   let tagMenu = $state<{ tag: string; x: number; y: number } | null>(null);
@@ -740,9 +690,8 @@
     <span>indexed presets</span>
   </div>
 
-  <!-- §3 LIBRARY: cloud-presence views with live counts. Selecting one filters the list exactly like the
-       monolith's equivalent (In cloud / Cloud only / Not backed up / Needs upload / Needs update). Cloud
-       views only render signed-in; signed-out we surface an honest "Sign in for cloud sync" row. -->
+  <!-- §3 LIBRARY: library views with live counts. Selecting one filters the list exactly like the
+       monolith's equivalent (All presets / On this device). -->
   <header class="section-head"><span>Library</span></header>
   <div class="axis-part-list views-list">
     {#each data.presenceViews as view}
@@ -757,12 +706,6 @@
         <em>{view.count}</em>
       </button>
     {/each}
-    {#if !cloudOn}
-      <div class="cloud-signin" title="Cloud sync views appear once you sign in">
-        <span aria-hidden="true">☁</span>
-        <span>Sign in for cloud sync</span>
-      </div>
-    {/if}
   </div>
 
   <header class="section-head"><span>Sources</span></header>
@@ -1103,9 +1046,6 @@
           <span class="preset-meta">
             <span class="meta-top">
               <i class="scenes">{anatomy.sceneCount} scn</i>
-              {#if anatomy.cloud}
-                <i class="cloud-chip" style:--c={anatomy.cloud.color} title={anatomy.cloud.label}>{anatomy.cloud.glyph} {anatomy.cloud.short}</i>
-              {/if}
             </span>
             <span class="cpu-meter" title="Estimated DSP load from block makeup — not the device's live CPU">
               <i class="cpu-l">~CPU</i>
@@ -1622,7 +1562,7 @@
     display: grid;
     gap: 4px;
   }
-  /* §4.3 row: checkbox | number | main(name+tags+block chips) | meta(scenes/cloud + CPU meter). */
+  /* §4.3 row: checkbox | number | main(name+tags+block chips) | meta(scenes + CPU meter). */
   .preset-row {
     min-height: 42px;
     display: grid;
@@ -1771,15 +1711,6 @@
   .scenes {
     color: var(--textdim);
     font: 600 9.5px/1 var(--font-mono);
-  }
-  .cloud-chip {
-    padding: 2px 6px;
-    border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--c) 12%, transparent);
-    color: var(--c);
-    font: 700 9px/1 var(--font-mono);
-    white-space: nowrap;
   }
   .cpu-meter {
     display: flex;
@@ -2414,17 +2345,6 @@
   .view-row.active strong {
     color: var(--accent);
   }
-  .cloud-signin {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    color: var(--textdim);
-    font: 600 11px/1.2 var(--font-mono);
-  }
-
   /* §3.3 saved filters */
   .save-in input {
     width: 100%;

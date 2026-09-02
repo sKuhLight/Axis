@@ -21,8 +21,6 @@ export interface AxisPresetBrowserRuntimeHost {
   findEntry: (entryId: string) => AxisPresetBrowserLibEntryLike | null;
   fileBytes?: (entryId: string) => Uint8Array | null;
   localPath?: (entryId: string) => string;
-  latestCloudVersionId?: (presetNumber: number) => string | null;
-  loadCloudVersion?: (versionId: string) => Promise<void>;
   loadBytes?: (bytes: ArrayBuffer | Uint8Array) => Promise<void>;
   loadDeviceSlot?: (presetNumber: number) => Promise<void>;
   deviceEntryBytes?: (presetNumber: number) => Promise<ArrayBuffer>;
@@ -96,14 +94,7 @@ export class AxisPresetBrowserWorkbenchRuntime {
     host.openBuild?.();
 
     try {
-      if (entry.id.startsWith('cloud:')) {
-        const versionId = host.latestCloudVersionId?.(entry.summary.number ?? -1);
-        if (!versionId || !host.loadCloudVersion) throw new Error('No cloud version found.');
-        await host.loadCloudVersion(versionId);
-        host.noteBufferReplaced?.(`Loaded ${entry.summary.name ?? 'preset'} from cloud`);
-        await host.reloadEditor?.();
-        host.notify?.(`Loaded ${entry.summary.name ?? 'preset'} from cloud`, '#9b8cf0');
-      } else if (entry.source === 'file') {
+      if (entry.source === 'file') {
         const bytes = host.fileBytes?.(entry.id);
         if (!bytes || !host.loadBytes) throw new Error('File bytes unavailable. Re-import the preset.');
         await host.loadBytes(bytes);

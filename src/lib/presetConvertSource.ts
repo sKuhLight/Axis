@@ -4,11 +4,10 @@
 // "Convert…" entry point. This module is the ONE place that turns a LibEntry into raw .syx bytes and
 // hands them to the convert store as the pre-seeded source, so the two shells stay in lock-step (the
 // monolith↔workbench mirror rule). The byte matrix mirrors PresetBrowser.svelte's entryBytes():
-// imported file → cached bytes, local folder → disk read, cloud-only → latest cloud version, device
-// slot → v2 backup dump or v1 snapshot-then-download.
+// imported file → cached bytes, local folder → disk read, device slot → v2 backup dump or v1
+// snapshot-then-download.
 
 import { forgefx } from './forgefx';
-import { cloud } from './cloud.svelte';
 import { editor } from './editor.svelte';
 import { library, type LibEntry } from './library.svelte';
 import { convert } from './convert.svelte';
@@ -26,7 +25,7 @@ async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
   return (await forgefx.versionSyx(version.id)).arrayBuffer();
 }
 
-/** Raw .syx bytes for ANY entry kind (imported file / local folder / cloud / device slot). */
+/** Raw .syx bytes for ANY entry kind (imported file / local folder / device slot). */
 export async function entrySyxBytes(e: LibEntry): Promise<ArrayBuffer> {
   if (e.source === 'file') {
     const bytes = library.fileBytes(e.id);
@@ -34,11 +33,6 @@ export async function entrySyxBytes(e: LibEntry): Promise<ArrayBuffer> {
     return bytes.buffer as ArrayBuffer;
   }
   if (e.source === 'local') return forgefx.localPresetFile(library.localPath(e.id));
-  if (e.id.startsWith('cloud:')) {
-    const cv = cloud.latestCloud(e.summary.number);
-    if (!cv) throw new Error('No cloud version to convert.');
-    return (await forgefx.versionSyx(cv.id)).arrayBuffer();
-  }
   return deviceEntryBytes(e.summary.number);
 }
 

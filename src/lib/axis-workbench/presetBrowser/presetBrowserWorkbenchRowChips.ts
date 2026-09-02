@@ -1,7 +1,7 @@
 // Row anatomy derivation for the docked preset browser list (§4.3 of
 // docs/workbench-dc-parity/06-preset-browser.md). Pure, summary-level logic — it turns an
 // AxisPresetBrowserEntrySummary into the design's full row form: per-block chips (family-coloured
-// "Cat · TYPE"), a CPU meter (estimate + colour thresholds), and the cloud/device presence chip.
+// "Cat · TYPE") and a CPU meter (estimate + colour thresholds).
 //
 // The block family → [label, colour] map mirrors src/lib/PresetBrowser.svelte's CAT table verbatim so
 // docked rows read identically to the monolith surface. The CPU estimate reuses the query module's
@@ -9,7 +9,6 @@
 // isn't stored in a preset), hence the "~" prefix everywhere it renders.
 import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
 import { estimateCpu } from './presetBrowserWorkbenchQuery';
-import type { SyncState } from '../../types';
 
 // block family slug → [label, colour]. Verbatim from PresetBrowser.svelte CAT; unknown slugs fall back.
 const CAT: Record<string, [string, string]> = {
@@ -106,30 +105,6 @@ export function axisPbRowCpuMeter(entry: AxisPresetBrowserEntrySummary): AxisPbC
   return { pct, color: axisPbCpuColor(pct) };
 }
 
-export interface AxisPbCloudChip {
-  short: string;
-  label: string;
-  color: string;
-  glyph: string;
-}
-
-// Cloud/device presence chip vocabulary (§5.1 / §6 table). Mirrors cloud.svelte SYNC_META short/colour;
-// duplicated here (glyph included) so the pure layer stays store-free and unit-testable. 'none' (signed
-// out / no comparison) yields null so the row simply omits the chip.
-const CLOUD_META: Record<Exclude<SyncState, 'none'>, AxisPbCloudChip> = {
-  synced: { short: 'Synced', label: 'Synced', color: '#33c46b', glyph: '☁' },
-  modified: { short: 'Local edit', label: 'Local edits not uploaded', color: '#f5a623', glyph: '↑' },
-  outdated: { short: 'Update', label: 'Newer version in cloud', color: '#4a82e0', glyph: '↓' },
-  cloudOnly: { short: 'Cloud', label: 'Cloud only · not on this device', color: '#9b8cf0', glyph: '☁' },
-  deviceOnly: { short: 'Device', label: 'Not backed up to cloud', color: '#6e6e78', glyph: '▪' },
-  unknown: { short: 'Device', label: 'On this device · cloud comparison unavailable', color: '#6e6e78', glyph: '▪' }
-};
-
-export function axisPbCloudChip(state: SyncState): AxisPbCloudChip | null {
-  if (state === 'none') return null;
-  return CLOUD_META[state];
-}
-
 // Device chip colour by device family (§4.3 right column). Derived from the entry model/source; falls
 // back to the neutral tint used by the monolith device chips.
 export function axisPbDeviceColor(model: string | null | undefined): string {
@@ -143,7 +118,6 @@ export function axisPbDeviceColor(model: string | null | undefined): string {
 export interface AxisPbRowAnatomy {
   blockChips: AxisPbRowBlockChip[];
   cpu: AxisPbCpuMeter;
-  cloud: AxisPbCloudChip | null;
   /** Up to 3 tag pills (§4.3). */
   tagPills: string[];
   sceneCount: number;
@@ -154,7 +128,6 @@ export function axisPbRowAnatomy(entry: AxisPresetBrowserEntrySummary): AxisPbRo
   return {
     blockChips: axisPbRowBlockChips(entry),
     cpu: axisPbRowCpuMeter(entry),
-    cloud: axisPbCloudChip(entry.syncState),
     tagPills: entry.tags.slice(0, 3),
     sceneCount: entry.sceneCount
   };

@@ -27,7 +27,7 @@ export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSe
   query: string; // advanced typed query
   simpleQ: string; // simple free text
   conditions: AxisPbCond[]; // simple-mode chips
-  // cloud-presence view (§3) — the sources sidebar's LIBRARY selection, shared across parts.
+  // library view (§3) — the sources sidebar's LIBRARY selection, shared across parts.
   presenceView: AxisPbPresenceView;
   // saved-filter inline-name affordance (§3.3) — the "Save filter" flow's open/name state.
   saving: boolean;
@@ -236,7 +236,7 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
-  // ===================== cloud-presence view (§3) =====================
+  // ===================== library view (§3) =====================
 
   // Select a LIBRARY view (All presets / On this device / In cloud / …). Shared across parts so the list
   // filters and the sources highlight stay in lockstep.

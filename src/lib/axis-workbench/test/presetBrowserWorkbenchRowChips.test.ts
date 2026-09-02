@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   axisPbCatColor,
   axisPbCatLabel,
-  axisPbCloudChip,
   axisPbCpuColor,
   axisPbDeviceColor,
   axisPbRowAnatomy,
@@ -28,8 +27,6 @@ function entry(over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBro
     blocks: [],
     models: {},
     amps: [],
-    syncState: 'none',
-    cloudOnly: false,
     converted: false,
     provenance: null,
     ...over
@@ -93,19 +90,7 @@ describe('CPU meter (§4.3)', () => {
   });
 });
 
-describe('cloud/device chips (§5.1 / §6)', () => {
-  it('returns null for signed-out / none state so the row omits the chip', () => {
-    expect(axisPbCloudChip('none')).toBeNull();
-  });
-
-  it('maps each sync state to short label + colour + glyph', () => {
-    expect(axisPbCloudChip('synced')).toMatchObject({ short: 'Synced', color: '#33c46b', glyph: '☁' });
-    expect(axisPbCloudChip('modified')).toMatchObject({ short: 'Local edit', color: '#f5a623', glyph: '↑' });
-    expect(axisPbCloudChip('outdated')).toMatchObject({ short: 'Update', color: '#4a82e0', glyph: '↓' });
-    expect(axisPbCloudChip('cloudOnly')).toMatchObject({ short: 'Cloud', color: '#9b8cf0' });
-    expect(axisPbCloudChip('deviceOnly')).toMatchObject({ short: 'Device', glyph: '▪' });
-  });
-
+describe('device chips (§5.1 / §6)', () => {
   it('picks a device colour by model family', () => {
     expect(axisPbDeviceColor('Axe-Fx III')).toBe('#4f6bed');
     expect(axisPbDeviceColor('FM9')).toBe('#2fb0c9');
@@ -115,19 +100,17 @@ describe('cloud/device chips (§5.1 / §6)', () => {
 });
 
 describe('full row anatomy', () => {
-  it('bundles chips, meter, cloud chip, capped tag pills and scenes', () => {
+  it('bundles chips, meter, capped tag pills and scenes', () => {
     const anatomy = axisPbRowAnatomy(
       entry({
         blockCount: 3,
         blocks: [{ effectId: 2, slug: 'amp', name: 'JCM800', instance: 1 }],
         tags: ['Lead', 'Hi-Gain', 'Rock', 'Extra'],
-        sceneCount: 4,
-        syncState: 'synced'
+        sceneCount: 4
       })
     );
     expect(anatomy.blockChips).toHaveLength(1);
     expect(anatomy.tagPills).toEqual(['Lead', 'Hi-Gain', 'Rock']); // capped at 3
-    expect(anatomy.cloud?.short).toBe('Synced');
     expect(anatomy.sceneCount).toBe(4);
     expect(anatomy.cpu.pct).toBeGreaterThan(0);
   });

@@ -33,16 +33,6 @@ const entries: AxisPresetBrowserLibEntryLike[] = [
       scenes: [],
       blocks: []
     }
-  },
-  {
-    id: 'cloud:42',
-    source: 'device',
-    summary: {
-      number: 42,
-      name: 'Cloud Lead',
-      scenes: [],
-      blocks: []
-    }
   }
 ];
 
@@ -75,7 +65,7 @@ describe('Preset Browser Workbench runtime', () => {
     expect(runtime.snapshot.error).toContain('No Preset Browser runtime host');
   });
 
-  it('loads device, file, local, and cloud entries through host actions', async () => {
+  it('loads device, file, and local entries through host actions', async () => {
     const runtime = new AxisPresetBrowserWorkbenchRuntime();
     const calls: string[] = [];
     runtime.bindHost({
@@ -90,8 +80,6 @@ describe('Preset Browser Workbench runtime', () => {
         return new Uint8Array([4, 5]).buffer;
       },
       setBufferSource: (source) => { calls.push(`buffer:${source?.path ?? 'none'}`); },
-      latestCloudVersionId: () => 'version.cloud',
-      loadCloudVersion: async (versionId) => { calls.push(`cloud:${versionId}`); },
       noteBufferReplaced: (label) => { calls.push(`note:${label}`); },
       reloadEditor: async () => { calls.push('reload'); },
       notify: (message) => { calls.push(`notify:${message}`); }
@@ -100,7 +88,6 @@ describe('Preset Browser Workbench runtime', () => {
     await runtime.loadEntry('dev:10');
     await runtime.loadEntry('file:pad');
     await runtime.loadEntry('local:Folder/Lead.syx');
-    await runtime.loadEntry('cloud:42');
 
     expect(calls).toEqual([
       'openBuild',
@@ -116,14 +103,9 @@ describe('Preset Browser Workbench runtime', () => {
       'note:Loaded Lead from local folder',
       'buffer:Folder/Lead.syx',
       'reload',
-      'notify:Loaded Lead - Save writes to disk or a slot',
-      'openBuild',
-      'cloud:version.cloud',
-      'note:Loaded Cloud Lead from cloud',
-      'reload',
-      'notify:Loaded Cloud Lead from cloud'
+      'notify:Loaded Lead - Save writes to disk or a slot'
     ]);
-    expect(runtime.snapshot.lastLoadedEntryId).toBe('cloud:42');
+    expect(runtime.snapshot.lastLoadedEntryId).toBe('local:Folder/Lead.syx');
   });
 
   it('auditions device entries through raw bytes and records status', async () => {
@@ -216,7 +198,6 @@ describe('Preset Browser Workbench runtime', () => {
     await runtime.loadEntry('dev:10');
     await runtime.loadEntry('file:pad');
     await runtime.loadEntry('local:Folder/Lead.syx');
-    await expect(runtime.loadEntry('cloud:42')).resolves.toBe(false);
     await runtime.auditionEntry('dev:10'); // auditioning is not loading
 
     expect(recorded).toEqual(['dev:10', 'file:pad', 'local:Folder/Lead.syx']);

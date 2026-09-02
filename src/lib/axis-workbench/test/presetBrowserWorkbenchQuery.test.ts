@@ -123,8 +123,6 @@ describe('matchEntryFromSummary (regression: decoded models must survive summary
     blocks: [{ effectId: 101, slug: 'amp', name: 'Amp 1', instance: 1 }],
     models: { amp: ['5153 100W Blue'] },
     amps: ['5153 100W Blue'],
-    syncState: 'none',
-    cloudOnly: false,
     converted: false,
     provenance: null,
     ...over
