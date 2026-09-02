@@ -135,7 +135,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // identical across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
   gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.blockEditor']);
-  gridDock.root.right = tabs('axis.tabs.grid.right', ['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
+  gridDock.root.right = tabs('axis.tabs.grid.right', [AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
   gridDock.regions.right.sizePx = 560;
   const seeded = buildAxisSeedPages(gridDock);
   layout.pages = seeded.pages;

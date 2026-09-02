@@ -48,6 +48,10 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   // small so it never forces the bottom zone to compact/mini on its own.
   'axis.hint': 40,
   'axis.legal': 98,
+  // Never lands in a bar zone (My Controls is a grid, which runs no fit math),
+  // but the table must cover every registered type or the fallback silently
+  // takes over.
+  'axis.sectionHeader': 120,
   // Telemetry monitor (META-17): mode label + P/B/R quick-switch + TX/RX rates + loops indicator.
   'axis.telemetry': 190
 };

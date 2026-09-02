@@ -1884,3 +1884,20 @@ Board schema `b10` re-seeds Default profiles for the new widgets; custom profile
 `MegaTapGraph.svelte` renders the Tap Control page's tap timing and amplitude pattern from Number of Taps,
 Predelay, Time Alpha, and Amplitude Alpha. Time and amplitude shape labels remain visible in the HUD.
 Board schema `b11` re-seeds Default profiles for the new widget; custom profiles remain unchanged.
+
+## My Controls Sections — axis.sectionHeader
+
+My Controls could only grow as one undifferentiated grid; at twenty pinned controls there was no
+way to say which belonged to which block. `axis.sectionHeader` is a marker widget in the panel's
+existing zone that claims a full grid row — labelled it renders a titled rule, blank a bare
+divider. It is a visual marker, not a container: removing a header leaves its controls in place.
+
+The only generic-layer change is `WidgetZone.gridCellStyle` honouring `colSpan: 'full'`, so a
+full-width unit does not have to hardcode the panel's column count.
+
+Because layout editing is retired, a control cannot be dragged under a header. The pin menu
+therefore lists the named sections, and `args.sectionId` on the pin action moves the insert index
+inside the one panel — it is not a second pin destination. Sections are created from a toolbar in
+the new `AxisMyControlsPanel.svelte`; labels are edited inline in the widget.
+
+No schema change and no migration: a document without headers is just a panel with one section.

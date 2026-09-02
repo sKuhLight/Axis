@@ -3,7 +3,6 @@ import {
   panelIdsInPageDock,
   panelWidgetZoneId,
   selectActiveLayout,
-  selectVisibleWidgetsByZone,
   type DockLayout,
   type DockNode,
   type PanelInstance,
@@ -25,11 +24,19 @@ import { AXIS_PAGE_GRID } from './axisWorkbenchPages';
  * It is a distinct panel TYPE rather than a reuse of `axis.customPanel`: the
  * custom panel stays as the (flag-gated, e2e-covered) edit-mode "＋ Panel"
  * affordance, and pin routing needs to identify its destination structurally.
- * Both types render the same component — a widget-zone grid.
+ * Both render a widget-zone grid, but My Controls has its own component
+ * (`panels/AxisMyControlsPanel.svelte`) for the section toolbar and empty state.
+ *
+ * The panel can be divided into sections — see `myControlsSections.ts`. A section
+ * is a full-row marker widget in this same zone, not a container, so nothing here
+ * changes shape.
  */
 export const AXIS_MY_CONTROLS_PANEL_ID = 'axis.myControls';
 export const AXIS_MY_CONTROLS_PANEL_TYPE = 'axis.myControls';
 export const AXIS_MY_CONTROLS_TITLE = 'My Controls';
+/** The History panel — My Controls docks immediately to its left. */
+const AXIS_HISTORY_PANEL_ID = 'axis.history';
+
 /** Widget zone the pinned controls live in. */
 export const AXIS_MY_CONTROLS_ZONE = panelWidgetZoneId(AXIS_MY_CONTROLS_PANEL_ID);
 
@@ -38,8 +45,13 @@ export const AXIS_MY_CONTROLS_EMPTY_LABEL = 'Right-click a control → Pin to My
 
 /**
  * The panel instance. `locked` + `closable: false` because it is a fixture of the
- * layout, not something the user adds or removes; two columns because it lives in
- * a dock region, not across the page.
+ * layout, not something the user adds or removes.
+ *
+ * The grid auto-fills columns at least `minColumnWidth` wide rather than pinning a
+ * column count: a fixed two columns stretched each tile across half of whatever
+ * width the dock region had, which made the knobs far larger than the ones in the
+ * block editor. `columns` stays as the fallback for a panel narrower than one
+ * column.
  */
 export function axisMyControlsPanel(): PanelInstance {
   return {
@@ -50,7 +62,10 @@ export function axisMyControlsPanel(): PanelInstance {
     locked: true,
     closable: false,
     collapsible: true,
-    state: { grid: { columns: 2, rowHeight: 42, gap: 8 } }
+    // Tile density matches the pinned-parameter panels this replaced: as many
+    // ~88px columns as fit, which is four across a docked right region. Two wide
+    // columns turned every pinned control into a banner.
+    state: { grid: { columns: 4, minColumnWidth: 88, rowHeight: 42, gap: 8 } }
   };
 }
 
@@ -61,11 +76,6 @@ export function axisMyControlsZone(): WidgetZoneState {
     orientation: 'horizontal',
     acceptsGroups: true
   };
-}
-
-/** How many controls are pinned right now (the pin menu shows this as a hint). */
-export function axisMyControlsWidgetCount(doc: WorkbenchDocument): number {
-  return selectVisibleWidgetsByZone(doc, AXIS_MY_CONTROLS_ZONE).length;
 }
 
 /** True once the panel instance exists in the active layout's roster. */
@@ -88,24 +98,38 @@ export function ensureAxisMyControlsPanel(doc: WorkbenchDocument): WorkbenchDocu
     layout.zones = layout.zones ?? {};
     layout.pages = layout.pages ?? {};
 
-    if (!layout.panels[AXIS_MY_CONTROLS_PANEL_ID]) layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = axisMyControlsPanel();
+    const existing = layout.panels[AXIS_MY_CONTROLS_PANEL_ID];
+    if (!existing) layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = axisMyControlsPanel();
+    // The grid geometry is a fixture of the panel, not user data — nothing in the
+    // UI edits it — so it is re-applied rather than preserved. Without this a
+    // document persisted before a geometry change keeps the old columns forever,
+    // exactly the way a seed-only change never reaches an existing layout.
+    else existing.state = axisMyControlsPanel().state;
     if (!layout.zones[AXIS_MY_CONTROLS_ZONE]) layout.zones[AXIS_MY_CONTROLS_ZONE] = axisMyControlsZone();
 
     const page = layout.pages[AXIS_PAGE_GRID];
     if (!page?.dock?.root) continue;
-    if (panelIdsInPageDock(page).includes(AXIS_MY_CONTROLS_PANEL_ID)) continue;
 
-    const historyStack = findTabStackWithPanel(page.dock.root, 'axis.history');
+    const docked = panelIdsInPageDock(page).includes(AXIS_MY_CONTROLS_PANEL_ID);
+    const historyStack = findTabStackWithPanel(page.dock.root, AXIS_HISTORY_PANEL_ID);
+
     if (historyStack) {
-      historyStack.panelIds.push(AXIS_MY_CONTROLS_PANEL_ID);
+      // Reposition an already-docked panel only when it shares History's stack —
+      // one parked in another region is left alone. Tab reorder is edit-mode gated
+      // (`TabStack`), so with layout editing retired there is no user arrangement
+      // here to overwrite.
+      if (!docked || historyStack.panelIds.includes(AXIS_MY_CONTROLS_PANEL_ID)) {
+        placeMyControlsBeforeHistory(historyStack);
+      }
       continue;
     }
+    if (docked) continue;
     if (!page.dock.root.right) {
       page.dock.root.right = {
         kind: 'tabs',
         id: createWorkbenchId('tabs'),
-        panelIds: ['axis.history', AXIS_MY_CONTROLS_PANEL_ID],
-        activePanelId: 'axis.history'
+        panelIds: [AXIS_MY_CONTROLS_PANEL_ID, AXIS_HISTORY_PANEL_ID],
+        activePanelId: AXIS_HISTORY_PANEL_ID
       };
       continue;
     }
@@ -113,6 +137,19 @@ export function ensureAxisMyControlsPanel(doc: WorkbenchDocument): WorkbenchDocu
     if (right) right.panelIds.push(AXIS_MY_CONTROLS_PANEL_ID);
   }
   return doc;
+}
+
+/**
+ * My Controls sits immediately LEFT of History: it is the tab the user reaches
+ * for, History is the log beside it. Rewrites the whole list rather than
+ * splicing in place so a panel already sitting to History's right moves, which
+ * makes the step idempotent for documents seeded before this order.
+ */
+function placeMyControlsBeforeHistory(stack: TabStackDockNode): void {
+  const others = stack.panelIds.filter((panelId) => panelId !== AXIS_MY_CONTROLS_PANEL_ID);
+  const historyIndex = others.indexOf(AXIS_HISTORY_PANEL_ID);
+  others.splice(historyIndex < 0 ? others.length : historyIndex, 0, AXIS_MY_CONTROLS_PANEL_ID);
+  stack.panelIds = others;
 }
 
 function findTabStackWithPanel(root: DockLayout['root'], panelId: string): TabStackDockNode | null {

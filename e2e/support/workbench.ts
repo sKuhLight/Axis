@@ -139,21 +139,43 @@ export interface PinnedParamSpec {
   color: string;
 }
 
+/** A section marker in My Controls. A blank label renders as a bare divider. */
+export interface SectionSpec {
+  section: string;
+}
+
+export type MyControlsSpec = PinnedParamSpec | SectionSpec;
+
 /**
- * Seed pinned controls into My Controls by editing the persisted document, then
- * reload. Pinning is a menu action over the LIVE selected block, so driving it
- * through the UI would couple these rendering specs to whatever device the dev
- * proxy has connected; writing the same widgets the pin action writes keeps them
- * about the panel, not about the device.
+ * Seed My Controls by editing the persisted document, then reload. Pinning is a
+ * menu action over the LIVE selected block, so driving it through the UI would
+ * couple these rendering specs to whatever device the dev proxy has connected;
+ * writing the same widgets the pin action writes keeps them about the panel, not
+ * about the device.
+ *
+ * Items are laid down in array order, so a section marker followed by controls
+ * reproduces exactly what the pin menu produces.
  */
-export async function seedPinnedControls(page: Page, specs: PinnedParamSpec[]): Promise<void> {
+export async function seedMyControls(page: Page, items: MyControlsSpec[]): Promise<void> {
   await page.evaluate(
-    ({ key, zone, items }) => {
+    ({ key, zone, entries }) => {
       const raw = window.localStorage.getItem(key);
       if (!raw) throw new Error('no persisted workbench doc to seed into');
       const doc = JSON.parse(raw);
       const layout = doc.layouts[doc.profiles[doc.activeProfileId].layoutId];
-      items.forEach((spec, index) => {
+      entries.forEach((spec, index) => {
+        if ('section' in spec) {
+          const id = `widget.section.${index}`;
+          layout.widgets[id] = {
+            id,
+            type: 'axis.sectionHeader',
+            zone,
+            order: index,
+            size: 'default',
+            state: { label: spec.section, grid: { colSpan: 'full' } }
+          };
+          return;
+        }
         const id = `axis.param.${spec.effectId}.${spec.paramId}`;
         layout.widgets[`widget.${id}`] = {
           id: `widget.${id}`,
@@ -177,8 +199,13 @@ export async function seedPinnedControls(page: Page, specs: PinnedParamSpec[]): 
       });
       window.localStorage.setItem(key, JSON.stringify(doc));
     },
-    { key: WORKBENCH_DOC_KEY, zone: MY_CONTROLS_ZONE, items: specs }
+    { key: WORKBENCH_DOC_KEY, zone: MY_CONTROLS_ZONE, entries: items }
   );
   await page.reload();
   await page.waitForSelector('.aw-root');
+}
+
+/** Seed pinned controls only — the common case. */
+export async function seedPinnedControls(page: Page, specs: PinnedParamSpec[]): Promise<void> {
+  await seedMyControls(page, specs);
 }

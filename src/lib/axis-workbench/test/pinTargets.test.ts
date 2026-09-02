@@ -6,6 +6,8 @@ import {
 } from '../../workbench';
 import { createAxisPinSelectedParametersAction } from '../axisParameterActions';
 import { AXIS_PARAM_CONTROL_BINDING } from '../axisWorkbenchBindings';
+import { AXIS_MY_CONTROLS_ZONE } from '../myControlsPanel';
+import { createAxisSectionHeaderWidget } from '../myControlsSections';
 import { axisPinTarget } from '../pinTargets';
 import { buildAxisPinMenuItems } from '../pinMenu';
 
@@ -47,8 +49,8 @@ describe('axis pin menu items', () => {
     const controller = newController();
     await createAxisPinSelectedParametersAction(() => [source('1', 'Gain')]).run({ controller, source: 'menu' });
 
-    let picks = 0;
-    const items = buildAxisPinMenuItems(controller.document, () => { picks += 1; });
+    const picks: (string | null)[] = [];
+    const items = buildAxisPinMenuItems(controller.document, (sectionId) => picks.push(sectionId));
 
     expect(items).toHaveLength(1);
     expect(items[0].id).toBe('pin.myControls');
@@ -56,6 +58,31 @@ describe('axis pin menu items', () => {
     expect(items[0].hint).toBe('1');
 
     items[0].run();
-    expect(picks).toBe(1);
+    expect(picks).toEqual([null]);
+  });
+
+  it('adds one item per named section, each routing its own header id', async () => {
+    const controller = newController();
+    const amp = createAxisSectionHeaderWidget('Amp');
+    controller.dispatch({ type: 'widget.add', widget: amp, zone: AXIS_MY_CONTROLS_ZONE, index: 0 });
+    await createAxisPinSelectedParametersAction(() => [source('1', 'Gain')]).run({
+      controller,
+      source: 'menu',
+      args: { sectionId: amp.id }
+    });
+    // A bare divider names nothing, so it is not offered as a target.
+    const divider = createAxisSectionHeaderWidget('');
+    controller.dispatch({ type: 'widget.add', widget: divider, zone: AXIS_MY_CONTROLS_ZONE, index: 2 });
+
+    const picks: (string | null)[] = [];
+    const items = buildAxisPinMenuItems(controller.document, (sectionId) => picks.push(sectionId));
+
+    expect(items.map((item) => item.label)).toEqual(['Pin to My Controls (end)', 'Amp']);
+    expect(items[1].hint).toBe('1');
+    expect(items[1].separatorBefore).toBe(true);
+
+    items[1].run();
+    items[0].run();
+    expect(picks).toEqual([amp.id, null]);
   });
 });

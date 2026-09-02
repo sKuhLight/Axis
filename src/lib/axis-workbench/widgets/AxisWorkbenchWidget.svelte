@@ -143,7 +143,9 @@
   const paramTile = $derived(
     !mini && (paramDisplayPref === 'tile' || (paramDisplayPref !== 'ring' && paramInPanel))
   );
-  const paramRingPx = $derived(paramTile ? (compact ? 34 : 42) : 24);
+  // Tile rings are sized so the whole card stays close to square in an ~88px
+  // grid track; a 42px ring made every pinned control a tall column.
+  const paramRingPx = $derived(paramTile ? (compact ? 30 : 34) : 24);
   const paramEffectId = $derived(readNumber(paramTarget.effectId) ?? readNumber(paramTarget.eid));
   const paramId = $derived(readNumber(paramTarget.paramId) ?? readNumber(paramTarget.pid));
   // Live param/enum data for the bound block: its own arrays when it's the open
@@ -396,6 +398,49 @@
       return;
     }
     if (paramLive && paramEnum) nudgeParam(1);
+  }
+  // ── section header / divider (My Controls) ──
+  // One type covers both: a label renders a titled rule, a blank label a bare
+  // divider. The label is edited in place — the generic widget context menu has
+  // no rename item, and giving it one would put a My-Controls concept into the
+  // framework layer.
+  const sectionLabel = $derived(typeof widget.state?.label === 'string' ? widget.state.label : '');
+  let sectionEditing = $state(false);
+  let sectionDraft = $state('');
+  let sectionInputEl = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (sectionEditing && sectionInputEl) {
+      sectionInputEl.focus();
+      sectionInputEl.select();
+    }
+  });
+
+  function startSectionEdit() {
+    if (editMode) return;
+    sectionDraft = sectionLabel;
+    sectionEditing = true;
+  }
+
+  function commitSectionLabel() {
+    if (!sectionEditing) return;
+    sectionEditing = false;
+    const label = sectionDraft.trim();
+    if (label === sectionLabel) return;
+    dispatch({ type: 'widget.state', widgetId: widget.id, state: { label } });
+  }
+
+  function sectionKeydown(event: KeyboardEvent) {
+    // Keystrokes must not reach the workbench's global shortcut handling while a
+    // section is being renamed.
+    event.stopPropagation();
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitSectionLabel();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      sectionEditing = false;
+    }
   }
 </script>
 
@@ -776,6 +821,28 @@
       {/if}
     </div>
   {/if}
+{:else if kind === 'sectionHeader'}
+  <div class="axis-widget section-header" class:divider={!sectionLabel} data-size={size}>
+    {#if sectionEditing}
+      <input
+        class="section-input mono"
+        bind:this={sectionInputEl}
+        bind:value={sectionDraft}
+        onblur={commitSectionLabel}
+        onkeydown={sectionKeydown}
+        placeholder="Section name"
+        aria-label="Section name"
+      />
+      <span class="section-rule"></span>
+    {:else if sectionLabel}
+      <button class="section-name mono" type="button" title="Rename section" onclick={startSectionEdit}>{sectionLabel}</button>
+      <span class="section-rule"></span>
+    {:else}
+      <button class="section-bar" type="button" title="Name this divider" aria-label="Name this divider" onclick={startSectionEdit}>
+        <span class="section-rule"></span>
+      </button>
+    {/if}
+  </div>
 {:else if kind === 'hint'}
   <div class="axis-widget hint" data-size={size} title={hintText}>
     <span class="mono hint-text">{hintText}</span>
@@ -1178,6 +1245,7 @@
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--text2);
   }
   /* control-surface-style hover/focus tooltip (design axtip): source block · param */
@@ -1209,11 +1277,14 @@
     flex-direction: column;
     justify-content: center;
     height: auto;
-    min-height: 92px;
-    min-width: 84px;
+    /* Kept just under the 88px grid track so a tile reads as a square card rather
+       than a tall column. */
+    min-height: 84px;
+    min-width: 0;
+    max-width: 100%;
     width: 100%;
-    gap: 5px;
-    padding: 12px 10px;
+    gap: 4px;
+    padding: 10px 8px;
     border: 1px solid color-mix(in srgb, var(--param-color) 30%, var(--border));
     border-radius: 12px;
     background: linear-gradient(180deg, color-mix(in srgb, var(--param-color) 8%, var(--bg2)), var(--bg2));
@@ -1228,8 +1299,15 @@
   .param.param-tile:hover {
     border-color: color-mix(in srgb, var(--param-color) 62%, var(--border));
   }
+  /* The value can be a long enum name ("GAIN ENHANCER"), not just a number, so it
+     is clamped exactly like the parameter name below — an unclamped value pushes
+     the tile past its grid track and makes one card wider than its neighbours. */
   .param.param-tile .param-val {
     font-size: 13px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .param.param-tile .param-name {
     font-size: 10px;
@@ -1318,6 +1396,61 @@
   .meter-toggle:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+  /* Full-row band inside the My Controls grid (the full-width span itself comes
+     from `state.grid.colSpan: 'full'`, read by WidgetZone). Height is free rather
+     than the widget height so a bare divider stays a thin rule. */
+  .section-header {
+    width: 100%;
+    height: auto;
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-name,
+  .section-input {
+    flex: none;
+    max-width: 60%;
+    border: 0;
+    background: transparent;
+    color: var(--textdim);
+    font: 700 9px/1 var(--font-mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .section-name {
+    padding: 2px 0;
+    cursor: text;
+    text-align: left;
+  }
+  .section-name:hover {
+    color: var(--text);
+  }
+  .section-input {
+    min-width: 0;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--accent);
+    color: var(--text);
+    outline: none;
+  }
+  .section-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  /* A bare divider is all rule, so the rule itself is the rename target. */
+  .section-bar {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .section-bar:hover .section-rule {
+    background: var(--accent);
   }
   .hint {
     flex: 1;

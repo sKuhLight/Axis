@@ -1,6 +1,5 @@
 import {
   createParameterWidgetsForZoneCommands,
-  selectVisibleWidgetsByZone,
   type JsonObject,
   type WorkbenchActionHandler,
   type WorkbenchController,
@@ -15,6 +14,7 @@ import {
   AXIS_MY_CONTROLS_ZONE,
   hasAxisMyControlsPanel
 } from './myControlsPanel';
+import { axisMyControlsSectionInsertIndex } from './myControlsSections';
 
 export const AXIS_PIN_SELECTED_PARAMETERS_ACTION = 'axis.pinSelectedParameters';
 
@@ -66,9 +66,15 @@ function ensurePanelCommands(controller: WorkbenchController): WorkbenchCommand[
 
 /**
  * Pin controls into My Controls — the ONE pin destination (see
- * `myControlsPanel.ts`). Pinning never creates a panel and never asks where to
- * go: `args.panelId` / `args.title` are deliberately ignored, so no caller can
- * reintroduce a second pin target.
+ * `myControlsPanel.ts`). Pinning never creates a panel: `args.panelId` /
+ * `args.title` are deliberately ignored, so no caller can reintroduce a second
+ * pin target.
+ *
+ * `args.sectionId` is NOT such a target. It names a section header widget inside
+ * the one panel and only moves the insert index — the controls still land in My
+ * Controls. It exists because layout editing is retired, so the pin is the only
+ * moment a user can say where in the panel a control belongs. An unknown or
+ * absent id appends to the end, as before.
  */
 export function createAxisPinSelectedParametersAction(
   getSources: AxisParameterSourceProvider = axisParameterSourcesFromCurrentEditor
@@ -85,7 +91,8 @@ export function createAxisPinSelectedParametersAction(
       const setup = ensurePanelCommands(controller);
       if (setup.length) controller.dispatchMany(setup);
 
-      const startIndex = selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE).length;
+      const sectionId = typeof args?.sectionId === 'string' ? args.sectionId : null;
+      const startIndex = axisMyControlsSectionInsertIndex(controller.document, sectionId);
       controller.dispatchMany([
         ...createParameterWidgetsForZoneCommands(controller.document, sources, {
           zone: AXIS_MY_CONTROLS_ZONE,

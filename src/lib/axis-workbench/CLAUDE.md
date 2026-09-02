@@ -76,7 +76,21 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   to "fix" a dead drop target. `ensureAxisMyControlsPanel` in the normalization
   chain self-heals the panel/zone/dock slot and must stay idempotent.
   `axis.customPanel` is a SEPARATE, still-live type: the flag-gated edit-mode
-  "＋ Panel" affordance. Both render `panels/AxisCustomPanel.svelte`.
+  "＋ Panel" affordance rendering `panels/AxisCustomPanel.svelte`. My Controls has
+  its own `panels/AxisMyControlsPanel.svelte` — same widget grid, plus the section
+  toolbar and the resting empty state.
+- **`myControlsSections.ts` — sections inside My Controls.** A section is NOT a
+  container: `axis.sectionHeader` is a marker widget in the same zone that claims a
+  full grid row via `state.grid.colSpan: 'full'` (read by `WidgetZone.gridCellStyle`
+  — the only generic-layer support this needed). Controls after a marker merely read
+  as belonging to it, so ordering, persistence and `Remove Widget` are unchanged and
+  removing a header leaves its controls. One type covers both affordances: a
+  labelled header renders a titled rule, a blank one a bare divider. The label is
+  edited INLINE in the widget — do not add a rename item to `WidgetHost`'s generic
+  menu. `args.sectionId` on the pin action names a header widget and only moves the
+  INSERT INDEX inside the one panel; it is not a second pin target and must not
+  become one. `axisMyControlsWidgetCount` excludes headers, or the pin menu's hint
+  inflates by one per section.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
   widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one
   `activate()` click dispatcher. `widgets/widgetEstWidths.ts` holds

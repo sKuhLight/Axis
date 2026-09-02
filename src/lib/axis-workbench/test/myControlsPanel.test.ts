@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyDockLayout, selectActiveLayout, type DockNode } from '../../workbench';
 import { createAxisWorkbenchDefaultDocument } from '../axisWorkbenchDefaults';
 import { AXIS_PAGE_GRID, buildAxisSeedPages } from '../axisWorkbenchPages';
+import { axisMyControlsWidgetCount } from '../myControlsSections';
 import {
-  axisMyControlsWidgetCount,
+  axisMyControlsPanel,
   ensureAxisMyControlsPanel,
   hasAxisMyControlsPanel,
   AXIS_MY_CONTROLS_PANEL_ID,
@@ -39,11 +40,11 @@ const gridRight = (doc: ReturnType<typeof docWithRight>) => {
 };
 
 describe('My Controls panel', () => {
-  it('ships docked next to History on the default Grid page', () => {
+  it('ships docked immediately left of History on the default Grid page', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     expect(hasAxisMyControlsPanel(doc)).toBe(true);
     expect(selectActiveLayout(doc)!.zones[AXIS_MY_CONTROLS_ZONE]).toBeDefined();
-    expect(gridRight(doc)?.panelIds).toEqual(['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
+    expect(gridRight(doc)?.panelIds).toEqual([AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
   });
 
   it('is a fixture: locked, not closable, and reports an empty pin count', () => {
@@ -57,20 +58,40 @@ describe('My Controls panel', () => {
 });
 
 describe('ensureAxisMyControlsPanel', () => {
-  it('tabs the panel in beside an existing History', () => {
+  it('tabs the panel in immediately left of an existing History', () => {
     const doc = ensureAxisMyControlsPanel(docWithRight(tabs(['axis.history'])));
     expect(hasAxisMyControlsPanel(doc)).toBe(true);
-    expect(gridRight(doc)?.panelIds).toEqual(['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
+    expect(gridRight(doc)?.panelIds).toEqual([AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
+  });
+
+  it('keeps it left of History in a stack that holds other panels too', () => {
+    const doc = ensureAxisMyControlsPanel(docWithRight(tabs(['axis.presetBrowser', 'axis.history'])));
+    expect(gridRight(doc)?.panelIds).toEqual(['axis.presetBrowser', AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
+  });
+
+  it('moves a panel a previous version docked to History\'s right', () => {
+    const doc = ensureAxisMyControlsPanel(docWithRight(tabs(['axis.history', AXIS_MY_CONTROLS_PANEL_ID])));
+    expect(gridRight(doc)?.panelIds).toEqual([AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
   });
 
   it('creates a right region with History when the Grid page has none', () => {
     const doc = ensureAxisMyControlsPanel(docWithRight(undefined));
-    expect(gridRight(doc)?.panelIds).toEqual(['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
+    expect(gridRight(doc)?.panelIds).toEqual([AXIS_MY_CONTROLS_PANEL_ID, 'axis.history']);
   });
 
   it('tabs into the right region when it holds something other than History', () => {
     const doc = ensureAxisMyControlsPanel(docWithRight(tabs(['axis.presetBrowser'])));
     expect(gridRight(doc)?.panelIds).toEqual(['axis.presetBrowser', AXIS_MY_CONTROLS_PANEL_ID]);
+  });
+
+  it('re-applies the grid geometry onto a panel persisted with an older one', () => {
+    const doc = docWithRight(tabs(['axis.history']));
+    const layout = selectActiveLayout(doc)!;
+    layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = { ...axisMyControlsPanel(), state: { grid: { columns: 2 } } };
+
+    ensureAxisMyControlsPanel(doc);
+
+    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID].state).toEqual(axisMyControlsPanel().state);
   });
 
   it('restores the zone and panel instance a persisted document lost', () => {

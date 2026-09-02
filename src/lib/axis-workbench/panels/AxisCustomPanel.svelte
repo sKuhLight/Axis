@@ -7,19 +7,16 @@
     type PanelInstance
   } from '../../workbench';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
-  import { AXIS_MY_CONTROLS_EMPTY_LABEL, AXIS_MY_CONTROLS_PANEL_TYPE } from '../myControlsPanel';
 
-  // Renders both widget-grid panel types: the flag-gated edit-mode custom panel
-  // and My Controls (the single pin destination). They differ only in how they
-  // get filled, so only the empty-state copy branches.
+  // The flag-gated edit-mode "＋ Panel" affordance. My Controls used to share this
+  // component; it now has its own (AxisMyControlsPanel.svelte) because it carries
+  // section chrome this panel has no use for.
   let { panel }: { panel: PanelInstance } = $props();
   const { controller } = getWorkbenchContext();
   const zone = $derived(panelWidgetZoneId(panel.id));
   const grid = $derived(customPanelGridSettings(panel.state));
   const empty = $derived(selectVisibleWidgetsByZone($controller.document, zone).length === 0);
-  const emptyLabel = $derived(
-    panel.type === AXIS_MY_CONTROLS_PANEL_TYPE ? AXIS_MY_CONTROLS_EMPTY_LABEL : 'Drop widgets here'
-  );
+  const emptyLabel = 'Drop widgets here';
 </script>
 
 <section class="custom-panel" role="group" aria-label={panel.title ?? 'Custom panel'}>
@@ -27,14 +24,15 @@
     {zone}
     variant="grid"
     gridColumns={grid.columns}
+    gridMinColumnWidth={grid.minColumnWidth}
     gridRowHeight={grid.rowHeight}
     gridGap={grid.gap}
     {emptyLabel}
   />
   {#if empty && !$controller.editMode}
     <!-- WidgetZone hides an empty zone entirely unless layout editing is on, so
-         the panel owns its own resting empty state — otherwise a fresh user opens
-         My Controls to a blank rectangle with no clue how to fill it. -->
+         the panel owns its own resting empty state — otherwise the panel is a
+         blank rectangle once the user leaves Customize. -->
     <p class="empty">{emptyLabel}</p>
   {/if}
 </section>

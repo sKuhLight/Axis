@@ -50,6 +50,8 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.fcLayouts',
   'axis.fcSwitchView',
   'axis.paramControl',
+  // Section header / divider inside My Controls — see myControlsSections.ts.
+  'axis.sectionHeader',
   'axis.hint',
   'axis.legal',
   'axis.telemetry'

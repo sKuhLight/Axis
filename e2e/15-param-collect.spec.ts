@@ -4,6 +4,7 @@ import {
   enterEditMode,
   exitEditMode,
   regionTabs,
+  seedMyControls,
   seedPinnedControls
 } from './support/workbench';
 
@@ -141,5 +142,87 @@ test.describe('Pinned control tiles', () => {
       expect(w!.sh).toBeGreaterThanOrEqual(w!.th - 2);
       expect(w!.sw).toBeGreaterThanOrEqual(w!.tw - 2);
     }
+  });
+});
+
+// Sections divide the panel. A section is not a container — it is a full-row
+// marker widget in the same zone, so the controls after it merely read as
+// belonging to it. One widget type covers both affordances: labelled it is a
+// titled rule, unlabelled a bare divider.
+test.describe('My Controls sections', () => {
+  async function openMyControls(page: import('@playwright/test').Page) {
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    return page.locator('.custom-panel').first();
+  }
+
+  test('a section header spans the full grid row', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedMyControls(page, [{ section: 'Amp' }, GAIN, LEVEL]);
+    const panel = await openMyControls(page);
+
+    await expect(panel.locator('.axis-widget.section-header')).toHaveCount(1);
+    await expect(panel.locator('.section-name')).toHaveText('Amp');
+
+    // The header claims the whole row while a control takes one of two columns —
+    // proof the `colSpan: 'full'` placement is being honoured, not just styled.
+    const widths = await panel.locator('.aw-widget-grid-cell').evaluateAll((cells) =>
+      cells.map((cell) => cell.getBoundingClientRect().width)
+    );
+    expect(widths.length).toBe(3);
+    expect(widths[0]).toBeGreaterThan(widths[1] * 1.8);
+  });
+
+  test('an unlabelled header renders as a bare divider with no caption', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedMyControls(page, [GAIN, { section: '' }, LEVEL]);
+    const panel = await openMyControls(page);
+
+    const divider = panel.locator('.axis-widget.section-header.divider');
+    await expect(divider).toHaveCount(1);
+    await expect(divider.locator('.section-name')).toHaveCount(0);
+    // Still nameable — that is how a divider becomes a section.
+    await expect(divider.getByRole('button', { name: 'Name this divider' })).toBeVisible();
+  });
+
+  test('＋ Section adds a header that can be renamed in place and survives a reload', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN]);
+    const panel = await openMyControls(page);
+
+    await panel.getByRole('button', { name: '＋ Section' }).click();
+    await expect(panel.locator('.section-name')).toHaveText('Section');
+
+    await panel.locator('.section-name').click();
+    const input = panel.locator('.section-input');
+    await expect(input).toBeFocused();
+    await input.fill('Drive');
+    await input.press('Enter');
+    await expect(panel.locator('.section-name')).toHaveText('Drive');
+
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    const reloaded = await openMyControls(page);
+    await expect(reloaded.locator('.section-name')).toHaveText('Drive');
+  });
+
+  test('＋ Divider adds an unlabelled marker', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN]);
+    const panel = await openMyControls(page);
+
+    await panel.getByRole('button', { name: '＋ Divider' }).click();
+    await expect(panel.locator('.axis-widget.section-header.divider')).toHaveCount(1);
+  });
+
+  test('removing a header leaves its controls behind', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedMyControls(page, [{ section: 'Amp' }, GAIN, LEVEL]);
+    const panel = await openMyControls(page);
+
+    await panel.locator('.axis-widget.section-header').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Remove Widget' }).click();
+
+    await expect(panel.locator('.axis-widget.section-header')).toHaveCount(0);
+    await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
   });
 });

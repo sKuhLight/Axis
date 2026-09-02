@@ -62,6 +62,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.fcLayouts',
       'axis.fcSwitchView',
       'axis.paramControl',
+      'axis.sectionHeader',
       'axis.hint',
       'axis.legal',
       'axis.telemetry'

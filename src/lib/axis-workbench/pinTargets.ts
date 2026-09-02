@@ -1,5 +1,6 @@
 import type { WorkbenchDocument } from '../workbench';
-import { axisMyControlsWidgetCount, AXIS_MY_CONTROLS_TITLE } from './myControlsPanel';
+import { AXIS_MY_CONTROLS_TITLE } from './myControlsPanel';
+import { axisMyControlsWidgetCount } from './myControlsSections';
 
 /**
  * The pin destination. There is exactly one — My Controls (see

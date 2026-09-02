@@ -11,6 +11,7 @@ import AxisCustomPanel from './panels/AxisCustomPanel.svelte';
 import AxisDockActionPanel from './panels/AxisDockActionPanel.svelte';
 import AxisFcPanel from './panels/AxisFcPanel.svelte';
 import AxisHistoryDockPanel from './panels/AxisHistoryDockPanel.svelte';
+import AxisMyControlsPanel from './panels/AxisMyControlsPanel.svelte';
 import AxisPlaceholderPanel from './panels/AxisPlaceholderPanel.svelte';
 import AxisPresetBrowserPanel from './panels/AxisPresetBrowserPanel.svelte';
 import AxisSignalGridPanel from './panels/AxisSignalGridPanel.svelte';
@@ -49,7 +50,7 @@ AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) => {
     type === 'axis.fc' ? AxisFcPanel :
     type === 'axis.history' ? AxisHistoryDockPanel :
     type === 'axis.customPanel' ? AxisCustomPanel :
-    type === 'axis.myControls' ? AxisCustomPanel :
+    type === 'axis.myControls' ? AxisMyControlsPanel :
     type === 'axis.virtualScreen' ? AxisVirtualScreenPanel :
     type === 'axis.placeholder' ? AxisPlaceholderPanel :
     type === 'axis.convertGrid' ? AxisConvertGridPanel :

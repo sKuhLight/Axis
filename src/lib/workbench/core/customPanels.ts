@@ -18,12 +18,18 @@ import type {
 export const PANEL_WIDGET_ZONE_PREFIX = 'panel:';
 export const DEFAULT_CUSTOM_PANEL_GRID = {
   columns: 4,
+  // 0 = off: the grid uses a fixed `columns` count. Above zero it auto-fills as
+  // many columns of at least this width as the panel can hold, so a docked panel
+  // keeps its tiles at a readable size instead of stretching two of them across
+  // whatever width the region happens to have.
+  minColumnWidth: 0,
   rowHeight: 42,
   gap: 8
 } as const;
 
 export interface CustomPanelGridSettings {
   columns: number;
+  minColumnWidth: number;
   rowHeight: number;
   gap: number;
 }
@@ -75,6 +81,7 @@ export function customPanelGridSettings(state: JsonObject | undefined): CustomPa
   const grid = readGridState(state);
   return {
     columns: readPositiveInt(grid?.columns, DEFAULT_CUSTOM_PANEL_GRID.columns, 1, 24),
+    minColumnWidth: readPositiveInt(grid?.minColumnWidth, DEFAULT_CUSTOM_PANEL_GRID.minColumnWidth, 0, 480),
     rowHeight: readPositiveInt(grid?.rowHeight, DEFAULT_CUSTOM_PANEL_GRID.rowHeight, 24, 160),
     gap: readPositiveInt(grid?.gap, DEFAULT_CUSTOM_PANEL_GRID.gap, 0, 24)
   };
@@ -87,6 +94,7 @@ export function customPanelStateWithGrid(state: JsonObject | undefined): JsonObj
     grid: {
       ...readGridState(state),
       columns: settings.columns,
+      minColumnWidth: settings.minColumnWidth,
       rowHeight: settings.rowHeight,
       gap: settings.gap
     }

@@ -36,7 +36,7 @@ describe('custom panel helpers', () => {
 
     expect(commands.map((command) => command.type)).toEqual(['zone.ensure', 'panel.add']);
     expect(layout.panels['panel.custom']).toMatchObject({ type: 'test.customPanel', title: 'Performance' });
-    expect(layout.panels['panel.custom'].state?.grid).toEqual({ columns: 4, rowHeight: 42, gap: 8 });
+    expect(layout.panels['panel.custom'].state?.grid).toEqual({ columns: 4, minColumnWidth: 0, rowHeight: 42, gap: 8 });
     expect(layout.zones['panel:panel.custom']).toMatchObject({ label: 'Performance', orientation: 'free', acceptsGroups: true });
     expect(layout.pages[layout.activePageId].dock.root.right?.kind).toBe('tabs');
   });
@@ -44,11 +44,16 @@ describe('custom panel helpers', () => {
   it('normalizes custom panel grid settings from persisted panel state', () => {
     expect(customPanelGridSettings({ grid: { columns: 12, rowHeight: 56, gap: 10 } })).toEqual({
       columns: 12,
+      minColumnWidth: 0,
       rowHeight: 56,
       gap: 10
     });
+    // `minColumnWidth` above zero switches the grid to auto-fill columns.
+    expect(customPanelGridSettings({ grid: { minColumnWidth: 150 } }).minColumnWidth).toBe(150);
+    expect(customPanelGridSettings({ grid: { minColumnWidth: 999 } }).minColumnWidth).toBe(480);
     expect(customPanelGridSettings({ grid: { columns: 99, rowHeight: 2, gap: -4 } })).toEqual({
       columns: 24,
+      minColumnWidth: 0,
       rowHeight: 24,
       gap: 0
     });

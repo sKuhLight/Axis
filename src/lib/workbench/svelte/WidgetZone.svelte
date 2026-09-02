@@ -29,6 +29,9 @@
     // top zones 12px, bottom 10px, gridbar 8px.
     fitGap = 12,
     gridColumns = 4,
+    // Above zero the grid auto-fills columns of at least this width instead of
+    // using a fixed `gridColumns` count.
+    gridMinColumnWidth = 0,
     gridRowHeight = 42,
     gridGap = 8
   }: {
@@ -39,6 +42,7 @@
     fitGroup?: string[];
     fitGap?: number;
     gridColumns?: number;
+    gridMinColumnWidth?: number;
     gridRowHeight?: number;
     gridGap?: number;
   } = $props();
@@ -200,10 +204,16 @@
 
     const column = readPlacementNumber(placement.column) ?? (readPlacementNumber(placement.x, 0) != null ? readPlacementNumber(placement.x, 0)! + 1 : null);
     const row = readPlacementNumber(placement.row) ?? (readPlacementNumber(placement.y, 0) != null ? readPlacementNumber(placement.y, 0)! + 1 : null);
+    // `colSpan: 'full'` claims the whole row whatever the zone's column count is.
+    // A unit that must read as a full-width band (a rule, a heading) otherwise has
+    // to hardcode the panel's `grid.columns`, which silently breaks the moment
+    // that panel setting changes.
+    const fullWidth = placement.colSpan === 'full' || placement.w === 'full';
     const colSpan = readPlacementNumber(placement.colSpan ?? placement.w);
     const rowSpan = readPlacementNumber(placement.rowSpan ?? placement.h);
     const rules: string[] = [];
-    if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
+    if (fullWidth) rules.push('grid-column: 1 / -1');
+    else if (column != null) rules.push(`grid-column: ${column} / span ${colSpan ?? 1}`);
     else if (colSpan != null) rules.push(`grid-column: span ${colSpan}`);
     if (row != null) rules.push(`grid-row: ${row} / span ${rowSpan ?? 1}`);
     else if (rowSpan != null) rules.push(`grid-row: span ${rowSpan}`);
@@ -231,11 +241,13 @@
     class:floating
     class:panel={variant === 'panel'}
     class:grid={variant === 'grid'}
+    class:auto-columns={variant === 'grid' && gridMinColumnWidth > 0}
     class:overflow-open={overflowOpen}
     class:drop-target={!!zoneSlot}
     bind:this={zoneEl}
     data-zone={zone}
     style:--aw-zone-grid-columns={gridColumns}
+    style:--aw-zone-grid-min-column={`${gridMinColumnWidth}px`}
     style:--aw-zone-grid-row-height={`${gridRowHeight}px`}
     style:--aw-zone-grid-gap={`${gridGap}px`}
   >
@@ -392,6 +404,12 @@
     align-content: flex-start;
     overflow: auto;
     padding: 1px;
+  }
+  /* Auto-fill mode: as many columns of at least --aw-zone-grid-min-column as fit.
+     `min(…, 100%)` keeps a single tile from overflowing a panel narrower than one
+     column. Must follow the .grid rule above to override its template. */
+  .aw-widget-zone.grid.auto-columns {
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--aw-zone-grid-min-column), 100%), 1fr));
   }
   .aw-widget-grid-cell {
     min-width: 0;

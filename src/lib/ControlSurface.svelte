@@ -1094,12 +1094,14 @@
     return !!c && c.id >= 0 && (c.kind === 'cont' || c.kind === 'toggle' || c.kind === 'select');
   }
 
-  async function pinControlToWorkbench(c: Ctl) {
+  // `sectionId` picks WHERE in My Controls the control lands (a section header
+  // widget id, or null for the end of the panel) — not which panel it goes to.
+  async function pinControlToWorkbench(c: Ctl, sectionId: string | null = null) {
     if (!workbenchCanPin || !workbench || !pinnable(c)) return;
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
       source: 'menu',
-      args: { paramId: c.id }
+      args: sectionId ? { paramId: c.id, sectionId } : { paramId: c.id }
     });
     if (result.success) editor.showToast(`Pinned ${c.label} to ${AXIS_MY_CONTROLS_TITLE}`, '#35c9d6');
   }
@@ -1117,7 +1119,7 @@
   const pinMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
     if (!pinMenuOpen || !workbench || !pinMenuCtl) return [];
     const c = pinMenuCtl;
-    return buildAxisPinMenuItems(workbench.controller.document, () => void pinControlToWorkbench(c));
+    return buildAxisPinMenuItems(workbench.controller.document, (sectionId) => void pinControlToWorkbench(c, sectionId));
   });
 
   function openPinMenuAt(c: Ctl, pos: WorkbenchMenuPosition) {
