@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { editor } from '../../editor.svelte';
   import { history } from '../../history.svelte';
   import { fmtControlValue } from '../../format';
@@ -30,6 +31,7 @@
     type AxisFcDevice
   } from './widgetControls';
   import { resolveParamWidgetState } from './paramWidgetState';
+  import { takeAxisPendingSectionEditId } from '../myControlsSections';
   import { resolvePresetWidgetTarget } from './presetWidgetTarget';
   import { isSaveDirty } from './saveDirtyState';
   import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
@@ -442,6 +444,16 @@
       sectionEditing = false;
     }
   }
+
+  // "＋ Section" (AxisMyControlsPanel) drops the user straight into naming the
+  // header it just created instead of leaving the default label for them to
+  // hunt down and click. `take` is one-shot, so only the widget that was just
+  // created — not every header that happens to mount later — ever matches.
+  onMount(() => {
+    if (kind === 'sectionHeader' && takeAxisPendingSectionEditId() === widget.id) {
+      startSectionEdit();
+    }
+  });
 </script>
 
 {#if kind === 'preset'}

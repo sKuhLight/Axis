@@ -184,17 +184,17 @@ test.describe('My Controls sections', () => {
     await expect(divider.getByRole('button', { name: 'Name this divider' })).toBeVisible();
   });
 
-  test('＋ Section adds a header that can be renamed in place and survives a reload', async ({ page }) => {
+  test('＋ Section drops straight into naming it, and the name survives a reload', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN]);
     const panel = await openMyControls(page);
 
     await panel.getByRole('button', { name: '＋ Section' }).click();
-    await expect(panel.locator('.section-name')).toHaveText('Section');
-
-    await panel.locator('.section-name').click();
+    // No extra click to enter rename mode — it's already there, draft pre-filled
+    // with the default label and selected.
     const input = panel.locator('.section-input');
     await expect(input).toBeFocused();
+    await expect(input).toHaveValue('Section');
     await input.fill('Drive');
     await input.press('Enter');
     await expect(panel.locator('.section-name')).toHaveText('Drive');

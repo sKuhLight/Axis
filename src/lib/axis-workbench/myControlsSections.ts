@@ -66,6 +66,29 @@ export function createAxisSectionHeaderWidget(label: string): WidgetInstance {
 }
 
 /**
+ * The header a "＋ Section" click should drop straight into rename mode, so the
+ * user names it instead of hunting for the click target afterward. One-shot,
+ * transient UI intent — not persisted document state, so it lives here as a
+ * module-private value rather than `widget.state` (ES module bindings are
+ * read-only to importers, hence the getter/setter pair rather than a bare
+ * export): `AxisMyControlsPanel.svelte` sets it right after dispatching the
+ * new widget, `AxisWorkbenchWidget.svelte` takes (reads and clears) it the
+ * moment that widget mounts.
+ */
+let pendingSectionEditId: string | null = null;
+
+export function setAxisPendingSectionEditId(widgetId: string): void {
+  pendingSectionEditId = widgetId;
+}
+
+/** Reads and clears the pending id — a one-shot take, not a peek. */
+export function takeAxisPendingSectionEditId(): string | null {
+  const id = pendingSectionEditId;
+  pendingSectionEditId = null;
+  return id;
+}
+
+/**
  * How many CONTROLS are pinned — headers are chrome and must not inflate the
  * count the pin menu shows as its hint.
  */

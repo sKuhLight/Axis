@@ -16,7 +16,9 @@ import {
   axisMyControlsWidgetCount,
   axisSectionHeaderLabel,
   createAxisSectionHeaderWidget,
-  isAxisSectionHeader
+  isAxisSectionHeader,
+  setAxisPendingSectionEditId,
+  takeAxisPendingSectionEditId
 } from '../myControlsSections';
 
 function source(id: string, label: string): WorkbenchParameterSource {
@@ -175,6 +177,19 @@ describe('axisMyControlsSectionRemovalIds', () => {
   it('returns just its own id for a header that no longer exists', () => {
     const controller = newController();
     expect(axisMyControlsSectionRemovalIds(controller.document, 'widget-gone')).toEqual(['widget-gone']);
+  });
+});
+
+describe('axis pending section edit id', () => {
+  it('take reads and clears what was set — a one-shot, not a peek', () => {
+    // Module-level state, so drain any leftover from another test first.
+    takeAxisPendingSectionEditId();
+
+    expect(takeAxisPendingSectionEditId()).toBeNull();
+
+    setAxisPendingSectionEditId('widget-123');
+    expect(takeAxisPendingSectionEditId()).toBe('widget-123');
+    expect(takeAxisPendingSectionEditId()).toBeNull();
   });
 });
 

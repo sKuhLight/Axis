@@ -8,7 +8,11 @@
   } from '../../workbench';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
   import { AXIS_MY_CONTROLS_EMPTY_LABEL } from '../myControlsPanel';
-  import { AXIS_SECTION_DEFAULT_LABEL, createAxisSectionHeaderWidget } from '../myControlsSections';
+  import {
+    AXIS_SECTION_DEFAULT_LABEL,
+    createAxisSectionHeaderWidget,
+    setAxisPendingSectionEditId
+  } from '../myControlsSections';
 
   // My Controls — the single pin destination. It renders the same widget grid as
   // AxisCustomPanel but owns two things that panel does not: the section toolbar,
@@ -22,13 +26,17 @@
   // Sections and dividers are the same widget type; a blank label renders as a
   // bare rule. Both append to the end — the user renames in place, and the pin
   // menu is what files a control under a section.
-  function addSectionMarker(label: string) {
-    controller.dispatch({
-      type: 'widget.add',
-      widget: createAxisSectionHeaderWidget(label),
-      zone,
-      index: widgets.length
-    });
+  function addSectionMarker(label: string): string {
+    const widget = createAxisSectionHeaderWidget(label);
+    controller.dispatch({ type: 'widget.add', widget, zone, index: widgets.length });
+    return widget.id;
+  }
+
+  // "＋ Section" drops straight into naming it — the default label exists to
+  // render something before the user picks a real one, not to be kept. A blank
+  // divider stays unnamed by default, so it does not get this treatment.
+  function addSection() {
+    setAxisPendingSectionEditId(addSectionMarker(AXIS_SECTION_DEFAULT_LABEL));
   }
 </script>
 
@@ -49,7 +57,7 @@
     <p class="empty">{AXIS_MY_CONTROLS_EMPTY_LABEL}</p>
   {/if}
   <div class="section-tools">
-    <button type="button" onclick={() => addSectionMarker(AXIS_SECTION_DEFAULT_LABEL)}>＋ Section</button>
+    <button type="button" onclick={addSection}>＋ Section</button>
     <button type="button" onclick={() => addSectionMarker('')}>＋ Divider</button>
   </div>
 </section>
