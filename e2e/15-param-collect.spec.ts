@@ -1,85 +1,48 @@
-import { test, expect, type Page } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, exitEditMode, regionTabs } from './support/workbench';
+import { test, expect } from '@playwright/test';
+import {
+  bootCleanWorkbench,
+  enterEditMode,
+  exitEditMode,
+  regionTabs,
+  seedPinnedControls
+} from './support/workbench';
 
-// ROUND 19 (AXIS-30): dragging parameter controls out of the Block Editor must
-// COLLECT them into one panel (no tab-per-param), render as recognizable,
-// block-coloured, named tiles, and arrange with the shared widget machinery.
+// Pinned parameter controls collect into ONE panel — My Controls, the single pin
+// destination — and render as recognizable, block-coloured, named tiles that
+// arrange with the shared widget machinery.
+//
+// Drag-to-pin is gone (there is nowhere else to drop a control), so the drop
+// mechanics these specs used to cover — edge drops, tab-bar drops, drag-hover
+// overlays — no longer exist. What remains under test is the panel and the tiles.
 
-const PARAM_MIME = 'application/x-workbench-parameter-source+json';
+const GAIN = { effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' };
+const LEVEL = { effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' };
+const MASTER = { effectId: 100, paramId: 1, block: 'Amp 1', label: 'Master', color: '#d98a2b' };
 
-/** A serialized WorkbenchParameterSource, as ControlSurface emits on drag. */
-function paramSourcePayload(opts: {
-  effectId: number;
-  paramId: number;
-  block: string;
-  label: string;
-  color: string;
-}): string {
-  return JSON.stringify({
-    id: `axis.param.${opts.effectId}.${opts.paramId}`,
-    label: opts.label,
-    preferredWidgetType: 'axis.paramControl',
-    defaultSize: 'default',
-    binding: {
-      kind: 'axis.paramControl',
-      version: 1,
-      target: {
-        effectId: opts.effectId,
-        paramId: opts.paramId,
-        block: opts.block,
-        param: opts.label,
-        label: opts.label
-      }
-    },
-    state: { block: opts.block, label: opts.label, color: opts.color }
-  });
-}
-
-/** Fire the HTML5 parameter drop onto a target, exactly as a control drag ends. */
-async function dropParamOnto(page: Page, selector: string, payload: string, at?: { x: number; y: number }): Promise<void> {
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await page.evaluate(
-    ({ dt, mime, data }) => dt.setData(mime, data),
-    { dt: dataTransfer, mime: PARAM_MIME, data: payload }
-  );
-  const init = at ? { dataTransfer, clientX: at.x, clientY: at.y } : { dataTransfer };
-  await page.dispatchEvent(selector, 'dragover', init);
-  await page.dispatchEvent(selector, 'drop', init);
-}
-
-/** Fire ONLY a parameter dragover (no drop) at a point — for spring/highlight. */
-async function paramDragOverAt(page: Page, selector: string, payload: string, at: { x: number; y: number }): Promise<void> {
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await page.evaluate(
-    ({ dt, mime, data }) => dt.setData(mime, data),
-    { dt: dataTransfer, mime: PARAM_MIME, data: payload }
-  );
-  await page.dispatchEvent(selector, 'dragover', { dataTransfer, clientX: at.x, clientY: at.y });
-}
-
-test.describe('Parameter collect + tile (AXIS-30)', () => {
-  test('dropping params onto a panel collects them as named, block-coloured tiles — no tab-per-param', async ({
-    page
-  }) => {
+test.describe('My Controls — the single pin destination', () => {
+  test('ships as a tab beside History and cannot be closed', async ({ page }) => {
     await bootCleanWorkbench(page);
-    await enterEditMode(page);
 
-    // Insert one custom panel to collect into.
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-    const customTabs = regionTabs(page, 'main').filter({ hasText: 'Custom Panel' });
-    await expect(customTabs).toHaveCount(1);
+    const rightTabs = regionTabs(page, 'right');
+    await expect(rightTabs.filter({ hasText: 'History' })).toHaveCount(1);
+    await expect(rightTabs.filter({ hasText: 'My Controls' })).toHaveCount(1);
+
+    await rightTabs.filter({ hasText: 'My Controls' }).click();
+    await expect(page.locator('.custom-panel')).toBeVisible();
+    // Empty state points at the only way to fill it.
+    await expect(page.getByText(/Pin to My Controls/i).first()).toBeVisible();
+  });
+
+  test('collects controls from different blocks as named, block-coloured tiles — no tab per param', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN, LEVEL]);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
 
     const panel = page.locator('.custom-panel').first();
-    await expect(panel).toBeVisible();
-
-    // Drop two parameters from DIFFERENT blocks into the same panel.
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' }));
-
-    // Both controls land in the ONE panel; no extra tab was spawned per param.
     const tiles = panel.locator('.axis-widget.param');
     await expect(tiles).toHaveCount(2);
-    await expect(customTabs).toHaveCount(1);
+    // Both landed in the ONE panel — the right stack still has exactly two tabs.
+    await expect(regionTabs(page, 'right')).toHaveCount(2);
 
     // Identity: each control shows its parameter NAME…
     await expect(panel.getByText('Gain', { exact: true })).toBeVisible();
@@ -98,59 +61,42 @@ test.describe('Parameter collect + tile (AXIS-30)', () => {
     await expect(panel.locator('.axtip', { hasText: 'Drive 1 · Level' })).toHaveCount(1);
   });
 
-  test('collected tiles arrange with the shared widget drag machinery', async ({ page }) => {
+  test('pinned controls survive a reload', async ({ page }) => {
     await bootCleanWorkbench(page);
-    await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await seedPinnedControls(page, [GAIN]);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await expect(page.locator('.custom-panel .axis-widget.param')).toHaveCount(1);
 
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 1, block: 'Amp 1', label: 'Master', color: '#d98a2b' }));
-
-    const panel = page.locator('.custom-panel').first();
-    // In edit mode every collected tile gets the SAME drag surface the rest of the
-    // workbench uses (round-18 shared machinery) — one per collected widget.
-    await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
-    await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(2);
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await expect(page.locator('.custom-panel .axis-widget.param')).toHaveCount(1);
+    await expect(page.locator('.custom-panel').getByText('Gain', { exact: true })).toBeVisible();
   });
 });
 
-// ROUND 20 (AXIS-31): state bugs on the collect feature.
-test.describe('Parameter collect state (AXIS-31)', () => {
-  test('bug #2 — the edge-drop overlay clears when a drag ends over a panel', async ({ page }) => {
+test.describe('Pinned control tiles', () => {
+  test('arrange with the shared widget drag machinery', async ({ page }) => {
     await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN, MASTER]);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-    await expect(page.locator('.custom-panel')).toBeVisible();
 
-    const payload = paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' });
-    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-    await page.evaluate(({ dt, mime, data }) => dt.setData(mime, data), { dt: dataTransfer, mime: PARAM_MIME, data: payload });
-
-    // Dragging over the workspace edge raises the "Dock left" region overlay.
-    await page.dispatchEvent('.aw-workspace', 'dragover', { dataTransfer });
-    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(1);
-
-    // The drop lands on the panel, which stopPropagation()s it — so the workspace
-    // never sees the drop that would have cleared its own overlay. Pre-fix, the
-    // overlay stuck until reload.
-    await page.dispatchEvent('.custom-panel', 'drop', { dataTransfer });
-    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(1);
-
-    // `dragend` fires on the drag source and bubbles to the window — the reliable
-    // cleanup point. After it, no overlay lingers.
-    await page.evaluate(() => window.dispatchEvent(new DragEvent('dragend', { bubbles: true })));
-    await expect(page.locator('.aw-edge-drop-preview')).toHaveCount(0);
+    const panel = page.locator('.custom-panel').first();
+    // In edit mode every pinned tile gets the SAME drag surface the rest of the
+    // workbench uses (round-18 shared machinery) — one per pinned widget.
+    await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
+    await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(2);
   });
 
-  test('bug #3 — a resting pinned control shows no drag affordance and no dashed slot look', async ({ page }) => {
+  test('a resting pinned control shows no drag affordance and no dashed slot look', async ({ page }) => {
     await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN]);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
 
     const panel = page.locator('.custom-panel').first();
     await expect(panel.locator('.axis-widget.param')).toHaveCount(1);
-    // In edit mode the tile has the drag surface (expected).
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(1);
 
     // Leaving customize must return the control to a clean resting state: the tile
@@ -160,77 +106,14 @@ test.describe('Parameter collect state (AXIS-31)', () => {
     const tile = panel.locator('.axis-widget.param').first();
     await expect(tile).toBeVisible();
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(0);
-    const borderStyle = await tile.evaluate((el) => getComputedStyle(el).borderTopStyle);
-    expect(borderStyle).toBe('solid');
-  });
-});
-
-// ROUND 21 (AXIS-32): drop-target UX across all drag types.
-test.describe('Drop-target UX (AXIS-32)', () => {
-  const GAIN = paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' });
-
-  test('directive #1 — a parameter edge drop highlights the ENTIRE region frame', async ({ page }) => {
-    await bootCleanWorkbench(page);
-    await enterEditMode(page);
-
-    // Hover a control over the MAIN region: the highlight surface must match the
-    // whole region frame, not a small labelled box.
-    const mainRegion = page.locator('.aw-region[data-region="main"]');
-    const rb = await mainRegion.boundingBox();
-    expect(rb).toBeTruthy();
-    await paramDragOverAt(page, '.aw-workspace', GAIN, { x: rb!.x + rb!.width / 2, y: rb!.y + rb!.height / 2 });
-
-    const preview = page.locator('.aw-edge-drop-preview');
-    await expect(preview).toHaveCount(1);
-    const pb = await preview.boundingBox();
-    expect(pb).toBeTruthy();
-    // The preview wraps the region frame (full drop area) within a couple of px.
-    expect(Math.abs(pb!.width - rb!.width)).toBeLessThan(6);
-    expect(Math.abs(pb!.height - rb!.height)).toBeLessThan(6);
+    expect(await tile.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe('solid');
   });
 
-  test('directive #2 — dropping a control on a tab bar makes a new Controls tab', async ({ page }) => {
+  test('the customize dashed outline wraps the full tile at every size', async ({ page }) => {
     await bootCleanWorkbench(page);
+    await seedPinnedControls(page, [GAIN, LEVEL]);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
     await enterEditMode(page);
-    // Add a custom panel so the main stack has real tabs (Signal Grid + Custom Panel).
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-    await expect(regionTabs(page, 'main')).toHaveCount(2);
-
-    // Drop a control onto the main stack's tab bar → a NEW "Controls" tab appears.
-    await dropParamOnto(page, '.aw-tabstack[data-region="main"] .aw-pane-head', GAIN);
-    await expect(regionTabs(page, 'main')).toHaveCount(3);
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Controls' })).toHaveCount(1);
-  });
-
-  test('directive #3 — hovering an inactive tab during a drag springs it active', async ({ page }) => {
-    await bootCleanWorkbench(page);
-    await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-
-    const tabs = regionTabs(page, 'main');
-    await expect(tabs).toHaveCount(2);
-    // The freshly-added Custom Panel is active; Signal Grid is the inactive tab.
-    const gridTab = tabs.filter({ hasText: 'Signal Grid' });
-    await expect(gridTab).not.toHaveClass(/active/);
-    const gb = await gridTab.boundingBox();
-    expect(gb).toBeTruthy();
-
-    // A control hovering the inactive tab arms the spring; after the dwell it
-    // activates so the drag can continue into the revealed panel content.
-    await paramDragOverAt(page, '.aw-tabstack[data-region="main"] .aw-pane-head', GAIN, {
-      x: gb!.x + gb!.width / 2,
-      y: gb!.y + gb!.height / 2
-    });
-    await expect(gridTab).toHaveClass(/active/, { timeout: 2000 });
-  });
-
-  test('directive #4 — the customize dashed outline wraps the full tile at every size', async ({ page }) => {
-    await bootCleanWorkbench(page);
-    await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
-
-    await dropParamOnto(page, '.custom-panel', GAIN);
-    await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' }));
 
     const panel = page.locator('.custom-panel').first();
     await expect(panel.locator('.axis-widget.param')).toHaveCount(2);

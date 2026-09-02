@@ -45,10 +45,10 @@ describe('ROUND 15 — default document seed pages', () => {
     expect(layout.activePageId).toBe(AXIS_PAGE_GRID);
   });
 
-  it('Grid page docks Block Editor (main) + History (right), with the Signal Grid undocked', () => {
+  it('Grid page docks Block Editor (main) + History/My Controls (right), with the Signal Grid undocked', () => {
     const grid = layout.pages[AXIS_PAGE_GRID];
     expect(grid.dock.root.main?.kind).toBe('tabs');
-    expect(panelIdsInPageDock(grid).sort()).toEqual(['axis.blockEditor', 'axis.history']);
+    expect(panelIdsInPageDock(grid).sort()).toEqual(['axis.blockEditor', 'axis.history', 'axis.myControls']);
     expect(grid.dock.regions.right.sizePx).toBe(560);
     // The panel stays in the roster so it can be re-added from the panel picker.
     expect(layout.panels['axis.signalGrid']).toBeDefined();

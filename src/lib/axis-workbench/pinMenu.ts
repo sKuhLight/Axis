@@ -1,27 +1,20 @@
-import type { WorkbenchMenuItem } from '../workbench';
-import { axisPinTargets, type AxisPinTarget } from './pinTargets';
-import type { WorkbenchDocument } from '../workbench';
+import type { WorkbenchDocument, WorkbenchMenuItem } from '../workbench';
+import { axisPinTarget } from './pinTargets';
 
 /**
- * Build the "Pin to custom panel" context/action-sheet menu for a pinnable
- * control. Existing custom panels come first (with their current widget count as
- * a hint), then a separated "New custom panel" entry. Each item invokes `onPick`
- * with the chosen target so the caller can route it through
- * `AXIS_PIN_SELECTED_PARAMETERS_ACTION` (panelId set = append, null = new panel).
+ * The context / action-sheet menu for a pinnable control: a single "Pin to My
+ * Controls" item, hinted with how many controls are pinned already. It stays a
+ * menu rather than an immediate action so right-click and long-press keep an
+ * explicit confirm step.
  */
-export function buildAxisPinMenuItems(
-  doc: WorkbenchDocument,
-  onPick: (target: AxisPinTarget) => void
-): WorkbenchMenuItem[] {
-  const targets = axisPinTargets(doc);
-  return targets.map((target, index): WorkbenchMenuItem => {
-    const isNew = target.panelId == null;
-    return {
-      id: isNew ? 'pin.new' : `pin.panel.${target.panelId}`,
+export function buildAxisPinMenuItems(doc: WorkbenchDocument, onPick: () => void): WorkbenchMenuItem[] {
+  const target = axisPinTarget(doc);
+  return [
+    {
+      id: 'pin.myControls',
       label: target.label,
-      hint: isNew ? '+' : String(target.widgetCount),
-      separatorBefore: isNew && index > 0,
-      run: () => onPick(target)
-    };
-  });
+      hint: String(target.widgetCount),
+      run: onPick
+    }
+  ];
 }

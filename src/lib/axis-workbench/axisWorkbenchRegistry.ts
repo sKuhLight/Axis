@@ -21,7 +21,7 @@ import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowse
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
 import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
-import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
+import { createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
 import { editor } from '../editor.svelte';
@@ -49,6 +49,7 @@ AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) => {
     type === 'axis.fc' ? AxisFcPanel :
     type === 'axis.history' ? AxisHistoryDockPanel :
     type === 'axis.customPanel' ? AxisCustomPanel :
+    type === 'axis.myControls' ? AxisCustomPanel :
     type === 'axis.virtualScreen' ? AxisVirtualScreenPanel :
     type === 'axis.placeholder' ? AxisPlaceholderPanel :
     type === 'axis.convertGrid' ? AxisConvertGridPanel :
@@ -179,6 +180,10 @@ registry.registerAction(
   })
 );
 registry.registerAction(createAxisPinSelectedParametersAction());
-registry.registerAction(createAxisParameterSourceEdgeDropAction());
+// The generic parameter-source EDGE-DROP action is deliberately NOT registered.
+// `DockWorkspace` and `TabStack` gate their parameter drop handlers on
+// `registry.hasAction(WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION)`, so leaving it
+// unregistered disables every drag-to-pin drop target at one choke point — pinning
+// goes through the pin menu into My Controls only.
 
 export const axisWorkbenchRegistry = registry;

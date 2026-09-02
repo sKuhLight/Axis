@@ -8,6 +8,7 @@ import type {
   WidgetInstance,
   WorkbenchDocument
 } from '../workbench/core/schema';
+import { axisMyControlsPanel, axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel';
 import {
   AXIS_SEED_PAGES_MARKER,
   buildAxisSeedPages,
@@ -62,6 +63,9 @@ export function createAxisWorkbenchPanels(): Record<string, PanelInstance> {
       singletonKey: 'axis.deviceTools'
     }),
     'axis.customPanel': panel('axis.customPanel', 'axis.customPanel', 'Custom Panel'),
+    // The single pin destination. No panelLibrary template: it must not be
+    // instantiable a second time.
+    [AXIS_MY_CONTROLS_PANEL_ID]: axisMyControlsPanel(),
     // Pages (ROUND 15): Setup / Controllers / Scenes / Live each own a seed page,
     // so their panel instances live in the roster (they used to be minted on demand
     // by the add-or-focus nav actions). Preset Browser / FC panels already exist above.
@@ -115,14 +119,15 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
       label: 'Custom Panel',
       orientation: 'horizontal',
       acceptsGroups: true
-    }
+    },
+    [axisMyControlsZone().id]: axisMyControlsZone()
   };
 
   layout.panels = createAxisWorkbenchPanels();
 
   // Pages (ROUND 15): every nav point is its own page. The GRID page opens on the
-  // Block Editor (operator decision 2026-09-02): Block Editor main + History docked
-  // right, with the Signal Grid panel UNDOCKED (still in the roster, so it can be
+  // Block Editor (operator decision 2026-09-02): Block Editor main + History and
+  // My Controls tabbed into the right dock, with the Signal Grid panel UNDOCKED (still in the roster, so it can be
   // re-added from the panel picker) — the editor already carries the GRID MAP
   // navigator, so the full signal grid is not needed for first contact. Preset
   // Browser, FC, Setup, Controllers, Scenes, and Live each get their own seed page
@@ -130,7 +135,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // identical across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
   gridDock.root.main = tabs('axis.tabs.grid.main', ['axis.blockEditor']);
-  gridDock.root.right = tabs('axis.tabs.grid.right', ['axis.history']);
+  gridDock.root.right = tabs('axis.tabs.grid.right', ['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
   gridDock.regions.right.sizePx = 560;
   const seeded = buildAxisSeedPages(gridDock);
   layout.pages = seeded.pages;

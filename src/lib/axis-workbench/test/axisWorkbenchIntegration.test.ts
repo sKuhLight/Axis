@@ -29,6 +29,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.account',
       'axis.deviceTools',
       'axis.customPanel',
+      'axis.myControls',
       'axis.virtualScreen',
       'axis.placeholder',
       'axis.convertGrid',

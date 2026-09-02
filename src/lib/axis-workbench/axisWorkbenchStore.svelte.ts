@@ -17,6 +17,7 @@ import {
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisAddBlockWidgets, pruneAxisRetiredRailWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
+import { ensureAxisMyControlsPanel } from './myControlsPanel';
 import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -62,11 +63,15 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // doc-metadata marker so freshly seeded / default docs are untouched.
   // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
+  // ensureAxisMyControlsPanel self-heals the single pin destination onto every layout's Grid page,
+  // tabbed next to History. Same ordering reason, same idempotence requirement.
   return ensureAxisMeterWidgetLibrary(
     ensureAxisMobileBottomNav(
       pruneAxisAddBlockWidgets(
         pruneAxisRetiredRailWidgets(
-          ensureAxisGridControlWidgets(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+          ensureAxisGridControlWidgets(
+            ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+          )
         )
       )
     )

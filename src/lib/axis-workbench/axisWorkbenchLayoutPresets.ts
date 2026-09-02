@@ -12,6 +12,7 @@ import {
 } from '../workbench/core';
 import { createAxisWorkbenchPanels } from './axisWorkbenchDefaults';
 import { buildAxisSeedPages, createAxisSeedNavigation } from './axisWorkbenchPages';
+import { axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel';
 
 /**
  * Axis layout presets — the production port of the design shell's `preset(kind)`
@@ -306,6 +307,7 @@ function createAxisPresetZones(): WidgetZoneLayout {
     orientation: 'horizontal',
     acceptsGroups: true
   };
+  zones[axisMyControlsZone().id] = axisMyControlsZone();
   return zones;
 }
 
@@ -379,12 +381,13 @@ function buildGridPageDock(spec: AxisPresetSpec): DockLayout {
     spec.editorMode === 'right' ? 'right' : spec.editorMode === 'left' ? 'left' : 'bottom';
   dock.root[editorRegion] = tabs(['axis.blockEditor']);
 
-  // History docks right (unless the editor already claimed right — then tab in).
+  // History + My Controls dock right (unless the editor already claimed right —
+  // then they tab in alongside it).
   if (editorRegion === 'right') {
     const right = dock.root.right as Extract<DockNode, { kind: 'tabs' }>;
-    right.panelIds.push('axis.history');
+    right.panelIds.push('axis.history', AXIS_MY_CONTROLS_PANEL_ID);
   } else {
-    dock.root.right = tabs(['axis.history']);
+    dock.root.right = tabs(['axis.history', AXIS_MY_CONTROLS_PANEL_ID]);
   }
 
   dock.regions.left.sizePx = 320;

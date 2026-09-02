@@ -65,6 +65,18 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   do NOT widen `WorkbenchContext` for it. Nothing is deleted, and
   `playwright.config.ts` sets both flags so the code stays e2e-covered.
 - `panels/` — one component per panel type.
+- **`myControlsPanel.ts` — the single pin destination.** Every pin path resolves to
+  the one `axis.myControls` panel instance, docked as a tab beside History on the
+  Grid page; `createAxisPinSelectedParametersAction` appends into
+  `AXIS_MY_CONTROLS_ZONE` and ignores any `panelId`/`title` args, so no caller can
+  reintroduce a second target. Drag-to-pin is retired at one choke point: the
+  generic `WORKBENCH_PARAMETER_SOURCE_EDGE_DROP_ACTION` is deliberately NOT
+  registered in `axisWorkbenchRegistry.ts`, and `DockWorkspace`/`TabStack` gate
+  their parameter-drop handlers on `registry.hasAction(...)` — do not register it
+  to "fix" a dead drop target. `ensureAxisMyControlsPanel` in the normalization
+  chain self-heals the panel/zone/dock slot and must stay idempotent.
+  `axis.customPanel` is a SEPARATE, still-live type: the flag-gated edit-mode
+  "＋ Panel" affordance. Both render `panels/AxisCustomPanel.svelte`.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
   widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one
   `activate()` click dispatcher. `widgets/widgetEstWidths.ts` holds

@@ -127,3 +127,58 @@ export function regionTabs(page: Page, region: string) {
 export async function clickNav(page: Page, entryId: string): Promise<void> {
   await page.locator(`[data-nav-entry="${entryId}"] button.axis-nav-entry`).click();
 }
+
+/** Widget zone the My Controls panel renders — the only pin destination. */
+export const MY_CONTROLS_ZONE = 'panel:axis.myControls';
+
+export interface PinnedParamSpec {
+  effectId: number;
+  paramId: number;
+  block: string;
+  label: string;
+  color: string;
+}
+
+/**
+ * Seed pinned controls into My Controls by editing the persisted document, then
+ * reload. Pinning is a menu action over the LIVE selected block, so driving it
+ * through the UI would couple these rendering specs to whatever device the dev
+ * proxy has connected; writing the same widgets the pin action writes keeps them
+ * about the panel, not about the device.
+ */
+export async function seedPinnedControls(page: Page, specs: PinnedParamSpec[]): Promise<void> {
+  await page.evaluate(
+    ({ key, zone, items }) => {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) throw new Error('no persisted workbench doc to seed into');
+      const doc = JSON.parse(raw);
+      const layout = doc.layouts[doc.profiles[doc.activeProfileId].layoutId];
+      items.forEach((spec, index) => {
+        const id = `axis.param.${spec.effectId}.${spec.paramId}`;
+        layout.widgets[`widget.${id}`] = {
+          id: `widget.${id}`,
+          type: 'axis.paramControl',
+          zone,
+          order: index,
+          size: 'default',
+          binding: {
+            kind: 'axis.paramControl',
+            version: 1,
+            target: {
+              effectId: spec.effectId,
+              paramId: spec.paramId,
+              block: spec.block,
+              param: spec.label,
+              label: spec.label
+            }
+          },
+          state: { label: spec.label, sourceId: id, block: spec.block, color: spec.color }
+        };
+      });
+      window.localStorage.setItem(key, JSON.stringify(doc));
+    },
+    { key: WORKBENCH_DOC_KEY, zone: MY_CONTROLS_ZONE, items: specs }
+  );
+  await page.reload();
+  await page.waitForSelector('.aw-root');
+}

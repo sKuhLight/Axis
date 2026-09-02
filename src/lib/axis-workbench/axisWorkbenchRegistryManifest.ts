@@ -12,6 +12,8 @@ export const AXIS_WORKBENCH_BASE_PANEL_TYPES = [
   'axis.account',
   'axis.deviceTools',
   'axis.customPanel',
+  // The single pin destination — see myControlsPanel.ts.
+  'axis.myControls',
   'axis.virtualScreen',
   'axis.placeholder',
   // Cross-device preset converter page panels (M4 · META-24). Each sets the OFFLINE editor surface

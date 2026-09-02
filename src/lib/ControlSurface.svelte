@@ -30,27 +30,18 @@
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
   import { buildDeviceLayoutBoard, layoutVariantSig, packInto, repackWidgets, MAX_ROWS, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
-  import { AXIS_PIN_SELECTED_PARAMETERS_ACTION, AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION } from './axis-workbench/axisParameterActions';
+  import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
   import { isAxisControlArrangeEnabled } from './axis-workbench/featureGate';
-  import { axisParameterSourceFromEditorParamId } from './axis-workbench/axisParameterSources';
   import {
-    createParameterWidgetCommand,
     getOptionalWorkbenchContext,
-    isDockRegionId,
     menuPositionFromPointer,
-    panelWidgetZoneId,
-    selectVisibleWidgetsByZone,
-    serializeWorkbenchParameterSource,
-    type DockRegionId,
     type WorkbenchMenuItem,
-    type WorkbenchMenuPosition,
-    type WorkbenchParameterSource
+    type WorkbenchMenuPosition
   } from './workbench';
-  import { fullRegionHighlightRect, widgetDropIndex } from './workbench/svelte/drag';
   import ContextMenu from './workbench/svelte/ContextMenu.svelte';
   import { longPress } from './axis-workbench/longPress';
+  import { AXIS_MY_CONTROLS_TITLE } from './axis-workbench/myControlsPanel';
   import { buildAxisPinMenuItems } from './axis-workbench/pinMenu';
-  import type { AxisPinTarget } from './axis-workbench/pinTargets';
   import { axisBlockEditorModifierController } from './axis-workbench/blockEditor/blockEditorModifierController';
 
   let {
@@ -986,14 +977,6 @@
 
   $effect(() => {
     const onMove = (e: PointerEvent) => {
-      if (pinDrag) {
-        e.preventDefault();
-        pinDrag = { ...pinDrag, x: e.clientX, y: e.clientY, target: resolvePinTarget(e.clientX, e.clientY) };
-        return;
-      }
-      if (pinHold && (Math.abs(e.clientX - pinHold.x) > PIN_MOVE_CANCEL || Math.abs(e.clientY - pinHold.y) > PIN_MOVE_CANCEL)) {
-        cancelPinHold(); // early movement = value adjust; fall through so vd/tk drive it
-      }
       if (mv) {
         e.preventDefault();
         // drag past the left/right edge of the board → carry the widget to the adjacent page
@@ -1047,15 +1030,6 @@
       if (sw && Math.abs(e.clientX - sw.sx) > 8) sw.moved = true;
     };
     const onUp = (e: PointerEvent) => {
-      if (pinDrag) {
-        const pin = pinDrag;
-        pinDrag = null;
-        cancelPinHold();
-        dropPin(pin);
-        suppressNextClick();
-        return;
-      }
-      cancelPinHold(); // a press that never became a drag must clear the pending hold timer
       if (mv) {
         if (drag?.valid) {
           let b = widgets.map((x) => (x.id === mv!.id ? { ...x, x: drag!.x, y: drag!.y } : x));
@@ -1120,213 +1094,22 @@
     return !!c && c.id >= 0 && (c.kind === 'cont' || c.kind === 'toggle' || c.kind === 'select');
   }
 
-  function parameterSourceForControl(c: Ctl): WorkbenchParameterSource | null {
-    if (!pinnable(c)) return null;
-    return axisParameterSourceFromEditorParamId(
-      {
-        selected: editor.selected,
-        params: editor.params,
-        enums: editor.enums
-      },
-      c.id
-    );
-  }
-
-  /** Glyph SVG (18px, block-accent) that recalls the control's kind on the chip. */
-  function paramChipGlyph(kind: Kind, color: string): string {
-    if (kind === 'toggle') {
-      return `<svg width="20" height="18" viewBox="0 0 40 24" aria-hidden="true"><rect x="2" y="4" width="36" height="16" rx="8" fill="none" stroke="${color}" stroke-width="2.5"/><circle cx="28" cy="12" r="6" fill="${color}"/></svg>`;
-    }
-    if (kind === 'select') {
-      return `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13 M4 12h13 M4 17h9" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-    }
-    // 'cont' (and any other pinnable): a knob glyph mirroring the tile's dial.
-    return `<svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 100" transform="rotate(135 16 16)"/><circle cx="16" cy="16" r="2.4" fill="${color}"/></svg>`;
-  }
-
-  async function pinControlToWorkbench(c: Ctl, target?: AxisPinTarget) {
+  async function pinControlToWorkbench(c: Ctl) {
     if (!workbenchCanPin || !workbench || !pinnable(c)) return;
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
       source: 'menu',
-      args: {
-        paramId: c.id,
-        title: c.label,
-        ...(target?.panelId ? { panelId: target.panelId } : {})
-      }
+      args: { paramId: c.id }
     });
-    if (result.success) {
-      const where = target?.panelId ? ` to ${target.label}` : '';
-      editor.showToast(`Pinned ${c.label}${where}`, '#35c9d6');
-    }
+    if (result.success) editor.showToast(`Pinned ${c.label} to ${AXIS_MY_CONTROLS_TITLE}`, '#35c9d6');
   }
 
-  // ── hold-to-drag pin (mouse/pen) ──
-  // Replaces the always-on native HTML5 `draggable` that used to hijack the
-  // value-adjust gesture (you could no longer "regeln" a knob — the browser
-  // started a pin drag the instant you dragged). Mirrors the grid-block move
-  // (SignalGrid.onBlockDown): a ~380 ms *still* hold arms a pointer drag; any
-  // earlier movement is a value adjust and cancels the arm. Native DnD can't be
-  // armed after a hold (Blink fixes drag-eligibility at pointerdown), so the pin
-  // drag is pointer-based — a following chip + drop highlight, hit-testing the
-  // same drop targets the native handlers used. Touch keeps the longPress→menu
-  // path below (dragging across docked panels isn't a touch gesture).
-  const PIN_HOLD_MS = 380;
-  const PIN_MOVE_CANCEL = 6;
-  type PinRect = { left: number; top: number; width: number; height: number };
-  type PinTarget =
-    | { kind: 'panel'; panelId: string; rect: PinRect; label: string }
-    | { kind: 'edge'; region: DockRegionId; rect: PinRect; label: string }
-    | { kind: 'tab'; tabStackId: string; region?: DockRegionId; index: number; rect: PinRect; label: string };
-  let pinHold: { c: Ctl; x: number; y: number } | null = null;
-  let pinHoldTimer: ReturnType<typeof setTimeout> | null = null;
-  let pinDrag = $state<{ c: Ctl; source: WorkbenchParameterSource; x: number; y: number; target: PinTarget | null } | null>(null);
-  let pinLayerEl = $state<HTMLElement | null>(null);
-  // An ancestor CSS `zoom` (Axis UI-scale) puts this fixed layer's px in LAYOUT
-  // space while pointer coords are VISUAL — divide by the self-calibrated factor
-  // so the chip/highlight track the pointer (mirrors DragLayer's compensation).
-  const pinZoom = $derived.by(() => {
-    void pinDrag;
-    if (!pinLayerEl || !pinLayerEl.offsetWidth) return 1;
-    const visual = pinLayerEl.getBoundingClientRect().width;
-    return visual > 0 ? visual / pinLayerEl.offsetWidth : 1;
-  });
-
-  function onPinArm(e: PointerEvent, c: Ctl | undefined) {
-    if (!workbenchCanPin || editMode || !pinnable(c)) return;
-    if (e.pointerType === 'touch' || e.button !== 0) return; // mouse/pen only; touch = longPress menu
-    pinHold = { c, x: e.clientX, y: e.clientY };
-    if (pinHoldTimer) clearTimeout(pinHoldTimer);
-    pinHoldTimer = setTimeout(() => {
-      pinHoldTimer = null;
-      if (pinHold && !pinDrag) startPinDrag();
-    }, PIN_HOLD_MS);
-  }
-
-  function cancelPinHold() {
-    if (pinHoldTimer) {
-      clearTimeout(pinHoldTimer);
-      pinHoldTimer = null;
-    }
-    pinHold = null;
-  }
-
-  function startPinDrag() {
-    if (!pinHold) return;
-    const c = pinHold.c;
-    const source = parameterSourceForControl(c);
-    if (!source) {
-      pinHold = null;
-      return;
-    }
-    // The same press may have armed a value adjust (vd/tk) + value bubble on an
-    // inner control — drop them so the hold becomes a clean reposition, not a
-    // stray value change (no movement happened yet, so nothing was written).
-    vd = null;
-    tk = null;
-    dragging = false;
-    if (tip && !tip.edit) tip = null;
-    pinDrag = { c, source, x: pinHold.x, y: pinHold.y, target: resolvePinTarget(pinHold.x, pinHold.y) };
-    pinHold = null;
-  }
-
-  // Which drop target sits under (x,y). The layer is pointer-events:none, so
-  // elementFromPoint reaches the real workbench drop zones — the same DOM anchors
-  // the native parameter drop + the built-in widget/panel drags hit-test.
-  function resolvePinTarget(x: number, y: number): PinTarget | null {
-    if (typeof document === 'undefined') return null;
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (!el) return null;
-    // 1. a custom panel body → collect the control into THAT panel
-    const panelBody = el.closest<HTMLElement>('.custom-panel');
-    if (panelBody) {
-      const panelId = panelBody.closest<HTMLElement>('[data-panel]')?.dataset.panel;
-      if (panelId) {
-        const r = panelBody.getBoundingClientRect();
-        return { kind: 'panel', panelId, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, label: 'Add to panel' };
-      }
-    }
-    // 2. a panel-stack tab bar → a new "Controls" panel as a tab at that spot
-    const head = el.closest<HTMLElement>('.aw-pane-head');
-    if (head) {
-      const stack = head.closest<HTMLElement>('[data-tabstack]');
-      const tabStackId = stack?.dataset.tabstack;
-      if (tabStackId) {
-        const region = stack?.dataset.region;
-        const tabs = Array.from(head.querySelectorAll<HTMLElement>('.aw-pane-tab')).map((t) => t.getBoundingClientRect());
-        const index = widgetDropIndex({ x, y: 0 }, tabs, 'horizontal');
-        const r = head.getBoundingClientRect();
-        return {
-          kind: 'tab',
-          tabStackId,
-          region: region && isDockRegionId(region) ? region : undefined,
-          index,
-          rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-          label: 'New tab'
-        };
-      }
-    }
-    // 3. an empty dock edge → collect into / create a Controls panel in that region
-    const ws = el.closest<HTMLElement>('.aw-workspace');
-    if (ws) {
-      const r = ws.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) {
-        const nx = (x - r.left) / r.width;
-        const ny = (y - r.top) / r.height;
-        const edge = 0.18;
-        const region: DockRegionId | null = nx < edge ? 'left' : nx > 1 - edge ? 'right' : ny < edge ? 'top' : ny > 1 - edge ? 'bottom' : null;
-        if (region) {
-          const hi = fullRegionHighlightRect(region) ?? { left: r.left, top: r.top, width: r.width, height: r.height };
-          return { kind: 'edge', region, rect: hi, label: `New panel · ${region}` };
-        }
-      }
-    }
-    return null;
-  }
-
-  function dropPin(pin: { c: Ctl; source: WorkbenchParameterSource; target: PinTarget | null }) {
-    const { c, source, target } = pin;
-    if (!workbench || !target) return; // no accepting target → no-op, like the native drop
-    if (target.kind === 'panel') {
-      // Mirror AxisCustomPanel.onParameterDrop: append the control into that panel.
-      const zone = panelWidgetZoneId(target.panelId);
-      const index = selectVisibleWidgetsByZone(workbench.controller.document, zone).length;
-      const command = createParameterWidgetCommand(workbench.controller.document, source, { zone, index });
-      if (command) {
-        workbench.controller.dispatch(command);
-        editor.showToast(`Pinned ${c.label}`, '#35c9d6');
-      }
-      return;
-    }
-    // edge / tab → the parameter-source edge-drop action (same one the native
-    // DockWorkspace / TabStack drop handlers run), given the serialized source.
-    const serialized = serializeWorkbenchParameterSource(source);
-    const args =
-      target.kind === 'tab'
-        ? { source: serialized, tabStackId: target.tabStackId, index: target.index, ...(target.region ? { region: target.region } : {}) }
-        : { source: serialized, region: target.region };
-    void workbench.registry
-      .runActionResult(AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION, { controller: workbench.controller, source: 'host', args })
-      .then((res) => {
-        if (res.success) editor.showToast(`Pinned ${c.label}`, '#35c9d6');
-      });
-  }
-
-  // A hold-drag on a clickable control (toggle/select/action) would otherwise fire
-  // a click on release and flip the control — swallow the next click so a
-  // reposition never doubles as an activation.
-  function suppressNextClick() {
-    if (typeof window === 'undefined') return;
-    const swallow = (ev: MouseEvent) => {
-      ev.stopPropagation();
-      ev.preventDefault();
-      window.removeEventListener('click', swallow, true);
-    };
-    window.addEventListener('click', swallow, true);
-    setTimeout(() => window.removeEventListener('click', swallow, true), 350);
-  }
-
-  // ── touch / context-menu pin path (HTML5 drag doesn't work on touch) ──
+  // ── touch / context-menu pin path ──
+  // Pinning is menu-only: right-click (mouse/pen) or long-press (touch) opens a
+  // one-item menu that pins into My Controls. Drag-to-pin was removed along with
+  // the multiple pin destinations it existed to choose between — there is nowhere
+  // else to drop a control, and the hold gesture it needed fought the knob's own
+  // value-adjust drag.
   let pinMenuOpen = $state(false);
   let pinMenuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
   let pinMenuCtl = $state<Ctl | null>(null);
@@ -1334,7 +1117,7 @@
   const pinMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
     if (!pinMenuOpen || !workbench || !pinMenuCtl) return [];
     const c = pinMenuCtl;
-    return buildAxisPinMenuItems(workbench.controller.document, (target) => void pinControlToWorkbench(c, target));
+    return buildAxisPinMenuItems(workbench.controller.document, () => void pinControlToWorkbench(c));
   });
 
   function openPinMenuAt(c: Ctl, pos: WorkbenchMenuPosition) {
@@ -1375,16 +1158,12 @@
     if (!workbenchCanPin || !workbench) return;
     const paramIds = pagePinIds();
     if (!paramIds.length) return;
-    const block = editor.selected?.display ?? 'Block';
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
       source: 'host',
-      args: {
-        paramIds,
-        title: `${block} Controls`
-      }
+      args: { paramIds }
     });
-    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, '#35c9d6');
+    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls to ${AXIS_MY_CONTROLS_TITLE}`, '#35c9d6');
   }
 
   // dropdown popover geometry — measured from the actual trigger element (not grid math: the
@@ -1486,7 +1265,6 @@
           role="group"
           aria-label={c.label}
           oncontextmenu={(e) => onPinContextMenu(e, c)}
-          onpointerdowncapture={(e) => onPinArm(e, c)}
           onwheel={(e) => onControlWheel(e, c)}
           use:longPress={{ onLongPress: (d) => onPinLongPress(c, d) }}
         >
@@ -1611,7 +1389,6 @@
               style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
               oncontextmenu={(e) => { if (!editMode && c.kind !== 'meterH') onPinContextMenu(e, c); }}
-              onpointerdowncapture={(e) => { if (c.kind !== 'meterH') onPinArm(e, c); }}
               onwheel={(e) => onControlWheel(e, c)}
               use:longPress={{ onLongPress: (d) => { if (!editMode && c.kind !== 'meterH') onPinLongPress(c, d); } }}
               onpointerdown={(e) => onWidgetDown(e, w.id, c.kind, c.id, c.key)}
@@ -1800,7 +1577,7 @@
                   <button class="qbadge" class:on={editor.isSwipeControl(c.id)} onpointerdown={(e) => e.stopPropagation()} onclick={() => sp && editor.toggleSwipeControl(sp)} title="Map to grid swipe control (adjust from the Signal Grid tile)">⚡</button>
                 {/if}
                 {#if workbenchCanPin && pinnable(c)}
-                  <button class="pinbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => pinControlToWorkbench(c)} title="Pin to a Workbench custom panel">⌖</button>
+                  <button class="pinbadge" onpointerdown={(e) => e.stopPropagation()} onclick={() => pinControlToWorkbench(c)} title="Pin to My Controls">⌖</button>
                 {/if}
                 <button class="rsz" onpointerdown={(e) => onResizeDown(e, w.id)} aria-label="Resize">
                   <svg width="13" height="13" viewBox="0 0 13 13"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke={accent} stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -1929,36 +1706,6 @@
 <!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to the hold-drag -->
 {#if workbenchCanPin}
   <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
-{/if}
-
-<!-- hold-to-drag pin overlay: a chip following the pointer + a highlight over the
-     drop target. Inert (pointer-events:none) so elementFromPoint reaches the real
-     drop zones underneath; px divided by the self-calibrated zoom (UI-scale). -->
-{#if pinDrag}
-  <div class="pindrag-layer" bind:this={pinLayerEl}>
-    {#if pinDrag.target}
-      <div
-        class="pindrag-hi"
-        style:left="{pinDrag.target.rect.left / pinZoom}px"
-        style:top="{pinDrag.target.rect.top / pinZoom}px"
-        style:width="{pinDrag.target.rect.width / pinZoom}px"
-        style:height="{pinDrag.target.rect.height / pinZoom}px"
-      ></div>
-    {/if}
-    <div
-      class="pindrag-chip"
-      class:reject={!pinDrag.target}
-      style:transform="translate({(pinDrag.x + 12) / pinZoom}px, {(pinDrag.y + 12) / pinZoom}px)"
-    >
-      <span class="pindrag-glyph">{@html paramChipGlyph(pinDrag.c.kind, accent)}</span>
-      <span class="pindrag-name">{pinDrag.c.label}</span>
-      {#if pinDrag.target}
-        <span class="pindrag-target">{pinDrag.target.label}</span>
-      {:else}
-        <span class="pindrag-target reject">⊘ hold &amp; drag to a panel</span>
-      {/if}
-    </div>
-  </div>
 {/if}
 
 <style>
@@ -3224,60 +2971,4 @@
     padding: 6px;
   }
 
-  /* ── hold-to-drag pin overlay ── */
-  .pindrag-layer {
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    pointer-events: none; /* elementFromPoint must reach the real drop zones */
-  }
-  .pindrag-hi {
-    position: absolute;
-    box-sizing: border-box;
-    border: 2px dashed var(--accent);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-  }
-  .pindrag-chip {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    height: 32px;
-    max-width: 240px;
-    padding: 0 12px;
-    box-sizing: border-box;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    color: var(--text);
-    opacity: 0.92;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-    font: 800 11px/1 var(--font-ui, system-ui, sans-serif);
-    white-space: nowrap;
-  }
-  .pindrag-chip.reject {
-    border-color: var(--textmuted);
-  }
-  .pindrag-glyph {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-  }
-  .pindrag-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .pindrag-target {
-    color: var(--accent);
-    font: 700 10px/1 var(--font-mono);
-    text-transform: uppercase;
-  }
-  .pindrag-target.reject {
-    color: var(--textmuted);
-    text-transform: none;
-  }
 </style>
