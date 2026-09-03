@@ -927,7 +927,7 @@
     </div>
     <div class="spacer"></div>
     {#if editor.isMobile}
-      <button class="ghost ic-btn" onclick={() => (sideOpen = true)} title="Library, folders & saved filters"><Icon name="list" size={14} /> Filters</button>
+      <button class="ghost ic-btn" onclick={() => (sideOpen = true)} title="Library, folders & saved searches"><Icon name="list" size={14} /> Filters</button>
     {/if}
     <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title={editor.scanNamesOnly ? 'Scan the stored-preset locations (names) into the local library' : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}>
       {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
@@ -973,7 +973,7 @@
         <div class="ac-foot"><span>↑↓ move</span><span>↵ insert</span><span>esc close</span></div>
       </div>
     {/if}
-    <button class="save" onclick={() => (saving = true)} title="Save current filter">☆ Save filter</button>
+    <button class="save" onclick={() => (saving = true)} title="Save current search">☆ Save search</button>
   </div>
 
   <!-- BUILDER CHIPS (also a drop target for params/blocks dragged from the detail panel) -->
@@ -1039,9 +1039,9 @@
         </div>
         <div class="div"></div>
       {/if}
-      <div class="side-h"><span class="lbl">SAVED FILTERS</span><span class="ct">{saved.length}</span></div>
+      <div class="side-h"><span class="lbl">SAVED SEARCHES</span><span class="ct">{saved.length}</span></div>
       {#if saving}
-        <div class="save-in"><input bind:value={saveName} onkeydown={(e) => { if (e.key === 'Enter') commitSave(); else if (e.key === 'Escape') saving = false; }} onblur={() => setTimeout(() => (saving = false), 120)} placeholder="Name this filter…" />
+        <div class="save-in"><input bind:value={saveName} onkeydown={(e) => { if (e.key === 'Enter') commitSave(); else if (e.key === 'Escape') saving = false; }} onblur={() => setTimeout(() => (saving = false), 120)} placeholder="Name this search…" />
         </div>
       {/if}
       <div class="saved-list">
@@ -1054,7 +1054,7 @@
             <button class="sv-x" onclick={() => delSaved(f.id)} title="Delete">×</button>
           </div>
         {/each}
-        {#if !saved.length}<div class="empty-s">No saved filters yet. Build a query and hit Save filter.</div>{/if}
+        {#if !saved.length}<div class="empty-s">No saved searches yet. Build a query and hit Save search.</div>{/if}
       </div>
       {#if library.allTags.length}
         <div class="div"></div>

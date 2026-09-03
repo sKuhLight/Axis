@@ -779,10 +779,10 @@
     {/each}
   </div>
 
-  <!-- §3.3 SAVED FILTERS: name + query subtitle + active highlight (parsed-query equality) + delete ×.
+  <!-- §3.3 SAVED SEARCHES: name + query subtitle + active highlight (parsed-query equality) + delete ×.
        Applying one loads its query via applyQueryText. Persisted to the shared axs.pb.saved store. -->
   <header class="section-head saved-head">
-    <span>Saved filters</span>
+    <span>Saved searches</span>
     <em>{savedFilters.length}</em>
   </header>
   {#if snapshot.saving}
@@ -790,7 +790,7 @@
       <input
         type="text"
         bind:value={saveName}
-        placeholder="Name this filter…"
+        placeholder="Name this search…"
         spellcheck="false"
         onkeydown={(e) => {
           if (e.key === 'Enter') commitSaveFilter();
@@ -810,11 +810,11 @@
             <small>{filter.query || '(empty)'}</small>
           </span>
         </button>
-        <button type="button" class="sv-x" title="Delete filter" onclick={() => deleteSavedFilter(filter.id)}>×</button>
+        <button type="button" class="sv-x" title="Delete search" onclick={() => deleteSavedFilter(filter.id)}>×</button>
       </div>
     {/each}
     {#if !savedFilters.length}
-      <div class="empty-s">No saved filters yet. Build a query and hit Save filter.</div>
+      <div class="empty-s">No saved searches yet. Build a query and hit Save search.</div>
     {/if}
   </div>
 
@@ -892,15 +892,15 @@
     </div>
     <div class="query-tools">
       <button type="button" class="add-filter" onclick={onAddFilter}><span class="plus">+</span> Add filter</button>
-      <!-- §2.2/§3.3 Save filter → opens the inline name input in the sources sidebar. -->
+      <!-- §2.2/§3.3 Save search → opens the inline name input in the sources sidebar. -->
       <button
         type="button"
         class="save-filter"
         class:on={snapshot.saving}
-        title="Save the current query as a filter"
+        title="Save the current query as a search"
         onclick={() => axisPresetBrowserWorkbenchController.setSaving(!snapshot.saving)}
       >
-        ☆ Save filter
+        ☆ Save search
       </button>
       <span class="tools-sp"></span>
       {#if library.scanning}
