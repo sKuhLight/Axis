@@ -966,8 +966,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
   }
   .axis-widget.scenes {
     flex: 1 1 0;
@@ -980,8 +980,8 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     color: var(--text2);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     background: none;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -1011,14 +1011,14 @@
     border: 1px solid var(--accent);
     border-radius: 6px;
     padding: 3px 6px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     outline: none;
   }
   /* must follow the .axis-widget rules above — equal specificity, later wins */
   [data-size='compact'] .scene-name,
   [data-size='compact'] .scene-name-in {
-    font-size: 11.5px;
+    font-size: 13px;
     padding: 2px 5px;
   }
   .mono {
