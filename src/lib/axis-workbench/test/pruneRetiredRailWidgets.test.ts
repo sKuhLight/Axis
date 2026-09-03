@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAxisWorkbenchDefaultDocument, pruneAxisRetiredRailWidgets } from '../axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from '../axisWorkbenchDefaults';
 import { selectActiveLayout } from '../../workbench';
 
 describe('V13c rail cleanup — default document', () => {
@@ -54,5 +54,24 @@ describe('pruneAxisRetiredRailWidgets — persisted-doc migration', () => {
   it('is idempotent and never crashes on a clean document', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     expect(() => pruneAxisRetiredRailWidgets(pruneAxisRetiredRailWidgets(doc))).not.toThrow();
+  });
+});
+
+describe('pruneAxisTopBarSearchWidgets — persisted-doc migration', () => {
+  it('removes preset search from the top bar but preserves other placements', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const layout = selectActiveLayout(doc)!;
+    layout.widgets['axis.widget.search.top'] = { id: 'axis.widget.search.top', type: 'axis.search', zone: 'top.left', order: 2, size: 'default' };
+    layout.widgets['axis.widget.search.bottom'] = { id: 'axis.widget.search.bottom', type: 'axis.search', zone: 'bottom', order: 2, size: 'default' };
+
+    pruneAxisTopBarSearchWidgets(doc);
+
+    expect(layout.widgets['axis.widget.search.top']).toBeUndefined();
+    expect(layout.widgets['axis.widget.search.bottom']).toMatchObject({ zone: 'bottom' });
+  });
+
+  it('is idempotent', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    expect(() => pruneAxisTopBarSearchWidgets(pruneAxisTopBarSearchWidgets(doc))).not.toThrow();
   });
 });

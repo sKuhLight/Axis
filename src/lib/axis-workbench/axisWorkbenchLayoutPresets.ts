@@ -178,8 +178,7 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
     rightW: 400,
     widgets: {
       preset: W('tl', 0),
-      search: W('tl', 1),
-      scenes: W('tl', 2),
+      scenes: W('tl', 1),
       cpu: W('tr', 2),
       save: W('tr', 3),
       gridmode: W('gridbar', 0),

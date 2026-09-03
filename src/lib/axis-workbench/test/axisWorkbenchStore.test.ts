@@ -23,6 +23,16 @@ describe('Axis Workbench persistence helpers', () => {
     expect(normalized.profiles['axis.profile.desktop']).toBeDefined();
   });
 
+  it('removes preset search from persisted top bars', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const layout = doc.layouts[doc.profiles[doc.activeProfileId].layoutId];
+    layout.widgets['axis.widget.search'] = { id: 'axis.widget.search', type: 'axis.search', zone: 'top.left', order: 2, size: 'default' };
+
+    const normalized = normalizeAxisWorkbenchDocument(doc);
+
+    expect(normalized.layouts[normalized.profiles[normalized.activeProfileId].layoutId].widgets['axis.widget.search']).toBeUndefined();
+  });
+
   it('applies remote documents to the singleton controller without dispatching commands', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     doc.metadata = { ...doc.metadata, marker: 'remote' };

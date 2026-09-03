@@ -264,6 +264,20 @@ export function pruneAxisRetiredRailWidgets(doc: WorkbenchDocument): WorkbenchDo
 }
 
 /**
+ * Remove the preset search widget from persisted top bars. It remains available
+ * outside the top bar for custom layouts that still use it there. Idempotent.
+ */
+export function pruneAxisTopBarSearchWidgets(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
+    for (const [id, instance] of Object.entries(layout.widgets)) {
+      if (instance?.type === 'axis.search' && instance.zone.startsWith('top.')) delete layout.widgets[id];
+    }
+  }
+  return doc;
+}
+
+/**
  * Drop every instance of a retired widget TYPE from a (possibly persisted) document.
  * These widgets were removed from the shell but persisted docs minted earlier still
  * carry their instances in a top/bottom zone, where the retired-rail prune (above)

@@ -142,6 +142,11 @@ describe('Axis layout presets', () => {
     expect(right?.kind).toBe('tabs');
     expect(right && right.kind === 'tabs' ? right.panelIds : []).toContain('axis.blockEditor');
   });
+
+  it('keeps preset search out of the studio top bar', () => {
+    const layout = createAxisLayoutPreset('studio', { layoutId: 'axis.layout.studio' });
+    expect(layout.widgets['axis.widget.search']).toBeUndefined();
+  });
 });
 
 describe('applyAxisLayoutPreset', () => {
