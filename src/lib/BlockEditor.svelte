@@ -378,26 +378,27 @@
     text-transform: uppercase;
     color: var(--text-mut);
   }
-  /* The block name is the loudest thing in the header. Long device names step DOWN through two buckets
-     rather than being measured and fitted: the width is fixed, so a bucket cannot start a size→width→size
-     loop, and a deterministic rule needs no measurement pass. Even the smallest bucket (16px) is larger
-     than the 14px this used to render at, so a long name is never worse than before. */
+  /* Sized below the TopBar preset name (17px) so the block type reads as context, not the
+     headline — this button changes type, it doesn't name what you're editing. Long device
+     names still step DOWN through two buckets rather than being measured and fitted: the
+     width is fixed, so a bucket cannot start a size→width→size loop, and a deterministic
+     rule needs no measurement pass. */
   .t-type {
     font-weight: 700;
-    font-size: calc(var(--d-font-lg) * 1.4);
-    letter-spacing: -0.015em;
+    font-size: var(--d-font-lg);
+    letter-spacing: -0.01em;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .t-type.long {
-    font-size: calc(var(--d-font-lg) * 1.2);
-    letter-spacing: -0.01em;
+    font-size: calc(var(--d-font-lg) * 0.93);
+    letter-spacing: -0.005em;
   }
   .t-type.xlong {
-    font-size: calc(var(--d-font-lg) * 1.07);
-    letter-spacing: -0.005em;
+    font-size: calc(var(--d-font-lg) * 0.87);
+    letter-spacing: 0;
   }
   .t-go {
     flex: none;
