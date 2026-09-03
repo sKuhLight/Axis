@@ -25,10 +25,19 @@ export function deriveCabAlignmentGraphs(input: {
     const controls = (layoutPage.rows ?? []).flatMap((row) => row.controls ?? []);
     const ids = new Map(controls.filter((control) => control.paramName && control.paramId != null).map((control) => [control.paramName!, control.paramId!]));
     let slot = 0;
+    // The device authors up to FOUR of these on one page — `graph_cab`/`graph_cabZoom` (and their `_mm`
+    // successors) all sit at the same `positionExact`, one firmware-gated pair standing in for the other
+    // as the unit/zoom state changes. They are alternate renderings of ONE graph, not separate graphs —
+    // `CabAlignmentGraph.svelte` already draws the zoomed span itself from the live `CABINET_ZOOM` value.
+    // Binding every match produced a second, fully-duplicate "Cab Alignment" card. Bind only the page's
+    // first match; a later match's slot is left unmapped, so `deviceLayoutBoard` resolves it to a gap
+    // instead of a second widget.
+    let pageBound = false;
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
       const graphSlot = slot++;
-      if (!CAB_GRAPHS.has(control.rawWidget ?? '')) continue;
+      if (!CAB_GRAPHS.has(control.rawWidget ?? '') || pageBound) continue;
+      pageBound = true;
       out.push({
         key: `cab-align${out.length + 1}`,
         page,
