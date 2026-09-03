@@ -122,20 +122,12 @@
         else if (editor.editorOpen) editor.closeEditor();
       }
     };
-    // Unsaved-changes guard, web mode only — in the desktop build the Electron main process owns the
-    // close dialog (fed by the setDirty $effect below); double-blocking here would fight it.
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if ((window as unknown as { axisDesktop?: { isDesktop?: boolean } }).axisDesktop?.isDesktop) return;
-      if (!editor.layout.crcValid) { e.preventDefault(); e.returnValue = ''; }
-    };
     window.addEventListener('resize', onResize);
     window.addEventListener('keydown', onKey);
-    window.addEventListener('beforeunload', onBeforeUnload);
     return () => {
       // The poll/watch intervals are owned by the $effect above (it clears them on teardown).
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('beforeunload', onBeforeUnload);
     };
   });
 

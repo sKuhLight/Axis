@@ -473,6 +473,28 @@
   const viewWidgets = $derived(repack ? repackWidgets(boardWidgets, displayCols) : boardWidgets);
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
+  // A row holding ONLY section-heading text (a device sectionLabel like "TONESTACK" — see
+  // deviceLayoutBoard.ts's `groupSectionLabels`) needs far less height than a knob-card row; giving it
+  // the uniform `rowCell` leaves a tall dead gap between the heading and its controls below. Shrink those
+  // rows to `LABEL_ROW_PX`, keyed off the CURRENT `viewWidgets` (not authoring-time assumptions) so a row
+  // that ever ends up mixed (a real control sharing the heading's grid line) safely falls back to full
+  // height. Arrange mode is exempt: its drag/resize math (onWidgetDown/onBoardDown) divides pixel deltas
+  // by `rowCell + GAP` and assumes every row is that height.
+  const LABEL_ROW_PX = 28;
+  const rowPx = $derived.by<number[]>(() => {
+    if (editMode) return Array(viewRows).fill(rowCell);
+    const hasWidget = Array<boolean>(viewRows).fill(false);
+    const labelOnly = Array<boolean>(viewRows).fill(true);
+    for (const w of viewWidgets) {
+      for (let r = w.y; r < w.y + w.h && r < viewRows; r++) {
+        hasWidget[r] = true;
+        if (w.view !== 'label') labelOnly[r] = false;
+      }
+    }
+    return Array.from({ length: viewRows }, (_, i) => (hasWidget[i] && labelOnly[i] ? LABEL_ROW_PX : rowCell));
+  });
+  const gridRowsTemplate = $derived(rowPx.map((h) => `${h}px`).join(' '));
+  const boardHeightPx = $derived(rowPx.reduce((a, b) => a + b, 0) + (rowPx.length - 1) * GAP);
   // Board WIDTH = content extent too, for device-authentic boards. `displayCols` is derived from the pane
   // (width ÷ the density's tileMax), which has nothing to do with how wide the device's rows actually are:
   // a 2-control row on a 16-column board left 14 columns of dead air, and every page read as "shoved to
@@ -656,7 +678,12 @@
     const valid = new Set(catalog.map((c) => c.key));
     const boards: Record<string, Widget[]> = {};
     for (const pg of b.pageOrder) {
-      let ws = (b.boards[pg] ?? []).filter((w) => valid.has(w.key)).map((w) => ({ ...w, w: clamp(w.w, 1, cols), h: clamp(w.h, 1, rows) }));
+      // A section heading (`view: 'label'`) has no catalog entry by design — no live param backs a static
+      // heading, so its key never matches `valid`. Without this exemption, EVERY reconcile (which runs
+      // right after the builder creates a fresh board, and on every subsequent load) silently deletes every
+      // heading — the reason INPUT BOOST/SATURATION never render even though `buildDeviceLayoutBoard`
+      // places them correctly.
+      let ws = (b.boards[pg] ?? []).filter((w) => w.view === 'label' || valid.has(w.key)).map((w) => ({ ...w, w: clamp(w.w, 1, cols), h: clamp(w.h, 1, rows) }));
       // a board saved at a wider column count would put widgets at x beyond the current `cols`, which
       // overflows/clips on the right. If anything sticks out, re-pack the page so it wraps onto new
       // rows instead (never clip right) — keeps positions otherwise untouched.
@@ -1397,6 +1424,7 @@
               class:editing={editMode}
               class:nobg={w.view === 'action' || w.view === 'eq' || w.view === 'mod' || w.view === 'comp' || w.view === 'cab' || w.view === 'dynacab' || w.view === 'adsr' || w.view === 'taps'}
               class:geqcard={c.kind === 'geq'}
+              class:meterh={c.kind === 'meterH'}
               style:width={c.kind === 'geq' ? `min(${18 + geqBands.length * 56 + Math.max(0, geqBands.length - 1) * 6}px, 100%)` : undefined}
               class:dragging={drag?.id === w.id}
               oncontextmenu={(e) => { if (!editMode && c.kind !== 'meterH') onPinContextMenu(e, c); }}
@@ -1604,21 +1632,24 @@
        time a narrower page came up — the same flicker, on the other axis. -->
   <div class="boardcol">
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{viewRows * rowCell + (viewRows - 1) * GAP}px">
+  <div class="boardwrap" bind:this={boardEl} onpointerdown={onBoardDown} style:width="{gridCols * cell + (gridCols - 1) * GAP}px" style:height="{boardHeightPx}px">
     {#if editMode}
       <div class="gridlayer" style:grid-template-columns="repeat({cols}, {cell}px)" style:grid-template-rows="repeat({rows}, {rowCell}px)" style:gap="{GAP}px">
         {#each Array(cols * rows) as _, i (i)}<div class="gcell"></div>{/each}
       </div>
     {/if}
 
-    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows="repeat({viewRows}, {rowCell}px)" style:gap="{GAP}px">
+    <div class="gridlayer" style:grid-template-columns="repeat({gridCols}, {cell}px)" style:grid-template-rows={gridRowsTemplate} style:gap="{GAP}px">
       {#if drag}
         <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
       {/if}
 
       {#each viewWidgets as w (w.id)}
         {@const c = catByKey.get(w.key)}
-        {#if c}
+        {#if w.view === 'label'}
+          <!-- sectionLabel heading — no catalog entry (no live param backs a heading text) -->
+          <div class="sectionhead" style:grid-column="{w.x + 1} / span {w.w}" style:grid-row="{w.y + 1} / span {w.h}"><span>{w.text}</span></div>
+        {:else if c}
           <div style:grid-column="{w.x + 1} / span {w.w}" style:grid-row="{w.y + 1} / span {w.h}" style:min-width="0" style:min-height="0" style:position="relative">
             {@render widgetCard(w, c)}
           </div>
@@ -2066,6 +2097,29 @@
     border: 1px dashed var(--surface2);
     background: rgba(255, 255, 255, 0.012);
   }
+  /* sectionLabel heading (e.g. "SATURATION") — the device's own section divider: text + a rule filling
+     the rest of its span. No catalog entry backs it (no live param), so it never becomes a `.card`. */
+  .sectionhead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--text);
+    opacity: 0.62;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 2px 4px;
+    white-space: nowrap;
+  }
+  .sectionhead::after {
+    content: '';
+    flex: 1;
+    min-width: 8px;
+    height: 1px;
+    background: var(--border2);
+  }
   .ghost {
     border-radius: 11px;
     z-index: 5;
@@ -2096,6 +2150,15 @@
   }
   .card.geqcard {
     margin: 0 auto;
+  }
+  /* meterH (HEADROOM/B+/Gain strips): the device's own editor draws these as a thin one-line strip —
+     label, bar, dB value — not a knob-height card. `.card`'s default `height:100%` fills the grid row
+     (sized for knobs via `rowCell`), so without this a meterH's one thin content line gets centered
+     inside a box padded out to knob height, reading as fat rather than slim. `height:auto` hugs the
+     content instead; the `.mhrow` internal layout (label/track/value) is unchanged. */
+  .card.meterh {
+    height: auto;
+    padding: 10px 14px;
   }
   .card.nobg {
     background: transparent;

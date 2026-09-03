@@ -71,6 +71,15 @@ export interface SurfaceWidget {
    *  page parameter. ControlSurface renders these as a fixed right-hand rail outside the page area, so
    *  they do not move when the page tab changes. See `railControls`. */
   rail?: boolean;
+  /** Heading text for a `view:'label'` widget (an unbound `sectionLabel`, e.g. "SATURATION"). Only set on
+   *  label widgets, which have no catalog entry — no live param backs a section heading. */
+  text?: string;
+  /** The `key`s of the widgets THIS heading actually spans (only set on `view:'label'` widgets). Computed
+   *  once at build time from `groupSectionLabels` + the row's real placement — carrying it forward lets
+   *  `packRows` resize a heading correctly on reflow without re-deriving membership from a flattened
+   *  widget list that no longer has the source row's `LayoutControl` array (and therefore no spacer/
+   *  column-gap boundaries) to work from. Absent on a board built before this field existed. */
+  members?: string[];
 }
 export interface SurfaceBoard {
   pageOrder: string[];
@@ -172,10 +181,93 @@ function coalesceRows(rows: readonly LayoutRow[] | undefined): EffRow[] {
   return out;
 }
 
-type Resolved = { key: string; view: string } | 'gap';
+/** Parse a device `positionExact` string (`"465,370"`) into pixel coordinates, or `null` if absent/
+ *  malformed. The device's own editor treats this as an absolute-pixel override of the column grid
+ *  (documented on the upstream `forgefx-midi` type); Axis carried the field without ever reading it. */
+export function parsePositionExact(s: string | null | undefined): { x: number; y: number } | null {
+  if (!s) return null;
+  const m = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(s.trim());
+  if (!m) return null;
+  return { x: Number(m[1]), y: Number(m[2]) };
+}
 
-/** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
- *  spacers, labels, and parameters the device did not surface as a knob/enum). */
+/** Gap (device px) above which two `positionExact` controls are treated as different visual rows rather
+ *  than neighbours on the same one. Tuned against real device data (`forgefx-midi/src/gen3/fm3/
+ *  layouts.generated.ts`), not guessed: same-row spread tops out around 7px (the cab Align page's
+ *  `Bank`/`Type`/`Zoom` row), while genuine row-to-row gaps start at 30px+ (Scene Levels' `Scene 1` →
+ *  `Scene 2` is 34px; the cab's Bank/Type row → its IR Length row below is 60px). 20px sits cleanly
+ *  between both with margin on either side. */
+const CANVAS_ROW_GAP_PX = 20;
+
+/** Group `positionExact`-only controls into synthetic visual rows, for controls the device placed on its
+ *  own absolute canvas instead of a column grid — a lone outlier mixed into an otherwise col-authored row
+ *  (the amp's HEADROOM), a dense per-slot cluster (the cab's Picker/Bank/Type/IR Length block), or an
+ *  entire canvas-authored page (Speaker/Align/Scene Levels, where EVERY control in the row is one of
+ *  these). Sorts by `(y, x)` — device reading order — then starts a new row whenever the gap to the
+ *  previous item's `y` exceeds `CANVAS_ROW_GAP_PX` (see its own doc comment for the real numbers this was
+ *  tuned against). Pure position math: no knowledge of grid columns or widget sizes, so the caller is free
+ *  to flow-pack each returned row however it needs to. */
+export function clusterByCanvasRow<T extends { xPx: number; yPx: number }>(items: readonly T[]): T[][] {
+  const sorted = items.slice().sort((a, b) => a.yPx - b.yPx || a.xPx - b.xPx);
+  const rows: T[][] = [];
+  let prevY: number | null = null;
+  for (const item of sorted) {
+    if (prevY == null || item.yPx - prevY > CANVAS_ROW_GAP_PX) rows.push([]);
+    rows[rows.length - 1]!.push(item);
+    prevY = item.yPx;
+  }
+  return rows;
+}
+
+/** For one row's controls (already stripped of overlay candidates — see `buildDeviceLayoutBoard`), find
+ *  each heading's member span: from right after the heading up to (but excluding) whichever comes first —
+ *  the next heading, a `spacer` control, or a genuine authored-column GAP (a column number no control on
+ *  the row claims, not even a spacer).
+ *
+ *  ONE rule regardless of how many headings share the row. An earlier version special-cased a row with
+ *  exactly one heading to extend through its own internal spacers to the row's end, on the theory that a
+ *  lone heading's spacers are just knob spacing rather than group boundaries. The real device disproves
+ *  that for `TRANSFORMER` (Power Amp) specifically: it's followed by `XFormer Drive`/`XFormer Matching`,
+ *  then a `spacer`, then `Speaker Impedance`/`PI Bias Excursion`/`Cathode Resistance`/`Cathode Time Const`
+ *  — four knobs with unrelated param names (no shared `XFormer` prefix) that the real editor draws with NO
+ *  heading over them, same as `SATURATION`'s spacer excluding the trailing Low Cut/High Cut knobs on its
+ *  own row. The stop-at-spacer rule was always right; the "unless it's the row's only heading" exception
+ *  was an unverified guess. `OUTPUT COMPRESSOR` (Dynamics) needs the column-gap check on top of that: its
+ *  row has no spacer at all, just `Master Bias Excursion` at col 5 with col 4 claimed by nothing (a
+ *  firmware-gated control added later) — the real editor draws it clear of the compressor group too.
+ *
+ *  Pure array-order arithmetic; no coordinate math needed to bound a label's span. */
+export function groupSectionLabels(
+  controls: readonly LayoutControl[],
+  isHeading: (ctl: LayoutControl) => boolean
+): { ctlIndex: number; start: number; end: number }[] {
+  const headingIdx: number[] = [];
+  for (let i = 0; i < controls.length; i++) if (isHeading(controls[i])) headingIdx.push(i);
+  return headingIdx.map((ctlIndex, k) => {
+    const limit = headingIdx[k + 1] ?? controls.length;
+    let end = limit;
+    let lastCol: number | null = null;
+    for (let i = ctlIndex + 1; i < limit; i++) {
+      if (controls[i].widget === 'spacer') {
+        end = i;
+        break;
+      }
+      const col = controls[i].placement?.col;
+      if (col == null) continue; // doesn't claim a column — doesn't affect contiguity either way
+      if (lastCol != null && col > lastCol + 1) {
+        end = i; // a column between them belongs to no control at all — a real break, stop here
+        break;
+      }
+      lastCol = col;
+    }
+    return { ctlIndex, start: ctlIndex + 1, end };
+  });
+}
+
+type Resolved = { key: string; view: string } | { label: string } | 'gap';
+
+/** Resolve one layout control to a catalog key + view, a section heading, or `'gap'` (advance the cursor,
+ *  draw nothing — spacers and parameters the device did not surface as a knob/enum). */
 function resolveControl(
   ctl: LayoutControl,
   byKey: Map<string, BoardCtl>,
@@ -214,8 +306,22 @@ function resolveControl(
   if ((ctl.widget === 'graph' || ctl.widget === 'label') && graphKey && byKey.has(graphKey)) {
     return { key: graphKey, view: 'eq' };
   }
-  // Labels, unresolved dropdowns, and anything else with no binding: leave a gap (matches the pre-v2
-  // behaviour of silently skipping unmapped controls, but keeps neighbours' horizontal alignment).
+  // A `sectionLabel`/`labelBold` with no graph to bind (INPUT BOOST/SATURATION/TONESTACK, the cab's
+  // "CAB 1"/"CAB 2") is a real section heading, not a dropped gap: render it as one (see
+  // `groupSectionLabels` for how its column span is computed at the call site, which needs row context
+  // this function doesn't have). Two `label`-widget shapes are NOT headings, though, and must keep the
+  // pre-existing "drop it" behaviour:
+  //  - bound to a live paramId (the cab's `labelCabName`, e.g. "Name") — a live DISPLAY FIELD, not
+  //    decorative text; showing its static control-label ("Name") in place of the actual cabinet name
+  //    would be actively misleading, and no live-value render path exists yet.
+  //  - `labelSeperator` — a purely decorative divider between two columns whose own `label` text
+  //    ("Seperator") the device never intended as user-visible.
+  if (ctl.widget === 'label') {
+    if (ctl.paramId != null || ctl.rawWidget === 'labelSeperator') return 'gap';
+    return { label: ctl.label ?? '' };
+  }
+  // Unresolved dropdowns and anything else with no binding: leave a gap (matches the pre-v2 behaviour of
+  // silently skipping unmapped controls, but keeps neighbours' horizontal alignment).
   return 'gap';
 }
 
@@ -277,10 +383,33 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
   return acc;
 }
 
-/** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout). It rides in the
- *  variant fingerprint, so every stored Default board re-seeds once and picks up the new tagging —
- *  without it a board saved before band-grouping keeps its untagged widgets and splits bands forever. */
-const BOARD_SCHEMA = 'b14';
+/** Bumped whenever the BUILDER's output shape changes (as opposed to the served layout), OR whenever a
+ *  bug elsewhere permanently corrupted what got saved. It rides in the variant fingerprint, so every
+ *  stored Default board re-seeds once and picks up the fix — without it a board saved before
+ *  band-grouping keeps its untagged widgets and splits bands forever. b16→b17: `ControlSurface`'s
+ *  `reconcile()` stripped every section-heading widget on every load (headings have no catalog entry, so
+ *  they never matched its `valid` key set) — fixed there, but a board already saved mid-bug had its
+ *  headings deleted and re-persisted without them, so the variantSig match alone would keep serving that
+ *  headingless board forever; only a schema bump forces the re-seed that picks the fix up. b17→b18: a row
+ *  containing a heading anywhere used to push EVERY control in that row down onto the heading's line —
+ *  including controls that come before the heading in array order and belong to no heading at all (the
+ *  amp's real Preamp row 2: Preamp Sag..Preamp Bias Excursion sit before TONESTACK, col 0–5, and were
+ *  wrongly dragged down with Tonestack Type/Freq/Location, col 6–8, which the heading actually spans).
+ *  Fixed to split the row at the heading; a board already saved with the old placement needs the bump to
+ *  re-seed instead of keeping the wrong y's forever. b18→b19: a row with only ONE heading used to extend
+ *  it across the row's ENTIRE remainder unconditionally, on the theory this was needed for `TRANSFORMER`
+ *  (assumed to use its internal spacers as pure knob spacing). Wrong for the amp's real OUTPUT COMPRESSOR
+ *  row, where `Master Bias Excursion` sits past a genuine authored-column gap (col 4 claimed by nothing,
+ *  not even a spacer) and the real editor draws it clear of the compressor's underline. Fixed to stop at
+ *  that gap, and each heading now carries its resolved `members` so the responsive re-pack (`packRows`)
+ *  can't re-expand it back over them on reflow either. b19→b20: the TRANSFORMER assumption itself was
+ *  also wrong — screenshot-confirmed the real editor stops its heading at the FIRST spacer (after
+ *  `XFormer Drive`/`XFormer Matching`), same as every multi-heading row; `Speaker Impedance`/`PI Bias
+ *  Excursion`/`Cathode Resistance`/`Cathode Time Const` (unrelated param names, no `XFormer` prefix) sit
+ *  past that spacer with no heading over them. `groupSectionLabels` no longer special-cases a row with
+ *  only one heading — every heading, on every row, stops at the first spacer/gap/next-heading. Boards
+ *  saved with the old wider TRANSFORMER-shaped heading need the re-seed. */
+const BOARD_SCHEMA = 'b20';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -370,12 +499,37 @@ export function buildDeviceLayoutBoard(
       if (ex > 0) gridRow += eh; // advance past the hero row(s) so the page's own rows start below them
     }
     coalesceRows(pg.rows).forEach((row, rowIndex) => {
-      // Resolve the whole row up front: placing a band set needs its TOTAL width before it can tell
-      // whether the set still fits the current line. A `key: null` slot is a gap (spacer, duplicate, or a
-      // control with no catalog entry) that only advances the cursor so neighbours don't shift left.
-      const slots: { key: string | null; view: string; w: number; h: number; group: number; col: number | null; rail: boolean }[] = [];
-      let prevBand: number | null = null;
+      // Split out `positionExact`-only controls that are NOT section headings (the amp's HEADROOM, the
+      // cab's per-slot identity cluster, or — when EVERY control in the row is one of these — a whole
+      // canvas-authored page like Speaker/Align) — they must not consume a column or perturb `authoredX`
+      // (their own `col` is null, so without this they'd inherit the row's last authored column and
+      // likely overflow the row width, kicking the WHOLE row — including its legitimate col-authored
+      // siblings — onto the flow fallback). They're placed as their own grid rows below instead (see
+      // `clusterByCanvasRow` below). A `mixer`/rail control is EXEMPT even if it happens to carry
+      // `positionExact` (the cab's `Balance` does) — it renders in the fixed sidebar via the ordinary rail
+      // path regardless of placement, and must never be pulled into this row-of-its-own machinery, which
+      // would strand it floating over the page content instead of in the rail.
+      const overlayCtls: LayoutControl[] = [];
+      const mainCtls: LayoutControl[] = [];
       for (const ctl of row.controls) {
+        const isRail = row.strip || (ctl.paramId != null && railIds.has(ctl.paramId));
+        if (!isRail && ctl.widget !== 'label' && ctl.widget !== 'spacer' && ctl.placement?.col == null && parsePositionExact(ctl.placement?.positionExact) != null) {
+          overlayCtls.push(ctl);
+        } else {
+          mainCtls.push(ctl);
+        }
+      }
+
+      // Resolve the row up front: placing a band set needs its TOTAL width before it can tell whether the
+      // set still fits the current line. A `key: null` slot is a gap (spacer, duplicate, or a control with
+      // no catalog entry) that only advances the cursor so neighbours don't shift left. Unbound section
+      // headings resolve to `{label}` here too (no column consumed — same as a gap) and are tracked
+      // separately in `headingCtls` so their member span can be computed once the row's real x's are known.
+      const slots: { key: string | null; view: string; w: number; h: number; group: number; col: number | null; rail: boolean; ctlIndex: number }[] = [];
+      const headingCtls: { ctlIndex: number; text: string }[] = [];
+      let prevBand: number | null = null;
+      for (let ci = 0; ci < mainCtls.length; ci++) {
+        const ctl = mainCtls[ci];
         const band = bandIndex(ctl);
         if (band == null || band !== prevBand) groupSeq++; // band change (or no band) opens a new set
         prevBand = band;
@@ -384,73 +538,168 @@ export function buildDeviceLayoutBoard(
         const rail = row.strip || (ctl.paramId != null && railIds.has(ctl.paramId));
         const graphKey = graphKeyForSlot(pageIndex, ctl.widget === 'graph' ? graphSlot++ : 0);
         const r = resolveControl(ctl, byKey, geqBandIds, graphKey);
+        if (r !== 'gap' && 'label' in r) {
+          headingCtls.push({ ctlIndex: ci, text: r.label });
+          slots.push({ key: null, view: '', w: 1, h: 1, group, col, rail, ctlIndex: ci });
+          continue;
+        }
         const base = r === 'gap' ? undefined : byKey.get(r.key);
         if (r === 'gap' || !base || seen.has(r.key)) {
-          slots.push({ key: null, view: '', w: 1, h: 1, group, col, rail });
+          slots.push({ key: null, view: '', w: 1, h: 1, group, col, rail, ctlIndex: ci });
           continue;
         }
         seen.add(r.key);
-        slots.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, group, col, rail });
+        slots.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, group, col, rail, ctlIndex: ci });
       }
+      // A row with a heading reserves one grid line for the heading text, ABOVE the controls it heads —
+      // but controls that precede the heading in array order (the amp's real Preamp row 2: Preamp
+      // Sag/Tube Hardness/Triode 1+2 Plate Freq/Preamp Bias/Preamp Bias Excursion all sit BEFORE
+      // TONESTACK, col-authored 0–5, with Tonestack Type/Freq/Location AFTER it at col 6–8) belong to NO
+      // heading and must stay on the row they were already on, not get dragged down onto the heading's
+      // line with the controls it actually labels. Split the row's slots at the FIRST heading's ctlIndex:
+      // the "before" slice places at the row's start line unchanged; the heading line is reserved only
+      // after that; the "after" slice (what the heading actually spans — see `groupSectionLabels`) places
+      // below it. A row with no heading, or one whose heading opens the row (TRANSFORMER/OUTPUT
+      // COMPRESSOR/INPUT BOOST — the entire row is what it heads), has an empty "before" slice and
+      // behaves exactly as it did when this was a single un-split placement pass.
+      const hasHeadingLine = headingCtls.length > 0;
+      const firstHeadingCtlIndex = hasHeadingLine ? Math.min(...headingCtls.map((h) => h.ctlIndex)) : Infinity;
+      const beforeSlots = slots.filter((s) => s.ctlIndex < firstHeadingCtlIndex);
+      const afterSlots = slots.filter((s) => s.ctlIndex >= firstHeadingCtlIndex);
+      const xByCtlIndex = new Map<number, { x: number; w: number; key: string }>();
 
-      // Device-authored columns (see `authoredX`). Gaps are dropped rather than allowed to consume a
-      // column: they draw nothing, and on this path the alignment is stated explicitly by `col`, so a
-      // decorative label sitting in the array ahead of `col: 0` must not shove the whole row right.
-      // An un-authored real control inherits the last authored column seen in array order (-1 before the
-      // first), which anchors it between its neighbours; the sweep's cursor then gives it the next free
-      // column. Rows the device authored no column for at all fall through to the flow path below.
-      let last = -1;
-      const anchored = slots
-        .map((s) => {
-          if (s.col != null) last = s.col;
-          return { slot: s, col: last, w: s.w };
-        })
-        .filter((a) => a.slot.key);
-      if (anchored.length && slots.some((s) => s.col != null)) {
-        const xs = authoredX(anchored, columns);
-        if (xs) {
-          let h = 1;
-          anchored.forEach((a, i) => {
-            const s = a.slot;
-            widgets.push({ id: 'w' + s.key, key: s.key!, x: xs[i], y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, col: xs[i], ...(s.rail ? { rail: true } : {}) });
-            h = Math.max(h, s.h);
-          });
-          gridRow += h;
-          return;
+      // Places one slice of this row's slots starting at grid line `startY`, via device-authored columns
+      // (see `authoredX`) when the device gave any of them a `col`, falling back to the left→right
+      // band-aware flow-wrap otherwise. Returns how many grid lines the slice consumed (0 if it placed
+      // nothing) so the caller can advance past it. `col` values are absolute — a split-off "after" slice
+      // still authors at its own cols (6–8, say), which is exactly the alignment the device intended.
+      const placeSlots = (slotSubset: typeof slots, startY: number): number => {
+        let last = -1;
+        const anchored = slotSubset
+          .map((s) => {
+            if (s.col != null) last = s.col;
+            return { slot: s, col: last, w: s.w };
+          })
+          .filter((a) => a.slot.key);
+        if (anchored.length && slotSubset.some((s) => s.col != null)) {
+          const xs = authoredX(anchored, columns);
+          if (xs) {
+            let h = 1;
+            anchored.forEach((a, i) => {
+              const s = a.slot;
+              widgets.push({ id: 'w' + s.key, key: s.key!, x: xs[i], y: startY, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, col: xs[i], ...(s.rail ? { rail: true } : {}) });
+              xByCtlIndex.set(s.ctlIndex, { x: xs[i], w: s.w, key: s.key! });
+              h = Math.max(h, s.h);
+            });
+            return h;
+          }
         }
-      }
-
-      let x = 0;
-      let rowH = 1;
-      let placed = false;
-      for (let i = 0; i < slots.length; ) {
-        let end = i + 1;
-        while (end < slots.length && slots[end].group === slots[i].group) end++;
-        const groupW = slots.slice(i, end).reduce((n, s) => n + s.w, 0);
-        // Keep one band's controls on ONE line: wrap the whole set rather than leaving half of it behind
-        // (a set too wide for the grid can't be kept whole — it falls through to per-control wrapping).
-        if (x > 0 && groupW <= columns && x + groupW > columns) {
-          gridRow += rowH;
-          x = 0;
-          rowH = 1;
-        }
-        for (; i < end; i++) {
-          const s = slots[i];
-          if (s.key && x > 0 && x + s.w > columns) {
-            // control doesn't fit the rest of this line — wrap onto a new grid line (still this row)
-            gridRow += rowH;
+        let x = 0;
+        let y = startY;
+        let rowH = 1;
+        let placed = false;
+        for (let i = 0; i < slotSubset.length; ) {
+          let end = i + 1;
+          while (end < slotSubset.length && slotSubset[end].group === slotSubset[i].group) end++;
+          const groupW = slotSubset.slice(i, end).reduce((n, s) => n + s.w, 0);
+          // Keep one band's controls on ONE line: wrap the whole set rather than leaving half of it behind
+          // (a set too wide for the grid can't be kept whole — it falls through to per-control wrapping).
+          if (x > 0 && groupW <= columns && x + groupW > columns) {
+            y += rowH;
             x = 0;
             rowH = 1;
           }
-          if (s.key) {
-            widgets.push({ id: 'w' + s.key, key: s.key, x, y: gridRow, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, ...(s.rail ? { rail: true } : {}) });
-            rowH = Math.max(rowH, s.h);
-            placed = true;
+          for (; i < end; i++) {
+            const s = slotSubset[i];
+            if (s.key && x > 0 && x + s.w > columns) {
+              // control doesn't fit the rest of this line — wrap onto a new grid line (still this slice)
+              y += rowH;
+              x = 0;
+              rowH = 1;
+            }
+            if (s.key) {
+              widgets.push({ id: 'w' + s.key, key: s.key, x, y, w: s.w, h: s.h, view: s.view, row: rowIndex, group: s.group, ...(s.rail ? { rail: true } : {}) });
+              xByCtlIndex.set(s.ctlIndex, { x, w: s.w, key: s.key });
+              rowH = Math.max(rowH, s.h);
+              placed = true;
+            }
+            x += s.w;
           }
-          x += s.w;
+        }
+        return placed ? y - startY + rowH : 0;
+      };
+
+      gridRow += placeSlots(beforeSlots, gridRow);
+      const headingY = gridRow;
+      if (hasHeadingLine) gridRow += 1;
+      gridRow += placeSlots(afterSlots, gridRow);
+
+      if (hasHeadingLine) {
+        const spans = groupSectionLabels(mainCtls, (ctl) => ctl.widget === 'label');
+        for (const h of headingCtls) {
+          const span = spans.find((s) => s.ctlIndex === h.ctlIndex);
+          const memberXs: { x: number; w: number; key: string }[] = [];
+          if (span) for (let i = span.start; i < span.end; i++) { const xw = xByCtlIndex.get(i); if (xw) memberXs.push(xw); }
+          const minX = memberXs.length ? Math.min(...memberXs.map((m) => m.x)) : 0;
+          const maxEnd = memberXs.length ? Math.max(...memberXs.map((m) => m.x + m.w)) : columns;
+          widgets.push({
+            id: `lbl${pageIndex}_${rowIndex}_${h.ctlIndex}`,
+            key: `label:${pageIndex}:${rowIndex}:${h.ctlIndex}`,
+            x: minX,
+            y: headingY,
+            w: Math.max(1, maxEnd - minX),
+            h: 1,
+            view: 'label',
+            text: h.text,
+            row: rowIndex,
+            ...(memberXs.length ? { members: memberXs.map((m) => m.key) } : {})
+          });
         }
       }
-      if (placed) gridRow += rowH; // next layout row starts below the tallest widget of this one
+
+      // Resolve every outlier candidate exactly like a `mainCtls` control — including graph-slot ordinals
+      // via the same page-wide `graphSlot` counter used above, so a canvas-authored page's graph (Speaker/
+      // Align/Scene Levels always carry `positionExact`, so it lands here, not in `mainCtls`) resolves
+      // correctly instead of silently dropping. Never let one borrow a SHARED/global catalog key
+      // ('meter'/'bypass'/'geq'): those back a single block-wide widget, not this specific control, and
+      // mis-binding produces the wrong widget in the wrong place (seen with HEADROOM when its own `m<pid>`
+      // monitor entry isn't in the live catalog — better to drop it, matching the pre-existing "silently
+      // skipped" behaviour, than show the wrong thing at a misleading position).
+      const outliers: { key: string; view: string; w: number; h: number; xPx: number; yPx: number }[] = [];
+      for (const oc of overlayCtls) {
+        const graphKey = graphKeyForSlot(pageIndex, oc.widget === 'graph' ? graphSlot++ : 0);
+        const r = resolveControl(oc, byKey, geqBandIds, graphKey);
+        if (r === 'gap' || 'label' in r) continue;
+        if (r.key === 'meter' || r.key === 'bypass' || r.key === 'geq') continue;
+        const base = byKey.get(r.key);
+        if (!base || seen.has(r.key)) continue;
+        const p = parsePositionExact(oc.placement?.positionExact)!;
+        seen.add(r.key);
+        outliers.push({ key: r.key, view: r.view, w: Math.min(base.w, columns), h: base.h, xPx: p.x, yPx: p.y });
+      }
+      // Place them as ordinary grid rows below this row's own col/flow content — never overlapping it, and
+      // with no need to know which columns that content used. `clusterByCanvasRow` turns the raw pixel
+      // scatter back into visual rows (device reading order); each synthetic row then flow-packs left→right
+      // at the page's own column count, exactly like the page-level hero widgets above. This is the ONE
+      // placement path for every `positionExact`-only shape: a lone outlier (HEADROOM), a dense per-slot
+      // cluster (the cab's identity block), and a whole canvas-authored page (where `mainCtls` ends up
+      // empty and every control in the row lands here) all flow through it identically.
+      for (const cluster of clusterByCanvasRow(outliers)) {
+        let cx = 0;
+        let ch = 1;
+        for (const o of cluster) {
+          const w = Math.min(o.w, columns);
+          if (cx > 0 && cx + w > columns) {
+            gridRow += ch;
+            cx = 0;
+            ch = 1;
+          }
+          widgets.push({ id: 'w' + o.key, key: o.key, x: cx, y: gridRow, w, h: o.h, view: o.view, row: rowIndex });
+          cx += w;
+          ch = Math.max(ch, o.h);
+        }
+        gridRow += ch;
+      }
     });
     if (!widgets.length) return;
     const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
@@ -513,7 +762,19 @@ export function packInto(list: SurfaceWidget[], c: number, r: number): SurfaceWi
  *
  *  Order alone isn't enough — the wrap must also fall BETWEEN bands. Widgets sharing a `group` are one
  *  band's set and move to the next line together, so a narrow window pushes band 3 down whole instead of
- *  stranding `Frequency 3` at the end of one line and its type/gain/Q at the start of the next. */
+ *  stranding `Frequency 3` at the end of one line and its type/gain/Q at the start of the next.
+ *
+ *  A section heading (`view: 'label'`) is a HARD break, never a soft one: `buildDeviceLayoutBoard` never
+ *  merges controls it doesn't head back in with it, at any width. But a row never has more than ONE
+ *  reserved heading LINE no matter how many headings share it (INPUT BOOST + SATURATION sit side by side
+ *  on one line) — so a row-group splits into exactly three Y-bands relative to that single `headingY`:
+ *  controls before it (belong to no heading — the TONESTACK row's Preamp Sag..Preamp Bias Excursion),
+ *  the heading(s) themselves, and everything after (headed or not — SATURATION's row also trails unheaded
+ *  Low Cut/High Cut, and it all reflows as ONE shared segment, matching the single combined control-line
+ *  the device draws). A lone heading is re-sized from what its "after" band actually placed; multiple
+ *  headings sharing one line keep their build-time relative position/width (clamped to fit) instead —
+ *  which of the reflowed "after" widgets belongs to which heading is spacer-boundary information that
+ *  lives only in `buildDeviceLayoutBoard`'s original `LayoutControl` array, not in this flattened list. */
 export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
   const columns = Math.max(1, cols);
   const rows = new Map<number, SurfaceWidget[]>();
@@ -528,48 +789,99 @@ export function packRows(list: SurfaceWidget[], cols: number): SurfaceWidget[] {
   }
   const out: SurfaceWidget[] = [];
   let gy = 0;
-  for (const key of [...rows.keys()].sort((a, b) => a - b)) {
-    const rw = rows.get(key)!.slice().sort((a, b) => a.y - b.y || a.x - b.x);
-    // A row the device authored columns for is replayed at those columns, exactly as it was built — the
-    // authored placement IS the layout, so re-flowing it would undo the alignment at every resize/zoom.
-    // `authoredX` returns null when the row no longer fits (narrow pane), and the flow path below takes
-    // over, which is the same fallback the builder uses.
-    const axs = authoredX(rw, columns);
+
+  // Places one label-free segment starting at grid line `startY` — the row-wide authoredX-or-wrap logic
+  // this replaced, unchanged, just scoped to whichever segment a heading split off. Returns the number
+  // of grid lines it consumed (0 for an empty segment).
+  const placeSegment = (seg: SurfaceWidget[], startY: number): number => {
+    if (!seg.length) return 0;
+    // A segment the device authored columns for is replayed at those columns, exactly as it was built —
+    // the authored placement IS the layout, so re-flowing it would undo the alignment at every resize.
+    // `authoredX` returns null when the segment no longer fits (narrow pane), and the flow path below
+    // takes over, which is the same fallback the builder uses.
+    const axs = authoredX(seg, columns);
     if (axs) {
       let rh = 1;
-      rw.forEach((w, i) => {
-        out.push({ ...w, x: axs[i], y: gy, w: Math.min(w.w, columns) });
+      seg.forEach((w, i) => {
+        out.push({ ...w, x: axs[i], y: startY, w: Math.min(w.w, columns) });
         rh = Math.max(rh, w.h);
       });
-      gy += rh;
-      continue;
+      return rh;
     }
     let x = 0;
+    let y = startY;
     let rowH = 1;
-    for (let i = 0; i < rw.length; ) {
+    for (let i = 0; i < seg.length; ) {
       // A band set (shared `group`) wraps as a unit, exactly as it was built — see the note above.
       let end = i + 1;
-      if (rw[i].group != null) while (end < rw.length && rw[end].group === rw[i].group) end++;
-      const groupW = rw.slice(i, end).reduce((n, w) => n + Math.min(w.w, columns), 0);
+      if (seg[i].group != null) while (end < seg.length && seg[end].group === seg[i].group) end++;
+      const groupW = seg.slice(i, end).reduce((n, w) => n + Math.min(w.w, columns), 0);
       if (x > 0 && groupW <= columns && x + groupW > columns) {
-        gy += rowH;
+        y += rowH;
         x = 0;
         rowH = 1;
       }
       for (; i < end; i++) {
-        const w = rw[i];
+        const w = seg[i];
         const ww = Math.min(w.w, columns);
         if (x + ww > columns) {
-          gy += rowH;
+          y += rowH;
           x = 0;
           rowH = 1;
         }
-        out.push({ ...w, x, y: gy, w: ww });
+        out.push({ ...w, x, y, w: ww });
         x += ww;
         rowH = Math.max(rowH, w.h);
       }
     }
-    gy += rowH;
+    return y - startY + rowH;
+  };
+
+  for (const key of [...rows.keys()].sort((a, b) => a - b)) {
+    const rw = rows.get(key)!.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+    const firstLabel = rw.find((w) => w.view === 'label');
+    if (!firstLabel) {
+      gy += placeSegment(rw, gy); // no heading: one flowing segment, exactly as a headingless row always was
+      continue;
+    }
+    // `buildDeviceLayoutBoard` never gives a source row more than ONE reserved heading line, no matter
+    // how many headings share it (INPUT BOOST + SATURATION sit on the SAME line, side by side) — so the
+    // row-group splits into exactly three Y-bands relative to that one `headingY`, not one break per
+    // label. Controls before it belong to no heading and reflow as their own segment; everything after
+    // it — headed or not (SATURATION's row also trails unheaded Low Cut/High Cut) — reflows as ONE
+    // shared segment, matching the single combined control-line the device itself draws.
+    const headingY = firstLabel.y;
+    const before = rw.filter((w) => w.y < headingY);
+    const headings = rw.filter((w) => w.y === headingY);
+    const after = rw.filter((w) => w.y > headingY);
+
+    gy += placeSegment(before, gy);
+    const lineY = gy;
+    const afterStartY = lineY + 1;
+    const consumed = placeSegment(after, afterStartY);
+    const placedAfter = out.slice(-after.length);
+
+    // `members` (populated by buildDeviceLayoutBoard from groupSectionLabels + the row's authored columns)
+    // names exactly which of `after`'s widgets belong to which heading — that's spacer/column-gap
+    // boundary information only the original LayoutControl array has, which this flattened, already
+    // reflowed list doesn't; without it we'd have to guess. A heading resizes from ONLY its true members,
+    // post-reflow, so e.g. OUTPUT COMPRESSOR never re-expands to cover the unheaded Master Bias Excursion
+    // trailing on the same row. A board saved before `members` existed falls back to the old behaviour:
+    // single heading claims everything after it (all it could distinguish then); multiple headings keep
+    // their build-time relative position/width (clamped to fit) rather than guess wrong.
+    for (const h of headings) {
+      const trueMembers = h.members ? placedAfter.filter((w) => h.members!.includes(w.key)) : headings.length === 1 ? placedAfter : null;
+      if (trueMembers?.length) {
+        const minX = Math.min(...trueMembers.map((w) => w.x));
+        const maxEnd = Math.max(...trueMembers.map((w) => w.x + w.w));
+        out.push({ ...h, x: minX, y: lineY, w: Math.max(1, maxEnd - minX) });
+      } else if (headings.length === 1) {
+        out.push({ ...h, x: 0, y: lineY, w: Math.min(h.w, columns) });
+      } else {
+        out.push({ ...h, x: Math.min(h.x, Math.max(0, columns - 1)), y: lineY, w: Math.min(h.w, columns) });
+      }
+    }
+    gy = afterStartY + consumed;
   }
   for (const w of noRow) {
     out.push({ ...w, x: 0, y: gy });

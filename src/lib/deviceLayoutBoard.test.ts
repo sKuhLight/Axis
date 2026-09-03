@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { buildDeviceLayoutBoard, layoutVariantSig, railControls, monitorsByFamily, packInto, packRows, repackWidgets, MAX_ROWS, type BoardCtl, type SurfaceWidget } from './deviceLayoutBoard';
+import {
+  buildDeviceLayoutBoard,
+  layoutVariantSig,
+  railControls,
+  monitorsByFamily,
+  packInto,
+  packRows,
+  repackWidgets,
+  MAX_ROWS,
+  parsePositionExact,
+  clusterByCanvasRow,
+  groupSectionLabels,
+  type BoardCtl,
+  type SurfaceWidget
+} from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
 // ── catalog builders (mirror ControlSurface's live catalog entries) ──
@@ -25,6 +39,23 @@ const layout = (pages: DeviceLayout['pages'], extra: Partial<DeviceLayout> = {})
 });
 
 const find = (ws: SurfaceWidget[], key: string): SurfaceWidget => ws.find((w) => w.key === key)!;
+
+/** No two (non-rail) widgets on a board share a grid cell — rail widgets render in their own fixed
+ *  sidebar zone, entirely outside this grid, so their x/y are irrelevant here. This is the actual
+ *  regression check for the `positionExact` placement bugs (HEADROOM/Cab-cluster/Align-page cards
+ *  literally overlapping other controls) — every fixture that carries `positionExact` controls asserts it. */
+const assertNoOverlap = (ws: SurfaceWidget[]) => {
+  const seen = new Set<string>();
+  for (const w of ws) {
+    if (w.rail) continue;
+    for (let y = w.y; y < w.y + w.h; y++)
+      for (let x = w.x; x < w.x + w.w; x++) {
+        const key = `${x},${y}`;
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+  }
+};
 
 describe('railControls — the block-level rail for layouts with no `mixer` section', () => {
   const page = (name: string, ids: number[], section = 'parameters') => ({
@@ -202,7 +233,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b14\|/);
+    expect(a.variantSig).toMatch(/^b20\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -694,5 +725,544 @@ describe('buildDeviceLayoutBoard — the mixer strip is one row', () => {
       12
     )!.boards['P']!;
     expect(find(split, 'k28').row).not.toBe(find(split, 'k2').row);
+  });
+});
+
+// ── positionExact placement: canvas pages, row-level overlay, section headings ──
+// Fixtures below are transcribed verbatim (widget/paramId/placement) from the amp's live FM3 layout data
+// (forgefx-midi/src/gen3/fm3/layouts.generated.ts, "Amp GTE 8.00" variant) — real device shapes, not
+// synthetic ones, specifically because the label-grouping rule needed two real rows that contradict each
+// other under either simple heuristic alone (see `groupSectionLabels`'s doc comment).
+
+describe('parsePositionExact', () => {
+  it('parses a device "x,y" string', () => {
+    expect(parsePositionExact('465,370')).toEqual({ x: 465, y: 370 });
+  });
+  it('returns null for missing or malformed input', () => {
+    expect(parsePositionExact(undefined)).toBeNull();
+    expect(parsePositionExact(null)).toBeNull();
+    expect(parsePositionExact('')).toBeNull();
+    expect(parsePositionExact('not-a-point')).toBeNull();
+  });
+});
+
+describe('clusterByCanvasRow — turns raw positionExact scatter back into visual rows', () => {
+  it('merges a small same-row spread into one row, ordered left→right — the cab Align page Bank/Type/Zoom row (max 7px apart)', () => {
+    const items = [
+      { xPx: 440, yPx: 223, tag: 'Type' },
+      { xPx: 311, yPx: 223, tag: 'Bank' },
+      { xPx: 196, yPx: 230, tag: 'Zoom' }
+    ];
+    const rows = clusterByCanvasRow(items);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].map((i) => i.tag)).toEqual(['Bank', 'Type', 'Zoom']);
+  });
+
+  it('splits a genuine row-to-row gap into separate rows — Scene Levels\' real Scene 1 → Scene 2 gap (34px)', () => {
+    const items = [
+      { xPx: 360, yPx: 77, tag: 'Scene 1' },
+      { xPx: 360, yPx: 111, tag: 'Scene 2' }
+    ];
+    expect(clusterByCanvasRow(items).map((r) => r.map((i) => i.tag))).toEqual([['Scene 1'], ['Scene 2']]);
+  });
+
+  it('splits the cab Cab page identity cluster into its real sub-rows (Picker/M/S, then Bank/Type, then IR Length)', () => {
+    const items = [
+      { xPx: 376, yPx: 63, tag: 'Picker' },
+      { xPx: 455, yPx: 63, tag: 'M' },
+      { xPx: 491, yPx: 63, tag: 'S' },
+      { xPx: 321, yPx: 105, tag: 'Bank' },
+      { xPx: 440, yPx: 105, tag: 'Type' },
+      { xPx: 321, yPx: 165, tag: 'IR Length' }
+    ];
+    const rows = clusterByCanvasRow(items).map((r) => r.map((i) => i.tag));
+    expect(rows).toEqual([['Picker', 'M', 'S'], ['Bank', 'Type'], ['IR Length']]);
+  });
+
+  it('returns no rows for no items', () => {
+    expect(clusterByCanvasRow([])).toEqual([]);
+  });
+});
+
+describe('groupSectionLabels — verified against real amp rows', () => {
+  // Preamp row 1 (pageNum 2): TWO headings on one row. SATURATION's underline stops before Low Cut/High
+  // Cut Frequency in the real editor — those two knobs render with no heading above them.
+  const preampRow1: LayoutControl[] = [
+    ctl('label', null, 'INPUT BOOST'),
+    ctl('toggle', 42, 'Boost', { placement: { col: 0 } }),
+    ctl('dropdown', 125, 'Boost Type', { placement: { col: 1 } }),
+    ctl('knob', 124, 'Boost Level', { placement: { col: 2 } }),
+    ctl('label', null, 'SATURATION'),
+    ctl('dropdown', 56, 'Saturation Switch', { placement: { col: 3 } }),
+    ctl('knob', 107, 'Saturation Drive', { placement: { col: 4 } }),
+    ctl('dropdown', 71, 'Preamp Tube Type', { placement: { col: 5 } }),
+    ctl('spacer', null, '', { placement: { col: 6 } }),
+    ctl('knob', 12, 'Low Cut Frequency', { placement: { col: 7 } }),
+    ctl('knob', 13, 'High Cut Frequency', { placement: { col: 8 } })
+  ];
+  const isHeading = (c: LayoutControl) => c.widget === 'label';
+
+  it('a heading that is NOT the last on its row stops at the next heading', () => {
+    const spans = groupSectionLabels(preampRow1, isHeading);
+    expect(spans[0]).toEqual({ ctlIndex: 0, start: 1, end: 4 }); // Boost, Boost Type, Boost Level
+  });
+
+  it('a heading that IS the last on a multi-heading row stops at the spacer, excluding trailing orphans', () => {
+    const spans = groupSectionLabels(preampRow1, isHeading);
+    expect(spans[1]).toEqual({ ctlIndex: 4, start: 5, end: 8 }); // Sat Switch, Sat Drive, Preamp Tube Type
+    // Low Cut (9) / High Cut (10) are excluded — no heading claims them.
+    expect(spans[1].end).toBeLessThan(9);
+  });
+
+  // Power Amp's TRANSFORMER row (pageNum 3): the ROW'S ONLY heading, but it does NOT extend across the
+  // whole row — screenshot-confirmed against the real editor, TRANSFORMER's underline stops right after
+  // XFormer Matching, at the first spacer. Speaker Impedance/PI Bias Excursion/Cathode Resistance/Cathode
+  // Time Const are unrelated params (no shared `XFormer` prefix) that render with no heading over them,
+  // same as SATURATION's trailing Low Cut/High Cut on a multi-heading row.
+  const transformerRow: LayoutControl[] = [
+    ctl('label', null, 'TRANSFORMER'),
+    ctl('knob', 48, 'XFormer Drive', { placement: { col: 0 } }),
+    ctl('knob', 53, 'XFormer Matching', { placement: { col: 1 } }),
+    ctl('spacer', null, '', { placement: { col: 2 } }),
+    ctl('knob', 129, 'Speaker Impedance', { placement: { col: 3 } }),
+    ctl('spacer', null, '', { placement: { col: 4 } }),
+    ctl('knob', 116, 'PI Bias Excursion', { placement: { col: 5 } }),
+    ctl('spacer', null, '', { placement: { col: 6 } }),
+    ctl('knob', 95, 'Cathode Resistance', { placement: { col: 7 } }),
+    ctl('knob', 96, 'Cathode Time Const', { placement: { col: 8 } })
+  ];
+
+  it('a lone heading stops at its FIRST internal spacer too, same as a multi-heading row — it does not extend to the row end', () => {
+    const spans = groupSectionLabels(transformerRow, isHeading);
+    expect(spans).toEqual([{ ctlIndex: 0, start: 1, end: 3 }]); // XFormer Drive, XFormer Matching only
+  });
+
+  // Dynamics' real OUTPUT COMPRESSOR row (pageNum 9, firmware ≥4.00): the ROW'S ONLY heading, same shape
+  // as TRANSFORMER — but here col 4 is claimed by NOTHING (not even a spacer): Gain sits at col 3, Master
+  // Bias Excursion jumps straight to col 5. That is a real device-authored gap, not knob spacing, and the
+  // real editor draws Master Bias Excursion clear of the compressor's underline.
+  const outputCompressorRow: LayoutControl[] = [
+    ctl('label', null, 'OUTPUT COMPRESSOR'),
+    ctl('knob', 77, 'Out Compression', { placement: { col: 0 } }),
+    ctl('knob', 78, 'Out Comp Threshold', { placement: { col: 1 } }),
+    ctl('knob', 72, 'Out Comp Clarity', { placement: { col: 2 } }),
+    ctl('meter', 121, 'Gain', { placement: { col: 3 } }),
+    ctl('knob', 134, 'Master Bias Excursion', { placement: { col: 5 } })
+  ];
+
+  it('a single heading stops at a genuine authored-column gap, excluding what sits past it', () => {
+    const spans = groupSectionLabels(outputCompressorRow, isHeading);
+    expect(spans).toEqual([{ ctlIndex: 0, start: 1, end: 5 }]); // Out Compression..Gain — not Master Bias Excursion
+  });
+});
+
+describe('buildDeviceLayoutBoard — a heading mid-row keeps its PRECEDING siblings above it (TONESTACK)', () => {
+  // The amp's real Preamp row 2 (pageNum 2): six col-authored controls (Preamp Sag..Preamp Bias
+  // Excursion) come BEFORE the TONESTACK heading, then three more (Tonestack Type/Freq/Location) AFTER
+  // it. Only the trailing three are what TONESTACK actually labels (`groupSectionLabels`'s "onlyHeading"
+  // rule gives it ctlIndex+1..end) — the leading six belong to no heading at all and must stay on the
+  // row they were already on, not get dragged down onto TONESTACK's own line together with the controls
+  // it heads (the bug: the whole row used to shift down by one grid line the instant it CONTAINED a
+  // heading anywhere, not just after it).
+  const preampRow2: LayoutControl[] = [
+    ctl('toggle', 98, 'Preamp Sag', { placement: { col: 0 } }),
+    ctl('knob', 50, 'Tube Hardness', { placement: { col: 1 } }),
+    ctl('knob', 69, 'Triode 1 Plate Freq', { placement: { col: 2 } }),
+    ctl('knob', 68, 'Triode 2 Plate Freq', { placement: { col: 3 } }),
+    ctl('knob', 44, 'Preamp Bias', { placement: { col: 4 } }),
+    ctl('knob', 108, 'Preamp Bias Excursion', { placement: { col: 5 } }),
+    ctl('label', null, 'TONESTACK'),
+    ctl('dropdown', 36, 'Tonestack Type', { placement: { col: 6 } }),
+    ctl('knob', 14, 'Tonestack Freq', { placement: { col: 7 } }),
+    ctl('dropdown', 20, 'Tonestack Location', { placement: { col: 8 } })
+  ];
+  const catalog: BoardCtl[] = [toggle(98), knob(50), knob(69), knob(68), knob(44), knob(108), select(36), knob(14), select(20)];
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: preampRow2 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+
+  it('places the six leading controls on the row above the heading, not below it', () => {
+    expect(find(b, 'e98').y).toBe(0);
+    expect(find(b, 'k50').y).toBe(0);
+    expect(find(b, 'k108').y).toBe(0);
+  });
+
+  it('reserves the heading its own line below them', () => {
+    expect(find(b, 'label:0:0:6').y).toBe(1);
+  });
+
+  it('places the three controls TONESTACK actually heads on the line below that, not the leading six', () => {
+    expect(find(b, 'e36').y).toBe(2);
+    expect(find(b, 'k14').y).toBe(2);
+    expect(find(b, 'e20').y).toBe(2);
+  });
+
+  it('sizes the heading from only its trailing members, not the whole row', () => {
+    expect(find(b, 'label:0:0:6').x).toBe(6); // where Tonestack Type starts, not x:0
+    expect(find(b, 'label:0:0:6').w).toBe(5); // Tonestack Type (col 6, w2) .. Location (col 8, w2) ends at 11
+  });
+
+  it('does not overlap any widget', () => assertNoOverlap(b));
+
+  // Regression: narrowing the pane (ControlSurface's responsive `repackWidgets` → `packRows`) used to
+  // bucket a heading's whole source row together and reflow it as ONE naive left-to-right wrap — since
+  // the heading itself never carries a `col`, that always fell out of `authoredX` and into the raw
+  // flow-wrap, scrambling the heading in among controls it doesn't label (screenshot: Tonestack Type/Freq
+  // wrapped ABOVE the TONESTACK line, Tonestack Location stranded alone below it).
+  it('keeps the leading six on their own line, the heading on its own, and the trailing three below it — at any width', () => {
+    for (const cols of [3, 6, 8, 12]) {
+      const packed = packRows(b, cols);
+      const at = (key: string) => packed.find((w) => w.key === key)!;
+      const leadingYs = new Set(['e98', 'k50', 'k69', 'k68', 'k44', 'k108'].map((k) => at(k).y));
+      const trailingYs = new Set(['e36', 'k14', 'e20'].map((k) => at(k).y));
+      const headingY = at('label:0:0:6').y;
+      if (cols >= 6) expect(leadingYs.size).toBe(1); // wide enough: the leading six fit on one line
+      expect([...leadingYs].every((y) => y < headingY)).toBe(true);
+      expect([...trailingYs].every((y) => y > headingY)).toBe(true);
+      assertNoOverlap(packed);
+    }
+  });
+});
+
+describe('buildDeviceLayoutBoard — section headings render (not dropped as gaps)', () => {
+  const preampRow1: LayoutControl[] = [
+    ctl('label', null, 'INPUT BOOST'),
+    ctl('toggle', 42, 'Boost', { placement: { col: 0 } }),
+    ctl('dropdown', 125, 'Boost Type', { placement: { col: 1 } }),
+    ctl('knob', 124, 'Boost Level', { placement: { col: 2 } }),
+    ctl('label', null, 'SATURATION'),
+    ctl('dropdown', 56, 'Saturation Switch', { placement: { col: 3 } }),
+    ctl('knob', 107, 'Saturation Drive', { placement: { col: 4 } }),
+    ctl('dropdown', 71, 'Preamp Tube Type', { placement: { col: 5 } }),
+    ctl('spacer', null, '', { placement: { col: 6 } }),
+    ctl('knob', 12, 'Low Cut Frequency', { placement: { col: 7 } }),
+    ctl('knob', 13, 'High Cut Frequency', { placement: { col: 8 } })
+  ];
+  const catalog: BoardCtl[] = [knob(42), knob(125), knob(124), knob(56), knob(107), knob(71), knob(12), knob(13), BYPASS];
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: preampRow1 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+
+  it('renders each unbound heading as its own widget with the device text, instead of a dropped gap', () => {
+    expect(find(b, 'label:0:0:0').text).toBe('INPUT BOOST');
+    expect(find(b, 'label:0:0:4').text).toBe('SATURATION');
+  });
+
+  it('sizes and positions a heading from its resolved members’ x span', () => {
+    expect(find(b, 'label:0:0:0').x).toBe(0);
+    expect(find(b, 'label:0:0:0').w).toBe(3); // Boost + Boost Type + Boost Level
+    expect(find(b, 'label:0:0:4').x).toBe(3);
+    expect(find(b, 'label:0:0:4').w).toBe(3); // Sat Switch + Sat Drive + Preamp Tube Type
+  });
+
+  it('places headings on their own grid line above the controls they head', () => {
+    expect(find(b, 'label:0:0:0').y).toBe(0);
+    expect(find(b, 'k42').y).toBe(1);
+  });
+
+  it('does not extend SATURATION over the trailing unheaded Low Cut/High Cut knobs', () => {
+    expect(find(b, 'k12').x).toBe(7); // Low Cut Frequency
+    expect(find(b, 'k13').x).toBe(8); // High Cut Frequency
+  });
+
+  // Regression: packRows used to treat EVERY label as its own hard break, splitting INPUT BOOST and
+  // SATURATION onto two separate lines (they share ONE) and sizing SATURATION from the entire trailing
+  // segment — including Boost/BoostType/BoostLevel, which it doesn't label.
+  it('keeps two headings sharing one line together on reflow, and their controls below it (not among them)', () => {
+    for (const cols of [6, 9, 12]) {
+      const packed = packRows(b, cols);
+      const at = (key: string) => packed.find((w) => w.key === key)!;
+      const inputBoostY = at('label:0:0:0').y;
+      const saturationY = at('label:0:0:4').y;
+      const controlYs = ['k42', 'k125', 'k124', 'k56', 'k107', 'k71', 'k12', 'k13'].map((k) => at(k).y);
+      expect(saturationY).toBe(inputBoostY); // one shared heading line, not two
+      expect(controlYs.every((y) => y > inputBoostY)).toBe(true); // every control — headed or not — below it
+      if (cols >= 8) expect(new Set(controlYs).size).toBe(1); // wide enough: all eight fit on one shared line
+      assertNoOverlap(packed);
+    }
+  });
+});
+
+describe('buildDeviceLayoutBoard — row-level outlier (HEADROOM: positionExact-only among col-authored siblings)', () => {
+  // The amp's real Preamp row tail (pageNum 2): Master Vol Trim is the last col-authored control, then
+  // HEADROOM sits in the SAME row with only positionExact — no col.
+  const row: LayoutControl[] = [
+    ctl('spacer', null, '', { placement: { col: 7 } }),
+    ctl('knob', 79, 'Master Vol Trim', { placement: { col: 8 } }),
+    ctl('meter', 132, 'HEADROOM', { placement: { positionExact: '465,370' } })
+  ];
+  const meterHCatalog: BoardCtl = { key: 'm132', kind: 'meterH', id: 132, w: 4, h: 1, view: 'meterH', views: ['meterH'] };
+  const catalog: BoardCtl[] = [knob(79), meterHCatalog, BYPASS];
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: row }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+
+  it('resolves HEADROOM to its meterH catalog entry, not a dropped gap', () => {
+    expect(find(b, 'm132').view).toBe('meterH');
+  });
+
+  it('places HEADROOM as an ordinary grid widget on its own row below Master Vol Trim, never inheriting its column', () => {
+    const headroom = find(b, 'm132');
+    const trim = find(b, 'k79');
+    expect(headroom.y).toBeGreaterThan(trim.y);
+    expect(headroom.col).toBeUndefined();
+  });
+
+  it('leaves Master Vol Trim placed normally at its authored column (HEADROOM does not perturb the row)', () => {
+    expect(find(b, 'k79').x).toBe(8);
+  });
+
+  it('does not overlap Master Vol Trim — the actual bug this replaces', () => {
+    assertNoOverlap(b);
+  });
+});
+
+describe('buildDeviceLayoutBoard — whole canvas-shaped page (Speaker/Align/Scene-Levels: every control positionExact, no col)', () => {
+  // Shaped like the amp's real Speaker page: every control positionExact, no col, including a graph.
+  const speakerLike: DeviceLayout['pages'] = [
+    {
+      name: 'Speaker',
+      rows: [
+        { controls: [ctl('graph', null, 'Speaker Response', { placement: { positionExact: '395,24' } })] },
+        { section: 'parameters', controls: [ctl('knob', 10, 'Speaker Damping', { placement: { positionExact: '305,30' } })] },
+        { section: 'mixer', controls: [ctl('knob', 1, 'Level', { placement: { positionExact: '1179,60' } })] }
+      ]
+    }
+  ];
+  const eqCat: BoardCtl = { key: 'eq:speaker', kind: 'eq', id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] };
+  const catalog: BoardCtl[] = [eqCat, knob(10), knob(1), BYPASS];
+  const board = buildDeviceLayoutBoard(
+    layout(speakerLike, { family: 'DISTORT' }),
+    catalog,
+    12,
+    new Set(),
+    (page, slot) => (page === 0 && slot === 0 ? 'eq:speaker' : null)
+  )!;
+  const b = board.boards['Speaker']!;
+
+  it('resolves the graph slot even though the graph carries positionExact, not col (the diff this replaces passed graphKey: null here)', () => {
+    expect(find(b, 'eq:speaker').view).toBe('eq');
+  });
+
+  it('places every non-rail control as an ordinary grid widget — Speaker Damping below the graph, since the fixture puts them in separate device rows', () => {
+    // (`clusterByCanvasRow`'s own tests above cover same-row merging when controls DO share one device row,
+    // the real Speaker page's actual shape — see e.g. its Low Freq/LF Reso/LF Q vertical stack.)
+    expect(find(b, 'k10').x).toBe(0);
+    expect(find(b, 'k10').y).toBeGreaterThan(find(b, 'eq:speaker').y);
+  });
+
+  it('routes the mixer-section Level to the rail, never onto the page grid, even though it carries its own positionExact', () => {
+    expect(find(b, 'k1').rail).toBe(true);
+  });
+
+  it('does not overlap any two widgets on the page — the actual bug this replaces', () => {
+    assertNoOverlap(b);
+  });
+});
+
+// ── real-device regression: the cab "Cab" page — a dense identity CLUSTER per slot, not a lone outlier ──
+// Transcribed from the cab's live CABINET block layout (forgefx-midi/src/gen3/fm3/layouts.generated.ts,
+// gtet:"6,03" variant). Caught a real bug during this pass: pixel-percentage overlay (fine for a single
+// outlier like HEADROOM) collapses a row's several close-together positionExact origins onto overlapping
+// cards once there's more than one — this is the shape that exposed it.
+describe('buildDeviceLayoutBoard — dense identity cluster (cab "Cab" page: Picker/Bank/Type/IR Length + Balance)', () => {
+  const cab1Row: LayoutControl[] = [
+    ctl('label', 65284, 'CAB 1', { placement: { positionExact: '315,63' }, rawWidget: 'labelBold' }),
+    ctl('button', 65280, 'Picker', { placement: { positionExact: '376,63' } }),
+    ctl('button', 65286, 'M', { placement: { positionExact: '455,63' } }),
+    ctl('button', 65288, 'S', { placement: { positionExact: '491,63' } }),
+    ctl('dropdown', 0, 'Bank', { placement: { positionExact: '321,105' } }),
+    ctl('readout', 4, 'Type', { placement: { positionExact: '440,105' } }),
+    ctl('label', 65282, 'Name', { placement: { positionExact: '321,135' }, rawWidget: 'labelCabName' }),
+    ctl('dropdown', 70, 'IR Length', { placement: { positionExact: '321,165' } }),
+    ctl('knob', 8, 'Level', { placement: { col: 3 } }),
+    ctl('knob', 12, 'Pan', { placement: { col: 4 } }),
+    ctl('knob', 62, 'Low Cut', { placement: { col: 5 } }),
+    ctl('knob', 66, 'High Cut', { placement: { col: 6 } }),
+    ctl('dropdown', 74, 'Low Slope', { placement: { col: 7 } }),
+    ctl('dropdown', 78, 'High Slope', { placement: { col: 8 } }),
+    ctl('knob', 20, 'Proximity', { placement: { col: 9 } })
+  ];
+  const balanceRow: LayoutControl[] = [
+    ctl('knob', 29, 'Balance', { placement: { positionExact: '1179,185' } }),
+    ctl('button', 32, 'Bypass'),
+    ctl('button', 84, 'Scene Ignore')
+  ];
+  const catalog: BoardCtl[] = [
+    toggle(65280), toggle(65286), toggle(65288), // Picker/M/S
+    select(0), knob(4), // Bank/Type
+    select(70), // IR Length
+    knob(8), knob(12), knob(62), knob(66), select(74), select(78), knob(20), // knob row
+    knob(29), toggle(32), toggle(84) // mixer rail
+  ];
+  const b = buildDeviceLayoutBoard(
+    layout([{ name: 'Cab', rows: [{ section: 'parameters', controls: cab1Row }, { section: 'mixer', controls: balanceRow }] }], { family: 'CABINET' }),
+    catalog,
+    12
+  )!.boards['Cab']!;
+
+  it('routes Balance to the ordinary rail, NOT the identity-cluster machinery, despite carrying its own positionExact', () => {
+    const bal = find(b, 'e29') ?? find(b, 'k29');
+    expect(bal.rail).toBe(true);
+  });
+
+  it('places the identity cluster (Picker/M/S/Bank/Type/IR Length) as its own grid rows BELOW the knob row, not stacked in its leading columns', () => {
+    const cluster = ['e65280', 'e65286', 'e65288', 'e0', 'k4', 'e70'].map((k) => find(b, k));
+    const knobRowY = find(b, 'k8').y; // Level, the knob row's own y
+    for (const w of cluster) expect(w.y).toBeGreaterThan(knobRowY);
+  });
+
+  it('does not overlap the cluster with the knob row or with itself — the actual bug this replaces', () => {
+    assertNoOverlap(b);
+  });
+
+  it('does not drop the "Name" live-value field as a bogus static heading', () => {
+    expect(b.some((w) => w.text === 'Name')).toBe(false);
+  });
+
+  it('leaves the col-authored knob row (Level..Proximity) at its real authored columns, unperturbed by the cluster', () => {
+    expect(find(b, 'k8').col).toBe(3); // Level — first in the row, unaffected by any cascade
+    // Proximity's own authored col is 9, but the two width-2 dropdowns ahead of it (Low/High Slope) push
+    // the sweep cursor past it — expected `authoredX` cursor behavior (see its own doc comment), NOT
+    // something the identity cluster caused. The point of this assertion is that it's a normal, coherent
+    // authored-column placement at all, not stranded in flow because the cluster corrupted the row.
+    expect(find(b, 'k20').col).toBeGreaterThanOrEqual(9);
+  });
+});
+
+// ── real-device regression: the cab "Align" page — a whole canvas-shaped page whose rail row has NO
+// placement at all on several controls (Level/Bypass/Scene Ignore carry no `placement` field whatsoever in
+// the real data). Those controls must still render, in the rail, not dropped.
+describe('buildDeviceLayoutBoard — canvas-shaped page with a placement-less rail row (cab "Align" page)', () => {
+  const alignRow: LayoutControl[] = [
+    ctl('toggle', 40, 'Zoom', { placement: { positionExact: '196,230' } }),
+    ctl('graph', null, 'Graph', { placement: { positionExact: '305,18' } }),
+    ctl('knob', 16, 'Delay 1', { placement: { positionExact: '416,282' } })
+  ];
+  const mixerLevelRow: LayoutControl[] = [ctl('knob', 28, 'Level')]; // no placement at all — real device data
+  const mixerBalanceRow: LayoutControl[] = [
+    ctl('knob', 29, 'Balance', { placement: { positionExact: '1179,185' } }),
+    ctl('button', 32, 'Bypass'), // no placement — real device data
+    ctl('button', 84, 'Scene Ignore') // no placement — real device data
+  ];
+  const eqCat: BoardCtl = { key: 'eq:align', kind: 'eq', id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] };
+  const catalog: BoardCtl[] = [eqCat, toggle(40), knob(16), knob(28), knob(29), toggle(32), toggle(84)];
+  const board = buildDeviceLayoutBoard(
+    layout(
+      [{ name: 'Align', rows: [{ section: 'parameters', controls: alignRow }, { section: 'mixer', controls: mixerLevelRow }, { section: 'mixer', controls: mixerBalanceRow }] }],
+      { family: 'CABINET' }
+    ),
+    catalog,
+    12,
+    new Set(),
+    (page, slot) => (page === 0 && slot === 0 ? 'eq:align' : null)
+  )!;
+  const b = board.boards['Align']!;
+
+  it('still places the positionExact-only controls as ordinary grid widgets even though its rail row has no placement on several controls', () => {
+    expect(find(b, 'e40').rail).toBeUndefined(); // Zoom, a real page widget, not a rail one
+  });
+
+  it('does not drop the placement-less rail controls (Level/Bypass/Scene Ignore)', () => {
+    expect(find(b, 'k28').rail).toBe(true);
+    expect(find(b, 'e32').rail).toBe(true);
+    expect(find(b, 'e84').rail).toBe(true);
+  });
+
+  it('never routes a rail widget onto the page grid, even Balance which carries its own positionExact', () => {
+    expect(find(b, 'k29').rail).toBe(true);
+  });
+
+  it('does not overlap any two widgets on the page — the actual bug this replaces', () => {
+    assertNoOverlap(b);
+  });
+});
+
+// ── real-device regression: the amp's Dynamics "OUTPUT COMPRESSOR" row — a single heading whose row has
+// a genuine authored-column gap, not internal spacing (contrast with the Power Amp TRANSFORMER row above,
+// which needs the OPPOSITE: to extend through its spacers). Transcribed from the real FM3 layout data
+// (forgefx-midi/src/gen3/fm3/layouts.generated.ts, Dynamics page, firmware ≥4.00 variant).
+describe('buildDeviceLayoutBoard — single heading stops at a genuine column gap (Dynamics OUTPUT COMPRESSOR / Master Bias Excursion)', () => {
+  const dynamicsRow: LayoutControl[] = [
+    ctl('label', null, 'OUTPUT COMPRESSOR', { placement: { positionExact: '305,29' } }),
+    ctl('knob', 77, 'Out Compression', { placement: { col: 0 } }),
+    ctl('knob', 78, 'Out Comp Threshold', { placement: { col: 1 } }),
+    ctl('knob', 72, 'Out Comp Clarity', { placement: { col: 2 } }),
+    ctl('meter', 121, 'Gain', { placement: { col: 3 } }),
+    // col 4 is claimed by NOTHING — Master Bias Excursion is firmware-gated (added in a later revision)
+    // and the real editor draws it clear of the compressor group, not under its heading.
+    ctl('knob', 134, 'Master Bias Excursion', { placement: { col: 5 } })
+  ];
+  const catalog: BoardCtl[] = [knob(77), knob(78), knob(72), knob(121), knob(134)];
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Dynamics', rows: [{ controls: dynamicsRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Dynamics']!;
+
+  it('sizes the heading from Out Compression..Gain only, not Master Bias Excursion', () => {
+    const heading = find(b, 'label:0:0:0');
+    expect(heading.x).toBe(0);
+    expect(heading.w).toBe(4); // Out Compression(col0)..Gain(col3) — stops before the col-4 gap
+    expect(heading.members).toEqual(['k77', 'k78', 'k72', 'k121']);
+  });
+
+  it('places Master Bias Excursion on the same line as the compressor knobs, just not under the heading', () => {
+    expect(find(b, 'k134').y).toBe(find(b, 'k77').y);
+    expect(find(b, 'k134').x).toBe(5); // its own authored column — the gap is preserved, not compacted away
+  });
+
+  it('does not overlap any widget', () => assertNoOverlap(b));
+
+  // Regression: packRows used to resize a lone heading from EVERY widget after it on the row, with no way
+  // to tell Master Bias Excursion apart from the compressor's real members — so narrowing the pane
+  // re-expanded OUTPUT COMPRESSOR's underline right back over it, even after the build-time fix above.
+  it('keeps Master Bias Excursion excluded from the heading at any repacked width, using the built `members` list', () => {
+    for (const cols of [4, 6, 8, 12]) {
+      const packed = packRows(b, cols);
+      const heading = packed.find((w) => w.key === 'label:0:0:0')!;
+      const bias = packed.find((w) => w.key === 'k134')!;
+      if (heading.y === bias.y) expect(heading.x + heading.w).toBeLessThanOrEqual(bias.x);
+      assertNoOverlap(packed);
+    }
+  });
+});
+
+// ── real-device regression: the amp's Power Amp "TRANSFORMER" row — screenshot-confirmed the real editor
+// stops the heading at its FIRST spacer, disproving the earlier "lone heading spans the whole row" belief
+// this codebase had baked in. Transcribed from the real FM3 layout data (forgefx-midi/src/gen3/fm3/
+// layouts.generated.ts, Power Amp page).
+describe('buildDeviceLayoutBoard — single heading stops at its first spacer, not the row end (Power Amp TRANSFORMER)', () => {
+  const transformerRow: LayoutControl[] = [
+    ctl('label', null, 'TRANSFORMER', { placement: { positionExact: '305,209' } }),
+    ctl('knob', 48, 'XFormer Drive', { placement: { col: 0 } }),
+    ctl('knob', 53, 'XFormer Matching', { placement: { col: 1 } }),
+    ctl('spacer', null, '', { placement: { col: 2 } }),
+    // Speaker Impedance/PI Bias Excursion/Cathode Resistance/Cathode Time Const: unrelated params (no
+    // shared `XFormer` prefix) — the real editor draws no heading over them.
+    ctl('knob', 129, 'Speaker Impedance', { placement: { col: 3 } }),
+    ctl('spacer', null, '', { placement: { col: 4 } }),
+    ctl('knob', 116, 'PI Bias Excursion', { placement: { col: 5 } }),
+    ctl('spacer', null, '', { placement: { col: 6 } }),
+    ctl('knob', 95, 'Cathode Resistance', { placement: { col: 7 } }),
+    ctl('knob', 96, 'Cathode Time Const', { placement: { col: 8 } })
+  ];
+  const catalog: BoardCtl[] = [knob(48), knob(53), knob(129), knob(116), knob(95), knob(96)];
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Power Amp', rows: [{ controls: transformerRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Power Amp']!;
+
+  it('sizes the heading from XFormer Drive/XFormer Matching only', () => {
+    const heading = find(b, 'label:0:0:0');
+    expect(heading.x).toBe(0);
+    expect(heading.w).toBe(2);
+    expect(heading.members).toEqual(['k48', 'k53']);
+  });
+
+  it('places the four trailing knobs on the same line, just not under the heading', () => {
+    const y = find(b, 'k48').y;
+    for (const key of ['k129', 'k116', 'k95', 'k96']) expect(find(b, key).y).toBe(y);
+  });
+
+  it('does not overlap any widget', () => assertNoOverlap(b));
+
+  it('keeps the trailing knobs excluded from the heading at any repacked width, using the built `members` list', () => {
+    for (const cols of [3, 6, 9, 12]) {
+      const packed = packRows(b, cols);
+      const heading = packed.find((w) => w.key === 'label:0:0:0')!;
+      for (const key of ['k129', 'k116', 'k95', 'k96']) {
+        const w = packed.find((w) => w.key === key)!;
+        if (heading.y === w.y) expect(heading.x + heading.w).toBeLessThanOrEqual(w.x);
+      }
+      assertNoOverlap(packed);
+    }
   });
 });
