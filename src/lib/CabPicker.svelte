@@ -64,9 +64,11 @@
       .then(([state, banks]) => {
         cs = state;
         irs = banks;
-        slot = 0;
+        // Open on the slot whoever launched us asked for (the per-slot identity card passes its own),
+        // clamped in case a variant serves fewer slots than the caller assumed.
+        slot = Math.min(Math.max(0, editor.cabPickerSlot), Math.max(0, state.slots.length - 1));
         mode = state.mode.label.toUpperCase().includes('DYNA') ? 'dyna' : 'legacy';
-        bank = state.slots[0]?.bank.label ?? state.bankOptions[0] ?? 'FACTORY 1';
+        bank = state.slots[slot]?.bank.label ?? state.bankOptions[0] ?? 'FACTORY 1';
       })
       .catch(() => (cs = null))
       .finally(() => (loading = false));

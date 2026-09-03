@@ -36,6 +36,9 @@ export interface EditorSurface {
   paletteOpen: boolean;
   placeTarget: { row: number; col: number } | null;
   cabPickerOpen: boolean;
+  /** Which slot the cab picker should open on (0-based). Set by whoever opens it — the per-slot identity
+   *  card opens the picker for ITS OWN slot, so clicking CAB 2 lands on Slot 2 rather than Slot 1. */
+  cabPickerSlot: number;
   quickBuildOpen: boolean;
   /** The cell an external drag (Quick Build sidecar / convert source grid) is over + drop validity. */
   externalDrop: { row: number; col: number; valid: boolean } | null;
@@ -69,7 +72,7 @@ export interface EditorSurface {
   completeLink: (row: number, col: number) => Promise<void>;
   openPaletteAt: (row: number, col: number) => void;
   openRetype: () => void;
-  openCabPicker: () => void;
+  openCabPicker: (slot?: number) => void;
   applyCab: (writes: { paramId: number; value: number }[]) => Promise<void>;
   toggleBypass: (cell?: Cell) => Promise<void>;
   setChannel: (ch: string) => Promise<void>;

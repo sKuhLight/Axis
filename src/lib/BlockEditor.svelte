@@ -11,6 +11,7 @@
   import { deriveCompressorGraphs } from './compressorGraphs';
   import { deriveCabAlignmentGraphs } from './cabAlignmentGraphs';
   import { deriveCabMicGraphs } from './cabMicGraphs';
+  import { deriveCabIdentityCards } from './cabIdentityCards';
   import { deriveAdsrGraphs } from './adsrGraphs';
   import { deriveMegaTapGraphs } from './megaTapGraphs';
   import type { CabState, CabSlot } from './types';
@@ -69,6 +70,11 @@
   // DynaCab is a per-slot MODE (see `dynaMode` above), not a separate layout — gate the mic graphic on it
   // so a legacy IR cab never draws one.
   const cabMicGraphs = $derived(deriveCabMicGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums, dyna: dynaMode }));
+  // Per-slot cab identity cards. Fed by the SAME `cabState` snapshot the header's picker button uses —
+  // already re-read whenever the picker closes — so a pick updates the card with no extra fetch.
+  const cabIdentityCards = $derived(
+    isCab ? deriveCabIdentityCards({ layout: editor.blockLayout, enums: editor.enums, cabState, dyna: dynaMode }) : []
+  );
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
   const megaTapGraphs = $derived(deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
@@ -207,6 +213,7 @@
           {compressorGraphs}
           {cabAlignmentGraphs}
           {cabMicGraphs}
+          {cabIdentityCards}
           {adsrGraphs}
           {megaTapGraphs}
           {geqBands}

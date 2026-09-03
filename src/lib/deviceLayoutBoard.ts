@@ -408,8 +408,12 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
  *  Excursion`/`Cathode Resistance`/`Cathode Time Const` (unrelated param names, no `XFormer` prefix) sit
  *  past that spacer with no heading over them. `groupSectionLabels` no longer special-cases a row with
  *  only one heading — every heading, on every row, stops at the first spacer/gap/next-heading. Boards
- *  saved with the old wider TRANSFORMER-shaped heading need the re-seed. */
-const BOARD_SCHEMA = 'b20';
+ *  saved with the old wider TRANSFORMER-shaped heading need the re-seed. b20→b21: rows can now carry an
+ *  Axis-authored lead card in their reserved leading columns (`leadKeyForRow` — the cab's per-slot
+ *  identity cluster), which also drops that row's canvas overlay cluster and headings. A board saved
+ *  before the hook has neither the card nor the drop, and would keep serving the orphaned `IR Length`
+ *  card under the knobs forever without the re-seed. */
+const BOARD_SCHEMA = 'b21';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -496,7 +500,24 @@ export function buildDeviceLayoutBoard(
    *  the TOP of that page, ahead of its own rows, instead of falling through to the trailing "More"
    *  sweep, so the graphic reads as a first-class hero rather than stranding below the knobs. Tagged
    *  `row: -1` so the responsive re-pack (`packRows`) also keeps them ahead of the page's own rows. */
-  extraKeysForPage: (page: number) => string[] = () => []
+  extraKeysForPage: (page: number) => string[] = () => [],
+  /** The catalog key of an Axis-authored card that belongs in ONE layout row's reserved leading columns,
+   *  rather than above the page (`extraKeysForPage`) or in a row of its own.
+   *
+   *  The cab is the case this exists for: the device authors one row per cab slot, places that slot's
+   *  identity cluster (`CAB n` heading, Picker, Bank, Type, Name, IR Length) by canvas pixels, and starts
+   *  the knob row at `col 3` — leaving cols 0–2 empty PRECISELY because the cluster occupies them. Most of
+   *  that cluster resolves to nothing in Axis (the CabPicker owns Bank/Type, `Name` is a live-value field,
+   *  Picker/M/S carry pseudo param ids), so a single Axis card re-presents it — and it has to land in the
+   *  row's own leading gap to read as that row's identity, which neither of the other placement paths can
+   *  do. See `cabIdentityCards.ts`.
+   *
+   *  When a row yields a lead key that resolves to a live catalog entry, the card is placed at `x: 0` on
+   *  that row's own grid line, clamped to the row's first authored column so it can never collide with the
+   *  content it sits beside, and the row's `positionExact` overlay cluster and unbound section headings are
+   *  DROPPED — the card now carries that information, and leaving them would duplicate the heading and
+   *  re-strand the orphan control the card absorbed. Rows with no lead key are completely unaffected. */
+  leadKeyForRow: (page: number, row: number) => string | null = () => null
 ): SurfaceBoard | null {
   if (!layout?.pages?.length) return null;
   const columns = Math.max(1, cols);
@@ -558,12 +579,22 @@ export function buildDeviceLayoutBoard(
       // `positionExact` (the cab's `Balance` does) — it renders in the fixed sidebar via the ordinary rail
       // path regardless of placement, and must never be pulled into this row-of-its-own machinery, which
       // would strand it floating over the page content instead of in the rail.
+      // An Axis-authored card claiming this row's reserved leading columns (see `leadKeyForRow`). Resolved
+      // BEFORE the split because it decides the fate of the row's overlay cluster and headings.
+      const leadKey = leadKeyForRow(pageIndex, rowIndex);
+      const leadBase = leadKey && !seen.has(leadKey) ? byKey.get(leadKey) : undefined;
+
       const overlayCtls: LayoutControl[] = [];
       const mainCtls: LayoutControl[] = [];
       for (const ctl of row.controls) {
         const isRail = row.strip || (ctl.paramId != null && railIds.has(ctl.paramId));
         if (!isRail && ctl.widget !== 'label' && ctl.widget !== 'spacer' && ctl.placement?.col == null && parsePositionExact(ctl.placement?.positionExact) != null) {
-          overlayCtls.push(ctl);
+          // A lead card absorbs this row's canvas-placed cluster — dropping it here is what removes the
+          // orphaned control the card now shows (the cab's stray `IR Length`).
+          if (!leadBase) overlayCtls.push(ctl);
+        } else if (leadBase && !isRail && ctl.widget === 'label') {
+          // …and its heading, which the card renders as its own title. Kept out of `mainCtls` entirely so
+          // no heading line is reserved and the knobs stay on the row's first line, beside the card.
         } else {
           mainCtls.push(ctl);
         }
@@ -678,10 +709,37 @@ export function buildDeviceLayoutBoard(
         return placed ? y - startY + rowH : 0;
       };
 
+      const rowStartY = gridRow;
       gridRow += placeSlots(beforeSlots, gridRow);
       const headingY = gridRow;
       if (hasHeadingLine) gridRow += 1;
       gridRow += placeSlots(afterSlots, gridRow);
+
+      // The lead card fills the row's reserved leading columns, spanning the row's FULL height so it reads
+      // as that row's identity rather than as one more tile stacked beside it. Width is clamped to the
+      // row's first authored column — that gap is the space the device left for it (`Level` at col 3 →
+      // cols 0-2), and the clamp is what guarantees it can never overlap the row's own content. A row
+      // whose content already starts at col 0 leaves no gap, so the card is skipped rather than drawn on
+      // top of it. Emitted after the slices because its height is the number of grid lines they consumed.
+      if (leadBase) {
+        const authoredCols = slots.filter((s) => s.key && s.col != null).map((s) => s.col as number);
+        const gap = authoredCols.length ? Math.min(...authoredCols) : columns;
+        const lw = Math.min(leadBase.w, gap, columns);
+        if (lw > 0) {
+          seen.add(leadKey!);
+          widgets.push({
+            id: 'w' + leadKey,
+            key: leadKey!,
+            x: 0,
+            y: rowStartY,
+            w: lw,
+            h: Math.max(1, gridRow - rowStartY),
+            view: leadBase.view,
+            row: rowIndex,
+            col: 0
+          });
+        }
+      }
 
       if (hasHeadingLine) {
         const spans = groupSectionLabels(mainCtls, (ctl) => ctl.widget === 'label');

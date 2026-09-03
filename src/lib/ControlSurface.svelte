@@ -15,6 +15,7 @@
   import type { CabAlignmentGraphSpec } from './cabAlignmentGraphs';
   import CabMicGraphic from './CabMicGraphic.svelte';
   import type { CabMicGraphSpec } from './cabMicGraphs';
+  import type { CabIdentitySpec } from './cabIdentityCards';
   import AdsrGraph from './AdsrGraph.svelte';
   import type { AdsrGraphSpec } from './adsrGraphs';
   import MegaTapGraph from './MegaTapGraph.svelte';
@@ -52,6 +53,7 @@
     compressorGraphs = [] as CompressorGraphSpec[],
     cabAlignmentGraphs = [] as CabAlignmentGraphSpec[],
     cabMicGraphs = [] as CabMicGraphSpec[],
+    cabIdentityCards = [] as CabIdentitySpec[],
     adsrGraphs = [] as AdsrGraphSpec[],
     megaTapGraphs = [] as MegaTapGraphSpec[],
     geqBands = [] as FaderBand[],
@@ -67,6 +69,7 @@
     compressorGraphs?: CompressorGraphSpec[];
     cabAlignmentGraphs?: CabAlignmentGraphSpec[];
     cabMicGraphs?: CabMicGraphSpec[];
+    cabIdentityCards?: CabIdentitySpec[];
     adsrGraphs?: AdsrGraphSpec[];
     megaTapGraphs?: MegaTapGraphSpec[];
     geqBands?: FaderBand[];
@@ -80,11 +83,11 @@
   const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', dynacab: '◎', adsr: '⌁', taps: '┊', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
+  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', mod: '〰', comp: '⌟', cab: '↔', cabid: '▤', dynacab: '◎', adsr: '⌁', taps: '┊', geq: '⇕', action: '⏼', meter: '▊', wave: '⌇' };
   const workbench = getOptionalWorkbenchContext();
   const workbenchCanPin = $derived(!!workbench?.registry.hasAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION));
 
-  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'dynacab' | 'adsr' | 'taps' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
+  type Kind = 'cont' | 'toggle' | 'select' | 'eq' | 'mod' | 'comp' | 'cab' | 'cabid' | 'dynacab' | 'adsr' | 'taps' | 'geq' | 'action' | 'meter' | 'meterH' | 'wave';
   type Ctl = { key: string; kind: Kind; label: string; id: number; w: number; h: number; view: string; views: readonly string[] };
   // Board/Widget model lives in the pure builder module (SurfaceWidget carries an optional `row` so the
   // device-authentic Default board can preserve the editor's rows through responsive re-pack).
@@ -189,6 +192,14 @@
     // board builder, so it reads as the DynaCab view FM3-Edit shows rather than a small widget below
     // the knobs. Additive — it does not hide the knobs it draws from the generic catalog.
     for (const g of cabMicGraphs) out.push({ key: g.key, kind: 'dynacab', label: g.title, id: -1, w: 4, h: 2, view: 'dynacab', views: ['dynacab'] });
+    // Per-slot cab identity card — the "CAB n" cluster FM3-Edit draws at the LEFT of each cab row (slot
+    // title, live cabinet name, bank + IR #, a way into the picker, and legacy-mode IR Length). Like the
+    // graphic above this is Axis re-presenting state the device already gives us; unlike it, the card
+    // belongs INSIDE its slot's own row rather than above the page, so the board builder places it via
+    // `leadKeyForRow` in the leading columns the device deliberately left empty (knobs start at col 3).
+    // `id` is the card's one editable param (IR Length) so the shared select machinery — `enm(c.id)`,
+    // `selMenu`, hover help — works on it unchanged; -1 in DynaCab mode, where the card is read-only.
+    for (const g of cabIdentityCards) out.push({ key: g.key, kind: 'cabid', label: g.title, id: g.irLength?.id ?? -1, w: 3, h: 1, view: 'cabid', views: ['cabid'] });
     for (const g of adsrGraphs) out.push({ key: g.key, kind: 'adsr', label: g.title, id: -1, w: 4, h: 2, view: 'adsr', views: ['adsr'] });
     for (const g of megaTapGraphs) out.push({ key: g.key, kind: 'taps', label: 'MegaTap', id: -1, w: 4, h: 2, view: 'taps', views: ['taps'] });
     // Graphic-EQ bands: ONE fader bank instead of N unrelated slider cards. The band params are
@@ -234,6 +245,7 @@
   const compressorGraphById = $derived(new Map(compressorGraphs.map((g) => [g.key, g])));
   const cabAlignmentGraphById = $derived(new Map(cabAlignmentGraphs.map((g) => [g.key, g])));
   const cabMicGraphById = $derived(new Map(cabMicGraphs.map((g) => [g.key, g])));
+  const cabIdentityById = $derived(new Map(cabIdentityCards.map((g) => [g.key, g])));
   const adsrGraphById = $derived(new Map(adsrGraphs.map((g) => [g.key, g])));
   const megaTapGraphById = $derived(new Map(megaTapGraphs.map((g) => [g.key, g])));
   // Each graph slot resolves to its own catalog entry. Most pages have one slot, but Controllers has LFO
@@ -257,6 +269,13 @@
     const byPage = new Map<number, string[]>();
     for (const g of cabMicGraphs) byPage.set(g.page, [...(byPage.get(g.page) ?? []), g.key]);
     return (page: number) => byPage.get(page) ?? [];
+  });
+  // Cab identity cards DO have a device row — their slot's own knob row — and belong in the leading
+  // columns the device left empty for them, not above the page. Keyed by `page:row` accordingly.
+  const cabIdentityKeyForRow = $derived.by(() => {
+    const byRow = new Map<string, string>();
+    for (const g of cabIdentityCards) byRow.set(`${g.page}:${g.row}`, g.key);
+    return (page: number, row: number) => byRow.get(`${page}:${row}`) ?? null;
   });
 
   // ── grid + board state ──
@@ -664,7 +683,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot, cabMicKeyForPage);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot, cabMicKeyForPage, cabIdentityKeyForRow);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -1539,6 +1558,34 @@
               {:else if c.kind === 'cab'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox"><CabAlignmentGraph graph={cabAlignmentGraphById.get(c.key)!} {accent} /></div>
+              {:else if c.kind === 'cabid'}
+                <!-- Per-slot cab identity: what FM3-Edit shows at the left of each cab row. The cabinet
+                     itself is chosen in the CabPicker (which owns those params), so the card SHOWS the
+                     selection and hands off to the picker rather than duplicating its controls. IR Length
+                     is the one param the card edits, and only in legacy mode. -->
+                {@const g = cabIdentityById.get(c.key)!}
+                <div class="cabid">
+                  <div class="cabid-top">
+                    <span class="cabid-slot">{g.title}</span>
+                    {#if g.bank}<span class="cabid-bank">{g.bank}{g.irIndex != null ? ` · #${g.irIndex}` : ''}</span>{/if}
+                  </div>
+                  <button
+                    class="cabid-name"
+                    title={g.name ? `${g.name} — choose a cabinet` : 'Choose a cabinet'}
+                    onpointerdown={(e) => e.stopPropagation()}
+                    onclick={() => !editMode && editor.openCabPicker(g.slot - 1)}
+                  >{g.name ?? '—'}</button>
+                  {#if g.irLength}
+                    <div class="cabid-ir">
+                      <span class="cabid-irlbl">IR Length</span>
+                      <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+                      <div class="selfield cabid-sel" class:open={openSelect === w.id} onpointerdown={(e) => e.stopPropagation()} onclick={(e) => !editMode && toggleSelectMenu(e, w.id)}>
+                        <span class="seltxt">{enm(c.id)?.options.find((o) => o.value === enm(c.id)?.value)?.label ?? '–'}</span>
+                        <span class="caret">▾</span>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
               {:else if c.kind === 'dynacab'}
                 <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
                 <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
@@ -2159,6 +2206,83 @@
   }
   .card.geqcard {
     margin: 0 auto;
+  }
+  /* Per-slot cab identity card. Fills the leading columns the device left empty beside the slot's knob
+     row, so it must live inside ONE knob-row height — hence the tight type scale and the single flexible
+     row (the cabinet name) that absorbs whatever height is left. */
+  .cabid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+  .cabid-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+  }
+  .cabid-slot {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--textdim);
+    flex: none;
+  }
+  .cabid-bank {
+    font-size: 10px;
+    color: var(--textfaint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  /* The name doubles as the way into the picker — the CabPicker owns the bank/IR params, so the card
+     shows the selection and hands off rather than duplicating those controls. */
+  .cabid-name {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    text-align: left;
+    background: var(--input);
+    border: 1px solid var(--border2);
+    border-radius: 7px;
+    padding: 5px 8px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cabid-name:hover {
+    border-color: var(--accent);
+  }
+  .cabid-ir {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .cabid-irlbl {
+    font-size: 10px;
+    color: var(--textdim);
+    flex: none;
+  }
+  .cabid-sel {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+    min-width: 0;
   }
   /* meterH (HEADROOM/B+/Gain strips): the device's own editor draws these as a thin one-line strip —
      label, bar, dB value — not a knob-height card. `.card`'s default `height:100%` fills the grid row

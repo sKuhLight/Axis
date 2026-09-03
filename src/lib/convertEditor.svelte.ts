@@ -109,6 +109,7 @@ class ConvertEditor {
   paletteOpen = $state(false);
   placeTarget = $state<{ row: number; col: number } | null>(null);
   cabPickerOpen = $state(false);
+  cabPickerSlot = $state(0);
   quickBuildOpen = $state(false); // Quick Build is a live-editor sheet; unused offline
   params = $state<NamedParam[]>([]);
   enums = $state<EnumParam[]>([]);
@@ -320,7 +321,7 @@ class ConvertEditor {
   openRetype = () => {
     this.paletteMode = 'retype';
   };
-  openCabPicker = () => {
+  openCabPicker = (_slot?: number) => {
     /* cab editing disabled offline */
   };
   applyCab = async (_writes: { paramId: number; value: number }[]): Promise<void> => {

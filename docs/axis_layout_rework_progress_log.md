@@ -1901,3 +1901,42 @@ inside the one panel — it is not a second pin destination. Sections are create
 the new `AxisMyControlsPanel.svelte`; labels are edited inline in the widget.
 
 No schema change and no migration: a document without headers is just a panel with one section.
+
+## Cab Per-Slot Identity Card — cabid
+
+The Cab page could not show which cabinet was loaded in which slot. The device authors one layout
+row per cab slot, places that slot's identity cluster (`CAB n` heading, Picker, M/S, Bank, Type, the
+live Name, IR Length) by canvas pixels, and starts the knob row at authored `col 3` — cols 0-2 are
+empty precisely because the cluster occupies them. Axis could render almost none of it: the
+CabPicker owns Bank/Type (hidden via `CAB_PICKER_IDS`), `Name` is a live-value field with no static
+render path, `Picker`/`M`/`S` carry pseudo param ids no live param backs, and the `CAB n` heading
+carries pseudo id 65284 so `resolveControl` has always classified it as a live display field and
+dropped it. The one survivor was an orphaned `IR Length` card floating under the knobs, unattached
+to any slot.
+
+`cabIdentityCards.ts` derives one card per live slot — same posture as `cabMicGraphs.ts`: Axis
+re-presenting state the device already gives us, bound by ForgeFX symbol (`CABINET_LEVEL{n}` for the
+row anchor, `CABINET_IRLENGTH{n}` for the one param the card edits), never by id. The live cabinet
+name/bank/IR # come from the `CabState` snapshot `BlockEditor` already fetches and already re-reads
+when the picker closes, so a pick updates the card with no extra request.
+
+`buildDeviceLayoutBoard` gains one narrow hook, `leadKeyForRow(page, row)`, for a card that belongs
+in a row's reserved leading columns rather than above the page (`extraKeysForPage`) or in a row of
+its own. A row with a lead card places it at `x: 0`, spanning the row's full height, clamped to the
+row's first authored column — the clamp is what makes overlap impossible, and it degrades safely to
+"skip the card" on a row whose content already starts at col 0. That row's canvas overlay cluster
+and unbound headings are dropped, since the card now carries them. Rows with no lead key are
+untouched, and the authored-column and flow paths are unchanged.
+
+Clicking a card's name opens the CabPicker on that card's own slot: `openCabPicker(slot?)` records
+`cabPickerSlot` on the editor surface and CabPicker initialises from it (clamped to the served slot
+count) instead of always landing on Slot 1.
+
+In DynaCab mode the card shows the DynaCab name and drops bank / IR # / IR Length, which the device
+ignores and `CAB_LEGACY_ONLY_IDS` already hides.
+
+Mute/solo are deliberately absent: their pseudo ids have no live param, enum, or endpoint behind
+them — they are FM3-Edit editor-internal, and nothing in Axis can read or write them today.
+
+Board schema `b21` re-seeds Default profiles so boards saved before the hook stop serving the
+orphaned `IR Length` placement; custom profiles remain unchanged.

@@ -267,7 +267,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b20\|/);
+    expect(a.variantSig).toMatch(/^b21\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -1155,6 +1155,103 @@ describe('buildDeviceLayoutBoard — dense identity cluster (cab "Cab" page: Pic
     // something the identity cluster caused. The point of this assertion is that it's a normal, coherent
     // authored-column placement at all, not stranded in flow because the cluster corrupted the row.
     expect(find(b, 'k20').col).toBeGreaterThanOrEqual(9);
+  });
+});
+
+// ── the cab identity card: an Axis-authored lead card in the row's reserved leading columns ──
+// Same real cab "Cab" page fixture as above. The device starts the knob row at col 3 and places the slot's
+// identity cluster (CAB 1 heading, Picker, Bank, Type, Name, IR Length) by canvas pixels into cols 0-2;
+// `leadKeyForRow` lets Axis put ONE card there instead, which also absorbs the cluster and the heading.
+describe('buildDeviceLayoutBoard — leadKeyForRow (cab per-slot identity card)', () => {
+  const CABID: BoardCtl = { key: 'cabid1', kind: 'cabid', id: 70, w: 3, h: 1, view: 'cabid', views: ['cabid'] };
+  const cabRow: LayoutControl[] = [
+    ctl('label', 65284, 'CAB 1', { placement: { positionExact: '315,63' }, rawWidget: 'labelBold' }),
+    ctl('button', 65280, 'Picker', { placement: { positionExact: '376,63' } }),
+    ctl('dropdown', 0, 'Bank', { placement: { positionExact: '321,105' } }),
+    ctl('readout', 4, 'Type', { placement: { positionExact: '440,105' } }),
+    ctl('dropdown', 70, 'IR Length', { placement: { positionExact: '321,165' } }),
+    ctl('knob', 8, 'Level', { placement: { col: 3 } }),
+    ctl('knob', 12, 'Pan', { placement: { col: 4 } }),
+    ctl('knob', 62, 'Low Cut', { placement: { col: 5 } }),
+    ctl('knob', 66, 'High Cut', { placement: { col: 6 } }),
+    ctl('knob', 20, 'Proximity', { placement: { col: 7 } })
+  ];
+  const catalog: BoardCtl[] = [CABID, toggle(65280), select(0), knob(4), select(70), knob(8), knob(12), knob(62), knob(66), knob(20)];
+  const lay = layout([{ name: 'Cab', rows: [{ section: 'parameters', controls: cabRow }] }], { family: 'CABINET' });
+  const build = (lead: string | null) =>
+    buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, () => [], () => lead)!.boards['Cab']!;
+  const b = build('cabid1');
+
+  it('places the card at x:0 on the SAME grid line as the knob row it belongs to', () => {
+    const card = find(b, 'cabid1');
+    expect(card.x).toBe(0);
+    expect(card.y).toBe(find(b, 'k8').y); // Level — the row's first authored control
+  });
+
+  it('leaves the authored knob row exactly where the device put it', () => {
+    expect(find(b, 'k8').col).toBe(3);
+    expect(find(b, 'k20').col).toBe(7);
+  });
+
+  it('absorbs the row canvas cluster — no orphan IR Length card stranded below the knobs', () => {
+    expect(b.some((w) => w.key === 'e70')).toBe(false);
+    expect(b.some((w) => w.key === 'e0' || w.key === 'k4' || w.key === 'e65280')).toBe(false);
+  });
+
+  it('reserves no heading line — the card carries the slot title itself', () => {
+    expect(b.some((w) => w.view === 'label')).toBe(false);
+    expect(find(b, 'k8').y).toBe(0); // knobs stay on the page's first line, beside the card
+  });
+
+  // The real cab's `CAB n` heading carries a PSEUDO paramId (65284), so `resolveControl` has always
+  // classified it as a live display field and dropped it — which is why the heading never appeared on the
+  // Cab page even after headings started rendering elsewhere. The card is what finally shows it. A
+  // heading with no paramId is a genuine unbound heading and is still absorbed, not left to double up.
+  it('absorbs a genuine unbound heading too, rather than doubling up with the card title', () => {
+    const unbound = layout(
+      [{ name: 'Cab', rows: [{ section: 'parameters', controls: [ctl('label', null, 'CAB 1', { placement: { positionExact: '315,63' }, rawWidget: 'labelBold' }), ...cabRow.slice(5)] }] }],
+      { family: 'CABINET' }
+    );
+    const ws = buildDeviceLayoutBoard(unbound, catalog, 12, new Set(), () => null, () => [], () => 'cabid1')!.boards['Cab']!;
+    expect(ws.some((w) => w.view === 'label')).toBe(false);
+    expect(find(ws, 'k8').y).toBe(0);
+    assertNoOverlap(ws);
+  });
+
+  it('never overlaps the row content it sits beside', () => assertNoOverlap(b));
+
+  it('keeps the card on its own row through a responsive re-pack', () => {
+    const packed = packRows(b, 12);
+    expect(packed.find((w) => w.key === 'cabid1')!.y).toBe(packed.find((w) => w.key === 'k8')!.y);
+    expect(packed.find((w) => w.key === 'cabid1')!.x).toBe(0);
+    assertNoOverlap(packed);
+  });
+
+  it('changes nothing when no lead key is supplied — the cluster places as it always did', () => {
+    const plain = build(null);
+    expect(plain.some((w) => w.key === 'cabid1')).toBe(false);
+    expect(find(plain, 'e70')).toBeTruthy(); // cluster back as its own row below
+    expect(find(plain, 'e70').y).toBeGreaterThan(find(plain, 'k8').y);
+  });
+
+  it('skips the card rather than drawing over a row whose content already starts at col 0', () => {
+    const noGap = layout(
+      [{ name: 'Cab', rows: [{ section: 'parameters', controls: [ctl('knob', 8, 'Level', { placement: { col: 0 } }), ctl('knob', 12, 'Pan', { placement: { col: 1 } })] }] }],
+      { family: 'CABINET' }
+    );
+    const ws = buildDeviceLayoutBoard(noGap, catalog, 12, new Set(), () => null, () => [], () => 'cabid1')!.boards['Cab']!;
+    expect(ws.some((w) => w.key === 'cabid1')).toBe(false);
+    assertNoOverlap(ws);
+  });
+
+  it('clamps the card to the leading gap when it is narrower than the card wants', () => {
+    const tight = layout(
+      [{ name: 'Cab', rows: [{ section: 'parameters', controls: [ctl('knob', 8, 'Level', { placement: { col: 2 } }), ctl('knob', 12, 'Pan', { placement: { col: 3 } })] }] }],
+      { family: 'CABINET' }
+    );
+    const ws = buildDeviceLayoutBoard(tight, catalog, 12, new Set(), () => null, () => [], () => 'cabid1')!.boards['Cab']!;
+    expect(find(ws, 'cabid1').w).toBe(2); // clamped from 3 to the real gap
+    assertNoOverlap(ws);
   });
 });
 

@@ -348,6 +348,7 @@ class EditorStore {
    *  (see AxisPresetBrowserSearchOverlay.svelte) — search + results only, no navigation away from Grid. */
   presetSearchOpen = $state(false);
   cabPickerOpen = $state(false);
+  cabPickerSlot = $state(0);
   deviceToolsOpen = $state(false); // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
   toast = $state<{ text: string; accent: string } | null>(null);
 
@@ -1567,8 +1568,9 @@ class EditorStore {
   /** Read a block's current cab/IR state. Routed through the store (not called on `forgefx` directly by
    *  components) so the editor surface owns it — an offline surface can override with a buffer read. */
   cabState = (eid: number) => forgefx.cabState(eid);
-  openCabPicker = () => {
+  openCabPicker = (slot = 0) => {
     if (!this.selected?.pack) return;
+    this.cabPickerSlot = Math.max(0, slot);
     this.cabPickerOpen = true;
   };
   /** Apply a set of discrete cab writes (mode / bank / IR index / dyna type) then refresh params. */
