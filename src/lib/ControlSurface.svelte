@@ -262,13 +262,16 @@
   });
   // Band param ids the device layout must collapse onto the single `geq` bank widget.
   const geqBandIds = $derived(new Set(geqBands.map((b) => b.gain.id).filter((id): id is number => id != null)));
-  // Dynacab graphics have no device row of their own — prepended at the TOP of the page that carries the
-  // mic slot's own knobs (see `deriveCabMicGraphs`'s `page` field), so the graphic reads as the DynaCab
-  // hero rather than stranding below the knobs (the builder places extra keys first, before the page's rows).
-  const cabMicKeyForPage = $derived.by(() => {
-    const byPage = new Map<number, string[]>();
-    for (const g of cabMicGraphs) byPage.set(g.page, [...(byPage.get(g.page) ?? []), g.key]);
-    return (page: number) => byPage.get(page) ?? [];
+  // Dynacab graphics have no device row of their own — placed directly ABOVE the row carrying that mic
+  // slot's own knobs (see `deriveCabMicGraphs`'s `page`/`row` fields), so each cone heads its own cab
+  // section instead of every slot's cone floating together at the top of the page.
+  const cabMicKeysForRow = $derived.by(() => {
+    const byRow = new Map<string, string[]>();
+    for (const g of cabMicGraphs) {
+      const k = `${g.page}:${g.row}`;
+      byRow.set(k, [...(byRow.get(k) ?? []), g.key]);
+    }
+    return (page: number, row: number) => byRow.get(`${page}:${row}`) ?? [];
   });
   // Cab identity cards DO have a device row — their slot's own knob row — and belong in the leading
   // columns the device left empty for them, not above the page. Keyed by `page:row` accordingly.
@@ -489,7 +492,36 @@
   // which is what read as tiles scattered at random. A hand-arranged board is left exactly where the user
   // put it — gravity-packing their deliberate placement into new columns would be a regression.
   const repack = $derived(!editMode && (displayCols < cols || (rowGrouped && displayCols > cols)));
-  const viewWidgets = $derived(repack ? repackWidgets(boardWidgets, displayCols) : boardWidgets);
+  const packedWidgets = $derived(repack ? repackWidgets(boardWidgets, displayCols) : boardWidgets);
+  // Where one cab section ends and the next begins — the grid row each cab's identity card starts on,
+  // minus the topmost one. The device draws no divider (its own editor separates the slots by canvas
+  // whitespace, which Axis's uniform grid collapses), so with two near-identical slots stacked the eye has
+  // nothing to tell CAB 1's controls from CAB 2's. Read off the LAID-OUT cards rather than their specs, so
+  // it follows them through responsive reflow. Arrange mode is exempt, same as `rowPx` below: its
+  // drag/resize math works in raw board coordinates and must not see an inserted row.
+  const cabBreaks = $derived.by<number[]>(() => {
+    if (editMode || cabIdentityCards.length < 2) return [];
+    const ys = cabIdentityCards
+      .map((g) => packedWidgets.find((w) => w.key === g.key)?.y)
+      .filter((y): y is number => y != null);
+    // Drop the TOPMOST section first, then discard anything left at row 0 — doing it the other way round
+    // drops CAB 1 in the filter and then `slice` eats CAB 2's divider, leaving none at all.
+    return [...new Set(ys)].sort((a, b) => a - b).slice(1).filter((y) => y > 0);
+  });
+  // Each break opens a real (short) grid row for the rule to breathe in — a 1px line crammed into the 8px
+  // gutter reads as a rendering artifact, not a separator. Everything at or below a break shifts down one
+  // row; anything that SPANS one grows by a row instead, so a tall widget can't be cut short by the insert.
+  const viewWidgets = $derived(
+    cabBreaks.length
+      ? packedWidgets.map((w) => ({
+          ...w,
+          y: w.y + cabBreaks.filter((b) => b <= w.y).length,
+          h: w.h + cabBreaks.filter((b) => b > w.y && b < w.y + w.h).length
+        }))
+      : packedWidgets
+  );
+  /** The inserted rows themselves, in FINAL coordinates — break `i` lands `i` rows lower than it was. */
+  const cabDividerRows = $derived(cabBreaks.map((b, i) => b + i));
   // board height = content extent, with `rows` as a minimum in arrange — grows downward, never sideways
   const viewRows = $derived(Math.max(editMode ? rows : 1, 1, ...viewWidgets.map((w) => w.y + w.h)));
   // A row holding ONLY section-heading text (a device sectionLabel like "TONESTACK" — see
@@ -500,6 +532,9 @@
   // height. Arrange mode is exempt: its drag/resize math (onWidgetDown/onBoardDown) divides pixel deltas
   // by `rowCell + GAP` and assumes every row is that height.
   const LABEL_ROW_PX = 28;
+  /** A cab divider's own row: just enough to sit the rule in open space, with the grid `gap` above and
+   *  below it doing the rest. Not `rowCell` — an empty full-height row reads as a missing widget. */
+  const DIVIDER_ROW_PX = 20;
   const rowPx = $derived.by<number[]>(() => {
     if (editMode) return Array(viewRows).fill(rowCell);
     const hasWidget = Array<boolean>(viewRows).fill(false);
@@ -510,7 +545,8 @@
         if (w.view !== 'label') labelOnly[r] = false;
       }
     }
-    return Array.from({ length: viewRows }, (_, i) => (hasWidget[i] && labelOnly[i] ? LABEL_ROW_PX : rowCell));
+    const divider = new Set(cabDividerRows);
+    return Array.from({ length: viewRows }, (_, i) => (divider.has(i) ? DIVIDER_ROW_PX : hasWidget[i] && labelOnly[i] ? LABEL_ROW_PX : rowCell));
   });
   const gridRowsTemplate = $derived(rowPx.map((h) => `${h}px`).join(' '));
   const boardHeightPx = $derived(rowPx.reduce((a, b) => a + b, 0) + (rowPx.length - 1) * GAP);
@@ -683,7 +719,7 @@
   // to the catalog default so FM3 renders exactly as before. Placement offsets are stored but not yet
   // rendered (later polish pass). Anything the layout doesn't reference is swept onto a "More" page.
   function layoutBoard(): Board | null {
-    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot, cabMicKeyForPage, cabIdentityKeyForRow);
+    return buildDeviceLayoutBoard(editor.blockLayout, catalog, cols, geqBandIds, graphKeyForSlot, cabMicKeysForRow, cabIdentityKeyForRow);
   }
   // Default board: device-authentic editor pages when the server supplies a layout; otherwise a curated
   // "Main" page (EQ + the ~8 musician-facing knobs + bypass) and an "Advanced" page with everything else.
@@ -1587,7 +1623,9 @@
                   {/if}
                 </div>
               {:else if c.kind === 'dynacab'}
-                <div class="eqtitle" style:left="{editMode ? 34 : 12}px">{c.label}</div>
+                <!-- No `eqtitle`: the cab identity card placed beside this cone (`leadKeyForRow`) already
+                     names the slot, and repeating "CAB n" here read as two separate sections. The graphic
+                     keeps its own aria-label, so it stays named for assistive tech. -->
                 <div class="eqbox" style:pointer-events={editMode ? 'none' : 'auto'}>
                   <CabMicGraphic graph={cabMicGraphById.get(c.key)!} {accent} onSet={(p, n) => editor.setParam(p, n)} />
                 </div>
@@ -1699,6 +1737,10 @@
       {#if drag}
         <div class="ghost" class:bad={!drag.valid} style:grid-column="{drag.x + 1} / span {drag.w}" style:grid-row="{drag.y + 1} / span {drag.h}"></div>
       {/if}
+
+      {#each cabDividerRows as dy (dy)}
+        <div class="cabdiv" style:grid-column="1 / -1" style:grid-row={dy + 1}></div>
+      {/each}
 
       {#each viewWidgets as w (w.id)}
         {@const c = catByKey.get(w.key)}
@@ -2175,6 +2217,14 @@
     min-width: 8px;
     height: 1px;
     background: var(--border2);
+  }
+  /* Cab section divider — centred in its own short row (`DIVIDER_ROW_PX`), so the rule has real space
+     around it instead of being wedged into the 8px gutter. Same rule as `.sectionhead`'s: same job. */
+  .cabdiv {
+    align-self: center;
+    height: 0;
+    border-bottom: 1px solid var(--border2);
+    pointer-events: none;
   }
   .ghost {
     border-radius: 11px;

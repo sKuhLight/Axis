@@ -267,7 +267,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b21\|/);
+    expect(a.variantSig).toMatch(/^b23\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -572,37 +572,51 @@ describe('buildDeviceLayoutBoard — response graph slots', () => {
   });
 });
 
-describe('buildDeviceLayoutBoard — extraKeysForPage (Dynacab hero graphic: no device row of its own)', () => {
-  const CABMIC: BoardCtl = { key: 'cabmic1', kind: 'dynacab', id: -1, w: 8, h: 4, view: 'dynacab', views: ['dynacab'] };
+describe('buildDeviceLayoutBoard — heroKeysForRow (Dynacab mic graphic: no device row of its own)', () => {
+  const cabmic = (n: number): BoardCtl => ({ key: `cabmic${n}`, kind: 'dynacab', id: -1, w: 8, h: 4, view: 'dynacab', views: ['dynacab'] });
+  // Two cab slots, one row each — the shape that made page-level hoisting unreadable (both cones landed
+  // together on top, neither attached to the slot it belongs to).
   const lay = layout([
-    { name: 'Cab', rows: [{ controls: [ctl('knob', 12, 'Pan 1'), ctl('knob', 20, 'Proximity 1')] }] },
+    {
+      name: 'Cab',
+      rows: [
+        { controls: [ctl('knob', 12, 'Pan 1'), ctl('knob', 20, 'Proximity 1')] },
+        { controls: [ctl('knob', 13, 'Pan 2'), ctl('knob', 21, 'Proximity 2')] }
+      ]
+    },
     { name: 'Room/Air', rows: [{ controls: [ctl('knob', 35, 'Room Level')] }] }
   ]);
-  const catalog: BoardCtl[] = [knob(12), knob(20), knob(35), CABMIC];
+  const catalog: BoardCtl[] = [knob(12), knob(20), knob(13), knob(21), knob(35), cabmic(1), cabmic(2)];
+  const heroes = (page: number, row: number) => (page === 0 ? (row === 0 ? ['cabmic1'] : row === 1 ? ['cabmic2'] : []) : []);
+  const build = () => buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, heroes)!;
 
-  it('places the extra widget at the TOP of its page, ahead of the page own rows', () => {
-    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
-    expect(find(b.boards['Cab'], 'cabmic1')).toBeTruthy();
-    expect(find(b.boards['Cab'], 'cabmic1').y).toBeLessThan(find(b.boards['Cab'], 'k12').y);
-    expect(b.boards['Room/Air'].some((w) => w.key === 'cabmic1')).toBe(false);
+  it('places each hero directly above its OWN row, not above the page', () => {
+    const ws = build().boards['Cab'];
+    expect(find(ws, 'cabmic1').y).toBeLessThan(find(ws, 'k12').y);
+    expect(find(ws, 'cabmic2').y).toBeLessThan(find(ws, 'k13').y);
+    // the second slot's cone sits BELOW the first slot's knobs — i.e. grouped with its own section
+    expect(find(ws, 'cabmic2').y).toBeGreaterThan(find(ws, 'k12').y);
+    expect(build().boards['Room/Air'].some((w) => w.key.startsWith('cabmic'))).toBe(false);
   });
 
-  it('tags the hero with row -1 so the responsive re-pack keeps it on top', () => {
-    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
-    const hero = find(b.boards['Cab'], 'cabmic1');
-    expect(hero.row).toBe(-1);
-    const repacked = packRows(b.boards['Cab'], 8);
-    expect(repacked.find((w) => w.key === 'cabmic1')!.y).toBeLessThan(repacked.find((w) => w.key === 'k12')!.y);
+  it('tags each hero with `row - 0.5` so the responsive re-pack keeps it with its section', () => {
+    const ws = build().boards['Cab'];
+    expect(find(ws, 'cabmic1').row).toBe(-0.5);
+    expect(find(ws, 'cabmic2').row).toBe(0.5);
+    const repacked = packRows(ws, 8);
+    const y = (k: string) => repacked.find((w) => w.key === k)!.y;
+    expect(y('cabmic1')).toBeLessThan(y('k12'));
+    expect(y('k12')).toBeLessThan(y('cabmic2'));
+    expect(y('cabmic2')).toBeLessThan(y('k13'));
   });
 
   it('does not fall through to the trailing "More" sweep once placed', () => {
-    const b = buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, (page) => (page === 0 ? ['cabmic1'] : []))!;
-    expect(b.pageOrder).not.toContain('More');
+    expect(build().pageOrder).not.toContain('More');
   });
 
-  it('falls back to the "More" sweep when no page claims the key (unchanged default behaviour)', () => {
+  it('falls back to the "More" sweep when no row claims the key (unchanged default behaviour)', () => {
     const b = buildDeviceLayoutBoard(lay, catalog, 12)!;
-    expect(b.boards['Cab'].some((w) => w.key === 'cabmic1')).toBe(false);
+    expect(b.boards['Cab'].some((w) => w.key.startsWith('cabmic'))).toBe(false);
     expect(find(b.boards['More'], 'cabmic1')).toBeTruthy();
   });
 });
@@ -1181,6 +1195,39 @@ describe('buildDeviceLayoutBoard — leadKeyForRow (cab per-slot identity card)'
   const build = (lead: string | null) =>
     buildDeviceLayoutBoard(lay, catalog, 12, new Set(), () => null, () => [], () => lead)!.boards['Cab']!;
   const b = build('cabid1');
+
+  // DynaCab: the same row also carries a hero mic graphic. The card must move UP onto the hero's line and
+  // sit beside the cone it names — the pair reads as one cab section, with the knobs underneath.
+  describe('with a Dynacab hero on the same row', () => {
+    const CABMIC: BoardCtl = { key: 'cabmic1', kind: 'dynacab', id: -1, w: 4, h: 2, view: 'dynacab', views: ['dynacab'] };
+    const withHero = buildDeviceLayoutBoard(lay, [...catalog, CABMIC], 12, new Set(), () => null, () => ['cabmic1'], () => 'cabid1')!.boards['Cab']!;
+    const card = () => find(withHero, 'cabid1');
+    const cone = () => find(withHero, 'cabmic1');
+
+    it('puts the card beside the cone, not on the knob row below it', () => {
+      expect(card().y).toBe(cone().y);
+      expect(card().x).toBe(0);
+      expect(card().y).toBeLessThan(find(withHero, 'k8').y);
+    });
+
+    it('indents the cone past the card so the two never overlap', () => {
+      expect(cone().x).toBe(card().w); // card is 3 wide (Level authored at col 3)
+      assertNoOverlap(withHero);
+    });
+
+    it('spans the card over the hero line(s) so it heads the whole cone', () => {
+      expect(card().h).toBe(cone().h);
+    });
+
+    it('buckets the card with the hero so the pair survives a re-pack together', () => {
+      expect(card().row).toBe(cone().row);
+      const packed = packRows(withHero, 12);
+      const y = (k: string) => packed.find((w) => w.key === k)!.y;
+      expect(y('cabid1')).toBe(y('cabmic1'));
+      expect(y('cabid1')).toBeLessThan(y('k8'));
+      expect(packed.find((w) => w.key === 'cabid1')!.x).toBe(0);
+    });
+  });
 
   it('places the card at x:0 on the SAME grid line as the knob row it belongs to', () => {
     const card = find(b, 'cabid1');

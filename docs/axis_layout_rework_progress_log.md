@@ -1940,3 +1940,42 @@ them — they are FM3-Edit editor-internal, and nothing in Axis can read or writ
 
 Board schema `b21` re-seeds Default profiles so boards saved before the hook stop serving the
 orphaned `IR Length` placement; custom profiles remain unchanged.
+
+## DynaCab Mic Graphic — Anchored to Its Own Cab Section
+
+In DynaCab mode the cab page rendered every slot's speaker-cone graphic as a page-level hero, hoisted
+to the top of the page ahead of all its rows. With two mic slots that produced two identical cones
+floating side by side above two visually identical cab sections, with nothing connecting CAB 1's cone
+to CAB 1's knobs.
+
+`extraKeysForPage(page)` is now `heroKeysForRow(page, row)`: the same placement (own grid line above,
+packed left→right, wrapping at the grid width), anchored to a layout ROW instead of a page. It was
+cab-only in practice, so this is a change of semantics rather than a new hook. Heroes are tagged
+`row: rowIndex - 0.5` so `packRows` — which buckets and sorts numerically by `row` — keeps each cone
+immediately ahead of its own section through responsive reflow.
+
+`CabMicGraphSpec` gains `row`, resolved from the same anchor `cabIdentityCards.ts` uses
+(`CABINET_LEVEL{n}`, falling back to `CABINET_PAN{n}`), so the cone, the identity card, and the slot's
+knobs all agree on which row the slot owns. Legacy mode is unaffected — `deriveCabMicGraphs` still
+returns `[]` when the cab is not in DynaCab mode.
+
+On a row that has BOTH a hero and a lead card, the card now joins the hero's line instead of the row
+below it: the hero is indented past the card's leading columns and the card is placed beside it, so a
+DynaCab slot reads as one group — identity beside its cone, knobs underneath. The cone's own `CAB n`
+title is dropped, since the card beside it already names the slot (the graphic keeps its aria-label).
+The card's height follows what it heads: the hero line(s) when there is a hero, the row's own lines
+otherwise, so legacy mode is byte-identical to before.
+
+A hairline divider now separates the cab sections. The device draws none — its own editor separates
+the slots by canvas whitespace, which Axis's uniform grid collapses — so with two near-identical slots
+stacked there was nothing telling CAB 1's controls from CAB 2's. It is derived from the LAID-OUT
+identity cards rather than their specs, so it follows them through responsive reflow. Each boundary
+opens a short grid row of its own (`DIVIDER_ROW_PX`, 20px) with the rule centred in it — a 1px line
+wedged into the 8px gutter read as a rendering artifact rather than a separator. Widgets at or below a
+boundary shift down one row; anything spanning one grows by a row instead, so the insert cannot cut a
+tall widget short. Arrange mode is exempt, exactly like `rowPx`'s label-row shrink: its drag/resize
+math works in raw board coordinates and must not see an inserted row. Same `--border2` rule the
+device's own `sectionLabel` headings use.
+
+Board schema `b23` re-seeds Default profiles; a board saved with the old placement would keep the
+cone pair pinned to the top of the page forever.

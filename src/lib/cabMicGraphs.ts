@@ -30,6 +30,10 @@ export interface CabMicGraphSpec {
   /** Layout page the slot's own knobs live on — lets the board builder drop the graphic on that same
    *  page, right after them, instead of a separate catch-all tab. */
   page: number;
+  /** Row WITHIN that page carrying the slot's own knobs, so the graphic can head that slot's section
+   *  rather than floating above the page with the other slots' graphics (see `heroKeysForRow`). Anchored
+   *  on Level — the first authored-column control of the cab's row — falling back to Pan. */
+  row: number;
   level?: NamedParam;
   pan: NamedParam;
   position: NamedParam;
@@ -39,22 +43,22 @@ export interface CabMicGraphSpec {
 
 const MAX_SLOTS = 4; // CABINET_* params go up to 4 mic slots in the protocol tables
 
-/** Symbol → device-true paramId, plus the first page each symbol appears on (so the graphic can sit
- *  on the same page as the knobs it re-presents). */
+/** Symbol → device-true paramId, plus the first page/row each symbol appears on (so the graphic can sit
+ *  on the same page as, and directly above, the knobs it re-presents). */
 function paramIndex(layout: DeviceLayout | null | undefined) {
   const idOf = new Map<string, number>();
-  const pageOf = new Map<string, number>();
+  const at = new Map<string, { page: number; row: number }>();
   (layout?.pages ?? []).forEach((page, pageIndex) => {
-    for (const row of page.rows ?? []) {
+    (page.rows ?? []).forEach((row, rowIndex) => {
       for (const c of (row.controls ?? []) as LayoutControl[]) {
         if (c.paramName && c.paramId != null) {
           idOf.set(c.paramName, c.paramId);
-          if (!pageOf.has(c.paramName)) pageOf.set(c.paramName, pageIndex);
+          if (!at.has(c.paramName)) at.set(c.paramName, { page: pageIndex, row: rowIndex });
         }
       }
-    }
+    });
   });
-  return { idOf, pageOf };
+  return { idOf, at };
 }
 
 /** Every Dynacab mic graphic this Cab block should draw, one per live mic slot — empty ([] = none) when
@@ -66,7 +70,7 @@ export function deriveCabMicGraphs(input: {
   dyna: boolean;
 }): CabMicGraphSpec[] {
   if (!input.dyna) return [];
-  const { idOf, pageOf } = paramIndex(input.layout);
+  const { idOf, at } = paramIndex(input.layout);
   const byId = new Map(input.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
   const param = (sym: string): NamedParam | undefined => {
     const id = idOf.get(sym);
@@ -95,11 +99,13 @@ export function deriveCabMicGraphs(input: {
     const pan = param(`CABINET_PAN${n}`);
     const pos = position(n);
     if (!pan || !pos) continue; // slot not on this variant — skip rather than half-draw it
+    const anchor = at.get(`CABINET_LEVEL${n}`) ?? at.get(`CABINET_PAN${n}`);
     out.push({
       key: `cabmic${n}`,
       slot: n,
       title: `CAB ${n}`,
-      page: pageOf.get(`CABINET_PAN${n}`) ?? 0,
+      page: anchor?.page ?? 0,
+      row: anchor?.row ?? 0,
       level: param(`CABINET_LEVEL${n}`),
       pan,
       position: pos,

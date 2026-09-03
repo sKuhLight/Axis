@@ -52,12 +52,35 @@ describe('deriveCabMicGraphs', () => {
   it('resolves one spec per live mic slot when in DynaCab mode', () => {
     const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [cabPage, alignPage]), params: cabParams, enums: cabEnums, dyna: true });
     expect(graphs.map((g) => g.key)).toEqual(['cabmic1', 'cabmic2']);
-    expect(graphs[0]).toMatchObject({ slot: 1, title: 'CAB 1', page: 0 });
+    expect(graphs[0]).toMatchObject({ slot: 1, title: 'CAB 1', page: 0, row: 0 });
     expect(graphs[0].pan.id).toBe(12);
     expect(graphs[0].position.id).toBe(93); // DynaCab position ("DynaCab 1"), not the Proximity knob
     expect(graphs[0].distance?.id).toBe(97); // DynaCab distance (cm), not the legacy delay 16
     expect(graphs[0].mic?.options[1].label).toBe('Condenser');
     expect(graphs[1]).toMatchObject({ slot: 2, title: 'CAB 2' });
+  });
+
+  it('anchors each slot to the page/row carrying its OWN knobs, so the cone heads its own cab section', () => {
+    // The real device authors one row per cab slot; the graphic has to name that row or both cones end up
+    // hoisted together above two indistinguishable sections.
+    const perSlotRows: LayoutPage = {
+      name: 'Cab',
+      rows: [
+        { controls: [c('CABINET_LEVEL1', 8, 'Level'), c('CABINET_PAN1', 12, 'Pan')] },
+        { controls: [c('CABINET_LEVEL2', 9, 'Level'), c('CABINET_PAN2', 13, 'Pan')] }
+      ]
+    };
+    const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [alignPage, perSlotRows]), params: cabParams, enums: cabEnums, dyna: true });
+    expect(graphs.map((g) => ({ page: g.page, row: g.row }))).toEqual([
+      { page: 1, row: 0 },
+      { page: 1, row: 1 }
+    ]);
+  });
+
+  it('falls back to the Pan row when the slot has no Level control authored', () => {
+    const panOnly = page('Cab', [c('CABINET_PAN1', 12, 'Pan')]);
+    const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [panOnly]), params: cabParams, enums: cabEnums, dyna: true });
+    expect(graphs[0]).toMatchObject({ page: 0, row: 0 });
   });
 
   it('returns nothing when the cab is not in DynaCab mode (legacy IR)', () => {

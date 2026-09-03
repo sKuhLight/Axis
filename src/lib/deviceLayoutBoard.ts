@@ -412,8 +412,13 @@ export function railControls(layout: DeviceLayout | null | undefined): Set<numbe
  *  Axis-authored lead card in their reserved leading columns (`leadKeyForRow` — the cab's per-slot
  *  identity cluster), which also drops that row's canvas overlay cluster and headings. A board saved
  *  before the hook has neither the card nor the drop, and would keep serving the orphaned `IR Length`
- *  card under the knobs forever without the re-seed. */
-const BOARD_SCHEMA = 'b21';
+ *  card under the knobs forever without the re-seed. b21→b22: the Dynacab mic graphic is no longer a
+ *  page-wide hero pinned to the top of the page — it now anchors above the layout row carrying its own
+ *  slot's knobs (`heroKeysForRow`), so CAB 1's cone heads CAB 1's section instead of both cones floating
+ *  as an unattached pair. A board saved with the old placement keeps the pair on top forever. b22→b23: a
+ *  row with BOTH a hero and a lead card now puts the card on the hero's line, indenting the hero past it,
+ *  so the cab's identity sits beside the cone it names instead of below it. */
+const BOARD_SCHEMA = 'b23';
 
 /** Stable fingerprint of the served layout variant — changes when the block's type selects a different
  *  layout, so the Default board can be re-seeded (user boards keep their own storage). */
@@ -495,14 +500,22 @@ export function buildDeviceLayoutBoard(
   cols: number,
   geqBandIds: Set<number> = new Set(),
   graphKeyForSlot: (page: number, slot: number) => string | null = () => null,
-  /** Catalog keys with no row of their own to anchor to (the Dynacab mic graphic re-presents knobs
-   *  that keep their own separate widgets, so it can't collapse onto one like `geq` does) — placed at
-   *  the TOP of that page, ahead of its own rows, instead of falling through to the trailing "More"
-   *  sweep, so the graphic reads as a first-class hero rather than stranding below the knobs. Tagged
-   *  `row: -1` so the responsive re-pack (`packRows`) also keeps them ahead of the page's own rows. */
-  extraKeysForPage: (page: number) => string[] = () => [],
+  /** Catalog keys with no device row of their own to anchor to (the Dynacab mic graphic re-presents
+   *  knobs that keep their own separate widgets, so it can't collapse onto one like `geq` does) — placed
+   *  on their own grid line(s) directly ABOVE the layout row they belong to, instead of falling through
+   *  to the trailing "More" sweep.
+   *
+   *  Anchoring per ROW rather than per page is what keeps a multi-slot block readable: the cab serves two
+   *  mic graphics on one page, and hoisting both to the page top left them floating as a pair above two
+   *  visually identical cab sections, with nothing tying CAB 1's cone to CAB 1's knobs. Returning them
+   *  from the row that carries the slot's own knobs makes each cone the header of its own cab section.
+   *  Tagged `row: rowIndex - 0.5` so the responsive re-pack (`packRows`) — which buckets and sorts by
+   *  `row` — keeps the hero immediately ahead of its row through reflow. A row that ALSO has a lead card
+   *  shares that line with it: the hero is indented past the card's leading columns and the card is placed
+   *  beside it rather than on the row below (see `leadKeyForRow`). */
+  heroKeysForRow: (page: number, row: number) => string[] = () => [],
   /** The catalog key of an Axis-authored card that belongs in ONE layout row's reserved leading columns,
-   *  rather than above the page (`extraKeysForPage`) or in a row of its own.
+   *  rather than above it (`heroKeysForRow`) or in a row of its own.
    *
    *  The cab is the case this exists for: the device authors one row per cab slot, places that slot's
    *  identity cluster (`CAB n` heading, Picker, Bank, Type, Name, IR Length) by canvas pixels, and starts
@@ -545,29 +558,6 @@ export function buildDeviceLayoutBoard(
     const seen = new Set<string>();
     let gridRow = 0;
     let groupSeq = 0;
-    // Widgets with no device row of their own (the Dynacab hero graphic) — placed FIRST, packed
-    // left→right and wrapping at `columns`, so they sit above the page's own rows instead of below them.
-    // `row: -1` sorts ahead of the authored rows in `packRows`, keeping the hero on top through reflow.
-    {
-      let ex = 0;
-      let eh = 1;
-      for (const key of extraKeysForPage(pageIndex)) {
-        if (seen.has(key)) continue;
-        const base = byKey.get(key);
-        if (!base) continue;
-        seen.add(key);
-        const w = Math.min(base.w, columns);
-        if (ex > 0 && ex + w > columns) {
-          gridRow += eh;
-          ex = 0;
-          eh = 1;
-        }
-        widgets.push({ id: 'w' + key, key, x: ex, y: gridRow, w, h: base.h, view: base.view, row: -1 });
-        ex += w;
-        eh = Math.max(eh, base.h);
-      }
-      if (ex > 0) gridRow += eh; // advance past the hero row(s) so the page's own rows start below them
-    }
     coalesceRows(pg.rows).forEach((row, rowIndex) => {
       // Split out `positionExact`-only controls that are NOT section headings (the amp's HEADROOM, the
       // cab's per-slot identity cluster, or — when EVERY control in the row is one of these — a whole
@@ -709,36 +699,70 @@ export function buildDeviceLayoutBoard(
         return placed ? y - startY + rowH : 0;
       };
 
+      // The lead card's footprint: the row's reserved leading columns, clamped to its FIRST authored
+      // column — that gap is the space the device left for it (`Level` at col 3 → cols 0-2), and the clamp
+      // is what guarantees it can never overlap the row's own content. A row whose content already starts
+      // at col 0 leaves no gap (width 0) and gets no card, rather than one drawn on top of it.
+      const authoredCols = slots.filter((s) => s.key && s.col != null).map((s) => s.col as number);
+      const leadW = leadBase ? Math.min(leadBase.w, authoredCols.length ? Math.min(...authoredCols) : columns, columns) : 0;
+
+      // Widgets with no device row of their own (the Dynacab mic graphic) — their own grid line(s) above
+      // this row, packed left→right and wrapping at `columns`. When the row also has a lead card they are
+      // INDENTED past it and the card joins them on this line (below), so the slot reads as one group:
+      // identity beside its cone, knobs underneath. `row: rowIndex - 0.5` sorts ahead of this row and
+      // behind the previous one in `packRows`, keeping the pair together through reflow.
+      const heroStartY = gridRow;
+      const heroX0 = leadW < columns ? leadW : 0;
+      let heroLines = 0;
+      {
+        let ex = heroX0;
+        let eh = 1;
+        for (const key of heroKeysForRow(pageIndex, rowIndex)) {
+          if (seen.has(key)) continue;
+          const base = byKey.get(key);
+          if (!base) continue;
+          seen.add(key);
+          const w = Math.min(base.w, columns - heroX0);
+          if (ex > heroX0 && ex + w > columns) {
+            gridRow += eh;
+            ex = heroX0;
+            eh = 1;
+          }
+          widgets.push({ id: 'w' + key, key, x: ex, y: gridRow, w, h: base.h, view: base.view, row: rowIndex - 0.5 });
+          ex += w;
+          eh = Math.max(eh, base.h);
+        }
+        if (ex > heroX0) {
+          gridRow += eh; // advance past the hero line(s) so this row starts below them
+          heroLines = gridRow - heroStartY;
+        }
+      }
+
       const rowStartY = gridRow;
       gridRow += placeSlots(beforeSlots, gridRow);
       const headingY = gridRow;
       if (hasHeadingLine) gridRow += 1;
       gridRow += placeSlots(afterSlots, gridRow);
 
-      // The lead card fills the row's reserved leading columns, spanning the row's FULL height so it reads
-      // as that row's identity rather than as one more tile stacked beside it. Width is clamped to the
-      // row's first authored column — that gap is the space the device left for it (`Level` at col 3 →
-      // cols 0-2), and the clamp is what guarantees it can never overlap the row's own content. A row
-      // whose content already starts at col 0 leaves no gap, so the card is skipped rather than drawn on
-      // top of it. Emitted after the slices because its height is the number of grid lines they consumed.
-      if (leadBase) {
-        const authoredCols = slots.filter((s) => s.key && s.col != null).map((s) => s.col as number);
-        const gap = authoredCols.length ? Math.min(...authoredCols) : columns;
-        const lw = Math.min(leadBase.w, gap, columns);
-        if (lw > 0) {
-          seen.add(leadKey!);
-          widgets.push({
-            id: 'w' + leadKey,
-            key: leadKey!,
-            x: 0,
-            y: rowStartY,
-            w: lw,
-            h: Math.max(1, gridRow - rowStartY),
-            view: leadBase.view,
-            row: rowIndex,
-            col: 0
-          });
-        }
+      // The lead card fills the leading columns measured above, spanning the FULL height of whatever it
+      // heads so it reads as that content's identity rather than as one more tile stacked beside it: the
+      // hero line(s) when the row has a hero (the card sits beside the cone it names), otherwise the row's
+      // own lines. Emitted after the slices because in the latter case its height is the number of grid
+      // lines they consumed.
+      if (leadBase && leadW > 0) {
+        const onHero = heroLines > 0;
+        seen.add(leadKey!);
+        widgets.push({
+          id: 'w' + leadKey,
+          key: leadKey!,
+          x: 0,
+          y: onHero ? heroStartY : rowStartY,
+          w: leadW,
+          h: onHero ? heroLines : Math.max(1, gridRow - rowStartY),
+          view: leadBase.view,
+          row: onHero ? rowIndex - 0.5 : rowIndex,
+          col: 0
+        });
       }
 
       if (hasHeadingLine) {
