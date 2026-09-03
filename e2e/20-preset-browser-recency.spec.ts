@@ -4,7 +4,7 @@ import { bootCleanWorkbench, clickNav } from './support/workbench';
 /**
  * Preset Browser — RECENT sort.
  *
- * The segment sorts by `presetRecency` (localStorage `axs.presets.lastLoaded`, entry id → epoch ms),
+ * The column header sorts by `presetRecency` (localStorage `axs.presets.lastLoaded`, entry id → epoch ms),
  * written whenever the app loads a preset. Loading a preset for real needs a device, so this spec seeds
  * the map directly and pins the ORDERING contract instead: most-recent first, never-loaded last.
  */
@@ -47,12 +47,12 @@ test.describe('Preset Browser recency sort', () => {
     // Default sort is by slot number.
     await expect(slots(page)).toHaveText(['001', '002', '003']);
 
-    await page.locator('.sort-seg button', { hasText: 'RECENT' }).click();
+    await page.locator('.list-cols .col-sort', { hasText: 'Recent' }).click();
 
     await expect(slots(page)).toHaveText(['003', '001', '002']);
 
     // And back — RECENT must not mutate the underlying list.
-    await page.locator('.sort-seg button', { hasText: '#' }).click();
+    await page.locator('.list-cols .col-sort.num').click();
     await expect(slots(page)).toHaveText(['001', '002', '003']);
   });
 });

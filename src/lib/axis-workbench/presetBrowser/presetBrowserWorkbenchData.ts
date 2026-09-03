@@ -67,6 +67,9 @@ export interface AxisPresetBrowserDataView {
   sources: AxisPresetBrowserSourceSummary[];
   entries: AxisPresetBrowserEntrySummary[];
   visibleEntries: AxisPresetBrowserEntrySummary[];
+  /** Entries in scope BEFORE the query runs — source + presence filters applied, conditions not. The
+   *  list header reports "N of scopedTotal" so the count only reads as a result when it is one. */
+  scopedTotal: number;
   selectedEntry: AxisPresetBrowserEntrySummary | null;
   activeSourceId: AxisPresetBrowserSourceId;
   /** Library views with live counts for the sources sidebar (§3). */
@@ -225,6 +228,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     sources,
     entries,
     visibleEntries,
+    scopedTotal: byPresence.length,
     selectedEntry,
     activeSourceId,
     presenceViews,

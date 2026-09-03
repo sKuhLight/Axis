@@ -103,6 +103,27 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.selectedEntry?.id).toBe('file:ambient');
   });
 
+  it('reports scopedTotal as the in-scope count BEFORE the query, so the header can say "N of M"', () => {
+    const unfiltered = createAxisPresetBrowserDataView({ entries, sourceId: 'all' });
+    // Nothing queried: the count is just the library size, and the header renders it plainly.
+    expect(unfiltered.scopedTotal).toBe(entries.length);
+    expect(unfiltered.visibleEntries.length).toBe(unfiltered.scopedTotal);
+
+    const filtered = createAxisPresetBrowserDataView({
+      entries,
+      sourceId: 'all',
+      conditions: [{ kind: 'block', block: 'reverb', params: [] }]
+    });
+    // Queried: visible is a strict subset, and scopedTotal still reports what it was drawn from.
+    expect(filtered.visibleEntries.length).toBe(1);
+    expect(filtered.scopedTotal).toBe(entries.length);
+
+    // The source filter is part of the SCOPE, not the query — it moves scopedTotal with it.
+    const deviceOnly = createAxisPresetBrowserDataView({ entries, sourceId: 'device' });
+    expect(deviceOnly.scopedTotal).toBe(deviceOnly.visibleEntries.length);
+    expect(deviceOnly.scopedTotal).toBeLessThan(entries.length);
+  });
+
   it('surfaces a Converted source with provenance, and shows the source label when the slot is unset', () => {
     const converted: AxisPresetBrowserLibEntryLike[] = [
       ...entries,

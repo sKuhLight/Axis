@@ -32,7 +32,8 @@
   } from '../../presetBrowser/types';
   import {
     axisPresetBrowserWorkbenchController,
-    type AxisPresetBrowserControllerSnapshot
+    type AxisPresetBrowserControllerSnapshot,
+    type AxisPresetBrowserSort
   } from '../../presetBrowser/presetBrowserWorkbenchController';
   import {
     axisPresetBrowserWorkbenchRuntime,
@@ -95,6 +96,7 @@
   import ContextMenu from '../../../workbench/svelte/ContextMenu.svelte';
   import {
     effectiveZoom,
+    menuPositionBelowRect,
     menuPositionFromPointer,
     resolveMenuPlacement,
     type WorkbenchMenuItem,
@@ -565,6 +567,50 @@
     renamingId = null;
   }
 
+  // ── §4.1 column-header sorting ───────────────────────────────────────────────────────────────
+  // Re-picking the active column flips its direction; picking a different one hands the direction back
+  // to `setSort`, which resets to that field's natural default (A-Z ascending, CPU/recent descending).
+  function toggleSort(key: AxisPresetBrowserSort) {
+    if (snapshot.sort === key) {
+      axisPresetBrowserWorkbenchController.setSortDir(snapshot.sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      axisPresetBrowserWorkbenchController.setSort(key);
+    }
+  }
+  const sortArrow = (key: AxisPresetBrowserSort) =>
+    snapshot.sort === key ? (snapshot.sortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
+  const sortLabel = (key: AxisPresetBrowserSort, field: string) =>
+    snapshot.sort === key
+      ? `Sorted by ${field}, ${snapshot.sortDir === 'asc' ? 'ascending' : 'descending'} — click to reverse`
+      : `Sort by ${field}`;
+
+  // ── toolbar overflow (⋯) ─────────────────────────────────────────────────────────────────────
+  // Occasional maintenance/tooling, one click deep. Local to the instance that owns the query bar
+  // (list/full) — unlike the row menu it acts on nothing shared, so it needs no overlay-owner rank.
+  let toolsOpen = $state(false);
+  let toolsPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  const toolsItems = $derived<WorkbenchMenuItem[]>([
+    {
+      id: 'rescan',
+      label: library.scanning ? `Scanning ${library.scanDone}/${library.scanTotal}…` : 'Re-scan device',
+      hint: editor.scanNamesOnly ? 'Names only' : 'Full index',
+      disabled: library.scanning,
+      run: () => void library.buildCache()
+    },
+    {
+      id: 'convert',
+      label: 'Convert Preset…',
+      hint: 'Cross-device',
+      separatorBefore: true,
+      run: () => convert.openBlank()
+    }
+  ]);
+  function openToolsMenu(event: MouseEvent) {
+    event.stopPropagation(); // the window click handler below closes menus — don't let it eat this open
+    toolsPos = menuPositionBelowRect((event.currentTarget as HTMLElement).getBoundingClientRect());
+    toolsOpen = true;
+  }
+
   // ── §4.4 row context menu (right-click / long-press) ────────────────────────────────────────
   // The generic workbench ContextMenu, rendered by the overlay OWNER instance only (§1 rank rule) so a
   // split sources|list|detail layout never double-renders the menu. Actions carry real backing:
@@ -782,7 +828,14 @@
 {/snippet}
 
 {#snippet listTopBar()}
-  <div class="query-bar">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="query-bar"
+    ondragenter={(e) => { e.preventDefault(); dragOver = true; }}
+    ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+    ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) dragOver = false; }}
+    ondrop={onFiltersDrop}
+  >
     <div class="query-input" class:focus={acOpen && snapshot.advanced}>
       <span class="magnifier" aria-hidden="true">⌕</span>
       {#if snapshot.advanced}
@@ -813,6 +866,18 @@
       {#if (snapshot.advanced ? snapshot.query : snapshot.simpleQ)}
         <button type="button" class="clear-btn" title="Clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>×</button>
       {/if}
+      <!-- The mode changes what THIS field accepts (plain text vs the typed query language), so it is
+           labelled on the field rather than floating in the toolbar as a standalone state word. -->
+      <button
+        type="button"
+        class="adv-toggle"
+        class:on={snapshot.advanced}
+        title={snapshot.advanced ? 'Switch to plain-text search' : 'Switch to the typed query language'}
+        aria-pressed={snapshot.advanced}
+        onclick={() => axisPresetBrowserWorkbenchController.toggleAdvanced()}
+      >
+        <i></i>{snapshot.advanced ? 'Advanced' : 'Simple'}
+      </button>
       {#if acOpen && snapshot.advanced}
         <!-- V13e autocomplete dropdown (§2.4) -->
         <div class="ac">
@@ -834,41 +899,8 @@
         </div>
       {/if}
     </div>
-    <div class="query-controls">
-      <button
-        type="button"
-        class="adv-toggle"
-        class:on={snapshot.advanced}
-        onclick={() => axisPresetBrowserWorkbenchController.toggleAdvanced()}
-        title="Toggle advanced query"
-      >
-        <i></i>{snapshot.advanced ? 'Advanced' : 'Simple'}
-      </button>
-      <div class="sort-group">
-        <div class="sort-seg" role="group" aria-label="Sort">
-          <button type="button" class:on={snapshot.sort === 'num'} onclick={() => axisPresetBrowserWorkbenchController.setSort('num')}>#</button>
-          <button type="button" class:on={snapshot.sort === 'name'} onclick={() => axisPresetBrowserWorkbenchController.setSort('name')}>A-Z</button>
-          <button type="button" class:on={snapshot.sort === 'cpu'} onclick={() => axisPresetBrowserWorkbenchController.setSort('cpu')}>CPU</button>
-          <button type="button" class:on={snapshot.sort === 'recent'} onclick={() => axisPresetBrowserWorkbenchController.setSort('recent')}>RECENT</button>
-        </div>
-        <div class="sort-dir" role="group" aria-label="Sort direction">
-          <button
-            type="button"
-            class:on={snapshot.sortDir === 'asc'}
-            title="Ascending"
-            aria-label="Sort ascending"
-            onclick={() => axisPresetBrowserWorkbenchController.setSortDir('asc')}
-          >▲</button>
-          <button
-            type="button"
-            class:on={snapshot.sortDir === 'desc'}
-            title="Descending"
-            aria-label="Sort descending"
-            onclick={() => axisPresetBrowserWorkbenchController.setSortDir('desc')}
-          >▼</button>
-        </div>
-      </div>
-      <div class="query-actions">
+    <div class="query-tools">
+      <button type="button" class="add-filter" onclick={onAddFilter}><span class="plus">+</span> Add filter</button>
       <!-- §2.2/§3.3 Save filter → opens the inline name input in the sources sidebar. -->
       <button
         type="button"
@@ -879,44 +911,28 @@
       >
         ☆ Save filter
       </button>
-      <!-- Library (re)scan — the workbench mirror of the monolith's "Build cache" button. Re-indexing the
-           device is what drops presets the user cleared on the hardware (their slot now reads <EMPTY>). -->
+      <span class="tools-sp"></span>
+      {#if library.scanning}
+        <span class="scan-progress">Scanning {library.scanDone}/{library.scanTotal}…</span>
+      {/if}
+      <!-- Re-scanning the device and converting a preset are occasional maintenance/tooling, not browsing:
+           they live one click deep so the toolbar only carries controls used while searching. -->
       <button
         type="button"
-        class="rebuild-cache"
-        disabled={library.scanning}
-        title={editor.scanNamesOnly
-          ? 'Scan the stored-preset locations (names) into the local library'
-          : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}
-        onclick={() => library.buildCache()}
-      >
-        {library.scanning ? `Building ${library.scanDone}/${library.scanTotal}…` : '↻ Re-scan device'}
-      </button>
-      <!-- General cross-device converter entry point (not only the per-row menu): opens the ConvertDialog
-           FRESH (no pre-seeded source) so the user picks a target device + Chooses a .syx directly. -->
-      <button
-        type="button"
-        class="convert-preset"
-        title="Convert a preset to another Fractal device — pick a target device, then Choose a .syx file"
-        onclick={() => convert.openBlank()}
-      >
-        ⇄ Convert Preset…
-      </button>
-      </div>
+        class="tools-more"
+        aria-label="More preset tools"
+        aria-haspopup="menu"
+        aria-expanded={toolsOpen}
+        title="More preset tools"
+        onclick={(e) => openToolsMenu(e)}
+      >⋯</button>
     </div>
-    <!-- V13e FILTERS builder-chips row (§2.5) — also a drop target for params/blocks dragged from detail -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="filters-row"
-      class:dragover={dragOver}
-      role="group"
-      ondragenter={(e) => { e.preventDefault(); dragOver = true; }}
-      ondragover={(e) => { e.preventDefault(); dragOver = true; }}
-      ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) dragOver = false; }}
-      ondrop={onFiltersDrop}
-    >
-      <span class="filters-lbl">FILTERS</span>
-      {#if dragOver}<span class="drop-hint">drop to add filter</span>{/if}
+    <!-- V13e FILTERS builder-chips row (§2.5) — also a drop target for params/blocks dragged from detail.
+         Only rendered once it has chips to hold (or a drag in flight): an empty bordered row carrying a
+         hint sentence was a whole band of chrome for a tooltip. -->
+    {#if activeConditions.length || dragOver}
+    <div class="filters-row" class:dragover={dragOver} role="group">
+      {#if dragOver}<span class="drop-hint">Drop to add a filter</span>{/if}
       {#each chipDescriptors as item, ci}
         <div class="fchip">
           {#if item.desc.kind === 'block'}
@@ -938,11 +954,10 @@
           <button type="button" class="fcx" onclick={() => removeCondAt(ci)}>×</button>
         </div>
       {/each}
-      <button type="button" class="faddf" onclick={onAddFilter}><span class="plus">+</span> Add filter</button>
-      {#if !activeConditions.length}<span class="filters-hint">{snapshot.advanced ? 'Type a query above, or add filters →' : 'Add block, parameter & tag filters →'}</span>{/if}
       <span class="fsp"></span>
-      {#if activeConditions.length}<button type="button" class="fclrall" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>{/if}
+      <button type="button" class="fclrall" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>
     </div>
+    {/if}
   </div>
 {/snippet}
 
@@ -954,12 +969,25 @@
         <span>{markedCount} selected</span>
         <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
       </div>
-    {:else}
-      <div class="axis-list-summary">
-        <span>{rowCap.totalRows} presets</span>
-        <strong>{data.sources.find((source) => source.id === data.activeSourceId)?.label ?? data.activeSourceId}</strong>
-      </div>
     {/if}
+    <!-- §4.1 Sorting is a property of this list, not of the search above it: each column header IS its
+         sort control, and the active one carries the direction. The result count rides here too — plain
+         while it just states the library size, accent only once it reports a filtered subset. -->
+    <div class="list-cols">
+      <span class="col-pad"></span>
+      <button type="button" class="col-sort num" class:on={snapshot.sort === 'num'} aria-label={sortLabel('num', 'slot number')} onclick={() => toggleSort('num')}>#{sortArrow('num')}</button>
+      <span class="col-mid">
+        <button type="button" class="col-sort" class:on={snapshot.sort === 'name'} aria-label={sortLabel('name', 'name')} onclick={() => toggleSort('name')}>Name{sortArrow('name')}</button>
+        <span class="col-count" class:filtered={rowCap.totalRows !== data.scopedTotal}>
+          {rowCap.totalRows === data.scopedTotal ? `${data.scopedTotal} presets` : `${rowCap.totalRows} of ${data.scopedTotal}`}
+        </span>
+        <span class="col-sp"></span>
+      </span>
+      <span class="col-meta">
+        <button type="button" class="col-sort" class:on={snapshot.sort === 'recent'} aria-label={sortLabel('recent', 'last loaded')} onclick={() => toggleSort('recent')}>Recent{sortArrow('recent')}</button>
+        <button type="button" class="col-sort" class:on={snapshot.sort === 'cpu'} aria-label={sortLabel('cpu', 'estimated CPU')} onclick={() => toggleSort('cpu')}>CPU{sortArrow('cpu')}</button>
+      </span>
+    </div>
     <div class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
       {#each rowCap.rows as entry}
         {@const anatomy = axisPbRowAnatomy(entry)}
@@ -1293,6 +1321,9 @@
   <ContextMenu open={menuOpen} position={menuPos} items={menuItems} label="Preset actions" onClose={() => (menuOpen = false)} />
 {/if}
 
+<!-- Toolbar overflow menu (Re-scan device / Convert Preset…). Local to the query-bar owner. -->
+<ContextMenu open={toolsOpen} position={toolsPos} items={toolsItems} label="Preset tools" onClose={() => (toolsOpen = false)} />
+
 <!-- V13e add-filter / param / value picker popover (§2.5, §4.4). Local to the instance that owns the query
      bar (list/full); anchored in viewport coords. A window click or Esc closes it. -->
 <svelte:window
@@ -1483,8 +1514,7 @@
     display: grid;
     gap: 8px;
   }
-  .axis-source-total,
-  .axis-list-summary {
+  .axis-source-total {
     min-height: 42px;
     display: flex;
     align-items: center;
@@ -1495,20 +1525,14 @@
     padding: 0 11px;
     background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
   }
-  .axis-source-total strong,
-  .axis-list-summary strong {
+  .axis-source-total strong {
     color: var(--text);
     font: 900 18px/1 var(--font-mono);
   }
-  .axis-source-total span,
-  .axis-list-summary span {
+  .axis-source-total span {
     color: var(--textdim);
     font: 800 10px/1 var(--font-mono);
     letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .axis-list-summary strong {
-    font-size: 12px;
     text-transform: uppercase;
   }
   button {
@@ -1812,33 +1836,60 @@
     color: var(--textdim);
     font-size: 15px;
   }
-  .query-controls {
+  /* One toolbar line: the query builder's own controls on the left, everything occasional behind ⋯. */
+  .query-tools {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    /* The fourth sort segment pushes this row past a narrow dock's width — wrap rather than squash
-       the buttons into unreadable slivers. */
     flex-wrap: wrap;
   }
-  .query-controls > .sort-group {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .tools-sp {
+    flex: 1;
   }
-  .adv-toggle {
+  .add-filter {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 5px;
     height: 30px;
     padding: 0 11px;
     border-radius: 999px;
     text-transform: none;
+    font: 700 11px/1 var(--font-mono);
+  }
+  .add-filter .plus {
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .tools-more {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    color: var(--textdim);
+    font: 700 14px/1 var(--font-mono);
+  }
+  .scan-progress {
+    color: var(--accent);
+    font: 700 10px/1 var(--font-mono);
+    letter-spacing: 0.06em;
+  }
+  /* The mode chip lives inside the search field, so it is sized to sit in a 40px input. */
+  .adv-toggle {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    text-transform: none;
+    font: 700 10px/1 var(--font-mono);
   }
   .adv-toggle i {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 999px;
     background: var(--textdim);
   }
@@ -1849,47 +1900,6 @@
   }
   .adv-toggle.on i {
     background: var(--accentink, var(--bg));
-  }
-  .sort-seg {
-    display: flex;
-    gap: 4px;
-  }
-  .sort-seg button {
-    height: 28px;
-    padding: 0 9px;
-    border-radius: 7px;
-    font: 700 11px/1 var(--font-mono);
-    text-transform: none;
-  }
-  .sort-seg button.on {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accentink, var(--bg));
-  }
-  /* Two half-height stacked ASC/DESC buttons beside the sort segments. */
-  .sort-dir {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .sort-dir button {
-    height: 13px;
-    width: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border-radius: 6px;
-    font: 700 9px/1 var(--font-mono);
-    line-height: 1;
-    text-align: center;
-    text-transform: none;
-  }
-  .sort-dir button.on {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accentink, var(--bg));
   }
   /* V13e autocomplete dropdown (§2.4) */
   .query-input.focus {
@@ -1973,19 +1983,15 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
+    min-height: 30px;
+    padding: 0;
+    border: 1px dashed transparent;
     border-radius: 10px;
-    background: color-mix(in srgb, var(--bg2) 60%, var(--bg));
   }
   .filters-row.dragover {
+    padding: 6px 8px;
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 8%, var(--bg2));
-  }
-  .filters-lbl {
-    color: var(--textdim);
-    font: 800 9px/1 var(--font-mono);
-    letter-spacing: 0.12em;
   }
   .drop-hint {
     color: var(--accent);
@@ -2060,27 +2066,6 @@
     color: var(--textdim);
     font: 600 10px/1 var(--font-mono);
     text-transform: none;
-  }
-  .faddf {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 8px;
-    border: 1px solid var(--border2, var(--border));
-    background: var(--bg2);
-    color: var(--text2);
-    font: 700 11px/1 var(--font-mono);
-    text-transform: none;
-  }
-  .faddf .plus {
-    color: var(--accent);
-    font-size: 13px;
-  }
-  .filters-hint {
-    color: var(--textdim);
-    font: 500 10.5px/1.2 var(--font-mono);
   }
   .fclrall {
     height: 24px;
@@ -2427,13 +2412,6 @@
     color: var(--textdim);
     font: 500 11px/1.3 var(--font-mono);
   }
-  .query-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
   .save-filter {
     height: 30px;
     padding: 0 11px;
@@ -2445,30 +2423,6 @@
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accentink, var(--bg));
-  }
-  .rebuild-cache {
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 999px;
-    text-transform: none;
-    font: 700 11px/1 var(--font-mono);
-  }
-  .rebuild-cache:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-  .convert-preset {
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 999px;
-    text-transform: none;
-    font: 700 11px/1 var(--font-mono);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-    color: var(--accent);
-  }
-  .convert-preset:hover {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
   .quick-tags {
     display: flex;
@@ -2491,6 +2445,64 @@
   }
 
   /* selection header + expander (§4) */
+  /* Mirrors .preset-row's grid (18px checkbox | 34px number | main | meta) so each header sits over the
+     column it sorts. The row's 1px border + 2px accent rail are absorbed by the asymmetric padding. */
+  .list-cols {
+    display: grid;
+    grid-template-columns: 18px 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 0 13px 0 14px;
+    min-height: 30px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .col-mid,
+  .col-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .col-meta {
+    justify-content: flex-end;
+  }
+  .col-sp {
+    flex: 1;
+  }
+  .list-cols .col-sort {
+    height: 24px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--textfaint, var(--textdim));
+    font: 800 9px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .list-cols .col-sort:hover {
+    color: var(--text2);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .list-cols .col-sort.on {
+    color: var(--accent);
+  }
+  .list-cols .col-sort.num {
+    padding-left: 0;
+    justify-self: start;
+  }
+  .col-count {
+    color: var(--textdim);
+    font: 700 10px/1 var(--font-mono);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  /* Accent is reserved for a count that is actually a RESULT — never for the library's resting size. */
+  .col-count.filtered {
+    color: var(--accent);
+  }
   .select-head {
     display: flex;
     align-items: center;
