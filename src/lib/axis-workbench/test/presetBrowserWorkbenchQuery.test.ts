@@ -127,6 +127,16 @@ describe('Preset Browser matching', () => {
     expect(matchPreset(entry(), parseQuery('tag:Live + AMP'), 'studio')).toBe(true);
     expect(matchPreset(entry(), parseQuery('tag:Live + COMP'), 'studio')).toBe(false);
   });
+
+  it('free text matches a real device name via the injected lookup, not just the decoded model', () => {
+    const realNameFor = (slug: string, modelName: string) =>
+      slug === 'amp' && modelName === '5153 red' ? 'Fractal Audio 5150 III' : '';
+    expect(matchPreset(entry(), [], 'fractal', realNameFor)).toBe(true);
+    expect(matchPreset(entry(), [], '5150', realNameFor)).toBe(true);
+    // Without a lookup (or one that doesn't know this model), the real name isn't searchable.
+    expect(matchPreset(entry(), [], 'fractal')).toBe(false);
+    expect(matchPreset(entry(), [], 'fractal', () => '')).toBe(false);
+  });
 });
 
 describe('matchEntryFromSummary (regression: decoded models must survive summary normalization)', () => {

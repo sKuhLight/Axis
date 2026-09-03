@@ -188,6 +188,12 @@ export interface AxisPbMatchEntry {
   blockSlugs: string[];
 }
 
+// Real-world device name lookup (manufacturer + the unit a model is based on), injected rather than
+// imported so this module stays a pure, dependency-free `.ts` unit (it's exercised by plain node-project
+// vitest, which never compiles the `deviceRealNames.svelte.ts` rune store). The live implementation is
+// `deviceRealNames.realNameFor` (src/lib/deviceRealNames.svelte.ts), wired in by the panel component.
+export type AxisPbRealNameLookup = (slug: string, modelName: string) => string;
+
 // Adapt an entry summary to the matchable shape. `cpu` is an estimate (blockCount-derived) when the
 // summary carries none.
 export function matchEntryFromSummary(entry: AxisPresetBrowserEntrySummary): AxisPbMatchEntry {
@@ -251,15 +257,22 @@ export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
   }
 }
 
-// Simple-mode free text: whitespace tokens, all must appear in the haystack (§2.3).
-export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string): boolean {
+// Free-text remainder of the unified query field (everything outside backtick spans, §2.3):
+// whitespace tokens, all must appear in the haystack. `realNameFor` is optional — omitted, matching
+// stays purely on decoded model names, same as before this lookup existed.
+export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
   const toks = simpleQ.toLowerCase().split(/\s+/).filter(Boolean);
   if (!toks.length) return true;
+  // Each model name is followed by its real-world gear name (manufacturer + basedOn, when known) so
+  // "hiwatt" matches an entry built on the internal "HIPOWER" model.
+  const modelHay = Object.entries(entry.models)
+    .flatMap(([slug, names]) => (names ?? []).flatMap((n) => [n, realNameFor?.(slug, n) ?? '']))
+    .join(' ');
   const hay = [
     entry.name,
     entry.tags.join(' '),
     entry.author ?? '',
-    Object.values(entry.models).flat().join(' '),
+    modelHay,
     entry.blockSlugs.join(' ')
   ]
     .join(' ')
@@ -268,9 +281,9 @@ export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string): boolean {
 }
 
 // Full predicate over conditions + simple text.
-export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simpleQ: string): boolean {
+export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
   for (const c of conds) if (!matchCond(entry, c)) return false;
-  return matchSimple(entry, simpleQ);
+  return matchSimple(entry, simpleQ, realNameFor);
 }
 
 // ===================== unified query (backtick-scoped filters) =====================

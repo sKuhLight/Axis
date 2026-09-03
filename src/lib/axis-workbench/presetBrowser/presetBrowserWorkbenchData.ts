@@ -107,6 +107,10 @@ export interface AxisPresetBrowserDataInput {
   conditions?: AxisPbCond[];
   /** Simple-mode free text applied on top of conditions. */
   simpleQuery?: string;
+  /** Real-world device name lookup folded into free-text matching (e.g. so "hiwatt" matches a preset
+   *  built on the internal "HIPOWER" model) — the live `deviceRealNames.realNameFor`. Optional so this
+   *  module stays testable without it; omitted, matching stays purely on decoded model names. */
+  realNameFor?: AxisPbRealNameLookup;
   /** Result ordering (§4.1). Defaults to preset number. */
   sort?: AxisPresetBrowserSortMode;
   /** Result direction (§4.1). 'asc' unless overridden; CPU/RECENT naturally sort descending. */
@@ -121,7 +125,7 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
   count: number;
 }
 
-import { matchEntryFromSummary, matchPreset, type AxisPbCond } from './presetBrowserWorkbenchQuery';
+import { matchEntryFromSummary, matchPreset, type AxisPbCond, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
 import {
   AXIS_PB_PRESENCE_VIEWS,
   entryInPresenceView,
@@ -216,7 +220,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
   const conditions = input.conditions ?? [];
   const simpleQuery = (input.simpleQuery ?? '').trim();
   const queried = conditions.length || simpleQuery
-    ? byPresence.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery))
+    ? byPresence.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery, input.realNameFor))
     : byPresence;
 
   const sortMode = input.sort ?? 'num';

@@ -49,6 +49,7 @@
     frequentTagRow
   } from '../../presetBrowser/presetBrowserWorkbenchFrequentTags';
   import { presetRecency } from '../../../presetRecency.svelte';
+  import { deviceRealNames } from '../../../deviceRealNames.svelte';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
   import {
     axisPbRowClickIntent,
@@ -147,6 +148,7 @@
     lastLoadedAt: presetRecency.at,
     conditions: activeConditions,
     simpleQuery: freeText,
+    realNameFor: deviceRealNames.realNameFor,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
     presenceView: snapshot.presenceView,
@@ -464,6 +466,14 @@
     const cic = (globalThis as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
     const id = ric ? ric(warm, { timeout: 1500 }) : (setTimeout(warm, 250) as unknown as number);
     return () => { if (ric && cic) cic(id); else clearTimeout(id); };
+  });
+
+  // Warm the real-device-name cache for every family the library uses, so free-text search can match
+  // "hiwatt" against a preset's internal "HIPOWER" model once the catalog resolves (see matchSimple).
+  $effect(() => {
+    const slugs = new Set<string>();
+    for (const e of baseEntries) for (const slug of Object.keys(e.summary.models ?? {})) slugs.add(slug);
+    deviceRealNames.prime(slugs);
   });
 
   function onRowClick(entry: AxisPresetBrowserEntrySummary, event: MouseEvent) {

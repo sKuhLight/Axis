@@ -10,6 +10,7 @@
   import { library } from './library.svelte';
   import { presetRecency } from './presetRecency.svelte';
   import { forgefx, ForgeError } from './forgefx';
+  import { deviceRealNames } from './deviceRealNames.svelte';
   import { notifyMutation } from './syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
   import { convert } from './convert.svelte';
@@ -65,6 +66,9 @@
     for (const e of library.entries) for (const b of e.summary.blocks) if (b.slug) s.add(b.slug);
     return [...s].sort();
   });
+  // Warm the real-device-name cache for every family the library uses, so free-text search can match
+  // "hiwatt" against a preset's internal "HIPOWER" model once the catalog resolves (see haystacks below).
+  $effect(() => { deviceRealNames.prime(filterableSlugs); });
   type Spec = { label: string; kind: 'enum' | 'num'; enums: Set<string>; min: number; max: number };
   const specsBySlug = $derived.by(() => {
     const out: Record<string, Map<string, Spec>> = {};
@@ -219,7 +223,12 @@
     for (const e of library.entries) {
       const blocks = library.paramsOf(e);
       const paramHay = blocks ? blocks.flatMap((b) => b.params.map((p) => `${p.label} ${p.enumLabel ?? ''}`)).join(' ') : '';
-      m.set(e.id, `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${Object.values(e.summary.models).flat().join(' ')} ${library.tagsOf(e.id).join(' ')} ${paramHay}`.toLowerCase());
+      // Each model name is followed by its real-world gear name (manufacturer + basedOn, when known) so
+      // "hiwatt" matches a preset built on the internal "HIPOWER" model.
+      const modelHay = Object.entries(e.summary.models)
+        .flatMap(([slug, names]) => names.flatMap((n) => [n, deviceRealNames.realNameFor(slug, n)]))
+        .join(' ');
+      m.set(e.id, `${e.summary.name} ${e.summary.scenes.join(' ')} ${e.summary.blocks.map((b) => b.name).join(' ')} ${modelHay} ${library.tagsOf(e.id).join(' ')} ${paramHay}`.toLowerCase());
     }
     return m;
   });
