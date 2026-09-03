@@ -52,6 +52,9 @@ export function axisPbCatColor(slug: string): string {
 }
 
 export interface AxisPbRowBlockChip {
+  /** The block family slug ("amp", "delay", …) this chip was built from — lets a caller correlate a
+   *  chip back to a search condition's `block` field (see presetBrowserWorkbenchChainMatch.ts). */
+  slug: string;
   /** Family colour for the chip fill/border/text. */
   color: string;
   /** Category label ("Amp", "Reverb", …). */
@@ -78,6 +81,7 @@ export function axisPbRowBlockChips(entry: AxisPresetBrowserEntrySummary): AxisP
     const type = rawType && rawType.toLowerCase() !== cat.toLowerCase() ? rawType : null;
     const instance = block.instance != null ? `${cat} ${block.instance}` : cat;
     chips.push({
+      slug,
       color: axisPbCatColor(slug),
       cat,
       type,

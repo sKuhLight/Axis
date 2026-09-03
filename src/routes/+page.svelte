@@ -31,6 +31,7 @@
   import Tour from '$lib/Tour.svelte';
   import Toast from '$lib/Toast.svelte';
   import AxisWorkbenchShell from '$lib/axis-workbench/AxisWorkbenchShell.svelte';
+  import AxisPresetBrowserSearchOverlay from '$lib/axis-workbench/presetBrowser/AxisPresetBrowserSearchOverlay.svelte';
   import DirectGate from '$lib/DirectGate.svelte';
   import MobileGate from '$lib/MobileGate.svelte';
   import { directBoot } from '$lib/direct.svelte';
@@ -118,6 +119,7 @@
         else if (convertScratch.open) convertScratch.close();
         else if (convert.open) convert.close();
         else if (editor.presetOpen) editor.presetOpen = false;
+        else if (editor.presetSearchOpen) editor.presetSearchOpen = false;
         else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
         else if (editor.editorOpen) editor.closeEditor();
       }
@@ -170,6 +172,7 @@
   <ConvertScratchView />
   <HistoryPanel />
   <PresetPicker />
+  {#if workbenchEnabled}<AxisPresetBrowserSearchOverlay />{/if}
   <SaveDialog />
   <TunerOverlay />
   <CachePrompt />

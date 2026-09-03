@@ -344,6 +344,9 @@ class EditorStore {
    *  callback (e.g. the cross-device converter save dialog) INSTEAD of loading the preset onto the
    *  device, then closes. Null = normal load-a-preset mode. Cleared whenever the picker closes. */
   presetPick = $state<((slot: number, name: string) => void) | null>(null);
+  /** The slim, workbench-only preset search overlay opened from the Grid page's top-bar preset widget
+   *  (see AxisPresetBrowserSearchOverlay.svelte) — search + results only, no navigation away from Grid. */
+  presetSearchOpen = $state(false);
   cabPickerOpen = $state(false);
   deviceToolsOpen = $state(false); // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
   toast = $state<{ text: string; accent: string } | null>(null);

@@ -231,8 +231,10 @@
   });
 
   function openWidget() {
-    if (kind === 'preset') dispatch({ type: 'page.activate', pageId: presetTarget.pageId });
-    else if (kind === 'tuner') editor.toggleTuner();
+    if (kind === 'preset') {
+      if (presetTarget.type === 'openPresetSearch') editor.presetSearchOpen = true;
+      else dispatch({ type: 'page.activate', pageId: presetTarget.pageId });
+    } else if (kind === 'tuner') editor.toggleTuner();
     else if (kind === 'tempo') editor.tapTempo();
     else if (kind === 'save') editor.openSave();
     else if (kind === 'search') editor.openLibrary();

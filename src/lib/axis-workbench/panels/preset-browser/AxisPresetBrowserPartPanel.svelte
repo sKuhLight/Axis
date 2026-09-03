@@ -40,6 +40,8 @@
     type AxisPresetBrowserRuntimeSnapshot
   } from '../../presetBrowser/presetBrowserWorkbenchRuntime';
   import { createAxisPresetBrowserWorkbenchHost } from '../../presetBrowser/presetBrowserWorkbenchHost';
+  import { resolvePresetLoadAction } from '../../presetBrowser/presetBrowserWorkbenchLoadAction';
+  import AxisPresetBrowserRowMain from '../../presetBrowser/AxisPresetBrowserRowMain.svelte';
   import { applyRowCap } from '../../presetBrowser/presetBrowserWorkbenchLayout';
   import {
     incrementTagCount,
@@ -534,11 +536,10 @@
 
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
-    // A saved conversion isn't a device slot — its primary action re-opens it in the converter.
-    if (entry.converted) { openConverter(entry.id); return; }
-    // An empty slot has no preset to read — load the slot itself to start a fresh preset.
-    if (entry.empty) { void editor.selectPreset(entry.number ?? 0, { recency: false }); return; }
-    void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
+    const action = resolvePresetLoadAction(entry);
+    if (action.kind === 'openConverter') openConverter(entry.id);
+    else if (action.kind === 'loadEmptySlot') void editor.selectPreset(action.number, { recency: false });
+    else void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
   }
 
   // Re-open a SAVED conversion (source 'converted') back in the converter, rehydrated from its stored doc.
@@ -1021,56 +1022,31 @@
           >{snapshot.marked[entry.id] ? '✓' : ''}</button>
           <span class="preset-number" class:sel={snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
           <span class="preset-main">
-            {#if renamingId === entry.id}
-              <!-- svelte-ignore a11y_autofocus -->
-              <input
-                class="rename-in"
-                type="text"
-                maxlength="32"
-                autofocus
-                spellcheck="false"
-                bind:value={renameValue}
-                onclick={(e) => e.stopPropagation()}
-                ondblclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === 'Enter') commitRename(entry);
-                  else if (e.key === 'Escape') cancelRename();
-                }}
-                onblur={() => commitRename(entry)}
-              />
-            {:else}
-              <strong>{entry.name}</strong>
-            {/if}
-            {#if entry.converted && entry.provenance}
-              <span class="conv-prov" title={`Converted from ${entry.provenance}`}>{entry.provenance}</span>
-            {/if}
-            {#if anatomy.tagPills.length}
-              <span class="tag-pills">
-                {#each anatomy.tagPills as tag}
-                  <em
-                    class="tag-pill"
-                    data-tag={tag}
-                    style:--tag-col={library.colorOf(tag)}
-                    oncontextmenu={(e) => openTagMenu(e, tag)}
-                  >{tag}</em>
-                {/each}
-              </span>
-            {/if}
-            {#if anatomy.blockChips.length && !entry.empty}
-              <!-- Signal-chain quick view: a flowing node → node → node strip, deliberately NOT pill-shaped
-                   so it never reads as tags (the tag pills sit directly above it). -->
-              <span class="chain-strip" title="Signal chain">
-                {#each anatomy.blockChips as chip, ci}
-                  {#if ci > 0}<i class="chain-arrow" aria-hidden="true">›</i>{/if}
-                  <em class="chain-node" style:--c={chip.color} title={chip.title}>
-                    <i class="chain-dot"></i>
-                    <b class="chain-cat">{chip.cat}</b>
-                    {#if chip.type}<span class="chain-type">{chip.type}</span>{/if}
-                  </em>
-                {/each}
-              </span>
-            {/if}
+            <AxisPresetBrowserRowMain {entry} onTagContextMenu={openTagMenu}>
+              {#snippet name()}
+                {#if renamingId === entry.id}
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    class="rename-in"
+                    type="text"
+                    maxlength="32"
+                    autofocus
+                    spellcheck="false"
+                    bind:value={renameValue}
+                    onclick={(e) => e.stopPropagation()}
+                    ondblclick={(e) => e.stopPropagation()}
+                    onkeydown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') commitRename(entry);
+                      else if (e.key === 'Escape') cancelRename();
+                    }}
+                    onblur={() => commitRename(entry)}
+                  />
+                {:else}
+                  <strong class="row-name" class:dim={entry.empty}>{entry.name}</strong>
+                {/if}
+              {/snippet}
+            </AxisPresetBrowserRowMain>
           </span>
           <span class="preset-meta">
             <span class="meta-top">
@@ -1619,14 +1595,6 @@
     display: grid;
     gap: 4px;
   }
-  .preset-main strong {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text);
-    font: 700 13px/1.15 var(--font-ui);
-  }
   .rename-in {
     width: 100%;
     box-sizing: border-box;
@@ -1641,83 +1609,10 @@
     /* Opt back in — the row suppresses selection, but the rename field is real text entry. */
     user-select: text;
   }
-  .tag-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    min-width: 0;
-  }
-  .tag-pill {
-    padding: 2px 6px;
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--tag-col) 14%, transparent);
-    color: var(--tag-col);
-    font: 700 9.5px/1 var(--font-mono);
-    font-style: normal;
-    white-space: nowrap;
-  }
-  /* Cross-device conversion provenance chip ("FM3 → AM4") on saved-conversion rows. */
-  .conv-prov {
-    align-self: flex-start;
-    padding: 2px 7px;
-    border: 1px solid color-mix(in srgb, var(--amber, #f5a623) 45%, transparent);
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--amber, #f5a623) 14%, transparent);
-    color: var(--amber, #f5a623);
-    font: 700 9.5px/1 var(--font-mono);
-    white-space: nowrap;
-  }
-  /* Cleared/empty device slot row — muted. */
+  /* Cleared/empty device slot row — muted. AxisPresetBrowserRowMain.svelte owns the name/tag-pill/
+     chain-strip dimming for `entry.empty`; this rule is the row-level opacity on everything else. */
   .preset-row.empty {
     opacity: 0.55;
-  }
-  .preset-row.empty .preset-main strong {
-    color: var(--textdim);
-    font-weight: 600;
-  }
-  /* §4.3 signal-chain strip. Chip/pill shapes are reserved for tags, so the chain renders as bare
-     nodes (family-coloured dot + category, dim model name) joined by chevrons — the wrap-friendly
-     stand-in for a drawn rail. */
-  .chain-strip {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1px 3px;
-    min-width: 0;
-  }
-  .chain-arrow {
-    color: color-mix(in srgb, var(--textdim) 65%, transparent);
-    font: 600 11px/1 var(--font-ui);
-    font-style: normal;
-  }
-  .chain-node {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-    min-width: 0;
-    padding: 1px 2px;
-    font-style: normal;
-  }
-  .chain-dot {
-    align-self: center;
-    flex: none;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--c);
-  }
-  .chain-cat {
-    color: var(--c);
-    font: 700 10px/1.2 var(--font-mono);
-    white-space: nowrap;
-  }
-  .chain-type {
-    max-width: 130px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--textdim);
-    font: 500 10px/1.2 var(--font-mono);
   }
   .preset-meta {
     display: flex;
