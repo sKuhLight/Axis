@@ -79,7 +79,7 @@
     hideSearch?: boolean;
   } = $props();
 
-  const GAP = 8;
+  const GAP = 5; // tighter now that tiles are borderless — was 8, sized for the boxed card look
   const RAIL_PAD = 17; // rail padding + hairline border
   const CONT_VIEWS = ['knob', 'fader', 'slider', 'number'] as const;
   const TOG_VIEWS = ['button', 'switch'] as const;
@@ -1363,7 +1363,6 @@
         <div
           class="restile"
           class:wide={c.kind === 'select' || (c.kind === 'cont' && view === 'slider')}
-          class:nobg={c.kind === 'action'}
           role="group"
           aria-label={c.label}
           oncontextmenu={(e) => onPinContextMenu(e, c)}
@@ -2242,14 +2241,17 @@
     height: 100%;
     border-radius: 11px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, var(--surface), var(--bg2));
-    border: 1px solid var(--surface2);
+    /* Transparent by default — controls sit directly on the grid, not boxed in a tile. The border
+       stays declared (just invisible) so `.card.editing` only has to override its color to show the
+       arrange-mode grab outline, instead of also having to add width/style. */
+    background: transparent;
+    border: 1px solid transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 5px;
-    padding: 8px;
+    padding: 4px; /* was 8px — that margin read as tile chrome; now it's just crowding, borderless */
     overflow: visible; /* let the value bubble pop above the tile */
     user-select: none;
     touch-action: none;
@@ -2343,9 +2345,9 @@
     height: auto;
     padding: 10px 14px;
   }
+  /* .card is already background/border-transparent by default now — `nobg` only remains to zero the
+     padding for kinds that draw their own full-bleed chrome (graphs, the bypass action pill). */
   .card.nobg {
-    background: transparent;
-    border-color: transparent;
     padding: 0;
   }
   .card.editing {
@@ -3199,16 +3201,10 @@
     gap: 6px;
     padding: 10px;
     border-radius: 11px;
-    background: linear-gradient(180deg, var(--surface), var(--bg2));
-    border: 1px solid var(--surface2);
     overflow: visible;
   }
   .restile.wide {
     width: 240px;
-  }
-  .restile.nobg {
-    background: transparent;
-    border-color: transparent;
   }
   .nores {
     width: 100%;
