@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildDeviceLayoutBoard,
   layoutVariantSig,
+  healBoardWithLayout,
   railControls,
   monitorsByFamily,
   packInto,
@@ -12,7 +13,8 @@ import {
   clusterByCanvasRow,
   groupSectionLabels,
   type BoardCtl,
-  type SurfaceWidget
+  type SurfaceWidget,
+  type SurfaceBoard
 } from './deviceLayoutBoard';
 import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
 
@@ -56,6 +58,38 @@ const assertNoOverlap = (ws: SurfaceWidget[]) => {
       }
   }
 };
+
+describe('healBoardWithLayout — self-heals a saved board against the current device layout', () => {
+  const w = (key: string, x: number, y: number, wid = 1, h = 1): SurfaceWidget => ({ id: `w${key}`, key, x, y, w: wid, h, view: 'knob' });
+
+  it('adds a widget the fresh layout has but the saved board is missing (a param reclassified knob -> toggle, e.g. Zoom)', () => {
+    // saved board predates a server-side classification fix: paramId 40 used to resolve to a knob (`k40`)
+    // and reconcile() already dropped it once the catalog stopped serving that key — the fresh layout now
+    // places it as `e40` (a toggle) instead.
+    const saved: SurfaceBoard = { pageOrder: ['Align'], page: 'Align', boards: { Align: [w('k16', 0, 0), w('k17', 1, 0)] } };
+    const fresh: SurfaceBoard = { pageOrder: ['Align'], page: 'Align', boards: { Align: [w('k16', 0, 0), w('k17', 1, 0), w('e40', 2, 0)] } };
+    const healed = healBoardWithLayout(saved, fresh, 8, 4);
+    expect(healed.boards.Align.map((x) => x.key).sort()).toEqual(['e40', 'k16', 'k17']);
+    // existing widgets keep their exact saved position — healing never reflows them
+    expect(find(healed.boards.Align, 'k16')).toMatchObject({ x: 0, y: 0 });
+    expect(find(healed.boards.Align, 'k17')).toMatchObject({ x: 1, y: 0 });
+    assertNoOverlap(healed.boards.Align);
+  });
+
+  it('appends a page the saved board never had, when everything the fresh layout puts there is new', () => {
+    const saved: SurfaceBoard = { pageOrder: ['Main'], page: 'Main', boards: { Main: [w('k1', 0, 0)] } };
+    const fresh: SurfaceBoard = { pageOrder: ['Main', 'Extra'], page: 'Main', boards: { Main: [w('k1', 0, 0)], Extra: [w('e2', 0, 0)] } };
+    const healed = healBoardWithLayout(saved, fresh, 8, 4);
+    expect(healed.pageOrder).toEqual(['Main', 'Extra']);
+    expect(healed.boards.Extra!.map((x) => x.key)).toEqual(['e2']);
+  });
+
+  it('is a no-op (same object reference) when nothing is missing', () => {
+    const saved: SurfaceBoard = { pageOrder: ['Main'], page: 'Main', boards: { Main: [w('k1', 0, 0)] } };
+    const fresh: SurfaceBoard = { pageOrder: ['Main'], page: 'Main', boards: { Main: [w('k1', 5, 5)] } }; // key already present — its fresh position is irrelevant
+    expect(healBoardWithLayout(saved, fresh, 8, 4)).toBe(saved);
+  });
+});
 
 describe('railControls — the block-level rail for layouts with no `mixer` section', () => {
   const page = (name: string, ids: number[], section = 'parameters') => ({

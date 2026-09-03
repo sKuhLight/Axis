@@ -29,7 +29,7 @@
   import { theme } from './theme.svelte';
   import { paramHelp, helpSlugForPack } from './help';
   import type { NamedParam, EnumParam } from './types';
-  import { buildDeviceLayoutBoard, layoutVariantSig, packInto, repackWidgets, MAX_ROWS, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
+  import { buildDeviceLayoutBoard, layoutVariantSig, healBoardWithLayout, packInto, repackWidgets, MAX_ROWS, type SurfaceWidget, type SurfaceBoard } from './deviceLayoutBoard';
   import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
   import { isAxisControlArrangeEnabled } from './axis-workbench/featureGate';
   import {
@@ -566,6 +566,15 @@
         // the current layout instead of restoring the stale arrangement. Blank/custom profiles keep their
         // saved board regardless. An empty `variantSig` means "no device layout" — nothing to re-seed to.
         if (prof === 'Default' && variantSig && saved.variantSig !== variantSig) return seedFor('Default');
+        // Same variant, but a param's device-reported KIND can still change server-side (a knob
+        // reclassified as a toggle, or vice versa) without moving variantSig — reconcile() above already
+        // dropped that widget's old, now-invalid key. Heal it back in from the fresh device-authentic
+        // layout instead of leaving the control silently missing. No-op when nothing is missing, and
+        // limited to Default (Blank/custom profiles keep exactly what the user arranged).
+        if (prof === 'Default') {
+          const fresh = layoutBoard();
+          if (fresh) return healBoardWithLayout(saved, fresh, cols, MAX_ROWS);
+        }
         return saved;
       }
       if (prof === 'Default') {

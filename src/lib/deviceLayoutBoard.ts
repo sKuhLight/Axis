@@ -430,6 +430,55 @@ export function layoutVariantSig(layout: DeviceLayout | null | undefined): strin
   ].join('|');
 }
 
+/** Add any widget the freshly-built device-authentic `fresh` board places but the SAVED board doesn't
+ *  have yet (checked by key, across every page of `saved`) — e.g. a param whose device-reported kind
+ *  changed (a knob reclassified as a toggle, or vice versa) between when the board was saved and now.
+ *  Without this, `reconcile` drops the widget under its old, now-invalid key and nothing takes its
+ *  place: the control just vanishes. Existing widgets keep their exact position; a newly-surfaced one is
+ *  placed into the first free cell of the page `fresh` puts it on (a page `saved` doesn't have yet is
+ *  appended to `pageOrder`). Returns `saved` unchanged (same reference) when nothing is missing. */
+export function healBoardWithLayout(saved: SurfaceBoard, fresh: SurfaceBoard, cols: number, maxRows = MAX_ROWS): SurfaceBoard {
+  const present = new Set(Object.values(saved.boards).flat().map((w) => w.key));
+  const boards = { ...saved.boards };
+  let pageOrder = saved.pageOrder;
+  let changed = false;
+  for (const pg of fresh.pageOrder) {
+    const missing = (fresh.boards[pg] ?? []).filter((w) => !present.has(w.key));
+    if (!missing.length) continue;
+    changed = true;
+    if (!boards[pg]) pageOrder = [...pageOrder, pg];
+    boards[pg] = appendIntoFreeCells(boards[pg] ?? [], missing, cols, maxRows);
+  }
+  return changed ? { ...saved, pageOrder, boards } : saved;
+}
+
+/** Place `toAdd` into the first open gaps of a `cols`×`maxRows` grid already occupied by `existing` —
+ *  `existing` keeps its exact x/y; only `toAdd`'s positions are computed. Same first-fit scan as
+ *  `packInto`, but seeded with fixed occupied cells instead of re-flowing everything from scratch. */
+function appendIntoFreeCells(existing: SurfaceWidget[], toAdd: SurfaceWidget[], cols: number, maxRows: number): SurfaceWidget[] {
+  const occupied = Array.from({ length: maxRows }, () => new Array(cols).fill(false));
+  const fits = (x: number, y: number, w: number, h: number) => {
+    if (x < 0 || y < 0 || x + w > cols || y + h > maxRows) return false;
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (occupied[j][i]) return false;
+    return true;
+  };
+  const mark = (x: number, y: number, w: number, h: number) => {
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) occupied[j][i] = true;
+  };
+  for (const w of existing) mark(w.x, w.y, Math.min(w.w, cols), Math.min(w.h, maxRows));
+  const placed: SurfaceWidget[] = [];
+  for (const w of toAdd) {
+    const pw = Math.min(w.w, cols);
+    const ph = Math.min(w.h, maxRows);
+    let pos: { x: number; y: number } | null = null;
+    for (let y = 0; y <= maxRows - ph && !pos; y++) for (let x = 0; x <= cols - pw && !pos; x++) if (fits(x, y, pw, ph)) pos = { x, y };
+    pos ??= { x: 0, y: 0 }; // grid exhausted (practically unreachable at MAX_ROWS) — first cell rather than dropping the widget
+    mark(pos.x, pos.y, pw, ph);
+    placed.push({ ...w, x: pos.x, y: pos.y, w: pw, h: ph });
+  }
+  return [...existing, ...placed];
+}
+
 /** Build the device-authentic Default board from a v2 layout, or null when the layout carries no
  *  renderable controls (caller falls back to its curated heuristic board). `catalog` is the live control
  *  set (knobs `k<id>`, enums `e<id>`, plus graph/`geq`/`bypass`/`meter`); `cols` is the target grid width.
