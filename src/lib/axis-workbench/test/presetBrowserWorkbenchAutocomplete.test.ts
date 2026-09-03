@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAcceptance,
   buildAutocompleteContext,
+  findBacktickRegion,
   suggest,
+  suggestInQuery,
   tidyQuery,
   type AutocompleteContext
 } from '../presetBrowser/presetBrowserWorkbenchAutocomplete';
@@ -98,5 +100,56 @@ describe('Preset Browser autocomplete', () => {
   it('tidyQuery trims dangling separators', () => {
     expect(tidyQuery('AMP + ')).toBe('AMP');
     expect(tidyQuery('AMP(Gain>7, ')).toBe('AMP(Gain>7');
+  });
+
+  describe('backtick-scoped autocomplete (unified query)', () => {
+    it('findBacktickRegion returns the inner span containing the caret', () => {
+      const text = 'clean `AM`'; // caret right after the typed fragment, before the closing tick
+      expect(findBacktickRegion(text, 9)).toEqual({ start: 7, end: 9 });
+    });
+
+    it('findBacktickRegion returns null when the caret is outside any span', () => {
+      expect(findBacktickRegion('clean `AMP` tone', 2)).toBeNull(); // in the leading free text
+      expect(findBacktickRegion('clean `AMP` tone', 14)).toBeNull(); // in the trailing free text
+    });
+
+    it('findBacktickRegion returns null with only a lone, unclosed backtick', () => {
+      // Real usage never hits this — onQueryInput auto-pairs a lone backtick — but the function
+      // itself requires a matched pair and must not treat an unclosed tick as an open-ended span.
+      expect(findBacktickRegion('clean `AM', 9)).toBeNull();
+    });
+
+    it('findBacktickRegion picks the containing span among multiple', () => {
+      const text = '`AMP` mid `tag:Lead`';
+      expect(findBacktickRegion(text, 15)).toEqual({ start: 11, end: 19 }); // inside the second span
+    });
+
+    it('findBacktickRegion includes the boundary positions right after/before the ticks', () => {
+      const text = '`AMP`';
+      expect(findBacktickRegion(text, 1)).toEqual({ start: 1, end: 4 }); // just after the open tick
+      expect(findBacktickRegion(text, 4)).toEqual({ start: 1, end: 4 }); // just before the close tick
+    });
+
+    it('suggestInQuery delegates to suggest() scoped to the containing span', () => {
+      const text = 'clean `AM`';
+      const r = suggestInQuery(ctx, text, 9);
+      expect(r.label).toBe('block / token');
+      expect(r.items.map((i) => i.label)).toContain('AMP');
+    });
+
+    it('suggestInQuery returns no items when the caret is outside any backtick span', () => {
+      const r = suggestInQuery(ctx, 'clean AM tone', 8);
+      expect(r.items).toEqual([]);
+      expect(r.label).toBe('');
+    });
+
+    it('applyAcceptance splice math is valid against the FULL text, no offset remapping needed', () => {
+      // Auto-pairing means a closing tick always sits somewhere after the caret, here right after it.
+      const text = 'clean `AMP(Type=`';
+      const caret = 16; // right before the closing tick
+      const item = suggestInQuery(ctx, text, caret).items.find((i) => i.label === 'USA Clean')!;
+      const res = applyAcceptance(item, text, caret);
+      expect(res.text).toBe('clean `AMP(Type="USA Clean", `');
+    });
   });
 });

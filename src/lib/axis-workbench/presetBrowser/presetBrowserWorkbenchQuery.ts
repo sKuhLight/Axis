@@ -273,10 +273,36 @@ export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simple
   return matchSimple(entry, simpleQ);
 }
 
-// advanced→simple / simple→advanced round-trip on the toggle (§2.1).
-export function toSimpleConds(advancedText: string): AxisPbCond[] {
-  return parseQuery(advancedText);
+// ===================== unified query (backtick-scoped filters) =====================
+
+export interface AxisPbParsedQuery {
+  conds: AxisPbCond[];
+  free: string;
 }
-export function toAdvancedText(conds: AxisPbCond[]): string {
-  return condsToQuery(conds);
+
+// Splits a single query field into structured conditions (parsed only from inside `` `...` ``
+// spans) and free text (everything else). Text outside backticks is deliberately never attempted
+// as query syntax — the backticks are the only signal that a span should parse, so a bare
+// `tag:Lead` typed without them is plain fuzzy text, not a filter. This replaces the old
+// Simple/Advanced split: one field, one behavior, no mode to toggle.
+export function parseUnifiedQuery(text: string): AxisPbParsedQuery {
+  const conds: AxisPbCond[] = [];
+  const free = text
+    .replace(/`([^`]*)`/g, (_, inner: string) => {
+      conds.push(...parseQuery(inner));
+      return ' ';
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { conds, free };
+}
+
+// Re-serializes conditions + free text back into one field: free text first, then a single
+// canonical backtick block holding every condition. Builder-driven edits (picker, drag, tag
+// toggle) always go through this, so any backtick spans the user typed by hand collapse into one
+// authoritative block on the next such edit — conditions never live in more than one place at once.
+export function serializeUnifiedQuery(conds: AxisPbCond[], free: string): string {
+  const structured = condsToQuery(conds);
+  if (!structured) return free;
+  return free ? `${free} \`${structured}\`` : `\`${structured}\``;
 }

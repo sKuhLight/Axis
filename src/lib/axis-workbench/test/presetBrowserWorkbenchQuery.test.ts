@@ -7,9 +7,9 @@ import {
   matchPreset,
   parseQuery,
   parseTerm,
+  parseUnifiedQuery,
+  serializeUnifiedQuery,
   splitTop,
-  toAdvancedText,
-  toSimpleConds,
   type AxisPbMatchEntry
 } from '../presetBrowser/presetBrowserWorkbenchQuery';
 import type { AxisPresetBrowserEntrySummary } from '../presetBrowser/presetBrowserWorkbenchData';
@@ -55,10 +55,33 @@ describe('Preset Browser query grammar', () => {
     expect(parseTerm('WOBBLE(X=1)')).toBeNull();
   });
 
-  it('round-trips advanced <-> simple via conds serialization', () => {
+  it('round-trips conditions through condsToQuery serialization', () => {
     const text = 'AMP(TYPE=5153, GAIN>7)  +  tag:Lead  +  cpu<60';
-    const conds = toSimpleConds(text);
-    expect(toAdvancedText(conds)).toBe(text);
+    expect(condsToQuery(parseQuery(text))).toBe(text);
+  });
+
+  it('parseUnifiedQuery parses only `` `...` `` spans, everything else is free text', () => {
+    const { conds, free } = parseUnifiedQuery('lead tone `AMP(TYPE=5153) + tag:Lead` more words');
+    expect(conds.map((c) => c.kind)).toEqual(['block', 'tag']);
+    expect(free).toBe('lead tone more words');
+  });
+
+  it('parseUnifiedQuery leaves query-shaped text outside backticks as free text (no auto-parse)', () => {
+    const { conds, free } = parseUnifiedQuery('tag:Lead');
+    expect(conds).toEqual([]);
+    expect(free).toBe('tag:Lead');
+  });
+
+  it('parseUnifiedQuery merges multiple backtick spans', () => {
+    const { conds, free } = parseUnifiedQuery('`AMP` clean `tag:Lead`');
+    expect(conds.map((c) => c.kind)).toEqual(['block', 'tag']);
+    expect(free).toBe('clean');
+  });
+
+  it('serializeUnifiedQuery puts free text first, then one canonical backtick block', () => {
+    expect(serializeUnifiedQuery(parseQuery('AMP + tag:Lead'), 'clean tone')).toBe('clean tone `AMP  +  tag:Lead`');
+    expect(serializeUnifiedQuery(parseQuery('AMP'), '')).toBe('`AMP`');
+    expect(serializeUnifiedQuery([], 'clean tone')).toBe('clean tone');
   });
 
   it('condsEqual is order-insensitive', () => {

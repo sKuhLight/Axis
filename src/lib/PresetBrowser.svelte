@@ -152,7 +152,6 @@
     const id = tokId(t);
     return id ? { kind: 'block', block: id, params: [] } : null;
   }
-  const parseQuery = (text: string): Cond[] => splitOn(text, '+').map((s) => parseTerm(s.text.trim())).filter(Boolean) as Cond[];
   const qv = (v: string) => (/[\s,()]/.test(v) ? `"${v}"` : v);
   function condToText(c: Cond): string {
     if (c.kind === 'block') { const tok = c.block.toUpperCase(); return c.params.length ? `${tok}(${c.params.map((p) => p.name + p.op + p.val).join(', ')})` : tok; }
@@ -226,32 +225,34 @@
   });
 
   // ===================== state =====================
-  let advanced = $state(true);
-  let query = $state(''); // advanced typed query
-  let simpleQ = $state(''); // simple free text
-  let conditions = $state<Cond[]>([]); // simple-mode chips
+  let query = $state(''); // the one query field
   let sort = $state<'num' | 'name' | 'cpu' | 'recent'>('num');
   let selectedId = $state<string | null>(null);
   let queryEl: HTMLInputElement | undefined = $state();
   let caret = $state(0);
 
-  // Parse the text box in BOTH modes: '+'-separated terms that parse as conditions become filters,
-  // anything that doesn't is free-text. So typing/pasting `AMP(Type=5153)` filters whether Advanced is
-  // on or off (Advanced just adds autocomplete + the chip builder).
+  // Structured filters parse only from inside `` `...` `` spans; everything else is free text. Text
+  // outside backticks is deliberately never attempted as query syntax — the backticks are the only
+  // signal a span should parse, so typing/pasting `AMP(Type=5153)` filters, but bare AMP(Type=5153)
+  // (no backticks) is plain fuzzy text. One field, no Simple/Advanced mode to toggle.
   function parseInput(text: string): { conds: Cond[]; free: string } {
     const conds: Cond[] = [];
-    const free: string[] = [];
-    for (const seg of splitOn(text, '+')) {
-      const t = seg.text.trim();
-      if (!t) continue;
-      const c = parseTerm(t);
-      if (c) conds.push(c);
-      else free.push(t);
-    }
-    return { conds, free: free.join(' ') };
+    const free = text
+      .replace(/`([^`]*)`/g, (_, inner: string) => {
+        for (const seg of splitOn(inner, '+')) {
+          const t = seg.text.trim();
+          if (!t) continue;
+          const c = parseTerm(t);
+          if (c) conds.push(c);
+        }
+        return ' ';
+      })
+      .replace(/\s+/g, ' ')
+      .trim();
+    return { conds, free };
   }
-  const parsedInput = $derived(parseInput(advanced ? query : simpleQ));
-  const activeConds = $derived(advanced ? parsedInput.conds : [...conditions, ...parsedInput.conds]);
+  const parsedInput = $derived(parseInput(query));
+  const activeConds = $derived(parsedInput.conds);
   const simpleText = $derived(parsedInput.free);
 
   // ── Orama full-text index: typo-tolerant, ranked free-text ──
@@ -571,24 +572,16 @@
       ? { slug, label: p.label, op: '=', val: p.enumLabel }
       : { slug, label: p.label, op: '=', val: String(p.value == null ? '' : Math.round(p.value * 10) / 10) };
 
-  // ── edit conditions (works in both modes; advanced re-serializes to the query text) ──
+  // ── edit conditions: re-serialize back into query, free text preserved, as one canonical
+  // backtick block. Any backtick spans the user typed by hand collapse into this single block. ──
   function editConds(fn: (c: Cond[]) => void) {
-    if (advanced) {
-      const c = parseQuery(query);
-      fn(c);
-      query = condsToQuery(c);
-    } else {
-      const c = conditions.map((x) => (x.kind === 'block' ? { ...x, params: x.params.map((p) => ({ ...p })) } : { ...x }));
-      fn(c);
-      conditions = c;
-    }
+    const { conds, free } = parseInput(query);
+    const c = conds.map((x) => (x.kind === 'block' ? { ...x, params: x.params.map((p) => ({ ...p })) } : { ...x }));
+    fn(c);
+    const structured = condsToQuery(c);
+    query = structured ? (free ? `${free} \`${structured}\`` : `\`${structured}\``) : free;
   }
-  const clearAll = () => { if (advanced) query = ''; else { conditions = []; simpleQ = ''; } };
-  function toggleAdvanced() {
-    if (advanced) { conditions = parseQuery(query); simpleQ = ''; advanced = false; }
-    else { query = condsToQuery(conditions); advanced = true; }
-    closeAc();
-  }
+  const clearAll = () => { query = ''; };
 
   // ===================== autocomplete =====================
   type AcItem = { label: string; insert: string; fragLen: number; hint: string; color: string; dot: boolean; kind?: 'value' | 'close' | 'done' };
@@ -659,25 +652,51 @@
     const f = (frag || '').toLowerCase();
     return arr.filter((v) => v.toLowerCase().includes(f)).slice(0, 40).map((v) => mk(v, qv(v), (frag || '').length, kind, '#6e6e78', false));
   };
+  // The `` `...` `` span (inner [start,end), backticks excluded) the caret sits inside, or null.
+  // Autocomplete only offers suggestions inside such a span — outside is free text with no help.
+  function findBacktickRegion(text: string, c: number): { start: number; end: number } | null {
+    const re = /`([^`]*)`/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      const start = m.index + 1, end = start + m[1].length;
+      if (c >= start && c <= end) return { start, end };
+    }
+    return null;
+  }
   function recomputeAc() {
-    if (!advanced) { acOpen = false; return; }
     // read the LIVE cursor position (after an insert the DOM caret is the source of truth) so the
     // context (param → value → next param) advances reliably instead of using a stale index
+    const text = queryEl?.value ?? query;
     const c = queryEl?.selectionStart ?? caret;
-    const r = suggest(queryEl?.value ?? query, c);
+    const region = findBacktickRegion(text, c);
+    if (!region) { acOpen = false; return; }
+    // the local slice is character-identical to that range of the full text, so acceptAc's splice
+    // math needs no offset remapping — only this context lookup is scoped to the span.
+    const r = suggest(text.slice(region.start, region.end), c - region.start);
     acItems = r.items; acLabel = r.label; acIndex = 0; acOpen = true;
   }
   const closeAc = () => { acOpen = false; };
-  function onQueryInput(e: Event) { const el = e.target as HTMLInputElement; query = el.value; caret = el.selectionStart ?? query.length; recomputeAc(); }
+  function onQueryInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    let v = el.value;
+    let c = el.selectionStart ?? v.length;
+    // Auto-pair a lone backtick: typing an unclosed ` opens a filter span and autocomplete right
+    // away, so power users never have to type both ticks by hand.
+    if (c > 0 && v[c - 1] === '`' && ((v.match(/`/g) ?? []).length % 2 === 1)) {
+      v = v.slice(0, c) + '`' + v.slice(c);
+      el.value = v;
+      el.setSelectionRange(c, c);
+    }
+    query = v; caret = c; recomputeAc();
+  }
   function onQuerySelect(e: Event) {
     const el = e.target as HTMLInputElement;
     caret = el.selectionStart ?? 0;
     // don't recompute on autocomplete-navigation keys — that would reset the highlighted index to 0
     if ('key' in e && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes((e as KeyboardEvent).key)) return;
-    if (advanced && acOpen) recomputeAc();
+    if (acOpen) recomputeAc();
   }
   function onQueryKey(e: KeyboardEvent) {
-    if (!advanced) return;
     if (!acOpen) { if (e.key === 'ArrowDown') recomputeAc(); return; }
     const n = acItems.length;
     if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(n - 1, acIndex + 1); }
@@ -795,12 +814,14 @@
     forgefx.putDoc('config', 'savedFilters', saved).catch(() => {}); // mirror to the unified store (sync-ready)
     notifyMutation(); // nudge debounced local auto-sync
   }
-  function applySaved(f: Saved) { if (!advanced) advanced = true; query = f.query; closeAc(); sideOpen = false; }
+  // Saved filters are condition-only text (no backticks, no free text) — applying one loads it as a
+  // fresh backtick block, replacing whatever the user had typed.
+  function applySaved(f: Saved) { query = f.query.trim() ? `\`${f.query}\`` : ''; closeAc(); sideOpen = false; }
   function delSaved(id: string) { saved = saved.filter((x) => x.id !== id); persistSaved(); }
   function commitSave() {
     const name = saveName.trim();
     if (!name) { saving = false; return; }
-    saved = [...saved, { id: 's' + Date.now(), name, query: advanced ? query : condsToQuery(conditions) }];
+    saved = [...saved, { id: 's' + Date.now(), name, query: condsToQuery(activeConds) }];
     persistSaved();
     saving = false; saveName = '';
   }
@@ -926,26 +947,20 @@
         {/each}
       </div>
     </div>
-    <button class="adv" class:on={advanced} onclick={toggleAdvanced} title="Toggle the typed query language with autocomplete">
-      <span class="dot" class:on={advanced}></span> Advanced search
-    </button>
   </div>
 
-  <!-- QUERY BAR -->
+  <!-- QUERY BAR: one field, always fuzzy free text, except `` `...` `` spans parse as structured
+       filters (parseInput) — no Simple/Advanced mode to toggle. -->
   <div class="qbar">
-    <div class="qwrap" class:focus={acOpen && advanced}>
+    <div class="qwrap" class:focus={acOpen}>
       <svg width="17" height="17" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#6e6e78" stroke-width="1.5" /><path d="M10.6 10.6 L14 14" stroke="#6e6e78" stroke-width="1.5" stroke-linecap="round" /></svg>
-      {#if advanced}
-        <input bind:this={queryEl} value={query} oninput={onQueryInput} onkeydown={onQueryKey} onfocus={recomputeAc} onblur={onQueryBlur} onclick={onQuerySelect} onkeyup={onQuerySelect}
-          placeholder="AMP(Type=5153, Gain>7)  +  REVERB(Mix>30)  +  tag:Lead" spellcheck="false" autocomplete="off" />
-      {:else}
-        <input bind:value={simpleQ} placeholder="Search presets, tags, amps, params…" spellcheck="false" autocomplete="off" />
-      {/if}
-      {#if (advanced ? query : simpleQ)}
+      <input bind:this={queryEl} value={query} oninput={onQueryInput} onkeydown={onQueryKey} onfocus={recomputeAc} onblur={onQueryBlur} onclick={onQuerySelect} onkeyup={onQuerySelect}
+        placeholder={'Search presets, tags, amps… or `AMP(Type=5153)` for filters'} spellcheck="false" autocomplete="off" />
+      {#if query}
         <button class="clr" onclick={clearAll} title="Clear">×</button>
       {/if}
     </div>
-    {#if acOpen && advanced}
+    {#if acOpen}
       <div class="ac">
         {#if acLabel}<div class="ac-ctx">{acLabel}</div>{/if}
         {#each acItems as a, i}
@@ -985,7 +1000,7 @@
       </div>
     {/each}
     <button class="addf" onclick={onAddFilter}><span class="plus">+</span> Add filter</button>
-    {#if !activeConds.length}<span class="hint">{advanced ? 'Type a query above, or add filters →' : 'Add block, parameter & tag filters →'}</span>{/if}
+    {#if !activeConds.length}<span class="hint">Add block, parameter &amp; tag filters, or type `AMP(...)` above →</span>{/if}
     <div class="spacer"></div>
     {#if activeConds.length}<button class="clrall" onclick={clearAll}>Clear all</button>{/if}
   </div>
@@ -1269,10 +1284,6 @@
   .seg { display: flex; gap: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
   .segb { padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.8); border-radius: 7px; font: 700 var(--d-font-sm) / 1 'JetBrains Mono', monospace; cursor: pointer; color: var(--textdim); background: transparent; border: none; }
   .segb.on { color: var(--bg); background: var(--accent, var(--accent)); }
-  .adv { display: inline-flex; align-items: center; gap: var(--d-gap); height: var(--d-ctl-h-sm); padding: 0 var(--d-pad-x); border-radius: 9px; cursor: pointer; font-size: var(--d-font); font-weight: 700; color: var(--text2); background: var(--track); border: 1px solid var(--border2); }
-  .adv.on { color: var(--accentink); background: var(--accent, var(--accent)); border-color: var(--accent, var(--accent)); }
-  .adv .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--textmuted); }
-  .adv .dot.on { background: var(--accentink); }
   /* query bar */
   .qbar { padding: 13px 20px 12px; border-bottom: 1px solid var(--surface2); flex: none; position: relative; z-index: 60; background: var(--bg2); display: flex; gap: 9px; align-items: stretch; }
   .qwrap { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: var(--d-ctl-h); padding: 0 var(--d-pad-x); background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px; transition: border-color 0.12s; }

@@ -2,57 +2,49 @@ import { test, expect, type Page } from '@playwright/test';
 import { bootCleanWorkbench, clickNav } from './support/workbench';
 
 /**
- * Preset Browser — advanced query bar.
+ * Preset Browser — unified query bar.
+ *
+ * One field: fuzzy free text everywhere, except text inside `` `...` `` spans parses as the typed
+ * query grammar with caret-aware autocomplete (see parseUnifiedQuery / suggestInQuery). There is no
+ * Simple/Advanced mode — the toggle was removed because it was redundant with "+ Add filter", which
+ * builds identical structured conditions in either mode; backticks are the field's only signal that
+ * a span should parse as a filter.
  *
  * Regression coverage: the autocomplete context (`acContext` / `filtersContext`) is read ONLY from the
  * input's focus handler, so the first click used to synchronously build the filter-spec table over
  * every param of every preset before the dropdown could paint — seconds of dead UI on a hydrated
  * library. The fix warms those derivations in `requestIdleCallback` time instead. This spec pins the
- * behaviour that must survive it: the dropdown still opens on the FIRST click, and the renderer stays
- * responsive while it does.
+ * behaviour that must survive it: the dropdown still opens on the FIRST click inside backticks, and
+ * the renderer stays responsive while it does.
  *
  * No wall-clock assertion — timing is flaky in CI, and the clean-boot fixture has no hydrated params
  * to be slow over. The felt latency is verified by hand; what's automated here is "still works".
  */
-/**
- * Both modes render an `.query-input input`, so the placeholder is what actually distinguishes
- * them: the caret-aware advanced field advertises the query grammar, the simple one is a plain
- * search box.
- */
-const ADVANCED_PLACEHOLDER = /AMP\(Type=5153/;
-const SIMPLE_PLACEHOLDER = /^Search presets/;
-
-/** Leave the Simple default and switch the bar into the typed query language. */
-async function enterAdvanced(page: Page): Promise<void> {
-  await page.locator('.adv-toggle').click();
-  await expect(page.locator('.adv-toggle')).toHaveText('Advanced');
-  await expect(page.locator('.query-input input')).toHaveAttribute(
-    'placeholder',
-    ADVANCED_PLACEHOLDER,
-  );
+async function openBacktickSpan(page: Page): Promise<void> {
+  const input = page.locator('.query-input input');
+  await input.click();
+  await input.pressSequentially('`');
 }
 
 test.describe('Preset Browser query bar', () => {
-  test('the advanced autocomplete opens on the first click', async ({ page }) => {
+  test('typing outside backticks is plain search — no autocomplete', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
 
-    // Simple is what a user who has never touched the toggle gets: the plain search box, no query
-    // language. The toggle button is labelled with the mode you are IN, not the one it switches to.
-    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
-    await expect(page.locator('.query-input input')).toHaveAttribute(
-      'placeholder',
-      SIMPLE_PLACEHOLDER,
-    );
-
-    await enterAdvanced(page);
+    await expect(page.locator('.query-input input')).toHaveAttribute('placeholder', /Search presets/);
 
     const input = page.locator('.query-input input');
-    await expect(input).toHaveCount(1);
-    await expect(page.locator('.ac')).toHaveCount(0); // closed until focused
-
     await input.click();
+    await input.pressSequentially('lead tone');
+    await expect(page.locator('.ac')).toHaveCount(0);
+  });
+
+  test('a backtick opens the autocomplete on the first click', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await clickNav(page, 'library');
+
+    await openBacktickSpan(page);
 
     // Liveness probe: on a renderer stuck in a synchronous build this never resolves and the test
     // times out here rather than on the assertion below (same technique as 11-pages.spec.ts).
@@ -68,14 +60,13 @@ test.describe('Preset Browser query bar', () => {
     await expect(dropdown.locator('.ac-item').filter({ hasText: 'tag:' }).first()).toBeVisible();
   });
 
-  test('typing a block name narrows the suggestions and Escape closes them', async ({ page }) => {
+  test('typing a block name inside backticks narrows the suggestions and Escape closes them', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
-    await enterAdvanced(page);
 
+    await openBacktickSpan(page);
     const input = page.locator('.query-input input');
-    await input.click();
-    await input.fill('rev');
+    await input.pressSequentially('rev');
 
     const items = page.locator('.ac .ac-item');
     await expect(items.filter({ hasText: 'REVERB' }).first()).toBeVisible();
@@ -85,34 +76,18 @@ test.describe('Preset Browser query bar', () => {
     await expect(page.locator('.ac')).toHaveCount(0);
   });
 
-  // The mode is sticky from the first deliberate toggle onward (`axs.pb.searchMode`) — a user who
-  // has learned the query language should not be thrown back to the simple box on every reload,
-  // and one who switched back should stay switched back.
-  test('the chosen mode survives a reload', async ({ page }) => {
+  test('moving the caret back outside the backtick span closes the autocomplete', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
-    await enterAdvanced(page);
 
-    await page.reload();
-    await page.waitForSelector('.aw-root');
-    await clickNav(page, 'library');
-    await expect(page.locator('.adv-toggle')).toHaveText('Advanced');
-    await expect(page.locator('.query-input input')).toHaveAttribute(
-      'placeholder',
-      ADVANCED_PLACEHOLDER,
-    );
+    const input = page.locator('.query-input input');
+    await input.click();
+    // `AMP` free text, then an open span with the caret parked inside it.
+    await input.pressSequentially('AMP `');
+    await expect(page.locator('.ac')).toHaveCount(1);
 
-    // …and the way back is sticky too.
-    await page.locator('.adv-toggle').click();
-    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
-
-    await page.reload();
-    await page.waitForSelector('.aw-root');
-    await clickNav(page, 'library');
-    await expect(page.locator('.adv-toggle')).toHaveText('Simple');
-    await expect(page.locator('.query-input input')).toHaveAttribute(
-      'placeholder',
-      SIMPLE_PLACEHOLDER,
-    );
+    await input.press('Home'); // caret now sits in the free-text prefix, outside the backtick span
+    await input.press('ArrowRight'); // trigger a caret-position recompute
+    await expect(page.locator('.ac')).toHaveCount(0);
   });
 });

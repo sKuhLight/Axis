@@ -66,7 +66,7 @@
   } from '../../presetBrowser/presetBrowserWorkbenchSpecs';
   import {
     buildAutocompleteContext,
-    suggest,
+    suggestInQuery,
     applyAcceptance,
     tidyQuery,
     type AxisPbAcItem
@@ -117,10 +117,14 @@
   const part = $derived<AxisPresetBrowserPart>(
     parseAxisPresetBrowserPart(panel.state?.part, axisPresetBrowserPartFromPanelType(panel.type))
   );
-  // Live conditions the query filters by (advanced typed query, or simple chips + typed text).
+  // Live conditions the query filters by — parsed from the `` `...` `` spans in the one query field.
   const activeConditions = $derived.by(() => {
     void snapshot; // re-derive on any snapshot change
     return axisPresetBrowserWorkbenchController.activeConditions;
+  });
+  const freeText = $derived.by(() => {
+    void snapshot;
+    return axisPresetBrowserWorkbenchController.freeText;
   });
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
   const presenceViews = presenceViewDefs();
@@ -142,7 +146,7 @@
     // Reads presetRecency.map inside this $derived, so a load re-sorts the list live.
     lastLoadedAt: presetRecency.at,
     conditions: activeConditions,
-    simpleQuery: snapshot.advanced ? '' : snapshot.simpleQ,
+    simpleQuery: freeText,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
     presenceView: snapshot.presenceView,
@@ -227,9 +231,9 @@
   let acIndex = $state(0);
   let acLabel = $state('');
   function recomputeAc() {
-    if (!snapshot.advanced) { acOpen = false; return; }
     const c = queryEl?.selectionStart ?? caret;
-    const r = suggest(acContext, queryEl?.value ?? snapshot.query, c);
+    const r = suggestInQuery(acContext, queryEl?.value ?? snapshot.queryText, c);
+    if (!r.items.length && !r.label) { acOpen = false; return; } // caret outside any `` `...` `` span
     acItems = r.items; acLabel = r.label; acIndex = 0; acOpen = true;
   }
   // Tab return re-fires focus on the query input and would reopen the dropdown on
@@ -251,18 +255,26 @@
   const closeAc = () => { acOpen = false; };
   function onQueryInput(e: Event) {
     const el = e.target as HTMLInputElement;
-    caret = el.selectionStart ?? el.value.length;
-    if (snapshot.advanced) { axisPresetBrowserWorkbenchController.setQuery(el.value); recomputeAc(); }
-    else axisPresetBrowserWorkbenchController.setSimpleQuery(el.value);
+    let value = el.value;
+    let pos = el.selectionStart ?? value.length;
+    // Auto-pair a lone backtick: typing an unclosed ` opens a filter span and autocomplete right away,
+    // so power users never have to type both ticks by hand.
+    if (pos > 0 && value[pos - 1] === '`' && ((value.match(/`/g) ?? []).length % 2 === 1)) {
+      value = value.slice(0, pos) + '`' + value.slice(pos);
+      el.value = value;
+      el.setSelectionRange(pos, pos);
+    }
+    caret = pos;
+    axisPresetBrowserWorkbenchController.setQuery(value);
+    recomputeAc();
   }
   function onQuerySelect(e: Event) {
     const el = e.target as HTMLInputElement;
     caret = el.selectionStart ?? 0;
     if ('key' in e && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes((e as KeyboardEvent).key)) return;
-    if (snapshot.advanced && acOpen) recomputeAc();
+    if (acOpen) recomputeAc();
   }
   function onQueryKey(e: KeyboardEvent) {
-    if (!snapshot.advanced) return;
     if (!acOpen) { if (e.key === 'ArrowDown') recomputeAc(); return; }
     const n = acItems.length;
     if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(n - 1, acIndex + 1); }
@@ -286,7 +298,7 @@
     setTimeout(() => {
       closeAc();
       picker = null;
-      if (snapshot.advanced) axisPresetBrowserWorkbenchController.setQuery(tidyQuery(snapshot.query));
+      axisPresetBrowserWorkbenchController.setQuery(tidyQuery(snapshot.queryText));
     }, 130);
   }
 
@@ -836,49 +848,28 @@
     ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) dragOver = false; }}
     ondrop={onFiltersDrop}
   >
-    <div class="query-input" class:focus={acOpen && snapshot.advanced}>
+    <div class="query-input" class:focus={acOpen}>
       <span class="magnifier" aria-hidden="true">⌕</span>
-      {#if snapshot.advanced}
-        <!-- V13e: advanced mode gets the caret-aware autocomplete engine -->
-        <input
-          bind:this={queryEl}
-          type="text"
-          spellcheck="false"
-          autocomplete="off"
-          placeholder="AMP(Type=5153, Gain>7)  +  REVERB(Mix>30)  +  tag:Lead"
-          value={snapshot.query}
-          oninput={onQueryInput}
-          onkeydown={onQueryKey}
-          onfocus={onQueryFocus}
-          onblur={onQueryBlur}
-          onclick={onQuerySelect}
-          onkeyup={onQuerySelect}
-        />
-      {:else}
-        <input
-          type="text"
-          spellcheck="false"
-          placeholder="Search presets, tags, amps, params…"
-          value={snapshot.simpleQ}
-          oninput={onQueryInput}
-        />
-      {/if}
-      {#if (snapshot.advanced ? snapshot.query : snapshot.simpleQ)}
+      <!-- One field, always: fuzzy free text, except `` `...` `` spans parse as structured filters
+           (see parseUnifiedQuery) — no Simple/Advanced mode to toggle. -->
+      <input
+        bind:this={queryEl}
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder={'Search presets, tags, amps… or `AMP(Type=5153)` for filters'}
+        value={snapshot.queryText}
+        oninput={onQueryInput}
+        onkeydown={onQueryKey}
+        onfocus={onQueryFocus}
+        onblur={onQueryBlur}
+        onclick={onQuerySelect}
+        onkeyup={onQuerySelect}
+      />
+      {#if snapshot.queryText}
         <button type="button" class="clear-btn" title="Clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>×</button>
       {/if}
-      <!-- The mode changes what THIS field accepts (plain text vs the typed query language), so it is
-           labelled on the field rather than floating in the toolbar as a standalone state word. -->
-      <button
-        type="button"
-        class="adv-toggle"
-        class:on={snapshot.advanced}
-        title={snapshot.advanced ? 'Switch to plain-text search' : 'Switch to the typed query language'}
-        aria-pressed={snapshot.advanced}
-        onclick={() => axisPresetBrowserWorkbenchController.toggleAdvanced()}
-      >
-        <i></i>{snapshot.advanced ? 'Advanced' : 'Simple'}
-      </button>
-      {#if acOpen && snapshot.advanced}
+      {#if acOpen}
         <!-- V13e autocomplete dropdown (§2.4) -->
         <div class="ac">
           {#if acLabel}<div class="ac-ctx">{acLabel}</div>{/if}
@@ -1874,32 +1865,6 @@
     color: var(--accent);
     font: 700 10px/1 var(--font-mono);
     letter-spacing: 0.06em;
-  }
-  /* The mode chip lives inside the search field, so it is sized to sit in a 40px input. */
-  .adv-toggle {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 26px;
-    padding: 0 9px;
-    border-radius: 999px;
-    text-transform: none;
-    font: 700 10px/1 var(--font-mono);
-  }
-  .adv-toggle i {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--textdim);
-  }
-  .adv-toggle.on {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accentink, var(--bg));
-  }
-  .adv-toggle.on i {
-    background: var(--accentink, var(--bg));
   }
   /* V13e autocomplete dropdown (§2.4) */
   .query-input.focus {

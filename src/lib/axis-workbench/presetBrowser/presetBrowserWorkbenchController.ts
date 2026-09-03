@@ -1,8 +1,7 @@
 import { parseAxisPresetBrowserPart, type AxisPresetBrowserPart, type AxisPresetBrowserSelection } from './types';
 import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
-import { condsToQuery, parseQuery, toAdvancedText, toSimpleConds, type AxisPbCond } from './presetBrowserWorkbenchQuery';
+import { condsToQuery, parseUnifiedQuery, serializeUnifiedQuery, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
-import { loadAdvancedMode, persistAdvancedMode } from './presetBrowserWorkbenchSearchMode';
 
 export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu' | 'recent';
 export type AxisPresetBrowserSortDir = 'asc' | 'desc';
@@ -22,11 +21,9 @@ export const AXIS_PRESET_BROWSER_SORT_DEFAULTS: Record<AxisPresetBrowserSort, Ax
 export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSelection {
   activePart: AxisPresetBrowserPart;
   detailOpen: boolean;
-  // query system (§2)
-  advanced: boolean;
-  query: string; // advanced typed query
-  simpleQ: string; // simple free text
-  conditions: AxisPbCond[]; // simple-mode chips
+  // query system (§2) — one field. Structured filters parse only from `` `...` `` spans inside it
+  // (see parseUnifiedQuery); everything else is free text. No mode to toggle.
+  queryText: string;
   // library view (§3) — the sources sidebar's LIBRARY selection, shared across parts.
   presenceView: AxisPbPresenceView;
   // saved-filter inline-name affordance (§3.3) — the "Save filter" flow's open/name state.
@@ -56,10 +53,7 @@ export class AxisPresetBrowserWorkbenchController {
     entryId: null,
     focusedBlockEffectId: null,
     detailOpen: false,
-    advanced: loadAdvancedMode(),
-    query: '',
-    simpleQ: '',
-    conditions: [],
+    queryText: '',
     presenceView: 'all',
     saving: false,
     sort: 'num',
@@ -79,12 +73,15 @@ export class AxisPresetBrowserWorkbenchController {
     return this.#clone();
   }
 
-  // The conditions that actually filter the list right now: parsed from the typed query in advanced
-  // mode, the chip list (plus any typed conditions) in simple mode.
+  // The conditions that actually filter the list right now: parsed from the `` `...` `` spans in
+  // queryText (see parseUnifiedQuery).
   get activeConditions(): AxisPbCond[] {
-    return this.#snapshot.advanced
-      ? parseQuery(this.#snapshot.query)
-      : [...this.#snapshot.conditions, ...parseQuery(this.#snapshot.simpleQ)];
+    return parseUnifiedQuery(this.#snapshot.queryText).conds;
+  }
+
+  // The free-text remainder of queryText (everything outside backtick spans) — feeds matchSimple.
+  get freeText(): string {
+    return parseUnifiedQuery(this.#snapshot.queryText).free;
   }
 
   bindHost(host: AxisPresetBrowserWorkbenchHost | null): () => void {
@@ -161,79 +158,42 @@ export class AxisPresetBrowserWorkbenchController {
 
   // ===================== query system (§2) =====================
 
-  setQuery(query: string): void {
-    this.#snapshot = { ...this.#snapshot, query };
-    this.#emit();
-  }
-
-  setSimpleQuery(simpleQ: string): void {
-    this.#snapshot = { ...this.#snapshot, simpleQ };
-    this.#emit();
-  }
-
-  setConditions(conditions: AxisPbCond[]): void {
-    // In advanced mode chip edits re-serialize back into the typed query (§2.5).
-    this.#snapshot = this.#snapshot.advanced
-      ? { ...this.#snapshot, query: condsToQuery(conditions) }
-      : { ...this.#snapshot, conditions };
+  setQuery(queryText: string): void {
+    this.#snapshot = { ...this.#snapshot, queryText };
     this.#emit();
   }
 
   clearQuery(): void {
-    this.#snapshot = { ...this.#snapshot, query: '', simpleQ: '', conditions: [] };
+    this.#snapshot = { ...this.#snapshot, queryText: '' };
     this.#emit();
   }
 
-  // Edit the active conditions in place, then persist back into whichever mode is live (§2.5, verbatim
-  // from the monolith `editConds`). Advanced mode re-serializes to the typed query text; simple mode
-  // writes the chip list. Used by the FILTERS builder-chips, pickers, quick tags, and drag-into-filters.
+  // Edit the active conditions in place, then re-serialize them back into queryText, free text
+  // preserved (§2.5, unified — verbatim in spirit from the monolith/pre-unification `editConds`).
+  // Used by the FILTERS builder-chips, pickers, quick tags, and drag-into-filters.
   editConds(fn: (conds: AxisPbCond[]) => void): void {
-    if (this.#snapshot.advanced) {
-      const c = parseQuery(this.#snapshot.query);
-      fn(c);
-      this.#snapshot = { ...this.#snapshot, query: condsToQuery(c) };
-    } else {
-      const c = this.#snapshot.conditions.map((x) =>
-        x.kind === 'block' ? { ...x, params: x.params.map((p) => ({ ...p })) } : { ...x }
-      );
-      fn(c);
-      this.#snapshot = { ...this.#snapshot, conditions: c };
-    }
+    const { conds, free } = parseUnifiedQuery(this.#snapshot.queryText);
+    const c = conds.map((x) => (x.kind === 'block' ? { ...x, params: x.params.map((p) => ({ ...p })) } : { ...x }));
+    fn(c);
+    this.#snapshot = { ...this.#snapshot, queryText: serializeUnifiedQuery(c, free) };
     this.#emit();
   }
 
-  // Toggle advanced ↔ simple and convert the current state across the boundary (§2.1).
-  toggleAdvanced(): void {
-    const s = this.#snapshot;
-    this.#snapshot = s.advanced
-      ? { ...s, advanced: false, conditions: toSimpleConds(s.query), query: '' }
-      : { ...s, advanced: true, query: toAdvancedText(s.conditions), conditions: [] };
-    // An explicit toggle is the ONLY thing that makes the mode sticky (see applyQueryText).
-    persistAdvancedMode(this.#snapshot.advanced);
-    this.#emit();
-  }
-
-  // Apply a saved-filter query string: switch to advanced and load its text (§3.3). Deliberately
-  // does NOT persist the mode — the stored preference is the mode the user chose to START in,
-  // not whatever is on screen, so one saved-filter click must not rewrite their default.
+  // Apply a saved-filter query string (§3.3): the stored text is condition-only (see
+  // currentQueryText), so it always loads as a fresh backtick block — any free text the user had
+  // typed is intentionally replaced, matching "apply this filter" rather than "add to my search".
   applyQueryText(text: string): void {
-    this.#snapshot = { ...this.#snapshot, advanced: true, query: text, conditions: [], saving: false };
+    this.#snapshot = { ...this.#snapshot, queryText: text.trim() ? `\`${text}\`` : '', saving: false };
     this.#emit();
   }
 
-  // Toggle a `tag:` condition (quick tags, §3.4). Works in both modes.
+  // Toggle a `tag:` condition (quick tags, §3.4).
   toggleTag(tag: string): void {
-    const has = this.activeConditions.some((c) => c.kind === 'tag' && c.val.toLowerCase() === tag.toLowerCase());
-    const next = has
-      ? this.activeConditions.filter((c) => !(c.kind === 'tag' && c.val.toLowerCase() === tag.toLowerCase()))
-      : [...this.activeConditions, { kind: 'tag' as const, val: tag }];
-    // Simple mode keeps the typed text: a tag chip is meant to NARROW what the user has already
-    // searched for. Clearing simpleQ here dropped the free-text filter, so the list visibly widened
-    // on a click meant to filter it — and it disagreed with editConds (the builder chips), which
-    // leaves the text alone. Free text and tag chips both feed the match, so they compose.
-    if (this.#snapshot.advanced) this.#snapshot = { ...this.#snapshot, query: condsToQuery(next) };
-    else this.#snapshot = { ...this.#snapshot, conditions: next };
-    this.#emit();
+    this.editConds((conds) => {
+      const i = conds.findIndex((c) => c.kind === 'tag' && c.val.toLowerCase() === tag.toLowerCase());
+      if (i >= 0) conds.splice(i, 1);
+      else conds.push({ kind: 'tag', val: tag });
+    });
   }
 
   // ===================== library view (§3) =====================
@@ -255,10 +215,10 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
-  // The current query text to save — advanced text as-is, or the serialized simple conditions (§3.3),
-  // matching the monolith's commitSave().
+  // The current query text to save — condition-only, no backticks and no free text (§3.3), matching
+  // the monolith's commitSave() and the AXIS_PB_SEED_SAVED_FILTERS format.
   currentQueryText(): string {
-    return this.#snapshot.advanced ? this.#snapshot.query : condsToQuery(this.#snapshot.conditions);
+    return condsToQuery(this.activeConditions);
   }
 
   // ===================== list part (§4) =====================
@@ -332,7 +292,6 @@ export class AxisPresetBrowserWorkbenchController {
   #clone(): AxisPresetBrowserControllerSnapshot {
     return {
       ...this.#snapshot,
-      conditions: [...this.#snapshot.conditions],
       marked: { ...this.#snapshot.marked }
     };
   }

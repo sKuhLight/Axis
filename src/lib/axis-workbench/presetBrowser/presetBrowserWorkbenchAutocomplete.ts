@@ -187,3 +187,29 @@ export function applyAcceptance(item: AxisPbAcItem, text: string, caret: number)
 export function tidyQuery(text: string): string {
   return text.replace(/\s*\+\s*$/, '').replace(/,\s*$/, '');
 }
+
+// ===================== backtick-scoped autocomplete (unified query) =====================
+
+// Finds the `` `...` `` span (if any) the caret sits inside, as an INNER [start,end) range (the
+// backticks themselves excluded). Autocomplete only offers suggestions inside such a span — text
+// outside backticks is free text and gets no query-language help.
+export function findBacktickRegion(text: string, caret: number): { start: number; end: number } | null {
+  const re = /`([^`]*)`/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const start = m.index + 1;
+    const end = start + m[1].length;
+    if (caret >= start && caret <= end) return { start, end };
+  }
+  return null;
+}
+
+// `suggest`, scoped to the backtick span containing the caret. Returns a closed/empty result when
+// the caret sits outside any span. The local slice is character-identical to that range of the full
+// text, so an accepted item's splice math (`applyAcceptance`) needs no offset remapping — call it
+// against the FULL text/caret as usual.
+export function suggestInQuery(ctx: AutocompleteContext, text: string, caret: number): AxisPbAcResult {
+  const region = findBacktickRegion(text, caret);
+  if (!region) return { items: [], label: '' };
+  return suggest(ctx, text.slice(region.start, region.end), caret - region.start);
+}

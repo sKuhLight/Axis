@@ -3,13 +3,6 @@ import { type Page, expect } from '@playwright/test';
 /** localStorage key the workbench store persists its document under. */
 export const WORKBENCH_DOC_KEY = 'axs.workbench.doc';
 
-/**
- * localStorage key the Preset Browser's sticky simple/advanced search mode lives under
- * (`presetBrowserWorkbenchSearchMode.ts`). Absent means Simple, the default a fresh user gets.
- * Cleared on every clean boot so a spec that toggled to Advanced can't leak into the next run.
- */
-export const PB_SEARCH_MODE_KEY = 'axs.pb.searchMode';
-
 /** LocalStorage key for the Block Editor Grid Map's expanded/collapsed state. */
 export const GRID_MAP_COLLAPSE_KEY = 'axs.gridmap.collapsed';
 
@@ -69,7 +62,7 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
       for (const k of clearKeys) window.localStorage.removeItem(k);
       for (const [k, v] of Object.entries(suppress)) window.localStorage.setItem(k, v);
     },
-    { clearKeys: [WORKBENCH_DOC_KEY, PB_SEARCH_MODE_KEY, GRID_MAP_COLLAPSE_KEY], suppress: FIRST_RUN_SUPPRESS },
+    { clearKeys: [WORKBENCH_DOC_KEY, GRID_MAP_COLLAPSE_KEY], suppress: FIRST_RUN_SUPPRESS },
   );
   await page.reload();
   await page.waitForSelector('.aw-root');

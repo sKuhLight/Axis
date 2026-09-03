@@ -1,86 +1,62 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AxisPresetBrowserWorkbenchController } from '../presetBrowser/presetBrowserWorkbenchController';
-import { AXIS_PB_SEARCH_MODE_KEY } from '../presetBrowser/presetBrowserWorkbenchSearchMode';
-
-// Minimal in-memory localStorage stub for the node test env — the controller reads the sticky
-// search mode out of storage in its field initializer.
-function stubStorage(): void {
-  const store = new Map<string, string>();
-  (globalThis as { localStorage?: Storage }).localStorage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-    clear: () => store.clear(),
-    key: () => null,
-    length: 0
-  } as Storage;
-}
-
-// A controller in advanced mode. Simple is the default now, so the query-language tests below opt
-// in explicitly rather than leaning on the initial snapshot.
-function advancedController(): AxisPresetBrowserWorkbenchController {
-  const c = new AxisPresetBrowserWorkbenchController();
-  c.toggleAdvanced();
-  return c;
-}
 
 describe('Preset Browser controller shared state (§1, §2)', () => {
-  beforeEach(() => stubStorage());
-
-  it('derives active conditions from the typed query in advanced mode', () => {
-    const c = advancedController();
-    c.setQuery('AMP(TYPE=5153)  +  tag:Lead');
+  it('derives active conditions only from `` `...` `` spans in the query', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('`AMP(TYPE=5153)  +  tag:Lead`');
     expect(c.activeConditions.map((cond) => cond.kind)).toEqual(['block', 'tag']);
   });
 
-  it('converts state across the advanced <-> simple toggle', () => {
-    const c = advancedController();
-    c.setQuery('AMP  +  tag:Lead');
-    c.toggleAdvanced(); // advanced -> simple: parses text into conditions, clears query
-    expect(c.snapshot.advanced).toBe(false);
-    expect(c.snapshot.query).toBe('');
-    expect(c.snapshot.conditions.map((cond) => cond.kind)).toEqual(['block', 'tag']);
-    c.toggleAdvanced(); // simple -> advanced: serializes conditions back into query
-    expect(c.snapshot.advanced).toBe(true);
-    expect(c.snapshot.query).toBe('AMP  +  tag:Lead');
-    expect(c.snapshot.conditions).toEqual([]);
-  });
-
-  it('toggles a tag condition on and off', () => {
+  it('treats text outside backticks as free text, not a filter', () => {
     const c = new AxisPresetBrowserWorkbenchController();
-    c.toggleTag('Lead');
-    expect(c.activeConditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
-    c.toggleTag('Lead');
+    c.setQuery('tag:Lead');
     expect(c.activeConditions).toEqual([]);
+    expect(c.freeText).toBe('tag:Lead');
   });
 
-  // A tag chip narrows what the user already typed; it must not silently empty the search box and
-  // widen the list. The builder chips (editConds) have always left the text alone.
-  it('keeps the simple-mode search text when a tag chip is clicked', () => {
+  it('editConds writes a canonical backtick block and preserves free text', () => {
     const c = new AxisPresetBrowserWorkbenchController();
-    c.setSimpleQuery('clean');
-    c.toggleTag('Lead');
-    expect(c.snapshot.simpleQ).toBe('clean');
-    expect(c.snapshot.conditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
-    c.toggleTag('Lead');
-    expect(c.snapshot.simpleQ).toBe('clean');
-    expect(c.snapshot.conditions).toEqual([]);
+    c.setQuery('lead tone');
+    c.editConds((conds) => conds.push({ kind: 'tag', val: 'Lead' }));
+    expect(c.snapshot.queryText).toBe('lead tone `tag:Lead`');
+    expect(c.freeText).toBe('lead tone');
+    expect(c.activeConditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
   });
 
-  it('editConds re-serializes to the query in advanced mode', () => {
-    const c = advancedController();
-    c.setQuery('AMP');
+  it('editConds re-serializes an existing block condition', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('`AMP`');
     c.editConds((conds) => {
       const blk = conds.find((x) => x.kind === 'block');
       if (blk && blk.kind === 'block') blk.params.push({ name: 'GAIN', op: '>', val: '7' });
     });
-    expect(c.snapshot.query).toBe('AMP(GAIN>7)');
+    expect(c.snapshot.queryText).toBe('`AMP(GAIN>7)`');
   });
 
-  it('editConds writes the chip list in simple mode', () => {
-    const c = new AxisPresetBrowserWorkbenchController(); // simple is the default mode
-    c.editConds((conds) => conds.push({ kind: 'tag', val: 'Lead' }));
-    expect(c.snapshot.conditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
+  it('toggles a tag condition on and off, preserving free text', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('clean');
+    c.toggleTag('Lead');
+    expect(c.freeText).toBe('clean');
+    expect(c.activeConditions).toEqual([{ kind: 'tag', val: 'Lead' }]);
+    c.toggleTag('Lead');
+    expect(c.freeText).toBe('clean');
+    expect(c.activeConditions).toEqual([]);
+  });
+
+  it('applyQueryText wraps saved-filter text in backticks, replacing free text', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('lead tone');
+    c.applyQueryText('AMP  +  tag:Lead');
+    expect(c.snapshot.queryText).toBe('`AMP  +  tag:Lead`');
+    expect(c.activeConditions.map((cond) => cond.kind)).toEqual(['block', 'tag']);
+  });
+
+  it('currentQueryText saves condition-only text, no backticks or free text', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.setQuery('lead tone `AMP  +  tag:Lead`');
+    expect(c.currentQueryText()).toBe('AMP  +  tag:Lead');
   });
 
   it('marks a range in display order for shift-click', () => {
@@ -130,33 +106,5 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     expect(c.snapshot.owner).toBe('sources');
     unSources();
     expect(c.snapshot.owner).toBeNull();
-  });
-
-  // ===================== sticky search mode =====================
-
-  it('opens in simple mode for a user who has never toggled', () => {
-    expect(new AxisPresetBrowserWorkbenchController().snapshot.advanced).toBe(false);
-  });
-
-  it('restores the persisted mode on construction', () => {
-    localStorage.setItem(AXIS_PB_SEARCH_MODE_KEY, 'advanced');
-    expect(new AxisPresetBrowserWorkbenchController().snapshot.advanced).toBe(true);
-  });
-
-  it('persists the mode on an explicit toggle', () => {
-    const c = new AxisPresetBrowserWorkbenchController();
-    c.toggleAdvanced();
-    expect(localStorage.getItem(AXIS_PB_SEARCH_MODE_KEY)).toBe('advanced');
-    c.toggleAdvanced();
-    expect(localStorage.getItem(AXIS_PB_SEARCH_MODE_KEY)).toBe('simple');
-  });
-
-  // Applying a saved filter switches the live mode but must not rewrite the user's chosen default,
-  // or one click on a saved filter would silently make advanced their permanent start mode.
-  it('does not persist the advanced switch a saved filter forces', () => {
-    const c = new AxisPresetBrowserWorkbenchController();
-    c.applyQueryText('AMP  +  tag:Lead');
-    expect(c.snapshot.advanced).toBe(true);
-    expect(localStorage.getItem(AXIS_PB_SEARCH_MODE_KEY)).toBeNull();
   });
 });
