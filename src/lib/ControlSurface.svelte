@@ -56,7 +56,9 @@
     megaTapGraphs = [] as MegaTapGraphSpec[],
     geqBands = [] as FaderBand[],
     geqTitle = 'Graphic EQ',
-    hideIds = [] as number[]
+    hideIds = [] as number[],
+    q = $bindable(''),
+    hideSearch = false
   }: {
     slug?: string;
     accent?: string;
@@ -70,6 +72,8 @@
     geqBands?: FaderBand[];
     geqTitle?: string;
     hideIds?: number[];
+    q?: string;
+    hideSearch?: boolean;
   } = $props();
 
   const GAP = 8;
@@ -320,7 +324,6 @@
   }
   let dragging = $state(false);
   let drag = $state<{ id: string; x: number; y: number; w: number; h: number; valid: boolean } | null>(null);
-  let q = $state(''); // live control-search query
   let resSel = $state<{ id: number; left: number; top: number; width: number } | null>(null); // results select popover
 
   // ── live control search: flat list of every matching control, ignoring tabs/groupings ──
@@ -1198,11 +1201,6 @@
 
 <!-- page tabs + live control search (wrapping chip rows — never a horizontal scrollbar) -->
 <div class="tabs">
-  <div class="csearch" class:active={searching}>
-    <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-    <input class="csin" placeholder="Find a control…" bind:value={q} />
-    {#if searching}<button class="csx" aria-label="Clear search" onclick={() => { q = ''; resSel = null; }}>✕</button>{/if}
-  </div>
   {#if !searching}
     {#if board}
       {#each board.pageOrder as pg (pg)}
@@ -1216,7 +1214,9 @@
     {#if editMode}
       <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
     {/if}
-    <span class="tab-sp"></span>
+  {/if}
+  <span class="tab-sp"></span>
+  {#if !searching}
     <!-- Axis-Layouts: switch between named layout profiles (Default = device-authentic, Blank, custom) -->
     <!-- Layout profiles are the persistence side of control re-arranging: with
          arranging off nothing new can be authored, "Blank" is a one-way trip to
@@ -1251,6 +1251,13 @@
         <span>{editMode ? '🔓' : '🔒'}</span>{editMode ? 'Arranging' : 'Arrange'}
       </button>
     {/if}
+  {/if}
+  {#if !hideSearch}
+    <div class="csearch" class:active={searching}>
+      <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+      <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
+      {#if searching}<button class="csx" aria-label="Clear search" onclick={() => { q = ''; resSel = null; }}>✕</button>{/if}
+    </div>
   {/if}
 </div>
 
@@ -1742,12 +1749,6 @@
     gap: var(--d-gap);
     padding: var(--d-pad-y) var(--d-pad-x) calc(var(--d-pad-y) * 0.6);
     flex: none;
-  }
-  /* phones: the search takes the first line, the page tabs wrap as chips below it */
-  @media (max-width: 759px) {
-    .tabs .csearch {
-      flex-basis: 100%;
-    }
   }
   .tab {
     flex: none;
@@ -2880,6 +2881,7 @@
   /* live control search */
   .csearch {
     flex: none;
+    width: 300px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2892,7 +2894,6 @@
     min-width: 140px;
   }
   .csearch.active {
-    flex: 1;
     border-color: var(--accent, var(--accent));
     color: var(--accent, var(--accent));
   }

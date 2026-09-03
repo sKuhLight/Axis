@@ -89,6 +89,15 @@
 
   const CHAN = ['A', 'B', 'C', 'D'];
 
+  // The name shown on the type button. Held here (not inline) because the header also sizes the title
+  // from its length and puts the full text in the button's tooltip.
+  const typeName = $derived(
+    isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel?.pack || '—')
+  );
+
+  let q = $state('');
+  const searching = $derived(q.trim().length > 0);
+
   // ── docked resize (desktop) ──
   let resizing = false;
   function resizeDown(e: PointerEvent) {
@@ -141,13 +150,20 @@
 
       <!-- header -->
       {#if sel && cat}
+        <!-- The header is its own inline-size container so the name bar can take its narrow step from the
+             PANE's width, not the viewport's — this editor is a dock panel and is routinely narrow on a wide
+             screen. Containment is scoped to the header, which holds no fixed/absolute descendants, so it
+             cannot become an unintended containing block for the surface's popovers. -->
+        <div class="headwrap">
         <header class="head">
           <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
-          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : 'Change type — search models'}>
-            <svg class="t-mag" width="16" height="16" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+          <!-- Fixed width, never content-sized: the name changes on every block selection, and a bar that
+               resized with it would shift the channel buttons and the search field on each hop. `.t-wrap`
+               takes the slack so "Change ▾" stays docked to the bar's right edge at any name length. -->
+          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
             <span class="t-wrap">
               <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
-              <span class="t-type">{isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel.pack || '—')}</span>
+              <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
             </span>
             {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
           </button>
@@ -161,8 +177,17 @@
             </div>
           {/if}
 
+          <span class="hspace"></span>
+
+          <div class="csearch" class:active={searching}>
+            <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+            <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
+            {#if searching}<button class="csx" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
+          </div>
+
           {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
         </header>
+        </div>
       {/if}
 
       <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
@@ -191,6 +216,8 @@
           {geqBands}
           geqTitle={editor.blockType?.name || 'Graphic EQ'}
           {hideIds}
+          bind:q
+          hideSearch
         />
       {/if}
 
@@ -271,13 +298,37 @@
     background: var(--border3);
   }
 
+  .headwrap {
+    flex: none;
+    container-type: inline-size;
+  }
   .head {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--d-gap);
     padding: var(--d-pad-y) var(--d-pad-x);
+    padding-bottom: calc(var(--d-pad-y) + var(--d-gap));
     border-bottom: 1px solid var(--surface2);
     flex: none;
+    /* the name bar's fixed width — stepped down once when the PANE gets narrow, never squeezed fluidly */
+    --be-name-w: 340px;
+  }
+  @container (max-width: 700px) {
+    .head {
+      --be-name-w: 240px;
+    }
+    .t-title {
+      display: none;
+    }
+    .csearch {
+      flex: 1 0 100%;
+      order: 2;
+    }
+  }
+  .hspace {
+    flex: 1;
+    min-width: var(--d-gap);
   }
   .icon {
     width: var(--d-ctl-h);
@@ -291,12 +342,15 @@
     color: var(--text);
     border: 1px solid;
   }
-  /* the type button doubles as the model search — grows to fill the header so the full name shows */
+  /* The type button is a FIXED-WIDTH box, not a content-sized one. Sizing it to the name would move the
+     channel buttons and the search field every time you selected a different block; a short name paying
+     for that with a little internal slack is the cheaper trade. */
   .typebtn {
     display: flex;
     align-items: center;
     gap: 11px;
-    flex: 1;
+    flex: none;
+    width: var(--be-name-w);
     min-width: 0;
     height: var(--d-ctl-h);
     padding: 0 var(--d-pad-x);
@@ -314,10 +368,6 @@
     cursor: default;
     opacity: 0.7;
   }
-  .t-mag {
-    flex: none;
-    color: var(--accent);
-  }
   .t-wrap {
     flex: 1;
     min-width: 0;
@@ -332,13 +382,26 @@
     text-transform: uppercase;
     color: var(--text-mut);
   }
+  /* The block name is the loudest thing in the header. Long device names step DOWN through two buckets
+     rather than being measured and fitted: the width is fixed, so a bucket cannot start a size→width→size
+     loop, and a deterministic rule needs no measurement pass. Even the smallest bucket (16px) is larger
+     than the 14px this used to render at, so a long name is never worse than before. */
   .t-type {
     font-weight: 700;
-    font-size: var(--d-font-lg);
+    font-size: calc(var(--d-font-lg) * 1.4);
+    letter-spacing: -0.015em;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .t-type.long {
+    font-size: calc(var(--d-font-lg) * 1.2);
+    letter-spacing: -0.01em;
+  }
+  .t-type.xlong {
+    font-size: calc(var(--d-font-lg) * 1.07);
+    letter-spacing: -0.005em;
   }
   .t-go {
     flex: none;
@@ -350,34 +413,95 @@
     background: color-mix(in srgb, var(--accent) 14%, transparent);
     white-space: nowrap;
   }
+  /* Channels sit directly beside the block name: they are a property OF the selected type, and reading
+     "Brit 800 Mod / CH C" as one phrase is the point. One bordered track rather than four loose chips,
+     and never shrunk — the selected channel stays in the same place at every pane width. */
   .ch {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     align-items: center;
+    flex: none;
+    padding: 3px;
+    border-radius: 11px;
+    background: var(--input);
+    border: 1px solid var(--border2);
   }
   .ch-lbl {
-    font: 600 8px/1 var(--font-mono);
+    font: 700 9px/1 var(--font-mono);
     color: var(--text-mut);
-    letter-spacing: 0.08em;
-    margin-right: 2px;
+    letter-spacing: 0.1em;
+    padding: 0 6px 0 4px;
   }
   .ch-btn {
-    width: var(--d-ctl-h-sm);
-    height: var(--d-ctl-h-sm);
+    width: calc(var(--d-ctl-h) * 0.95);
+    height: calc(var(--d-ctl-h) - 8px);
     flex: none;
-    border-radius: 9px;
-    background: var(--bg2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-faint);
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
     font-weight: 700;
-    font-size: var(--d-font);
+    font-size: calc(var(--d-font) * 1.12);
     cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .ch-btn:hover:not(.on) {
+    background: var(--surface2);
+    color: var(--text2);
   }
   .ch-btn.on {
-    background: var(--accent-tint);
-    border-color: var(--accent);
+    background: var(--amber-tint);
+    border-color: var(--amber-border);
     color: var(--amber);
   }
+
+  .csearch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 1 240px;
+    min-width: 0;
+    height: var(--d-ctl-h);
+    padding: 0 calc(var(--d-pad-x) * 0.8);
+    border-radius: 10px;
+    background: var(--input);
+    border: 1px solid var(--border2);
+    color: var(--text-mut);
+  }
+  .csearch:focus-within,
+  .csearch.active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .csearch svg,
+  .csx {
+    flex: none;
+  }
+  .csin {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--d-font);
+  }
+  .csin::placeholder {
+    color: var(--text-faint);
+  }
+  .csx {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
   .close {
     width: var(--d-ctl-h-sm);
     height: var(--d-ctl-h-sm);
