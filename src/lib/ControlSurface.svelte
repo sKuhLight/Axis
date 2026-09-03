@@ -1200,8 +1200,9 @@
 </script>
 
 <!-- page tabs + live control search (wrapping chip rows — never a horizontal scrollbar) -->
-<div class="tabs">
+<div class="tabs" style="--tabs-center-offset:{railW / 2}px">
   {#if !searching}
+    <div class="page-tabs">
     {#if board}
       {#each board.pageOrder as pg (pg)}
         {#if renamingPage === pg}
@@ -1214,6 +1215,7 @@
     {#if editMode}
       <button class="tab addp" title="Add page" onclick={addPage}>＋</button>
     {/if}
+    </div>
   {/if}
   <span class="tab-sp"></span>
   {#if !searching}
@@ -1743,11 +1745,14 @@
     background: rgba(160, 107, 237, 0.14);
   }
   .tabs {
+    position: relative;
     display: flex;
     align-items: center;
     flex-wrap: wrap; /* same chip-row pattern as the preset browser's filter chips — wrap, don't scroll */
     gap: var(--d-gap);
-    padding: var(--d-pad-y) var(--d-pad-x) calc(var(--d-pad-y) * 0.6);
+    padding: calc(var(--d-pad-y) * 1.5) var(--d-pad-x);
+    min-height: calc(var(--d-ctl-h-sm) + var(--d-pad-y) * 4);
+    box-sizing: border-box;
     flex: none;
   }
   .tab {
@@ -1761,6 +1766,15 @@
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--textdim);
+  }
+  .page-tabs {
+    position: absolute;
+    top: calc(50% + var(--d-pad-y) * 0.5);
+    left: calc(50% - var(--tabs-center-offset, 0px));
+    display: flex;
+    align-items: center;
+    gap: var(--d-gap);
+    transform: translate(-50%, -50%);
   }
   .tab.on {
     background: rgba(245, 166, 35, 0.12);

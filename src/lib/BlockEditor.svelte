@@ -156,18 +156,8 @@
              cannot become an unintended containing block for the surface's popovers. -->
         <div class="headwrap">
         <header class="head">
+          <div class="block-controls">
           <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
-          <!-- Fixed width, never content-sized: the name changes on every block selection, and a bar that
-               resized with it would shift the channel buttons and the search field on each hop. `.t-wrap`
-               takes the slack so "Change ▾" stays docked to the bar's right edge at any name length. -->
-          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
-            <span class="t-wrap">
-              <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
-              <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
-            </span>
-            {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
-          </button>
-
           {#if sel.pack && sel.channel != null}
             <div class="ch">
               <span class="ch-lbl mono">CH</span>
@@ -176,8 +166,14 @@
               {/each}
             </div>
           {/if}
-
-          <span class="hspace"></span>
+          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
+            <span class="t-wrap">
+              <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
+              <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
+            </span>
+            {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
+          </button>
+          </div>
 
           <div class="csearch" class:active={searching}>
             <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -303,32 +299,36 @@
     container-type: inline-size;
   }
   .head {
+    position: relative;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: var(--d-gap);
-    padding: var(--d-pad-y) var(--d-pad-x);
-    padding-bottom: calc(var(--d-pad-y) + var(--d-gap));
+    padding: calc(var(--d-pad-y) * 3) var(--d-pad-x);
+    padding-bottom: calc(var(--d-pad-y) * 2 + var(--d-gap));
     border-bottom: 1px solid var(--surface2);
     flex: none;
-    /* the name bar's fixed width — stepped down once when the PANE gets narrow, never squeezed fluidly */
-    --be-name-w: 340px;
   }
   @container (max-width: 700px) {
-    .head {
-      --be-name-w: 240px;
-    }
     .t-title {
       display: none;
+    }
+    .head .block-controls {
+      position: static;
+      top: auto;
+      transform: none;
     }
     .csearch {
       flex: 1 0 100%;
       order: 2;
     }
   }
-  .hspace {
+  .block-controls {
     flex: 1;
-    min-width: var(--d-gap);
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--d-gap);
   }
   .icon {
     width: var(--d-ctl-h);
@@ -342,17 +342,13 @@
     color: var(--text);
     border: 1px solid;
   }
-  /* The type button is a FIXED-WIDTH box, not a content-sized one. Sizing it to the name would move the
-     channel buttons and the search field every time you selected a different block; a short name paying
-     for that with a little internal slack is the cheaper trade. */
   .typebtn {
     display: flex;
     align-items: center;
     gap: 11px;
-    flex: none;
-    width: var(--be-name-w);
+    flex: 1;
     min-width: 0;
-    height: var(--d-ctl-h);
+    height: calc(var(--d-ctl-h) + 8px);
     padding: 0 var(--d-pad-x);
     background: linear-gradient(180deg, var(--bg2), var(--bg));
     border: 1px solid var(--border2);
