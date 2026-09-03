@@ -108,9 +108,11 @@
   // immediately on keyboard focus-within. State drives a class on the rail; the
   // width change is on an absolutely-positioned inner layer only.
   let railExpanded = $state(false);
+  let railHovering = $state(false);
   let railHoverTimer: ReturnType<typeof setTimeout> | null = null;
   const RAIL_HOVER_INTENT_MS = 150;
   function railEnter() {
+    railHovering = true;
     if (railHoverTimer) clearTimeout(railHoverTimer);
     railHoverTimer = setTimeout(() => {
       railExpanded = true;
@@ -118,6 +120,7 @@
     }, RAIL_HOVER_INTENT_MS);
   }
   function railLeave() {
+    railHovering = false;
     if (railHoverTimer) {
       clearTimeout(railHoverTimer);
       railHoverTimer = null;
@@ -125,13 +128,26 @@
     railExpanded = false;
   }
   // Keyboard focus expands immediately (no intent delay) so tabbing into the
-  // rail reveals labels; blur collapses unless the pointer is still hovering.
+  // rail reveals labels.
   function railFocusIn() {
     if (railHoverTimer) {
       clearTimeout(railHoverTimer);
       railHoverTimer = null;
     }
     railExpanded = true;
+  }
+  // Blur collapses unless the pointer is still hovering the rail. A nav entry
+  // blurs itself on mouseleave (see AxisWorkbenchNavigationEntry), so moving
+  // the mouse between entries after a click fires focusout while the pointer
+  // never actually left the rail — collapsing here would close it under the
+  // cursor. Only pointerleave (railLeave) may collapse a still-hovered rail.
+  function railFocusOut() {
+    if (railHovering) return;
+    if (railHoverTimer) {
+      clearTimeout(railHoverTimer);
+      railHoverTimer = null;
+    }
+    railExpanded = false;
   }
 </script>
 
@@ -169,7 +185,7 @@
       onpointerenter={railEnter}
       onpointerleave={railLeave}
       onfocusin={railFocusIn}
-      onfocusout={railLeave}
+      onfocusout={railFocusOut}
       use:focusTrap={{ enabled: showMobileDrawer && navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
       use:bottomSheetSwipe={{ enabled: isPhone, open: navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
     >
