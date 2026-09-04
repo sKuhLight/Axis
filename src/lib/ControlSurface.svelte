@@ -1777,7 +1777,7 @@
          dropdowns (the amp's Speaker tab drops Input Select and Bypass Mode). Losing them then changes
          only the slack in the middle — the knobs and the buttons do not move. Keyed by widget id so the
          DOM is reused across a tab switch rather than torn down. -->
-    <div class="rail" style:width="{railCols * railCell + (railCols - 1) * GAP}px" style:height="{railH}px">
+    <div class="rail" style:width="{railCols * railCell + (railCols - 1) * GAP}px" style:height="{railH}px" style:--rail-gap="{GAP}px">
       {#each ['knobs', 'drops', 'btns'] as const as zone, zi (zone)}
         {@const zws = zoneOf(railWidgets, zone)}
         {#if zi === 1}<div class="railslack"></div>{/if}
@@ -2139,7 +2139,7 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--rail-gap);
     margin-left: 8px;
     padding-left: 8px;
     border-left: 1px solid var(--surface);
