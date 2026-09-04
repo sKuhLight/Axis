@@ -1,4 +1,5 @@
 import type { DeviceLayout, EnumParam, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
 export interface CabAlignmentGraphSpec {
   key: string;
@@ -9,7 +10,6 @@ export interface CabAlignmentGraphSpec {
   zoom?: EnumParam;
 }
 
-const CAB_GRAPHS = new Set(['graph_cab', 'graph_cabZoom', 'graph_cab_mm', 'graph_cabZoom_mm']);
 
 /** Resolve Cabinet Align slots from the active served layout and its page-local timing controls. */
 export function deriveCabAlignmentGraphs(input: {
@@ -36,7 +36,7 @@ export function deriveCabAlignmentGraphs(input: {
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
       const graphSlot = slot++;
-      if (!CAB_GRAPHS.has(control.rawWidget ?? '') || pageBound) continue;
+      if (graphKind(control.rawWidget) !== 'cabAlign' || pageBound) continue;
       pageBound = true;
       out.push({
         key: `cab-align${out.length + 1}`,

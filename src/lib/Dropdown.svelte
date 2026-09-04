@@ -10,12 +10,30 @@
     value,
     options,
     accent = '#35c9d6',
+    fixedWidth,
+    fieldHeight,
+    hideLabel = false,
     onChange
-  }: { label: string; value: number; options: Opt[]; accent?: string; onChange: (v: number) => void } = $props();
+  }: {
+    label: string;
+    value: number;
+    options: Opt[];
+    accent?: string;
+    /** Exact width in px. The device canvas passes the box the DEVICE authored for this control, which
+     *  overrides the label-length sizing below — that heuristic exists for the flow layouts, where
+     *  nothing else decides the width. */
+    fixedWidth?: number;
+    /** Exact field height in px (the canvas's boxes are as short as 28px). */
+    fieldHeight?: number;
+    /** Drop the caption above the field — the `dropdownNoLabel`/`readout*` tokens have none. */
+    hideLabel?: boolean;
+    onChange: (v: number) => void;
+  } = $props();
 
   const current = $derived(options.find((o) => o.value === value));
   // width scales with the longest label, like the design (maxLen*8 + 50, clamped)
   const width = $derived.by(() => {
+    if (fixedWidth != null) return fixedWidth;
     const maxLen = options.reduce((m, o) => Math.max(m, o.label.length), label.length);
     return Math.max(112, Math.min(236, Math.round(maxLen * 8 + 50)));
   });
@@ -44,8 +62,8 @@
 </script>
 
 <div class="dd-wrap" style="--c:{accent}; width:{width}px">
-  <div class="lbl">{label}</div>
-  <div class="field" class:open bind:this={fieldEl} role="button" tabindex="0" onclick={toggle} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}>
+  {#if !hideLabel}<div class="lbl">{label}</div>{/if}
+  <div class="field" class:open class:dense={fieldHeight != null && fieldHeight < 34} style:height={fieldHeight != null ? `${fieldHeight}px` : undefined} bind:this={fieldEl} role="button" tabindex="0" onclick={toggle} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}>
     <span class="cur">{current?.label ?? value}</span>
     <span class="caret">▾</span>
   </div>
@@ -101,6 +119,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .field.dense {
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 11px;
   }
   .caret {
     font-size: 10px;

@@ -16,8 +16,49 @@ export interface ParamDef {
   group?: 'inputEQ' | 'outputEQ' | 'graphicEQ';
 }
 
+/** Curated tooltip copy for one param (ForgeFX GET /help/blocks/:slug, folded onto the param by
+ *  paramName — see ParamMeta.help). Hand-written, factual, paraphrased; not vendor manual text. */
+export interface ParamHelp {
+  blurb: string;
+  tip?: string;
+}
+
+/** Why a param ships despite failing a usability check, instead of vanishing: the device's layout
+ *  can still name its paramId, and Axis must be able to resolve every one it names.
+ *  `'no-range'` = no entry in the family's range table; `'degenerate-range'` = a 0-width (or
+ *  inverted) display range; `'duplicate-id'` = a later catalog def collided with an earlier one's
+ *  wire paramId. Absent = normal, usable param. */
+export type UnusableParamReason = 'no-range' | 'degenerate-range' | 'duplicate-id';
+
+/** Fields ADDITIVE to NamedParam/EnumParam beyond the original `value`/`norm`/`unit`/`min`/`max`/`log`
+ *  — ForgeFX's widened blockParams response (Phase 1.1/1.2/1.5). All optional: a param may lack any
+ *  of these (no range row, a walk-built profile override with no default capture, no curated help). */
+export interface ParamMeta {
+  /** Editor symbol (e.g. `'REVERB_TIME'`) — joins to layout controls without a second fetch. */
+  paramName?: string;
+  /** Catalog family (e.g. `'REVERB'`) — monitor/enum scoping is family-unique, not pid-unique. */
+  family?: string;
+  /** Device-true front-panel increment, in display units. */
+  step?: number;
+  /** Device-true default: decoded to display units for a float param, the raw ordinal for an enum. */
+  default?: number;
+  /** Device-true taper. `'custom'` also carries `taperPoints`; a `'custom'` taper is still served
+   *  linear on the wire for now. */
+  taper?: 'linear' | 'log' | 'flat' | 'custom';
+  taperPoints?: ReadonlyArray<readonly [number, number]>;
+  /** Catalog unit CODE (e.g. `'numeric'` / `'count'` / `'unverified'`) — distinct from `unit`, the
+   *  already-formatted display label ('dB', 'Hz', …). */
+  unitCode?: string;
+  /** Control kind — no longer implied by which array (`named` vs `enums`) the param landed in. */
+  kind?: 'enum' | 'float';
+  /** Present when this param failed a usability check but ships anyway — see {@link UnusableParamReason}. */
+  unusable?: UnusableParamReason;
+  /** Curated tooltip copy, when this param has a curated help entry. */
+  help?: ParamHelp;
+}
+
 /** A named parameter value read back from the device (GET /block/{name}/params). */
-export interface NamedParam {
+export interface NamedParam extends ParamMeta {
   /** Device-true paramId — disambiguates duplicate display labels (e.g. amp's two "Depth"s). */
   id?: number;
   name: string;
@@ -32,7 +73,7 @@ export interface NamedParam {
 }
 
 /** A discrete (enum) parameter read back from the device — rendered as a dropdown/switch. */
-export interface EnumParam {
+export interface EnumParam extends ParamMeta {
   id: number;
   name: string;
   value: number;
@@ -84,16 +125,18 @@ export interface LayoutControl {
   paramName: string | null;
   paramId: number | null;
   widget: LayoutWidget;
-  /** The source editor's raw widget token (e.g. `dropdown1`, `meterGainVert`, `btnBypass`). */
-  rawWidget?: string;
+  /** The source editor's raw widget token (e.g. `dropdown1`, `meterGainVert`, `btnBypass`) —
+   *  ALWAYS present (ForgeFX serves it verbatim); the renderer table (`deviceWidgets.ts`) sizes
+   *  every control off this, not `widget`. */
+  rawWidget: string;
   placement?: LayoutPlacement;
   crossBlock?: LayoutCrossBlock;
   fw?: unknown;
 }
 /** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
 export interface LayoutRow {
-  /** Editor section tag (e.g. `parameters`, `mixer`) — informational. */
-  section?: string;
+  /** Which page section the row belongs to — ALWAYS present (ForgeFX serves it verbatim). */
+  section: 'parameters' | 'mixer';
   controls: LayoutControl[];
 }
 /** One editor page (rendered as a tab): a title + its rows. */
@@ -101,6 +144,11 @@ export interface LayoutPage {
   name: string;
   pageNum?: number;
   fw?: unknown;
+  /** Block-type/amp-model selector value(s) that gate this page (comma-joined, as in the editor),
+   *  when the editor conditions it on one. Paired with `selectorParamName`. */
+  value?: string;
+  /** The selector param whose current value gates this page's `value`, when present. */
+  selectorParamName?: string;
   rows: LayoutRow[];
 }
 /** Device-authentic UI layout for a block/virtual effect. The server has ALREADY selected the variant

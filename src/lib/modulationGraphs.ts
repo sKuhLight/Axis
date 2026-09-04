@@ -1,8 +1,8 @@
 // Parameter-driven modulation waveforms. Graph slots are identified by their ordinal on a page because
 // the Controllers layout places LFO 1 and LFO 2 on the same page.
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
-const MODULATION_GRAPHS = new Set(['graph_lfo', 'graph_phaser', 'graph_trem']);
 
 export interface ModulationGraphSpec {
   key: string;
@@ -43,7 +43,7 @@ export function deriveModulationGraphs(input: {
       for (const control of row.controls ?? []) {
         if (control.widget !== 'graph') continue;
         const graphSlot = slot++;
-        if (!MODULATION_GRAPHS.has(control.rawWidget ?? '')) continue;
+        if (graphKind(control.rawWidget) !== 'mod') continue;
         const local = row.controls ?? [];
         const named = (match: RegExp): NamedParam | undefined => {
           const id = local.find((candidate) => match.test(candidate.paramName ?? ''))?.paramId;

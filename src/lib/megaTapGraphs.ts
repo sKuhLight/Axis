@@ -1,4 +1,5 @@
 import type { DeviceLayout, EnumParam, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
 export interface MegaTapGraphSpec {
   key: string;
@@ -23,7 +24,7 @@ export function deriveMegaTapGraphs(input: { layout: DeviceLayout | null | undef
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
       const graphSlot = slot++;
-      if (control.rawWidget !== 'graph_megatap') continue;
+      if (graphKind(control.rawWidget) !== 'megatap') continue;
       const named = (name: string) => params.get(id(name) ?? -1);
       const typed = (name: string) => enums.get(id(name) ?? -1);
       out.push({ key: `megatap${out.length + 1}`, page, slot: graphSlot, taps: named('MEGATAP_NUMTAPS'), predelay: named('MEGATAP_PREDELAY'), timeAlpha: named('MEGATAP_TIMEALPHA'), ampAlpha: named('MEGATAP_AMPALPHA'), timeShape: typed('MEGATAP_TIMESHAPE'), ampShape: typed('MEGATAP_AMPSHAPE') });

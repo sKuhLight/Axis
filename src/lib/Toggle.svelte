@@ -8,8 +8,18 @@
     label,
     value,
     options,
+    dense = false,
     onChange
-  }: { label: string; value: number; options: Opt[]; onChange: (v: number) => void } = $props();
+  }: {
+    label: string;
+    value: number;
+    options: Opt[];
+    /** Device-canvas mode: the editor's own toggle box is 44px tall for switch AND caption, which the
+     *  default three-row layout (value / pill / label) cannot fit. Dense drops the value line and
+     *  halves the pill — the selected option's name is the caption instead. */
+    dense?: boolean;
+    onChange: (v: number) => void;
+  } = $props();
 
   const onOpt = $derived(options[1] ?? options[0]);
   const offOpt = $derived(options[0]);
@@ -18,9 +28,9 @@
   const flip = () => onChange((on ? offOpt : onOpt)?.value ?? value);
 </script>
 
-<div class="wrap">
-  <div class="val mono" class:on>{valueText}</div>
-  <button class="switch" class:on aria-pressed={on} aria-label={label} title={label} onclick={flip}>
+<div class="wrap" class:dense>
+  {#if !dense}<div class="val mono" class:on>{valueText}</div>{/if}
+  <button class="switch" class:on aria-pressed={on} aria-label={label} title="{label} — {valueText}" onclick={flip}>
     <span class="knob"></span>
   </button>
   <div class="label">{label}</div>
@@ -80,6 +90,11 @@
     background: var(--ok);
     box-shadow: 0 0 8px rgba(70, 209, 127, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5);
   }
+  .wrap.dense { gap: 3px; justify-content: center; height: 100%; }
+  .wrap.dense .switch { width: 36px; height: 18px; border-radius: 9px; }
+  .wrap.dense .knob { top: 2px; left: 2px; width: 12px; height: 12px; }
+  .wrap.dense .switch.on .knob { left: 20px; }
+  .wrap.dense .label { font-size: 10px; }
   .label {
     font-weight: 600;
     font-size: 12px;

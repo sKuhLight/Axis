@@ -20,6 +20,7 @@
 
 import { type EQBand, type EQShape, geqBandsFromLayout, shapeFromLabel } from './eq';
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
 /** One graph and the pages that show it. A block can have several (the amp draws a different curve on
  *  Input EQ than on Speaker) and one graph can appear on several pages (the Filter block repeats its
@@ -35,10 +36,6 @@ export interface EqGraphSpec {
   bands: EQBand[];
 }
 
-/** `rawWidget` tokens that mean "log-frequency response curve". The device's other graph kinds (LFO,
- *  ADSR, cab align, tremolo, phaser, RTA, megatap, modifier) plot something else entirely and are not
- *  handled here — they resolve to no graph, exactly as every graph did before this module. */
-const FREQ_GRAPHS = new Set(['graph_eq', 'graph_reverb', 'graph_peq', 'graph_filter', 'graph3', 'graph4']);
 
 interface BandSpec {
   freq: string;
@@ -102,7 +99,10 @@ const pageControls = (pg: { rows?: { controls?: LayoutControl[] }[] }): LayoutCo
   (pg.rows ?? []).flatMap((r) => r.controls ?? []);
 
 const hasFreqGraph = (ctls: LayoutControl[]): boolean =>
-  ctls.some((c) => c.widget === 'graph' && FREQ_GRAPHS.has(c.rawWidget ?? ''));
+  // "log-frequency response curve" is one entry in the shared graph vocabulary (`deviceWidgets.ts`),
+  // not a token list of this module's own. The device's other graph kinds (LFO, ADSR, cab align,
+  // tremolo, phaser, RTA, megatap, modifier) plot something else and resolve to no graph here.
+  ctls.some((c) => c.widget === 'graph' && graphKind(c.rawWidget) === 'freq');
 
 /** The gain swing the graph should span: the widest of its own bands' device-true ranges. */
 function gainRangeOf(bands: EQBand[]): number {

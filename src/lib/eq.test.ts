@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { geqBandsFromLayout, hzFromLabel, shapeFromLabel } from './eq';
 import type { DeviceLayout, LayoutControl } from './types';
 
-const slider = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'slider' });
-const knob = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'knob' });
-const page = (name: string, rows: LayoutControl[][]) => ({ name, rows: rows.map((controls) => ({ controls })) });
+const slider = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'slider', rawWidget: '' });
+const knob = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'knob', rawWidget: '' });
+const page = (name: string, rows: LayoutControl[][]) => ({ name, rows: rows.map((controls) => ({ section: 'parameters' as const, controls })) });
 const lay = (pages: ReturnType<typeof page>[]): DeviceLayout => ({ family: 'AMP', pages });
 
 describe('shapeFromLabel', () => {

@@ -1,0 +1,4061 @@
+{
+  "block": "Cab",
+  "slug": "cab",
+  "page": 62,
+  "named": [
+    {
+      "id": 2,
+      "name": "Bank",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_BANK3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 3,
+      "name": "Bank",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_BANK4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 6,
+      "name": "Type",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_TYPE3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 7,
+      "name": "Type",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_TYPE4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 8,
+      "name": "Level",
+      "value": -21.689,
+      "norm": 0.45777764213995786,
+      "min": -40,
+      "max": 0,
+      "paramName": "CABINET_LEVEL1",
+      "family": "CABINET",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Relative level of IR 1 in the blend. With a single IR loaded it has no effect.",
+        "tip": "Cab levels balance the mix; use the Mix-page Level for overall volume."
+      }
+    },
+    {
+      "id": 9,
+      "name": "Level",
+      "value": -21.689,
+      "norm": 0.45777764213995786,
+      "min": -40,
+      "max": 0,
+      "paramName": "CABINET_LEVEL2",
+      "family": "CABINET",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 10,
+      "name": "Level",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LEVEL3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 11,
+      "name": "Level",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LEVEL4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 12,
+      "name": "Pan",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -100,
+      "max": 100,
+      "paramName": "CABINET_PAN1",
+      "family": "CABINET",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Stereo position of IR 1 in the cab mix."
+      }
+    },
+    {
+      "id": 13,
+      "name": "Pan",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -100,
+      "max": 100,
+      "paramName": "CABINET_PAN2",
+      "family": "CABINET",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float"
+    },
+    {
+      "id": 14,
+      "name": "Pan",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_PAN3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 15,
+      "name": "Pan",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_PAN4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 16,
+      "name": "Distance 1",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 1,
+      "paramName": "CABINET_DELAY1",
+      "family": "CABINET",
+      "step": 0.000001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Mic distance for IR 1 (mm); the sub-ms delay creates inter-mic phase effects."
+      }
+    },
+    {
+      "id": 17,
+      "name": "Distance 2",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 1,
+      "paramName": "CABINET_DELAY2",
+      "family": "CABINET",
+      "step": 0.000001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 18,
+      "name": "Distance 3",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_DELAY3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 19,
+      "name": "Distance 4",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_DELAY4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 20,
+      "name": "Proximity",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_PROXIMITY1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Proximity effect for IR 1 — adds low end as the virtual mic moves closer."
+      }
+    },
+    {
+      "id": 21,
+      "name": "Proximity",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_PROXIMITY2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 22,
+      "name": "Proximity",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_PROXIMITY3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 23,
+      "name": "Proximity",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_PROXIMITY4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 26,
+      "name": "MUTE3",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_MUTE3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 27,
+      "name": "MUTE4",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_MUTE4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 28,
+      "name": "Level",
+      "value": -34.222,
+      "norm": 0.45777764213995786,
+      "min": -80,
+      "max": 20,
+      "paramName": "CABINET_LEVEL",
+      "family": "CABINET",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Master output level of the whole Cab block (on the Mix page)."
+      }
+    },
+    {
+      "id": 29,
+      "name": "Balance",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -100,
+      "max": 100,
+      "paramName": "CABINET_PAN",
+      "family": "CABINET",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Places the block output in the stereo field."
+      }
+    },
+    {
+      "id": 33,
+      "name": "Drive",
+      "value": 0.236,
+      "norm": 0.45777764213995786,
+      "min": 0.01,
+      "max": 10,
+      "log": true,
+      "paramName": "CABINET_DRIVE",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0.01,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Virtual mic-preamp gain. Push it for warm to nasty preamp distortion."
+      }
+    },
+    {
+      "id": 34,
+      "name": "Saturation",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_BIAS",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Preamp saturation — the even/odd harmonic balance of the mic-preamp distortion."
+      }
+    },
+    {
+      "id": 35,
+      "name": "Room Level",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "CABINET_ROOMMIX",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 36,
+      "name": "Room Size",
+      "value": 8.608,
+      "norm": 0.45777764213995786,
+      "min": 3,
+      "max": 30,
+      "log": true,
+      "paramName": "CABINET_ROOMSIZE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 5.45,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 37,
+      "name": "Mic Spacing",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "CABINET_MICSPACE",
+      "family": "CABINET",
+      "step": 0.1,
+      "default": 17,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 38,
+      "name": "Low Cut",
+      "value": 164.659,
+      "norm": 0.45777764213995786,
+      "min": 20,
+      "max": 2000,
+      "log": true,
+      "paramName": "CABINET_LOCUT",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 39,
+      "name": "High Cut",
+      "value": 1646.589,
+      "norm": 0.45777764213995786,
+      "min": 200,
+      "max": 20000,
+      "log": true,
+      "paramName": "CABINET_HICUT",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 41,
+      "name": "Proximity Frequency",
+      "value": 57.386,
+      "norm": 0.45777764213995786,
+      "min": 20,
+      "max": 200,
+      "log": true,
+      "paramName": "CABINET_PROXFREQ",
+      "family": "CABINET",
+      "step": 0,
+      "default": 71.877,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 44,
+      "name": "Bass",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "CABINET_BASS",
+      "family": "CABINET",
+      "step": 0.025,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 45,
+      "name": "Mid",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "CABINET_MID",
+      "family": "CABINET",
+      "step": 0.025,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 46,
+      "name": "Treble",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "CABINET_TREBLE",
+      "family": "CABINET",
+      "step": 0.025,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 48,
+      "name": "Smoothing",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_SMOOTH1",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range",
+      "help": {
+        "blurb": "Smooths out the peaks and notches of a mic’d IR for a more \"in the room\" feel."
+      }
+    },
+    {
+      "id": 49,
+      "name": "Smoothing",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_SMOOTH2",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 50,
+      "name": "Smoothing",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_SMOOTH3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 51,
+      "name": "Smoothing",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_SMOOTH4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 52,
+      "name": "Filter Slope",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_ORDER",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 53,
+      "name": "Floor Reflections",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "min": -100,
+      "max": 100,
+      "paramName": "CABINET_FLOORLVL",
+      "family": "CABINET",
+      "step": 0.002,
+      "default": 49.998,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 54,
+      "name": "Air",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "CABINET_AIR",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 55,
+      "name": "Frequency",
+      "value": 5738.622,
+      "norm": 0.45777764213995786,
+      "min": 2000,
+      "max": 20000,
+      "log": true,
+      "paramName": "CABINET_AIRFREQ",
+      "family": "CABINET",
+      "step": 0,
+      "default": 2935.564,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 57,
+      "name": "LF Damping",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_LFDAMPING",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 58,
+      "name": "HF Damping",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_HFDAMPING",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 59,
+      "name": "Room Diffusion",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "CABINET_DIFFUSION",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 60,
+      "name": "GAINMONITOR",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_GAINMONITOR",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 61,
+      "name": "VU",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_VUMETER",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "db",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 62,
+      "name": "Low Cut",
+      "value": 57.386,
+      "norm": 0.45777764213995786,
+      "min": 20,
+      "max": 200,
+      "log": true,
+      "paramName": "CABINET_LOCUT1",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 63,
+      "name": "Low Cut",
+      "value": 57.386,
+      "norm": 0.45777764213995786,
+      "min": 20,
+      "max": 200,
+      "log": true,
+      "paramName": "CABINET_LOCUT2",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 64,
+      "name": "Low Cut",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LOCUT3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 65,
+      "name": "Low Cut",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LOCUT4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 66,
+      "name": "High Cut",
+      "value": 5738.622,
+      "norm": 0.45777764213995786,
+      "min": 2000,
+      "max": 20000,
+      "log": true,
+      "paramName": "CABINET_HICUT1",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 67,
+      "name": "High Cut",
+      "value": 5738.622,
+      "norm": 0.45777764213995786,
+      "min": 2000,
+      "max": 20000,
+      "log": true,
+      "paramName": "CABINET_HICUT2",
+      "family": "CABINET",
+      "step": 0,
+      "default": 20000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 68,
+      "name": "High Cut",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_HICUT3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 69,
+      "name": "High Cut",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_HICUT4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 72,
+      "name": "IR Length",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LENGTH3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 73,
+      "name": "IR Length",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LENGTH4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 76,
+      "name": "Low Slope",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LOSLOPE3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 77,
+      "name": "Low Slope",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_LOSLOPE4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 80,
+      "name": "High Slope",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_HISLOPE3",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 81,
+      "name": "High Slope",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_HISLOPE4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 92,
+      "name": "DYNACAB MIC4",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "CABINET_DYNACAB_MIC4",
+      "family": "CABINET",
+      "step": 0,
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 93,
+      "name": "DynaCab",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_DYNACAB_R1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 94,
+      "name": "DynaCab",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "CABINET_DYNACAB_R2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 97,
+      "name": "Distance",
+      "value": 10.987,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 24,
+      "paramName": "CABINET_DYNACAB_Z1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 4.8,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 98,
+      "name": "Distance",
+      "value": 10.987,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 24,
+      "paramName": "CABINET_DYNACAB_Z2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 4.8,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 65282,
+      "name": "Name",
+      "value": 0,
+      "norm": 0,
+      "paramName": "CABINET_NAME1",
+      "family": "CABINET",
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65283,
+      "name": "Name",
+      "value": 0,
+      "norm": 0,
+      "paramName": "CABINET_NAME2",
+      "family": "CABINET",
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65284,
+      "name": "CAB 1",
+      "value": 0,
+      "norm": 0,
+      "paramName": "CABINET_LABEL1",
+      "family": "CABINET",
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65285,
+      "name": "CAB 2",
+      "value": 0,
+      "norm": 0,
+      "paramName": "CABINET_LABEL2",
+      "family": "CABINET",
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "no-range"
+    }
+  ],
+  "enums": [
+    {
+      "id": 0,
+      "name": "Bank",
+      "value": 2,
+      "options": [
+        {
+          "value": 0,
+          "label": "FACTORY 1"
+        },
+        {
+          "value": 1,
+          "label": "FACTORY 2"
+        },
+        {
+          "value": 2,
+          "label": "USER"
+        },
+        {
+          "value": 3,
+          "label": "LEGACY"
+        },
+        {
+          "value": 4,
+          "label": "SCRATCHPAD"
+        }
+      ],
+      "paramName": "CABINET_BANK1",
+      "family": "CABINET",
+      "step": 1,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 1,
+      "name": "Bank",
+      "value": 2,
+      "options": [
+        {
+          "value": 0,
+          "label": "FACTORY 1"
+        },
+        {
+          "value": 1,
+          "label": "FACTORY 2"
+        },
+        {
+          "value": 2,
+          "label": "USER"
+        },
+        {
+          "value": 3,
+          "label": "LEGACY"
+        },
+        {
+          "value": 4,
+          "label": "SCRATCHPAD"
+        }
+      ],
+      "paramName": "CABINET_BANK2",
+      "family": "CABINET",
+      "step": 1,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 4,
+      "name": "Type",
+      "value": 86,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        },
+        {
+          "value": 2,
+          "label": "2"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        },
+        {
+          "value": 4,
+          "label": "4"
+        },
+        {
+          "value": 5,
+          "label": "5"
+        },
+        {
+          "value": 6,
+          "label": "6"
+        },
+        {
+          "value": 7,
+          "label": "7"
+        },
+        {
+          "value": 8,
+          "label": "8"
+        },
+        {
+          "value": 9,
+          "label": "9"
+        },
+        {
+          "value": 10,
+          "label": "10"
+        },
+        {
+          "value": 11,
+          "label": "11"
+        },
+        {
+          "value": 12,
+          "label": "12"
+        },
+        {
+          "value": 13,
+          "label": "13"
+        },
+        {
+          "value": 14,
+          "label": "14"
+        },
+        {
+          "value": 15,
+          "label": "15"
+        },
+        {
+          "value": 16,
+          "label": "16"
+        },
+        {
+          "value": 17,
+          "label": "17"
+        },
+        {
+          "value": 18,
+          "label": "18"
+        },
+        {
+          "value": 19,
+          "label": "19"
+        },
+        {
+          "value": 20,
+          "label": "20"
+        },
+        {
+          "value": 21,
+          "label": "21"
+        },
+        {
+          "value": 22,
+          "label": "22"
+        },
+        {
+          "value": 23,
+          "label": "23"
+        },
+        {
+          "value": 24,
+          "label": "24"
+        },
+        {
+          "value": 25,
+          "label": "25"
+        },
+        {
+          "value": 26,
+          "label": "26"
+        },
+        {
+          "value": 27,
+          "label": "27"
+        },
+        {
+          "value": 28,
+          "label": "28"
+        },
+        {
+          "value": 29,
+          "label": "29"
+        },
+        {
+          "value": 30,
+          "label": "30"
+        },
+        {
+          "value": 31,
+          "label": "31"
+        },
+        {
+          "value": 32,
+          "label": "32"
+        },
+        {
+          "value": 33,
+          "label": "33"
+        },
+        {
+          "value": 34,
+          "label": "34"
+        },
+        {
+          "value": 35,
+          "label": "35"
+        },
+        {
+          "value": 36,
+          "label": "36"
+        },
+        {
+          "value": 37,
+          "label": "37"
+        },
+        {
+          "value": 38,
+          "label": "38"
+        },
+        {
+          "value": 39,
+          "label": "39"
+        },
+        {
+          "value": 40,
+          "label": "40"
+        },
+        {
+          "value": 41,
+          "label": "41"
+        },
+        {
+          "value": 42,
+          "label": "42"
+        },
+        {
+          "value": 43,
+          "label": "43"
+        },
+        {
+          "value": 44,
+          "label": "44"
+        },
+        {
+          "value": 45,
+          "label": "45"
+        },
+        {
+          "value": 46,
+          "label": "46"
+        },
+        {
+          "value": 47,
+          "label": "47"
+        },
+        {
+          "value": 48,
+          "label": "48"
+        },
+        {
+          "value": 49,
+          "label": "49"
+        },
+        {
+          "value": 50,
+          "label": "50"
+        },
+        {
+          "value": 51,
+          "label": "51"
+        },
+        {
+          "value": 52,
+          "label": "52"
+        },
+        {
+          "value": 53,
+          "label": "53"
+        },
+        {
+          "value": 54,
+          "label": "54"
+        },
+        {
+          "value": 55,
+          "label": "55"
+        },
+        {
+          "value": 56,
+          "label": "56"
+        },
+        {
+          "value": 57,
+          "label": "57"
+        },
+        {
+          "value": 58,
+          "label": "58"
+        },
+        {
+          "value": 59,
+          "label": "59"
+        },
+        {
+          "value": 60,
+          "label": "60"
+        },
+        {
+          "value": 61,
+          "label": "61"
+        },
+        {
+          "value": 62,
+          "label": "62"
+        },
+        {
+          "value": 63,
+          "label": "63"
+        },
+        {
+          "value": 64,
+          "label": "64"
+        },
+        {
+          "value": 65,
+          "label": "65"
+        },
+        {
+          "value": 66,
+          "label": "66"
+        },
+        {
+          "value": 67,
+          "label": "67"
+        },
+        {
+          "value": 68,
+          "label": "68"
+        },
+        {
+          "value": 69,
+          "label": "69"
+        },
+        {
+          "value": 70,
+          "label": "70"
+        },
+        {
+          "value": 71,
+          "label": "71"
+        },
+        {
+          "value": 72,
+          "label": "72"
+        },
+        {
+          "value": 73,
+          "label": "73"
+        },
+        {
+          "value": 74,
+          "label": "74"
+        },
+        {
+          "value": 75,
+          "label": "75"
+        },
+        {
+          "value": 76,
+          "label": "76"
+        },
+        {
+          "value": 77,
+          "label": "77"
+        },
+        {
+          "value": 78,
+          "label": "78"
+        },
+        {
+          "value": 79,
+          "label": "79"
+        },
+        {
+          "value": 80,
+          "label": "80"
+        },
+        {
+          "value": 81,
+          "label": "81"
+        },
+        {
+          "value": 82,
+          "label": "82"
+        },
+        {
+          "value": 83,
+          "label": "83"
+        },
+        {
+          "value": 84,
+          "label": "84"
+        },
+        {
+          "value": 85,
+          "label": "85"
+        },
+        {
+          "value": 86,
+          "label": "86"
+        },
+        {
+          "value": 87,
+          "label": "87"
+        },
+        {
+          "value": 88,
+          "label": "88"
+        },
+        {
+          "value": 89,
+          "label": "89"
+        },
+        {
+          "value": 90,
+          "label": "90"
+        },
+        {
+          "value": 91,
+          "label": "91"
+        },
+        {
+          "value": 92,
+          "label": "92"
+        },
+        {
+          "value": 93,
+          "label": "93"
+        },
+        {
+          "value": 94,
+          "label": "94"
+        },
+        {
+          "value": 95,
+          "label": "95"
+        },
+        {
+          "value": 96,
+          "label": "96"
+        },
+        {
+          "value": 97,
+          "label": "97"
+        },
+        {
+          "value": 98,
+          "label": "98"
+        },
+        {
+          "value": 99,
+          "label": "99"
+        },
+        {
+          "value": 100,
+          "label": "100"
+        },
+        {
+          "value": 101,
+          "label": "101"
+        },
+        {
+          "value": 102,
+          "label": "102"
+        },
+        {
+          "value": 103,
+          "label": "103"
+        },
+        {
+          "value": 104,
+          "label": "104"
+        },
+        {
+          "value": 105,
+          "label": "105"
+        },
+        {
+          "value": 106,
+          "label": "106"
+        },
+        {
+          "value": 107,
+          "label": "107"
+        },
+        {
+          "value": 108,
+          "label": "108"
+        },
+        {
+          "value": 109,
+          "label": "109"
+        },
+        {
+          "value": 110,
+          "label": "110"
+        },
+        {
+          "value": 111,
+          "label": "111"
+        },
+        {
+          "value": 112,
+          "label": "112"
+        },
+        {
+          "value": 113,
+          "label": "113"
+        },
+        {
+          "value": 114,
+          "label": "114"
+        },
+        {
+          "value": 115,
+          "label": "115"
+        },
+        {
+          "value": 116,
+          "label": "116"
+        },
+        {
+          "value": 117,
+          "label": "117"
+        },
+        {
+          "value": 118,
+          "label": "118"
+        },
+        {
+          "value": 119,
+          "label": "119"
+        },
+        {
+          "value": 120,
+          "label": "120"
+        },
+        {
+          "value": 121,
+          "label": "121"
+        },
+        {
+          "value": 122,
+          "label": "122"
+        },
+        {
+          "value": 123,
+          "label": "123"
+        },
+        {
+          "value": 124,
+          "label": "124"
+        },
+        {
+          "value": 125,
+          "label": "125"
+        },
+        {
+          "value": 126,
+          "label": "126"
+        },
+        {
+          "value": 127,
+          "label": "127"
+        }
+      ],
+      "paramName": "CABINET_TYPE1",
+      "family": "CABINET",
+      "step": 1,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "enum"
+    },
+    {
+      "id": 5,
+      "name": "Type",
+      "value": 86,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        },
+        {
+          "value": 2,
+          "label": "2"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        },
+        {
+          "value": 4,
+          "label": "4"
+        },
+        {
+          "value": 5,
+          "label": "5"
+        },
+        {
+          "value": 6,
+          "label": "6"
+        },
+        {
+          "value": 7,
+          "label": "7"
+        },
+        {
+          "value": 8,
+          "label": "8"
+        },
+        {
+          "value": 9,
+          "label": "9"
+        },
+        {
+          "value": 10,
+          "label": "10"
+        },
+        {
+          "value": 11,
+          "label": "11"
+        },
+        {
+          "value": 12,
+          "label": "12"
+        },
+        {
+          "value": 13,
+          "label": "13"
+        },
+        {
+          "value": 14,
+          "label": "14"
+        },
+        {
+          "value": 15,
+          "label": "15"
+        },
+        {
+          "value": 16,
+          "label": "16"
+        },
+        {
+          "value": 17,
+          "label": "17"
+        },
+        {
+          "value": 18,
+          "label": "18"
+        },
+        {
+          "value": 19,
+          "label": "19"
+        },
+        {
+          "value": 20,
+          "label": "20"
+        },
+        {
+          "value": 21,
+          "label": "21"
+        },
+        {
+          "value": 22,
+          "label": "22"
+        },
+        {
+          "value": 23,
+          "label": "23"
+        },
+        {
+          "value": 24,
+          "label": "24"
+        },
+        {
+          "value": 25,
+          "label": "25"
+        },
+        {
+          "value": 26,
+          "label": "26"
+        },
+        {
+          "value": 27,
+          "label": "27"
+        },
+        {
+          "value": 28,
+          "label": "28"
+        },
+        {
+          "value": 29,
+          "label": "29"
+        },
+        {
+          "value": 30,
+          "label": "30"
+        },
+        {
+          "value": 31,
+          "label": "31"
+        },
+        {
+          "value": 32,
+          "label": "32"
+        },
+        {
+          "value": 33,
+          "label": "33"
+        },
+        {
+          "value": 34,
+          "label": "34"
+        },
+        {
+          "value": 35,
+          "label": "35"
+        },
+        {
+          "value": 36,
+          "label": "36"
+        },
+        {
+          "value": 37,
+          "label": "37"
+        },
+        {
+          "value": 38,
+          "label": "38"
+        },
+        {
+          "value": 39,
+          "label": "39"
+        },
+        {
+          "value": 40,
+          "label": "40"
+        },
+        {
+          "value": 41,
+          "label": "41"
+        },
+        {
+          "value": 42,
+          "label": "42"
+        },
+        {
+          "value": 43,
+          "label": "43"
+        },
+        {
+          "value": 44,
+          "label": "44"
+        },
+        {
+          "value": 45,
+          "label": "45"
+        },
+        {
+          "value": 46,
+          "label": "46"
+        },
+        {
+          "value": 47,
+          "label": "47"
+        },
+        {
+          "value": 48,
+          "label": "48"
+        },
+        {
+          "value": 49,
+          "label": "49"
+        },
+        {
+          "value": 50,
+          "label": "50"
+        },
+        {
+          "value": 51,
+          "label": "51"
+        },
+        {
+          "value": 52,
+          "label": "52"
+        },
+        {
+          "value": 53,
+          "label": "53"
+        },
+        {
+          "value": 54,
+          "label": "54"
+        },
+        {
+          "value": 55,
+          "label": "55"
+        },
+        {
+          "value": 56,
+          "label": "56"
+        },
+        {
+          "value": 57,
+          "label": "57"
+        },
+        {
+          "value": 58,
+          "label": "58"
+        },
+        {
+          "value": 59,
+          "label": "59"
+        },
+        {
+          "value": 60,
+          "label": "60"
+        },
+        {
+          "value": 61,
+          "label": "61"
+        },
+        {
+          "value": 62,
+          "label": "62"
+        },
+        {
+          "value": 63,
+          "label": "63"
+        },
+        {
+          "value": 64,
+          "label": "64"
+        },
+        {
+          "value": 65,
+          "label": "65"
+        },
+        {
+          "value": 66,
+          "label": "66"
+        },
+        {
+          "value": 67,
+          "label": "67"
+        },
+        {
+          "value": 68,
+          "label": "68"
+        },
+        {
+          "value": 69,
+          "label": "69"
+        },
+        {
+          "value": 70,
+          "label": "70"
+        },
+        {
+          "value": 71,
+          "label": "71"
+        },
+        {
+          "value": 72,
+          "label": "72"
+        },
+        {
+          "value": 73,
+          "label": "73"
+        },
+        {
+          "value": 74,
+          "label": "74"
+        },
+        {
+          "value": 75,
+          "label": "75"
+        },
+        {
+          "value": 76,
+          "label": "76"
+        },
+        {
+          "value": 77,
+          "label": "77"
+        },
+        {
+          "value": 78,
+          "label": "78"
+        },
+        {
+          "value": 79,
+          "label": "79"
+        },
+        {
+          "value": 80,
+          "label": "80"
+        },
+        {
+          "value": 81,
+          "label": "81"
+        },
+        {
+          "value": 82,
+          "label": "82"
+        },
+        {
+          "value": 83,
+          "label": "83"
+        },
+        {
+          "value": 84,
+          "label": "84"
+        },
+        {
+          "value": 85,
+          "label": "85"
+        },
+        {
+          "value": 86,
+          "label": "86"
+        },
+        {
+          "value": 87,
+          "label": "87"
+        },
+        {
+          "value": 88,
+          "label": "88"
+        },
+        {
+          "value": 89,
+          "label": "89"
+        },
+        {
+          "value": 90,
+          "label": "90"
+        },
+        {
+          "value": 91,
+          "label": "91"
+        },
+        {
+          "value": 92,
+          "label": "92"
+        },
+        {
+          "value": 93,
+          "label": "93"
+        },
+        {
+          "value": 94,
+          "label": "94"
+        },
+        {
+          "value": 95,
+          "label": "95"
+        },
+        {
+          "value": 96,
+          "label": "96"
+        },
+        {
+          "value": 97,
+          "label": "97"
+        },
+        {
+          "value": 98,
+          "label": "98"
+        },
+        {
+          "value": 99,
+          "label": "99"
+        },
+        {
+          "value": 100,
+          "label": "100"
+        },
+        {
+          "value": 101,
+          "label": "101"
+        },
+        {
+          "value": 102,
+          "label": "102"
+        },
+        {
+          "value": 103,
+          "label": "103"
+        },
+        {
+          "value": 104,
+          "label": "104"
+        },
+        {
+          "value": 105,
+          "label": "105"
+        },
+        {
+          "value": 106,
+          "label": "106"
+        },
+        {
+          "value": 107,
+          "label": "107"
+        },
+        {
+          "value": 108,
+          "label": "108"
+        },
+        {
+          "value": 109,
+          "label": "109"
+        },
+        {
+          "value": 110,
+          "label": "110"
+        },
+        {
+          "value": 111,
+          "label": "111"
+        },
+        {
+          "value": 112,
+          "label": "112"
+        },
+        {
+          "value": 113,
+          "label": "113"
+        },
+        {
+          "value": 114,
+          "label": "114"
+        },
+        {
+          "value": 115,
+          "label": "115"
+        },
+        {
+          "value": 116,
+          "label": "116"
+        },
+        {
+          "value": 117,
+          "label": "117"
+        },
+        {
+          "value": 118,
+          "label": "118"
+        },
+        {
+          "value": 119,
+          "label": "119"
+        },
+        {
+          "value": 120,
+          "label": "120"
+        },
+        {
+          "value": 121,
+          "label": "121"
+        },
+        {
+          "value": 122,
+          "label": "122"
+        },
+        {
+          "value": 123,
+          "label": "123"
+        },
+        {
+          "value": 124,
+          "label": "124"
+        },
+        {
+          "value": 125,
+          "label": "125"
+        },
+        {
+          "value": 126,
+          "label": "126"
+        },
+        {
+          "value": 127,
+          "label": "127"
+        }
+      ],
+      "paramName": "CABINET_TYPE2",
+      "family": "CABINET",
+      "step": 1,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "enum"
+    },
+    {
+      "id": 24,
+      "name": "MUTE1",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "--"
+        },
+        {
+          "value": 1,
+          "label": "MUTE"
+        },
+        {
+          "value": 2,
+          "label": "SOLO"
+        }
+      ],
+      "paramName": "CABINET_MUTE1",
+      "family": "CABINET",
+      "step": 1,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "enum",
+      "help": {
+        "blurb": "Mutes IR 1. A muted IR uses no CPU — handy to save processing."
+      }
+    },
+    {
+      "id": 25,
+      "name": "MUTE2",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "--"
+        },
+        {
+          "value": 1,
+          "label": "MUTE"
+        },
+        {
+          "value": 2,
+          "label": "SOLO"
+        }
+      ],
+      "paramName": "CABINET_MUTE2",
+      "family": "CABINET",
+      "step": 1,
+      "default": 1,
+      "unitCode": "unverified",
+      "kind": "enum"
+    },
+    {
+      "id": 30,
+      "name": "Bypass Mode",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "THRU"
+        },
+        {
+          "value": 1,
+          "label": "MUTE"
+        }
+      ],
+      "paramName": "CABINET_BYPASSMODE",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "How the signal is routed when bypassed (e.g. muted, thru, or kept wet for trails)."
+      }
+    },
+    {
+      "id": 31,
+      "name": "MODE",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "LEGACY"
+        },
+        {
+          "value": 1,
+          "label": "DYNA-CAB"
+        }
+      ],
+      "paramName": "CABINET_MODE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "enum",
+      "help": {
+        "blurb": "Switches between Legacy IR-bank mode and the visual DynaCab cab/mic system."
+      }
+    },
+    {
+      "id": 40,
+      "name": "Zoom",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        }
+      ],
+      "paramName": "CABINET_ZOOM",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 42,
+      "name": "Input Mode",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "STEREO"
+        },
+        {
+          "value": 1,
+          "label": "LEFT"
+        },
+        {
+          "value": 2,
+          "label": "RIGHT"
+        },
+        {
+          "value": 3,
+          "label": "SUM L+R"
+        }
+      ],
+      "paramName": "CABINET_INPUTSEL",
+      "family": "CABINET",
+      "step": 0,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 47,
+      "name": "Preamp Mode",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "ECONOMY"
+        },
+        {
+          "value": 1,
+          "label": "HIGH QUALITY"
+        }
+      ],
+      "paramName": "CABINET_OVERSAMPLE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 56,
+      "name": "Room Shape",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "HALL"
+        },
+        {
+          "value": 1,
+          "label": "ROOM"
+        }
+      ],
+      "paramName": "CABINET_ROOMSHAPE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 70,
+      "name": "IR Length",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "STANDARD"
+        },
+        {
+          "value": 1,
+          "label": "ULTRA-RES"
+        }
+      ],
+      "paramName": "CABINET_LENGTH1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 71,
+      "name": "IR Length",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "STANDARD"
+        },
+        {
+          "value": 1,
+          "label": "ULTRA-RES"
+        }
+      ],
+      "paramName": "CABINET_LENGTH2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 74,
+      "name": "Low Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_LOSLOPE1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 75,
+      "name": "Low Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_LOSLOPE2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 78,
+      "name": "High Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_HISLOPE1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 79,
+      "name": "High Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_HISLOPE2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 82,
+      "name": "Low Cut Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_PRELOSLOPE",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 83,
+      "name": "High Cut Slope",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        },
+        {
+          "value": 2,
+          "label": "18 dB/OCT"
+        },
+        {
+          "value": 3,
+          "label": "24 dB/OCT"
+        }
+      ],
+      "paramName": "CABINET_PREHISLOPE",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 84,
+      "name": "Scene Ignore",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "CABINET_SCENEIGNORE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "When on, this block ignores scene changes."
+      }
+    },
+    {
+      "id": 85,
+      "name": "DYNACAB TYPE1",
+      "value": 20,
+      "options": [
+        {
+          "value": 0,
+          "label": "1x8 5F1 TWEED"
+        },
+        {
+          "value": 1,
+          "label": "1x8 PRINCETONE"
+        },
+        {
+          "value": 2,
+          "label": "1x10 BF PRINCETONE"
+        },
+        {
+          "value": 3,
+          "label": "1x10 METRO BLUES"
+        },
+        {
+          "value": 4,
+          "label": "1x10 SF PRINCETONE"
+        },
+        {
+          "value": 5,
+          "label": "1x12 AC20"
+        },
+        {
+          "value": 6,
+          "label": "1x12 BLACK MAGICK"
+        },
+        {
+          "value": 7,
+          "label": "1x12 CAR AMBLER"
+        },
+        {
+          "value": 8,
+          "label": "1x12 DELUXE TWEED"
+        },
+        {
+          "value": 9,
+          "label": "1x12 DELUXE VERB"
+        },
+        {
+          "value": 10,
+          "label": "1x12 DIV13 CJ11"
+        },
+        {
+          "value": 11,
+          "label": "1x12 G12T-100"
+        },
+        {
+          "value": 12,
+          "label": "1x12 HOT KITTY"
+        },
+        {
+          "value": 13,
+          "label": "1x12 JR BLUES"
+        },
+        {
+          "value": 14,
+          "label": "1x12 NUCLEAR TONE"
+        },
+        {
+          "value": 15,
+          "label": "1x12 SCHOLZ"
+        },
+        {
+          "value": 16,
+          "label": "1x12 TWEED 20112"
+        },
+        {
+          "value": 17,
+          "label": "1x12 VIBRATO LUX"
+        },
+        {
+          "value": 18,
+          "label": "1x15 HEART KEY"
+        },
+        {
+          "value": 19,
+          "label": "1x15 PORTABASS"
+        },
+        {
+          "value": 20,
+          "label": "1x15 VIBROVERB"
+        },
+        {
+          "value": 21,
+          "label": "2x10 HEART KEY"
+        },
+        {
+          "value": 22,
+          "label": "2x10 SUPER 6G4"
+        },
+        {
+          "value": 23,
+          "label": "2x12 5153 STEALTH"
+        },
+        {
+          "value": 24,
+          "label": "2x12 65 BASSGUY"
+        },
+        {
+          "value": 25,
+          "label": "2x12 CHIEFMAN"
+        },
+        {
+          "value": 26,
+          "label": "2x12 CLASS-A 30W"
+        },
+        {
+          "value": 27,
+          "label": "2x12 DOUBLE VERB"
+        },
+        {
+          "value": 28,
+          "label": "2x12 LEAD 80"
+        },
+        {
+          "value": 29,
+          "label": "2x12 TEXAS STAR"
+        },
+        {
+          "value": 30,
+          "label": "4x10 BASSGUY RI"
+        },
+        {
+          "value": 31,
+          "label": "4x12 1960TV"
+        },
+        {
+          "value": 32,
+          "label": "4x12 5153"
+        },
+        {
+          "value": 33,
+          "label": "4x12 5153 STEALTH"
+        },
+        {
+          "value": 34,
+          "label": "4x12 CITRUS"
+        },
+        {
+          "value": 35,
+          "label": "4x12 FRIEDMAN GB"
+        },
+        {
+          "value": 36,
+          "label": "4x12 FRIEDMAN V30"
+        },
+        {
+          "value": 37,
+          "label": "4x12 LERXST"
+        },
+        {
+          "value": 38,
+          "label": "4x12 RECTO SLANT"
+        },
+        {
+          "value": 39,
+          "label": "4x12 RECTO STRAIGHT"
+        },
+        {
+          "value": 40,
+          "label": "4x12 RUMBLE EV12L"
+        },
+        {
+          "value": 41,
+          "label": "4x12 RUMBLE EV12S"
+        },
+        {
+          "value": 42,
+          "label": "4x12 SOLO 100"
+        },
+        {
+          "value": 43,
+          "label": "4x12 USA MC90"
+        },
+        {
+          "value": 44,
+          "label": "8x10 SV BASS"
+        }
+      ],
+      "paramName": "CABINET_DYNACAB_TYPE1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 86,
+      "name": "DYNACAB TYPE2",
+      "value": 20,
+      "options": [
+        {
+          "value": 0,
+          "label": "1x8 5F1 TWEED"
+        },
+        {
+          "value": 1,
+          "label": "1x8 PRINCETONE"
+        },
+        {
+          "value": 2,
+          "label": "1x10 BF PRINCETONE"
+        },
+        {
+          "value": 3,
+          "label": "1x10 METRO BLUES"
+        },
+        {
+          "value": 4,
+          "label": "1x10 SF PRINCETONE"
+        },
+        {
+          "value": 5,
+          "label": "1x12 AC20"
+        },
+        {
+          "value": 6,
+          "label": "1x12 BLACK MAGICK"
+        },
+        {
+          "value": 7,
+          "label": "1x12 CAR AMBLER"
+        },
+        {
+          "value": 8,
+          "label": "1x12 DELUXE TWEED"
+        },
+        {
+          "value": 9,
+          "label": "1x12 DELUXE VERB"
+        },
+        {
+          "value": 10,
+          "label": "1x12 DIV13 CJ11"
+        },
+        {
+          "value": 11,
+          "label": "1x12 G12T-100"
+        },
+        {
+          "value": 12,
+          "label": "1x12 HOT KITTY"
+        },
+        {
+          "value": 13,
+          "label": "1x12 JR BLUES"
+        },
+        {
+          "value": 14,
+          "label": "1x12 NUCLEAR TONE"
+        },
+        {
+          "value": 15,
+          "label": "1x12 SCHOLZ"
+        },
+        {
+          "value": 16,
+          "label": "1x12 TWEED 20112"
+        },
+        {
+          "value": 17,
+          "label": "1x12 VIBRATO LUX"
+        },
+        {
+          "value": 18,
+          "label": "1x15 HEART KEY"
+        },
+        {
+          "value": 19,
+          "label": "1x15 PORTABASS"
+        },
+        {
+          "value": 20,
+          "label": "1x15 VIBROVERB"
+        },
+        {
+          "value": 21,
+          "label": "2x10 HEART KEY"
+        },
+        {
+          "value": 22,
+          "label": "2x10 SUPER 6G4"
+        },
+        {
+          "value": 23,
+          "label": "2x12 5153 STEALTH"
+        },
+        {
+          "value": 24,
+          "label": "2x12 65 BASSGUY"
+        },
+        {
+          "value": 25,
+          "label": "2x12 CHIEFMAN"
+        },
+        {
+          "value": 26,
+          "label": "2x12 CLASS-A 30W"
+        },
+        {
+          "value": 27,
+          "label": "2x12 DOUBLE VERB"
+        },
+        {
+          "value": 28,
+          "label": "2x12 LEAD 80"
+        },
+        {
+          "value": 29,
+          "label": "2x12 TEXAS STAR"
+        },
+        {
+          "value": 30,
+          "label": "4x10 BASSGUY RI"
+        },
+        {
+          "value": 31,
+          "label": "4x12 1960TV"
+        },
+        {
+          "value": 32,
+          "label": "4x12 5153"
+        },
+        {
+          "value": 33,
+          "label": "4x12 5153 STEALTH"
+        },
+        {
+          "value": 34,
+          "label": "4x12 CITRUS"
+        },
+        {
+          "value": 35,
+          "label": "4x12 FRIEDMAN GB"
+        },
+        {
+          "value": 36,
+          "label": "4x12 FRIEDMAN V30"
+        },
+        {
+          "value": 37,
+          "label": "4x12 LERXST"
+        },
+        {
+          "value": 38,
+          "label": "4x12 RECTO SLANT"
+        },
+        {
+          "value": 39,
+          "label": "4x12 RECTO STRAIGHT"
+        },
+        {
+          "value": 40,
+          "label": "4x12 RUMBLE EV12L"
+        },
+        {
+          "value": 41,
+          "label": "4x12 RUMBLE EV12S"
+        },
+        {
+          "value": 42,
+          "label": "4x12 SOLO 100"
+        },
+        {
+          "value": 43,
+          "label": "4x12 USA MC90"
+        },
+        {
+          "value": 44,
+          "label": "8x10 SV BASS"
+        }
+      ],
+      "paramName": "CABINET_DYNACAB_TYPE2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 89,
+      "name": "DYNACAB MIC1",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "Condenser"
+        },
+        {
+          "value": 1,
+          "label": "Ribbon"
+        },
+        {
+          "value": 2,
+          "label": "Dynamic 1"
+        },
+        {
+          "value": 3,
+          "label": "Dynamic 2"
+        }
+      ],
+      "paramName": "CABINET_DYNACAB_MIC1",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 90,
+      "name": "DYNACAB MIC2",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "Condenser"
+        },
+        {
+          "value": 1,
+          "label": "Ribbon"
+        },
+        {
+          "value": 2,
+          "label": "Dynamic 1"
+        },
+        {
+          "value": 3,
+          "label": "Dynamic 2"
+        }
+      ],
+      "paramName": "CABINET_DYNACAB_MIC2",
+      "family": "CABINET",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 105,
+      "name": "Auto Align",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "CABINET_AUTO_ALIGN",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 65280,
+      "name": "Picker",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_PICKER1",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65281,
+      "name": "Picker",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_PICKER2",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65286,
+      "name": "M",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_BTN_MUTE1",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65287,
+      "name": "M",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_BTN_MUTE2",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65288,
+      "name": "S",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_BTN_SOLO1",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    },
+    {
+      "id": 65289,
+      "name": "S",
+      "value": 0,
+      "options": [],
+      "paramName": "CABINET_BTN_SOLO2",
+      "family": "CABINET",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    }
+  ],
+  "type": {
+    "value": 20,
+    "name": "1x15 VIBROVERB"
+  },
+  "layout": {
+    "editorName": "Cab",
+    "family": "CABINET",
+    "variantName": "0",
+    "variantValue": "0",
+    "pages": [
+      {
+        "name": "Cab",
+        "pageNum": 0,
+        "fw": {
+          "gtet": "6,03"
+        },
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "CAB 1",
+                "paramName": "CABINET_LABEL1",
+                "paramId": 65284,
+                "widget": "label",
+                "rawWidget": "labelBold",
+                "placement": {
+                  "positionExact": "315,63"
+                }
+              },
+              {
+                "label": "Picker",
+                "paramName": "CABINET_PICKER1",
+                "paramId": 65280,
+                "widget": "button",
+                "rawWidget": "btnRectangle",
+                "placement": {
+                  "positionExact": "376,63"
+                }
+              },
+              {
+                "label": "M",
+                "paramName": "CABINET_BTN_MUTE1",
+                "paramId": 65286,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "455,63"
+                }
+              },
+              {
+                "label": "S",
+                "paramName": "CABINET_BTN_SOLO1",
+                "paramId": 65288,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "491,63"
+                }
+              },
+              {
+                "label": "Bank",
+                "paramName": "CABINET_BANK1",
+                "paramId": 0,
+                "widget": "dropdown",
+                "rawWidget": "dropdownCabBank",
+                "placement": {
+                  "positionExact": "321,105"
+                }
+              },
+              {
+                "label": "Type",
+                "paramName": "CABINET_TYPE1",
+                "paramId": 4,
+                "widget": "readout",
+                "rawWidget": "readoutCabNumber",
+                "placement": {
+                  "positionExact": "440,105"
+                }
+              },
+              {
+                "label": "Name",
+                "paramName": "CABINET_NAME1",
+                "paramId": 65282,
+                "widget": "label",
+                "rawWidget": "labelCabName",
+                "placement": {
+                  "positionExact": "321,135"
+                }
+              },
+              {
+                "label": "IR Length",
+                "paramName": "CABINET_LENGTH1",
+                "paramId": 70,
+                "widget": "dropdown",
+                "rawWidget": "dropdownLeftLabelLong",
+                "placement": {
+                  "positionExact": "321,165"
+                },
+                "fw": {
+                  "gtet": "3,3"
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL1",
+                "paramId": 8,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Pan",
+                "paramName": "CABINET_PAN1",
+                "paramId": 12,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Low Cut",
+                "paramName": "CABINET_LOCUT1",
+                "paramId": 62,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "High Cut",
+                "paramName": "CABINET_HICUT1",
+                "paramId": 66,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Low Slope",
+                "paramName": "CABINET_LOSLOPE1",
+                "paramId": 74,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "High Slope",
+                "paramName": "CABINET_HISLOPE1",
+                "paramId": 78,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 8
+                }
+              },
+              {
+                "label": "Proximity",
+                "paramName": "CABINET_PROXIMITY1",
+                "paramId": 20,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 9
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "CAB 2",
+                "paramName": "CABINET_LABEL2",
+                "paramId": 65285,
+                "widget": "label",
+                "rawWidget": "labelBold",
+                "placement": {
+                  "positionExact": "315,243"
+                }
+              },
+              {
+                "label": "Picker",
+                "paramName": "CABINET_PICKER2",
+                "paramId": 65281,
+                "widget": "button",
+                "rawWidget": "btnRectangle",
+                "placement": {
+                  "positionExact": "376,243"
+                }
+              },
+              {
+                "label": "M",
+                "paramName": "CABINET_BTN_MUTE2",
+                "paramId": 65287,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "455,243"
+                }
+              },
+              {
+                "label": "S",
+                "paramName": "CABINET_BTN_SOLO2",
+                "paramId": 65289,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "491,243"
+                }
+              },
+              {
+                "label": "Bank",
+                "paramName": "CABINET_BANK2",
+                "paramId": 1,
+                "widget": "dropdown",
+                "rawWidget": "dropdownCabBank",
+                "placement": {
+                  "positionExact": "321,285"
+                }
+              },
+              {
+                "label": "Type",
+                "paramName": "CABINET_TYPE2",
+                "paramId": 5,
+                "widget": "readout",
+                "rawWidget": "readoutCabNumber",
+                "placement": {
+                  "positionExact": "440,285"
+                }
+              },
+              {
+                "label": "Name",
+                "paramName": "CABINET_NAME2",
+                "paramId": 65283,
+                "widget": "label",
+                "rawWidget": "labelCabName",
+                "placement": {
+                  "positionExact": "321,315"
+                }
+              },
+              {
+                "label": "IR Length",
+                "paramName": "CABINET_LENGTH2",
+                "paramId": 71,
+                "widget": "dropdown",
+                "rawWidget": "dropdownLeftLabelLong",
+                "placement": {
+                  "positionExact": "321,345"
+                },
+                "fw": {
+                  "gtet": "3,3"
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL2",
+                "paramId": 9,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Pan",
+                "paramName": "CABINET_PAN2",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Low Cut",
+                "paramName": "CABINET_LOCUT2",
+                "paramId": 63,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "High Cut",
+                "paramName": "CABINET_HICUT2",
+                "paramId": 67,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Low Slope",
+                "paramName": "CABINET_LOSLOPE2",
+                "paramId": 75,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "High Slope",
+                "paramName": "CABINET_HISLOPE2",
+                "paramId": 79,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 8
+                }
+              },
+              {
+                "label": "Proximity",
+                "paramName": "CABINET_PROXIMITY2",
+                "paramId": 21,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 9
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knobCompact"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "CABINET_PAN",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "positionExact": "1179,185"
+                }
+              },
+              {
+                "label": "Bypass",
+                "paramName": "CABINET_BYPASS",
+                "paramId": 32,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "CABINET_SCENEIGNORE",
+                "paramId": 84,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene",
+                "fw": {
+                  "gtet": "5,3"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Preamp",
+        "pageNum": 1,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Preamp Type",
+                "paramName": "CABINET_PRETYPE",
+                "paramId": 43,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5"
+              },
+              {
+                "label": "Preamp Mode",
+                "paramName": "CABINET_OVERSAMPLE",
+                "paramId": 47,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5",
+                "placement": {
+                  "positionExact": "435,50"
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "Drive",
+                "paramName": "CABINET_DRIVE",
+                "paramId": 33,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Saturation",
+                "paramName": "CABINET_BIAS",
+                "paramId": 34,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "VU",
+                "paramName": "CABINET_VUMETER",
+                "paramId": 61,
+                "widget": "meter",
+                "rawWidget": "meterVuVert"
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Bass",
+                "paramName": "CABINET_BASS",
+                "paramId": 44,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Mid",
+                "paramName": "CABINET_MID",
+                "paramId": 45,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Treble",
+                "paramName": "CABINET_TREBLE",
+                "paramId": 46,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "Low\nCut",
+                "paramName": "CABINET_LOCUT",
+                "paramId": 38,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                },
+                "fw": {
+                  "gtet": "4"
+                }
+              },
+              {
+                "label": "Low Cut\nSlope",
+                "paramName": "CABINET_PRELOSLOPE",
+                "paramId": 82,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 5
+                },
+                "fw": {
+                  "gtet": "4"
+                }
+              },
+              {
+                "label": "High\nCut",
+                "paramName": "CABINET_HICUT",
+                "paramId": 39,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                },
+                "fw": {
+                  "gtet": "4"
+                }
+              },
+              {
+                "label": "High Cut\nSlope",
+                "paramName": "CABINET_PREHISLOPE",
+                "paramId": 83,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 7
+                },
+                "fw": {
+                  "gtet": "4"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "CABINET_PAN",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nMode",
+                "paramName": "CABINET_INPUTSEL",
+                "paramId": 42,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "CABINET_BYPASSMODE",
+                "paramId": 30,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "CABINET_BYPASS",
+                "paramId": 32,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "CABINET_SCENEIGNORE",
+                "paramId": 84,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene",
+                "fw": {
+                  "gtet": "5,3"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Room/Air",
+        "pageNum": 2,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Room\nLevel",
+                "paramName": "CABINET_ROOMMIX",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Room\nSize",
+                "paramName": "CABINET_ROOMSIZE",
+                "paramId": 36,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Room\nShape",
+                "paramName": "CABINET_ROOMSHAPE",
+                "paramId": 56,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1"
+              },
+              {
+                "label": "Floor\nReflections",
+                "paramName": "CABINET_FLOORLVL",
+                "paramId": 53,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Room\nDiffusion",
+                "paramName": "CABINET_DIFFUSION",
+                "paramId": 59,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "LF\nDamping",
+                "paramName": "CABINET_LFDAMPING",
+                "paramId": 57,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "HF\nDamping",
+                "paramName": "CABINET_HFDAMPING",
+                "paramId": 58,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Mic\nSpacing",
+                "paramName": "CABINET_MICSPACE",
+                "paramId": 37,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Air",
+                "paramName": "CABINET_AIR",
+                "paramId": 54,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Frequency",
+                "paramName": "CABINET_AIRFREQ",
+                "paramId": 55,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "Proximity\nFrequency",
+                "paramName": "CABINET_PROXFREQ",
+                "paramId": 41,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "CABINET_PAN",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nMode",
+                "paramName": "CABINET_INPUTSEL",
+                "paramId": 42,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "CABINET_BYPASSMODE",
+                "paramId": 30,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "CABINET_BYPASS",
+                "paramId": 32,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "CABINET_SCENEIGNORE",
+                "paramId": 84,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene",
+                "fw": {
+                  "gtet": "5,3"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Align",
+        "pageNum": 3,
+        "fw": {
+          "gtet": "6,03"
+        },
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Zoom",
+                "paramName": "CABINET_ZOOM",
+                "paramId": 40,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "positionExact": "196,230"
+                }
+              },
+              {
+                "label": "Graph",
+                "paramName": null,
+                "paramId": null,
+                "widget": "graph",
+                "rawWidget": "graph_cab_mm",
+                "placement": {
+                  "positionExact": "305,18"
+                },
+                "fw": {
+                  "gtet": "12,00"
+                }
+              },
+              {
+                "label": "Graph",
+                "paramName": null,
+                "paramId": null,
+                "widget": "graph",
+                "rawWidget": "graph_cabZoom_mm",
+                "placement": {
+                  "positionExact": "305,18"
+                },
+                "fw": {
+                  "gtet": "12,00"
+                }
+              },
+              {
+                "label": "Bank",
+                "paramName": "CABINET_BANK1",
+                "paramId": 0,
+                "widget": "dropdown",
+                "rawWidget": "dropdownCabBank",
+                "placement": {
+                  "positionExact": "311,223"
+                }
+              },
+              {
+                "label": "Type",
+                "paramName": "CABINET_TYPE1",
+                "paramId": 4,
+                "widget": "readout",
+                "rawWidget": "readoutCabNumber",
+                "placement": {
+                  "positionExact": "430,223"
+                }
+              },
+              {
+                "label": "Name",
+                "paramName": "CABINET_NAME1",
+                "paramId": 65282,
+                "widget": "label",
+                "rawWidget": "labelCabName",
+                "placement": {
+                  "positionExact": "311,253"
+                }
+              },
+              {
+                "label": "Picker",
+                "paramName": "CABINET_PICKER1",
+                "paramId": 65280,
+                "widget": "button",
+                "rawWidget": "btnRectangle",
+                "placement": {
+                  "positionExact": "326,305"
+                }
+              },
+              {
+                "label": "M",
+                "paramName": "CABINET_BTN_MUTE1",
+                "paramId": 65286,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "330,344"
+                }
+              },
+              {
+                "label": "S",
+                "paramName": "CABINET_BTN_SOLO1",
+                "paramId": 65288,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "366,344"
+                }
+              },
+              {
+                "label": "Delay 1",
+                "paramName": "CABINET_DELAY1",
+                "paramId": 16,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout",
+                "placement": {
+                  "positionExact": "416,282"
+                },
+                "fw": {
+                  "gtet": "12,00"
+                }
+              },
+              {
+                "label": "Seperator",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "labelSeperator",
+                "placement": {
+                  "positionExact": "518,245"
+                }
+              },
+              {
+                "label": "Bank",
+                "paramName": "CABINET_BANK2",
+                "paramId": 1,
+                "widget": "dropdown",
+                "rawWidget": "dropdownCabBank",
+                "placement": {
+                  "positionExact": "526,223"
+                }
+              },
+              {
+                "label": "Type",
+                "paramName": "CABINET_TYPE2",
+                "paramId": 5,
+                "widget": "readout",
+                "rawWidget": "readoutCabNumber",
+                "placement": {
+                  "positionExact": "645,223"
+                }
+              },
+              {
+                "label": "Name",
+                "paramName": "CABINET_NAME2",
+                "paramId": 65283,
+                "widget": "label",
+                "rawWidget": "labelCabName",
+                "placement": {
+                  "positionExact": "526,253"
+                }
+              },
+              {
+                "label": "Picker",
+                "paramName": "CABINET_PICKER2",
+                "paramId": 65281,
+                "widget": "button",
+                "rawWidget": "btnRectangle",
+                "placement": {
+                  "positionExact": "541,305"
+                }
+              },
+              {
+                "label": "M",
+                "paramName": "CABINET_BTN_MUTE2",
+                "paramId": 65287,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "545,344"
+                }
+              },
+              {
+                "label": "S",
+                "paramName": "CABINET_BTN_SOLO2",
+                "paramId": 65289,
+                "widget": "button",
+                "rawWidget": "btnSquare",
+                "placement": {
+                  "positionExact": "581,344"
+                }
+              },
+              {
+                "label": "Delay 2",
+                "paramName": "CABINET_DELAY2",
+                "paramId": 17,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout",
+                "placement": {
+                  "positionExact": "631,282"
+                },
+                "fw": {
+                  "gtet": "12,00"
+                }
+              },
+              {
+                "label": "Seperator",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "labelSeperator",
+                "placement": {
+                  "positionExact": "733,245"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "CABINET_LEVEL",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knobCompact"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "CABINET_PAN",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "positionExact": "1179,185"
+                }
+              },
+              {
+                "label": "Bypass",
+                "paramName": "CABINET_BYPASS",
+                "paramId": 32,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "CABINET_SCENEIGNORE",
+                "paramId": 84,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene",
+                "fw": {
+                  "gtet": "5,3"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,9 +1,9 @@
 <script lang="ts">
   // Full-view rail screen for a virtual effect (Setup / Controllers / Modifier / FC). It's the same
-  // widget-grid Control Surface as a block, pointed at effectId 1/2/3/199 — device-authentic editor
-  // pages come from the served layout, reads/writes go through the normal param path.
+  // device-canvas editor as a block, pointed at effectId 1/2/3/199 — device-authentic editor pages
+  // come from the served layout, reads/writes go through the normal param path.
   import { editor } from './editor.svelte';
-  import ControlSurface from './ControlSurface.svelte';
+  import DeviceCanvas from './DeviceCanvas.svelte';
   import { deriveModulationGraphs } from './modulationGraphs';
   import { deriveAdsrGraphs } from './adsrGraphs';
 
@@ -36,7 +36,7 @@
       <div class="msg"><p>No parameters available for {editor.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <ControlSurface slug={editor.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} />
+        <DeviceCanvas slug={editor.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} />
       </div>
     {/if}
   </section>
@@ -79,7 +79,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* the ControlSurface scrolls internally (vertical only) — no sideways scroll here */
+    overflow: hidden; /* the DeviceCanvas scrolls internally — no sideways scroll of the rail itself */
   }
   .msg {
     flex: 1;

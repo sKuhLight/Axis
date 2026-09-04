@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { deriveModulationGraphs } from './modulationGraphs';
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
 
-const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget?: string): LayoutControl => ({
+const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = ''): LayoutControl => ({
   label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget
 });
 const param = (id: number, name: string): NamedParam => ({ id, name, value: 0, norm: 0.5, min: 0, max: 10 });
@@ -15,8 +15,8 @@ describe('deriveModulationGraphs', () => {
       pages: [{
         name: 'LFO 1 + 2',
         rows: [
-          { controls: [control('CONTROLLERS_LFO1TYPE', 1, 'dropdown'), control('CONTROLLERS_LFO1FREQ', 2), control(null, null, 'graph', 'graph_lfo')] },
-          { controls: [control('CONTROLLERS_LFO2TYPE', 3, 'dropdown'), control('CONTROLLERS_LFO2FREQ', 4), control(null, null, 'graph', 'graph_lfo')] }
+          { section: 'parameters', controls: [control('CONTROLLERS_LFO1TYPE', 1, 'dropdown'), control('CONTROLLERS_LFO1FREQ', 2), control(null, null, 'graph', 'graph_lfo')] },
+          { section: 'parameters', controls: [control('CONTROLLERS_LFO2TYPE', 3, 'dropdown'), control('CONTROLLERS_LFO2FREQ', 4), control(null, null, 'graph', 'graph_lfo')] }
         ]
       }]
     };
@@ -33,7 +33,7 @@ describe('deriveModulationGraphs', () => {
       family: 'TREMOLO',
       pages: [{
         name: 'Tremolo',
-        rows: [{ controls: [
+        rows: [{ section: 'parameters', controls: [
           control('TREMOLO_LFOTYPE', 1, 'dropdown'), control('TREMOLO_RATE', 2), control('TREMOLO_DEPTH', 3),
           control('TREMOLO_DUTY', 4), control('TREMOLO_BETA', 5), control('TREMOLO_PHASE', 6),
           control(null, null, 'graph', 'graph_trem')

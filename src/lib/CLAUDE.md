@@ -37,11 +37,17 @@ private generic `req<T>(path, init?)`:
 All API shapes are **hand-mirrored interfaces** — no codegen, no OpenAPI. The
 chain is: ForgeFX route JSON → `types.ts` interface → `req<T>` → store `$state` →
 component `$derived`. `DeviceCaps` is load-bearing: capability gates hang off it.
-Drift failure mode: typecheck and the node-env unit suite still cannot catch
-server↔`types.ts` shape drift (no codegen, no contract test), so a server shape
-change not reflected in `types.ts` typechecks green and fails at runtime — missing
-caps fields silently hide features; the manual mirror discipline stands. v2 caps fields are optional (`?`) by design so
-legacy payloads degrade to the `isAm4` fallback branches.
+Drift failure mode: typecheck alone cannot catch server↔`types.ts` shape drift —
+TS structural typing accepts any object with compatible optional fields, so a
+server shape change not reflected in `types.ts` typechecks green; missing caps
+fields silently hide features. The manual mirror discipline stands, but
+`blockParams` (`NamedParam`/`EnumParam`/`DeviceLayout` and its `LayoutPage`/
+`LayoutRow`/`LayoutControl`) now has a **contract test**:
+`forgefxContract.test.ts` Zod-parses real ForgeFX response fixtures
+(`fixtures/blockParams/*.json`, provenance in that dir's README) against a
+schema mirroring the widened contract — this is what actually fails at test
+time on drift, not just at runtime in the field. v2 caps fields are optional
+(`?`) by design so legacy payloads degrade to the `isAm4` fallback branches.
 
 ## Store pattern (`src/lib/editor.svelte.ts`, ~1865 lines)
 

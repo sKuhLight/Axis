@@ -20,6 +20,7 @@ const ctl = (widget: LayoutWidget, placement?: LayoutControl['placement']): Layo
   paramName: null,
   paramId: null,
   widget,
+  rawWidget: '',
   ...(placement ? { placement } : {})
 });
 

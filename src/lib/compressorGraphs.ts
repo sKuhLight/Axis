@@ -1,6 +1,7 @@
 // Compressor transfer graphs. Only Threshold/Ratio models receive a calculated curve; Sustain-style
 // models still own a graph slot, but their nonlinear behavior cannot be inferred from one strength knob.
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
 export interface CompressorGraphSpec {
   key: string;
@@ -14,7 +15,6 @@ export interface CompressorGraphSpec {
   release?: NamedParam;
 }
 
-const COMP_GRAPH = 'graph_comp_studio';
 
 // Real hardware never reports bit-exact 0 dB GR at idle (detector noise floor/quantization), so a
 // strict `grDb <= 0` guard almost never fires — it keeps resolving a "real" point a hair above
@@ -57,7 +57,7 @@ export function deriveCompressorGraphs(input: {
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
       const graphSlot = slot++;
-      if (control.rawWidget !== COMP_GRAPH) continue;
+      if (graphKind(control.rawWidget) !== 'comp') continue;
       out.push({
         key: `comp${out.length + 1}`,
         page,

@@ -16,7 +16,7 @@ import {
   type SurfaceWidget,
   type SurfaceBoard
 } from './deviceLayoutBoard';
-import type { DeviceLayout, LayoutControl, LayoutWidget } from './types';
+import type { DeviceLayout, LayoutControl, LayoutRow, LayoutWidget } from './types';
 
 // ── catalog builders (mirror ControlSurface's live catalog entries) ──
 const knob = (id: number): BoardCtl => ({ key: `k${id}`, kind: 'cont', id, w: 1, h: 1, view: 'knob', views: ['knob', 'fader', 'slider', 'number'] });
@@ -31,6 +31,7 @@ const ctl = (widget: LayoutWidget, paramId: number | null, label = '', extra: Pa
   paramName: label || null,
   paramId,
   widget,
+  rawWidget: '',
   ...extra
 });
 
@@ -92,7 +93,7 @@ describe('healBoardWithLayout — self-heals a saved board against the current d
 });
 
 describe('railControls — the block-level rail for layouts with no `mixer` section', () => {
-  const page = (name: string, ids: number[], section = 'parameters') => ({
+  const page = (name: string, ids: number[], section: LayoutRow['section'] = 'parameters') => ({
     name,
     rows: [{ section, controls: ids.map((id) => ctl('knob', id, `P${id}`)) }]
   });
@@ -147,9 +148,9 @@ describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
     {
       name: 'Gate',
       rows: [
-        { controls: [ctl('knob', 0, 'Threshold'), ctl('knob', 1, 'Ratio'), ctl('spacer', null), ctl('meter', 8, 'Gain', { rawWidget: 'meterGainVert' })] },
-        { controls: [ctl('dropdown', 4, 'Impedance'), ctl('toggle', 9, 'Mode'), ctl('slider', 5, 'Level')] },
-        { controls: [ctl('button', 6, 'Bypass', { rawWidget: 'btnBypass' })] }
+        { section: 'parameters', controls: [ctl('knob', 0, 'Threshold'), ctl('knob', 1, 'Ratio'), ctl('spacer', null), ctl('meter', 8, 'Gain', { rawWidget: 'meterGainVert' })] },
+        { section: 'parameters', controls: [ctl('dropdown', 4, 'Impedance'), ctl('toggle', 9, 'Mode'), ctl('slider', 5, 'Level')] },
+        { section: 'parameters', controls: [ctl('button', 6, 'Bypass', { rawWidget: 'btnBypass' })] }
       ]
     }
   ]);
@@ -189,7 +190,7 @@ describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
 
   it('unknown/unmapped widgets fall back to the catalog default (no FM3 regression)', () => {
     const board = buildDeviceLayoutBoard(
-      layout([{ name: 'P', rows: [{ controls: [ctl('unknown', 0, 'Threshold')] }] }]),
+      layout([{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('unknown', 0, 'Threshold')] }] }]),
       [knob(0)],
       12
     )!;
@@ -198,7 +199,7 @@ describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
 
   it('meter/bypass are dropped when the block has no such catalog entry (leaves a gap, no crash)', () => {
     const board = buildDeviceLayoutBoard(
-      layout([{ name: 'P', rows: [{ controls: [ctl('meter', 8, 'Gain'), ctl('knob', 0, 'Threshold')] }] }]),
+      layout([{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('meter', 8, 'Gain'), ctl('knob', 0, 'Threshold')] }] }]),
       [knob(0)], // no METER entry
       12
     )!;
@@ -209,7 +210,7 @@ describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
 
   it('wraps a control that overflows the remaining columns onto a new grid line', () => {
     const board = buildDeviceLayoutBoard(
-      layout([{ name: 'P', rows: [{ controls: [knob(0), knob(1), knob(2)].map((k) => ctl('knob', k.id, `k${k.id}`)) }] }]),
+      layout([{ name: 'P', rows: [{ section: 'parameters', controls: [knob(0), knob(1), knob(2)].map((k) => ctl('knob', k.id, `k${k.id}`)) }] }]),
       [knob(0), knob(1), knob(2)],
       2 // only 2 cols → third knob wraps
     )!;
@@ -222,7 +223,7 @@ describe('buildDeviceLayoutBoard — rows + widget mapping', () => {
 
   it('de-duplicates a param listed twice on one page but keeps the slot', () => {
     const board = buildDeviceLayoutBoard(
-      layout([{ name: 'P', rows: [{ controls: [ctl('knob', 0, 'A'), ctl('knob', 0, 'A again'), ctl('knob', 1, 'B')] }] }]),
+      layout([{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'A'), ctl('knob', 0, 'A again'), ctl('knob', 1, 'B')] }] }]),
       [knob(0), knob(1)],
       12
     )!;
@@ -236,8 +237,8 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
   it('suffixes duplicate page names so the {#each} keys stay unique', () => {
     const board = buildDeviceLayoutBoard(
       layout([
-        { name: 'Gate', rows: [{ controls: [ctl('knob', 0, 'A')] }] },
-        { name: 'Gate', rows: [{ controls: [ctl('knob', 1, 'B')] }] }
+        { name: 'Gate', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'A')] }] },
+        { name: 'Gate', rows: [{ section: 'parameters', controls: [ctl('knob', 1, 'B')] }] }
       ]),
       [knob(0), knob(1)],
       12
@@ -247,7 +248,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
 
   it('sweeps catalog controls the layout never referenced onto a trailing "More" page', () => {
     const board = buildDeviceLayoutBoard(
-      layout([{ name: 'Gate', rows: [{ controls: [ctl('knob', 0, 'A')] }] }]),
+      layout([{ name: 'Gate', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'A')] }] }]),
       [knob(0), knob(99)], // k99 unreferenced
       12
     )!;
@@ -256,13 +257,13 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
   });
 
   it('returns null when no page has a renderable control (caller uses its heuristic board)', () => {
-    expect(buildDeviceLayoutBoard(layout([{ name: 'P', rows: [{ controls: [ctl('spacer', null)] }] }]), [knob(0)], 12)).toBeNull();
+    expect(buildDeviceLayoutBoard(layout([{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('spacer', null)] }] }]), [knob(0)], 12)).toBeNull();
     expect(buildDeviceLayoutBoard(null, [knob(0)], 12)).toBeNull();
     expect(buildDeviceLayoutBoard(layout([]), [knob(0)], 12)).toBeNull();
   });
 
   it('stamps a variantSig that changes with the served variant (drives Default re-seed)', () => {
-    const pages = [{ name: 'P', rows: [{ controls: [ctl('knob', 0, 'A')] }] }] as DeviceLayout['pages'];
+    const pages = [{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'A')] }] }] as DeviceLayout['pages'];
     const a = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'A' }), [knob(0)], 12)!;
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
@@ -297,7 +298,7 @@ describe('packRows — row-preserving responsive reflow', () => {
   // line" together (the old `sort by x only` bug).
   it('re-packs a source row that itself wrapped at build time back into its original order', () => {
     const catalog: BoardCtl[] = [knob(0), knob(1), knob(2), knob(3), knob(4), knob(5)];
-    const oneRow = layout([{ name: 'P', rows: [{ controls: [0, 1, 2, 3, 4, 5].map((id) => ctl('knob', id, `k${id}`)) }] }]);
+    const oneRow = layout([{ name: 'P', rows: [{ section: 'parameters', controls: [0, 1, 2, 3, 4, 5].map((id) => ctl('knob', id, `k${id}`)) }] }]);
     // built at 2 cols: k0,k1 wrap onto line y0; k2,k3 onto y1; k4,k5 onto y2 — all still `row: 0`
     const built = buildDeviceLayoutBoard(oneRow, catalog, 2)!.boards['P'];
     expect(built.map((w) => [w.key, w.x, w.y])).toEqual([
@@ -352,7 +353,7 @@ describe('buildDeviceLayoutBoard — band sets stay together', () => {
   ];
   const bandCatalog = (i: number): BoardCtl[] => [knob(i * 10 + 1), select(i * 10 + 2), knob(i * 10 + 3), knob(i * 10 + 4)];
   const bands = [1, 2, 3, 4, 5];
-  const peq = layout([{ name: 'PEQ', rows: [{ controls: bands.flatMap(bandCtls) }] }], { family: 'PEQ' });
+  const peq = layout([{ name: 'PEQ', rows: [{ section: 'parameters', controls: bands.flatMap(bandCtls) }] }], { family: 'PEQ' });
   const catalog = bands.flatMap(bandCatalog);
   /** grid line each band's four controls landed on — one entry per band, must be a single value each */
   const linesPerBand = (ws: SurfaceWidget[]) =>
@@ -468,7 +469,7 @@ describe('monitorsByFamily — pid scoping', () => {
 
 describe('buildDeviceLayoutBoard — monitor pids resolve to meters, not knobs', () => {
   const authentic = (controls: LayoutControl[]) =>
-    layout([{ name: 'Authentic', rows: [{ controls }] }], { family: 'DISTORT' });
+    layout([{ name: 'Authentic', rows: [{ section: 'parameters', controls }] }], { family: 'DISTORT' });
 
   it('prefers the meterH entry over a same-pid knob entry', () => {
     // amp HEADROOM: pid 132 is BOTH a named param (min 0 / max 1) and DISTORT_VPLATEMON.
@@ -503,8 +504,8 @@ describe('buildDeviceLayoutBoard — graphic-EQ band collapse', () => {
     {
       name: 'EQ',
       rows: [
-        { controls: [...[...bandIds].map((id) => ctl('slider', id, `${id * 100}`))] },
-        { controls: [ctl('knob', 20, 'Balance'), ctl('knob', 21, 'Level')] }
+        { section: 'parameters', controls: [...[...bandIds].map((id) => ctl('slider', id, `${id * 100}`))] },
+        { section: 'parameters', controls: [ctl('knob', 20, 'Balance'), ctl('knob', 21, 'Level')] }
       ]
     }
   ]);
@@ -542,8 +543,8 @@ describe('buildDeviceLayoutBoard — graphic-EQ band collapse', () => {
 describe('buildDeviceLayoutBoard — response graph slots', () => {
   const EQ2: BoardCtl = { key: 'eq2', kind: 'eq', id: -1, w: 4, h: 2, view: 'eq', views: ['eq'] };
   const lay = layout([
-    { name: 'Input EQ', rows: [{ controls: [ctl('knob', 0, 'Frequency'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] },
-    { name: 'Speaker', rows: [{ controls: [ctl('knob', 1, 'LF Res Freq'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] }
+    { name: 'Input EQ', rows: [{ section: 'parameters', controls: [ctl('knob', 0, 'Frequency'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] },
+    { name: 'Speaker', rows: [{ section: 'parameters', controls: [ctl('knob', 1, 'LF Res Freq'), ctl('graph', null, 'Graph', { rawWidget: 'graph4' })] }] }
   ]);
   const catalog: BoardCtl[] = [knob(0), knob(1), EQ, EQ2, BYPASS];
   const perPage = (page: number) => ['eq', 'eq2'][page] ?? null;
@@ -566,7 +567,7 @@ describe('buildDeviceLayoutBoard — response graph slots', () => {
   });
 
   it('addresses multiple graph slots on one page independently', () => {
-    const two = layout([{ name: 'Controllers', rows: [{ controls: [ctl('graph', null, 'Graph'), ctl('graph', null, 'Graph')] }] }]);
+    const two = layout([{ name: 'Controllers', rows: [{ section: 'parameters', controls: [ctl('graph', null, 'Graph'), ctl('graph', null, 'Graph')] }] }]);
     const b = buildDeviceLayoutBoard(two, [EQ, EQ2], 12, new Set(), (_page, slot) => ['eq', 'eq2'][slot] ?? null)!;
     expect(b.boards['Controllers'].map((w) => w.key)).toEqual(['eq', 'eq2']);
   });
@@ -580,11 +581,11 @@ describe('buildDeviceLayoutBoard — heroKeysForRow (Dynacab mic graphic: no dev
     {
       name: 'Cab',
       rows: [
-        { controls: [ctl('knob', 12, 'Pan 1'), ctl('knob', 20, 'Proximity 1')] },
-        { controls: [ctl('knob', 13, 'Pan 2'), ctl('knob', 21, 'Proximity 2')] }
+        { section: 'parameters', controls: [ctl('knob', 12, 'Pan 1'), ctl('knob', 20, 'Proximity 1')] },
+        { section: 'parameters', controls: [ctl('knob', 13, 'Pan 2'), ctl('knob', 21, 'Proximity 2')] }
       ]
     },
-    { name: 'Room/Air', rows: [{ controls: [ctl('knob', 35, 'Room Level')] }] }
+    { name: 'Room/Air', rows: [{ section: 'parameters', controls: [ctl('knob', 35, 'Room Level')] }] }
   ]);
   const catalog: BoardCtl[] = [knob(12), knob(20), knob(13), knob(21), knob(35), cabmic(1), cabmic(2)];
   const heroes = (page: number, row: number) => (page === 0 ? (row === 0 ? ['cabmic1'] : row === 1 ? ['cabmic2'] : []) : []);
@@ -626,7 +627,7 @@ describe('buildDeviceLayoutBoard — device-authored columns (placement.col)', (
   const catalog: BoardCtl[] = [knob(7), knob(8), knob(9), knob(10), knob(26), knob(22), knob(11), knob(41), knob(49), knob(38), knob(90), knob(82), knob(35)];
 
   const build = (controls: LayoutControl[], cols = 12) =>
-    buildDeviceLayoutBoard(layout([{ name: 'Authentic', rows: [{ controls }] }]), catalog, cols)!.boards['Authentic']!;
+    buildDeviceLayoutBoard(layout([{ name: 'Authentic', rows: [{ section: 'parameters', controls }] }]), catalog, cols)!.boards['Authentic']!;
 
   it('honours a deliberate hole: Master Volume at col 8 leaves col 7 empty', () => {
     // amp Authentic row 0 verbatim: cols [0,1,2,3,4,5,6,8,null]
@@ -660,8 +661,8 @@ describe('buildDeviceLayoutBoard — device-authored columns (placement.col)', (
         {
           name: 'CF',
           rows: [
-            { controls: [ctl('label', null, 'POWER TUBES'), ctl('knob', 38, 'Grid Bias', at(0)), ctl('knob', 90, 'Hardness', at(1))] },
-            { controls: [ctl('label', null, 'CATHODE FOLLOWER'), ctl('knob', 82, 'Compression', at(3)), ctl('knob', 35, 'Harmonics', at(4))] }
+            { section: 'parameters', controls: [ctl('label', null, 'POWER TUBES'), ctl('knob', 38, 'Grid Bias', at(0)), ctl('knob', 90, 'Hardness', at(1))] },
+            { section: 'parameters', controls: [ctl('label', null, 'CATHODE FOLLOWER'), ctl('knob', 82, 'Compression', at(3)), ctl('knob', 35, 'Harmonics', at(4))] }
           ]
         }
       ]),
@@ -684,7 +685,7 @@ describe('buildDeviceLayoutBoard — device-authored columns (placement.col)', (
     // Axis dropdowns are 2 cells wide; the editor grid is one control per column.
     const wide: BoardCtl[] = [select(4), knob(8)];
     const b = buildDeviceLayoutBoard(
-      layout([{ name: 'P', rows: [{ controls: [ctl('dropdown', 4, 'Type', at(0)), ctl('knob', 8, 'Bass', at(1))] }] }]),
+      layout([{ name: 'P', rows: [{ section: 'parameters', controls: [ctl('dropdown', 4, 'Type', at(0)), ctl('knob', 8, 'Bass', at(1))] }] }]),
       wide,
       12
     )!.boards['P']!;
@@ -925,7 +926,7 @@ describe('buildDeviceLayoutBoard — a heading mid-row keeps its PRECEDING sibli
     ctl('dropdown', 20, 'Tonestack Location', { placement: { col: 8 } })
   ];
   const catalog: BoardCtl[] = [toggle(98), knob(50), knob(69), knob(68), knob(44), knob(108), select(36), knob(14), select(20)];
-  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: preampRow2 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ section: 'parameters', controls: preampRow2 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
 
   it('places the six leading controls on the row above the heading, not below it', () => {
     expect(find(b, 'e98').y).toBe(0);
@@ -985,7 +986,7 @@ describe('buildDeviceLayoutBoard — section headings render (not dropped as gap
     ctl('knob', 13, 'High Cut Frequency', { placement: { col: 8 } })
   ];
   const catalog: BoardCtl[] = [knob(42), knob(125), knob(124), knob(56), knob(107), knob(71), knob(12), knob(13), BYPASS];
-  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: preampRow1 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ section: 'parameters', controls: preampRow1 }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
 
   it('renders each unbound heading as its own widget with the device text, instead of a dropped gap', () => {
     expect(find(b, 'label:0:0:0').text).toBe('INPUT BOOST');
@@ -1153,7 +1154,7 @@ describe('buildDeviceLayoutBoard — row-level outlier (HEADROOM: positionExact-
   ];
   const meterHCatalog: BoardCtl = { key: 'm132', kind: 'meterH', id: 132, w: 4, h: 1, view: 'meterH', views: ['meterH'] };
   const catalog: BoardCtl[] = [knob(79), meterHCatalog, BYPASS];
-  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ controls: row }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Preamp', rows: [{ section: 'parameters', controls: row }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Preamp']!;
 
   it('resolves HEADROOM to its meterH catalog entry, not a dropped gap', () => {
     expect(find(b, 'm132').view).toBe('meterH');
@@ -1185,7 +1186,7 @@ describe('buildDeviceLayoutBoard — whole canvas-shaped page (Speaker/Align/Sce
     {
       name: 'Speaker',
       rows: [
-        { controls: [ctl('graph', null, 'Speaker Response', { placement: { positionExact: '395,24' } })] },
+        { section: 'parameters', controls: [ctl('graph', null, 'Speaker Response', { placement: { positionExact: '395,24' } })] },
         { section: 'parameters', controls: [ctl('knob', 10, 'Speaker Damping', { placement: { positionExact: '305,30' } })] },
         { section: 'mixer', controls: [ctl('knob', 1, 'Level', { placement: { positionExact: '1179,60' } })] }
       ]
@@ -1489,7 +1490,7 @@ describe('buildDeviceLayoutBoard — single heading stops at a genuine column ga
     ctl('knob', 134, 'Master Bias Excursion', { placement: { col: 5 } })
   ];
   const catalog: BoardCtl[] = [knob(77), knob(78), knob(72), knob(121), knob(134)];
-  const b = buildDeviceLayoutBoard(layout([{ name: 'Dynamics', rows: [{ controls: dynamicsRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Dynamics']!;
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Dynamics', rows: [{ section: 'parameters', controls: dynamicsRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Dynamics']!;
 
   it('sizes the heading from Out Compression..Gain only, not Master Bias Excursion', () => {
     const heading = find(b, 'label:0:0:0');
@@ -1539,7 +1540,7 @@ describe('buildDeviceLayoutBoard — single heading stops at its first spacer, n
     ctl('knob', 96, 'Cathode Time Const', { placement: { col: 8 } })
   ];
   const catalog: BoardCtl[] = [knob(48), knob(53), knob(129), knob(116), knob(95), knob(96)];
-  const b = buildDeviceLayoutBoard(layout([{ name: 'Power Amp', rows: [{ controls: transformerRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Power Amp']!;
+  const b = buildDeviceLayoutBoard(layout([{ name: 'Power Amp', rows: [{ section: 'parameters', controls: transformerRow }] }], { family: 'DISTORT' }), catalog, 12)!.boards['Power Amp']!;
 
   it('sizes the heading from XFormer Drive/XFormer Matching only', () => {
     const heading = find(b, 'label:0:0:0');

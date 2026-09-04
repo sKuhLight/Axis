@@ -2,14 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { deriveCabMicGraphs } from './cabMicGraphs';
 import type { DeviceLayout, EnumParam, LayoutControl, LayoutPage, NamedParam } from './types';
 
-// ── fixture builders (same shape as eqGraphs.test.ts) ──
-const c = (paramName: string | null, paramId: number | null, label = ''): LayoutControl => ({
+// ── fixture builders ──
+// Shaped after the REAL DynaCab page (Axe-Fx III `CABINET` variant "1", page "Cab 1+2"): the cone is a
+// `dynaCabControl` control bound to `CABINET_DYNACAB_R{n}`, and every DynaCab param is authored into the
+// layout by symbol with a device-true paramId. Nothing here is resolved by display name.
+const c = (paramName: string | null, paramId: number | null, label = '', rawWidget = 'knob'): LayoutControl => ({
   label: label || paramName || '',
   paramName,
   paramId,
-  widget: 'knob'
+  widget: rawWidget === 'dynaCabControl' ? 'unknown' : 'knob',
+  rawWidget
 });
-const page = (name: string, controls: LayoutControl[]): LayoutPage => ({ name, rows: [{ controls }] });
+const page = (name: string, controls: LayoutControl[]): LayoutPage => ({ name, rows: [{ section: 'parameters', controls }] });
 const layout = (family: string, pages: LayoutPage[]): DeviceLayout => ({ family, pages });
 const p = (id: number, name: string, min = 0, max = 1): NamedParam => ({ id, name, value: 0, norm: 0.5, min, max });
 const e = (id: number, name: string, labels: string[], value: number): EnumParam => ({
@@ -19,101 +23,67 @@ const e = (id: number, name: string, labels: string[], value: number): EnumParam
   options: labels.map((label, i) => ({ value: i, label }))
 });
 
-// A two-slot Cab page — CAB 1 and CAB 2 columns, as the FM3-Edit reference shows. The DynaCab-only params
-// (position "DynaCab {n}", distance "Distance {n}", mic "DYNACAB MIC{n}") are NOT in the layout — the real
-// device never authors them into the knob grid, it only serves them as live params/enums (see banner).
-const cabPage = page('Cab', [
-  c('CABINET_LEVEL1', 8, 'Level'),
-  c('CABINET_PAN1', 12, 'Pan'),
-  c('CABINET_LOCUT1', 62, 'Low Cut'),
-  c('CABINET_HICUT1', 66, 'High Cut'),
-  c('CABINET_LEVEL2', 9, 'Level'),
-  c('CABINET_PAN2', 13, 'Pan'),
-  c('CABINET_LOCUT2', 63, 'Low Cut'),
-  c('CABINET_HICUT2', 67, 'High Cut')
-]);
-const alignPage = page('Align', [c('CABINET_DELAY1', 16, 'Distance'), c('CABINET_DELAY2', 17, 'Distance')]);
-
-// Live params: the legacy delay and the DynaCab distance share the display label "Distance n" — the legacy
-// one is 0..1 (norm), the DynaCab one is cm (max 24). The mic POSITION is served as "DynaCab {n}" (0..10),
-// distinct from "Proximity {n}" which stays a separate legacy-effect knob. Mic enums: "DYNACAB MIC{n}".
-const cabParams: NamedParam[] = [
-  p(8, 'Level 1'), p(12, 'Pan 1', -100, 100), p(93, 'DynaCab 1', 0, 10), p(16, 'Distance 1', 0, 1), p(97, 'Distance 1', 0, 24),
-  p(62, 'Low Cut 1', 20, 20000), p(66, 'High Cut 1', 20, 20000),
-  p(9, 'Level 2'), p(13, 'Pan 2', -100, 100), p(94, 'DynaCab 2', 0, 10), p(17, 'Distance 2', 0, 1), p(98, 'Distance 2', 0, 24),
-  p(63, 'Low Cut 2', 20, 20000), p(67, 'High Cut 2', 20, 20000)
+const slot = (n: number, base: number) => [
+  c(`CABINET_LABEL${n}`, 65287 + n, `CAB ${n}`, 'labelBold'),
+  c(`CABINET_LABEL${n}`, 65287 + n, 'Mic', 'labelBold'), // the page reuses the symbol for the caption
+  c(`CABINET_DYNACAB_MIC${n}`, base + 4, '', 'dropdownCabDyna'),
+  c(`CABINET_DYNACAB_R${n}`, base + 8, 'DynaCab', 'dynaCabControl'),
+  c(`CABINET_PAN${n}`, 11 + n, 'Pan'),
+  c(`CABINET_LEVEL${n}`, 7 + n, 'Level'),
+  c(`CABINET_DYNACAB_R${n}`, base + 8, 'Position'),
+  c(`CABINET_DYNACAB_Z${n}`, base + 12, 'Distance')
 ];
-const cabEnums: EnumParam[] = [
-  e(89, 'DYNACAB MIC1', ['Dynamic 1', 'Condenser'], 1),
-  e(90, 'DYNACAB MIC2', ['Dynamic 1', 'Condenser'], 0)
+const dynaLayout = layout('CABINET', [page('Cab 1+2', [...slot(1, 85), ...slot(2, 86)])]);
+const dynaParams = [
+  p(8, 'Level 1'), p(9, 'Level 2'), p(12, 'Pan 1'), p(13, 'Pan 2'),
+  p(93, 'DynaCab 1', 0, 10), p(94, 'DynaCab 2', 0, 10),
+  p(97, 'Distance 1', 0, 24), p(98, 'Distance 2', 0, 24)
 ];
+const dynaEnums = [e(89, 'DYNACAB MIC1', ['R121', 'SM57'], 1), e(90, 'DYNACAB MIC2', ['R121', 'SM57'], 0)];
 
 describe('deriveCabMicGraphs', () => {
-  it('resolves one spec per live mic slot when in DynaCab mode', () => {
-    const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [cabPage, alignPage]), params: cabParams, enums: cabEnums, dyna: true });
-    expect(graphs.map((g) => g.key)).toEqual(['cabmic1', 'cabmic2']);
-    expect(graphs[0]).toMatchObject({ slot: 1, title: 'CAB 1', page: 0, row: 0 });
-    expect(graphs[0].pan.id).toBe(12);
-    expect(graphs[0].position.id).toBe(93); // DynaCab position ("DynaCab 1"), not the Proximity knob
-    expect(graphs[0].distance?.id).toBe(97); // DynaCab distance (cm), not the legacy delay 16
-    expect(graphs[0].mic?.options[1].label).toBe('Condenser');
-    expect(graphs[1]).toMatchObject({ slot: 2, title: 'CAB 2' });
+  it('draws one cone per device-authored dynaCabControl, in device order', () => {
+    const out = deriveCabMicGraphs({ layout: dynaLayout, params: dynaParams, enums: dynaEnums });
+    expect(out.map((g) => g.slot)).toEqual([1, 2]);
+    expect(out.map((g) => g.key)).toEqual(['cabmic1', 'cabmic2']);
   });
 
-  it('anchors each slot to the page/row carrying its OWN knobs, so the cone heads its own cab section', () => {
-    // The real device authors one row per cab slot; the graphic has to name that row or both cones end up
-    // hoisted together above two indistinguishable sections.
-    const perSlotRows: LayoutPage = {
-      name: 'Cab',
-      rows: [
-        { controls: [c('CABINET_LEVEL1', 8, 'Level'), c('CABINET_PAN1', 12, 'Pan')] },
-        { controls: [c('CABINET_LEVEL2', 9, 'Level'), c('CABINET_PAN2', 13, 'Pan')] }
-      ]
-    };
-    const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [alignPage, perSlotRows]), params: cabParams, enums: cabEnums, dyna: true });
-    expect(graphs.map((g) => ({ page: g.page, row: g.row }))).toEqual([
-      { page: 1, row: 0 },
-      { page: 1, row: 1 }
+  it('binds every control by SYMBOL to the device-true id', () => {
+    const [one] = deriveCabMicGraphs({ layout: dynaLayout, params: dynaParams, enums: dynaEnums });
+    expect(one.position.id).toBe(93); // CABINET_DYNACAB_R1 — the cone's own param
+    expect(one.pan.id).toBe(12);
+    expect(one.level?.id).toBe(8);
+    expect(one.distance?.id).toBe(97); // CABINET_DYNACAB_Z1, not the legacy CABINET_DELAY1
+    expect(one.mic?.id).toBe(89);
+  });
+
+  it('titles the slot from the device heading, taking the FIRST use of a reused symbol', () => {
+    // `CABINET_LABEL1` names both the "CAB 1" heading and the "Mic" caption below it.
+    expect(deriveCabMicGraphs({ layout: dynaLayout, params: dynaParams, enums: dynaEnums })[0].title).toBe('CAB 1');
+  });
+
+  it('draws nothing for a legacy IR cab — no dynaCabControl, no cone', () => {
+    const legacy = layout('CABINET', [
+      page('Cab', [c('CABINET_LEVEL1', 8, 'Level'), c('CABINET_PAN1', 12, 'Pan'), c('CABINET_DELAY1', 16, 'Distance')])
     ]);
+    expect(deriveCabMicGraphs({ layout: legacy, params: dynaParams, enums: dynaEnums })).toEqual([]);
   });
 
-  it('falls back to the Pan row when the slot has no Level control authored', () => {
-    const panOnly = page('Cab', [c('CABINET_PAN1', 12, 'Pan')]);
-    const graphs = deriveCabMicGraphs({ layout: layout('CABINET', [panOnly]), params: cabParams, enums: cabEnums, dyna: true });
-    expect(graphs[0]).toMatchObject({ page: 0, row: 0 });
+  it('skips a slot whose position or pan is not live rather than half-drawing it', () => {
+    const withoutPan = dynaParams.filter((x) => x.id !== 13);
+    expect(deriveCabMicGraphs({ layout: dynaLayout, params: withoutPan, enums: dynaEnums }).map((g) => g.slot)).toEqual([1]);
   });
 
-  it('returns nothing when the cab is not in DynaCab mode (legacy IR)', () => {
-    expect(deriveCabMicGraphs({ layout: layout('CABINET', [cabPage, alignPage]), params: cabParams, enums: cabEnums, dyna: false })).toEqual([]);
+  it('still draws a slot whose optional controls are missing', () => {
+    const bare = dynaParams.filter((x) => x.id !== 8 && x.id !== 97);
+    const [one] = deriveCabMicGraphs({ layout: dynaLayout, params: bare, enums: [] });
+    expect(one.level).toBeUndefined();
+    expect(one.distance).toBeUndefined();
+    expect(one.mic).toBeUndefined();
+    expect(one.position.id).toBe(93);
   });
 
-  it('falls back to the legacy delay knob when the DynaCab distance is not live', () => {
-    const onlyDelay = page('Cab', [
-      c('CABINET_PAN1', 12, 'Pan'),
-      c('CABINET_DELAY1', 16, 'Distance')
-    ]);
-    const graphs = deriveCabMicGraphs({
-      layout: layout('CABINET', [onlyDelay]),
-      params: [p(12, 'Pan 1', -100, 100), p(93, 'DynaCab 1', 0, 10), p(16, 'Distance 1', 0, 1)],
-      enums: [],
-      dyna: true
-    });
-    expect(graphs[0].distance?.id).toBe(16);
-  });
-
-  it('skips a slot whose Pan/Position are not live for this variant', () => {
-    const oneSlot = page('Cab', [c('CABINET_PAN1', 12, 'Pan')]);
-    const graphs = deriveCabMicGraphs({
-      layout: layout('CABINET', [oneSlot]),
-      params: [p(12, 'Pan 1', -100, 100), p(93, 'DynaCab 1', 0, 10)],
-      enums: [],
-      dyna: true
-    });
-    expect(graphs.map((g) => g.key)).toEqual(['cabmic1']);
-  });
-
-  it('returns nothing for a non-Cab layout', () => {
-    expect(deriveCabMicGraphs({ layout: layout('DISTORT', []), params: [], enums: [], dyna: true })).toEqual([]);
-    expect(deriveCabMicGraphs({ layout: null, params: [], enums: [], dyna: true })).toEqual([]);
+  it('is empty for a block with no layout at all', () => {
+    expect(deriveCabMicGraphs({ layout: null, params: dynaParams, enums: dynaEnums })).toEqual([]);
   });
 });

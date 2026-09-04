@@ -1,0 +1,2698 @@
+{
+  "block": "Reverb",
+  "slug": "reverb",
+  "page": 66,
+  "named": [
+    {
+      "id": 1,
+      "name": "Time",
+      "value": 45.832,
+      "norm": 0.45777764213995786,
+      "unit": "s",
+      "min": 0.1,
+      "max": 100,
+      "paramName": "REVERB_TIME",
+      "family": "REVERB",
+      "step": 0.02,
+      "default": 2.8,
+      "unitCode": "seconds",
+      "kind": "float",
+      "help": {
+        "blurb": "Decay (t60) time — how long the tail takes to fade out."
+      }
+    },
+    {
+      "id": 2,
+      "name": "High Cut Frequency",
+      "value": 1646.589,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 200,
+      "max": 20000,
+      "log": true,
+      "paramName": "REVERB_HICUT",
+      "family": "REVERB",
+      "step": 0,
+      "default": 610.77,
+      "unitCode": "hz",
+      "kind": "float",
+      "help": {
+        "blurb": "High-cut on the wet signal only — darkens the reverb without dulling the dry tone."
+      }
+    },
+    {
+      "id": 3,
+      "name": "High Decay",
+      "value": 0.082,
+      "norm": 0.45777764213995786,
+      "min": 0.01,
+      "max": 1,
+      "log": true,
+      "paramName": "REVERB_HFRATIO",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0.024,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "High-band decay relative to overall time; shorten it to model an absorptive room."
+      }
+    },
+    {
+      "id": 4,
+      "name": "Wall Diffusion",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_DIFFUSION",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 100,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 5,
+      "name": "Size",
+      "value": 46.32,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 1,
+      "max": 100,
+      "paramName": "REVERB_SIZE",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 35.001,
+      "unitCode": "percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Size of the modeled space. Larger spaces are darker and grainier; very small values turn metallic."
+      }
+    },
+    {
+      "id": 6,
+      "name": "REVERBDELAY",
+      "value": 114.444,
+      "norm": 0.45777764213995786,
+      "unit": "ms",
+      "min": 0,
+      "max": 250,
+      "paramName": "REVERB_REVERBDELAY",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "ms",
+      "kind": "float"
+    },
+    {
+      "id": 7,
+      "name": "Early Level",
+      "value": -17.111,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -40,
+      "max": 10,
+      "paramName": "REVERB_EARLYLEVEL",
+      "family": "REVERB",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float",
+      "help": {
+        "blurb": "Level of the early reflections (no effect on Spring types)."
+      }
+    },
+    {
+      "id": 8,
+      "name": "Late Level",
+      "value": -17.111,
+      "norm": 0.45777764213995786,
+      "min": -40,
+      "max": 10,
+      "paramName": "REVERB_REVERBLEVEL",
+      "family": "REVERB",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Level of the reverb tail."
+      }
+    },
+    {
+      "id": 9,
+      "name": "Pre-Delay",
+      "value": 457.778,
+      "norm": 0.45777764213995786,
+      "unit": "ms",
+      "min": 0,
+      "max": 1000,
+      "paramName": "REVERB_PREDELAY",
+      "family": "REVERB",
+      "step": 0.00025,
+      "default": 39.995,
+      "unitCode": "ms",
+      "kind": "float",
+      "help": {
+        "blurb": "Gap before the reverb starts; keeps a small space yet pushes the tail back from the dry signal."
+      }
+    },
+    {
+      "id": 10,
+      "name": "Low Cut Frequency",
+      "value": 164.659,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 20,
+      "max": 2000,
+      "log": true,
+      "paramName": "REVERB_LOWCUT",
+      "family": "REVERB",
+      "step": 0,
+      "default": 20,
+      "unitCode": "hz",
+      "kind": "float",
+      "help": {
+        "blurb": "Low-cut on the wet signal only — keeps the reverb from muddying the mix."
+      }
+    },
+    {
+      "id": 11,
+      "name": "Depth",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_DEPTH",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 20,
+      "unitCode": "percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Modulation depth in the tail — thickens and lushes up the reverb, chorus-like."
+      }
+    },
+    {
+      "id": 12,
+      "name": "Rate",
+      "value": 0.082,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 0.01,
+      "max": 1,
+      "log": true,
+      "paramName": "REVERB_RATE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.098,
+      "unitCode": "hz",
+      "kind": "float",
+      "help": {
+        "blurb": "Modulation rate of the tail movement."
+      }
+    },
+    {
+      "id": 13,
+      "name": "Mix",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_MIX",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 25.001,
+      "unitCode": "percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Wet/dry blend. 0% = dry only, 100% = effect only."
+      }
+    },
+    {
+      "id": 14,
+      "name": "Level",
+      "value": -34.222,
+      "norm": 0.45777764213995786,
+      "min": -80,
+      "max": 20,
+      "paramName": "REVERB_LEVEL",
+      "family": "REVERB",
+      "step": 0.1,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Output level of the block."
+      }
+    },
+    {
+      "id": 15,
+      "name": "Balance",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -100,
+      "max": 100,
+      "paramName": "REVERB_PAN",
+      "family": "REVERB",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Places the block output in the stereo field."
+      }
+    },
+    {
+      "id": 18,
+      "name": "Input Gain",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_GAIN",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 100,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Input gain into the block."
+      }
+    },
+    {
+      "id": 20,
+      "name": "Input Diffusion",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_INPDIFF",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 21,
+      "name": "Input Diff Time",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_INDIFFTIME",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 24,
+      "name": "Tone",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "REVERB_TONE",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 25,
+      "name": "Mic Spacing",
+      "value": 91.556,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 200,
+      "paramName": "REVERB_WIDTH",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 19.999,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 26,
+      "name": "Freq 1",
+      "value": 164.659,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 20,
+      "max": 2000,
+      "log": true,
+      "paramName": "REVERB_FREQ1",
+      "family": "REVERB",
+      "step": 0,
+      "default": 30.399,
+      "unitCode": "hz",
+      "kind": "float"
+    },
+    {
+      "id": 27,
+      "name": "Freq 2",
+      "value": 823.295,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 100,
+      "max": 10000,
+      "log": true,
+      "paramName": "REVERB_FREQ2",
+      "family": "REVERB",
+      "step": 0,
+      "default": 138.491,
+      "unitCode": "hz",
+      "kind": "float"
+    },
+    {
+      "id": 28,
+      "name": "Q 1",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "REVERB_Q1",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.133,
+      "unitCode": "count",
+      "kind": "float"
+    },
+    {
+      "id": 29,
+      "name": "Q 2",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "REVERB_Q2",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.133,
+      "unitCode": "count",
+      "kind": "float"
+    },
+    {
+      "id": 30,
+      "name": "Gain 1",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -12,
+      "max": 12,
+      "paramName": "REVERB_GAIN1",
+      "family": "REVERB",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 31,
+      "name": "Gain 2",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -12,
+      "max": 12,
+      "paramName": "REVERB_GAIN2",
+      "family": "REVERB",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 32,
+      "name": "Drive",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "REVERB_DRIVE",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0.111,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Overdrives the spring-reverb circuit (Spring types)."
+      }
+    },
+    {
+      "id": 33,
+      "name": "Low Decay",
+      "value": 0.165,
+      "norm": 0.45777764213995786,
+      "min": 0.02,
+      "max": 2,
+      "log": true,
+      "paramName": "REVERB_LFTIME",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.195,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Decay time of the low band — set independently for natural multi-band tails."
+      }
+    },
+    {
+      "id": 34,
+      "name": "Crossover Frequency",
+      "value": 823.295,
+      "norm": 0.45777764213995786,
+      "min": 100,
+      "max": 10000,
+      "log": true,
+      "paramName": "REVERB_LFXOVER",
+      "family": "REVERB",
+      "step": 0,
+      "default": 107.227,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Crossover frequency splitting the low/high decay bands."
+      }
+    },
+    {
+      "id": 35,
+      "name": "Spread",
+      "value": -16.889,
+      "norm": 0.45777764213995786,
+      "min": -200,
+      "max": 200,
+      "paramName": "REVERB_SPREAD",
+      "family": "REVERB",
+      "step": 0.002,
+      "default": 99.997,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 36,
+      "name": "Attenuation",
+      "value": 36.622,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 80,
+      "paramName": "REVERB_ATTEN",
+      "family": "REVERB",
+      "step": 0.1,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Ducker depth — how much the reverb dips while you play. 0 disables ducking."
+      }
+    },
+    {
+      "id": 37,
+      "name": "Threshold",
+      "value": -34.222,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -80,
+      "max": 20,
+      "paramName": "REVERB_THRESH",
+      "family": "REVERB",
+      "step": 0.1,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float",
+      "help": {
+        "blurb": "Input level above which the ducker attenuates the reverb."
+      }
+    },
+    {
+      "id": 38,
+      "name": "Release Time",
+      "value": 23.623,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 1000,
+      "log": true,
+      "paramName": "REVERB_RELEASE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 39,
+      "name": "Early Diffusion",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_EARLYDIFF",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 40,
+      "name": "Early Diff Time",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_EARLYDIFFTIME",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 41,
+      "name": "Early Decay",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_EARLYDECAY",
+      "family": "REVERB",
+      "step": 0.002,
+      "default": 100,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 42,
+      "name": "Late Input Mix",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_EARLYSEND",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 46,
+      "name": "LFO Phase",
+      "value": 82.4,
+      "norm": 0.45777764213995786,
+      "unit": "°",
+      "min": 0,
+      "max": 180,
+      "paramName": "REVERB_LFOPHASE",
+      "family": "REVERB",
+      "step": 0.003141593,
+      "default": 90,
+      "unitCode": "degrees",
+      "kind": "float"
+    },
+    {
+      "id": 48,
+      "name": "Boiiinnng!",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_DISPERSION",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 53,
+      "name": "Mix",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_PITCHMIX",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 54,
+      "name": "Voice 1 Shift",
+      "value": -2.027,
+      "norm": 0.45777764213995786,
+      "unit": "st",
+      "min": -24,
+      "max": 24,
+      "paramName": "REVERB_SHIFT1",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "semitones",
+      "kind": "float"
+    },
+    {
+      "id": 55,
+      "name": "Voice 2 Shift",
+      "value": -2.027,
+      "norm": 0.45777764213995786,
+      "unit": "st",
+      "min": -24,
+      "max": 24,
+      "paramName": "REVERB_SHIFT2",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "semitones",
+      "kind": "float"
+    },
+    {
+      "id": 56,
+      "name": "Feedback",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_PITCHFDBK",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 58,
+      "name": "Splice Time",
+      "value": 920.978,
+      "norm": 0.45777764213995786,
+      "min": 10,
+      "max": 2000,
+      "paramName": "REVERB_PITCHTIME",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 999.99,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 60,
+      "name": "Modulation",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_PITCHMOD",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 61,
+      "name": "Voice Balance",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "min": -100,
+      "max": 100,
+      "paramName": "REVERB_PITCHBAL",
+      "family": "REVERB",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 63,
+      "name": "Feedback",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_PREDLYFDBK",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 64,
+      "name": "Echo Mix",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "REVERB_PREDLYMIX",
+      "family": "REVERB",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 65,
+      "name": "Pitch High Cut",
+      "value": 1646.589,
+      "norm": 0.45777764213995786,
+      "min": 200,
+      "max": 20000,
+      "log": true,
+      "paramName": "REVERB_PITCHLPF",
+      "family": "REVERB",
+      "step": 0,
+      "default": 303.99,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 69,
+      "name": "Low Q",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "REVERB_LOWQ",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.133,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 70,
+      "name": "High Q",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "REVERB_HIGHQ",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0.133,
+      "unitCode": "numeric",
+      "kind": "float"
+    }
+  ],
+  "enums": [
+    {
+      "id": 16,
+      "name": "Bypass Mode",
+      "value": 2,
+      "options": [
+        {
+          "value": 0,
+          "label": "THRU"
+        },
+        {
+          "value": 1,
+          "label": "MUTE FX OUT"
+        },
+        {
+          "value": 2,
+          "label": "MUTE OUT"
+        },
+        {
+          "value": 3,
+          "label": "MUTE FX IN"
+        },
+        {
+          "value": 4,
+          "label": "MUTE IN"
+        }
+      ],
+      "paramName": "REVERB_BYPASSMODE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "How the signal is routed when bypassed (e.g. muted, thru, or kept wet for trails)."
+      }
+    },
+    {
+      "id": 17,
+      "name": "GLOBALMIX",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        }
+      ],
+      "paramName": "REVERB_GLOBALMIX",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "enum",
+      "help": {
+        "blurb": "Adds a global offset to this block’s Mix across all presets."
+      }
+    },
+    {
+      "id": 19,
+      "name": "Echo Density",
+      "value": 4,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        },
+        {
+          "value": 2,
+          "label": "2"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        },
+        {
+          "value": 4,
+          "label": "4"
+        },
+        {
+          "value": 5,
+          "label": "5"
+        },
+        {
+          "value": 6,
+          "label": "6"
+        },
+        {
+          "value": 7,
+          "label": "7"
+        },
+        {
+          "value": 8,
+          "label": "8"
+        }
+      ],
+      "paramName": "REVERB_DENSITY",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum",
+      "help": {
+        "blurb": "Echo density of the tail. Higher = smoother; lower lets individual repeats show."
+      }
+    },
+    {
+      "id": 23,
+      "name": "No. of Springs",
+      "value": 3,
+      "options": [
+        {
+          "value": 0,
+          "label": "1"
+        },
+        {
+          "value": 1,
+          "label": "2"
+        },
+        {
+          "value": 2,
+          "label": "3"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        },
+        {
+          "value": 4,
+          "label": "4"
+        },
+        {
+          "value": 5,
+          "label": "5"
+        },
+        {
+          "value": 6,
+          "label": "6"
+        }
+      ],
+      "paramName": "REVERB_NUMSPRINGS",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 43,
+      "name": "Quality",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "ECONOMY"
+        },
+        {
+          "value": 1,
+          "label": "NORMAL"
+        },
+        {
+          "value": 2,
+          "label": "HIGH"
+        },
+        {
+          "value": 3,
+          "label": "ULTRA-HIGH"
+        }
+      ],
+      "paramName": "REVERB_QUALITY",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 44,
+      "name": "Stack/Hold",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "STACK"
+        },
+        {
+          "value": 2,
+          "label": "HOLD"
+        }
+      ],
+      "paramName": "REVERB_HOLD",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "HOLD sustains the current tail indefinitely; STACK holds it but keeps the input open to layer."
+      }
+    },
+    {
+      "id": 45,
+      "name": "BASETYPE",
+      "value": 4,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        },
+        {
+          "value": 2,
+          "label": "2"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        },
+        {
+          "value": 4,
+          "label": "4"
+        },
+        {
+          "value": 5,
+          "label": "5"
+        },
+        {
+          "value": 6,
+          "label": "6"
+        },
+        {
+          "value": 7,
+          "label": "7"
+        },
+        {
+          "value": 8,
+          "label": "8"
+        }
+      ],
+      "paramName": "REVERB_BASETYPE",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 47,
+      "name": "Input Select",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "L+R"
+        },
+        {
+          "value": 1,
+          "label": "LEFT"
+        },
+        {
+          "value": 2,
+          "label": "RIGHT"
+        }
+      ],
+      "paramName": "REVERB_INPUTSELECT",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Selects which input(s) feed the block (left, right, sum, or stereo)."
+      }
+    },
+    {
+      "id": 49,
+      "name": "Low Cut Slope",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        }
+      ],
+      "paramName": "REVERB_LOWSLOPE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 50,
+      "name": "High Cut Slope",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "6 dB/OCT"
+        },
+        {
+          "value": 1,
+          "label": "12 dB/OCT"
+        }
+      ],
+      "paramName": "REVERB_HIGHSLOPE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 51,
+      "name": "Scene Ignore",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "REVERB_SCENEIGNORE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "When on, this block ignores scene changes."
+      }
+    },
+    {
+      "id": 52,
+      "name": "Kill Dry",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "REVERB_KILLDRY",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Removes the dry signal so only the wet effect is heard — useful in parallel/wet-only routings."
+      }
+    },
+    {
+      "id": 57,
+      "name": "Direction",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "FORWARD"
+        },
+        {
+          "value": 1,
+          "label": "REVERSE"
+        },
+        {
+          "value": 2,
+          "label": "FOR/REV"
+        },
+        {
+          "value": 3,
+          "label": "REV/FOR"
+        }
+      ],
+      "paramName": "REVERB_PITCHDIR",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 59,
+      "name": "Position",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "INPUT"
+        },
+        {
+          "value": 1,
+          "label": "MATRIX"
+        },
+        {
+          "value": 2,
+          "label": "FEEDBACK"
+        }
+      ],
+      "paramName": "REVERB_PITCHPOS",
+      "family": "REVERB",
+      "step": 1,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "enum"
+    },
+    {
+      "id": 62,
+      "name": "Tempo",
+      "value": 36,
+      "options": [
+        {
+          "value": 0,
+          "label": "NONE "
+        },
+        {
+          "value": 1,
+          "label": "1/64 TRIP"
+        },
+        {
+          "value": 2,
+          "label": "1/64"
+        },
+        {
+          "value": 3,
+          "label": "1/64 DOT"
+        },
+        {
+          "value": 4,
+          "label": "1/32 TRIP"
+        },
+        {
+          "value": 5,
+          "label": "1/32"
+        },
+        {
+          "value": 6,
+          "label": "1/32 DOT"
+        },
+        {
+          "value": 7,
+          "label": "1/16 TRIP"
+        },
+        {
+          "value": 8,
+          "label": "1/16"
+        },
+        {
+          "value": 9,
+          "label": "1/16 DOT"
+        },
+        {
+          "value": 10,
+          "label": "1/8 TRIP"
+        },
+        {
+          "value": 11,
+          "label": "1/8"
+        },
+        {
+          "value": 12,
+          "label": "1/8 DOT"
+        },
+        {
+          "value": 13,
+          "label": "1/4 TRIP"
+        },
+        {
+          "value": 14,
+          "label": "1/4"
+        },
+        {
+          "value": 15,
+          "label": "1/4 DOT"
+        },
+        {
+          "value": 16,
+          "label": "1/2 TRIP"
+        },
+        {
+          "value": 17,
+          "label": "1/2"
+        },
+        {
+          "value": 18,
+          "label": "1/2 DOT"
+        },
+        {
+          "value": 19,
+          "label": "1 TRIP"
+        },
+        {
+          "value": 20,
+          "label": "1"
+        },
+        {
+          "value": 21,
+          "label": "1 DOT"
+        },
+        {
+          "value": 22,
+          "label": "2"
+        },
+        {
+          "value": 23,
+          "label": "3"
+        },
+        {
+          "value": 24,
+          "label": "4"
+        },
+        {
+          "value": 25,
+          "label": "4/3"
+        },
+        {
+          "value": 26,
+          "label": "5/4"
+        },
+        {
+          "value": 27,
+          "label": "5/64"
+        },
+        {
+          "value": 28,
+          "label": "7/64"
+        },
+        {
+          "value": 29,
+          "label": "9/64"
+        },
+        {
+          "value": 30,
+          "label": "10/64 (5/32)"
+        },
+        {
+          "value": 31,
+          "label": "11/64"
+        },
+        {
+          "value": 32,
+          "label": "13/64"
+        },
+        {
+          "value": 33,
+          "label": "14/64 (7/32)"
+        },
+        {
+          "value": 34,
+          "label": "15/64"
+        },
+        {
+          "value": 35,
+          "label": "17/64"
+        },
+        {
+          "value": 36,
+          "label": "18/64 (9/32)"
+        },
+        {
+          "value": 37,
+          "label": "19/64"
+        },
+        {
+          "value": 38,
+          "label": "20/64 (5/16)"
+        },
+        {
+          "value": 39,
+          "label": "21/64"
+        },
+        {
+          "value": 40,
+          "label": "22/64 (11/32)"
+        },
+        {
+          "value": 41,
+          "label": "23/64"
+        },
+        {
+          "value": 42,
+          "label": "25/64"
+        },
+        {
+          "value": 43,
+          "label": "26/64 (13/32)"
+        },
+        {
+          "value": 44,
+          "label": "27/64"
+        },
+        {
+          "value": 45,
+          "label": "28/64 (7/16)"
+        },
+        {
+          "value": 46,
+          "label": "29/64"
+        },
+        {
+          "value": 47,
+          "label": "30/64 (15/32)"
+        },
+        {
+          "value": 48,
+          "label": "31/64"
+        },
+        {
+          "value": 49,
+          "label": "33/64"
+        },
+        {
+          "value": 50,
+          "label": "34/64 (17/32)"
+        },
+        {
+          "value": 51,
+          "label": "35/64"
+        },
+        {
+          "value": 52,
+          "label": "36/64 (9/16)"
+        },
+        {
+          "value": 53,
+          "label": "37/64"
+        },
+        {
+          "value": 54,
+          "label": "38/64 (19/32)"
+        },
+        {
+          "value": 55,
+          "label": "39/64"
+        },
+        {
+          "value": 56,
+          "label": "40/64 (5/8)"
+        },
+        {
+          "value": 57,
+          "label": "41/64"
+        },
+        {
+          "value": 58,
+          "label": "42/64 (21/32)"
+        },
+        {
+          "value": 59,
+          "label": "43/64"
+        },
+        {
+          "value": 60,
+          "label": "44/64 (11/16)"
+        },
+        {
+          "value": 61,
+          "label": "45/64"
+        },
+        {
+          "value": 62,
+          "label": "46/64 (23/32)"
+        },
+        {
+          "value": 63,
+          "label": "47/64"
+        },
+        {
+          "value": 64,
+          "label": "49/64"
+        },
+        {
+          "value": 65,
+          "label": "50/64 (25/32)"
+        },
+        {
+          "value": 66,
+          "label": "51/64"
+        },
+        {
+          "value": 67,
+          "label": "52/64 (13/16)"
+        },
+        {
+          "value": 68,
+          "label": "53/64"
+        },
+        {
+          "value": 69,
+          "label": "54/64 (27/32)"
+        },
+        {
+          "value": 70,
+          "label": "55/64"
+        },
+        {
+          "value": 71,
+          "label": "56/64 (7/8)"
+        },
+        {
+          "value": 72,
+          "label": "57/64"
+        },
+        {
+          "value": 73,
+          "label": "58/64 (29/32)"
+        },
+        {
+          "value": 74,
+          "label": "59/64"
+        },
+        {
+          "value": 75,
+          "label": "60/64 (15/16)"
+        },
+        {
+          "value": 76,
+          "label": "61/64"
+        },
+        {
+          "value": 77,
+          "label": "62/64 (31/32)"
+        },
+        {
+          "value": 78,
+          "label": "63/64"
+        }
+      ],
+      "paramName": "REVERB_PREDLYTEMPO",
+      "family": "REVERB",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 66,
+      "name": "Tank Type",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "PARALLEL"
+        },
+        {
+          "value": 1,
+          "label": "SERIES-PARALLEL"
+        }
+      ],
+      "paramName": "REVERB_SPRINGTYPE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 67,
+      "name": "TONETYPE",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "0"
+        },
+        {
+          "value": 1,
+          "label": "1"
+        },
+        {
+          "value": 2,
+          "label": "2"
+        },
+        {
+          "value": 3,
+          "label": "3"
+        }
+      ],
+      "paramName": "REVERB_TONETYPE",
+      "family": "REVERB",
+      "step": 0,
+      "default": 21845,
+      "unitCode": "db",
+      "kind": "enum"
+    },
+    {
+      "id": 68,
+      "name": "Tap",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "INPUT"
+        },
+        {
+          "value": 1,
+          "label": "OUTPUT"
+        }
+      ],
+      "paramName": "REVERB_PREDLYTAP",
+      "family": "REVERB",
+      "step": 0,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    }
+  ],
+  "type": {
+    "value": 36,
+    "name": "Asylum Hall"
+  },
+  "layout": {
+    "editorName": "Reverb",
+    "family": "REVERB",
+    "variantName": "Default",
+    "variantValue": null,
+    "fw": {
+      "gtet": "10"
+    },
+    "pages": [
+      {
+        "name": "Basic",
+        "pageNum": 0,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Time",
+                "paramName": "REVERB_TIME",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Size",
+                "paramName": "REVERB_SIZE",
+                "paramId": 5,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Stack/Hold",
+                "paramName": "REVERB_HOLD",
+                "paramId": 44,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "PRE-DELAY",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "563,29"
+                }
+              },
+              {
+                "label": "Pre-Delay",
+                "paramName": "REVERB_PREDELAY",
+                "paramId": 9,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Tempo",
+                "paramName": "REVERB_PREDLYTEMPO",
+                "paramId": 62,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Feedback",
+                "paramName": "REVERB_PREDLYFDBK",
+                "paramId": 63,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Echo Mix",
+                "paramName": "REVERB_PREDLYMIX",
+                "paramId": 64,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Tap",
+                "paramName": "REVERB_PREDLYTAP",
+                "paramId": 68,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 7
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "DECAY",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "563,209"
+                }
+              },
+              {
+                "label": "Crossover Frequency",
+                "paramName": "REVERB_LFXOVER",
+                "paramId": 34,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Low Decay",
+                "paramName": "REVERB_LFTIME",
+                "paramId": 33,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "High Decay",
+                "paramName": "REVERB_HFRATIO",
+                "paramId": 3,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Echo Density",
+                "paramName": "REVERB_DENSITY",
+                "paramId": 19,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Quality",
+                "paramName": "REVERB_QUALITY",
+                "paramId": 43,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 7
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input Gain",
+                "paramName": "REVERB_GAIN",
+                "paramId": 18,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Mix",
+                "paramName": "REVERB_MIX",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "REVERB_LEVEL",
+                "paramId": 14,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "REVERB_PAN",
+                "paramId": 15,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Spread",
+                "paramName": "REVERB_SPREAD",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "REVERB_INPUTSELECT",
+                "paramId": 47,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "REVERB_BYPASSMODE",
+                "paramId": 16,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Kill Dry",
+                "paramName": "REVERB_KILLDRY",
+                "paramId": 52,
+                "widget": "button",
+                "rawWidget": "btnKillDry"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "REVERB_SCENEIGNORE",
+                "paramId": 51,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "REVERB_BYPASS",
+                "paramId": 22,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Advanced",
+        "pageNum": 1,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "DIFFUSION",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "308,29"
+                }
+              },
+              {
+                "label": "Input Diffusion",
+                "paramName": "REVERB_INPDIFF",
+                "paramId": 20,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Input Diff Time",
+                "paramName": "REVERB_INDIFFTIME",
+                "paramId": 21,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Wall Diffusion",
+                "paramName": "REVERB_DIFFUSION",
+                "paramId": 4,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "EARLY REFLECTIONS",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "308,209"
+                }
+              },
+              {
+                "label": "Early Level",
+                "paramName": "REVERB_EARLYLEVEL",
+                "paramId": 7,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Early Diffusion",
+                "paramName": "REVERB_EARLYDIFF",
+                "paramId": 39,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Early Diff Time",
+                "paramName": "REVERB_EARLYDIFFTIME",
+                "paramId": 40,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Early Decay",
+                "paramName": "REVERB_EARLYDECAY",
+                "paramId": 41,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Mic Spacing",
+                "paramName": "REVERB_WIDTH",
+                "paramId": 25,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "LATE",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "733,209"
+                }
+              },
+              {
+                "label": "Late Level",
+                "paramName": "REVERB_REVERBLEVEL",
+                "paramId": 8,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Late Input Mix ",
+                "paramName": "REVERB_EARLYSEND",
+                "paramId": 42,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input Gain",
+                "paramName": "REVERB_GAIN",
+                "paramId": 18,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Mix",
+                "paramName": "REVERB_MIX",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "REVERB_LEVEL",
+                "paramId": 14,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "REVERB_PAN",
+                "paramId": 15,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Spread",
+                "paramName": "REVERB_SPREAD",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "REVERB_INPUTSELECT",
+                "paramId": 47,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "REVERB_BYPASSMODE",
+                "paramId": 16,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Kill Dry",
+                "paramName": "REVERB_KILLDRY",
+                "paramId": 52,
+                "widget": "button",
+                "rawWidget": "btnKillDry"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "REVERB_SCENEIGNORE",
+                "paramId": 51,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "REVERB_BYPASS",
+                "paramId": 22,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Duck + Mod",
+        "pageNum": 2,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "DUCKER",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "308,29"
+                }
+              },
+              {
+                "label": "Threshold",
+                "paramName": "REVERB_THRESH",
+                "paramId": 37,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Attenuation",
+                "paramName": "REVERB_ATTEN",
+                "paramId": 36,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Release Time",
+                "paramName": "REVERB_RELEASE",
+                "paramId": 38,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "MODULATION",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "563,29"
+                }
+              },
+              {
+                "label": "Depth",
+                "paramName": "REVERB_DEPTH",
+                "paramId": 11,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Rate",
+                "paramName": "REVERB_RATE",
+                "paramId": 12,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "LFO Phase",
+                "paramName": "REVERB_LFOPHASE",
+                "paramId": 46,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input Gain",
+                "paramName": "REVERB_GAIN",
+                "paramId": 18,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Mix",
+                "paramName": "REVERB_MIX",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "REVERB_LEVEL",
+                "paramId": 14,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "REVERB_PAN",
+                "paramId": 15,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Spread",
+                "paramName": "REVERB_SPREAD",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "REVERB_INPUTSELECT",
+                "paramId": 47,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "REVERB_BYPASSMODE",
+                "paramId": 16,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Kill Dry",
+                "paramName": "REVERB_KILLDRY",
+                "paramId": 52,
+                "widget": "button",
+                "rawWidget": "btnKillDry"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "REVERB_SCENEIGNORE",
+                "paramId": 51,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "REVERB_BYPASS",
+                "paramId": 22,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "EQ",
+        "pageNum": 3,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "LOW",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "308,29"
+                }
+              },
+              {
+                "label": "Low Cut",
+                "paramName": "REVERB_LOWCUT",
+                "paramId": 10,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Low Slope",
+                "paramName": "REVERB_LOWSLOPE",
+                "paramId": 49,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight1Line",
+                "placement": {
+                  "positionExact": "305,194"
+                }
+              },
+              {
+                "label": "Low Q",
+                "paramName": "REVERB_LOWQ",
+                "paramId": 69,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "positionExact": "305,270"
+                }
+              },
+              {
+                "label": "BAND 1",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "391,29"
+                }
+              },
+              {
+                "label": "Freq 1",
+                "paramName": "REVERB_FREQ1",
+                "paramId": 26,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Q 1",
+                "paramName": "REVERB_Q1",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Gain 1",
+                "paramName": "REVERB_GAIN1",
+                "paramId": 30,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "BAND 2",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "646,29"
+                }
+              },
+              {
+                "label": "Freq 2",
+                "paramName": "REVERB_FREQ2",
+                "paramId": 27,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Q 2",
+                "paramName": "REVERB_Q2",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Gain 2",
+                "paramName": "REVERB_GAIN2",
+                "paramId": 31,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "HIGH",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "903,29"
+                }
+              },
+              {
+                "label": "High Cut",
+                "paramName": "REVERB_HICUT",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "High Slope",
+                "paramName": "REVERB_HIGHSLOPE",
+                "paramId": 50,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "positionExact": "900,194"
+                }
+              },
+              {
+                "label": "High Q",
+                "paramName": "REVERB_HIGHQ",
+                "paramId": 70,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "positionExact": "900,270"
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Graph",
+                "paramName": null,
+                "paramId": null,
+                "widget": "graph",
+                "rawWidget": "graph_eq",
+                "placement": {
+                  "positionExact": "390,190"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input Gain",
+                "paramName": "REVERB_GAIN",
+                "paramId": 18,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Mix",
+                "paramName": "REVERB_MIX",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Level",
+                "paramName": "REVERB_LEVEL",
+                "paramId": 14,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "REVERB_PAN",
+                "paramId": 15,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Spread",
+                "paramName": "REVERB_SPREAD",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "col": 1
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "REVERB_INPUTSELECT",
+                "paramId": 47,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "REVERB_BYPASSMODE",
+                "paramId": 16,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1TightXtra",
+                "placement": {
+                  "col": 2
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Kill Dry",
+                "paramName": "REVERB_KILLDRY",
+                "paramId": 52,
+                "widget": "button",
+                "rawWidget": "btnKillDry"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "REVERB_SCENEIGNORE",
+                "paramId": 51,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "REVERB_BYPASS",
+                "paramId": 22,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -8,10 +8,11 @@ const c = (widget: LayoutWidget, paramName: string | null, paramId: number | nul
   label: label || paramName || '',
   paramName,
   paramId,
-  widget
+  widget,
+  rawWidget: ''
 });
 const graph = (rawWidget: string): LayoutControl => ({ label: 'Graph', paramName: null, paramId: null, widget: 'graph', rawWidget });
-const page = (name: string, controls: LayoutControl[]): LayoutPage => ({ name, rows: [{ controls }] });
+const page = (name: string, controls: LayoutControl[]): LayoutPage => ({ name, rows: [{ section: 'parameters', controls }] });
 const layout = (family: string, pages: LayoutPage[]): DeviceLayout => ({ family, pages });
 
 const p = (id: number, name: string, min = 0, max = 1): NamedParam => ({ id, name, value: 0, norm: 0.5, min, max });
@@ -221,7 +222,7 @@ describe('deriveEqGraphs — PEQ', () => {
 // ── graphic EQ: no graph slot on the device, so Axis adds one over the fader bank's bands ──
 describe('deriveEqGraphs — graphic EQ fallback', () => {
   const lay = layout('GEQ', [
-    { name: 'GEQ', rows: [{ controls: [63, 125, 250, 500].map((hz, i) => c('slider', `GEQ_BAND${i}`, i, String(hz))) }] }
+    { name: 'GEQ', rows: [{ section: 'parameters', controls: [63, 125, 250, 500].map((hz, i) => c('slider', `GEQ_BAND${i}`, i, String(hz))) }] }
   ]);
   const params = [0, 1, 2, 3].map((id) => p(id, `band${id}`, -12, 12));
 

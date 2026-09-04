@@ -6,7 +6,8 @@ const ctl = (widget: LayoutWidget, paramId: number | null, paramName: string | n
   label,
   paramName,
   paramId,
-  widget
+  widget,
+  rawWidget: ''
 });
 
 /** The real cab shape: one row per slot, each carrying that slot's IR Length + knobs. */
@@ -99,7 +100,7 @@ describe('deriveCabIdentityCards', () => {
     expect(derive({ layout: null })).toEqual([]);
     expect(
       deriveCabIdentityCards({
-        layout: { family: 'DISTORT', pages: [{ name: 'Drive', rows: [{ controls: [ctl('knob', 1, 'DRIVE_GAIN', 'Drive')] }] }] },
+        layout: { family: 'DISTORT', pages: [{ name: 'Drive', rows: [{ section: 'parameters', controls: [ctl('knob', 1, 'DRIVE_GAIN', 'Drive')] }] }] },
         enums: [],
         cabState: null,
         dyna: false
@@ -110,7 +111,7 @@ describe('deriveCabIdentityCards', () => {
   it('falls back to Pan when the variant does not author Level, so the card still finds its row', () => {
     const noLevel: DeviceLayout = {
       family: 'CABINET',
-      pages: [{ name: 'Cab', rows: [{ controls: [ctl('knob', 99, 'CABINET_MISC', 'Misc')] }, { controls: [ctl('knob', 12, 'CABINET_PAN1', 'Pan')] }] }]
+      pages: [{ name: 'Cab', rows: [{ section: 'parameters', controls: [ctl('knob', 99, 'CABINET_MISC', 'Misc')] }, { section: 'parameters', controls: [ctl('knob', 12, 'CABINET_PAN1', 'Pan')] }] }]
     };
     const [a] = deriveCabIdentityCards({ layout: noLevel, enums: [], cabState: null, dyna: false });
     expect(a.row).toBe(1);

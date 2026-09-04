@@ -1,0 +1,5838 @@
+{
+  "block": "Amp",
+  "slug": "amp",
+  "page": 58,
+  "named": [
+    {
+      "id": 1,
+      "name": "Amp1 Level",
+      "value": -34.222,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -80,
+      "max": 20,
+      "paramName": "DISTORT_LEVEL",
+      "family": "DISTORT",
+      "step": 0.1,
+      "default": -12,
+      "unitCode": "db",
+      "kind": "float",
+      "help": {
+        "blurb": "Output level of the block."
+      }
+    },
+    {
+      "id": 2,
+      "name": "Balance",
+      "value": -8.444,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -100,
+      "max": 100,
+      "paramName": "DISTORT_PAN",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "bipolar_percent",
+      "kind": "float",
+      "help": {
+        "blurb": "Places the block output in the stereo field."
+      }
+    },
+    {
+      "id": 7,
+      "name": "Gain",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_DRIVE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Preamp gain. Sets how clean or distorted the amp is; with Master, defines the overall drive character."
+      }
+    },
+    {
+      "id": 8,
+      "name": "Bass",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_BASS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Low-end tone control, modeling the amp’s passive tonestack."
+      }
+    },
+    {
+      "id": 9,
+      "name": "Mid",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_MID",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Midrange tone control of the modeled tonestack."
+      }
+    },
+    {
+      "id": 10,
+      "name": "Treble",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_TREBLE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "High-end tone control of the modeled tonestack."
+      }
+    },
+    {
+      "id": 11,
+      "name": "Master Volume",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_MASTER",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Power-amp drive. Higher settings add power-tube distortion, bloom and touch sensitivity.",
+        "tip": "On clean-power amps, too-high Master is a common cause of mush — watch the Headroom meter."
+      }
+    },
+    {
+      "id": 12,
+      "name": "Low Cut Frequency",
+      "value": 82.329,
+      "norm": 0.45777764213995786,
+      "min": 10,
+      "max": 1000,
+      "log": true,
+      "paramName": "DISTORT_HPFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 10.476,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Input low-cut frequency — a classic way to tighten an amp."
+      }
+    },
+    {
+      "id": 13,
+      "name": "High Cut Frequency",
+      "value": 3293.179,
+      "norm": 0.45777764213995786,
+      "min": 400,
+      "max": 40000,
+      "log": true,
+      "paramName": "DISTORT_LPFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1221.54,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "High-cut placed between preamp and power amp; darkens distorted tone strongly."
+      }
+    },
+    {
+      "id": 14,
+      "name": "Tonestack Freq",
+      "value": 573.862,
+      "norm": 0.45777764213995786,
+      "min": 200,
+      "max": 2000,
+      "log": true,
+      "paramName": "DISTORT_TONEFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 293.556,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 15,
+      "name": "XFLEAKAGE",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_XFLEAKAGE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 16,
+      "name": "Bright Cap",
+      "value": 236.229,
+      "norm": 0.45777764213995786,
+      "unit": "pF",
+      "min": 10,
+      "max": 10000,
+      "log": true,
+      "paramName": "DISTORT_BRIGHTCAP",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 10,
+      "unitCode": "pf",
+      "kind": "float",
+      "help": {
+        "blurb": "Sets the bright-cap value that controls how much top end the Bright switch adds."
+      }
+    },
+    {
+      "id": 17,
+      "name": "WSLPF",
+      "value": 3293.179,
+      "norm": 0.45777764213995786,
+      "min": 400,
+      "max": 40000,
+      "log": true,
+      "paramName": "DISTORT_WSLPF",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 682.963,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 18,
+      "name": "XFormer Low Freq",
+      "value": 41.165,
+      "norm": 0.45777764213995786,
+      "min": 5,
+      "max": 500,
+      "log": true,
+      "paramName": "DISTORT_XFHPF",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 5.749,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 19,
+      "name": "XFormer Hi Freq",
+      "value": 11477.244,
+      "norm": 0.45777764213995786,
+      "min": 4000,
+      "max": 40000,
+      "log": true,
+      "paramName": "DISTORT_XFLPF",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 5871.128,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 22,
+      "name": "Depth",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_DEPTH",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Power-amp low-end boost via negative-feedback shaping; adds low thump."
+      }
+    },
+    {
+      "id": 23,
+      "name": "OFFSET1",
+      "value": -0.084,
+      "norm": 0.45777764213995786,
+      "min": -1,
+      "max": 1,
+      "paramName": "DISTORT_OFFSET1",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 25,
+      "name": "Supply Sag",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_SUPPLYSAG",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Power-supply sag — how much the virtual rails dip under load, affecting compression and feel."
+      }
+    },
+    {
+      "id": 26,
+      "name": "Presence",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_PRESENCE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float",
+      "help": {
+        "blurb": "Power-amp high-end via negative-feedback shaping; adds top-end edge."
+      }
+    },
+    {
+      "id": 27,
+      "name": "Negative Feedback",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_BETA",
+      "family": "DISTORT",
+      "step": 0.0001,
+      "default": 3.5,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 28,
+      "name": "Presence Frequency",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_PRESFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 10,
+      "unitCode": "hz",
+      "kind": "float"
+    },
+    {
+      "id": 29,
+      "name": "Low Freq",
+      "value": 114.772,
+      "norm": 0.45777764213995786,
+      "min": 40,
+      "max": 400,
+      "log": true,
+      "paramName": "DISTORT_SPKRLFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 55.074,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 30,
+      "name": "LF Reso",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_SPKRLFGAIN",
+      "family": "DISTORT",
+      "step": 0.024,
+      "default": 0.208,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 31,
+      "name": "Depth Frequency",
+      "value": 143.466,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 50,
+      "max": 500,
+      "log": true,
+      "paramName": "DISTORT_DEPTHFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 50,
+      "unitCode": "hz",
+      "kind": "float"
+    },
+    {
+      "id": 33,
+      "name": "Master Vol Cap",
+      "value": 23.623,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 1000,
+      "log": true,
+      "paramName": "DISTORT_MVCAP",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Bright-cap across the Master Volume; affects brightness as Master changes."
+      }
+    },
+    {
+      "id": 34,
+      "name": "WSHPF",
+      "value": 47.246,
+      "norm": 0.45777764213995786,
+      "min": 2,
+      "max": 2000,
+      "log": true,
+      "paramName": "DISTORT_WSHPF",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 2,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 35,
+      "name": "Harmonics",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_CFCLIP",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 37,
+      "name": "B+ Time Constant",
+      "value": 8.233,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 100,
+      "log": true,
+      "paramName": "DISTORT_TIMECONST",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 3.854,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 38,
+      "name": "Grid Bias",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_BIAS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 50,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 40,
+      "name": "PI RATIO",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_PI_RATIO",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0.5,
+      "unitCode": "unverified",
+      "kind": "float"
+    },
+    {
+      "id": 43,
+      "name": "LF Q",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_SPKRLFQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 44,
+      "name": "Preamp Bias",
+      "value": -0.084,
+      "norm": 0.45777764213995786,
+      "min": -1,
+      "max": 1,
+      "paramName": "DISTORT_OFFSET2",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 45,
+      "name": "High Freq",
+      "value": 1147.724,
+      "norm": 0.45777764213995786,
+      "min": 400,
+      "max": 4000,
+      "log": true,
+      "paramName": "DISTORT_SPKRHFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 4000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 46,
+      "name": "HF Reso",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_SPKRHFGAIN",
+      "family": "DISTORT",
+      "step": 0.024,
+      "default": 0.208,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 48,
+      "name": "XFormer Drive",
+      "value": 0.236,
+      "norm": 0.45777764213995786,
+      "min": 0.01,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_XDRIVE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.02,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Overdrive gain stage (only on amps that model one)."
+      }
+    },
+    {
+      "id": 49,
+      "name": "Input Trim",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_TRIM",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.152,
+      "unitCode": "numeric",
+      "kind": "float",
+      "help": {
+        "blurb": "Adds or removes gain without changing tone — unlike Drive, it doesn’t interact with the surrounding circuit."
+      }
+    },
+    {
+      "id": 50,
+      "name": "Tube Hardness",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_HARDNESS2",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 8.5,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 52,
+      "name": "Speaker Drive",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_SPKRDRIVE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 2,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 53,
+      "name": "XFormer Matching",
+      "value": 0.943,
+      "norm": 0.45777764213995786,
+      "min": 0.5,
+      "max": 2,
+      "log": true,
+      "paramName": "DISTORT_XFMATCH",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0.794,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 54,
+      "name": "Screen Frequency",
+      "value": 8.233,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 100,
+      "log": true,
+      "paramName": "DISTORT_SCREENFREQ",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 1.52,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 55,
+      "name": "Screen Q",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_SCREENQ",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0.183,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 57,
+      "name": "Bass",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ1",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 58,
+      "name": "Mid",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ2",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 59,
+      "name": "Treble",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ3",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 60,
+      "name": "Presence",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ4",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 61,
+      "name": "1600",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ5",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 62,
+      "name": "2K",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ6",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 63,
+      "name": "4K",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ7",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 64,
+      "name": "8K",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_EQ8",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 65,
+      "name": "Bias Excursion",
+      "value": 91.556,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 200,
+      "paramName": "DISTORT_BIASEXCURSION",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 100,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 66,
+      "name": "Excursion Time",
+      "value": 2.058,
+      "norm": 0.45777764213995786,
+      "min": 0.25,
+      "max": 25,
+      "log": true,
+      "paramName": "DISTORT_EXCURSIONTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.25,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 67,
+      "name": "Recovery Time",
+      "value": 4.116,
+      "norm": 0.45777764213995786,
+      "min": 0.5,
+      "max": 50,
+      "log": true,
+      "paramName": "DISTORT_RECOVERYTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.5,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 68,
+      "name": "Triode 2 Plate Freq",
+      "value": 3293.179,
+      "norm": 0.45777764213995786,
+      "min": 400,
+      "max": 40000,
+      "log": true,
+      "paramName": "DISTORT_FEEDFWDFREQ2",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 40000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 69,
+      "name": "Triode 1 Plate Freq",
+      "value": 3293.179,
+      "norm": 0.45777764213995786,
+      "min": 400,
+      "max": 40000,
+      "log": true,
+      "paramName": "DISTORT_FEEDFWDFREQ1",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 40000,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 72,
+      "name": "Out Comp Clarity",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_CLARITY",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0.1,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 73,
+      "name": "Q",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_INEQQ",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0.133,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 74,
+      "name": "Frequency",
+      "value": 823.295,
+      "norm": 0.45777764213995786,
+      "min": 100,
+      "max": 10000,
+      "log": true,
+      "paramName": "DISTORT_INEQFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 385.358,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 75,
+      "name": "Gain",
+      "value": -1.689,
+      "norm": 0.45777764213995786,
+      "min": -20,
+      "max": 20,
+      "paramName": "DISTORT_INEQGAIN",
+      "family": "DISTORT",
+      "step": 0.05,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 76,
+      "name": "Overdrive",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_DRIVE2",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 5,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 77,
+      "name": "Out Compression",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_COMPRESSION",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 78,
+      "name": "Out Comp Threshold",
+      "value": -32.533,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": -60,
+      "max": 0,
+      "paramName": "DISTORT_THRESHOLD",
+      "family": "DISTORT",
+      "step": 0.1,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 79,
+      "name": "Master Vol Trim",
+      "value": 0.823,
+      "norm": 0.45777764213995786,
+      "min": 0.1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_MVTRIM",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 81,
+      "name": "Definition",
+      "value": -0.844,
+      "norm": 0.45777764213995786,
+      "min": -10.00014,
+      "max": 10.00014,
+      "paramName": "DISTORT_DEFINITION",
+      "family": "DISTORT",
+      "step": 0.000316,
+      "default": 0,
+      "unitCode": "count",
+      "kind": "float"
+    },
+    {
+      "id": 82,
+      "name": "Compression",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_CFTHRESH",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 83,
+      "name": "Grid Clipping",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_CFGRID",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 84,
+      "name": "VERSION",
+      "value": 4.58,
+      "norm": 0.45777764213995786,
+      "paramName": "DISTORT_VERSION",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "float",
+      "unusable": "degenerate-range"
+    },
+    {
+      "id": 85,
+      "name": "High Cut",
+      "value": 1646.589,
+      "norm": 0.45777764213995786,
+      "unit": "Hz",
+      "min": 200,
+      "max": 20000,
+      "log": true,
+      "paramName": "DISTORT_HICUT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 200,
+      "unitCode": "hz",
+      "kind": "float"
+    },
+    {
+      "id": 86,
+      "name": "Dynamic Presence",
+      "value": -0.844,
+      "norm": 0.45777764213995786,
+      "min": -10,
+      "max": 10,
+      "paramName": "DISTORT_DYNPRES",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 87,
+      "name": "Dynamic Depth",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_DYNDEPTH",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 89,
+      "name": "AC Line Frequency",
+      "value": 62.044,
+      "norm": 0.45777764213995786,
+      "min": 30,
+      "max": 100,
+      "paramName": "DISTORT_LINEFREQ",
+      "family": "DISTORT",
+      "step": 5,
+      "default": 60,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 90,
+      "name": "Hardness",
+      "value": 8.895,
+      "norm": 0.45777764213995786,
+      "min": 2.5,
+      "max": 40,
+      "log": true,
+      "paramName": "DISTORT_PAHARDNESS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 4.353,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 91,
+      "name": "Frequency",
+      "value": 1.647,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0.2,
+      "max": 20,
+      "log": true,
+      "paramName": "DISTORT_TREMFREQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.611,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 92,
+      "name": "Depth",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_TREMDEPTH",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 95,
+      "name": "Cathode Resistance",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_CBRATIO",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 96,
+      "name": "Cathode Time Const",
+      "value": 8.233,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 100,
+      "log": true,
+      "paramName": "DISTORT_CBTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 97,
+      "name": "DYNIMP",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_DYNIMP",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 99,
+      "name": "High Treble",
+      "value": -1.013,
+      "norm": 0.45777764213995786,
+      "min": -12,
+      "max": 12,
+      "paramName": "DISTORT_HITREBLE",
+      "family": "DISTORT",
+      "step": 0.024,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 100,
+      "name": "Mismatch",
+      "value": -0.084,
+      "norm": 0.45777764213995786,
+      "min": -1,
+      "max": 1,
+      "paramName": "DISTORT_PAOFFSET",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 101,
+      "name": "Input Dynamics",
+      "value": -0.844,
+      "norm": 0.45777764213995786,
+      "min": -10,
+      "max": 10,
+      "paramName": "DISTORT_INDYNAMICS",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 102,
+      "name": "HF Slope",
+      "value": 2.869,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 10,
+      "log": true,
+      "paramName": "DISTORT_SPKRHFQ",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1.985,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 103,
+      "name": "Variac",
+      "value": 95.778,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 50,
+      "max": 150,
+      "paramName": "DISTORT_VARIAC",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 100,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 105,
+      "name": "GRIDHARDNESS",
+      "value": 51.2,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": 10,
+      "max": 100,
+      "paramName": "DISTORT_GRIDHARDNESS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 89.999,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 107,
+      "name": "Saturation Drive",
+      "value": 5.12,
+      "norm": 0.45777764213995786,
+      "min": 1,
+      "max": 10,
+      "paramName": "DISTORT_SATDRIVE",
+      "family": "DISTORT",
+      "step": 0.01,
+      "default": 1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 108,
+      "name": "Preamp Bias Excursion",
+      "value": 91.556,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 200,
+      "paramName": "DISTORT_TRIODE2RATIO",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 100,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 109,
+      "name": "TRIODE2EXTIME",
+      "value": 2.362,
+      "norm": 0.45777764213995786,
+      "unit": "ms",
+      "min": 0.1,
+      "max": 100,
+      "log": true,
+      "paramName": "DISTORT_TRIODE2EXTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.1,
+      "unitCode": "ms",
+      "kind": "float"
+    },
+    {
+      "id": 110,
+      "name": "TRIODE2RECTIME",
+      "value": 4.725,
+      "norm": 0.45777764213995786,
+      "unit": "ms",
+      "min": 0.2,
+      "max": 200,
+      "log": true,
+      "paramName": "DISTORT_TRIODE2RECTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0.2,
+      "unitCode": "ms",
+      "kind": "float"
+    },
+    {
+      "id": 114,
+      "name": "TRIODE1RATIO",
+      "value": -16.889,
+      "norm": 0.45777764213995786,
+      "unit": "%",
+      "min": -200,
+      "max": 200,
+      "paramName": "DISTORT_TRIODE1RATIO",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 0,
+      "unitCode": "percent",
+      "kind": "float"
+    },
+    {
+      "id": 115,
+      "name": "Hardness",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_CFHARDNESS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "knob_0_10",
+      "kind": "float"
+    },
+    {
+      "id": 116,
+      "name": "PI Bias Excursion",
+      "value": 91.556,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 200,
+      "paramName": "DISTORT_PIEXCURSION",
+      "family": "DISTORT",
+      "step": 0.002,
+      "default": 100,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 117,
+      "name": "Speaker Compress.",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_MOTORDRIVE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 1,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 118,
+      "name": "Speaker Time Const",
+      "value": 823.295,
+      "norm": 0.45777764213995786,
+      "min": 100,
+      "max": 10000,
+      "log": true,
+      "paramName": "DISTORT_MDTIME",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 242.009,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 119,
+      "name": "RESOLUTION",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_RESOLUTION",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 120,
+      "name": "B+",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_VCCMON",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 121,
+      "name": "Gain",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_GAINMON",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 122,
+      "name": "Gain",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_MDMON",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 123,
+      "name": "Gain",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_INDYNMON",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 124,
+      "name": "Boost Level",
+      "value": 10.987,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 24,
+      "paramName": "DISTORT_BOOSTLVL",
+      "family": "DISTORT",
+      "step": 0.05,
+      "default": 12,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 127,
+      "name": "Speaker Compliance",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_SPKRDYNAMICS",
+      "family": "DISTORT",
+      "step": 0.001,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 129,
+      "name": "Speaker Impedance",
+      "value": 0.943,
+      "norm": 0.45777764213995786,
+      "min": 0.5,
+      "max": 2,
+      "log": true,
+      "paramName": "DISTORT_SPKRDCR",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 131,
+      "name": "Cab Resonance",
+      "value": 91.556,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 200,
+      "paramName": "DISTORT_CABRESONANCE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 132,
+      "name": "HEADROOM",
+      "value": 0.458,
+      "norm": 0.45777764213995786,
+      "unit": "dB",
+      "min": 0,
+      "max": 1,
+      "paramName": "DISTORT_VPLATEMON",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "db",
+      "kind": "float"
+    },
+    {
+      "id": 133,
+      "name": "Preamp Presence",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_PREPRESENCE",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 134,
+      "name": "Master Bias Excursion",
+      "value": 45.778,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 100,
+      "paramName": "DISTORT_BIASX",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 135,
+      "name": "High Cut",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_PAHICUT",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 139,
+      "name": "Speaker Thump",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_SPKRTHUMP",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    },
+    {
+      "id": 141,
+      "name": "Global MV",
+      "value": 4.578,
+      "norm": 0.45777764213995786,
+      "min": 0,
+      "max": 10,
+      "paramName": "DISTORT_GLOBALMASTER",
+      "family": "DISTORT",
+      "step": 0.001,
+      "unitCode": "numeric",
+      "kind": "float"
+    }
+  ],
+  "enums": [
+    {
+      "id": 3,
+      "name": "Bypass Mode",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "THRU"
+        },
+        {
+          "value": 1,
+          "label": "MUTE"
+        }
+      ],
+      "paramName": "DISTORT_BYPASSMODE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "How the signal is routed when bypassed (e.g. muted, thru, or kept wet for trails)."
+      }
+    },
+    {
+      "id": 20,
+      "name": "Tonestack Location",
+      "value": 2,
+      "options": [
+        {
+          "value": 0,
+          "label": "PRE"
+        },
+        {
+          "value": 1,
+          "label": "POST"
+        },
+        {
+          "value": 2,
+          "label": "MID"
+        },
+        {
+          "value": 3,
+          "label": "END"
+        },
+        {
+          "value": 4,
+          "label": "PRE-MID"
+        }
+      ],
+      "paramName": "DISTORT_TONELOC",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 21,
+      "name": "Input Select",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "LEFT"
+        },
+        {
+          "value": 1,
+          "label": "RIGHT"
+        },
+        {
+          "value": 2,
+          "label": "SUM L+R"
+        }
+      ],
+      "paramName": "DISTORT_INPUTSELECT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 2,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Selects which input(s) feed the block (left, right, sum, or stereo)."
+      }
+    },
+    {
+      "id": 24,
+      "name": "CLIPTYPE2",
+      "value": 5,
+      "options": [
+        {
+          "value": 0,
+          "label": "SOFT"
+        },
+        {
+          "value": 1,
+          "label": "HARD"
+        },
+        {
+          "value": 2,
+          "label": "SQUARE"
+        },
+        {
+          "value": 3,
+          "label": "CUBIC"
+        },
+        {
+          "value": 4,
+          "label": "ABS"
+        },
+        {
+          "value": 5,
+          "label": "TUBE"
+        },
+        {
+          "value": 6,
+          "label": "QUARTIC"
+        },
+        {
+          "value": 7,
+          "label": "PUSH-PULL"
+        },
+        {
+          "value": 8,
+          "label": "3/2 HARD"
+        },
+        {
+          "value": 9,
+          "label": "3/2 SOFT"
+        },
+        {
+          "value": 10,
+          "label": "TRIODE"
+        },
+        {
+          "value": 11,
+          "label": "TRIODE+SAT"
+        },
+        {
+          "value": 12,
+          "label": "TRIODE+SAT1"
+        }
+      ],
+      "paramName": "DISTORT_CLIPTYPE2",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 32,
+      "name": "DRIVETYPE",
+      "value": 3,
+      "options": [
+        {
+          "value": 0,
+          "label": "NORMAL"
+        },
+        {
+          "value": 1,
+          "label": "DUAL"
+        },
+        {
+          "value": 2,
+          "label": "JUMPED HIWATT"
+        },
+        {
+          "value": 3,
+          "label": "JUMPED BASSMAN"
+        },
+        {
+          "value": 4,
+          "label": "JUMPED TWEED"
+        },
+        {
+          "value": 5,
+          "label": "TWEED"
+        },
+        {
+          "value": 6,
+          "label": "GANGED"
+        },
+        {
+          "value": 7,
+          "label": "JUMPED PLEXI"
+        }
+      ],
+      "paramName": "DISTORT_DRIVETYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "enum"
+    },
+    {
+      "id": 36,
+      "name": "Tonestack Type",
+      "value": 63,
+      "options": [
+        {
+          "value": 0,
+          "label": "ACTIVE"
+        },
+        {
+          "value": 1,
+          "label": "DEFAULT"
+        },
+        {
+          "value": 2,
+          "label": "BROWNFACE"
+        },
+        {
+          "value": 3,
+          "label": "BLACKFACE"
+        },
+        {
+          "value": 4,
+          "label": "BASSGUY"
+        },
+        {
+          "value": 5,
+          "label": "TOP BOOST"
+        },
+        {
+          "value": 6,
+          "label": "PLEXI"
+        },
+        {
+          "value": 7,
+          "label": "BOUTIQUE"
+        },
+        {
+          "value": 8,
+          "label": "HI POWER"
+        },
+        {
+          "value": 9,
+          "label": "USA NORMAL"
+        },
+        {
+          "value": 10,
+          "label": "USA FAT"
+        },
+        {
+          "value": 11,
+          "label": "RECTO1 ORG"
+        },
+        {
+          "value": 12,
+          "label": "RECTO1 RED"
+        },
+        {
+          "value": 13,
+          "label": "SKYLINE"
+        },
+        {
+          "value": 14,
+          "label": "GERMAN"
+        },
+        {
+          "value": 15,
+          "label": "JR BLUES"
+        },
+        {
+          "value": 16,
+          "label": "WRECKER 1"
+        },
+        {
+          "value": 17,
+          "label": "NEUTRAL"
+        },
+        {
+          "value": 18,
+          "label": "CA3+SE"
+        },
+        {
+          "value": 19,
+          "label": "FREYER D60"
+        },
+        {
+          "value": 20,
+          "label": "MR Z 38 SR"
+        },
+        {
+          "value": 21,
+          "label": "EURO UBER"
+        },
+        {
+          "value": 22,
+          "label": "PVH 6160"
+        },
+        {
+          "value": 23,
+          "label": "SOLO 100"
+        },
+        {
+          "value": 24,
+          "label": "CORNCOB"
+        },
+        {
+          "value": 25,
+          "label": "XTC"
+        },
+        {
+          "value": 26,
+          "label": "CAROLANN"
+        },
+        {
+          "value": 27,
+          "label": "CITRUS"
+        },
+        {
+          "value": 28,
+          "label": "BRIT JM45"
+        },
+        {
+          "value": 29,
+          "label": "USA RHY"
+        },
+        {
+          "value": 30,
+          "label": "RECTO2 ORG"
+        },
+        {
+          "value": 31,
+          "label": "RECTO2 RED VNTG"
+        },
+        {
+          "value": 32,
+          "label": "SHIVER CLN"
+        },
+        {
+          "value": 33,
+          "label": "CAMERON"
+        },
+        {
+          "value": 34,
+          "label": "BRIT JVM 0D1"
+        },
+        {
+          "value": 35,
+          "label": "BRIT JVM 0D2"
+        },
+        {
+          "value": 36,
+          "label": "5153 GREEN"
+        },
+        {
+          "value": 37,
+          "label": "5153 BLUE"
+        },
+        {
+          "value": 38,
+          "label": "5153 RED"
+        },
+        {
+          "value": 39,
+          "label": "BRIT SUPER"
+        },
+        {
+          "value": 40,
+          "label": "DIV13 CJ"
+        },
+        {
+          "value": 41,
+          "label": "BADGER 18"
+        },
+        {
+          "value": 42,
+          "label": "ATOMICA"
+        },
+        {
+          "value": 43,
+          "label": "SPAWN ROD"
+        },
+        {
+          "value": 44,
+          "label": "BADGER 30"
+        },
+        {
+          "value": 45,
+          "label": "BRIT SILVER"
+        },
+        {
+          "value": 46,
+          "label": "SUPER VERB"
+        },
+        {
+          "value": 47,
+          "label": "HOT KITTY"
+        },
+        {
+          "value": 48,
+          "label": "VIBRATO-KING"
+        },
+        {
+          "value": 49,
+          "label": "GIBTONE SCOUT"
+        },
+        {
+          "value": 50,
+          "label": "CA3+SE CLEAN"
+        },
+        {
+          "value": 51,
+          "label": "BF FIXED MID"
+        },
+        {
+          "value": 52,
+          "label": "GERMAN V4"
+        },
+        {
+          "value": 53,
+          "label": "VIBRATO-LUX"
+        },
+        {
+          "value": 54,
+          "label": "DIRTY SHIRLEY"
+        },
+        {
+          "value": 55,
+          "label": "PLEXI 100W"
+        },
+        {
+          "value": 56,
+          "label": "RUBY ROCKET BRT"
+        },
+        {
+          "value": 57,
+          "label": "CONCOURSE"
+        },
+        {
+          "value": 58,
+          "label": "TRIPTIK LD"
+        },
+        {
+          "value": 59,
+          "label": "TRIPTIK CLN"
+        },
+        {
+          "value": 60,
+          "label": "JAZZ 120"
+        },
+        {
+          "value": 61,
+          "label": "BOGFISH"
+        },
+        {
+          "value": 62,
+          "label": "WRECKER 2"
+        },
+        {
+          "value": 63,
+          "label": "SKYLINE DEEP"
+        },
+        {
+          "value": 64,
+          "label": "USA SUB BLUES"
+        },
+        {
+          "value": 65,
+          "label": "WRECKER LVRPOOL"
+        },
+        {
+          "value": 66,
+          "label": "CITRUS A30 CLN"
+        },
+        {
+          "value": 67,
+          "label": "CITRUS A30 DRT"
+        },
+        {
+          "value": 68,
+          "label": "CAR ROAMER"
+        },
+        {
+          "value": 69,
+          "label": "USA BASS"
+        },
+        {
+          "value": 70,
+          "label": "CITRUS BASS"
+        },
+        {
+          "value": 71,
+          "label": "STUDIO"
+        },
+        {
+          "value": 72,
+          "label": "BRIT 800"
+        },
+        {
+          "value": 73,
+          "label": "RECTO1 ORG MDRN"
+        },
+        {
+          "value": 74,
+          "label": "ANGLE SEVERE 1"
+        },
+        {
+          "value": 75,
+          "label": "ANGLE SEVERE 2"
+        },
+        {
+          "value": 76,
+          "label": "USA PRE LD1 RED"
+        },
+        {
+          "value": 77,
+          "label": "RECTO ORG BRT"
+        },
+        {
+          "value": 78,
+          "label": "RECTO RED BRT"
+        },
+        {
+          "value": 79,
+          "label": "VIBROVERB AA"
+        },
+        {
+          "value": 80,
+          "label": "PVH 6160+ LEAD"
+        },
+        {
+          "value": 81,
+          "label": "RUMBLE HRM"
+        },
+        {
+          "value": 82,
+          "label": "MR Z HWY 66"
+        },
+        {
+          "value": 83,
+          "label": "SUPER 6G4"
+        },
+        {
+          "value": 84,
+          "label": "65 BASSMAN BASS"
+        },
+        {
+          "value": 85,
+          "label": "FRIEDMAN"
+        },
+        {
+          "value": 86,
+          "label": "BAND-COMMANDER"
+        },
+        {
+          "value": 87,
+          "label": "USA PRE CLEAN"
+        },
+        {
+          "value": 88,
+          "label": "TUCANA CLEAN"
+        },
+        {
+          "value": 89,
+          "label": "FRIEDMAN SM BOX"
+        },
+        {
+          "value": 90,
+          "label": "TX STAR"
+        },
+        {
+          "value": 91,
+          "label": "USA IIC+"
+        },
+        {
+          "value": 92,
+          "label": "THORDENDAL"
+        },
+        {
+          "value": 93,
+          "label": "SOLO 99"
+        },
+        {
+          "value": 94,
+          "label": "BLUDOJAI"
+        },
+        {
+          "value": 95,
+          "label": "HERBIE"
+        },
+        {
+          "value": 96,
+          "label": "PVH 6160+ CRUNCH"
+        },
+        {
+          "value": 97,
+          "label": "SOLO 88 CLEAN"
+        },
+        {
+          "value": 98,
+          "label": "JS410"
+        },
+        {
+          "value": 99,
+          "label": "JS410 MIDSHIFT"
+        },
+        {
+          "value": 100,
+          "label": "RUBY ROCKET"
+        },
+        {
+          "value": 101,
+          "label": "USA IIC++"
+        },
+        {
+          "value": 102,
+          "label": "LEGATO 100"
+        },
+        {
+          "value": 103,
+          "label": "HOOK EDGE"
+        },
+        {
+          "value": 104,
+          "label": "HOOK NO EDGE"
+        },
+        {
+          "value": 105,
+          "label": "HOOK CLEAN 1"
+        },
+        {
+          "value": 106,
+          "label": "HOOK CLEAN 2"
+        },
+        {
+          "value": 107,
+          "label": "SOLO 88"
+        },
+        {
+          "value": 108,
+          "label": "SPAWN NITROUS"
+        },
+        {
+          "value": 109,
+          "label": "SV BASS"
+        },
+        {
+          "value": 110,
+          "label": "RECTO2 RED MDRN"
+        },
+        {
+          "value": 111,
+          "label": "JP IIC+ YEL/RED"
+        },
+        {
+          "value": 112,
+          "label": "JP IIC+ GREEN"
+        },
+        {
+          "value": 113,
+          "label": "MR Z GHIA"
+        },
+        {
+          "value": 114,
+          "label": "MATCHBOX D-30 EF86"
+        },
+        {
+          "value": 115,
+          "label": "TRES CORONA"
+        },
+        {
+          "value": 116,
+          "label": "PVH 6160+ CLEAN"
+        },
+        {
+          "value": 117,
+          "label": "ARCHEAN"
+        },
+        {
+          "value": 118,
+          "label": "ARCHEAN BRIGHT"
+        },
+        {
+          "value": 119,
+          "label": "ARCHEAN CLEAN"
+        },
+        {
+          "value": 120,
+          "label": "BUDDAH DUOMASTER"
+        },
+        {
+          "value": 121,
+          "label": "NULL"
+        },
+        {
+          "value": 122,
+          "label": "JMPRE-1 CLN"
+        },
+        {
+          "value": 123,
+          "label": "JMPRE-1 CLN BASS"
+        },
+        {
+          "value": 124,
+          "label": "JMPRE-1 OD1"
+        },
+        {
+          "value": 125,
+          "label": "BRIT STUDIO 20"
+        },
+        {
+          "value": 126,
+          "label": "BRIT AFS100"
+        },
+        {
+          "value": 127,
+          "label": "MATCHBOX D-30"
+        }
+      ],
+      "paramName": "DISTORT_TONETYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 39,
+      "name": "FBTYPE",
+      "value": 31,
+      "options": [
+        {
+          "value": 0,
+          "label": "BASSGUY"
+        },
+        {
+          "value": 1,
+          "label": "PLEXI"
+        },
+        {
+          "value": 2,
+          "label": "BRIT 800"
+        },
+        {
+          "value": 3,
+          "label": "BRIT 1987x"
+        },
+        {
+          "value": 4,
+          "label": "SOLO 100"
+        },
+        {
+          "value": 5,
+          "label": "RUMBLE"
+        },
+        {
+          "value": 6,
+          "label": "XTC"
+        },
+        {
+          "value": 7,
+          "label": "JR BLUES"
+        },
+        {
+          "value": 8,
+          "label": "RECTO ORG"
+        },
+        {
+          "value": 9,
+          "label": "FRYETTE"
+        },
+        {
+          "value": 10,
+          "label": "6160"
+        },
+        {
+          "value": 11,
+          "label": "IDEAL"
+        },
+        {
+          "value": 12,
+          "label": "AC-30"
+        },
+        {
+          "value": 13,
+          "label": "SHIVER OLD"
+        },
+        {
+          "value": 14,
+          "label": "CAMERON"
+        },
+        {
+          "value": 15,
+          "label": "BRIT JVM"
+        },
+        {
+          "value": 16,
+          "label": "TRIPTIK"
+        },
+        {
+          "value": 17,
+          "label": "CALI"
+        },
+        {
+          "value": 18,
+          "label": "GERMAN V4"
+        },
+        {
+          "value": 19,
+          "label": "TRIP-TIK"
+        },
+        {
+          "value": 20,
+          "label": "WRECKER"
+        },
+        {
+          "value": 21,
+          "label": "RECTO RED"
+        },
+        {
+          "value": 22,
+          "label": "DEUTSCH WILDE"
+        },
+        {
+          "value": 23,
+          "label": "FRIEDMAN"
+        },
+        {
+          "value": 24,
+          "label": "TUCANA"
+        },
+        {
+          "value": 25,
+          "label": "5153 100W"
+        },
+        {
+          "value": 26,
+          "label": "TERRIER"
+        },
+        {
+          "value": 27,
+          "label": "MARK IIC"
+        },
+        {
+          "value": 28,
+          "label": "MARK IV RHY"
+        },
+        {
+          "value": 29,
+          "label": "MATCHBOX"
+        },
+        {
+          "value": 30,
+          "label": "SUPER 6G4"
+        },
+        {
+          "value": 31,
+          "label": "CONCERT 6G12"
+        },
+        {
+          "value": 32,
+          "label": "NULL"
+        },
+        {
+          "value": 33,
+          "label": "PLEXI 50W"
+        },
+        {
+          "value": 34,
+          "label": "SHIVER NEW"
+        },
+        {
+          "value": 35,
+          "label": "UBER"
+        },
+        {
+          "value": 36,
+          "label": "DIZZY"
+        },
+        {
+          "value": 37,
+          "label": "ATOMICA"
+        },
+        {
+          "value": 38,
+          "label": "FASTROD"
+        },
+        {
+          "value": 39,
+          "label": "TX STAR"
+        },
+        {
+          "value": 40,
+          "label": "CORNFORD"
+        },
+        {
+          "value": 41,
+          "label": "CAPT HOOK"
+        },
+        {
+          "value": 42,
+          "label": "AFS100"
+        },
+        {
+          "value": 43,
+          "label": "SPAWN NITROUS"
+        },
+        {
+          "value": 44,
+          "label": "USA JP IIC+"
+        },
+        {
+          "value": 45,
+          "label": "SUPREMO TREM"
+        },
+        {
+          "value": 46,
+          "label": "BRIT JM45"
+        },
+        {
+          "value": 47,
+          "label": "MATCHBOX D-30"
+        },
+        {
+          "value": 48,
+          "label": "ARCHEAN"
+        },
+        {
+          "value": 49,
+          "label": "DELUXE VERB"
+        },
+        {
+          "value": 50,
+          "label": "DOUBLE VERB"
+        },
+        {
+          "value": 51,
+          "label": "VIBRATO LUX"
+        },
+        {
+          "value": 52,
+          "label": "TREMOLO LUX"
+        },
+        {
+          "value": 53,
+          "label": "FAS CLASSIC"
+        },
+        {
+          "value": 54,
+          "label": "KOMET"
+        },
+        {
+          "value": 55,
+          "label": "HIPOWER"
+        },
+        {
+          "value": 56,
+          "label": "USA SUB BLUES"
+        },
+        {
+          "value": 57,
+          "label": "FAS BROOTALZ"
+        },
+        {
+          "value": 58,
+          "label": "ENERGYBALL"
+        },
+        {
+          "value": 59,
+          "label": "CITRUS RV50"
+        },
+        {
+          "value": 60,
+          "label": "BASSGUY RI"
+        },
+        {
+          "value": 61,
+          "label": "REVV GENERATOR"
+        },
+        {
+          "value": 62,
+          "label": "5153 50W"
+        },
+        {
+          "value": 63,
+          "label": "5153 STEALTH"
+        },
+        {
+          "value": 64,
+          "label": "JS410"
+        },
+        {
+          "value": 65,
+          "label": "MARK V"
+        },
+        {
+          "value": 66,
+          "label": "BRIT SILVER"
+        },
+        {
+          "value": 67,
+          "label": "PLEXI 2204"
+        },
+        {
+          "value": 68,
+          "label": "BRIT 6100"
+        }
+      ],
+      "paramName": "DISTORT_FBTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "unverified",
+      "kind": "enum"
+    },
+    {
+      "id": 41,
+      "name": "Bright",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_BRIGHT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Bright switch — a treble lift that is strongest at low gain."
+      }
+    },
+    {
+      "id": 42,
+      "name": "Boost",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_BOOST",
+      "family": "DISTORT",
+      "step": 1,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Built-in clean boost into the amp — adds gain without a separate Drive block."
+      }
+    },
+    {
+      "id": 47,
+      "name": "Cut",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_CUT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Trims low frequencies into the amp to tighten the tone and reduce flub."
+      }
+    },
+    {
+      "id": 51,
+      "name": "Master Vol Location",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "PRE-PI"
+        },
+        {
+          "value": 1,
+          "label": "POST-PI"
+        },
+        {
+          "value": 2,
+          "label": "PRE-TRIODE"
+        }
+      ],
+      "paramName": "DISTORT_MVPOSITION",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 56,
+      "name": "Saturation Switch",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        },
+        {
+          "value": 2,
+          "label": "ON (IDEAL)"
+        }
+      ],
+      "paramName": "DISTORT_SATSWITCH",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "Engages a preamp saturation mod for thicker, more aggressive distortion."
+      }
+    },
+    {
+      "id": 70,
+      "name": "Power Tube Type",
+      "value": 11,
+      "options": [
+        {
+          "value": 0,
+          "label": "5881"
+        },
+        {
+          "value": 1,
+          "label": "6L6GB"
+        },
+        {
+          "value": 2,
+          "label": "EL34 MULL"
+        },
+        {
+          "value": 3,
+          "label": "EL84/6BQ5"
+        },
+        {
+          "value": 4,
+          "label": "6L6GC GE"
+        },
+        {
+          "value": 5,
+          "label": "6V6GT GE"
+        },
+        {
+          "value": 6,
+          "label": "KT66 GEN"
+        },
+        {
+          "value": 7,
+          "label": "KT88 GEN"
+        },
+        {
+          "value": 8,
+          "label": "6550 SVET"
+        },
+        {
+          "value": 9,
+          "label": "6973"
+        },
+        {
+          "value": 10,
+          "label": "6AQ5"
+        },
+        {
+          "value": 11,
+          "label": "300B"
+        },
+        {
+          "value": 12,
+          "label": "KT77 JJ"
+        },
+        {
+          "value": 13,
+          "label": "6CA7 JJ"
+        },
+        {
+          "value": 14,
+          "label": "6L6GC JJ"
+        },
+        {
+          "value": 15,
+          "label": "EL34 JJ"
+        },
+        {
+          "value": 16,
+          "label": "EL84 JJ"
+        },
+        {
+          "value": 17,
+          "label": "KT66 JJ"
+        },
+        {
+          "value": 18,
+          "label": "KT88 JJ"
+        },
+        {
+          "value": 19,
+          "label": "6CA7 AMP"
+        },
+        {
+          "value": 20,
+          "label": "EL34 SVET"
+        },
+        {
+          "value": 21,
+          "label": "6L6GC SVET"
+        },
+        {
+          "value": 22,
+          "label": "6V6GT TUNG"
+        },
+        {
+          "value": 23,
+          "label": "EL84 MULL"
+        },
+        {
+          "value": 24,
+          "label": "6550 TUNG"
+        }
+      ],
+      "paramName": "DISTORT_TUBETYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 2,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 71,
+      "name": "Preamp Tube Type",
+      "value": 4,
+      "options": [
+        {
+          "value": 0,
+          "label": "12AX7A SYL"
+        },
+        {
+          "value": 1,
+          "label": "ECC83"
+        },
+        {
+          "value": 2,
+          "label": "7025"
+        },
+        {
+          "value": 3,
+          "label": "12AX7A JJ"
+        },
+        {
+          "value": 4,
+          "label": "ECC803S"
+        },
+        {
+          "value": 5,
+          "label": "EF86"
+        },
+        {
+          "value": 6,
+          "label": "12AX7A RCA"
+        },
+        {
+          "value": 7,
+          "label": "12AX7A"
+        },
+        {
+          "value": 8,
+          "label": "12AX7B"
+        }
+      ],
+      "paramName": "DISTORT_PRETUBETYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 80,
+      "name": "Fat",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_FAT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 88,
+      "name": "Power Type",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "AC"
+        },
+        {
+          "value": 1,
+          "label": "DC"
+        }
+      ],
+      "paramName": "DISTORT_SUPPLYTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 93,
+      "name": "Ratio",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "FIXED"
+        },
+        {
+          "value": 1,
+          "label": "SHARED CATHODE"
+        },
+        {
+          "value": 2,
+          "label": "SPLIT CATHODE"
+        }
+      ],
+      "paramName": "DISTORT_BIASTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "numeric",
+      "kind": "enum"
+    },
+    {
+      "id": 94,
+      "name": "Type",
+      "value": 5,
+      "options": [
+        {
+          "value": 0,
+          "label": "8 BAND VAR Q"
+        },
+        {
+          "value": 1,
+          "label": "7 BAND VAR Q"
+        },
+        {
+          "value": 2,
+          "label": "5 BAND (MARK)"
+        },
+        {
+          "value": 3,
+          "label": "8 BAND CONST Q"
+        },
+        {
+          "value": 4,
+          "label": "7 BAND CONST Q"
+        },
+        {
+          "value": 5,
+          "label": "5 BAND CONST Q"
+        },
+        {
+          "value": 6,
+          "label": "5 BAND PASSIVE"
+        },
+        {
+          "value": 7,
+          "label": "4 BAND PASSIVE"
+        },
+        {
+          "value": 8,
+          "label": "3 BAND PASSIVE"
+        },
+        {
+          "value": 9,
+          "label": "3 BAND CONSOLE"
+        },
+        {
+          "value": 10,
+          "label": "JMPRE-1"
+        }
+      ],
+      "paramName": "DISTORT_EQTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 98,
+      "name": "Preamp Sag",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_PRESAG",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 104,
+      "name": "Type",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "LOWSHELF"
+        },
+        {
+          "value": 1,
+          "label": "PEAKING"
+        },
+        {
+          "value": 2,
+          "label": "HIGHSHELF"
+        },
+        {
+          "value": 3,
+          "label": "TILT EQ"
+        }
+      ],
+      "paramName": "DISTORT_INEQTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 1,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 106,
+      "name": "Pres. Shift",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_PRESSHIFT",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 111,
+      "name": "Out Comp Type",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "OUTPUT"
+        },
+        {
+          "value": 1,
+          "label": "FEEDBACK"
+        },
+        {
+          "value": 2,
+          "label": "GAIN ENHANCER"
+        }
+      ],
+      "paramName": "DISTORT_COMPTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 112,
+      "name": "Location",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "OUTPUT"
+        },
+        {
+          "value": 1,
+          "label": "PRE P.A."
+        },
+        {
+          "value": 2,
+          "label": "INPUT"
+        }
+      ],
+      "paramName": "DISTORT_EQPOSITION",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 113,
+      "name": "Type",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "AUTHENTIC"
+        },
+        {
+          "value": 1,
+          "label": "IDEAL"
+        }
+      ],
+      "paramName": "DISTORT_PRECOMPTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 125,
+      "name": "Boost Type",
+      "value": 6,
+      "options": [
+        {
+          "value": 0,
+          "label": "NEUTRAL"
+        },
+        {
+          "value": 1,
+          "label": "T808"
+        },
+        {
+          "value": 2,
+          "label": "T808 MOD"
+        },
+        {
+          "value": 3,
+          "label": "SUPER OD"
+        },
+        {
+          "value": 4,
+          "label": "FULL OD"
+        },
+        {
+          "value": 5,
+          "label": "AC BOOST"
+        },
+        {
+          "value": 6,
+          "label": "SHIMMER"
+        },
+        {
+          "value": 7,
+          "label": "FAS BOOST"
+        },
+        {
+          "value": 8,
+          "label": "GRINDER"
+        },
+        {
+          "value": 9,
+          "label": "TREBLE BOOST"
+        },
+        {
+          "value": 10,
+          "label": "MID BOOST"
+        },
+        {
+          "value": 11,
+          "label": "CC BOOST"
+        },
+        {
+          "value": 12,
+          "label": "SHRED BOOST"
+        },
+        {
+          "value": 13,
+          "label": "RCB BOOST"
+        },
+        {
+          "value": 14,
+          "label": "JP IIC+ SHRED"
+        }
+      ],
+      "paramName": "DISTORT_BOOSTTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 126,
+      "name": "Output Mode",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "FRFR"
+        },
+        {
+          "value": 1,
+          "label": "SS PWR AMP + CAB"
+        }
+      ],
+      "paramName": "DISTORT_OUTPUTTYPE",
+      "family": "DISTORT",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 128,
+      "name": "Off / On",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_EQONOFF",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 130,
+      "name": "Speaker Imp. Curve",
+      "value": 42,
+      "options": [
+        {
+          "value": 0,
+          "label": "Resistive Load"
+        },
+        {
+          "value": 1,
+          "label": "1x8 5F1 Tweed"
+        },
+        {
+          "value": 2,
+          "label": "1x10 Princetone NR"
+        },
+        {
+          "value": 3,
+          "label": "1x10 BF Princetone"
+        },
+        {
+          "value": 4,
+          "label": "1x10 SF Princetone"
+        },
+        {
+          "value": 5,
+          "label": "1x12 Tweed Emmi"
+        },
+        {
+          "value": 6,
+          "label": "1x12 Vibrato Lux"
+        },
+        {
+          "value": 7,
+          "label": "1x12 Deluxe Verb"
+        },
+        {
+          "value": 8,
+          "label": "1x12 Deluxe Verb RI"
+        },
+        {
+          "value": 9,
+          "label": "1x12 JR Blues"
+        },
+        {
+          "value": 10,
+          "label": "1x12 Brit G12H55"
+        },
+        {
+          "value": 11,
+          "label": "1x12 Brit G12H75"
+        },
+        {
+          "value": 12,
+          "label": "1x12 Div13 CJ11"
+        },
+        {
+          "value": 13,
+          "label": "1x12 Brit G12T"
+        },
+        {
+          "value": 14,
+          "label": "1x12 V30"
+        },
+        {
+          "value": 15,
+          "label": "1x12 AC-20 DLX"
+        },
+        {
+          "value": 16,
+          "label": "1x12 Car Ambler"
+        },
+        {
+          "value": 17,
+          "label": "1x12 AST BV25"
+        },
+        {
+          "value": 18,
+          "label": "1x15 Vibrato Verb"
+        },
+        {
+          "value": 19,
+          "label": "1x15 Portabass"
+        },
+        {
+          "value": 20,
+          "label": "2x10 Super"
+        },
+        {
+          "value": 21,
+          "label": "2x10 Vibrato Lux"
+        },
+        {
+          "value": 22,
+          "label": "2x12 Bassguy"
+        },
+        {
+          "value": 23,
+          "label": "2x12 Double Verb"
+        },
+        {
+          "value": 24,
+          "label": "2x12 Double Verb SF"
+        },
+        {
+          "value": 25,
+          "label": "1x12 Class-A 15W"
+        },
+        {
+          "value": 26,
+          "label": "2x12 Class-A 30W"
+        },
+        {
+          "value": 27,
+          "label": "2x12 TX Star"
+        },
+        {
+          "value": 28,
+          "label": "2x12 Match Chief"
+        },
+        {
+          "value": 29,
+          "label": "1x12 Hot Kitty"
+        },
+        {
+          "value": 30,
+          "label": "2x12 Jazz 120"
+        },
+        {
+          "value": 31,
+          "label": "4x10 Bassguy"
+        },
+        {
+          "value": 32,
+          "label": "4x10 Brit JM45"
+        },
+        {
+          "value": 33,
+          "label": "4x10 Super Verb"
+        },
+        {
+          "value": 34,
+          "label": "4x10 SV Bass"
+        },
+        {
+          "value": 35,
+          "label": "4x12 Brit TV"
+        },
+        {
+          "value": 36,
+          "label": "4x12 Brit Greenback"
+        },
+        {
+          "value": 37,
+          "label": "4x12 Basketweave"
+        },
+        {
+          "value": 38,
+          "label": "4x12 Brit 800"
+        },
+        {
+          "value": 39,
+          "label": "4x12 Brit AX"
+        },
+        {
+          "value": 40,
+          "label": "4x12 Hipower"
+        },
+        {
+          "value": 41,
+          "label": "4x12 USA MC90"
+        },
+        {
+          "value": 42,
+          "label": "4x12 Recto Large"
+        },
+        {
+          "value": 43,
+          "label": "4x12 Recto Small"
+        },
+        {
+          "value": 44,
+          "label": "4x12 Recto Slant"
+        },
+        {
+          "value": 45,
+          "label": "4x12 Recto Straight"
+        },
+        {
+          "value": 46,
+          "label": "4x12 5153"
+        },
+        {
+          "value": 47,
+          "label": "4x12 Citrus"
+        },
+        {
+          "value": 48,
+          "label": "4x12 Rumble"
+        },
+        {
+          "value": 49,
+          "label": "2x12 Lead 80"
+        },
+        {
+          "value": 50,
+          "label": "4x12 Solo 100"
+        },
+        {
+          "value": 51,
+          "label": "Load Box LB-2 UK"
+        },
+        {
+          "value": 52,
+          "label": "Load Box LB-2 US"
+        },
+        {
+          "value": 53,
+          "label": "4x12 Friedman"
+        },
+        {
+          "value": 54,
+          "label": "2x12 Bassbuster"
+        },
+        {
+          "value": 55,
+          "label": "1x12 Tweed Alnico Blue"
+        },
+        {
+          "value": 56,
+          "label": "4x12 PVH 6160"
+        },
+        {
+          "value": 57,
+          "label": "4x12 Euro"
+        },
+        {
+          "value": 58,
+          "label": "2x12 Recto"
+        },
+        {
+          "value": 59,
+          "label": "2x12 Godzilla"
+        },
+        {
+          "value": 60,
+          "label": "1x12 Tweed C12Q"
+        },
+        {
+          "value": 61,
+          "label": "1x12 Dirty Shirley EV12L"
+        },
+        {
+          "value": 62,
+          "label": "1x12 USA Ext EV12L"
+        },
+        {
+          "value": 63,
+          "label": "2x12 Band Commander SRO"
+        },
+        {
+          "value": 64,
+          "label": "2x12 Guy Tron Alnico Blue"
+        },
+        {
+          "value": 65,
+          "label": "1x12 G12T-75"
+        },
+        {
+          "value": 66,
+          "label": "2x12 Class-A Greenback"
+        },
+        {
+          "value": 67,
+          "label": "2x12 Two Stone 1265"
+        },
+        {
+          "value": 68,
+          "label": "4x12 Lerxst Omega"
+        },
+        {
+          "value": 69,
+          "label": "1x12 Deluxe Oxford"
+        },
+        {
+          "value": 70,
+          "label": "4x12 Hipower Pete T"
+        },
+        {
+          "value": 71,
+          "label": "4x12 USA Semi-Open"
+        },
+        {
+          "value": 72,
+          "label": "2x12 Dizzy RV"
+        },
+        {
+          "value": 73,
+          "label": "4x12 Hipower Lindsey B"
+        },
+        {
+          "value": 74,
+          "label": "4x12 London Town Tall"
+        },
+        {
+          "value": 75,
+          "label": "Oxbow Loadbox"
+        },
+        {
+          "value": 76,
+          "label": "Double Notes Loadbox"
+        },
+        {
+          "value": 77,
+          "label": "1x10 Metro Blues"
+        },
+        {
+          "value": 78,
+          "label": "4x10 Bassguy RI"
+        },
+        {
+          "value": 79,
+          "label": "2x12 Class-A 30W Silver"
+        },
+        {
+          "value": 80,
+          "label": "2x10 Heart Key"
+        },
+        {
+          "value": 81,
+          "label": "4x12 1960BV"
+        },
+        {
+          "value": 82,
+          "label": "1x12 Deluxe Tweed"
+        },
+        {
+          "value": 83,
+          "label": "1x15 Heart Key"
+        },
+        {
+          "value": 84,
+          "label": "2x12 USA C90 Open Back"
+        },
+        {
+          "value": 85,
+          "label": "1x12 Friedman"
+        },
+        {
+          "value": 86,
+          "label": "2x12 5153 Stealth"
+        },
+        {
+          "value": 87,
+          "label": "4x12 5153 Stealth"
+        },
+        {
+          "value": 88,
+          "label": "1x12 Scholz"
+        },
+        {
+          "value": 89,
+          "label": "1x8 Princetone"
+        },
+        {
+          "value": 90,
+          "label": "1x12 Black Magick"
+        },
+        {
+          "value": 91,
+          "label": "8x10 SV Bass"
+        },
+        {
+          "value": 92,
+          "label": "Suhr Reactive Load"
+        }
+      ],
+      "paramName": "DISTORT_SPKRMODEL",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 136,
+      "name": "Power Amp Modeling",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_PAONOFF",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 137,
+      "name": "Scene Ignore",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_SCENEIGNORE",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum",
+      "help": {
+        "blurb": "When on, this block ignores scene changes."
+      }
+    },
+    {
+      "id": 138,
+      "name": "Speaker Breakup",
+      "value": 1,
+      "options": [
+        {
+          "value": 0,
+          "label": "SOFT"
+        },
+        {
+          "value": 1,
+          "label": "MEDIUM"
+        },
+        {
+          "value": 2,
+          "label": "HARD"
+        }
+      ],
+      "paramName": "DISTORT_SPKRBREAKUP",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 140,
+      "name": "Plate Suppr. Diodes",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_PLATEDIODE",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 142,
+      "name": "Auto Dyna-Cab Imp.",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_AUTO_SPKR_Z",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 143,
+      "name": "NFB Compensation",
+      "value": 0,
+      "options": [
+        {
+          "value": 0,
+          "label": "OFF"
+        },
+        {
+          "value": 1,
+          "label": "ON"
+        }
+      ],
+      "paramName": "DISTORT_NFBCOMP",
+      "family": "DISTORT",
+      "step": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
+      "id": 65520,
+      "name": "Zero All",
+      "value": 0,
+      "options": [],
+      "paramName": "DISTORT_ZEROEQ",
+      "family": "DISTORT",
+      "unitCode": "enum",
+      "kind": "enum",
+      "unusable": "no-range"
+    }
+  ],
+  "type": {
+    "value": 151,
+    "name": "Bogfish Strato"
+  },
+  "layout": {
+    "editorName": "Amp",
+    "family": "DISTORT",
+    "variantName": "Amp GTE 8.00",
+    "variantValue": null,
+    "fw": {
+      "gtet": "8,00"
+    },
+    "pinned": true,
+    "pages": [
+      {
+        "name": "Authentic",
+        "pageNum": 0,
+        "fw": {
+          "gtet": "10,00"
+        },
+        "value": "15,36,39,51,69,73,74,86,87,88,91,92,104,113,119,120,122,151,152,185,189,190,191,206,207,213,230,231,235,250,251,252,253,265,275,276,278,279,280,301,313,315,316,327",
+        "selectorParamName": "DISTORT_TYPE",
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Gain",
+                "paramName": "DISTORT_DRIVE",
+                "paramId": 7,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bass",
+                "paramName": "DISTORT_BASS",
+                "paramId": 8,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Mid",
+                "paramName": "DISTORT_MID",
+                "paramId": 9,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Treble",
+                "paramName": "DISTORT_TREBLE",
+                "paramId": 10,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Presence",
+                "paramName": "DISTORT_PRESENCE",
+                "paramId": 26,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Depth",
+                "paramName": "DISTORT_DEPTH",
+                "paramId": 22,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Master Volume",
+                "paramName": "DISTORT_MASTER",
+                "paramId": 11,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 8
+                }
+              },
+              {
+                "label": "HEADROOM",
+                "paramName": "DISTORT_VPLATEMON",
+                "paramId": 132,
+                "widget": "meter",
+                "rawWidget": "meterGainHeadroom",
+                "placement": {
+                  "positionExact": "465,370"
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Input\nTrim",
+                "paramName": "DISTORT_TRIM",
+                "paramId": 49,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Ideal",
+        "pageNum": 1,
+        "value": "",
+        "selectorParamName": "DISTORT_TYPE",
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Gain",
+                "paramName": "DISTORT_DRIVE",
+                "paramId": 7,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Bass",
+                "paramName": "DISTORT_BASS",
+                "paramId": 8,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Mid",
+                "paramName": "DISTORT_MID",
+                "paramId": 9,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Treble",
+                "paramName": "DISTORT_TREBLE",
+                "paramId": 10,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Presence",
+                "paramName": "DISTORT_PRESENCE",
+                "paramId": 26,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "Depth",
+                "paramName": "DISTORT_DEPTH",
+                "paramId": 22,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "Master Volume",
+                "paramName": "DISTORT_MASTER",
+                "paramId": 11,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 8
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Boost",
+                "paramName": "DISTORT_BOOST",
+                "paramId": 42,
+                "widget": "toggle",
+                "rawWidget": "toggleHorz",
+                "placement": {
+                  "col": 0,
+                  "offsetY": -70
+                }
+              },
+              {
+                "label": "Cut",
+                "paramName": "DISTORT_CUT",
+                "paramId": 47,
+                "widget": "toggle",
+                "rawWidget": "toggleHorz",
+                "placement": {
+                  "col": 2,
+                  "offsetY": -70
+                }
+              },
+              {
+                "label": "Fat",
+                "paramName": "DISTORT_FAT",
+                "paramId": 80,
+                "widget": "toggle",
+                "rawWidget": "toggleHorz",
+                "placement": {
+                  "col": 3,
+                  "offsetY": -70
+                }
+              },
+              {
+                "label": "Bright",
+                "paramName": "DISTORT_BRIGHT",
+                "paramId": 41,
+                "widget": "toggle",
+                "rawWidget": "toggleHorz",
+                "placement": {
+                  "col": 4,
+                  "offsetY": -70
+                }
+              },
+              {
+                "label": "Pres. Shift",
+                "paramName": "DISTORT_PRESSHIFT",
+                "paramId": 106,
+                "widget": "toggle",
+                "rawWidget": "toggleHorz",
+                "placement": {
+                  "col": 5,
+                  "offsetY": -70
+                }
+              },
+              {
+                "label": "Input\nTrim",
+                "paramName": "DISTORT_TRIM",
+                "paramId": 49,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "High\nTreble",
+                "paramName": "DISTORT_HITREBLE",
+                "paramId": 99,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Bright\nCap",
+                "paramName": "DISTORT_BRIGHTCAP",
+                "paramId": 16,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "Master Vol Trim",
+                "paramName": "DISTORT_MVTRIM",
+                "paramId": 79,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 8
+                }
+              },
+              {
+                "label": "HEADROOM",
+                "paramName": "DISTORT_VPLATEMON",
+                "paramId": 132,
+                "widget": "meter",
+                "rawWidget": "meterGainHeadroom",
+                "placement": {
+                  "positionExact": "465,370"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Preamp",
+        "pageNum": 2,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "INPUT BOOST",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "307,29"
+                }
+              },
+              {
+                "label": "Boost",
+                "paramName": "DISTORT_BOOST",
+                "paramId": 42,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Boost\nType",
+                "paramName": "DISTORT_BOOSTTYPE",
+                "paramId": 125,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Boost\nLevel",
+                "paramName": "DISTORT_BOOSTLVL",
+                "paramId": 124,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "SATURATION",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "562,29"
+                }
+              },
+              {
+                "label": "Saturation\nSwitch",
+                "paramName": "DISTORT_SATSWITCH",
+                "paramId": 56,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Saturation\nDrive",
+                "paramName": "DISTORT_SATDRIVE",
+                "paramId": 107,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Preamp Tube Type",
+                "paramName": "DISTORT_PRETUBETYPE",
+                "paramId": 71,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Low Cut\nFrequency",
+                "paramName": "DISTORT_HPFREQ",
+                "paramId": 12,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "High Cut\nFrequency",
+                "paramName": "DISTORT_LPFREQ",
+                "paramId": 13,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 8
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Preamp\nSag",
+                "paramName": "DISTORT_PRESAG",
+                "paramId": 98,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Tube\nHardness",
+                "paramName": "DISTORT_HARDNESS2",
+                "paramId": 50,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Triode 1\nPlate Freq",
+                "paramName": "DISTORT_FEEDFWDFREQ1",
+                "paramId": 69,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Triode 2\nPlate Freq",
+                "paramName": "DISTORT_FEEDFWDFREQ2",
+                "paramId": 68,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Preamp\nBias",
+                "paramName": "DISTORT_OFFSET2",
+                "paramId": 44,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Preamp Bias\nExcursion",
+                "paramName": "DISTORT_TRIODE2RATIO",
+                "paramId": 108,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "TONESTACK",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "817,209"
+                }
+              },
+              {
+                "label": "Tonestack\nType",
+                "paramName": "DISTORT_TONETYPE",
+                "paramId": 36,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Tonestack\nFreq",
+                "paramName": "DISTORT_TONEFREQ",
+                "paramId": 14,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "Tonestack\nLocation",
+                "paramName": "DISTORT_TONELOC",
+                "paramId": 20,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 8
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Power Amp",
+        "pageNum": 3,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Power Amp Modeling",
+                "paramName": "DISTORT_PAONOFF",
+                "paramId": 136,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Negative Feedback",
+                "paramName": "DISTORT_BETA",
+                "paramId": 27,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "NFB Compensation",
+                "paramName": "DISTORT_NFBCOMP",
+                "paramId": 143,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Pres. Shift",
+                "paramName": "DISTORT_PRESSHIFT",
+                "paramId": 106,
+                "widget": "toggle",
+                "rawWidget": "toggle",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Presence Frequency",
+                "paramName": "DISTORT_PRESFREQ",
+                "paramId": 28,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Depth Frequency",
+                "paramName": "DISTORT_DEPTHFREQ",
+                "paramId": 31,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Master Vol\nCap",
+                "paramName": "DISTORT_MVCAP",
+                "paramId": 33,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "Master Vol\nLocation",
+                "paramName": "DISTORT_MVPOSITION",
+                "paramId": 51,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 8
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "TRANSFORMER",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,209"
+                }
+              },
+              {
+                "label": "XFormer\nDrive",
+                "paramName": "DISTORT_XDRIVE",
+                "paramId": 48,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "XFormer\nMatching",
+                "paramName": "DISTORT_XFMATCH",
+                "paramId": 53,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Speaker Impedance",
+                "paramName": "DISTORT_SPKRDCR",
+                "paramId": 129,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "PI Bias Excursion",
+                "paramName": "DISTORT_PIEXCURSION",
+                "paramId": 116,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 6
+                }
+              },
+              {
+                "label": "Cathode Resistance",
+                "paramName": "DISTORT_CBRATIO",
+                "paramId": 95,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 7
+                }
+              },
+              {
+                "label": "Cathode Time Const",
+                "paramName": "DISTORT_CBTIME",
+                "paramId": 96,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 8
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Pwr Tubes + CF",
+        "pageNum": 4,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "POWER TUBES",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,29"
+                }
+              },
+              {
+                "label": "Power Tube Type",
+                "paramName": "DISTORT_TUBETYPE",
+                "paramId": 70,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Grid\nBias",
+                "paramName": "DISTORT_BIAS",
+                "paramId": 38,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Hardness",
+                "paramName": "DISTORT_PAHARDNESS",
+                "paramId": 90,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Mismatch",
+                "paramName": "DISTORT_PAOFFSET",
+                "paramId": 100,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Bias\nExcursion",
+                "paramName": "DISTORT_BIASEXCURSION",
+                "paramId": 65,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Plate Suppr.\nDiodes",
+                "paramName": "DISTORT_PLATEDIODE",
+                "paramId": 140,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 5
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "CATHODE FOLLOWER",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "560,209"
+                },
+                "fw": {
+                  "gtet": "9"
+                }
+              },
+              {
+                "label": "Compression",
+                "paramName": "DISTORT_CFTHRESH",
+                "paramId": 82,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                },
+                "fw": {
+                  "gtet": "9"
+                }
+              },
+              {
+                "label": "Harmonics",
+                "paramName": "DISTORT_CFCLIP",
+                "paramId": 35,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                },
+                "fw": {
+                  "gtet": "9"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Power Supply",
+        "pageNum": 5,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Supply Sag",
+                "paramName": "DISTORT_SUPPLYSAG",
+                "paramId": 25,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "B+",
+                "paramName": "DISTORT_VCCMON",
+                "paramId": 120,
+                "widget": "meter",
+                "rawWidget": "meterGainVert",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Power\nType",
+                "paramName": "DISTORT_SUPPLYTYPE",
+                "paramId": 88,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "AC Line\nFrequency",
+                "paramName": "DISTORT_LINEFREQ",
+                "paramId": 89,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              },
+              {
+                "label": "Variac",
+                "paramName": "DISTORT_VARIAC",
+                "paramId": 103,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "B+ Time Constant",
+                "paramName": "DISTORT_TIMECONST",
+                "paramId": 37,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Screen Frequency",
+                "paramName": "DISTORT_SCREENFREQ",
+                "paramId": 54,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Screen Q",
+                "paramName": "DISTORT_SCREENQ",
+                "paramId": 55,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 4
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Speaker",
+        "pageNum": 6,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Low Freq",
+                "paramName": "DISTORT_SPKRLFREQ",
+                "paramId": 29,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout",
+                "placement": {
+                  "positionExact": "305,30"
+                }
+              },
+              {
+                "label": "LF Reso",
+                "paramName": "DISTORT_SPKRLFGAIN",
+                "paramId": 30,
+                "widget": "knob",
+                "rawWidget": "knobMini",
+                "placement": {
+                  "positionExact": "305,128"
+                }
+              },
+              {
+                "label": "LF Q",
+                "paramName": "DISTORT_SPKRLFQ",
+                "paramId": 43,
+                "widget": "knob",
+                "rawWidget": "knobMini",
+                "placement": {
+                  "positionExact": "305,206"
+                }
+              },
+              {
+                "label": "XFormer Low Freq",
+                "paramName": "DISTORT_XFHPF",
+                "paramId": 18,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "305,284"
+                }
+              },
+              {
+                "label": "Graph",
+                "paramName": null,
+                "paramId": null,
+                "widget": "graph",
+                "rawWidget": "graph4",
+                "placement": {
+                  "positionExact": "395,24"
+                }
+              },
+              {
+                "label": "Speaker Imp. Curve",
+                "paramName": "DISTORT_SPKRMODEL",
+                "paramId": 130,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5ThinTight1Line",
+                "placement": {
+                  "positionExact": "405,284"
+                }
+              },
+              {
+                "label": "Auto Dyna-Cab Imp.",
+                "paramName": "DISTORT_AUTO_SPKR_Z",
+                "paramId": 142,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5ThinTight1Line",
+                "placement": {
+                  "positionExact": "405,345"
+                }
+              },
+              {
+                "label": "Cab Resonance",
+                "paramName": "DISTORT_CABRESONANCE",
+                "paramId": 131,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "542,284"
+                }
+              },
+              {
+                "label": "Speaker Breakup",
+                "paramName": "DISTORT_SPKRBREAKUP",
+                "paramId": 138,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight",
+                "placement": {
+                  "positionExact": "640,284"
+                }
+              },
+              {
+                "label": "High Freq",
+                "paramName": "DISTORT_SPKRHFREQ",
+                "paramId": 45,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout",
+                "placement": {
+                  "positionExact": "745,30"
+                }
+              },
+              {
+                "label": "HF Reso",
+                "paramName": "DISTORT_SPKRHFGAIN",
+                "paramId": 46,
+                "widget": "knob",
+                "rawWidget": "knobMini",
+                "placement": {
+                  "positionExact": "745,128"
+                }
+              },
+              {
+                "label": "HF Slope",
+                "paramName": "DISTORT_SPKRHFQ",
+                "paramId": 102,
+                "widget": "knob",
+                "rawWidget": "knobMini",
+                "placement": {
+                  "positionExact": "745,206"
+                }
+              },
+              {
+                "label": "XFormer Hi Freq",
+                "paramName": "DISTORT_XFLPF",
+                "paramId": 19,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "745,284"
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Seperator",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "labelSeperator",
+                "placement": {
+                  "positionExact": "860,25"
+                }
+              },
+              {
+                "label": "Speaker\nDrive",
+                "paramName": "DISTORT_SPKRDRIVE",
+                "paramId": 52,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "900,30"
+                }
+              },
+              {
+                "label": "Speaker\nCompress.",
+                "paramName": "DISTORT_MOTORDRIVE",
+                "paramId": 117,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "985,30"
+                }
+              },
+              {
+                "label": "Speaker\nCompliance",
+                "paramName": "DISTORT_SPKRDYNAMICS",
+                "paramId": 127,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "900,157"
+                }
+              },
+              {
+                "label": "Speaker\nTime Const",
+                "paramName": "DISTORT_MDTIME",
+                "paramId": 118,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "985,157"
+                }
+              },
+              {
+                "label": "Speaker\nThump",
+                "paramName": "DISTORT_SPKRTHUMP",
+                "paramId": 139,
+                "widget": "knob",
+                "rawWidget": "knobMiniReadout2",
+                "placement": {
+                  "positionExact": "900,284"
+                }
+              },
+              {
+                "label": "Output Mode",
+                "paramName": "DISTORT_OUTPUTTYPE",
+                "paramId": 126,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5Mini",
+                "placement": {
+                  "positionExact": "1025,294"
+                }
+              },
+              {
+                "label": "Gain",
+                "paramName": "DISTORT_MDMON",
+                "paramId": 122,
+                "widget": "meter",
+                "rawWidget": "meterGainVertShort",
+                "placement": {
+                  "positionExact": "1071,25"
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knobCompact"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knobCompact",
+                "placement": {
+                  "positionExact": "1179,185"
+                }
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Input EQ",
+        "pageNum": 7,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Type",
+                "paramName": "DISTORT_INEQTYPE",
+                "paramId": 104,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1"
+              },
+              {
+                "label": "Frequency",
+                "paramName": "DISTORT_INEQFREQ",
+                "paramId": 74,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Q",
+                "paramName": "DISTORT_INEQQ",
+                "paramId": 73,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Gain",
+                "paramName": "DISTORT_INEQGAIN",
+                "paramId": 75,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "Graph",
+                "paramName": null,
+                "paramId": null,
+                "widget": "graph",
+                "rawWidget": "graph4"
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "Low Cut",
+                "paramName": "DISTORT_HPFREQ",
+                "paramId": 12,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "High Cut",
+                "paramName": "DISTORT_HICUT",
+                "paramId": 85,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Definition",
+                "paramName": "DISTORT_DEFINITION",
+                "paramId": 81,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Output EQ",
+        "pageNum": 8,
+        "value": "5",
+        "selectorParamName": "DISTORT_EQTYPE",
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "",
+                "paramName": null,
+                "paramId": null,
+                "widget": "spacer",
+                "rawWidget": "spacer"
+              },
+              {
+                "label": "200",
+                "paramName": "DISTORT_EQ1",
+                "paramId": 57,
+                "widget": "slider",
+                "rawWidget": "slider",
+                "placement": {
+                  "offsetX": 52
+                }
+              },
+              {
+                "label": "400",
+                "paramName": "DISTORT_EQ2",
+                "paramId": 58,
+                "widget": "slider",
+                "rawWidget": "slider"
+              },
+              {
+                "label": "800",
+                "paramName": "DISTORT_EQ3",
+                "paramId": 59,
+                "widget": "slider",
+                "rawWidget": "slider"
+              },
+              {
+                "label": "1600",
+                "paramName": "DISTORT_EQ4",
+                "paramId": 60,
+                "widget": "slider",
+                "rawWidget": "slider"
+              },
+              {
+                "label": "3200",
+                "paramName": "DISTORT_EQ5",
+                "paramId": 61,
+                "widget": "slider",
+                "rawWidget": "slider"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Dynamics",
+        "pageNum": 9,
+        "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "OUTPUT COMPRESSOR",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,29"
+                }
+              },
+              {
+                "label": "Out Compression",
+                "paramName": "DISTORT_COMPRESSION",
+                "paramId": 77,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 0
+                }
+              },
+              {
+                "label": "Out Comp\nThreshold",
+                "paramName": "DISTORT_THRESHOLD",
+                "paramId": 78,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 1
+                }
+              },
+              {
+                "label": "Out Comp\nClarity",
+                "paramName": "DISTORT_CLARITY",
+                "paramId": 72,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 2
+                }
+              },
+              {
+                "label": "Gain",
+                "paramName": "DISTORT_GAINMON",
+                "paramId": 121,
+                "widget": "meter",
+                "rawWidget": "meterGainVert",
+                "placement": {
+                  "col": 3
+                }
+              },
+              {
+                "label": "Master Bias\nExcursion",
+                "paramName": "DISTORT_BIASX",
+                "paramId": 134,
+                "widget": "knob",
+                "rawWidget": "knob",
+                "placement": {
+                  "col": 5
+                },
+                "fw": {
+                  "gtet": "4,2"
+                }
+              }
+            ]
+          },
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Out Comp\nType",
+                "paramName": "DISTORT_COMPTYPE",
+                "paramId": 111,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5",
+                "placement": {
+                  "col": 0,
+                  "offsetX": 40
+                }
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Level",
+                "paramName": "DISTORT_LEVEL",
+                "paramId": 1,
+                "widget": "knob",
+                "rawWidget": "knob"
+              },
+              {
+                "label": "Balance",
+                "paramName": "DISTORT_PAN",
+                "paramId": 2,
+                "widget": "knob",
+                "rawWidget": "knob"
+              }
+            ]
+          },
+          {
+            "section": "mixer",
+            "controls": [
+              {
+                "label": "Input\nSelect",
+                "paramName": "DISTORT_INPUTSELECT",
+                "paramId": 21,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass\nMode",
+                "paramName": "DISTORT_BYPASSMODE",
+                "paramId": 3,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight"
+              },
+              {
+                "label": "Bypass",
+                "paramName": "DISTORT_BYPASS",
+                "paramId": 5,
+                "widget": "button",
+                "rawWidget": "btnBypass"
+              },
+              {
+                "label": "Scene\nIgnore",
+                "paramName": "DISTORT_SCENEIGNORE",
+                "paramId": 137,
+                "widget": "button",
+                "rawWidget": "btnIgnoreScene"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

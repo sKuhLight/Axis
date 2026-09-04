@@ -1979,3 +1979,95 @@ device's own `sectionLabel` headings use.
 
 Board schema `b23` re-seeds Default profiles; a board saved with the old placement would keep the
 cone pair pinned to the top of the page forever.
+
+## Phase 3.3 / 3.4 — The Device Canvas Renders, and the Symbol Tables Shrink
+
+`DeviceCanvas.svelte` replaces `ControlSurface.svelte` as the block editor's body. It draws each
+control absolutely positioned on a fixed 2480px surface (the device's 1240px canvas at 2x) from
+`placeLayout()`, one canvas per page tab, with no packing, snapping, reflow or re-ordering anywhere in
+the path. `BlockEditor.svelte` now mounts it directly; `ControlSurface.svelte`, `deviceLayoutBoard.ts`
+and `surfaceGrid.ts` are unreferenced from the app and are Phase 4's deletion.
+
+Controls bind to live params by the device-true `paramId` the layout carries. `widgetView()` in
+`deviceWidgets.ts` picks how to paint each family off the same token prefixes the size table already
+keys on, so there is no second 90-row table. A control the device draws as an input but that resolves
+to no live param degrades to a read-only label rather than to a knob that writes nowhere — that covers
+the cab's UI pseudo-params (`CABINET_NAME1`, `0xFF00`+) and anything ForgeFX flagged `unusable`. A
+param the device also reports as a MONITOR renders as a meter, never as a draggable knob.
+
+The canvas lays out at DEVICE pixels under one `scale(DEVICE_SCALE)` transform rather than consuming
+the placer's already-scaled numbers directly: laying out at 2x would draw device-sized boxes around
+half-sized text, borders and knob dials. The placer's rendered-px contract is unchanged; the component
+divides once (`dp()`) and the transform does the rest.
+
+`Knob.svelte` is reused as-is (it already takes a `size`). `Dropdown.svelte` and `Toggle.svelte` gained
+additive size overrides — `fixedWidth` / `fieldHeight` / `hideLabel`, and a `dense` layout — because
+both were sized for grid cards and cannot otherwise fit a 28px-tall device box; their behaviour and
+default appearance are unchanged.
+
+### The alternate gate — resolved in the renderer, not in ForgeFX
+
+The device anchors ALTERNATES at one coordinate and swaps them on another control's value. `deviceAlternates.ts`
+owns that decision, and the decision is the renderer's because the gates read LIVE param values: the
+layout is fetched once per block open and never re-read on a param write, so resolving server-side
+would cost a round trip and a remount per click. ForgeFX keeps what it already owns — page selectors,
+firmware pruning — which are structural and only change when the block is re-opened anyway.
+
+It is a closed set, not a patch surface. Sweeping the served corpus (after `pruneControlsByFw`) finds
+exactly 17 co-anchored groups in three shapes, and `deviceAlternates.test.ts` asserts that census so a
+fourth shape fails loudly instead of silently drawing index 0:
+
+| shape | n | gate |
+|---|---|---|
+| `graph_cab*` / `graph_cabZoom*` | 9 | the page's own `CABINET_ZOOM` toggle |
+| `knobCompact` / `dropdownCompact3` (PEQ `Gain n` vs `Slope n`) | 6 | the band's filter type, via `eq.ts:shapeFromLabel` |
+| `dropdown1` / `dropdown1` (FM3 GLOBAL out 2) | 2 | none — see below |
+
+The GLOBAL out-2 pair is gated on a hardware setting the block protocol does not expose. It falls
+through to index 0 (the editor's own first-authored control) and that fallback is asserted, so a later
+"fix" has to be deliberate.
+
+### 3.4 — what the layout took over, and what it could not
+
+Taken over: the six private `new Set([...])` graph-token lists (`eqGraphs.FREQ_GRAPHS`,
+`modulationGraphs.MODULATION_GRAPHS`, `cabAlignmentGraphs.CAB_GRAPHS`, `adsrGraphs.ADSR_GRAPHS`, and
+the inline checks in `compressorGraphs`/`megaTapGraphs`) collapse into one `graphKind()` dispatch in
+`deviceWidgets.ts`, next to the sizes. Six lists over one vocabulary was five chances to disagree.
+Graphs are keyed and SIZED by the `graph_*` control's own box, so the fixed per-kind `w`/`h` in the
+old ControlSurface catalog is gone. The cab's identity cluster (`CAB n` heading, cabinet name, Bank,
+Type, Picker/Mute/Solo) is now just the controls the device authored, which retires
+`cabIdentityCards.ts`'s `MAX_SLOTS` and its `` `CAB ${n}` `` title literals along with `BlockEditor`'s
+`CAB_PICKER_IDS` / `CAB_LEGACY_ONLY_IDS` hide lists — the host supplies only the TEXT for a pseudo-param
+(`pseudoText`) and what a click means (`onPseudoClick`), so the canvas stays ignorant of what a cab is.
+
+Not taken over, with reasons recorded in the code:
+
+- **`eqGraphs.BAND_GROUPS` / `CUTS` stay.** The plan expected these to fall out of "the params the
+  device drew next to the graph". They cannot: grouping a band needs freq/gain/Q/type to be matched to
+  each other, and the corpus gives no placement signal for that — the only available cue is symbol
+  spelling, which the module already documents as unusable (the amp's `SPKRLFREQ` / `SPKRLFQ` do not
+  tokenize, and a band's shape needs an explicit binding to its type enum regardless). Deriving it
+  would be *more* guessing than the explicit table, not less.
+- **`eq.ts:MIN_BANDS` (">=4 frequency sliders = a graphic EQ") stays.** The device does not say it: a
+  graphic EQ has no `graph_*` control anywhere in its layout. What the rework did retire is its effect
+  on ARRANGEMENT — the bands are no longer collapsed onto a `FaderBank` widget that replaced them, so
+  it now only answers "which params share a response curve".
+- **`eq.ts:shapeFromLabel` stays**, as planned, and gained a second caller: shape is a property of the
+  filter type's selected VALUE, and the layout is value-independent.
+
+### Regression to decide
+
+`cabMicGraphs.ts` / `CabMicGraphic.svelte` (the DynaCab speaker-cone graphic) is no longer mounted.
+It has **no device control behind it** — the cab page authors no graph token in DynaCab mode — so under
+"the device is the only source of UI knowledge" it has no anchor to be drawn at. The module and
+component are left in the tree pending an operator call: drop it, or give it an Axis-owned anchor.
+
+### Verification
+
+`tsc --noEmit` clean, `svelte-check` clean, production build clean. `deviceCanvas.test.ts` (2539 pages
+x 3 devices) still reports **582 flow rows pushed across 489 pages** — unchanged, so no widget metric
+moved — and now also asserts that every corpus `rawWidget` resolves to a view, that no `graph_*` token
+resolves to a draggable control, and that no graph token is outside the vocabulary. Unit suite: 1639
+passing, 1 pre-existing unrelated failure (`convertConflicts.test.ts` asserts a `◈` glyph that
+`catalog.ts` now serves as SVG). **Visual parity against FM3-Edit is NOT verified** — the reference
+screenshots still do not exist in the repo.

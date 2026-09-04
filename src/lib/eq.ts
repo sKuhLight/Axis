@@ -16,6 +16,13 @@ export interface EQBand {
   shape?: EQShape;
 }
 
+// SURVIVES THE LAYOUT REWORK, deliberately. Everything else Axis used to infer about a control now
+// comes from the served layout, but a band's SHAPE cannot: high-pass vs shelf vs bell is a property of
+// the filter type's currently selected VALUE, and the layout is value-independent — it places the same
+// `Type` dropdown whatever that dropdown says. Two callers depend on it for exactly that reason:
+// `eqGraphs.ts` (which curve to draw) and `deviceAlternates.ts` (a shelf/cut band shows its Slope
+// dropdown where a peaking band shows its Gain knob).
+//
 // Curve shape from a band's device-true type label. Two label families exist and they must be read in
 // this order: the Filter/Plex/Multitap/amp-input-EQ types NAME their own side (`Low-Pass`, `HIGHSHELF`,
 // spelling and hyphenation vary by family), while PEQ's types are side-agnostic (`Shelving`,
@@ -60,7 +67,14 @@ export interface GeqBand {
 }
 
 /** Minimum sliders in a row before it counts as a band bank — below this it is an ordinary control row
- *  that happens to carry a numeric label. */
+ *  that happens to carry a numeric label.
+ *
+ *  ALSO SURVIVES THE LAYOUT REWORK. The rework's rule is "if the device says it, don't infer it" — and
+ *  the device does NOT say it here: a graphic EQ has no `graph_*` control anywhere in its layout (see
+ *  `deriveEqGraphs`'s Geq fallback), so there is nothing to read instead. What the rework DID retire is
+ *  this function's effect on ARRANGEMENT: the bands used to be collapsed into one `FaderBank` widget
+ *  that replaced them on the board. The device canvas draws each slider at its own coordinate, so the
+ *  band set now only answers "which params share a response curve", never "where do they go". */
 const MIN_BANDS = 4;
 
 /** The graphic-EQ bands of a block, in device order, or `[]` when its layout has no band row.

@@ -2,18 +2,16 @@
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from './catalog';
-  import ControlSurface from './ControlSurface.svelte';
+  import DeviceCanvas from './DeviceCanvas.svelte';
   import GridMap from './GridMap.svelte';
   import QuickBuild from './QuickBuild.svelte';
-  import { geqBandsFromLayout } from './eq';
   import { deriveEqGraphs } from './eqGraphs';
   import { deriveModulationGraphs } from './modulationGraphs';
   import { deriveCompressorGraphs } from './compressorGraphs';
   import { deriveCabAlignmentGraphs } from './cabAlignmentGraphs';
-  import { deriveCabMicGraphs } from './cabMicGraphs';
-  import { deriveCabIdentityCards } from './cabIdentityCards';
   import { deriveAdsrGraphs } from './adsrGraphs';
   import { deriveMegaTapGraphs } from './megaTapGraphs';
+  import { deriveCabMicGraphs } from './cabMicGraphs';
   import type { CabState, CabSlot } from './types';
 
   const editor = getEditorSurface();
@@ -67,31 +65,37 @@
   const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const compressorGraphs = $derived(deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const cabAlignmentGraphs = $derived(deriveCabAlignmentGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
-  // DynaCab is a per-slot MODE (see `dynaMode` above), not a separate layout — gate the mic graphic on it
-  // so a legacy IR cab never draws one.
-  const cabMicGraphs = $derived(deriveCabMicGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums, dyna: dynaMode }));
-  // Per-slot cab identity cards. Fed by the SAME `cabState` snapshot the header's picker button uses —
-  // already re-read whenever the picker closes — so a pick updates the card with no extra fetch.
-  const cabIdentityCards = $derived(
-    isCab ? deriveCabIdentityCards({ layout: editor.blockLayout, enums: editor.enums, cabState, dyna: dynaMode }) : []
-  );
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
+  // The DynaCab speaker cone. The served layout says whether the block has one (a `dynaCabControl`
+  // control) and where — no mode flag needed here: ForgeFX already picked the DynaCab variant.
+  const cabMicGraphs = $derived(deriveCabMicGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const megaTapGraphs = $derived(deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
-  // Fixed-frequency gain bands (GEQ blocks + the amp's built-in output EQ) → one vertical fader bank
-  // on the control surface, in device order with the device's own band labels.
-  const geqBands = $derived.by(() => {
-    const byId = new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p]));
-    return geqBandsFromLayout(editor.blockLayout)
-      .map((b) => ({ key: `gb${b.paramId}`, label: b.label, gain: byId.get(b.paramId)! }))
-      .filter((b) => !!b.gain);
-  });
-  // cab IR picker owns mode/bank/IR/dyna params — hide them from the generic surface catalog
-  const CAB_PICKER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 31, 85, 86];
-  // Legacy-only Cab params that DynaCab mode does not use: IR Length (70/71) and Proximity (20/21). Hidden
-  // when the cab is a DynaCab so the surface shows only the controls the DynaCab actually exposes — the
-  // mic graphic + Level/Pan/Low Cut/High Cut/slopes + the Position/Distance knobs.
-  const CAB_LEGACY_ONLY_IDS = [70, 71, 20, 21];
-  const hideIds = $derived(isCab ? (dynaMode ? [...CAB_PICKER_IDS, ...CAB_LEGACY_ONLY_IDS] : CAB_PICKER_IDS) : []);
+
+  // ── cab pseudo-params ──
+  // The Cab page authors five controls per slot whose `paramId` is a UI pseudo-id (0xFF00+): the slot
+  // heading, the cabinet NAME, and the Picker / Mute / Solo buttons. The block protocol has no value
+  // for those, so the canvas asks the host what to show and what a click means. Everything the cab
+  // page draws now comes from the device's own layout — which is what retires the hand-built
+  // `cabIdentityCards` slot cards (`MAX_SLOTS`, the `CAB n` title literals, the page/row anchoring).
+  const cabSlotIndex = (paramName: string | null | undefined) => {
+    const m = /(\d+)$/.exec(paramName ?? '');
+    return m ? Number(m[1]) : null;
+  };
+  const cabSlotOf = (paramName: string | null | undefined): CabSlot | null => {
+    const n = cabSlotIndex(paramName);
+    return n == null ? null : (cabState?.slots.find((s) => s.slot === n) ?? null);
+  };
+  const pseudoText = (c: { paramName: string | null; paramId: number | null }): string | null => {
+    if (!isCab || !c.paramName) return null;
+    const slot = cabSlotOf(c.paramName);
+    if (/^CABINET_NAME/.test(c.paramName)) return slot ? cabSlotLabel(slot, dynaMode) : '—';
+    if (/^CABINET_TYPE/.test(c.paramName)) return slot ? String(slot.irName) : null;
+    return null;
+  };
+  const onPseudoClick = (c: { paramName: string | null }) => {
+    const n = cabSlotIndex(c.paramName);
+    if (isCab && /^CABINET_PICKER/.test(c.paramName ?? '') && n != null) editor.openCabPicker(n - 1);
+  };
 
   const CHAN = ['A', 'B', 'C', 'D'];
 
@@ -205,22 +209,19 @@
       {:else if editor.sheetState === 'error'}
         <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
       {:else}
-        <ControlSurface
+        <DeviceCanvas
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
           {eqGraphs}
           {modulationGraphs}
           {compressorGraphs}
           {cabAlignmentGraphs}
-          {cabMicGraphs}
-          {cabIdentityCards}
           {adsrGraphs}
           {megaTapGraphs}
-          {geqBands}
-          geqTitle={editor.blockType?.name || 'Graphic EQ'}
-          {hideIds}
+          {cabMicGraphs}
+          {pseudoText}
+          {onPseudoClick}
           bind:q
-          hideSearch
         />
       {/if}
 

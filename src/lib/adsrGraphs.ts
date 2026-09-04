@@ -1,4 +1,5 @@
 import type { DeviceLayout, NamedParam } from './types';
+import { graphKind } from './deviceWidgets';
 
 export interface AdsrGraphSpec {
   key: string;
@@ -13,7 +14,6 @@ export interface AdsrGraphSpec {
   threshold?: NamedParam;
 }
 
-const ADSR_GRAPHS = new Set(['graph_adsr', 'graph_adsr_marker']);
 
 /** Resolve each Controllers ADSR graph from the matching page-local ADSR-numbered controls. */
 export function deriveAdsrGraphs(input: {
@@ -35,7 +35,7 @@ export function deriveAdsrGraphs(input: {
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
       const graphSlot = slot++;
-      if (!ADSR_GRAPHS.has(control.rawWidget ?? '')) continue;
+      if (graphKind(control.rawWidget) !== 'adsr') continue;
       out.push({
         key: `adsr${adsr}`,
         page,
