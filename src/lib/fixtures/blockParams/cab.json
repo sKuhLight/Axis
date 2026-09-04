@@ -2232,6 +2232,67 @@
       "kind": "enum"
     },
     {
+      "id": 43,
+      "name": "Preamp Type",
+      "value": 5,
+      "options": [
+        {
+          "value": 0,
+          "label": "NONE"
+        },
+        {
+          "value": 1,
+          "label": "TUBE"
+        },
+        {
+          "value": 2,
+          "label": "BIPOLAR"
+        },
+        {
+          "value": 3,
+          "label": "FET I"
+        },
+        {
+          "value": 4,
+          "label": "FET II"
+        },
+        {
+          "value": 5,
+          "label": "TRANSFORMER"
+        },
+        {
+          "value": 6,
+          "label": "TAPE 70us"
+        },
+        {
+          "value": 7,
+          "label": "TAPE 50us"
+        },
+        {
+          "value": 8,
+          "label": "TAPE 35us"
+        },
+        {
+          "value": 9,
+          "label": "VINTAGE"
+        },
+        {
+          "value": 10,
+          "label": "MODERN"
+        },
+        {
+          "value": 11,
+          "label": "EXCITER"
+        }
+      ],
+      "paramName": "CABINET_PRETYPE",
+      "family": "CABINET",
+      "step": 0,
+      "default": 0,
+      "unitCode": "enum",
+      "kind": "enum"
+    },
+    {
       "id": 47,
       "name": "Preamp Mode",
       "value": 0,
@@ -3045,10 +3106,7 @@
       "unusable": "no-range"
     }
   ],
-  "type": {
-    "value": 20,
-    "name": "1x15 VIBROVERB"
-  },
+  "type": null,
   "layout": {
     "editorName": "Cab",
     "family": "CABINET",
@@ -3061,7 +3119,27 @@
         "fw": {
           "gtet": "6,03"
         },
+        "layout": "LAYOUT_MIXER1",
         "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Input\nMode",
+                "paramName": "CABINET_INPUTSEL",
+                "paramId": 42,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1Tight",
+                "placement": {
+                  "positionExact": "196,230"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
+              }
+            ]
+          },
           {
             "section": "parameters",
             "controls": [
@@ -3073,6 +3151,10 @@
                 "rawWidget": "labelBold",
                 "placement": {
                   "positionExact": "315,63"
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 28
                 }
               },
               {
@@ -3083,6 +3165,10 @@
                 "rawWidget": "btnRectangle",
                 "placement": {
                   "positionExact": "376,63"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               },
               {
@@ -3093,6 +3179,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "455,63"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE1"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3103,6 +3196,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "491,63"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE1"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3113,6 +3213,10 @@
                 "rawWidget": "dropdownCabBank",
                 "placement": {
                   "positionExact": "321,105"
+                },
+                "bounds": {
+                  "w": 117,
+                  "h": 24
                 }
               },
               {
@@ -3123,6 +3227,10 @@
                 "rawWidget": "readoutCabNumber",
                 "placement": {
                   "positionExact": "440,105"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 24
                 }
               },
               {
@@ -3133,6 +3241,13 @@
                 "rawWidget": "labelCabName",
                 "placement": {
                   "positionExact": "321,135"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_TYPE1"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3146,6 +3261,10 @@
                 },
                 "fw": {
                   "gtet": "3,3"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3156,6 +3275,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3166,6 +3289,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3176,6 +3303,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3186,6 +3317,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3196,6 +3331,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3206,6 +3345,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3216,6 +3359,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 9
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -3231,6 +3378,10 @@
                 "rawWidget": "labelBold",
                 "placement": {
                   "positionExact": "315,243"
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 28
                 }
               },
               {
@@ -3241,6 +3392,10 @@
                 "rawWidget": "btnRectangle",
                 "placement": {
                   "positionExact": "376,243"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               },
               {
@@ -3251,6 +3406,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "455,243"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE2"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3261,6 +3423,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "491,243"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE2"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3271,6 +3440,10 @@
                 "rawWidget": "dropdownCabBank",
                 "placement": {
                   "positionExact": "321,285"
+                },
+                "bounds": {
+                  "w": 117,
+                  "h": 24
                 }
               },
               {
@@ -3281,6 +3454,10 @@
                 "rawWidget": "readoutCabNumber",
                 "placement": {
                   "positionExact": "440,285"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 24
                 }
               },
               {
@@ -3291,6 +3468,13 @@
                 "rawWidget": "labelCabName",
                 "placement": {
                   "positionExact": "321,315"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_TYPE2"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3304,6 +3488,10 @@
                 },
                 "fw": {
                   "gtet": "3,3"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3314,6 +3502,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3324,6 +3516,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3334,6 +3530,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3344,6 +3544,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3354,6 +3558,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3364,6 +3572,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3374,6 +3586,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 9
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -3386,7 +3602,11 @@
                 "paramName": "CABINET_LEVEL",
                 "paramId": 28,
                 "widget": "knob",
-                "rawWidget": "knobCompact"
+                "rawWidget": "knobCompact",
+                "bounds": {
+                  "w": 83,
+                  "h": 120
+                }
               }
             ]
           },
@@ -3401,6 +3621,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "positionExact": "1179,185"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -3408,7 +3632,11 @@
                 "paramName": "CABINET_BYPASS",
                 "paramId": 32,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
@@ -3418,16 +3646,80 @@
                 "rawWidget": "btnIgnoreScene",
                 "fw": {
                   "gtet": "5,3"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER1",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1179,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1188,325"
+        }
       },
       {
         "name": "Preamp",
         "pageNum": 1,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "TONE",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 3
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
+                }
+              },
+              {
+                "label": "FILTERS",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "647,209"
+                },
+                "fw": {
+                  "gtet": "4"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 4
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
+                }
+              }
+            ]
+          },
           {
             "section": "parameters",
             "controls": [
@@ -3436,7 +3728,11 @@
                 "paramName": "CABINET_PRETYPE",
                 "paramId": 43,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1p5"
+                "rawWidget": "dropdown1p5",
+                "bounds": {
+                  "w": 124,
+                  "h": 136
+                }
               },
               {
                 "label": "Preamp Mode",
@@ -3446,6 +3742,10 @@
                 "rawWidget": "dropdown1p5",
                 "placement": {
                   "positionExact": "435,50"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 136
                 }
               },
               {
@@ -3453,49 +3753,81 @@
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "Drive",
                 "paramName": "CABINET_DRIVE",
                 "paramId": 33,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Saturation",
                 "paramName": "CABINET_BIAS",
                 "paramId": 34,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "VU",
                 "paramName": "CABINET_VUMETER",
                 "paramId": 61,
                 "widget": "meter",
-                "rawWidget": "meterVuVert"
+                "rawWidget": "meterVuVert",
+                "render": {
+                  "minDb": -40,
+                  "maxDb": 20
+                },
+                "bounds": {
+                  "w": 73,
+                  "h": 320
+                }
               }
             ]
           },
@@ -3507,28 +3839,44 @@
                 "paramName": "CABINET_BASS",
                 "paramId": 44,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Mid",
                 "paramName": "CABINET_MID",
                 "paramId": 45,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Treble",
                 "paramName": "CABINET_TREBLE",
                 "paramId": 46,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "Low\nCut",
@@ -3541,6 +3889,10 @@
                 },
                 "fw": {
                   "gtet": "4"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3554,6 +3906,10 @@
                 },
                 "fw": {
                   "gtet": "4"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3567,6 +3923,10 @@
                 },
                 "fw": {
                   "gtet": "4"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3580,6 +3940,10 @@
                 },
                 "fw": {
                   "gtet": "4"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -3592,14 +3956,22 @@
                 "paramName": "CABINET_LEVEL",
                 "paramId": 28,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "CABINET_PAN",
                 "paramId": 29,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3611,21 +3983,33 @@
                 "paramName": "CABINET_INPUTSEL",
                 "paramId": 42,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "CABINET_BYPASSMODE",
                 "paramId": 30,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "CABINET_BYPASS",
                 "paramId": 32,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
@@ -3635,16 +4019,77 @@
                 "rawWidget": "btnIgnoreScene",
                 "fw": {
                   "gtet": "5,3"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Room/Air",
         "pageNum": 2,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "ROOM",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 8
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
+                }
+              },
+              {
+                "label": "AIR",
+                "paramName": null,
+                "paramId": null,
+                "widget": "label",
+                "rawWidget": "sectionLabel",
+                "placement": {
+                  "positionExact": "305,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 2
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
+                }
+              }
+            ]
+          },
           {
             "section": "parameters",
             "controls": [
@@ -3653,56 +4098,88 @@
                 "paramName": "CABINET_ROOMMIX",
                 "paramId": 35,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Room\nSize",
                 "paramName": "CABINET_ROOMSIZE",
                 "paramId": 36,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Room\nShape",
                 "paramName": "CABINET_ROOMSHAPE",
                 "paramId": 56,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1"
+                "rawWidget": "dropdown1",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Floor\nReflections",
                 "paramName": "CABINET_FLOORLVL",
                 "paramId": 53,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Room\nDiffusion",
                 "paramName": "CABINET_DIFFUSION",
                 "paramId": 59,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "LF\nDamping",
                 "paramName": "CABINET_LFDAMPING",
                 "paramId": 57,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "HF\nDamping",
                 "paramName": "CABINET_HFDAMPING",
                 "paramId": 58,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Mic\nSpacing",
                 "paramName": "CABINET_MICSPACE",
                 "paramId": 37,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3714,28 +4191,44 @@
                 "paramName": "CABINET_AIR",
                 "paramId": 54,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Frequency",
                 "paramName": "CABINET_AIRFREQ",
                 "paramId": 55,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "Proximity\nFrequency",
                 "paramName": "CABINET_PROXFREQ",
                 "paramId": 41,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3747,14 +4240,22 @@
                 "paramName": "CABINET_LEVEL",
                 "paramId": 28,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "CABINET_PAN",
                 "paramId": 29,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3766,21 +4267,33 @@
                 "paramName": "CABINET_INPUTSEL",
                 "paramId": 42,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "CABINET_BYPASSMODE",
                 "paramId": 30,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "CABINET_BYPASS",
                 "paramId": 32,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
@@ -3790,11 +4303,28 @@
                 "rawWidget": "btnIgnoreScene",
                 "fw": {
                   "gtet": "5,3"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Align",
@@ -3802,6 +4332,7 @@
         "fw": {
           "gtet": "6,03"
         },
+        "layout": "LAYOUT_MIXER1",
         "rows": [
           {
             "section": "parameters",
@@ -3814,6 +4345,10 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "positionExact": "196,230"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3827,6 +4362,15 @@
                 },
                 "fw": {
                   "gtet": "12,00"
+                },
+                "render": {
+                  "controllingParamName": "CABINET_ZOOM",
+                  "controllingParamValue": "0",
+                  "graphIndex": "0,1,2,3"
+                },
+                "bounds": {
+                  "w": 856,
+                  "h": 200
                 }
               },
               {
@@ -3840,6 +4384,15 @@
                 },
                 "fw": {
                   "gtet": "12,00"
+                },
+                "render": {
+                  "controllingParamName": "CABINET_ZOOM",
+                  "controllingParamValue": "1",
+                  "graphIndex": "0,1,2,3"
+                },
+                "bounds": {
+                  "w": 856,
+                  "h": 200
                 }
               },
               {
@@ -3850,6 +4403,10 @@
                 "rawWidget": "dropdownCabBank",
                 "placement": {
                   "positionExact": "311,223"
+                },
+                "bounds": {
+                  "w": 117,
+                  "h": 24
                 }
               },
               {
@@ -3860,6 +4417,10 @@
                 "rawWidget": "readoutCabNumber",
                 "placement": {
                   "positionExact": "430,223"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 24
                 }
               },
               {
@@ -3870,6 +4431,13 @@
                 "rawWidget": "labelCabName",
                 "placement": {
                   "positionExact": "311,253"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_TYPE1"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3880,6 +4448,10 @@
                 "rawWidget": "btnRectangle",
                 "placement": {
                   "positionExact": "326,305"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               },
               {
@@ -3890,6 +4462,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "330,344"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE1"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3900,6 +4479,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "366,344"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE1"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3913,6 +4499,13 @@
                 },
                 "fw": {
                   "gtet": "12,00"
+                },
+                "render": {
+                  "ctrlLabelColor": "fasUniversalBlue"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 96
                 }
               },
               {
@@ -3923,6 +4516,13 @@
                 "rawWidget": "labelSeperator",
                 "placement": {
                   "positionExact": "518,245"
+                },
+                "render": {
+                  "separatorHeight": 125
+                },
+                "bounds": {
+                  "w": 2,
+                  "h": 0
                 }
               },
               {
@@ -3933,6 +4533,10 @@
                 "rawWidget": "dropdownCabBank",
                 "placement": {
                   "positionExact": "526,223"
+                },
+                "bounds": {
+                  "w": 117,
+                  "h": 24
                 }
               },
               {
@@ -3943,6 +4547,10 @@
                 "rawWidget": "readoutCabNumber",
                 "placement": {
                   "positionExact": "645,223"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 24
                 }
               },
               {
@@ -3953,6 +4561,13 @@
                 "rawWidget": "labelCabName",
                 "placement": {
                   "positionExact": "526,253"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_TYPE2"
+                },
+                "bounds": {
+                  "w": 200,
+                  "h": 25
                 }
               },
               {
@@ -3963,6 +4578,10 @@
                 "rawWidget": "btnRectangle",
                 "placement": {
                   "positionExact": "541,305"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               },
               {
@@ -3973,6 +4592,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "545,344"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE2"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3983,6 +4609,13 @@
                 "rawWidget": "btnSquare",
                 "placement": {
                   "positionExact": "581,344"
+                },
+                "render": {
+                  "secondaryParameterName": "CABINET_MUTE2"
+                },
+                "bounds": {
+                  "w": 28,
+                  "h": 28
                 }
               },
               {
@@ -3996,6 +4629,13 @@
                 },
                 "fw": {
                   "gtet": "12,00"
+                },
+                "render": {
+                  "ctrlLabelColor": "ffcc0000"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 96
                 }
               },
               {
@@ -4006,6 +4646,13 @@
                 "rawWidget": "labelSeperator",
                 "placement": {
                   "positionExact": "733,245"
+                },
+                "render": {
+                  "separatorHeight": 125
+                },
+                "bounds": {
+                  "w": 2,
+                  "h": 0
                 }
               }
             ]
@@ -4018,7 +4665,11 @@
                 "paramName": "CABINET_LEVEL",
                 "paramId": 28,
                 "widget": "knob",
-                "rawWidget": "knobCompact"
+                "rawWidget": "knobCompact",
+                "bounds": {
+                  "w": 83,
+                  "h": 120
+                }
               }
             ]
           },
@@ -4033,6 +4684,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "positionExact": "1179,185"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -4040,7 +4695,11 @@
                 "paramName": "CABINET_BYPASS",
                 "paramId": 32,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
@@ -4050,11 +4709,28 @@
                 "rawWidget": "btnIgnoreScene",
                 "fw": {
                   "gtet": "5,3"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
                 }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER1",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1179,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1188,325"
+        }
       }
     ]
   }

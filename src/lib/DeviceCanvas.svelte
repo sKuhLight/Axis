@@ -17,7 +17,6 @@
   import { widgetView, graphKind } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
   import { fmtControlValue, normFromValue, paramValue } from './format';
-  import { paramHelp, helpSlugForPack } from './help';
   import Knob from './Knob.svelte';
   import Toggle from './Toggle.svelte';
   import Dropdown from './Dropdown.svelte';
@@ -84,19 +83,26 @@
   });
 
   // ── live binding ──
-  // The layout's `paramId` is device-true FOR THIS VARIANT (ForgeFX resolved it against the block's
-  // current type), so it is the join. `paramName` is only used where a gate must name a param that is
-  // NOT the control's own — see the alternate context below.
-  const namedById = $derived(new Map(editor.params.filter((p) => p.id != null).map((p) => [p.id as number, p])));
-  const enumById = $derived(new Map(editor.enums.map((e) => [e.id, e])));
+  // The join is FAMILY + paramName (the editor symbol), never the wire paramId alone: duplicate pids
+  // exist across the catalog, so a pid-only join can bind a control to the wrong param. `paramId` is
+  // used only as the WIRE ADDRESS for writes (editor.setParam reads the param's own id off the bound
+  // param object). A control whose paramName has no live entry (a catalog gap) stays display-only.
   const bySymbol = $derived.by(() => {
     const m = new Map<string, NamedParam | EnumParam>();
     for (const p of editor.params) if (p.paramName) m.set(p.paramName, p);
     for (const e of editor.enums) if (e.paramName) m.set(e.paramName, e);
     return m;
   });
-  const named = (id: number | null | undefined) => (id == null ? undefined : namedById.get(id));
-  const enm = (id: number | null | undefined) => (id == null ? undefined : enumById.get(id));
+  const paramFor = (c: LayoutControl): NamedParam | EnumParam | undefined =>
+    c.paramName ? bySymbol.get(c.paramName) : undefined;
+  const named = (c: LayoutControl): NamedParam | undefined => {
+    const p = paramFor(c);
+    return p && !('options' in p) ? p : undefined;
+  };
+  const enm = (c: LayoutControl): EnumParam | undefined => {
+    const p = paramFor(c);
+    return p && 'options' in p ? p : undefined;
+  };
 
   const altContext = $derived<AlternateContext>({
     valueOf: (sym) => {
@@ -141,24 +147,33 @@
     return mons.find((m) => m.paramName === (token ?? c.paramName)) ?? null;
   };
   const monFill = (m: LiveMonitor | null) => Math.max(0, Math.min(1, m?.norm ?? 0));
-  const monText = (m: LiveMonitor | null) =>
-    m?.db != null ? `${m.db >= 0 ? '+' : ''}${m.db.toFixed(1)}` : m ? `${Math.round(m.norm * 100)}%` : '—';
+  /** Meter dB readout, mapped through the LAYOUT's own `min_dB`/`max_dB` (render.minDb/maxDb) when
+   *  supplied — the device-authored meter scale, not a monitor-table default. */
+  const monText = (c: LayoutControl, m: LiveMonitor | null) => {
+    const min = c.render?.minDb, max = c.render?.maxDb;
+    if (m?.norm != null && min != null && max != null) {
+      const db = min + m.norm * (max - min);
+      return `${db >= 0 ? '+' : ''}${db.toFixed(1)}`;
+    }
+    return m?.db != null ? `${m.db >= 0 ? '+' : ''}${m.db.toFixed(1)}` : m ? `${Math.round(m.norm * 100)}%` : '—';
+  };
   /** A param the device also reports as a MONITOR is a reading, not a control — it must never render
    *  as a draggable knob (a drag would WRITE to it). */
   const isMonitor = (c: LayoutControl) => c.paramId != null && blockMons.has(c.paramId);
 
   // ── how to draw one control ──
-  // `positionExact` boxes are pre-clamped to the room the device left, so a view is chosen only after
-  // the box is known: a control whose neighbours squeezed it below a usable size falls back to a label.
+  // A view is chosen only after the binding is known: an unbound or `unusable` param the device draws
+  // as an input is display-only — the pseudo-params (cab name, slot label) and any `unusable` param
+  // land here rather than as a control that writes nowhere.
   type View = ReturnType<typeof widgetView>;
   function viewOf(pc: PlacedControl): View {
     const c = pc.control;
     if (isMonitor(c)) return 'meter';
     const v = widgetView(c.rawWidget, c.widget);
-    // An unbound control the device draws as an input is display-only — the pseudo-params (cab name,
-    // slot label) and any `unusable` param land here rather than as a control that writes nowhere.
-    if ((v === 'knob' || v === 'fader') && !named(c.paramId)) return 'label';
-    if ((v === 'dropdown' || v === 'toggle') && !enm(c.paramId)) return v === 'dropdown' ? 'readout' : 'label';
+    const p = paramFor(c);
+    const unusable = p != null && 'unusable' in p && p.unusable != null;
+    if ((v === 'knob' || v === 'fader') && (!p || unusable)) return 'label';
+    if ((v === 'dropdown' || v === 'toggle') && (!p || unusable || !('options' in p))) return v === 'dropdown' ? 'readout' : 'label';
     return v;
   }
 
@@ -182,20 +197,15 @@
   }
 
   // ── hover help (shown in the app's status bar, as the grid board did) ──
-  let helpToken = 0;
-  async function showHelp(c: LayoutControl) {
-    const token = ++helpToken;
+  // The param's curated help is ALREADY folded onto the served param by paramName (ForgeFX Phase 1.5) —
+  // no second /help fetch here.
+  function showHelp(c: LayoutControl) {
     const label = c.label || c.rawWidget;
-    editor.setHint(label);
-    if (c.paramId == null) return;
-    const h = await paramHelp(helpSlugForPack(slug), c.paramId);
-    if (token !== helpToken) return;
+    const p = paramFor(c);
+    const h = p && 'help' in p ? p.help : undefined;
     editor.setHint(h ? `${label} — ${h.blurb}${h.tip ? '  ·  Tip: ' + h.tip : ''}` : label);
   }
-  const clearHelp = () => {
-    helpToken++;
-    editor.clearHint();
-  };
+  const clearHelp = () => editor.clearHint();
 
   // ── modifier flyout (∿ badge on a continuous control) ──
   let modOpen = $state(false);
@@ -231,7 +241,6 @@
 
   const query = $derived(q.trim().toLowerCase());
   const matches = (c: LayoutControl) => !query || (c.label ?? '').toLowerCase().includes(query);
-  const hitCount = $derived(query ? drawn.filter((c) => matches(c.control)).length : 0);
 </script>
 
 <div class="tabs">
@@ -239,10 +248,6 @@
     <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>{p.name}</button>
   {/each}
   <span class="sp"></span>
-  <div class="search">
-    <input placeholder="Find a control…" bind:value={q} />
-    {#if query}<span class="hits">{hitCount}</span>{/if}
-  </div>
 </div>
 
 {#if !page}
@@ -260,8 +265,8 @@
       {#each drawn as pc (pc.control.rawWidget + pc.alternateKey + pc.alternateIndex)}
         {@const c = pc.control}
         {@const view = viewOf(pc)}
-        {@const p = named(c.paramId)}
-        {@const e = enm(c.paramId)}
+        {@const p = named(c)}
+        {@const e = enm(c)}
         <div
           class="cell {view}"
           class:dim={query.length > 0 && !matches(c)}
@@ -346,7 +351,7 @@
                   style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}
                 ></div>
               </div>
-              <div class="mval mono">{monText(m)}</div>
+              <div class="mval mono">{monText(c, m)}</div>
             </div>
           {:else if view === 'graph'}
             {@const kind = graphKind(c.rawWidget)}
@@ -425,20 +430,6 @@
   }
   .tab.on { color: var(--text); background: var(--surface2); box-shadow: inset 0 -2px 0 var(--accent); }
   .sp { flex: 1; }
-  .search { position: relative; flex: none; }
-  .search input {
-    width: 180px;
-    padding: 4px 26px 4px 9px;
-    border: 1px solid var(--border2);
-    border-radius: 8px;
-    background: var(--bg2);
-    color: var(--text);
-    font-size: 12px;
-  }
-  .hits {
-    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
-    font: 700 10px/1 var(--font-mono); color: var(--textfaint);
-  }
   .empty { padding: 24px; color: var(--textdim); font-size: 13px; }
 
   /* The fixed canvas. Horizontal scroll on a narrow screen is the accepted cost of drawing the
@@ -487,11 +478,11 @@
   .ticks { width: 100%; height: 100%; background: repeating-linear-gradient(to bottom, var(--border2) 0 1px, transparent 1px 12px); opacity: 0.5; }
   .readout {
     width: 100%; text-align: center; font: 700 11px/1.2 var(--font-mono); color: var(--text2);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; white-space: pre-line;
   }
   .lbl {
     width: 100%; text-align: center; font-size: 11px; color: var(--textdim); line-height: 1.15;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; white-space: pre-line;
   }
   .lbl.heading { font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); font-size: 10px; }
   .lbl.bold { font-weight: 800; color: var(--text); }

@@ -1,28 +1,15 @@
 // Which of several controls anchored at the SAME canvas coordinate the device is currently drawing.
 //
 // The official editor stacks alternates: it authors two (or more) controls at one position and shows
-// one at a time, swapping them on ANOTHER control's value. Nothing in the layout data says which — the
-// gate lives in the editor's own JUCE code — so this module is the one place Axis names those gates.
+// one at a time, swapping them on ANOTHER control's value. The device now supplies that gate itself
+// on the control's `render.controllingParamName` / `render.controllingParamValue` (a visibility gate:
+// the control renders when the named param's current value is in the comma-joined list) — so this
+// module READS it instead of naming block-specific gates.
 //
-// IT IS A CLOSED SET, NOT A PATCH SURFACE. Sweeping the served corpus (FM3 + FM9 + Axe-Fx III, every
-// variant, every page, after ForgeFX's `pruneControlsByFw` has removed the FIRMWARE alternates) finds
-// exactly 17 co-anchored groups in three shapes:
-//
-//   6x  knobCompact | dropdownCompact3   PEQ bands 1 and 5: a `Gain` knob or a `Slope` dropdown
-//   9x  graph_cab* | graph_cabZoom*      the cab Align page's response graph, zoomed or not
-//   2x  dropdown1 | dropdown1            FM3 GLOBAL out 2: `Boost/Pad` or `Output Level`
-//
-// `deviceAlternates.test.ts` re-derives that census from the corpus and fails if a fourth shape
-// appears, so this stays a bounded list rather than growing one entry per bug report.
-//
-// The gates themselves are device semantics, not layout guesses:
-//   • ZOOM  — the same page authors a real `*_ZOOM` toggle param. Read it.
-//   • SLOPE — a parametric band shows `Slope` only when its filter TYPE is a shelf or a cut; a peaking
-//     band has a gain instead. That is the same fact `eq.ts:shapeFromLabel` already encodes for the
-//     response curve, so this reuses it rather than re-listing the type options.
-//   • The GLOBAL out-2 pair is gated on a hardware/global setting that the block protocol does not
-//     expose at all. It falls through to the default (index 0 = the editor's own first-authored
-//     control) and is called out here rather than silently guessed.
+// The ONE gate the layout data does NOT carry is the PEQ band gain/slope pair: a peaking band shows
+// its `Gain` knob, a shelf/cut band its `Slope` dropdown — that is a property of the filter TYPE
+// value, not of the layout, and is resolved via `shapeFromLabel` (documented below), never a
+// hardcoded family list.
 
 import { shapeFromLabel } from './eq';
 import type { LayoutControl } from './types';
@@ -39,8 +26,19 @@ export interface AlternateContext {
 /** Never-live context — every gate falls through to the default. Used for pure placement tests. */
 export const NO_ALTERNATE_CONTEXT: AlternateContext = { valueOf: () => undefined, labelOf: () => undefined };
 
-const isZoom = (c: LayoutControl) => /Zoom/.test(c.rawWidget ?? '');
 const isSlope = (c: LayoutControl) => /SLOPE$/.test(c.paramName ?? '');
+
+/** Does this control's `controllingParam` visibility gate currently pass? No gate → always. */
+function gatePasses(c: LayoutControl, ctx: AlternateContext): boolean {
+  const name = c.render?.controllingParamName;
+  if (!name) return true;
+  const val = ctx.valueOf(name);
+  if (val == null) return true; // controlling param not live → show the control (default)
+  const list = (c.render?.controllingParamValue ?? '')
+    .split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+  if (list.length === 0) return true;
+  return list.includes(val);
+}
 
 /** `PEQ_GAIN1` → `PEQ_TYPE1`: the type enum for the band a gain knob belongs to. Null when the symbol
  *  is not an indexed gain, which is the only spelling the corpus's slope alternates use. */
@@ -58,16 +56,12 @@ function bandTypeSymbol(paramName: string | null | undefined): string | null {
 export function pickAlternate(group: readonly LayoutControl[], ctx: AlternateContext): number {
   if (group.length < 2) return 0;
 
-  // ── zoom pair: the page's own `*_ZOOM` toggle picks the zoomed variant ──
-  const zoomIndex = group.findIndex(isZoom);
-  if (zoomIndex >= 0 && group.some((c) => !isZoom(c))) {
-    // The toggle is authored on the same page but is NOT part of this anchor group, so it is addressed
-    // by symbol. Every occurrence in the corpus is `<FAMILY>_ZOOM`; take it off whichever family the
-    // group's own params name, falling back to the cab's (the only family that ships a zoom graph).
-    const family = group.map((c) => c.paramName?.split('_')[0]).find(Boolean) ?? 'CABINET';
-    const on = ctx.valueOf(`${family}_ZOOM`);
-    return on ? zoomIndex : group.findIndex((c) => !isZoom(c));
-  }
+  // ── the device's own visibility gate (render.controllingParamName/Value) ──
+  // A gate resolves to exactly one visible control (e.g. graph_cab vs graph_cabZoom on CABINET_ZOOM,
+  // the GLOBAL out-2 pair on GLOBAL_OUT2_TYPE). When the controlling param is live, only the matching
+  // control is visible; when it is not live, all pass and the next shape below decides.
+  const passing = group.map((c, i) => ({ c, i })).filter(({ c }) => gatePasses(c, ctx));
+  if (passing.length === 1) return passing[0].i;
 
   // ── gain/slope pair: a shelf or cut band shows its slope, a peaking band its gain ──
   const slopeIndex = group.findIndex(isSlope);
@@ -81,7 +75,8 @@ export function pickAlternate(group: readonly LayoutControl[], ctx: AlternateCon
     return shapeFromLabel(typeLabel, true) === 'bell' ? gainIndex : slopeIndex;
   }
 
-  return 0;
+  // Default: the first control that still passes the gate, else index 0 (the editor's own first).
+  return passing.length ? passing[0].i : 0;
 }
 
 /**

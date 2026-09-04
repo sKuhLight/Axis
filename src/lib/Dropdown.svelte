@@ -92,7 +92,7 @@
     font-weight: 600;
     font-size: 12px;
     color: var(--text2);
-    white-space: nowrap;
+    white-space: pre-line;
     overflow: hidden;
     text-overflow: ellipsis;
   }

@@ -1,9 +1,6 @@
-// The alternate gate: is the closed set still closed, and does each gate answer the device's answer?
-//
-// The census test is the important one. `deviceAlternates.ts` only works because the corpus contains a
-// SMALL, KNOWN set of co-anchored control groups; if a fourth shape appears (a new firmware, a new
-// device), the module would silently draw index 0 and the page would be wrong in a way nothing else
-// catches. So the census is asserted, not documented.
+// The alternate gate: co-anchored controls are swapped on another control's value. The gate now comes
+// from the device's own `render.controllingParamName`/`controllingParamValue` visibility metadata; the
+// only shape the layout does NOT carry is the PEQ gain/slope pair (a property of the filter TYPE value).
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -35,18 +32,21 @@ describe('pickAlternate', () => {
     expect(pickAlternate([ctl({ rawWidget: 'knob' })], NO_ALTERNATE_CONTEXT)).toBe(0);
   });
 
-  it('shows the plain cab graph until CABINET_ZOOM is on', () => {
+  it('uses the controllingParam visibility gate for a graph pair', () => {
     const group = [
-      ctl({ rawWidget: 'graph_cab', paramName: null }),
-      ctl({ rawWidget: 'graph_cabZoom', paramName: null })
+      ctl({ rawWidget: 'graph_cab', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '0' } }),
+      ctl({ rawWidget: 'graph_cabZoom', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '1' } })
     ];
-    expect(pickAlternate(group, NO_ALTERNATE_CONTEXT)).toBe(0);
+    expect(pickAlternate(group, NO_ALTERNATE_CONTEXT)).toBe(0); // gate not live → first
     expect(pickAlternate(group, ctxOf({ CABINET_ZOOM: 1 }))).toBe(1);
     expect(pickAlternate(group, ctxOf({ CABINET_ZOOM: 0 }))).toBe(0);
   });
 
-  it('picks the zoomed graph whichever order the editor authored the pair in', () => {
-    const group = [ctl({ rawWidget: 'graph_cabZoom_mm' }), ctl({ rawWidget: 'graph_cab_mm' })];
+  it('picks the gated control whichever order the pair is authored in', () => {
+    const group = [
+      ctl({ rawWidget: 'graph_cabZoom_mm', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '1' } }),
+      ctl({ rawWidget: 'graph_cab_mm', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '0' } })
+    ];
     expect(pickAlternate(group, ctxOf({ CABINET_ZOOM: 1 }))).toBe(0);
     expect(pickAlternate(group, ctxOf({ CABINET_ZOOM: 0 }))).toBe(1);
   });
@@ -63,21 +63,20 @@ describe('pickAlternate', () => {
     expect(pickAlternate(group, NO_ALTERNATE_CONTEXT)).toBe(0);
   });
 
-  it('falls through to the first-authored control for an ungated pair', () => {
-    // FM3 GLOBAL out 2: Boost/Pad vs Output Level, gated on a hardware setting the block protocol
-    // does not expose. Documented in deviceAlternates.ts; asserted here so a future "fix" is deliberate.
+  it('uses the controllingParam gate for the GLOBAL out-2 pair', () => {
     const group = [
-      ctl({ label: 'Boost/Pad', paramName: 'GLOBAL_OUT2_PAD', rawWidget: 'dropdown1' }),
-      ctl({ label: 'Output Level', paramName: 'GLOBAL_OUT2_LINE', rawWidget: 'dropdown1' })
+      ctl({ label: 'Boost/Pad', paramName: 'GLOBAL_OUT2_PAD', rawWidget: 'dropdown1', render: { controllingParamName: 'GLOBAL_OUT2_TYPE', controllingParamValue: '0' } }),
+      ctl({ label: 'Output Level', paramName: 'GLOBAL_OUT2_LINE', rawWidget: 'dropdown1', render: { controllingParamName: 'GLOBAL_OUT2_TYPE', controllingParamValue: '1,2' } })
     ];
-    expect(pickAlternate(group, ctxOf({ GLOBAL_OUT2_PAD: 1 }, { GLOBAL_OUT2_PAD: 'Pad' }))).toBe(0);
+    expect(pickAlternate(group, ctxOf({ GLOBAL_OUT2_TYPE: 0 }))).toBe(0);
+    expect(pickAlternate(group, ctxOf({ GLOBAL_OUT2_TYPE: 2 }))).toBe(1);
   });
 });
 
 describe('resolveAlternates / isVisible', () => {
   const placed = [
-    { control: ctl({ rawWidget: 'graph_cab' }), alternateKey: '305,18', alternateIndex: 0 },
-    { control: ctl({ rawWidget: 'graph_cabZoom' }), alternateKey: '305,18', alternateIndex: 1 },
+    { control: ctl({ rawWidget: 'graph_cab', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '0' } }), alternateKey: '305,18', alternateIndex: 0 },
+    { control: ctl({ rawWidget: 'graph_cabZoom', render: { controllingParamName: 'CABINET_ZOOM', controllingParamValue: '1' } }), alternateKey: '305,18', alternateIndex: 1 },
     { control: ctl({ rawWidget: 'knob' }), alternateKey: '10,10', alternateIndex: 0 }
   ];
 
@@ -116,19 +115,17 @@ suite('alternate census', () => {
         }
   }
 
-  it('still contains only the three shapes this module names', () => {
-    const shapes = new Map<string, number>();
+  const isSlope = (c: LayoutControl) => /SLOPE$/.test(c.paramName ?? '');
+  const gainSym = (c: LayoutControl) => /^(.*)_GAIN(\d+)$/.test(c.paramName ?? '');
+
+  it('every co-anchored group is gated by controllingParam metadata or is a PEQ gain/slope pair', () => {
+    const ungated: string[] = [];
     for (const g of groups) {
-      const s = g.controls.map((c) => c.rawWidget).join(' | ');
-      shapes.set(s, (shapes.get(s) ?? 0) + 1);
+      const isSlopePair = g.controls.some(isSlope) && g.controls.some(gainSym);
+      const allGated = g.controls.every((c) => c.render?.controllingParamName != null);
+      if (!isSlopePair && !allGated) ungated.push(g.id);
     }
-    expect(Object.fromEntries([...shapes].sort())).toEqual({
-      'graph_cab | graph_cabZoom': 5,
-      'graph_cab_mm | graph_cabZoom_mm': 4,
-      'knobCompact | dropdownCompact3': 6,
-      'dropdown1 | dropdown1': 1,
-      'dropdownThin1Line | dropdownThin1Line': 1
-    });
+    expect(ungated).toEqual([]);
   });
 
   it('never has an anchor with more than two occupants', () => {
@@ -143,11 +140,12 @@ suite('alternate census', () => {
     }
   });
 
-  it('resolves every graph pair to the zoomed graph when the cab is zoomed', () => {
+  it('resolves every gated graph pair to the zoomed graph when the cab is zoomed', () => {
     const zoomed = ctxOf({ CABINET_ZOOM: 1 });
     for (const g of groups) {
-      if (!g.controls.some((c) => /Zoom/.test(c.rawWidget))) continue;
-      expect(/Zoom/.test(g.controls[pickAlternate(g.controls, zoomed)].rawWidget), g.id).toBe(true);
+      if (!g.controls.some((c) => c.render?.controllingParamName === 'CABINET_ZOOM')) continue;
+      const i = pickAlternate(g.controls, zoomed);
+      expect(/Zoom/.test(g.controls[i].rawWidget), g.id).toBe(true);
     }
   });
 });

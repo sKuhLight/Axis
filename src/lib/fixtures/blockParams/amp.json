@@ -3806,8 +3806,9 @@
         "fw": {
           "gtet": "10,00"
         },
-        "value": "15,36,39,51,69,73,74,86,87,88,91,92,104,113,119,120,122,151,152,185,189,190,191,206,207,213,230,231,235,250,251,252,253,265,275,276,278,279,280,301,313,315,316,327",
+        "value": "15,36,39,51,69,73,74,86,87,88,91,92,104,113,119,120,122,151,152,185,189,190,191,206,207,213,230,231,235,250,251,252,253,265,275,276,278,279,280,301,313,315,316,327,333,334,335",
         "selectorParamName": "DISTORT_TYPE",
+        "layout": "LAYOUT_AMP_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -3820,6 +3821,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3830,6 +3835,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -3840,6 +3849,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3850,6 +3863,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3860,6 +3877,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3870,6 +3891,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3880,6 +3905,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3890,6 +3919,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3900,6 +3933,14 @@
                 "rawWidget": "meterGainHeadroom",
                 "placement": {
                   "positionExact": "465,370"
+                },
+                "render": {
+                  "minDb": -20,
+                  "maxDb": 0
+                },
+                "bounds": {
+                  "w": 420,
+                  "h": 20
                 }
               }
             ]
@@ -3912,7 +3953,11 @@
                 "paramName": "DISTORT_TRIM",
                 "paramId": 49,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3924,14 +3969,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -3943,38 +3996,68 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_AMP_MIXER2",
+          "parametersX": 305,
+          "parametersY": 22,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 210,
+          "mixerX": 1094,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 210,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Ideal",
         "pageNum": 1,
         "value": "",
         "selectorParamName": "DISTORT_TYPE",
+        "layout": "LAYOUT_AMP_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -3987,6 +4070,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -3997,6 +4084,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4007,6 +4098,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4017,6 +4112,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4027,6 +4126,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4037,6 +4140,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4047,6 +4154,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4057,6 +4168,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4067,6 +4182,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4083,6 +4202,10 @@
                 "placement": {
                   "col": 0,
                   "offsetY": -70
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 55
                 }
               },
               {
@@ -4094,6 +4217,10 @@
                 "placement": {
                   "col": 2,
                   "offsetY": -70
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 55
                 }
               },
               {
@@ -4105,6 +4232,10 @@
                 "placement": {
                   "col": 3,
                   "offsetY": -70
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 55
                 }
               },
               {
@@ -4116,6 +4247,10 @@
                 "placement": {
                   "col": 4,
                   "offsetY": -70
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 55
                 }
               },
               {
@@ -4127,6 +4262,14 @@
                 "placement": {
                   "col": 5,
                   "offsetY": -70
+                },
+                "render": {
+                  "controllingParamName": "DISTORT_FBTYPE",
+                  "controllingParamValue": "17,28"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 55
                 }
               },
               {
@@ -4137,6 +4280,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4147,6 +4294,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4157,6 +4308,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4167,6 +4322,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4177,6 +4336,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4187,6 +4350,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4197,6 +4364,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4207,6 +4378,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4217,6 +4392,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4227,6 +4406,14 @@
                 "rawWidget": "meterGainHeadroom",
                 "placement": {
                   "positionExact": "465,370"
+                },
+                "render": {
+                  "minDb": -20,
+                  "maxDb": 0
+                },
+                "bounds": {
+                  "w": 420,
+                  "h": 20
                 }
               }
             ]
@@ -4239,14 +4426,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -4258,36 +4453,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_AMP_MIXER2",
+          "parametersX": 305,
+          "parametersY": 22,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 210,
+          "mixerX": 1094,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 210,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Preamp",
         "pageNum": 2,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -4300,6 +4525,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "307,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 251
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4310,6 +4544,10 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4320,6 +4558,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4330,6 +4572,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4340,6 +4586,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "562,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 166
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4350,6 +4605,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4360,6 +4619,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4370,6 +4633,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4380,6 +4647,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4390,6 +4661,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4400,6 +4675,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4415,6 +4694,10 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4425,6 +4708,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4435,6 +4722,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4445,6 +4736,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4455,6 +4750,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4465,6 +4764,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4475,6 +4778,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "817,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 251
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4485,6 +4797,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4495,6 +4811,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4505,6 +4825,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4517,14 +4841,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -4536,36 +4868,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Power Amp",
         "pageNum": 3,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -4578,6 +4940,10 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4588,6 +4954,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4598,6 +4968,10 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4608,6 +4982,14 @@
                 "rawWidget": "toggle",
                 "placement": {
                   "col": 3
+                },
+                "render": {
+                  "controllingParamName": "DISTORT_FBTYPE",
+                  "controllingParamValue": "17,28,44"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4618,6 +5000,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4628,6 +5014,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4638,6 +5028,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4648,6 +5042,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4658,6 +5056,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4673,6 +5075,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "305,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 2
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4683,6 +5094,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4693,6 +5108,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4703,6 +5122,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4713,6 +5136,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4723,6 +5150,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4733,6 +5164,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4743,6 +5178,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -4753,6 +5192,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4763,6 +5206,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 8
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4775,14 +5222,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -4794,36 +5249,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Pwr Tubes + CF",
         "pageNum": 4,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -4836,6 +5321,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "305,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 6
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4846,6 +5340,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4856,6 +5354,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4866,6 +5368,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4876,6 +5382,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4886,6 +5396,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4896,6 +5410,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4914,6 +5432,15 @@
                 },
                 "fw": {
                   "gtet": "9"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 2
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -4927,6 +5454,10 @@
                 },
                 "fw": {
                   "gtet": "9"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -4940,6 +5471,10 @@
                 },
                 "fw": {
                   "gtet": "9"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -4952,14 +5487,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -4971,36 +5514,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Power Supply",
         "pageNum": 5,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -5013,6 +5586,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5023,6 +5600,14 @@
                 "rawWidget": "meterGainVert",
                 "placement": {
                   "col": 1
+                },
+                "render": {
+                  "minDb": -9,
+                  "maxDb": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 320
                 }
               },
               {
@@ -5033,6 +5618,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -5043,6 +5632,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5053,6 +5646,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5063,6 +5660,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -5078,6 +5679,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5088,6 +5693,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -5098,6 +5707,10 @@
                 "rawWidget": "spacer",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 0
                 }
               },
               {
@@ -5108,6 +5721,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5118,6 +5735,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -5130,14 +5751,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -5149,36 +5778,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Speaker",
         "pageNum": 6,
+        "layout": "LAYOUT_MIXER1",
         "rows": [
           {
             "section": "parameters",
@@ -5191,6 +5850,10 @@
                 "rawWidget": "knobMiniReadout",
                 "placement": {
                   "positionExact": "305,30"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 96
                 }
               },
               {
@@ -5201,6 +5864,10 @@
                 "rawWidget": "knobMini",
                 "placement": {
                   "positionExact": "305,128"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 76
                 }
               },
               {
@@ -5211,6 +5878,10 @@
                 "rawWidget": "knobMini",
                 "placement": {
                   "positionExact": "305,206"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 76
                 }
               },
               {
@@ -5221,6 +5892,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "305,284"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5231,6 +5906,13 @@
                 "rawWidget": "graph4",
                 "placement": {
                   "positionExact": "395,24"
+                },
+                "render": {
+                  "graphIndex": "0"
+                },
+                "bounds": {
+                  "w": 338,
+                  "h": 260
                 }
               },
               {
@@ -5241,6 +5923,10 @@
                 "rawWidget": "dropdown1p5ThinTight1Line",
                 "placement": {
                   "positionExact": "405,284"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 50
                 }
               },
               {
@@ -5251,6 +5937,10 @@
                 "rawWidget": "dropdown1p5ThinTight1Line",
                 "placement": {
                   "positionExact": "405,345"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 50
                 }
               },
               {
@@ -5261,6 +5951,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "542,284"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5271,6 +5965,10 @@
                 "rawWidget": "dropdown1Tight",
                 "placement": {
                   "positionExact": "640,284"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 85
                 }
               },
               {
@@ -5281,6 +5979,10 @@
                 "rawWidget": "knobMiniReadout",
                 "placement": {
                   "positionExact": "745,30"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 96
                 }
               },
               {
@@ -5291,6 +5993,10 @@
                 "rawWidget": "knobMini",
                 "placement": {
                   "positionExact": "745,128"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 76
                 }
               },
               {
@@ -5301,6 +6007,10 @@
                 "rawWidget": "knobMini",
                 "placement": {
                   "positionExact": "745,206"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 76
                 }
               },
               {
@@ -5311,6 +6021,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "745,284"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               }
             ]
@@ -5326,6 +6040,13 @@
                 "rawWidget": "labelSeperator",
                 "placement": {
                   "positionExact": "860,25"
+                },
+                "render": {
+                  "separatorHeight": 345
+                },
+                "bounds": {
+                  "w": 2,
+                  "h": 0
                 }
               },
               {
@@ -5336,6 +6057,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "900,30"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5346,6 +6071,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "985,30"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5356,6 +6085,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "900,157"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5366,6 +6099,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "985,157"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5376,6 +6113,10 @@
                 "rawWidget": "knobMiniReadout2",
                 "placement": {
                   "positionExact": "900,284"
+                },
+                "bounds": {
+                  "w": 80,
+                  "h": 108
                 }
               },
               {
@@ -5386,6 +6127,10 @@
                 "rawWidget": "dropdown1p5Mini",
                 "placement": {
                   "positionExact": "1025,294"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 76
                 }
               },
               {
@@ -5396,6 +6141,14 @@
                 "rawWidget": "meterGainVertShort",
                 "placement": {
                   "positionExact": "1071,25"
+                },
+                "render": {
+                  "minDb": -6,
+                  "maxDb": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 266
                 }
               }
             ]
@@ -5408,7 +6161,11 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knobCompact"
+                "rawWidget": "knobCompact",
+                "bounds": {
+                  "w": 83,
+                  "h": 120
+                }
               }
             ]
           },
@@ -5423,6 +6180,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "positionExact": "1179,185"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -5430,22 +6191,44 @@
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER1",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1179,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1188,325"
+        }
       },
       {
         "name": "Input EQ",
         "pageNum": 7,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -5455,42 +6238,69 @@
                 "paramName": "DISTORT_INEQTYPE",
                 "paramId": 104,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1"
+                "rawWidget": "dropdown1",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Frequency",
                 "paramName": "DISTORT_INEQFREQ",
                 "paramId": 74,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Q",
                 "paramName": "DISTORT_INEQQ",
                 "paramId": 73,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Gain",
                 "paramName": "DISTORT_INEQGAIN",
                 "paramId": 75,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "",
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "Graph",
                 "paramName": null,
                 "paramId": null,
                 "widget": "graph",
-                "rawWidget": "graph4"
+                "rawWidget": "graph4",
+                "render": {
+                  "graphIndex": "1"
+                },
+                "bounds": {
+                  "w": 338,
+                  "h": 260
+                }
               }
             ]
           },
@@ -5502,28 +6312,44 @@
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "Low Cut",
                 "paramName": "DISTORT_HPFREQ",
                 "paramId": 12,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "High Cut",
                 "paramName": "DISTORT_HICUT",
                 "paramId": 85,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Definition",
                 "paramName": "DISTORT_DEFINITION",
                 "paramId": 81,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -5535,14 +6361,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -5554,39 +6388,130 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Output EQ",
         "pageNum": 8,
         "value": "5",
         "selectorParamName": "DISTORT_EQTYPE",
+        "layout": "LAYOUT_AMP_GEQ",
         "rows": [
+          {
+            "section": "parameters",
+            "controls": [
+              {
+                "label": "Type",
+                "paramName": "DISTORT_EQTYPE",
+                "paramId": 94,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5Tight1Line",
+                "placement": {
+                  "positionExact": "305,50"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 65
+                }
+              },
+              {
+                "label": "Location",
+                "paramName": "DISTORT_EQPOSITION",
+                "paramId": 112,
+                "widget": "dropdown",
+                "rawWidget": "dropdown1p5Tight1Line",
+                "placement": {
+                  "positionExact": "305,125"
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 65
+                }
+              },
+              {
+                "label": "Zero All",
+                "paramName": "DISTORT_ZEROEQ",
+                "paramId": 65520,
+                "widget": "button",
+                "rawWidget": "btnRectangle",
+                "placement": {
+                  "positionExact": "331,225"
+                },
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
+              },
+              {
+                "label": "Off / On",
+                "paramName": "DISTORT_EQONOFF",
+                "paramId": 128,
+                "widget": "toggle",
+                "rawWidget": "toggleCompact",
+                "placement": {
+                  "positionExact": "325,275"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 116
+                }
+              }
+            ]
+          },
           {
             "section": "parameters",
             "controls": [
@@ -5595,7 +6520,11 @@
                 "paramName": null,
                 "paramId": null,
                 "widget": "spacer",
-                "rawWidget": "spacer"
+                "rawWidget": "spacer",
+                "bounds": {
+                  "w": 0,
+                  "h": 0
+                }
               },
               {
                 "label": "200",
@@ -5605,6 +6534,10 @@
                 "rawWidget": "slider",
                 "placement": {
                   "offsetX": 52
+                },
+                "bounds": {
+                  "w": 215,
+                  "h": 20
                 }
               },
               {
@@ -5612,28 +6545,44 @@
                 "paramName": "DISTORT_EQ2",
                 "paramId": 58,
                 "widget": "slider",
-                "rawWidget": "slider"
+                "rawWidget": "slider",
+                "bounds": {
+                  "w": 215,
+                  "h": 20
+                }
               },
               {
                 "label": "800",
                 "paramName": "DISTORT_EQ3",
                 "paramId": 59,
                 "widget": "slider",
-                "rawWidget": "slider"
+                "rawWidget": "slider",
+                "bounds": {
+                  "w": 215,
+                  "h": 20
+                }
               },
               {
                 "label": "1600",
                 "paramName": "DISTORT_EQ4",
                 "paramId": 60,
                 "widget": "slider",
-                "rawWidget": "slider"
+                "rawWidget": "slider",
+                "bounds": {
+                  "w": 215,
+                  "h": 20
+                }
               },
               {
                 "label": "3200",
                 "paramName": "DISTORT_EQ5",
                 "paramId": 61,
                 "widget": "slider",
-                "rawWidget": "slider"
+                "rawWidget": "slider",
+                "bounds": {
+                  "w": 215,
+                  "h": 20
+                }
               }
             ]
           },
@@ -5645,14 +6594,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -5664,36 +6621,66 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_AMP_GEQ",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 80,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       },
       {
         "name": "Dynamics",
         "pageNum": 9,
+        "layout": "LAYOUT_MIXER2",
         "rows": [
           {
             "section": "parameters",
@@ -5706,6 +6693,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "305,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "cols": 4
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -5716,6 +6712,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5726,6 +6726,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5736,6 +6740,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -5746,6 +6754,14 @@
                 "rawWidget": "meterGainVert",
                 "placement": {
                   "col": 3
+                },
+                "render": {
+                  "minDb": -30,
+                  "maxDb": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 320
                 }
               },
               {
@@ -5759,6 +6775,10 @@
                 },
                 "fw": {
                   "gtet": "4,2"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -5775,6 +6795,10 @@
                 "placement": {
                   "col": 0,
                   "offsetX": 40
+                },
+                "bounds": {
+                  "w": 124,
+                  "h": 136
                 }
               }
             ]
@@ -5787,14 +6811,22 @@
                 "paramName": "DISTORT_LEVEL",
                 "paramId": 1,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               },
               {
                 "label": "Balance",
                 "paramName": "DISTORT_PAN",
                 "paramId": 2,
                 "widget": "knob",
-                "rawWidget": "knob"
+                "rawWidget": "knob",
+                "bounds": {
+                  "w": 83,
+                  "h": 136
+                }
               }
             ]
           },
@@ -5806,32 +6838,61 @@
                 "paramName": "DISTORT_INPUTSELECT",
                 "paramId": 21,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass\nMode",
                 "paramName": "DISTORT_BYPASSMODE",
                 "paramId": 3,
                 "widget": "dropdown",
-                "rawWidget": "dropdown1Tight"
+                "rawWidget": "dropdown1Tight",
+                "bounds": {
+                  "w": 83,
+                  "h": 85
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "DISTORT_BYPASS",
                 "paramId": 5,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "DISTORT_SCENEIGNORE",
                 "paramId": 137,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER2",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1094,
+          "mixerY": 50,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 180,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360"
+        }
       }
     ]
   }

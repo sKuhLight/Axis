@@ -15,6 +15,46 @@ import type { BlockParams } from './types';
 
 const fwRangeSchema = z.object({ gtet: z.string().optional(), lt: z.string().optional() });
 
+const widgetBoundsSchema = z.object({ w: z.number(), h: z.number() });
+
+const renderMetaSchema = z.object({
+  sectionSpan: z.object({ cols: z.number().optional(), pixels: z.number().optional() }).optional(),
+  minDb: z.number().optional(),
+  maxDb: z.number().optional(),
+  separatorHeight: z.number().optional(),
+  controllingParamName: z.string().optional(),
+  controllingParamValue: z.string().optional(),
+  secondaryParameterName: z.string().optional(),
+  parameterOffset: z.number().optional(),
+  lock: z.string().optional(),
+  graphIndex: z.string().optional(),
+  graphOScope: z.boolean().optional(),
+  graphMarkerX: z.string().optional(),
+  dynamicParamInfo: z.boolean().optional(),
+  dynamicParamId: z.boolean().optional(),
+  knobDirection: z.string().optional(),
+  disabledText: z.string().optional(),
+  ctrlLabelColor: z.string().optional(),
+  markerColor: z.string().optional(),
+  useMarker: z.boolean().optional(),
+  message: z.string().optional()
+});
+
+const pageLayoutSchema = z.object({
+  name: z.string(),
+  parametersX: z.number().optional(),
+  parametersY: z.number().optional(),
+  parametersSpacingX: z.number().optional(),
+  parametersSpacingY: z.number().optional(),
+  mixerX: z.number().optional(),
+  mixerY: z.number().optional(),
+  mixerSpacingX: z.number().optional(),
+  mixerSpacingY: z.number().optional(),
+  btnBypassPosition: z.string().optional(),
+  btnIgnoreScenePosition: z.string().optional(),
+  btnKillDryPosition: z.string().optional()
+});
+
 // Fields ADDITIVE to a param beyond the original value/norm/unit/min/max/log (ForgeFX Phase 1.1/1.2/1.5).
 const paramMetaSchema = z.object({
   paramName: z.string().optional(),
@@ -61,12 +101,14 @@ const layoutControlSchema = z.object({
     positionExact: z.string().optional()
   }).optional(),
   crossBlock: z.object({
-    effect: z.number(),
-    family: z.string(),
+    effect: z.string(),
+    family: z.string().nullable(),
     paramName: z.string().nullable(),
     paramId: z.number().nullable()
   }).optional(),
-  fw: fwRangeSchema.optional()
+  fw: fwRangeSchema.optional(),
+  render: renderMetaSchema.optional(),
+  bounds: widgetBoundsSchema.optional()
 });
 
 const layoutRowSchema = z.object({
@@ -81,6 +123,8 @@ const layoutPageSchema = z.object({
   fw: fwRangeSchema.optional(),
   value: z.string().optional(),
   selectorParamName: z.string().optional(),
+  layout: z.string().optional(),
+  geometry: pageLayoutSchema.optional(),
   rows: z.array(layoutRowSchema)
 });
 
@@ -130,6 +174,31 @@ describe('ForgeFX blockParams contract (fixtures/blockParams/*.json)', () => {
         expect(controls.length).toBeGreaterThan(0);
         expect(controls.every((c) => typeof c.rawWidget === 'string' && c.rawWidget.length > 0)).toBe(true);
         expect(rows.every((r) => r.section === 'parameters' || r.section === 'mixer')).toBe(true);
+      });
+
+      it('pages carry resolved PageLayout geometry and controls carry widget bounds (renderer profile)', () => {
+        const dto = fixture as BlockParams;
+        const pages = dto.layout?.pages ?? [];
+        const controls = pages.flatMap((p) => p.rows.flatMap((r) => r.controls));
+        const withGeometry = pages.filter((p) => p.geometry != null).length;
+        const withBounds = controls.filter((c) => c.bounds != null).length;
+        expect(withGeometry).toBeGreaterThan(0);
+        expect(withBounds).toBeGreaterThan(0);
+        // Every page with a `layout` reference has a resolved geometry.
+        expect(pages.filter((p) => p.layout != null && p.geometry == null)).toEqual([]);
+      });
+
+      it('crossBlock carries a string effect token and a nullable family (Phase 2)', () => {
+        // The schema is the contract: a cross-block ref's `effect` is the editor's cross-effect TOKEN
+        // (e.g. 'ID_GLOBAL'), not a wire eid, and `family` is null when the reference is unresolved.
+        const ok = layoutControlSchema.pick({ crossBlock: true }).safeParse({
+          crossBlock: { effect: 'ID_GLOBAL', family: null, paramName: 'GLOBAL_TEMPO', paramId: null },
+        });
+        const bad = layoutControlSchema.pick({ crossBlock: true }).safeParse({
+          crossBlock: { effect: 199, family: 'GLOBAL', paramName: 'GLOBAL_TEMPO', paramId: null },
+        });
+        expect(ok.success).toBe(true);
+        expect(bad.success).toBe(false);
       });
 
       it('labels are served UNCHANGED — catalog-only, not deduped (Phase 1.3)', () => {

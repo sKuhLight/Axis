@@ -99,9 +99,10 @@ export type LayoutWidget =
 /** A layout control that binds to a DIFFERENT block than the one being edited (rendered live via the
  *  pinned-param hydration when `paramId` resolves; display-only otherwise). */
 export interface LayoutCrossBlock {
-  /** Effect id of the block that owns the parameter. */
-  effect: number;
-  family: string;
+  /** Editor cross-effect token (e.g. `'ID_GLOBAL'`, `'ID_MODIFIER1'`) — a string, not a wire eid. */
+  effect: string;
+  /** Resolved catalog family of the referenced parameter, or null when unresolved. */
+  family: string | null;
   paramName: string | null;
   paramId: number | null;
 }
@@ -126,12 +127,15 @@ export interface LayoutControl {
   paramId: number | null;
   widget: LayoutWidget;
   /** The source editor's raw widget token (e.g. `dropdown1`, `meterGainVert`, `btnBypass`) —
-   *  ALWAYS present (ForgeFX serves it verbatim); the renderer table (`deviceWidgets.ts`) sizes
-   *  every control off this, not `widget`. */
+   *  ALWAYS present (ForgeFX serves it verbatim); the renderer dispatches the view off this. */
   rawWidget: string;
   placement?: LayoutPlacement;
   crossBlock?: LayoutCrossBlock;
   fw?: unknown;
+  /** Typed per-control rendering metadata (section span, meter dB range, gates, …) — served verbatim. */
+  render?: LayoutRenderMeta;
+  /** Server-resolved outer widget bounds in device px (from the editor `__components.xml`). */
+  bounds?: LayoutWidgetBounds;
 }
 /** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
 export interface LayoutRow {
@@ -149,7 +153,54 @@ export interface LayoutPage {
   value?: string;
   /** The selector param whose current value gates this page's `value`, when present. */
   selectorParamName?: string;
+  /** The editor `PageLayout` name this page is drawn on (e.g. `'LAYOUT_MIXER2'`). */
+  layout?: string;
+  /** Server-resolved page geometry (the PageLayout this page's `layout` names). */
+  geometry?: LayoutPageLayout;
   rows: LayoutRow[];
+}
+
+/** Widget outer bounds in the device's own canvas pixels. */
+export interface LayoutWidgetBounds { w: number; h: number; }
+
+/** The editor's PageLayout geometry for a page — parameter/mixer baselines + pitches + button anchors. */
+export interface LayoutPageLayout {
+  name: string;
+  parametersX?: number;
+  parametersY?: number;
+  parametersSpacingX?: number;
+  parametersSpacingY?: number;
+  mixerX?: number;
+  mixerY?: number;
+  mixerSpacingX?: number;
+  mixerSpacingY?: number;
+  btnBypassPosition?: string;
+  btnIgnoreScenePosition?: string;
+  btnKillDryPosition?: string;
+}
+
+/** Typed, renderer-relevant per-control metadata (mirror of forgefx-midi's EditorControlRenderMeta). */
+export interface LayoutRenderMeta {
+  sectionSpan?: { cols?: number; pixels?: number };
+  minDb?: number;
+  maxDb?: number;
+  separatorHeight?: number;
+  controllingParamName?: string;
+  controllingParamValue?: string;
+  secondaryParameterName?: string;
+  parameterOffset?: number;
+  lock?: string;
+  graphIndex?: string;
+  graphOScope?: boolean;
+  graphMarkerX?: string;
+  dynamicParamInfo?: boolean;
+  dynamicParamId?: boolean;
+  knobDirection?: string;
+  disabledText?: string;
+  ctrlLabelColor?: string;
+  markerColor?: string;
+  useMarker?: boolean;
+  message?: string;
 }
 /** Device-authentic UI layout for a block/virtual effect. The server has ALREADY selected the variant
  *  matching the block's current type, so `pages` are the arrangement to render as-is. */

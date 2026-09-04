@@ -102,7 +102,7 @@
     text-align: center;
     line-height: 1.2;
     max-width: 100%;
-    white-space: nowrap;
+    white-space: pre-line;
     overflow: hidden;
     text-overflow: ellipsis;
   }

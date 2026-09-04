@@ -1663,6 +1663,7 @@
       {
         "name": "Basic",
         "pageNum": 0,
+        "layout": "LAYOUT_MIXER3_XTRA",
         "rows": [
           {
             "section": "parameters",
@@ -1675,6 +1676,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1685,6 +1690,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1695,6 +1704,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1705,6 +1718,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "563,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 419
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -1715,6 +1737,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1725,6 +1751,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1735,6 +1765,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1745,6 +1779,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1755,6 +1793,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -1770,6 +1812,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "563,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -1780,6 +1831,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1790,6 +1845,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1800,6 +1859,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1810,6 +1873,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1820,6 +1887,10 @@
                 "rawWidget": "dropdown1",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -1835,6 +1906,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -1845,6 +1920,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -1855,6 +1934,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -1870,6 +1953,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -1880,6 +1967,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -1895,6 +1986,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               },
               {
@@ -1905,6 +2000,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               }
             ]
@@ -1917,29 +2016,56 @@
                 "paramName": "REVERB_KILLDRY",
                 "paramId": 52,
                 "widget": "button",
-                "rawWidget": "btnKillDry"
+                "rawWidget": "btnKillDry",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "REVERB_SCENEIGNORE",
                 "paramId": 51,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "REVERB_BYPASS",
                 "paramId": 22,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER3_XTRA",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1014,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 127,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360",
+          "btnKillDryPosition": "1020,360"
+        }
       },
       {
         "name": "Advanced",
         "pageNum": 1,
+        "layout": "LAYOUT_MIXER3_XTRA",
         "rows": [
           {
             "section": "parameters",
@@ -1952,6 +2078,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "308,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -1962,6 +2097,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1972,6 +2111,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -1982,6 +2125,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -1997,6 +2144,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "308,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 419
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2007,6 +2163,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2017,6 +2177,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2027,6 +2191,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2037,6 +2205,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2047,6 +2219,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2057,6 +2233,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "733,209"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 164
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2067,6 +2252,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2077,6 +2266,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -2092,6 +2285,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2102,6 +2299,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2112,6 +2313,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2127,6 +2332,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2137,6 +2346,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2152,6 +2365,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               },
               {
@@ -2162,6 +2379,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               }
             ]
@@ -2174,29 +2395,56 @@
                 "paramName": "REVERB_KILLDRY",
                 "paramId": 52,
                 "widget": "button",
-                "rawWidget": "btnKillDry"
+                "rawWidget": "btnKillDry",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "REVERB_SCENEIGNORE",
                 "paramId": 51,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "REVERB_BYPASS",
                 "paramId": 22,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER3_XTRA",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1014,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 127,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360",
+          "btnKillDryPosition": "1020,360"
+        }
       },
       {
         "name": "Duck + Mod",
         "pageNum": 2,
+        "layout": "LAYOUT_MIXER3_XTRA",
         "rows": [
           {
             "section": "parameters",
@@ -2209,6 +2457,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "308,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2219,6 +2476,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2229,6 +2490,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2239,6 +2504,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2249,6 +2518,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "563,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2259,6 +2537,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2269,6 +2551,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2279,6 +2565,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               }
             ]
@@ -2294,6 +2584,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2304,6 +2598,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2314,6 +2612,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2329,6 +2631,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2339,6 +2645,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2354,6 +2664,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               },
               {
@@ -2364,6 +2678,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               }
             ]
@@ -2376,29 +2694,56 @@
                 "paramName": "REVERB_KILLDRY",
                 "paramId": 52,
                 "widget": "button",
-                "rawWidget": "btnKillDry"
+                "rawWidget": "btnKillDry",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "REVERB_SCENEIGNORE",
                 "paramId": 51,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "REVERB_BYPASS",
                 "paramId": 22,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER3_XTRA",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1014,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 127,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360",
+          "btnKillDryPosition": "1020,360"
+        }
       },
       {
         "name": "EQ",
         "pageNum": 3,
+        "layout": "LAYOUT_MIXER3_XTRA",
         "rows": [
           {
             "section": "parameters",
@@ -2411,6 +2756,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "308,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 79
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2421,6 +2775,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2431,6 +2789,10 @@
                 "rawWidget": "dropdown1Tight1Line",
                 "placement": {
                   "positionExact": "305,194"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 63
                 }
               },
               {
@@ -2441,6 +2803,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "positionExact": "305,270"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2451,6 +2817,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "391,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2461,6 +2836,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2471,6 +2850,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2481,6 +2864,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 3
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2491,6 +2878,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "646,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 249
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2501,6 +2897,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 4
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2511,6 +2911,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 5
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2521,6 +2925,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 6
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2531,6 +2939,15 @@
                 "rawWidget": "sectionLabel",
                 "placement": {
                   "positionExact": "903,29"
+                },
+                "render": {
+                  "sectionSpan": {
+                    "pixels": 79
+                  }
+                },
+                "bounds": {
+                  "w": 0,
+                  "h": 20
                 }
               },
               {
@@ -2541,6 +2958,10 @@
                 "rawWidget": "knob",
                 "placement": {
                   "col": 7
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 136
                 }
               },
               {
@@ -2551,6 +2972,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "positionExact": "900,194"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               },
               {
@@ -2561,6 +2986,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "positionExact": "900,270"
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2576,6 +3005,13 @@
                 "rawWidget": "graph_eq",
                 "placement": {
                   "positionExact": "390,190"
+                },
+                "render": {
+                  "graphIndex": "0"
+                },
+                "bounds": {
+                  "w": 510,
+                  "h": 186
                 }
               }
             ]
@@ -2591,6 +3027,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2601,6 +3041,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2611,6 +3055,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2626,6 +3074,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 0
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               },
               {
@@ -2636,6 +3088,10 @@
                 "rawWidget": "knobCompact",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 120
                 }
               }
             ]
@@ -2651,6 +3107,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 1
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               },
               {
@@ -2661,6 +3121,10 @@
                 "rawWidget": "dropdown1TightXtra",
                 "placement": {
                   "col": 2
+                },
+                "bounds": {
+                  "w": 83,
+                  "h": 72
                 }
               }
             ]
@@ -2673,25 +3137,51 @@
                 "paramName": "REVERB_KILLDRY",
                 "paramId": 52,
                 "widget": "button",
-                "rawWidget": "btnKillDry"
+                "rawWidget": "btnKillDry",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Scene\nIgnore",
                 "paramName": "REVERB_SCENEIGNORE",
                 "paramId": 51,
                 "widget": "button",
-                "rawWidget": "btnIgnoreScene"
+                "rawWidget": "btnIgnoreScene",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               },
               {
                 "label": "Bypass",
                 "paramName": "REVERB_BYPASS",
                 "paramId": 22,
                 "widget": "button",
-                "rawWidget": "btnBypass"
+                "rawWidget": "btnBypass",
+                "bounds": {
+                  "w": 74,
+                  "h": 28
+                }
               }
             ]
           }
-        ]
+        ],
+        "geometry": {
+          "name": "LAYOUT_MIXER3_XTRA",
+          "parametersX": 305,
+          "parametersY": 50,
+          "parametersSpacingX": 85,
+          "parametersSpacingY": 180,
+          "mixerX": 1014,
+          "mixerY": 22,
+          "mixerSpacingX": 85,
+          "mixerSpacingY": 127,
+          "btnBypassPosition": "1188,360",
+          "btnIgnoreScenePosition": "1104,360",
+          "btnKillDryPosition": "1020,360"
+        }
       }
     ]
   }

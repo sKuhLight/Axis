@@ -1,21 +1,16 @@
-// The device editor's widget metrics: how big a control of each editor `rawWidget` type actually is,
-// in the device's own canvas pixels.
+// The device editor's widget metrics, in the device's own canvas pixels.
 //
-// This is the ONE table Axis owns about layout, and it exists because the layout data says WHERE every
-// control goes but not HOW BIG it is — the official editor knows that from its own JUCE widget classes,
-// which are code, not config. Everything else (position, label, grouping, page, order) comes from the
-// device and is never guessed here.
+// PRIMARY SOURCE is now served metadata: ForgeFX resolves each control's `rawWidget` to its outer
+// `bounds` from the editor's `__components.xml` and attaches it (`LayoutControl.bounds`) — the placer
+// sizes every control off that. THIS table is the LEGACY FALLBACK for a control served without bounds
+// (a device whose editor config has not been extracted — FM9 today), plus the rawWidget → Svelte-view
+// dispatch (`widgetView`) and the graph-token vocabulary (`graphKind`), which stay in Axis.
 //
-// MEASURED, NOT INVENTED. Every width below is mined from the generated layout corpus itself: on the
-// pixel-composed pages the editor places controls by absolute `positionExact`, so the horizontal
-// distance from one control to the next on the same visual line is an upper bound on the left one's
-// width. Taking the TIGHTEST packing (10th percentile across all three gen-3 devices, ~35k controls)
-// recovers the real widget width. The numbers that came back are self-consistent in a way that
-// confirms the method: the editor's own type names encode their width in units of ~85px —
-// `dropdown1` measured 85, `dropdown1p5` measured 126 (= 1.5 x 84), `dropdownMini` 45 — which is not
-// something a coincidence produces. Where a token is too rare to measure (fewer than ~5 samples, or
-// always alone on its line) the value is derived from its measured base type and its name modifier,
-// and is flagged `derived` so the sweep test can report it.
+// MEASURED, NOT INVENTED (legacy fallback only). Every width below is mined from the generated layout
+// corpus itself: on the pixel-composed pages the editor places controls by absolute `positionExact`,
+// so the horizontal distance from one control to the next on the same visual line is an upper bound on
+// the left one's width. Taking the TIGHTEST packing (10th percentile across all three gen-3 devices)
+// recovers the real widget width.
 //
 // Heights are less directly measurable (a control is rarely followed by another directly beneath it),
 // so they come from the widget's own anatomy at the measured width: a full knob is a dial plus a
