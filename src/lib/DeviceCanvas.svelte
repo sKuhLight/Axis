@@ -187,8 +187,10 @@
   function wheel(e: WheelEvent, p: NamedParam | undefined) {
     if (!p) return;
     e.preventDefault();
+    const dy = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    if (dy === 0) return;
     const step = e.shiftKey ? 0.002 : 0.02;
-    setNorm(p, (p.norm ?? 0) + (e.deltaY < 0 ? step : -step));
+    setNorm(p, (p.norm ?? 0) + (dy < 0 ? -step : step));
   }
   function bumpEnum(e: EnumParam, dir: number) {
     const i = e.options.findIndex((o) => o.value === e.value);
@@ -452,10 +454,10 @@
   .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
   .ftrack {
     position: relative; flex: 1; width: 8px; border-radius: 4px;
-    background: var(--track); cursor: ns-resize; touch-action: none;
+    background: var(--track); cursor: pointer; touch-action: none;
   }
   .ffill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 4px; background: var(--c); }
-  .fl { font-size: 9px; font-weight: 600; color: var(--textdim); white-space: nowrap; }
+  .fl { font-size: 9px; font-weight: 600; color: var(--textdim); white-space: nowrap; cursor: pointer; }
 
   .btn {
     width: 100%; height: 100%; padding: 0 4px; border: 1px solid var(--border2); border-radius: 6px;

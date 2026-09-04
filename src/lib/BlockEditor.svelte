@@ -126,7 +126,7 @@
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-    document.body.style.cursor = 'ns-resize';
+    document.body.style.cursor = 'pointer';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
@@ -287,7 +287,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: ns-resize;
+    cursor: pointer;
     background: var(--bg2);
     border-bottom: 1px solid var(--surface2);
     touch-action: none;
