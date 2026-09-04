@@ -134,13 +134,24 @@ async function bootWithLayout(page: Page): Promise<void> {
   await page.route('**/api/events', (route) => route.abort());
 
   await bootCleanWorkbench(page);
-  await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
+  // Confirms the mocked grid/block routes took effect: the Block Editor's own embedded map
+  // (GridMap.svelte, always mounted with the Block Editor — no selection or expansion needed).
+  await expect(page.locator('.map')).toBeVisible();
+}
+
+/**
+ * Expand the Block Editor's embedded Grid Map and tap the mocked Drive block (row 0, col 0) to
+ * mount the ControlSurface board for it. Split out from `bootWithLayout()` because the map starts
+ * collapsed by default (its own tested behaviour) and cells only render when expanded.
+ */
+async function selectDriveBlock(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Expand map' }).click();
+  await page.locator('.mc.block[data-idx="0,0"]').click();
 }
 
 test.describe('ControlSurface device-layout board (AXIS-36)', () => {
   test('starts the block editor map collapsed on a clean boot', async ({ page }) => {
     await bootWithLayout(page);
-    await page.locator('[data-idx="0,0"].cell.block').click();
 
     await expect(page.getByRole('button', { name: 'Expand map' })).toBeVisible();
     await expect(page.locator('.map .body')).toHaveCount(0);
@@ -153,7 +164,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     await bootWithLayout(page);
 
     // Tap the Drive block → the embedded Block Editor mounts the ControlSurface for it.
-    await page.locator('[data-idx="0,0"].cell.block').click();
+    await selectDriveBlock(page);
     await expect(page.locator('.boardwrap')).toBeVisible();
 
     // The layout's single page becomes a tab named "Drive".
@@ -181,7 +192,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
   test('mouse wheel over a continuous control changes its value without pinning it', async ({ page }) => {
     await bootWithLayout(page);
-    await page.locator('[data-idx="0,0"].cell.block').click();
+    await selectDriveBlock(page);
     await expect(page.locator('.boardwrap')).toBeVisible();
 
     const gain = page.locator('.boardwrap .card').filter({ has: page.locator('.lbl', { hasText: 'Gain' }) }).first();
@@ -196,7 +207,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
   test('places controls at the columns the device authored, not in array order', async ({ page }) => {
     await bootWithLayout(page);
-    await page.locator('[data-idx="0,0"].cell.block').click();
+    await selectDriveBlock(page);
     await expect(page.locator('.boardwrap')).toBeVisible();
 
     // `placement.col` carries the TRUE visual order: Gain is listed first but authored at col 2, Tone
@@ -215,7 +226,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
   test('block-level controls render as a fixed rail, right of the page, that does not move on page change', async ({ page }) => {
     await bootWithLayout(page);
-    await page.locator('[data-idx="0,0"].cell.block').click();
+    await selectDriveBlock(page);
     await expect(page.locator('.boardwrap')).toBeVisible();
 
     // The mixer-section controls leave the page grid entirely and render in `.rail`.
@@ -251,7 +262,7 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
   test('dropdown popover renders directly under its trigger, not the grid cell edge', async ({ page }) => {
     await bootWithLayout(page);
-    await page.locator('[data-idx="0,0"].cell.block').click();
+    await selectDriveBlock(page);
     await expect(page.locator('.boardwrap')).toBeVisible();
 
     // Regression guard (AXIS dropdown-offset bug): the popover used to be positioned from the

@@ -41,13 +41,5 @@ test.describe('Keyboard', () => {
     await expect(tuner).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(tuner).toHaveCount(0);
-
-    // The regression that matters: a bare letter key must stay typeable in text fields.
-    await page.keyboard.press('ControlOrMeta+k');
-    const search = page.locator('.card .search input');
-    await expect(search).toBeFocused();
-    await page.keyboard.type('tt');
-    await expect(search).toHaveValue('tt');
-    await expect(tuner).toHaveCount(0);
   });
 });

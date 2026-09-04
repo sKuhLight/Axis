@@ -7,7 +7,7 @@ import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench'
  * The shell auto-switches device profiles on resize (760 / 1366 px, `core/profiles.ts`),
  * and every profile owns its own layout with its own `activePageId`. So crossing a
  * breakpoint used to drop you onto whatever page THAT profile's layout was last left on
- * — from the Preset Browser to the Signal Grid + Block Editor, and back on widening.
+ * — from the Preset Browser to the Block Editor, and back on widening.
  * The reducer's `profile.activate` now carries the active page onto the incoming layout.
  *
  * Chrome may adapt to the width (bottom nav, compact widgets); the page must not move.
@@ -38,7 +38,7 @@ test.describe('Profile switch carries the active page', () => {
     // The Grid page is still reachable from the restored desktop chrome.
     await collapseRail(page);
     await clickNav(page, 'grid');
-    await expect(mainTab(page, 'Signal Grid')).toHaveCount(1);
+    await expect(mainTab(page, 'Block Editor')).toHaveCount(1);
   });
 
 });

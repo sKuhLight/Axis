@@ -20,6 +20,15 @@ export const GRID_MAP_COLLAPSE_KEY = 'axs.gridmap.collapsed';
  *     it appears once a device connects (this dev environment has a live FM3
  *     behind the /api proxy) and RACES the specs' first clicks; it intercepted
  *     a nav click in a real run.
+ *
+ * A sibling of that last race: DeviceDefsPrompt ("Get definitions for this
+ * device?") is fixed-position at the viewport bottom and shows whenever the
+ * live FM3's real defs-cache has no persisted profile for its firmware yet —
+ * which intercepts clicks on any bottom-anchored chrome (e.g. My Controls'
+ * sticky `+ Section` / `+ Divider` bar). Unlike the flags above this one isn't
+ * a simple localStorage toggle (its dismissal key is per device+firmware), so
+ * it's neutralised by faking the status endpoint instead — see the
+ * `**\/device/cache` route below.
  */
 const FIRST_RUN_SUPPRESS: Record<string, string> = {
   'axs.telemetry.decided': '1',
@@ -54,6 +63,11 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
   // layout locally instead of restoring the shared dev-session doc.
   await page.route('**/store/config/workbench', (route) =>
     route.fulfill({ status: 404, contentType: 'application/json', body: 'null' }),
+  );
+  // Claim a defs profile already exists so shouldOfferDeviceDefs() stays false
+  // regardless of the live FM3's real cache state — see the doc comment above.
+  await page.route('**/device/cache', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: true }) }),
   );
 
   await page.goto('/');

@@ -83,7 +83,7 @@ test.describe('Pages: every seed page activates cleanly', () => {
       await collapseRail(page);
       await clickNav(page, 'grid');
       await expect(page.locator('[data-nav-entry="grid"][data-nav-active="true"]')).toHaveCount(1);
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
+      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
     });
   }
 });
@@ -99,7 +99,7 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
 
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
   });
 
   test('clicking the preset widget from a non-Grid, non-PB page goes to Grid', async ({ page }) => {
@@ -108,6 +108,6 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
     await clickNav(page, 'scenes');
     await collapseRail(page); // else the expanded rail overlays the top bar widget (see collapseRail doc)
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
   });
 });

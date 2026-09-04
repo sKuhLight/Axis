@@ -2,12 +2,14 @@ import { test, expect } from '@playwright/test';
 import { bootCleanWorkbench, enterEditMode, exitEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
 
 test.describe('Dock interactions', () => {
-  test('drag a panel tab from bottom into the main region', async ({ page }) => {
+  test('drag a panel tab from the right dock into the main region', async ({ page }) => {
     await bootCleanWorkbench(page);
     // Tab dragging is an edit-mode gesture (TabStack.tabPointerDown gates on editMode).
     await enterEditMode(page);
 
-    const src = regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' }).first();
+    // Signal Grid ships undocked by default, so this drags History (right dock, tabbed
+    // alongside My Controls) into main instead — same gesture, a pane that's actually there.
+    const src = regionTabs(page, 'right').filter({ hasText: 'History' }).first();
     const mainStack = page.locator('.aw-tabstack[data-region="main"]');
     const sb = await src.boundingBox();
     const mb = await mainStack.boundingBox();
@@ -27,17 +29,17 @@ test.describe('Dock interactions', () => {
     await page.mouse.move(tx, ty, { steps: 4 });
     await page.mouse.up();
 
-    // Block Editor now lives in the main stack alongside Signal Grid.
-    await expect(regionTabs(page, 'main')).toHaveText([/Signal Grid/, /Block Editor/]);
+    // History now lives in the main stack alongside Block Editor.
+    await expect(regionTabs(page, 'main')).toHaveText([/Block Editor/, /History/]);
   });
 
   test('tab switching activates the clicked panel', async ({ page }) => {
     await bootCleanWorkbench(page);
     // ROUND 15 (Pages): nav clicks switch PAGES (they no longer accumulate tabs in
-    // one stack). To get a multi-tab main stack, drag the Grid page's Block Editor
-    // tab up into main so main = [Signal Grid, Block Editor], then switch tabs.
+    // one stack). To get a multi-tab main stack, drag History (right dock) into main
+    // so main = [Block Editor, History], then switch tabs.
     await enterEditMode(page);
-    const src = regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' }).first();
+    const src = regionTabs(page, 'right').filter({ hasText: 'History' }).first();
     const mainStack = page.locator('.aw-tabstack[data-region="main"]');
     const sb = await src.boundingBox();
     const mb = await mainStack.boundingBox();
@@ -52,16 +54,16 @@ test.describe('Dock interactions', () => {
     await page.mouse.up();
 
     const mainTabs = regionTabs(page, 'main');
-    await expect(mainTabs).toHaveText([/Signal Grid/, /Block Editor/]);
+    await expect(mainTabs).toHaveText([/Block Editor/, /History/]);
     await exitEditMode(page);
     await collapseRail(page);
 
-    // Clicking the Block Editor tab activates it; clicking Signal Grid switches back.
+    // Clicking the History tab activates it; clicking Block Editor switches back.
+    await mainTabs.filter({ hasText: 'History' }).click();
+    await expect(mainTabs.filter({ hasText: 'History' })).toHaveClass(/active/);
     await mainTabs.filter({ hasText: 'Block Editor' }).click();
     await expect(mainTabs.filter({ hasText: 'Block Editor' })).toHaveClass(/active/);
-    await mainTabs.filter({ hasText: 'Signal Grid' }).click();
-    await expect(mainTabs.filter({ hasText: 'Signal Grid' })).toHaveClass(/active/);
-    await expect(mainTabs.filter({ hasText: 'Block Editor' })).not.toHaveClass(/active/);
+    await expect(mainTabs.filter({ hasText: 'History' })).not.toHaveClass(/active/);
   });
 
   test('collapse and close a panel from the pane header menu', async ({ page }) => {

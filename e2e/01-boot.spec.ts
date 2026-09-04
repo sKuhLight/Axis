@@ -13,9 +13,8 @@ test.describe('Boot', () => {
     await expect(page.locator('[data-zone="top.left"]')).toHaveCount(1);
     await expect(page.locator('[data-zone="top.right"]')).toHaveCount(1);
 
-    // Default dock: Signal Grid pane header + Block Editor tab.
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
-    await expect(regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    // Default dock: Block Editor main (Signal Grid ships undocked by default).
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Block Editor' })).toHaveCount(1);
 
     // Navigation rail is populated.
     await expect(page.locator('[data-nav-entry]').first()).toBeVisible();

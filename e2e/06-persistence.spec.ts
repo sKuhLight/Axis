@@ -6,7 +6,7 @@ test.describe('Persistence', () => {
     await bootCleanWorkbench(page);
 
     // Dock the Scenes panel — a persisted layout change NOT in the default layout
-    // (only Signal Grid ships docked in main by default, so a new Scenes tab is
+    // (only Block Editor ships docked in main by default, so a new Scenes tab is
     // an unambiguous signal that the rearrangement was persisted).
     await clickNav(page, 'scenes');
     await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
@@ -50,10 +50,9 @@ test.describe('Persistence', () => {
     // The shell still boots and renders the default layout — not a blank page.
     await page.waitForSelector('.aw-root');
     await expect(page.locator('.aw-root')).toHaveCount(1);
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
-    await expect(regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Block Editor' })).toHaveCount(1);
     // The Scenes panel from the corrupt doc is gone — we're back to defaults
-    // (Signal Grid in main; Block Editor in bottom).
+    // (Block Editor in main).
     await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(0);
   });
 });
