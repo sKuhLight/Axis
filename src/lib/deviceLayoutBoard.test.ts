@@ -267,7 +267,7 @@ describe('buildDeviceLayoutBoard — pages, sweep, variant', () => {
     const b = buildDeviceLayoutBoard(layout(pages, { variantName: 'Type', variantValue: 'B' }), [knob(0)], 12)!;
     expect(a.variantSig).not.toBe(b.variantSig);
     expect(a.variantSig).toBe(layoutVariantSig(layout(pages, { variantName: 'Type', variantValue: 'A' })));
-    expect(a.variantSig).toMatch(/^b23\|/);
+    expect(a.variantSig).toMatch(/^b24\|/);
     expect(layoutVariantSig(null)).toBe('');
   });
 });
@@ -1027,6 +1027,122 @@ describe('buildDeviceLayoutBoard — section headings render (not dropped as gap
   });
 });
 
+describe("buildDeviceLayoutBoard — the amp's real Ideal page (one device row, two visual lines)", () => {
+  // Verbatim shape of the Axe-Fx III amp Ideal page (`axe-fx-iii/layouts.generated.ts`, DISTORT, the
+  // unversioned current variant). Its second row is the case that broke the page: FIVE toggles carrying
+  // `offsetY: -70` share their column numbers with the knobs drawn below them, so the row holds two visual
+  // lines. Read as one line, the duplicate columns collide and the placement cursor shoves all fourteen
+  // controls onto a single row — which is exactly what the app rendered: Boost, Input Trim, Cut, Fat, High
+  // Treble, Bright, Bright Cap, Pres. Shift, Master Vol Trim in one unbroken sweep, aligned with nothing.
+  const knobs = [1, 2, 3, 4, 20, 16, 5, 47, 97, 10, 77];
+  const toggles = [40, 45, 78, 39, 104];
+  const headroom: BoardCtl = { key: 'm130', kind: 'meterH', id: 130, w: 4, h: 1, view: 'meterH', views: ['meterH'] };
+  const catalog: BoardCtl[] = [...knobs.map(knob), ...toggles.map(toggle), headroom];
+  const at = (col: number) => ({ placement: { col } });
+  const up = (col: number) => ({ placement: { col, offsetY: -70 } });
+
+  const board = buildDeviceLayoutBoard(
+    layout(
+      [
+        {
+          name: 'Ideal',
+          rows: [
+            {
+              section: 'parameters',
+              controls: [
+                ctl('knob', 1, 'Gain', at(0)),
+                ctl('spacer', null, '', at(1)),
+                ctl('knob', 2, 'Bass', at(2)),
+                ctl('knob', 3, 'Mid', at(3)),
+                ctl('knob', 4, 'Treble', at(4)),
+                ctl('knob', 20, 'Presence', at(5)),
+                ctl('knob', 16, 'Depth', at(6)),
+                ctl('spacer', null, '', at(7)),
+                ctl('knob', 5, 'Master Volume', at(8))
+              ]
+            },
+            {
+              section: 'parameters',
+              controls: [
+                ctl('toggle', 40, 'Boost', up(0)),
+                ctl('toggle', 45, 'Cut', up(2)),
+                ctl('toggle', 78, 'Fat', up(3)),
+                ctl('toggle', 39, 'Bright', up(4)),
+                ctl('toggle', 104, 'Pres. Shift', up(5)),
+                ctl('knob', 47, 'Input Trim', at(0)),
+                ctl('spacer', null, '', at(1)),
+                ctl('spacer', null, '', at(2)),
+                ctl('knob', 97, 'High Treble', at(3)),
+                ctl('knob', 10, 'Bright Cap', at(4)),
+                ctl('spacer', null, '', at(5)),
+                ctl('spacer', null, '', at(6)),
+                ctl('spacer', null, '', at(7)),
+                ctl('knob', 77, 'Master Vol Trim', at(8)),
+                ctl('meter', 130, 'HEADROOM', { placement: { positionExact: '465,370' } })
+              ]
+            }
+          ]
+        }
+      ],
+      { family: 'DISTORT' }
+    ),
+    catalog,
+    12
+  )!;
+  const b = board.boards['Ideal']!;
+  const xy = (k: string) => ({ x: find(b, k).x, y: find(b, k).y });
+
+  it('draws the toggles and the trim knobs as two separate lines, toggles above', () => {
+    const toggleY = find(b, 'e40').y;
+    const knobY = find(b, 'k47').y;
+    expect(toggleY).toBeLessThan(knobY);
+    expect(new Set(['e40', 'e45', 'e78', 'e39', 'e104'].map((k) => find(b, k).y)).size).toBe(1);
+    expect(new Set(['k47', 'k97', 'k10', 'k77'].map((k) => find(b, k).y)).size).toBe(1);
+  });
+
+  it('keeps every control in the column the device authored it in', () => {
+    expect(xy('e40').x).toBe(0); // Boost
+    expect(xy('e45').x).toBe(2); // Cut
+    expect(xy('e78').x).toBe(3); // Fat
+    expect(xy('e39').x).toBe(4); // Bright
+    expect(xy('e104').x).toBe(5); // Pres. Shift
+    expect(xy('k47').x).toBe(0); // Input Trim, under Boost
+    expect(xy('k97').x).toBe(3); // High Treble, under Fat
+    expect(xy('k10').x).toBe(4); // Bright Cap, under Bright
+    expect(xy('k77').x).toBe(8); // Master Vol Trim
+  });
+
+  it('aligns the second row under the first — the columns the screenshot showed sliding', () => {
+    expect(xy('k1').x).toBe(xy('e40').x); // Gain over Boost
+    expect(xy('k3').x).toBe(xy('e78').x); // Mid over Fat
+    expect(xy('k4').x).toBe(xy('e39').x); // Treble over Bright
+    expect(xy('k5').x).toBe(xy('k77').x); // Master Volume over Master Vol Trim
+  });
+
+  it('leaves the deliberate hole at col 1 that the device authored a spacer for', () => {
+    expect(b.some((w) => !w.rail && w.y === find(b, 'k1').y && w.x === 1)).toBe(false);
+  });
+
+  it('puts HEADROOM under the tonestack at its authored column, below both lines', () => {
+    expect(find(b, 'm130').x).toBe(3);
+    expect(find(b, 'm130').y).toBeGreaterThan(find(b, 'k47').y);
+  });
+
+  it('never overlaps two controls', () => {
+    assertNoOverlap(b);
+  });
+
+  it('survives responsive reflow at every width that fits the page', () => {
+    for (let cols = 9; cols <= 16; cols++) {
+      const packed = packRows(b, cols);
+      assertNoOverlap(packed);
+      const p = (k: string) => packed.find((w) => w.key === k)!;
+      expect(p('e40').y).toBeLessThan(p('k47').y); // the two lines never re-merge
+      expect(p('k1').x).toBe(p('e40').x); // and stay column-aligned with the row above
+    }
+  });
+});
+
 describe('buildDeviceLayoutBoard — row-level outlier (HEADROOM: positionExact-only among col-authored siblings)', () => {
   // The amp's real Preamp row tail (pageNum 2): Master Vol Trim is the last col-authored control, then
   // HEADROOM sits in the SAME row with only positionExact — no col.
@@ -1043,11 +1159,15 @@ describe('buildDeviceLayoutBoard — row-level outlier (HEADROOM: positionExact-
     expect(find(b, 'm132').view).toBe('meterH');
   });
 
-  it('places HEADROOM as an ordinary grid widget on its own row below Master Vol Trim, never inheriting its column', () => {
+  it('places HEADROOM on its own line below Master Vol Trim, at the column the device authored it in', () => {
     const headroom = find(b, 'm132');
     const trim = find(b, 'k79');
     expect(headroom.y).toBeGreaterThan(trim.y);
-    expect(headroom.col).toBeUndefined();
+    // x=465 on the device's 1240px canvas is column 3 — NOT column 8, which it would inherit from Master
+    // Vol Trim, and NOT column 0, which is where flow-packing the cluster from the left margin used to put
+    // it (the reason the meter rendered bottom-left instead of under the tonestack).
+    expect(headroom.x).toBe(3);
+    expect(headroom.col).toBe(3);
   });
 
   it('leaves Master Vol Trim placed normally at its authored column (HEADROOM does not perturb the row)', () => {
@@ -1089,7 +1209,10 @@ describe('buildDeviceLayoutBoard — whole canvas-shaped page (Speaker/Align/Sce
   it('places every non-rail control as an ordinary grid widget — Speaker Damping below the graph, since the fixture puts them in separate device rows', () => {
     // (`clusterByCanvasRow`'s own tests above cover same-row merging when controls DO share one device row,
     // the real Speaker page's actual shape — see e.g. its Low Freq/LF Reso/LF Q vertical stack.)
-    expect(find(b, 'k10').x).toBe(0);
+    // x=305 is column 2 — the device drew this knob in the left-hand stack beside its graph, not against
+    // the left margin. Flow-packing canvas clusters from x=0 is what flattened the real Speaker page's
+    // knobs-flanking-a-graph composition into left-aligned rows.
+    expect(find(b, 'k10').x).toBe(2);
     expect(find(b, 'k10').y).toBeGreaterThan(find(b, 'eq:speaker').y);
   });
 

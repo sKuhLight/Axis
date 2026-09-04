@@ -62,11 +62,52 @@ named, switchable **layout profiles** per context (per block family, and per vir
 - **Custom / duplicated** — user-created profiles (including duplicates of Default or another
   profile), switchable and persisted.
 
-> **Status note.** As of this writing, the served `layout` field is **not yet consumed** by the
-> editor store ([`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts)) and the API client's
-> `BlockParams` type does **not** yet carry it — wiring the served layout through and adding the
-> profile switcher (Default/Blank/custom) is the in-progress work. The existing built-in
-> Ideal/Advanced/EQ tabs plus user custom tabs are the shipped predecessor of this system.
+> **Status note.** The served `layout` is consumed: `BlockParams` carries it
+> ([`src/lib/types.ts`](../src/lib/types.ts)), the editor store ingests it
+> ([`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts)), and
+> [`src/lib/deviceLayoutBoard.ts`](../src/lib/deviceLayoutBoard.ts) turns it into the Default board.
+> The built-in Ideal/Advanced/EQ tabs in `src/lib/layouts.ts` are now only the FALLBACK for a block
+> the server serves no layout for — note its `Ideal` is a keyword heuristic and is unrelated to the
+> device's real "Ideal" tab.
+
+## Placement: how a served control becomes a grid cell
+
+The device places every control on its own fixed ~1240px canvas, and says where in four fields:
+`placement.col`, `placement.offsetX`, `placement.offsetY`, `placement.positionExact`.
+[`src/lib/deviceGeometry.ts`](../src/lib/deviceGeometry.ts) resolves all four onto one number line;
+`deviceLayoutBoard.ts` snaps that line to the board grid. Two axes, modelled differently because the
+device authors them differently:
+
+- **Horizontal is absolute.** `col` and `positionExact.x` are two spellings of the same canvas x, so
+  both go through `pxToCol`. `COL_PITCH` is *derived* as `CANVAS_W / DEVICE_COLS` precisely so
+  `pxToCol(colToPx(c)) === c` — authored columns survive the round trip as an identity of the
+  definition, not as a tuned approximation.
+- **Vertical is relative.** `offsetY` nudges a control off its row's baseline, which is how ONE device
+  row draws MORE THAN ONE visual line — the amp's Ideal page puts five toggles 70px above the knobs
+  that share their column numbers. `splitByOffsetY` recovers those lines. `positionExact.y` is an
+  absolute canvas coordinate instead, so those controls cluster among themselves
+  (`clusterByCanvasRow`) and are placed below the row's own content. There is no reliable constant
+  converting a row index to a canvas y, so the two are deliberately never mixed onto one axis.
+
+### Two tiers, and where the grid stops
+
+Measured across all 1015 Axe-Fx III pages, 92% are grid-shaped: 500 carry no `positionExact` at all,
+and 433 carry one or two outliers (the amp's HEADROOM meter) that snap invisibly. The rest are
+**pixel-composed**: 34 of 152 distinct pages — Cab, Align, Speaker, PEQ, Filter, Scene Levels,
+Modifier, Tuner — place controls as little as 1–4px apart, which no column pitch can separate.
+`isPanelCluster` identifies them from the geometry (never from a family name — a hardcoded list is
+what produced the per-block patch cycle this replaced).
+
+The grid tier lays every page out without overlap or overflow; five pages (`CONTROLLERS/CS per Scene`,
+`FC/Devices`, `MIDIBLOCK/One Scene`, `VOCODER/Level`, `VOCODER/Pan`) have more section headings than
+the grid has columns and crowd them onto the last column. Those pages want a **panel tier** — the
+cluster rendered as one grid widget that positions its children by the device's own pixels — which is
+not built yet. `src/lib/deviceLayoutSweep.test.ts` runs every page of all three devices through the
+builder and pins that list by name, so an ordinary page cannot silently join it.
+
+The hand-written `cabIdentityCards.ts`, `cabMicGraphs.ts`, `cabAlignmentGraphs.ts` and `eqGraphs.ts`
+are each a panel-tier widget built by hand for one block; they are the candidates to retire into a
+generic panel once it exists.
 
 ## Virtual-effect screens — Setup / Controllers / Modifier / FC
 
