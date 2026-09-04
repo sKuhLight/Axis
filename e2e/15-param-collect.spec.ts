@@ -220,7 +220,10 @@ test.describe('My Controls sections', () => {
     const panel = await openMyControls(page);
 
     await panel.locator('.axis-widget.section-header').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Remove Widget' }).click();
+    // A named section's removal item reads "Remove whole section" (it cascades
+    // to the controls under it), not the generic "Remove Widget" — see
+    // axisWorkbenchRegistry.ts's registerWidgetMenu for My Controls.
+    await page.getByRole('menuitem', { name: 'Remove whole section' }).click();
 
     await expect(panel.locator('.axis-widget.section-header')).toHaveCount(0);
     await expect(panel.locator('.axis-widget.param')).toHaveCount(0);
@@ -232,7 +235,9 @@ test.describe('My Controls sections', () => {
     const panel = await openMyControls(page);
 
     await panel.locator('.axis-widget.section-header').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Remove Widget' }).click();
+    // A divider (or any plain control) in My Controls gets the plain "Remove"
+    // label — only a NAMED section header reads "Remove whole section".
+    await page.getByRole('menuitem', { name: 'Remove', exact: true }).click();
 
     await expect(panel.locator('.axis-widget.section-header')).toHaveCount(0);
     await expect(panel.locator('.axis-widget.param')).toHaveCount(2);
