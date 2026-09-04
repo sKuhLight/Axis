@@ -68,6 +68,15 @@ const num = (v: number | undefined, fallback: number): number => (Number.isFinit
 const FALLBACK_SPACING_X = 85;
 const FALLBACK_SPACING_Y = 180;
 
+/** A text label the component metadata left auto-sized (bounds width 0) sizes to its own caption. The
+ *  editor's `__components.xml` records `labelBold` / `labelModifier` / a span-less `sectionLabel` with a
+ *  zero width because JUCE sizes them to the text — a 0px cell would clip the caption entirely. */
+function textLabelWidth(label: string): number {
+  return Math.max(28, Math.ceil((label ?? '').length * 8) + 8);
+}
+
+const isTextLabel = (rawWidget: string) => rawWidget === 'sectionLabel' || rawWidget.startsWith('label');
+
 /** Outer box of one control in DEVICE px. Served `bounds` win; `render` resolves the two widgets whose
  *  size the component metadata leaves dynamic (a `sectionLabel`'s span, a `labelSeperator`'s height). */
 function boxOf(c: LayoutControl, sectionSpacingX: number): { w: number; h: number } {
@@ -81,6 +90,7 @@ function boxOf(c: LayoutControl, sectionSpacingX: number): { w: number; h: numbe
   } else if (c.rawWidget === 'labelSeperator' && c.render?.separatorHeight != null) {
     h = c.render.separatorHeight;
   }
+  if (w <= 0 && isTextLabel(c.rawWidget)) w = textLabelWidth(c.label);
   return { w, h };
 }
 
@@ -107,7 +117,15 @@ export function placePage(page: LayoutPage): PlacedPage {
     const baselineY0 = isMixer ? num(geo?.mixerY, 0) : num(geo?.parametersY, 0);
     const spacingX = isMixer ? num(geo?.mixerSpacingX, FALLBACK_SPACING_X) : num(geo?.parametersSpacingX, FALLBACK_SPACING_X);
     const spacingY = isMixer ? num(geo?.mixerSpacingY, FALLBACK_SPACING_Y) : num(geo?.parametersSpacingY, FALLBACK_SPACING_Y);
-    const baselineY = baselineY0 + (isMixer ? mixerRow++ : paramsRow++) * spacingY;
+
+    // A row whose controls are ALL absolutely anchored (positionExact, or a PageLayout button anchor)
+    // is a decoration row — the device's section headings, the cab's identity cluster, a graph overlay —
+    // not a flow row. It has no grid baseline, so it must NOT advance the section's row cursor, or it
+    // pushes every following flow row down a full pitch (the Cab/Preamp "total mess").
+    let baselineY: number | null = null;
+    if (row.controls.some((c) => !absoluteAnchor(c, geo))) {
+      baselineY = baselineY0 + (isMixer ? mixerRow++ : paramsRow++) * spacingY;
+    }
 
     let slot = 0;
     for (const c of row.controls) {
@@ -120,7 +138,7 @@ export function placePage(page: LayoutPage): PlacedPage {
       const col = c.placement?.col;
       const idx = col ?? slot;
       const x = baselineX + idx * spacingX + (c.placement?.offsetX ?? 0);
-      const y = baselineY + (c.placement?.offsetY ?? 0);
+      const y = baselineY! + (c.placement?.offsetY ?? 0);
       slot = idx + 1;
       entries.push({ control: c, rect: { x, y, w: box.w, h: box.h }, layer: 'flow', row: rowIndex });
     }

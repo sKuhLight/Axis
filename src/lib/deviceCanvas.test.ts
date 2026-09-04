@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { placePage, placeLayout, parsePositionExact, CANVAS_W, DEVICE_SCALE, type PlacedControl } from './deviceCanvas';
-import { widgetBox } from './deviceWidgets';
+import { widgetBox, dropdownFieldHeight } from './deviceWidgets';
 import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from './types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +152,28 @@ describe('placePage (exact geometry)', () => {
     expect(a.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([305 + 3 * 85, 305 + 3 * 85]);
     expect(a.controls).toEqual(b.controls);
   });
+
+  it('a decoration row (all positionExact) does not advance the flow row cursor', () => {
+    const page: LayoutPage = {
+      name: 'P', geometry: LAYOUT_MIXER2,
+      rows: [
+        { section: 'parameters', controls: [ctl({ rawWidget: 'sectionLabel', label: 'TONE', placement: { positionExact: '305,209' } })] },
+        { section: 'parameters', controls: [ctl({ rawWidget: 'knob', placement: { col: 0 } })] },
+      ],
+    };
+    const knob = placePage(page).controls.find((c) => c.control.rawWidget === 'knob')!;
+    expect(knob.y / DEVICE_SCALE).toBe(50);
+  });
+
+  it('sizes a zero-width text label to its caption', () => {
+    const page: LayoutPage = {
+      name: 'P', geometry: LAYOUT_MIXER2,
+      rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'labelBold', label: 'CAB 1', bounds: { w: 0, h: 28 }, placement: { positionExact: '315,63' } })] }],
+    };
+    const w = placePage(page).controls[0].w / DEVICE_SCALE;
+    expect(w).toBeGreaterThan(0);
+    expect(w).toBeGreaterThanOrEqual(28);
+  });
 });
 
 // ── corpus sweep ──
@@ -221,6 +243,16 @@ describe('widgetBox (legacy fallback)', () => {
     expect(widgetBox('knobCompact').w).toBeGreaterThan(0);
     expect(widgetBox(null).w).toBeGreaterThan(0);
     expect(widgetBox('').w).toBeGreaterThan(0);
+  });
+});
+
+describe('dropdownFieldHeight', () => {
+  it('caps a labelled slot to the field height, preserves short field-only tokens', () => {
+    expect(dropdownFieldHeight(136)).toBe(28);
+    expect(dropdownFieldHeight(85)).toBe(28);
+    expect(dropdownFieldHeight(28)).toBe(28);
+    expect(dropdownFieldHeight(24)).toBe(24);
+    expect(dropdownFieldHeight(25)).toBe(25);
   });
 });
 

@@ -2071,3 +2071,52 @@ resolves to a draggable control, and that no graph token is outside the vocabula
 passing, 1 pre-existing unrelated failure (`convertConflicts.test.ts` asserts a `◈` glyph that
 `catalog.ts` now serves as SVG). **Visual parity against FM3-Edit is NOT verified** — the reference
 screenshots still do not exist in the repo.
+
+## Operator decisions on the known blockers (2026-09-04)
+
+- **FM9 — dropped.** Support FM3 only. FM9's `layouts.generated.ts` stays in the old schema (no
+  `page.layout`/`render`/`bounds`, no `renderer.generated.ts`) and degrades to the neutral 85/180
+  fallback pitch in `deviceCanvas.ts`; that is now the accepted end-state, not a gap to close.
+- **Firmware mismatch — accepted, no action.** FM3-Edit is fw 13.00 vs the fw-12 catalog, so 8
+  controls (CHORUS_BASS/TREBLE/DELAYRANGE, MIXER_DELAY1-4) resolve to null `paramId` and render as
+  read-only labels via the Phase-3.4 degrade path. Not treated as a defect.
+- **Visual verification — operator will supply FM3-Edit reference screenshots** (list below).
+- Regeneration / non-negotiables acknowledged (DEVICE_SCALE 0.95, served-metadata arrangement only,
+  no layout-board/rail/page heuristics, keep Axis widget visuals + graph components, never commit
+  Fractal XML/assets).
+
+### Screenshot list requested of the operator (FM3-Edit, default editor size, full page, tab strip visible)
+
+1. **Amp** — Authentic, Preamp, Ideal (name the amp model — Authentic is model-specific; match the
+   rig's "5153").
+2. **Cab** — Cab page, Preamp page.
+3. Nice-to-have (risk areas): an Amp meter row (meters-as-meters), Cab **Align** page (graph_cab vs
+   graph_cabZoom alternate), PEQ Gain/Slope alternate (knobCompact vs dropdownCompact3), DynaCab mode
+   (speaker-cone / mic graphic).
+4. Note FM3-Edit's window/editor width in px if non-default. If FM3-Edit cannot render block editors
+   without hardware, parity is judged against the extracted layout data instead (plan Phase 6.5).
+
+## Device-canvas rendering fixes (operator screenshots, 2026-09-04)
+
+The operator supplied FM3-Edit reference screenshots plus three Axis screenshots with descriptive
+titles: "groups unclear / dropdowns too tall", "cab cab total mess", "cab preamp total mess". This
+model has no image input, so the bugs were diagnosed against the served geometry + the extracted
+FM3-Edit XML (still in the temp opencode dir, never committed). Three renderer bugs found and fixed
+(all in Axis — the served data is correct, the renderer mis-placed/sized it):
+
+1. **Dropdown field filled the whole slot** (`DeviceCanvas.svelte`). `fieldHeight = pc.h - 15` turned a
+   136px `dropdown1` into a 121px field. New `dropdownFieldHeight()` (`deviceWidgets.ts`) caps the field
+   at 28px; field-only tokens (`dropdownCabBank` 24px, etc.) keep their exact height.
+2. **Zero-width text labels were invisible** (`deviceCanvas.ts:boxOf`). `labelBold` ("CAB 1"/"CAB 2"),
+   `labelModifier` and span-less `sectionLabel` carry `bounds.w = 0` (JUCE auto-size) → the cell clipped
+   the caption. Now sized to the label text.
+3. **Row-cursor off-by-one** (`deviceCanvas.ts:placePage`). A row whose controls are ALL absolutely
+   anchored (section-label headings, the cab identity cluster, graph overlays) is a decoration row with
+   no grid baseline, but it still advanced the section cursor, pushing every following flow row down a
+   full pitch (Cab Preamp: `Preamp Type` at y=230 while `Preamp Mode` sat at its positionExact y=50).
+   Such rows no longer advance the cursor. Verified against the corpus: only 2 real `<Row>`s are
+   all-absolute-and-followed-by-flow (EQ, IR Player) and both are correctly decoration rows.
+
+Gates: `npm run check` 0 errors / 0 warnings; `npx vitest run` 1658 passed, 1 pre-existing unrelated
+failure (`convertConflicts.test.ts` `◈`→SVG, not touched). New tests: decoration-row cursor, zero-width
+label sizing, `dropdownFieldHeight`. Operator re-screenshot requested to confirm parity.

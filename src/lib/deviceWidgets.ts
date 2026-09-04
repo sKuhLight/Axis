@@ -176,6 +176,17 @@ const UNKNOWN: WidgetBox = { w: 85, h: 42, derived: true };
 /** Every token the table names outright — the sweep test asserts the layout corpus stays inside it. */
 export const MEASURED_WIDGETS: ReadonlySet<string> = new Set(Object.keys(MEASURED));
 
+/** The dropdown FIELD height, in device canvas pixels. The served `bounds` height is the whole control
+ *  SLOT (label + field, up to the 136px knob-height), so a field must not be sized off it — the editor's
+ *  own dropdown field is a single ~24-28px line. Field-only tokens (`dropdownNoLabel`, `dropdownCabBank`,
+ *  `dropdownLeftLabel*`) are already that short and keep their exact height; a labelled slot collapses
+ *  its field to this cap. */
+export const DROPDOWN_FIELD_H = 28;
+/** Height of a dropdown's field for a control slot of height `boxH` (device px). */
+export function dropdownFieldHeight(boxH: number): number {
+  return Math.min(boxH, DROPDOWN_FIELD_H);
+}
+
 /** Box for an editor `rawWidget`, in device canvas pixels. Never throws: an unrecognised token falls
  *  back by prefix, then to a plain dropdown-sized box, and is reported by the sweep test rather than
  *  silently guessed at render time. */

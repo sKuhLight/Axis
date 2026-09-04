@@ -14,7 +14,7 @@
   //   • how a control binds to a live parameter, by the device-true `paramId` the layout carries.
   import { getEditorSurface } from './editorSurface';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
-  import { widgetView, graphKind } from './deviceWidgets';
+  import { widgetView, graphKind, dropdownFieldHeight } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
   import { fmtControlValue, normFromValue, paramValue } from './format';
   import Knob from './Knob.svelte';
@@ -322,7 +322,7 @@
               options={e.options}
               {accent}
               fixedWidth={dp(pc.w)}
-              fieldHeight={Math.max(18, dp(pc.h) - (dp(pc.h) >= 40 ? 15 : 0))}
+              fieldHeight={dropdownFieldHeight(dp(pc.h))}
               hideLabel={dp(pc.h) < 40}
               onChange={(v) => editor.setEnum(e, v)}
             />
