@@ -306,7 +306,7 @@
     <div class="empty">
       <div class="empty-glyph">∿</div>
       <div class="empty-title">No parameter targeted</div>
-      <div class="empty-sub">Tap the ∿ badge on any continuous parameter in a Block panel to edit its modifier here.</div>
+      <div class="empty-sub">Right-click a continuous parameter in a Block panel and choose Edit Modifier.</div>
     </div>
   {:else}
     <!-- header -->
@@ -335,7 +335,7 @@
         {#if canBind}
           Modifier slot {slot} → <b>{label}</b>{#if bindMsg}<span class="bindmsg"> · {bindMsg}</span>{:else if binding}<span class="bindmsg"> · binding…</span>{/if}
         {:else}
-          Editing modifier slot {slot} (effect {eid}) — open from a control's ∿ to assign it to that control.
+          Editing modifier slot {slot} (effect {eid}) — right-click a control and choose Edit Modifier to assign it to that control.
         {/if}
       </div>
     {/if}

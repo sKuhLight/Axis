@@ -37,8 +37,14 @@
   import type { CabMicGraphSpec } from './cabMicGraphs';
   import type { EnumParam, LayoutControl, LiveMonitor, NamedParam } from './types';
   import { axisBlockEditorModifierController } from './axis-workbench/blockEditor/blockEditorModifierController';
+  import { getOptionalWorkbenchContext } from './workbench/svelte/context';
+  import { buildAxisPinMenuItems } from './axis-workbench/pinMenu';
+  import { AXIS_PIN_SELECTED_PARAMETERS_ACTION } from './axis-workbench/axisParameterActions';
+  import ContextMenu from './workbench/svelte/ContextMenu.svelte';
+  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './workbench/svelte/contextMenu';
 
   const editor = getEditorSurface();
+  const wb = getOptionalWorkbenchContext();
 
   let {
     slug = '',
@@ -209,7 +215,7 @@
   }
   const clearHelp = () => editor.clearHint();
 
-  // ── modifier flyout (∿ badge on a continuous control) ──
+  // ── modifier flyout (launched from a control's context menu) ──
   let modOpen = $state(false);
   let modLabel = $state('');
   let modTargetEid = $state<number | null>(null);
@@ -233,6 +239,49 @@
     modTargetEid = targetEid;
     modOpen = true;
   }
+
+  // ── control context menu (right-click) ──
+  // Replaces the inline ∿ badge: pinning and modifier launch both live here. Pinning routes through
+  // the workbench's single pin action (My Controls); the modifier item reuses `openMod` (docked panel
+  // when one is mounted, the in-editor flyout otherwise). Outside the workbench (monolith shell) only
+  // the modifier item is offered.
+  let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  let menuTarget = $state<PlacedControl | null>(null);
+
+  function openMenu(pc: PlacedControl, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    menuTarget = pc;
+    menuPos = menuPositionFromPointer(e);
+  }
+
+  function pinControl(c: LayoutControl, sectionId: string | null) {
+    if (!wb) return;
+    const paramId = paramFor(c)?.id ?? c.paramId;
+    if (paramId == null) return;
+    wb.registry.runAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
+      controller: wb.controller,
+      source: 'menu',
+      args: sectionId ? { paramId, sectionId } : { paramId }
+    });
+  }
+
+  const menuItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    const pc = menuTarget;
+    if (!pc) return [];
+    const c = pc.control;
+    const items: WorkbenchMenuItem[] = [];
+    const pinId = paramFor(c)?.id ?? c.paramId;
+    if (wb && pinId != null) {
+      items.push(...buildAxisPinMenuItems(wb.controller.document, (sectionId) => pinControl(c, sectionId)));
+    }
+    const view = viewOf(pc);
+    const p = named(c);
+    if ((view === 'knob' || view === 'fader') && p && c.paramId != null) {
+      items.push({ id: 'modifier', label: 'Edit Modifier', separatorBefore: items.length > 0, run: () => openMod(c) });
+    }
+    return items;
+  });
 
   // ── search ──
   // Search HIGHLIGHTS on the canvas instead of collecting matches into a list. Re-flowing the results
@@ -280,12 +329,10 @@
           onmouseenter={() => showHelp(c)}
           onmouseleave={clearHelp}
           onwheel={(ev) => (view === 'knob' || view === 'fader' ? wheel(ev, p) : undefined)}
+          oncontextmenu={(ev) => openMenu(pc, ev)}
           role="presentation"
         >
           {#if view === 'knob' && p}
-            {#if dp(pc.w) >= 60}
-              <button class="mod" title="Edit modifier" onclick={() => openMod(c)}>∿</button>
-            {/if}
             <Knob
               value={p.norm ?? 0}
               label={c.label}
@@ -409,6 +456,10 @@
 
 <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
 
+<div class="bctx">
+  <ContextMenu open={menuTarget != null && menuItems.length > 0} position={menuPos} items={menuItems} label="Control actions" onClose={() => (menuTarget = null)} />
+</div>
+
 <style>
   .tabs {
     display: flex;
@@ -443,12 +494,22 @@
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }
 
-  .mod {
-    position: absolute; top: 0; right: 0; z-index: 2;
-    width: 14px; height: 14px; padding: 0; border: 0; border-radius: 4px;
-    background: transparent; color: var(--textfaint); font-size: 11px; line-height: 1; cursor: pointer;
+  /* Bridges the workbench ContextMenu's `--aw-*` tokens onto the app tokens so the menu stays styled
+     in the monolith shell too (inside the workbench, `.aw-root` already defines these identically). */
+  .bctx {
+    display: contents;
+    --aw-surface: var(--surface);
+    --aw-surface-2: var(--surface2);
+    --aw-border: var(--border);
+    --aw-border-2: var(--border2);
+    --aw-text: var(--text);
+    --aw-text-2: var(--text2);
+    --aw-text-faint: var(--textfaint);
+    --aw-accent: var(--accent);
+    --aw-danger: var(--danger);
+    --aw-font-ui: var(--font-ui);
+    --aw-font-mono: var(--font-mono);
   }
-  .mod:hover { color: #f5a623; }
 
   .fader { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; width: 100%; }
   .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
