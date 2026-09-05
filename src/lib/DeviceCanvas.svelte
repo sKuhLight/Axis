@@ -494,11 +494,6 @@
             {#if pageMatches(p) > 0}<span class="mcount">{pageMatches(p)}</span>{/if}
           </button>
         {/each}
-        <div class="csearch" class:active={query.length > 0}>
-          <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-          <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
-          {#if query.length > 0}<button class="csx" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
-        </div>
       </nav>
       {#if drawnRail.length}
         <div class="rail-surface" style:width="{dp(TAB_RAIL_W)}px" style:height="{dp(page.height)}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
@@ -537,7 +532,7 @@
     z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     padding: 12px 10px;
     overflow-y: auto;
   }
@@ -546,7 +541,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -579,53 +574,6 @@
     text-align: center;
   }
   .tab.on { color: var(--text); background: var(--surface2); }
-  /* Search bar, placed after the page names so it sits just below the last tab. */
-  .csearch {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    height: var(--d-ctl-h-sm);
-    padding: 0 8px;
-    border-radius: 8px;
-    background: var(--input);
-    border: 1px solid var(--border2);
-    color: var(--textfaint);
-  }
-  .csearch:focus-within,
-  .csearch.active {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .csearch svg,
-  .csx {
-    flex: none;
-  }
-  .csin {
-    flex: 1;
-    min-width: 0;
-    background: none;
-    border: 0;
-    outline: none;
-    color: var(--text);
-    font: inherit;
-    font-size: 12px;
-  }
-  .csin::placeholder {
-    color: var(--textfaint);
-  }
-  .csx {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 0;
-    background: var(--surface2);
-    color: var(--textdim);
-    font-size: 10px;
-    line-height: 1;
-    cursor: pointer;
-  }
   .empty { padding: 24px; color: var(--textdim); font-size: 13px; }
 
   /* The fixed canvas. Horizontal scroll on a narrow screen is the accepted cost of drawing the
