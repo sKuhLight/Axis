@@ -367,6 +367,7 @@
                 }}
               >
                 <div class="ffill" style:height="{(p.norm ?? 0) * 100}%"></div>
+                <div class="fhandle" style:bottom="calc({(p.norm ?? 0) * 100}% - 5px)"></div>
               </div>
               <div class="fl">{c.label}</div>
             </div>
@@ -534,6 +535,12 @@
     background: var(--track); cursor: pointer; touch-action: none;
   }
   .ffill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 4px; background: var(--c); }
+  .fhandle {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 18px; height: 10px; border-radius: 3px;
+    background: var(--c); border: 2px solid var(--bg2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  }
   .fl { font-size: 9px; font-weight: 600; color: var(--textdim); white-space: nowrap; cursor: pointer; }
 
   .btn {
