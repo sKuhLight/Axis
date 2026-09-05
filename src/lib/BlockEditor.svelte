@@ -128,7 +128,6 @@
   );
 
   let q = $state('');
-  const searching = $derived(q.trim().length > 0);
 
   // ── docked resize (desktop) ──
   let resizing = false;
@@ -180,16 +179,12 @@
            instead of shoving the map down the pane. -->
       <GridMap />
 
-      <!-- header: search + close. The block's identity (icon/name), channel and type now live in the
-           left rail beside the canvas so they stay put on every page. -->
-      {#if sel && cat}
+      <!-- header: close only. Search moved into the page-tab rail's footer; the block's identity
+           (icon/name), channel and type live in the left rail beside the canvas so they stay put on
+           every page. -->
+      {#if sel && cat && !embedded}
         <header class="head">
-          <div class="csearch" class:active={searching}>
-            <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-            <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
-            {#if searching}<button class="csx" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
-          </div>
-          {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
+          <button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>
         </header>
       {/if}
 
@@ -483,53 +478,6 @@
     background: var(--amber-tint);
     border-color: var(--amber-border);
     color: var(--amber);
-  }
-
-  .csearch {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 1 340px;
-    min-width: 0;
-    height: var(--d-ctl-h);
-    padding: 0 calc(var(--d-pad-x) * 0.8);
-    border-radius: 10px;
-    background: var(--input);
-    border: 1px solid var(--border2);
-    color: var(--text-mut);
-  }
-  .csearch:focus-within,
-  .csearch.active {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .csearch svg,
-  .csx {
-    flex: none;
-  }
-  .csin {
-    flex: 1;
-    min-width: 0;
-    background: none;
-    border: 0;
-    outline: none;
-    color: var(--text);
-    font: inherit;
-    font-size: var(--d-font);
-  }
-  .csin::placeholder {
-    color: var(--text-faint);
-  }
-  .csx {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 0;
-    background: var(--surface-2);
-    color: var(--text-dim);
-    font-size: 10px;
-    line-height: 1;
-    cursor: pointer;
   }
 
   .close {
