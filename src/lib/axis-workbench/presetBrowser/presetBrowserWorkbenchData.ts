@@ -111,6 +111,10 @@ export interface AxisPresetBrowserDataInput {
    *  built on the internal "HIPOWER" model) — the live `deviceRealNames.realNameFor`. Optional so this
    *  module stays testable without it; omitted, matching stays purely on decoded model names. */
   realNameFor?: AxisPbRealNameLookup;
+  /** Optional per-entry-id memo of the pre-built matchable shape + haystack (see
+   *  `preparePresetBrowserIndex`). When present, the query filter skips rebuilding `matchEntryFromSummary`
+   *  + `entryHaystack` per entry on every call — the per-keystroke fast path the hosts build once idle. */
+  prepared?: Map<string, AxisPbPreparedEntry>;
   /** Result ordering (§4.1). Defaults to preset number. */
   sort?: AxisPresetBrowserSortMode;
   /** Result direction (§4.1). 'asc' unless overridden; CPU/RECENT naturally sort descending. */
@@ -125,7 +129,7 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
   count: number;
 }
 
-import { matchEntryFromSummary, matchPreset, type AxisPbCond, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
+import { entryHaystack, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
 import {
   AXIS_PB_PRESENCE_VIEWS,
   entryInPresenceView,
@@ -173,16 +177,63 @@ export function buildEmptyDeviceSlotEntries(
   return out;
 }
 
+/** Pre-built per-entry shape: a stable normalized summary (with plain, unproxied blocks/models so row
+ *  chips derive cheaply AND the object identity is stable across keystrokes, which keeps Svelte from
+ *  re-deriving unchanged rows), plus the matchable shape + haystack so a keystroke only runs
+ *  `matchPrepared` instead of rebuilding those per entry. */
+export interface AxisPbPreparedEntry {
+  summary: AxisPresetBrowserEntrySummary;
+  match: AxisPbMatchEntry;
+  hay: string;
+}
+
+/** Idle-built search index over the library: per-entry prepared shape, plus the set of device slot
+ *  numbers that have a real (non-empty) entry — the complement of the empty-slot set, so
+ *  `buildEmptyDeviceSlotEntries` can run O(count) with O(1) lookups instead of an O(count × entries)
+ *  `slotIsEmpty` scan per slot. Rebuilt only when entries/tags/real-names/recency change, NOT per keystroke. */
+export interface AxisPresetBrowserIndex {
+  match: Map<string, AxisPbPreparedEntry>;
+  deviceSlots: Set<number>;
+}
+
+export function preparePresetBrowserIndex(
+  entries: AxisPresetBrowserLibEntryLike[],
+  tagsOf: (entryId: string) => string[],
+  realNameFor?: AxisPbRealNameLookup,
+  lastLoadedAt?: (entryId: string) => number | null
+): AxisPresetBrowserIndex {
+  const match = new Map<string, AxisPbPreparedEntry>();
+  const deviceSlots = new Set<number>();
+  for (const entry of entries) {
+    const norm = normalizeEntry(entry, tagsOf, lastLoadedAt);
+    // Copy the proxied summary references into plain structures so every downstream read (match build,
+    // row-chip derivation) is a raw read — the deep `$state` proxy made walking these ~85x slower.
+    const summary: AxisPresetBrowserEntrySummary = {
+      ...norm,
+      blocks: norm.blocks.map((b) => ({ ...b })),
+      models: Object.fromEntries(Object.entries(norm.models).map(([k, v]) => [k, [...v]])),
+      amps: [...norm.amps],
+      tags: [...norm.tags]
+    };
+    const m = matchEntryFromSummary(summary);
+    match.set(entry.id, { summary, match: m, hay: entryHaystack(m, realNameFor) });
+    if (summary.sourceId === 'device' && summary.number != null) deviceSlots.add(summary.number);
+  }
+  return { match, deviceSlots };
+}
+
 export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInput): AxisPresetBrowserDataView {
   const activeSourceId = normalizeAxisPresetBrowserSourceId(input.sourceId);
   const lastLoadedAt = input.lastLoadedAt;
-  const entries = input.entries.map((entry) => normalizeEntry(entry, input.tagsOf, lastLoadedAt));
-  const filteredEntries = (input.filteredEntries ?? input.entries).map((entry) =>
-    normalizeEntry(entry, input.tagsOf, lastLoadedAt)
-  );
-  const emptySlots = (input.emptySlots ?? []).map((entry) =>
-    normalizeEntry(entry, input.tagsOf, lastLoadedAt)
-  );
+  // Reuse the prepared (stable, plain) summary when available so a keystroke neither re-normalizes every
+  // entry nor changes entry identity (which would re-render unchanged rows). Falls back to a fresh
+  // normalize for entries the host didn't prepare (e.g. synthesized empty slots).
+  const prepared = input.prepared;
+  const normalize = (entry: AxisPresetBrowserLibEntryLike): AxisPresetBrowserEntrySummary =>
+    prepared?.get(entry.id)?.summary ?? normalizeEntry(entry, input.tagsOf, lastLoadedAt);
+  const entries = input.entries.map(normalize);
+  const filteredEntries = (input.filteredEntries ?? input.entries).map(normalize);
+  const emptySlots = (input.emptySlots ?? []).map(normalize);
   const counts = new Map<AxisPresetBrowserSourceId, number>([['all', entries.length]]);
 
   for (const entry of entries) {
@@ -220,7 +271,11 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
   const conditions = input.conditions ?? [];
   const simpleQuery = (input.simpleQuery ?? '').trim();
   const queried = conditions.length || simpleQuery
-    ? byPresence.filter((entry) => matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery, input.realNameFor))
+    ? byPresence.filter((entry) => {
+        const p = prepared?.get(entry.id);
+        if (p) return matchPrepared(p.match, p.hay, conditions, simpleQuery);
+        return matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery, input.realNameFor);
+      })
     : byPresence;
 
   const sortMode = input.sort ?? 'num';

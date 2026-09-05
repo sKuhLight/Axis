@@ -15,7 +15,9 @@
   import {
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
+    preparePresetBrowserIndex,
     type AxisPresetBrowserEntrySummary,
+    type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
   } from './presetBrowserWorkbenchData';
   import { presenceViews as presenceViewDefs } from './presetBrowserWorkbenchPresence';
@@ -31,9 +33,10 @@
   import { openConvertedInConverter } from '../../presetConvertSource';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
 
-  // 512 covers every device's full preset count with room to spare, so the cap is invisible in the
-  // common case (browsing one device, no search) and only bites on a huge combined "All presets" view.
-  const ROW_LIMIT = 600;
+  // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
+  // so open (and every keystroke) only pays for the rows actually on screen instead of all ~512.
+  const INITIAL_ROWS = 20;
+  const SCROLL_BATCH = 50;
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let listEl = $state<HTMLDivElement | null>(null);
@@ -41,6 +44,7 @@
   // Keyboard cursor into `rows`, independent of `snapshot.entryId` (the currently LOADED preset) —
   // Enter loads whichever row this points at, defaulting to the top result.
   let highlightIndex = $state(0);
+  let visibleCount = $state(INITIAL_ROWS);
 
   onMount(() => {
     const unbindRuntime = bindAxisRuntimeHost({
@@ -62,13 +66,21 @@
     if (!editor.presetSearchOpen) return;
     axisPresetBrowserWorkbenchController.setQuery('');
     highlightIndex = 0;
+    visibleCount = INITIAL_ROWS;
     void tick().then(() => inputEl?.focus());
   });
 
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
+  // Search index (per-entry matchable shape + haystack, plus the present device-slot set) built eagerly
+  // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
+  // keeps the Map/Set contents unproxied so matching reads stay cheap.
+  let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
+  $effect(() => {
+    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at);
+  });
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
     if (!library.cacheBuilt) return [];
-    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => library.slotIsEmpty(n));
+    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const activeConditions = $derived.by(() => {
     void snapshot; // re-derive on any snapshot change
@@ -89,14 +101,15 @@
     conditions: activeConditions,
     simpleQuery: freeText,
     realNameFor: deviceRealNames.realNameFor,
+    prepared: index.match,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
     presenceView: snapshot.presenceView,
     presenceViews: presenceViewDefs()
   }));
-  const rows = $derived(data.visibleEntries.slice(0, ROW_LIMIT));
-  // True only once the user has actually typed/filtered something — distinct from the ROW_LIMIT cap,
-  // so the count/hint below never claims a "match" when nothing was searched.
+  const rows = $derived(data.visibleEntries.slice(0, visibleCount));
+  // True only once the user has actually typed/filtered something — distinct from the visible-count
+  // batching, so the count/hint below never claims a "match" when nothing was searched.
   const searching = $derived(!!freeText.trim() || activeConditions.length > 0);
   // `highlightIndex` only ever moves by explicit user action (arrow keys, hover, reset-on-open/typed);
   // clamp it against the CURRENT `rows` here rather than chasing every place rows can shrink (e.g. a
@@ -147,6 +160,25 @@
     }
   }
 
+  function loadMore() {
+    const el = listEl;
+    if (!el) return;
+    // Expand once the user scrolls within a row-height of the bottom of the current batch.
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 96) return;
+    visibleCount = Math.min(visibleCount + SCROLL_BATCH, data.visibleEntries.length);
+  }
+
+  // If the first batch doesn't fill the viewport (a very tall window), there is no scrollbar to drive
+  // `loadMore` — grow the list until it overflows or everything is rendered.
+  $effect(() => {
+    if (!editor.presetSearchOpen) return;
+    const el = listEl;
+    if (!el) return;
+    if (visibleCount >= data.visibleEntries.length) return;
+    if (el.scrollHeight > el.clientHeight + 1) return;
+    visibleCount = Math.min(visibleCount + SCROLL_BATCH, data.visibleEntries.length);
+  });
+
   const pad = (n: number) => String(n).padStart(3, '0');
 </script>
 
@@ -167,6 +199,7 @@
             oninput={(e) => {
               axisPresetBrowserWorkbenchController.setQuery(e.currentTarget.value);
               highlightIndex = 0;
+              visibleCount = INITIAL_ROWS;
             }}
             onkeydown={onKey}
             placeholder="Search by name, tag, or device…"
@@ -174,18 +207,16 @@
         </div>
       </div>
 
-      <div class="list scroll" bind:this={listEl}>
+      <div class="list scroll" bind:this={listEl} onscroll={loadMore}>
         <div class="section mono">
           {#if searching}
-            {rows.length} of {data.scopedTotal} MATCH{rows.length === 1 ? '' : 'ES'}
-          {:else if rows.length === data.scopedTotal}
-            {data.scopedTotal} PRESETS
+            {data.visibleEntries.length} of {data.scopedTotal} MATCH{data.visibleEntries.length === 1 ? '' : 'ES'}
           {:else}
-            SHOWING {rows.length} OF {data.scopedTotal}
+            {data.scopedTotal} PRESETS
           {/if}
         </div>
         {#each rows as entry, i (entry.id)}
-          {@const chainChips = matchingChainChips(axisPbRowBlockChips(entry), activeConditions, freeText)}
+          {@const chainChips = searching ? matchingChainChips(axisPbRowBlockChips(entry), activeConditions, freeText) : []}
           <div
             class="rowwrap"
             class:active={snapshot.entryId === entry.id}
@@ -210,7 +241,7 @@
                the PRE-query source/presence total (see its doc comment in presetBrowserWorkbenchData.ts)
                and stays huge even once a search has narrowed things down, which used to make this hint
                claim hundreds of "hidden matches" that were actually just non-matches the search excluded. -->
-          <div class="empty-hint">+{data.visibleEntries.length - rows.length} more — {searching ? 'refine your search' : 'type to search'}</div>
+          <div class="empty-hint">+{data.visibleEntries.length - rows.length} more — scroll to load</div>
         {/if}
         {#if rows.length === 0}
           <div class="empty-hint">No presets match “{freeText || snapshot.queryText}”.</div>

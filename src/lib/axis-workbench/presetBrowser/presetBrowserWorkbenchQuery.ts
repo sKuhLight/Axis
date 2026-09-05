@@ -257,18 +257,17 @@ export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
   }
 }
 
-// Free-text remainder of the unified query field (everything outside backtick spans, §2.3):
-// whitespace tokens, all must appear in the haystack. `realNameFor` is optional — omitted, matching
-// stays purely on decoded model names, same as before this lookup existed.
-export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
-  const toks = simpleQ.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!toks.length) return true;
+// The free-text haystack for one matchable entry — name + tags + author + models (each followed by its
+// real-world gear name) + block slugs, lowercased. Factored out of `matchSimple` so a host can build it
+// ONCE per entry (idle) and reuse it across keystrokes instead of rebuilding it per keystroke (rebuilding
+// name+blocks+models for 500 presets each keystroke was the typing lag, same as the monolith).
+export function entryHaystack(entry: AxisPbMatchEntry, realNameFor?: AxisPbRealNameLookup): string {
   // Each model name is followed by its real-world gear name (manufacturer + basedOn, when known) so
   // "hiwatt" matches an entry built on the internal "HIPOWER" model.
   const modelHay = Object.entries(entry.models)
     .flatMap(([slug, names]) => (names ?? []).flatMap((n) => [n, realNameFor?.(slug, n) ?? '']))
     .join(' ');
-  const hay = [
+  return [
     entry.name,
     entry.tags.join(' '),
     entry.author ?? '',
@@ -277,6 +276,15 @@ export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFo
   ]
     .join(' ')
     .toLowerCase();
+}
+
+// Free-text remainder of the unified query field (everything outside backtick spans, §2.3):
+// whitespace tokens, all must appear in the haystack. `realNameFor` is optional — omitted, matching
+// stays purely on decoded model names, same as before this lookup existed.
+export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
+  const toks = simpleQ.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!toks.length) return true;
+  const hay = entryHaystack(entry, realNameFor);
   return toks.every((t) => hay.includes(t));
 }
 
@@ -284,6 +292,16 @@ export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFo
 export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
   for (const c of conds) if (!matchCond(entry, c)) return false;
   return matchSimple(entry, simpleQ, realNameFor);
+}
+
+// Predicate over conditions + a PRE-BUILT haystack (see entryHaystack): the per-keystroke fast path that
+// skips rebuilding the matchable shape + haystack for every entry. `match` must be the `matchEntryFromSummary`
+// output for the same entry and `hay` its `entryHaystack` string.
+export function matchPrepared(match: AxisPbMatchEntry, hay: string, conds: AxisPbCond[], simpleQ: string): boolean {
+  for (const c of conds) if (!matchCond(match, c)) return false;
+  const toks = simpleQ.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!toks.length) return true;
+  return toks.every((t) => hay.includes(t));
 }
 
 // ===================== unified query (backtick-scoped filters) =====================

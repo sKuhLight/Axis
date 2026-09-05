@@ -12,7 +12,9 @@
   import {
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
+    preparePresetBrowserIndex,
     type AxisPresetBrowserEntrySummary,
+    type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
   } from '../../presetBrowser/presetBrowserWorkbenchData';
   import { presenceViews as presenceViewDefs } from '../../presetBrowser/presetBrowserWorkbenchPresence';
@@ -131,11 +133,18 @@
   });
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
   const presenceViews = presenceViewDefs();
+  // Search index (per-entry matchable shape + haystack, plus the present device-slot set) built eagerly
+  // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
+  // keeps the Map/Set contents unproxied so matching reads stay cheap.
+  let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
+  $effect(() => {
+    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at);
+  });
   // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful once a
   // device scan has run (slotIsEmpty reads cacheBuilt + entries); no scan → no empty rows.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
     if (!library.cacheBuilt) return [];
-    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => library.slotIsEmpty(n));
+    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const data = $derived(createAxisPresetBrowserDataView({
     entries: baseEntries,
@@ -151,6 +160,7 @@
     conditions: activeConditions,
     simpleQuery: freeText,
     realNameFor: deviceRealNames.realNameFor,
+    prepared: index.match,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
     presenceView: snapshot.presenceView,

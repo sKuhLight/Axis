@@ -7,7 +7,7 @@
   // (rename/recolor a tag) stays panel-only via the optional callback — the overlay has no tag editor.
   import type { Snippet } from 'svelte';
   import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
-  import { axisPbRowAnatomy, type AxisPbRowBlockChip } from './presetBrowserWorkbenchRowChips';
+  import { axisPbRowBlockChips, type AxisPbRowBlockChip } from './presetBrowserWorkbenchRowChips';
   import { library } from '../../library.svelte';
 
   let {
@@ -24,8 +24,11 @@
     chainChips?: AxisPbRowBlockChip[];
   } = $props();
 
-  const anatomy = $derived(axisPbRowAnatomy(entry));
-  const chips = $derived(chainChips ?? anatomy.blockChips);
+  // Only derive what this row actually renders. `chainChips` is supplied by the search overlay (and
+  // already narrows/empties the chain), so avoid rebuilding the full block-chip list (and the unused CPU
+  // meter) a second time — the overlay's 500+ rows made that double walk the mount/typing cost.
+  const tagPills = $derived(entry.tags.slice(0, 3));
+  const chips = $derived(chainChips ?? axisPbRowBlockChips(entry));
 </script>
 
 {#if name}
@@ -36,9 +39,9 @@
 {#if entry.converted && entry.provenance}
   <span class="conv-prov" title={`Converted from ${entry.provenance}`}>{entry.provenance}</span>
 {/if}
-{#if anatomy.tagPills.length}
+{#if tagPills.length}
   <span class="tag-pills">
-    {#each anatomy.tagPills as tag}
+    {#each tagPills as tag}
       <em
         class="tag-pill"
         data-tag={tag}
