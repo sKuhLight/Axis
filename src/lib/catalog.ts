@@ -15,7 +15,7 @@ const svg = (inner: string, attrs = 'fill="none" stroke="currentColor" stroke-wi
   `<svg viewBox="0 0 24 24" width="1em" height="1em" ${attrs}>${inner}</svg>`;
 
 const MULTITAP_GLYPH = svg(
-  '<circle cx="3" cy="5" r="1.15" fill="currentColor" stroke="none"/><path d="M7 3.2a1.8 1.8 0 0 1 0 3.6"/><path d="M12 2.4a2.6 2.6 0 0 1 0 5.2"/><path d="M17.5 1.6a3.4 3.4 0 0 1 0 6.8"/><circle cx="3" cy="12" r="1.15" fill="currentColor" stroke="none"/><path d="M7 10.2a1.8 1.8 0 0 1 0 3.6"/><path d="M12 9.4a2.6 2.6 0 0 1 0 5.2"/><path d="M17.5 8.6a3.4 3.4 0 0 1 0 6.8"/><circle cx="3" cy="19" r="1.15" fill="currentColor" stroke="none"/><path d="M7 17.2a1.8 1.8 0 0 1 0 3.6"/><path d="M12 16.4a2.6 2.6 0 0 1 0 5.2"/><path d="M17.5 15.6a3.4 3.4 0 0 1 0 6.8"/>'
+  '<line x1="2" y1="12" x2="22" y2="12" stroke-width="1"/><line x1="3" y1="2" x2="3" y2="11.2" stroke-width="1.6"/><circle cx="3" cy="2" r="1.2" fill="currentColor" stroke="none"/><line x1="7.5" y1="12.8" x2="7.5" y2="19.5" stroke-width="1.6"/><circle cx="7.5" cy="19.5" r="1.1" fill="currentColor" stroke="none"/><line x1="11.5" y1="5.5" x2="11.5" y2="11.2" stroke-width="1.6"/><circle cx="11.5" cy="5.5" r="1.1" fill="currentColor" stroke="none"/><line x1="15" y1="12.8" x2="15" y2="18" stroke-width="1.6"/><circle cx="15" cy="18" r="1.1" fill="currentColor" stroke="none"/><line x1="18.5" y1="8" x2="18.5" y2="11.2" stroke-width="1.6"/><circle cx="18.5" cy="8" r="1.1" fill="currentColor" stroke="none"/><line x1="21" y1="12.8" x2="21" y2="15.5" stroke-width="1.6"/><circle cx="21" cy="15.5" r="1.1" fill="currentColor" stroke="none"/>'
 );
 
 // Single-stroke treble clef (Material Design Icons) — thin, uniform line weight.
