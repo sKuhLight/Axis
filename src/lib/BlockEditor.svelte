@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from './catalog';
@@ -157,7 +158,14 @@
   );
 
   let q = $state('');
+  let controlSearch = $state<HTMLInputElement>();
   const searching = $derived(q.trim().length > 0);
+
+  onMount(() => {
+    const focusControlSearch = () => controlSearch?.focus();
+    window.addEventListener('axis:focus-control-search', focusControlSearch);
+    return () => window.removeEventListener('axis:focus-control-search', focusControlSearch);
+  });
 
   // Clear the control search when the selection changes so a stale filter never
   // hides controls on a freshly-selected block.
@@ -263,7 +271,7 @@
             <div class="sbar">
               <div class="csearch" class:active={searching}>
                 <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-                <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} onkeydown={(e) => { if (e.key === 'Escape') { q = ''; e.currentTarget.blur(); } }} />
+                <input bind:this={controlSearch} class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} onkeydown={(e) => { if (e.key === 'Escape') { q = ''; e.currentTarget.blur(); } }} />
                 {#if searching}<button class="csx" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
               </div>
             </div>

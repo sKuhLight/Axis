@@ -109,6 +109,14 @@
         if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editor.quickBuildOpen = !editor.quickBuildOpen;
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '/') {
+        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        window.dispatchEvent(new Event('axis:focus-control-search'));
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'p' || e.key === 'P')) {
+        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        editor.presetSearchOpen = true;
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         if (editor.tuner.active) editor.toggleTuner();
