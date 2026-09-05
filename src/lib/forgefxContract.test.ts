@@ -133,6 +133,7 @@ const deviceLayoutSchema = z.object({
   family: z.string(),
   variantName: z.string().optional(),
   variantValue: z.string().nullable().optional(),
+  variantSelectorParamName: z.string().optional(),
   fw: fwRangeSchema.optional(),
   pinned: z.unknown().optional(),
   pages: z.array(layoutPageSchema)

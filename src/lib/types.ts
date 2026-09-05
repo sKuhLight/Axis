@@ -209,6 +209,9 @@ export interface DeviceLayout {
   family: string;
   variantName?: string;
   variantValue?: string | null;
+  /** The selector param (e.g. `CABINET_MODE`) whose current value keyed `variantValue`, when the
+   *  variant was folded up from page selectors — a family with no model selector (CABINET). */
+  variantSelectorParamName?: string;
   fw?: unknown;
   pinned?: unknown;
   pages: LayoutPage[];
