@@ -238,16 +238,15 @@
               </div>
             {/if}
 
-            <div class="type-row">
-              <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
-                <span class="t-wrap">
-                  <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
-                </span>
-              </button>
-              <button class="savelib" onclick={() => (saveOpen = true)} title="Save block to library" aria-label="Save block to library">
-                <Icon name="save" size={16} />
-              </button>
-            </div>
+            <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
+              <span class="t-wrap">
+                <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
+              </span>
+            </button>
+            <button class="savelib" onclick={() => (saveOpen = true)} title="Save block to library" aria-label="Save block to library">
+              <Icon name="save" size={16} />
+              <span>Save to library</span>
+            </button>
           </aside>
         {/if}
 
@@ -472,27 +471,20 @@
     cursor: default;
     opacity: 0.7;
   }
-  .type-row {
-    display: flex;
-    gap: 6px;
-    width: 100%;
-    min-width: 0;
-  }
-  .type-row .typebtn {
-    flex: 1;
-  }
   .savelib {
-    flex: none;
-    width: calc(var(--d-ctl-h) + 8px);
-    height: calc(var(--d-ctl-h) + 8px);
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: calc(var(--d-ctl-h) + 8px);
     background: var(--bg2);
     border: 1px solid var(--border2);
     border-radius: 11px;
     cursor: pointer;
     color: var(--text-dim);
+    font-weight: 700;
+    font-size: var(--d-font);
     transition: border-color 0.12s, color 0.12s, background 0.12s;
   }
   .savelib:hover {
