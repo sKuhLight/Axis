@@ -89,7 +89,6 @@
     if (!isCab || !c.paramName) return null;
     const slot = cabSlotOf(c.paramName);
     if (/^CABINET_NAME/.test(c.paramName)) return slot ? cabSlotLabel(slot, dynaMode) : '—';
-    if (/^CABINET_TYPE/.test(c.paramName)) return slot ? String(slot.irName) : null;
     return null;
   };
   const onPseudoClick = (c: { paramName: string | null }) => {
