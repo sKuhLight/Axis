@@ -283,6 +283,21 @@
   }
 
   const dockEmpty = $derived(isDock && !hasTarget);
+
+  // The flyout is opened from a pointer context menu, so it does not receive
+  // focus automatically. Capture Escape at the window before the shell's
+  // shortcut handler can close the entire block editor instead.
+  $effect(() => {
+    if (isDock || !open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose?.();
+    };
+    window.addEventListener('keydown', closeOnEscape, true);
+    return () => window.removeEventListener('keydown', closeOnEscape, true);
+  });
 </script>
 
 {#if variant === 'flyout'}
