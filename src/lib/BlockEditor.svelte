@@ -249,6 +249,7 @@
               <span class="t-wrap">
                 <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
               </span>
+              <svg class="caret" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
             </button>
             <button class="savelib" onclick={() => (saveOpen = true)} title="Save block to library" aria-label="Save block to library">
               <Icon name="save" size={16} />
@@ -528,6 +529,14 @@
   .t-type.xlong {
     font-size: calc(var(--d-font-lg) * 0.87);
     letter-spacing: 0;
+  }
+  .caret {
+    flex: none;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  .typebtn:hover:not(:disabled) .caret {
+    color: var(--accent);
   }
   /* Channels sit below the block name in the rail: they are a property OF the selected type, and
      reading "Brit 800 Mod / CH C" as one phrase is the point. One horizontal track, each button
