@@ -80,6 +80,12 @@
 
   // ── pages ──
   const pages = $derived(placeLayout(editor.blockLayout));
+  // The device's editor reserves an identity column (~305 device px) to the left of its controls, and
+  // `placePage` collapses that column (its leftmost control lands at the surface origin). The block
+  // editor fills the space with its page tabs, drawn in RENDERED px (outside the 0.95 scale) so tab
+  // type stays full-size; the canvas surface then sits to the rail's right with a small gap.
+  const TAB_RAIL_W = (305 * DEVICE_SCALE) / 2 - 8;
+  const RAIL_PAD = 13;
   let pageName = $state('');
   const page = $derived<PlacedPage | null>(pages.find((p) => p.name === pageName) ?? pages[0] ?? null);
   const pageIndex = $derived(page ? pages.indexOf(page) : -1);
@@ -294,13 +300,6 @@
   const matches = (c: LayoutControl) => !query || (c.label ?? '').toLowerCase().includes(query);
 </script>
 
-<div class="tabs">
-  {#each pages as p (p.name)}
-    <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>{p.name}</button>
-  {/each}
-  <span class="sp"></span>
-</div>
-
 {#if !page}
   <div class="empty">No device layout for this block.</div>
 {:else}
@@ -311,8 +310,15 @@
          dials scale with the boxes — laying out at 2x with 11px labels would draw device-sized
          controls around half-sized text. `.canvas` reserves the rendered footprint for the scroller;
          `.surface` is the device's own 1240px canvas, magnified. -->
-    <div class="canvas" style:width="{page.width}px" style:height="{page.height}px">
-      <div class="surface" style:width="{dp(page.width)}px" style:height="{dp(page.height)}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
+    <div class="canvas" style:width="{TAB_RAIL_W + RAIL_PAD + page.width}px" style:height="{page.height}px">
+      <!-- Page tabs live in the device's own identity column (the ~305px strip `placePage` collapses)
+           as a vertical rail; the canvas surface sits to its right with a small gap. -->
+      <nav class="tabs" style:width="{TAB_RAIL_W}px">
+        {#each pages as p (p.name)}
+          <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>{p.name}</button>
+        {/each}
+      </nav>
+      <div class="surface" style:width="{dp(page.width)}px" style:height="{dp(page.height)}px" style:left="{TAB_RAIL_W + RAIL_PAD}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
       {#each drawn as pc (pc.control.rawWidget + pc.alternateKey + pc.alternateIndex)}
         {@const c = pc.control}
         {@const view = viewOf(pc)}
@@ -462,28 +468,37 @@
 </div>
 
 <style>
+  /* Vertical page-tab rail, absolutely placed in the empty identity column the device's canvas leaves
+     to the left of its controls. It spans the canvas height and sits on top of the (unscaled) rendered
+     space, so tab type is full-size and never scales with the device drawing. */
   .tabs {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 4px;
-    padding: 4px 10px;
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-    flex: none;
+    padding: 12px 10px;
+    overflow-y: auto;
   }
   .tab {
-    padding: 5px 12px;
+    flex: none;
+    padding: 8px 12px;
     border: 0;
-    border-radius: 8px 8px 0 0;
+    border-radius: 8px;
     background: transparent;
     color: var(--textdim);
     font-size: 12px;
     font-weight: 700;
+    text-align: left;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     cursor: pointer;
   }
-  .tab.on { color: var(--text); background: var(--surface2); box-shadow: inset 0 -2px 0 var(--accent); }
-  .sp { flex: 1; }
+  .tab.on { color: var(--text); background: var(--surface2); }
   .empty { padding: 24px; color: var(--textdim); font-size: 13px; }
 
   /* The fixed canvas. Horizontal scroll on a narrow screen is the accepted cost of drawing the

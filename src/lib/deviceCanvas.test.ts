@@ -57,14 +57,14 @@ const LAYOUT_MIXER2: LayoutPageLayout = {
 };
 
 describe('placePage (exact geometry)', () => {
-  it('places a Parameters row at parametersX + col * parametersSpacingX, collapsed to the left inset', () => {
+  it('places a Parameters row at parametersX + col * parametersSpacingX, collapsed to the left origin', () => {
     const page: LayoutPage = {
       name: 'P', layout: 'LAYOUT_MIXER2', geometry: LAYOUT_MIXER2,
       rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'knob', placement: { col: 0 } }), ctl({ rawWidget: 'knob', placement: { col: 2 } })] }],
     };
     const placed = placePage(page);
     const xs = placed.controls.map((c) => c.x / DEVICE_SCALE);
-    expect(xs).toEqual([16, 16 + 2 * 85]);
+    expect(xs).toEqual([0, 0 + 2 * 85]);
     expect(placed.controls.map((c) => c.y / DEVICE_SCALE)).toEqual([50, 50]);
   });
 
@@ -89,8 +89,8 @@ describe('placePage (exact geometry)', () => {
       ],
     };
     const placed = placePage(page);
-    expect(placed.controls[0].x / DEVICE_SCALE).toBe(16);
-    expect(placed.controls[1].x / DEVICE_SCALE).toBeCloseTo(16 + 85);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(0);
+    expect(placed.controls[1].x / DEVICE_SCALE).toBeCloseTo(85);
     expect(placed.controls[2].y / DEVICE_SCALE).toBe(50 + 180);
   });
 
@@ -102,10 +102,7 @@ describe('placePage (exact geometry)', () => {
       ] }],
     };
     const placed = placePage(page);
-    const xs = placed.controls.map((c) => c.x / DEVICE_SCALE);
-    expect(xs[0]).toBeCloseTo(16);
-    expect(xs[1]).toBeCloseTo(16 + 85);
-    expect(xs[2]).toBeCloseTo(16 + 2 * 85);
+    expect(placed.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([0, 85, 2 * 85]);
   });
 
   it('positionExact overrides the flow slot; offsetX/offsetY nudge it', () => {
@@ -114,7 +111,7 @@ describe('placePage (exact geometry)', () => {
       rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'sectionLabel', placement: { positionExact: '307,29' } })] }],
     };
     const placed = placePage(page);
-    expect(placed.controls[0].x / DEVICE_SCALE).toBe(16);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(0);
     expect(placed.controls[0].y / DEVICE_SCALE).toBe(29);
 
     const off: LayoutPage = {
@@ -132,8 +129,8 @@ describe('placePage (exact geometry)', () => {
     const placed = placePage(page);
     const byp = placed.controls.find((c) => c.control.rawWidget === 'btnBypass')!;
     const ign = placed.controls.find((c) => c.control.rawWidget === 'btnIgnoreScene')!;
-    expect([byp.x / DEVICE_SCALE, byp.y / DEVICE_SCALE]).toEqual([100, 360]);
-    expect([ign.x / DEVICE_SCALE, ign.y / DEVICE_SCALE]).toEqual([16, 360]);
+    expect([byp.x / DEVICE_SCALE, byp.y / DEVICE_SCALE]).toEqual([84, 360]);
+    expect([ign.x / DEVICE_SCALE, ign.y / DEVICE_SCALE]).toEqual([0, 360]);
   });
 
   it('sizes a sectionLabel from sectionSpan.pixels or cols × spacingX', () => {
@@ -152,7 +149,7 @@ describe('placePage (exact geometry)', () => {
     const a = placePage(page);
     const b = placePage(page);
     // Two controls the device authored at the same column stay put (col 3 twice) — no repacking.
-    expect(a.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([16, 16]);
+    expect(a.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([0, 0]);
     expect(a.controls).toEqual(b.controls);
   });
 
