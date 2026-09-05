@@ -1,6 +1,8 @@
 <script lang="ts">
   // Compact dropdown: label-on-top field (112–236px) that opens a fixed popup menu.
   // Multiple of these flow in a flex-wrap row (laid out by the parent), so they don't waste space.
+  import { tick } from 'svelte';
+  import { effectiveZoom } from './workbench/svelte/contextMenu';
   interface Opt {
     value: number;
     label: string;
@@ -41,23 +43,50 @@
   let open = $state(false);
   let menu = $state<{ left: number; top: number; width: number } | null>(null);
   let fieldEl = $state<HTMLDivElement | null>(null);
+  let scrimEl = $state<HTMLElement | null>(null);
+
+  // The menu is portaled to <body> so it escapes the device canvas's scale transform (a transformed
+  // ancestor is the containing block for `position: fixed`, which would otherwise anchor the popup to
+  // the canvas surface rather than the viewport). Body still sits under the root `<html>` CSS zoom
+  // (the UI-scale setting), so the field's VISUAL rect coords must be divided back into the LAYOUT
+  // space a fixed element positions in — the viewport-spanning backdrop self-calibrates that ratio.
+  const zoomNow = () => (scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1);
+
+  function place() {
+    const r = fieldEl?.getBoundingClientRect();
+    if (!r) return null;
+    // open below the field, flip up if it would overflow the viewport
+    const below = window.innerHeight - r.bottom;
+    const top = below < 200 && r.top > below ? r.top - Math.min(248, options.length * 38 + 12) - 4 : r.bottom + 4;
+    const z = zoomNow();
+    return { left: r.left / z, top: top / z, width: r.width / z };
+  }
 
   function toggle() {
     if (open) {
       open = false;
       return;
     }
-    const r = fieldEl?.getBoundingClientRect();
-    if (!r) return;
-    // open below the field, flip up if it would overflow the viewport
-    const below = window.innerHeight - r.bottom;
-    const top = below < 200 && r.top > below ? r.top - Math.min(248, options.length * 38 + 12) - 4 : r.bottom + 4;
-    menu = { left: r.left, top, width: r.width };
+    menu = place();
     open = true;
+    // First paint has no backdrop yet, so the zoom estimate above is 1; re-place once the scrim exists.
+    void tick().then(() => {
+      if (open) menu = place();
+    });
   }
   function pick(v: number) {
     open = false;
     onChange(v);
+  }
+
+  // Lift the popup out of the canvas surface into <body> so its fixed position resolves to the viewport.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode === document.body) document.body.removeChild(node);
+      }
+    };
   }
 </script>
 
@@ -70,14 +99,16 @@
 </div>
 
 {#if open && menu}
-  <button class="backdrop" aria-label="Close" onclick={() => (open = false)}></button>
-  <div class="menu scroll" style="left:{menu.left}px; top:{menu.top}px; width:{menu.width}px">
-    {#each options as o (o.value)}
-      <button class="opt" class:active={o.value === value} onclick={() => pick(o.value)}>
-        <span class="ol">{o.label}</span>
-        {#if o.value === value}<span class="chk">✓</span>{/if}
-      </button>
-    {/each}
+  <div class="portal" style:--c={accent} use:portal>
+    <button class="backdrop" bind:this={scrimEl} aria-label="Close" onclick={() => (open = false)}></button>
+    <div class="menu scroll" style="left:{menu.left}px; top:{menu.top}px; width:{menu.width}px">
+      {#each options as o (o.value)}
+        <button class="opt" class:active={o.value === value} onclick={() => pick(o.value)}>
+          <span class="ol">{o.label}</span>
+          {#if o.value === value}<span class="chk">✓</span>{/if}
+        </button>
+      {/each}
+    </div>
   </div>
 {/if}
 
@@ -138,6 +169,9 @@
     border: 0;
     background: transparent;
     cursor: default;
+  }
+  .portal {
+    display: contents;
   }
   .menu {
     position: fixed;
