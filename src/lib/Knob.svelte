@@ -86,5 +86,7 @@
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 10px; font-weight: 600; color: var(--text2); pointer-events: none;
   }
-  .lbl { font-size: 10px; font-weight: 600; color: var(--textdim); text-align: center; max-width: 72px; line-height: 1.1; white-space: pre-line; cursor: pointer; }
+  /* The caption reserves exactly one line of the flex column: a wrapped second line paints BELOW it
+     (overflow: visible) instead of growing the column and shoving the dial up off its row. */
+  .lbl { font-size: 10px; font-weight: 600; color: var(--textdim); text-align: center; max-width: 72px; line-height: 1.1; white-space: pre-line; cursor: pointer; height: 1.1em; }
 </style>

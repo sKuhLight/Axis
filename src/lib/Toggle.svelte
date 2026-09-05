@@ -103,7 +103,8 @@
     line-height: 1.2;
     max-width: 100%;
     white-space: pre-line;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    /* One caption line reserved so a wrapped second line overflows down instead of lifting the switch. */
+    height: 1.2em;
   }
 </style>
