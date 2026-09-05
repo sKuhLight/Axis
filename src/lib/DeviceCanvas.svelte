@@ -58,6 +58,7 @@
     cabMicGraphs = [] as CabMicGraphSpec[],
     pseudoText = (() => null) as (c: LayoutControl) => string | null,
     onPseudoClick = (() => {}) as (c: LayoutControl) => void,
+    pseudoOn = (() => false) as (c: LayoutControl) => boolean,
     q = $bindable('')
   }: {
     slug?: string;
@@ -75,6 +76,8 @@
     pseudoText?: (c: LayoutControl) => string | null;
     /** Activate a pseudo-param control (the cab Picker button). Same reason: host's business. */
     onPseudoClick?: (c: LayoutControl) => void;
+    /** Whether a pseudo-param button reads as active (the cab Mute button). Host's business. */
+    pseudoOn?: (c: LayoutControl) => boolean;
     q?: string;
   } = $props();
 
@@ -313,7 +316,20 @@
   const dp = (n: number) => n / DEVICE_SCALE;
 
   const query = $derived(q.trim().toLowerCase());
-  const matches = (c: LayoutControl) => !query || (c.label ?? '').toLowerCase().includes(query);
+  // Static text (section headings, `labelBold`, cab-name captions) is decoration, not a control — it
+  // must never count as a "Find a control" result or light up as a hit.
+  const isStaticLabel = (c: LayoutControl) => widgetView(c.rawWidget, c.widget) === 'label';
+  const matches = (c: LayoutControl) => !query || (!isStaticLabel(c) && (c.label ?? '').toLowerCase().includes(query));
+  // A match on an off-screen page must still be findable: when the query names a control the current
+  // page doesn't draw, jump to the first page (in tab order) that does. The in-place highlight then
+  // answers "where is X" exactly where X lives, without resurrecting the discarded results list.
+  const matchesPage = (p: PlacedPage) => [...p.controls, ...p.rail].some((pc) => matches(pc.control));
+  const pageMatches = (p: PlacedPage) => (query ? [...p.controls, ...p.rail].filter((pc) => matches(pc.control)).length : 0);
+  const searchPage = $derived.by(() => (query ? (pages.find(matchesPage) ?? null) : null));
+  $effect(() => {
+    if (!searchPage) return;
+    if (page && !matchesPage(page)) pageName = searchPage.name;
+  });
 </script>
 
 {#snippet cell(pc: PlacedControl)}
@@ -386,12 +402,12 @@
         <button class="btn act" class:on={!editor.selected?.bypassed} class:byp={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>
           {editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}
         </button>
-      {:else if e}
+      {:else if e && e.options.length > 0}
         <button class="btn" class:on={e.value === (e.options[1]?.value ?? 1)} title={c.label} onclick={() => bumpEnum(e, e.value === (e.options[1]?.value ?? 1) ? -1 : 1)}>
           {c.label}
         </button>
       {:else}
-        <button class="btn" title={c.label} onclick={() => onPseudoClick(c)}>{c.label}</button>
+        <button class="btn" class:on={pseudoOn(c)} title={c.label} onclick={() => onPseudoClick(c)}>{c.label}</button>
       {/if}
     {:else if view === 'meter'}
       {@const m = liveMonitor(c)}
@@ -460,17 +476,23 @@
 {:else}
   <!-- Fixed width. The pane scrolls; the canvas never reflows to it. -->
   <div class="scroller scroll">
+    {#if query && !searchPage}
+      <div class="nores">No controls match “{q}”.</div>
+    {/if}
     <!-- The placer speaks RENDERED px (device px x DEVICE_SCALE). The canvas draws at DEVICE px under
          one scale transform instead of consuming those numbers directly, so type, borders and knob
          dials scale with the boxes — laying out at 2x with 11px labels would draw device-sized
          controls around half-sized text. `.canvas` reserves the rendered footprint for the scroller;
          `.surface` is the device's own 1240px canvas, magnified. -->
-    <div class="canvas" style:width="{TAB_RAIL_W + RAIL_PAD + page.width}px" style:height="{page.height}px">
+    <div class="canvas" style:width="{TAB_RAIL_W + RAIL_PAD + page.width}px" style:height="{page.height}px" style:--c={accent}>
       <!-- Page tabs live in the device's own identity column (the ~305px strip `placePage` collapses)
            as a vertical rail; the canvas surface sits to its right with a small gap. -->
       <nav class="tabs" style:width="{TAB_RAIL_W}px">
         {#each pages as p (p.name)}
-          <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>{p.name}</button>
+          <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>
+            <span class="tname">{p.name}</span>
+            {#if pageMatches(p) > 0}<span class="mcount">{pageMatches(p)}</span>{/if}
+          </button>
         {/each}
       </nav>
       {#if drawnRail.length}
@@ -516,6 +538,9 @@
   }
   .tab {
     flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 8px 12px;
     border: 0;
     border-radius: 8px;
@@ -529,12 +554,43 @@
     text-overflow: ellipsis;
     cursor: pointer;
   }
+  .tname {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mcount {
+    flex: none;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--c, var(--accent));
+    color: #06181a;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 16px;
+    text-align: center;
+  }
   .tab.on { color: var(--text); background: var(--surface2); }
   .empty { padding: 24px; color: var(--textdim); font-size: 13px; }
 
   /* The fixed canvas. Horizontal scroll on a narrow screen is the accepted cost of drawing the
      device's own 1240px canvas at 1:1 — it never reflows to the pane. */
   .scroller { flex: 1; overflow: auto; min-height: 0; }
+  .nores {
+    position: sticky;
+    top: 10px;
+    z-index: 2;
+    width: max-content;
+    margin: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--textdim);
+    font-size: 13px;
+  }
   .canvas { position: relative; }
   .surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
   /* The identity column's controls, scaled exactly like the surface but living in the tab rail's strip.
