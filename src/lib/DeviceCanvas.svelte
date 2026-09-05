@@ -547,6 +547,24 @@
     width: 100%; text-align: center; font-size: 11px; color: var(--textdim); line-height: 1.15;
     overflow: hidden; text-overflow: ellipsis; white-space: pre-line;
   }
-  .lbl.heading { font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); font-size: 10px; }
+  .lbl.heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .lbl.heading::after {
+    content: '';
+    flex: 1;
+    min-width: 10px;
+    height: 1px;
+    background: var(--border);
+  }
   .lbl.bold { font-weight: 800; color: var(--text); }
 </style>
