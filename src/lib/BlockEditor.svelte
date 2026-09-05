@@ -12,7 +12,7 @@
   import { deriveAdsrGraphs } from './adsrGraphs';
   import { deriveMegaTapGraphs } from './megaTapGraphs';
   import { deriveCabMicGraphs } from './cabMicGraphs';
-  import type { CabState, CabSlot } from './types';
+  import type { CabState, CabSlot, EnumParam, LayoutControl } from './types';
 
   const editor = getEditorSurface();
 
@@ -91,9 +91,32 @@
     if (/^CABINET_NAME/.test(c.paramName)) return slot ? cabSlotLabel(slot, dynaMode) : '—';
     return null;
   };
-  const onPseudoClick = (c: { paramName: string | null }) => {
+  // The cab page's M / S buttons are editor-internal pseudo-buttons (paramName `CABINET_BTN_MUTE{n}` /
+  // `CABINET_BTN_SOLO{n}`) whose real state lives on the `CABINET_MUTE{n}` enum (0 = off, 1 = mute,
+  // 2 = solo). The layout names that enum via `render.secondaryParameterName`, so a click resolves the
+  // live enum and writes it — the M button toggles mute.
+  const cabMuteEnum = (c: LayoutControl): EnumParam | null => {
+    if (!isCab) return null;
+    const sym = c.render?.secondaryParameterName ?? (() => {
+      const n = cabSlotIndex(c.paramName);
+      return n == null ? null : `CABINET_MUTE${n}`;
+    })();
+    return sym ? (editor.enums.find((e) => e.paramName === sym) ?? null) : null;
+  };
+  const pseudoOn = (c: LayoutControl): boolean => {
+    if (!isCab || !/^CABINET_BTN_MUTE/.test(c.paramName ?? '')) return false;
+    return cabMuteEnum(c)?.value === 1;
+  };
+  const onPseudoClick = (c: LayoutControl) => {
     const n = cabSlotIndex(c.paramName);
-    if (isCab && /^CABINET_PICKER/.test(c.paramName ?? '') && n != null) editor.openCabPicker(n - 1);
+    if (isCab && /^CABINET_PICKER/.test(c.paramName ?? '') && n != null) {
+      editor.openCabPicker(n - 1);
+      return;
+    }
+    if (isCab && /^CABINET_BTN_MUTE/.test(c.paramName ?? '')) {
+      const e = cabMuteEnum(c);
+      if (e) editor.setEnum(e, e.value === 1 ? 0 : 1);
+    }
   };
 
   const CHAN = ['A', 'B', 'C', 'D'];
@@ -223,6 +246,7 @@
               {cabMicGraphs}
               {pseudoText}
               {onPseudoClick}
+              {pseudoOn}
               bind:q
             />
           {/if}
