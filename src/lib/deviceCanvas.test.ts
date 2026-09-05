@@ -105,6 +105,24 @@ describe('placePage (exact geometry)', () => {
     expect(placed.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([0, 85, 2 * 85]);
   });
 
+  it('carries a flow control\u2019s offsetX forward, so a nudged bank stays evenly spaced', () => {
+    // The amp's Output-EQ page authors one spacer, then a first slider with `offsetX` and the rest
+    // plain. The nudge shifts the whole bank, not just the first fader — without the carry the first
+    // two faders collapse onto each other.
+    const page: LayoutPage = {
+      name: 'P', geometry: LAYOUT_MIXER2,
+      rows: [{ section: 'parameters', controls: [
+        ctl({ rawWidget: 'spacer' }),
+        ctl({ rawWidget: 'slider', placement: { offsetX: 52 } }),
+        ctl({ rawWidget: 'slider' }),
+        ctl({ rawWidget: 'slider' }),
+      ] }],
+    };
+    const placed = placePage(page);
+    const xs = placed.controls.map((c) => c.x / DEVICE_SCALE);
+    expect(xs).toEqual([0, 85 + 52, 85 + 52 + 85, 85 + 52 + 2 * 85]);
+  });
+
   it('positionExact overrides the flow slot; offsetX/offsetY nudge it', () => {
     const page: LayoutPage = {
       name: 'P', geometry: LAYOUT_MIXER2,

@@ -129,6 +129,11 @@ export function placePage(page: LayoutPage): PlacedPage {
     }
 
     let slot = 0;
+    // The device nudges a WHOLE run of flow controls by putting `offsetX` on the run's first control
+    // only (the amp's Output-EQ and the wah's Graphic-EQ shift their whole fader bank with one nudge on
+    // the first slider; the pitch block shifts an entire voice group). Carrying the nudge forward keeps
+    // the run evenly spaced instead of collapsing the first gap; an explicit `col` re-anchors the run.
+    let carryX = 0;
     for (const c of row.controls) {
       const box = boxOf(c, spacingX);
       const abs = absoluteAnchor(c, geo);
@@ -138,7 +143,12 @@ export function placePage(page: LayoutPage): PlacedPage {
       }
       const col = c.placement?.col;
       const idx = col ?? slot;
-      const x = baselineX + idx * spacingX + (c.placement?.offsetX ?? 0);
+      if (col != null) {
+        carryX = 0;
+      } else if (c.placement?.offsetX != null) {
+        carryX = c.placement.offsetX;
+      }
+      const x = baselineX + idx * spacingX + (col != null ? (c.placement?.offsetX ?? 0) : carryX);
       const y = baselineY! + (c.placement?.offsetY ?? 0);
       slot = idx + 1;
       entries.push({ control: c, rect: { x, y, w: box.w, h: box.h }, layer: 'flow', row: rowIndex });
