@@ -3,7 +3,7 @@
   // Keep paths terse — these render at 9–22px, so favour simple geometry that stays legible small.
   export type IconName =
     | 'device' | 'refresh' | 'check' | 'rename' | 'duplicate' | 'convert' | 'export'
-    | 'trash' | 'load' | 'star' | 'folder' | 'plus' | 'close' | 'list';
+    | 'trash' | 'load' | 'star' | 'folder' | 'plus' | 'close' | 'list' | 'save';
 </script>
 
 <script lang="ts">
@@ -49,5 +49,8 @@
     <circle cx="4.5" cy="6" r="1.1" fill="currentColor" stroke="none" />
     <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
     <circle cx="4.5" cy="18" r="1.1" fill="currentColor" stroke="none" />
+  {:else if name === 'save'}
+    <path d="M12 4v11m0 0 4-4m-4 4-4-4" />
+    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
   {/if}
 </svg>

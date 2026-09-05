@@ -5,6 +5,7 @@ import type {
   BlockParams,
   BlockApplyResult,
   BlockLibraryCandidate,
+  BlockLibrarySaveResult,
   DecodedBlockFile,
   BlockSummary,
   BlockTypeOption,
@@ -216,6 +217,9 @@ export const forgefx = {
   blockTypes: (slug: string) => req<BlockTypeOption[]>(`/blocks/${slug}/types`),
   blockLibrarySources: (libraryPath: string) => req<{ candidates: BlockLibraryCandidate[] }>(`/fm3edit/blocks/sources?libraryPath=${encodeURIComponent(libraryPath)}`),
   decodeBlockLibrarySource: (path: string, libraryPath: string) => req<DecodedBlockFile>('/fm3edit/blocks/decode', { method: 'POST', body: JSON.stringify({ path, libraryPath }) }),
+  /** Save a placed block back to the `.blk` library (device-coupled: captures the block's live burst). */
+  saveBlockLibraryBlock: (libraryPath: string, name: string, effectId: number, mode: 'current' | 'all') =>
+    req<BlockLibrarySaveResult>('/fm3edit/blocks/save', { method: 'POST', body: JSON.stringify({ libraryPath, name, effectId, mode }) }),
 
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),

@@ -519,6 +519,13 @@ export interface BlockApplyResult {
   params: number;
   activeChannel: number;
 }
+/** Result of saving a placed block back to the `.blk` library (POST /fm3edit/blocks/save). */
+export interface BlockLibrarySaveResult {
+  ok: boolean;
+  path: string;
+  category: string;
+  name: string;
+}
 
 /** A stored preset version snapshot (GET /versions). */
 export interface VersionInfo {

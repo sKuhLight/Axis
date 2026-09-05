@@ -2,9 +2,14 @@
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from './catalog';
+  import { appSettings } from './appSettings.svelte';
+  import { defaultBlockLibraryPath } from './blockLibraryPath';
+  import { forgefx, ForgeError } from './forgefx';
+  import Icon from './Icon.svelte';
   import DeviceCanvas from './DeviceCanvas.svelte';
   import GridMap from './GridMap.svelte';
   import QuickBuild from './QuickBuild.svelte';
+  import BlockLibrarySaveDialog from './BlockLibrarySaveDialog.svelte';
   import { deriveEqGraphs } from './eqGraphs';
   import { deriveModulationGraphs } from './modulationGraphs';
   import { deriveCompressorGraphs } from './compressorGraphs';
@@ -21,6 +26,30 @@
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
   const isCab = $derived(sel?.pack === 'Cab');
+
+  // ── save-to-library (POST /fm3edit/blocks/save) ──
+  let saveOpen = $state(false);
+  const libraryPath = $derived(
+    appSettings.cfg.blockLibraryPath ||
+      defaultBlockLibraryPath(editor.detected?.connected ? editor.detected.name : null) ||
+      ''
+  );
+  async function saveBlock(name: string, scope: 'current' | 'all'): Promise<string | null> {
+    const eid = sel?.effectId;
+    if (eid == null || !libraryPath) return 'No block is selected.';
+    try {
+      await forgefx.saveBlockLibraryBlock(libraryPath, name, eid, scope);
+      editor.showToast(`${name} saved to block library`, '#5fc46b');
+      return null;
+    } catch (e) {
+      const message =
+        e instanceof ForgeError
+          ? e.message.replace(/^POST \/fm3edit\/blocks\/save → \d+:?\s*/, '')
+          : 'Block save rejected';
+      editor.showToast(message || 'Block save rejected', '#d6543f');
+      return message || 'Block save rejected';
+    }
+  }
   // DynaCab is a per-block MODE value (param 31 "MODE" = 0 LEGACY / 1 DYNA-CAB) on the OPEN block. Derive it
   // from editor.enums — reloaded on every preset/block read — rather than the async `cabState` snapshot below,
   // which is only re-fetched when the effectId or the picker changes and so goes stale across preset switches
@@ -208,11 +237,16 @@
               </div>
             {/if}
 
-            <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
-              <span class="t-wrap">
-                <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
-              </span>
-            </button>
+            <div class="type-row">
+              <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
+                <span class="t-wrap">
+                  <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
+                </span>
+              </button>
+              <button class="savelib" onclick={() => (saveOpen = true)} title="Save block to library" aria-label="Save block to library">
+                <Icon name="save" size={16} />
+              </button>
+            </div>
           </aside>
         {/if}
 
@@ -253,6 +287,14 @@
     <!-- Quick Build: q toggles this bottom sheet of placeable blocks, anchored to the Block Editor pane
          so it works docked or embedded. -->
     <QuickBuild />
+
+    <BlockLibrarySaveDialog
+      open={saveOpen}
+      defaultName={sel?.display ?? 'Block'}
+      {libraryPath}
+      onSave={saveBlock}
+      onClose={() => (saveOpen = false)}
+    />
   </div>
 {/if}
 
@@ -410,6 +452,34 @@
   .typebtn:disabled {
     cursor: default;
     opacity: 0.7;
+  }
+  .type-row {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+  }
+  .type-row .typebtn {
+    flex: 1;
+  }
+  .savelib {
+    flex: none;
+    width: calc(var(--d-ctl-h) + 8px);
+    height: calc(var(--d-ctl-h) + 8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 11px;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .savelib:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
   }
   .t-wrap {
     flex: 1;
