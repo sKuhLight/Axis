@@ -158,72 +158,77 @@
            instead of shoving the map down the pane. -->
       <GridMap />
 
-      <!-- header -->
+      <!-- header: search + close. The block's identity (icon/name), channel and type now live in the
+           left rail beside the canvas so they stay put on every page. -->
       {#if sel && cat}
-        <!-- The header is its own inline-size container so the name bar can take its narrow step from the
-             PANE's width, not the viewport's — this editor is a dock panel and is routinely narrow on a wide
-             screen. Containment is scoped to the header, which holds no fixed/absolute descendants, so it
-             cannot become an unintended containing block for the surface's popovers. -->
-        <div class="headwrap">
         <header class="head">
-          <div class="block-controls">
-          <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
-          {#if sel.pack && sel.channel != null}
-            <div class="ch">
-              <span class="ch-lbl mono">CH</span>
-              {#each CHAN as id}
-                <button class="ch-btn" class:on={sel.channel === id} onclick={() => editor.setChannel(id)}>{id}</button>
-              {/each}
-            </div>
-          {/if}
-          <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
-            <span class="t-wrap">
-              <span class="t-title">{isCab ? 'Cab IR · DynaCab' : `${cat.short} · type`}</span>
-              <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
-            </span>
-            {#if sel.pack}<span class="t-go">{isCab ? 'Open' : 'Change ▾'}</span>{/if}
-          </button>
-          </div>
-
           <div class="csearch" class:active={searching}>
             <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
             <input class="csin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
             {#if searching}<button class="csx" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
           </div>
-
           {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
         </header>
-        </div>
       {/if}
 
-      <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
-      {#if !sel || !cat}
-        <div class="empty">
-          <strong>Block Editor</strong>
-          <span>Select a block in the grid to edit its parameters.</span>
+      <!-- body: left rail (identity / channel / type) + the device-canvas control surface. The rail is
+           the block's identity controls moved out of the header so they sit to the left of every page. -->
+      <div class="body">
+        {#if sel && cat}
+          <aside class="side">
+            <!-- block type icon + name, mirroring the Signal Grid tile's glyph-over-label anatomy -->
+            <div class="identity">
+              <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
+              <span class="name" title={sel.display}>{cat.short}</span>
+            </div>
+
+            {#if sel.pack && sel.channel != null}
+              <div class="ch">
+                <span class="ch-lbl mono">CH</span>
+                {#each CHAN as id}
+                  <button class="ch-btn" class:on={sel.channel === id} onclick={() => editor.setChannel(id)}>{id}</button>
+                {/each}
+              </div>
+            {/if}
+
+            <button class="typebtn" onclick={() => (isCab ? editor.openCabPicker() : editor.openRetype())} disabled={!sel.pack} title={isCab ? (cabSummary ?? 'Browse cabinet library') : `${typeName} — change type`}>
+              <span class="t-wrap">
+                <span class="t-type" class:long={typeName.length > 16 && typeName.length <= 24} class:xlong={typeName.length > 24}>{typeName}</span>
+              </span>
+            </button>
+          </aside>
+        {/if}
+
+        <div class="stage">
+          {#if !sel || !cat}
+            <div class="empty">
+              <strong>Block Editor</strong>
+              <span>Select a block in the grid to edit its parameters.</span>
+            </div>
+          {:else if editor.sheetState === 'nopack'}
+            <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
+          {:else if editor.sheetState === 'loading'}
+            <div class="content scroll"><p class="hint">Reading parameters…</p></div>
+          {:else if editor.sheetState === 'error'}
+            <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
+          {:else}
+            <DeviceCanvas
+              slug={sel.pack ?? sel.display ?? 'block'}
+              accent={cat.accent}
+              {eqGraphs}
+              {modulationGraphs}
+              {compressorGraphs}
+              {cabAlignmentGraphs}
+              {adsrGraphs}
+              {megaTapGraphs}
+              {cabMicGraphs}
+              {pseudoText}
+              {onPseudoClick}
+              bind:q
+            />
+          {/if}
         </div>
-      {:else if editor.sheetState === 'nopack'}
-        <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
-      {:else if editor.sheetState === 'loading'}
-        <div class="content scroll"><p class="hint">Reading parameters…</p></div>
-      {:else if editor.sheetState === 'error'}
-        <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
-      {:else}
-        <DeviceCanvas
-          slug={sel.pack ?? sel.display ?? 'block'}
-          accent={cat.accent}
-          {eqGraphs}
-          {modulationGraphs}
-          {compressorGraphs}
-          {cabAlignmentGraphs}
-          {adsrGraphs}
-          {megaTapGraphs}
-          {cabMicGraphs}
-          {pseudoText}
-          {onPseudoClick}
-          bind:q
-        />
-      {/if}
+      </div>
 
     </div>
 
@@ -302,51 +307,67 @@
     background: var(--border3);
   }
 
-  .headwrap {
-    flex: none;
-    container-type: inline-size;
-  }
   .head {
     position: relative;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: var(--d-gap);
-    padding: calc(var(--d-pad-y) * 3) var(--d-pad-x);
-    padding-bottom: calc(var(--d-pad-y) * 2 + var(--d-gap));
+    padding: var(--d-pad-y) var(--d-pad-x);
     border-bottom: 1px solid var(--surface2);
     flex: none;
   }
-  @container (max-width: 700px) {
-    .t-title {
-      display: none;
-    }
-    .head .block-controls {
-      position: static;
-      top: auto;
-      transform: none;
-    }
-    .csearch {
-      flex: 1 0 100%;
-      order: 2;
-    }
+  /* body = rail + canvas side by side; the rail is the block's identity column and the stage holds
+     the device canvas (or an empty/loading state). Both fill the space below the header. */
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
   }
-  .block-controls {
+  .side {
+    flex: none;
+    width: 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: calc(var(--d-pad-y) * 2) var(--d-pad-x);
+    border-right: 1px solid var(--surface2);
+    background: var(--bg2);
+    overflow-y: auto;
+  }
+  .stage {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
-    align-items: center;
-    gap: var(--d-gap);
+    flex-direction: column;
   }
+  .identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    container-type: inline-size;
+  }
+  .name {
+    font-weight: 700;
+    font-size: var(--d-font-lg);
+    color: var(--text);
+    text-align: center;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  /* The icon is the rail's hero: fill the rail's inner width and size the glyph to it (the glyph is a
+     24×24 viewBox at 1em, so font-size sets its rendered size). Leave a little breathing room inside. */
   .icon {
-    width: var(--d-ctl-h);
-    height: var(--d-ctl-h);
+    width: 50%;
+    aspect-ratio: 1;
     flex: none;
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--d-font-lg);
+    font-size: calc(50cqw - 20px);
     color: var(--text);
     border: 1px solid;
   }
@@ -354,7 +375,7 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    flex: 1;
+    width: 100%;
     min-width: 0;
     height: calc(var(--d-ctl-h) + 8px);
     padding: 0 var(--d-pad-x);
@@ -380,12 +401,6 @@
     line-height: 1.15;
     text-align: left;
   }
-  .t-title {
-    font: 700 calc(var(--d-font-sm) * 0.82) / 1 var(--font-mono);
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--text-mut);
-  }
   /* Sized below the TopBar preset name (17px) so the block type reads as context, not the
      headline — this button changes type, it doesn't name what you're editing. Long device
      names still step DOWN through two buckets rather than being measured and fitted: the
@@ -408,39 +423,26 @@
     font-size: calc(var(--d-font-lg) * 0.87);
     letter-spacing: 0;
   }
-  .t-go {
-    flex: none;
-    font-size: var(--d-font-sm);
-    font-weight: 700;
-    color: var(--accent);
-    padding: calc(var(--d-pad-y) * 0.6) calc(var(--d-pad-x) * 0.7);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    white-space: nowrap;
-  }
-  /* Channels sit directly beside the block name: they are a property OF the selected type, and reading
-     "Brit 800 Mod / CH C" as one phrase is the point. One bordered track rather than four loose chips,
-     and never shrunk — the selected channel stays in the same place at every pane width. */
+  /* Channels sit below the block name in the rail: they are a property OF the selected type, and
+     reading "Brit 800 Mod / CH C" as one phrase is the point. One horizontal track, each button
+     sharing the rail width equally. */
   .ch {
     display: flex;
     gap: 2px;
     align-items: center;
     flex: none;
-    padding: 3px;
-    border-radius: 11px;
-    background: var(--input);
-    border: 1px solid var(--border2);
   }
   .ch-lbl {
     font: 700 9px/1 var(--font-mono);
     color: var(--text-mut);
     letter-spacing: 0.1em;
     padding: 0 6px 0 4px;
+    flex: none;
   }
   .ch-btn {
-    width: calc(var(--d-ctl-h) * 0.95);
-    height: calc(var(--d-ctl-h) - 8px);
-    flex: none;
+    flex: 1;
+    min-width: 0;
+    height: 30px;
     border-radius: 8px;
     background: transparent;
     border: 1px solid transparent;
@@ -464,7 +466,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 0 1 240px;
+    flex: 0 1 340px;
     min-width: 0;
     height: var(--d-ctl-h);
     padding: 0 calc(var(--d-pad-x) * 0.8);
@@ -508,6 +510,7 @@
   }
 
   .close {
+    margin-left: auto;
     width: var(--d-ctl-h-sm);
     height: var(--d-ctl-h-sm);
     flex: none;

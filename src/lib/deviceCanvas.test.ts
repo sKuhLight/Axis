@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { placePage, placeLayout, parsePositionExact, CANVAS_W, DEVICE_SCALE, type PlacedControl } from './deviceCanvas';
+import { placePage, placeLayout, parsePositionExact, DEVICE_SCALE, type PlacedControl } from './deviceCanvas';
 import { widgetBox, dropdownFieldHeight } from './deviceWidgets';
 import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from './types';
 
@@ -57,14 +57,14 @@ const LAYOUT_MIXER2: LayoutPageLayout = {
 };
 
 describe('placePage (exact geometry)', () => {
-  it('places a Parameters row at parametersX + col * parametersSpacingX', () => {
+  it('places a Parameters row at parametersX + col * parametersSpacingX, collapsed to the left inset', () => {
     const page: LayoutPage = {
       name: 'P', layout: 'LAYOUT_MIXER2', geometry: LAYOUT_MIXER2,
       rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'knob', placement: { col: 0 } }), ctl({ rawWidget: 'knob', placement: { col: 2 } })] }],
     };
     const placed = placePage(page);
     const xs = placed.controls.map((c) => c.x / DEVICE_SCALE);
-    expect(xs).toEqual([305, 305 + 2 * 85]);
+    expect(xs).toEqual([16, 16 + 2 * 85]);
     expect(placed.controls.map((c) => c.y / DEVICE_SCALE)).toEqual([50, 50]);
   });
 
@@ -89,8 +89,8 @@ describe('placePage (exact geometry)', () => {
       ],
     };
     const placed = placePage(page);
-    expect(placed.controls[0].x / DEVICE_SCALE).toBe(1094);
-    expect(placed.controls[1].x / DEVICE_SCALE).toBe(1094 + 85);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(16);
+    expect(placed.controls[1].x / DEVICE_SCALE).toBeCloseTo(16 + 85);
     expect(placed.controls[2].y / DEVICE_SCALE).toBe(50 + 180);
   });
 
@@ -102,7 +102,10 @@ describe('placePage (exact geometry)', () => {
       ] }],
     };
     const placed = placePage(page);
-    expect(placed.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([305, 305 + 85, 305 + 2 * 85]);
+    const xs = placed.controls.map((c) => c.x / DEVICE_SCALE);
+    expect(xs[0]).toBeCloseTo(16);
+    expect(xs[1]).toBeCloseTo(16 + 85);
+    expect(xs[2]).toBeCloseTo(16 + 2 * 85);
   });
 
   it('positionExact overrides the flow slot; offsetX/offsetY nudge it', () => {
@@ -111,7 +114,7 @@ describe('placePage (exact geometry)', () => {
       rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'sectionLabel', placement: { positionExact: '307,29' } })] }],
     };
     const placed = placePage(page);
-    expect(placed.controls[0].x / DEVICE_SCALE).toBe(307);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(16);
     expect(placed.controls[0].y / DEVICE_SCALE).toBe(29);
 
     const off: LayoutPage = {
@@ -129,8 +132,8 @@ describe('placePage (exact geometry)', () => {
     const placed = placePage(page);
     const byp = placed.controls.find((c) => c.control.rawWidget === 'btnBypass')!;
     const ign = placed.controls.find((c) => c.control.rawWidget === 'btnIgnoreScene')!;
-    expect([byp.x / DEVICE_SCALE, byp.y / DEVICE_SCALE]).toEqual([1188, 360]);
-    expect([ign.x / DEVICE_SCALE, ign.y / DEVICE_SCALE]).toEqual([1104, 360]);
+    expect([byp.x / DEVICE_SCALE, byp.y / DEVICE_SCALE]).toEqual([100, 360]);
+    expect([ign.x / DEVICE_SCALE, ign.y / DEVICE_SCALE]).toEqual([16, 360]);
   });
 
   it('sizes a sectionLabel from sectionSpan.pixels or cols × spacingX', () => {
@@ -149,7 +152,7 @@ describe('placePage (exact geometry)', () => {
     const a = placePage(page);
     const b = placePage(page);
     // Two controls the device authored at the same column stay put (col 3 twice) — no repacking.
-    expect(a.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([305 + 3 * 85, 305 + 3 * 85]);
+    expect(a.controls.map((c) => c.x / DEVICE_SCALE)).toEqual([16, 16]);
     expect(a.controls).toEqual(b.controls);
   });
 
@@ -227,12 +230,13 @@ suite('device canvas sweep', () => {
     }
   });
 
-  it('keeps every placed control within the fixed canvas width (devices with a renderer)', () => {
+  it('keeps every placed control within its page width (devices with a renderer)', () => {
     const over: string[] = [];
     for (const { id, page, renderer } of cases) {
       if (!renderer) continue; // FM9 has no resolved geometry — placement is a documented degradation
       const placed = placePage(resolvePage(page, renderer));
-      for (const c of placed.controls) if (c.x + c.w > CANVAS_W * DEVICE_SCALE) { over.push(`${id} :: ${c.control.label || c.control.rawWidget}`); break; }
+      // +0.5 tolerates float rounding on the boundary control (x+w vs width share a product chain).
+      for (const c of placed.controls) if (c.x + c.w > placed.width + 0.5) { over.push(`${id} :: ${c.control.label || c.control.rawWidget}`); break; }
     }
     expect(over).toEqual([]);
   });

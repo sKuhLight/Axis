@@ -24,6 +24,9 @@ import { widgetBox } from './deviceWidgets';
 export const CANVAS_W = 1280;
 /** Rendered at 0.95:1 with the device's own canvas — the block editor is a fixed 1240px-wide surface. */
 export const DEVICE_SCALE = 0.95;
+/** Left inset (device px) left between the canvas edge and the leftmost control after the device's
+ *  empty identity rail is collapsed — keeps the controls off the rail divider. */
+const CANVAS_INSET = 16;
 
 /** One control, placed. `x`/`y`/`w`/`h` are in RENDERED px (device px x {@link DEVICE_SCALE}). */
 export interface PlacedControl {
@@ -156,9 +159,19 @@ export function placePage(page: LayoutPage): PlacedPage {
   });
   const bottom = ordered.reduce((m, e) => Math.max(m, e.rect.y + e.rect.h), 0);
 
+  // The device's canvas reserves a wide left rail (its own block-identity column — e.g. Amp's
+  // parametersX = 305) that the block editor now draws OUTSIDE the canvas (the left rail in
+  // BlockEditor). Collapse that empty rail: shift the page so its leftmost control starts at a small
+  // inset, and size the canvas to the content rather than the full 1280px slot. The device's relative
+  // spacing — columns, offsets and absolute anchors — is untouched.
+  const left = ordered.reduce((m, e) => Math.min(m, e.rect.x), Infinity);
+  const right = ordered.reduce((m, e) => Math.max(m, e.rect.x + e.rect.w), -Infinity);
+  const originX = Number.isFinite(left) ? left : 0;
+  const contentW = Number.isFinite(right) ? right - originX : 0;
+
   return {
     name: page.name,
-    width: CANVAS_W * DEVICE_SCALE,
+    width: (contentW + CANVAS_INSET) * DEVICE_SCALE,
     height: bottom * DEVICE_SCALE,
     controls: ordered.map((e, i) => ({
       control: e.control,
@@ -166,7 +179,7 @@ export function placePage(page: LayoutPage): PlacedPage {
       row: e.row,
       alternateKey: alts[i].key,
       alternateIndex: alts[i].index,
-      x: e.rect.x * DEVICE_SCALE,
+      x: (e.rect.x - originX + CANVAS_INSET) * DEVICE_SCALE,
       y: e.rect.y * DEVICE_SCALE,
       w: e.rect.w * DEVICE_SCALE,
       h: e.rect.h * DEVICE_SCALE
