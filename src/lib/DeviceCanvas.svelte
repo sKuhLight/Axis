@@ -131,6 +131,20 @@
   const drawn = $derived(page ? page.controls.filter((c) => isVisible(c, alternates)) : []);
   const drawnRail = $derived(page ? page.rail.filter((c) => isVisible(c, alternates)) : []);
 
+  // ── mixer strip ──
+  // The right-hand `section: 'mixer'` controls (the block's master Level/Balance/Bypass strip) are nudged
+  // 2 rendered px left of their authored position and separated from the parameter grid by a 1px divider,
+  // so the strip reads as its own column. Only drawn when there are parameter controls to its left.
+  const mixerShift = (pc: PlacedControl) => (pc.section === 'mixer' ? 2 : 0);
+  const mixerRule = $derived.by(() => {
+    const ms = drawn.filter((pc) => pc.section === 'mixer');
+    if (!ms.length || !drawn.some((pc) => pc.section !== 'mixer')) return null;
+    const left = Math.min(...ms.map((c) => c.x));
+    const top = Math.min(...ms.map((c) => c.y));
+    const bottom = Math.max(...ms.map((c) => c.y + c.h));
+    return { left: left - 14, top, height: Math.max(0, bottom - top) };
+  });
+
   // ── graph binding ──
   // A graph's spec is keyed by (page index, graph ordinal on that page) — the same coordinates the
   // derive modules assign, computed from the ORIGINAL layout order because `placePage` sorts its output
@@ -311,7 +325,7 @@
     class="cell {view}"
     class:dim={query.length > 0 && !matches(c)}
     class:hit={query.length > 0 && matches(c)}
-    style:left="{dp(pc.x)}px"
+    style:left="{dp(pc.x - mixerShift(pc))}px"
     style:top="{dp(pc.y)}px"
     style:width="{dp(pc.w)}px"
     style:height="{dp(pc.h)}px"
@@ -467,6 +481,9 @@
         </div>
       {/if}
       <div class="surface" style:width="{dp(page.width)}px" style:height="{dp(page.height)}px" style:left="{TAB_RAIL_W + RAIL_PAD}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
+      {#if mixerRule}
+        <div class="mixer-rule" style:left="{dp(mixerRule.left)}px" style:top="{dp(mixerRule.top)}px" style:height="{dp(mixerRule.height)}px"></div>
+      {/if}
       {#each drawn as pc (pc.control.rawWidget + pc.alternateKey + pc.alternateIndex)}
         {@render cell(pc)}
         {/each}
@@ -523,6 +540,7 @@
   /* The identity column's controls, scaled exactly like the surface but living in the tab rail's strip.
      Sits under the tabs (z-index 0 vs the tabs' 1) so page tabs stay on top. */
   .rail-surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
+  .mixer-rule { position: absolute; width: 1px; background: var(--border2); }
   .cell { position: absolute; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }

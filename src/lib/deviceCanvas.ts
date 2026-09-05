@@ -45,6 +45,9 @@ export interface PlacedControl {
    *  swaps them on some other control's value (see `deviceAlternates.ts`). Same anchor = same key. */
   alternateKey: string;
   alternateIndex: number;
+  /** Which authored section the control came from — the block's `parameters` grid vs its right-hand
+   *  `mixer` strip. The canvas uses this to nudge the mixer and draw its divider. */
+  section: 'parameters' | 'mixer';
 }
 
 export interface PlacedPage {
@@ -117,7 +120,7 @@ function absoluteAnchor(c: LayoutControl, geo: LayoutPageLayout | undefined): { 
 /** Place one page's controls at the device's own coordinates. Pure — no Svelte, no DOM, no measurement. */
 export function placePage(page: LayoutPage): PlacedPage {
   const geo = page.geometry;
-  const entries: { control: LayoutControl; rect: { x: number; y: number; w: number; h: number }; layer: 'absolute' | 'flow'; row: number }[] = [];
+  const entries: { control: LayoutControl; rect: { x: number; y: number; w: number; h: number }; layer: 'absolute' | 'flow'; row: number; section: 'parameters' | 'mixer' }[] = [];
 
   let paramsRow = 0;
   let mixerRow = 0;
@@ -147,7 +150,7 @@ export function placePage(page: LayoutPage): PlacedPage {
       const box = boxOf(c, spacingX);
       const abs = absoluteAnchor(c, geo);
       if (abs) {
-        entries.push({ control: c, rect: { x: abs.x + (c.placement?.offsetX ?? 0), y: abs.y + (c.placement?.offsetY ?? 0), w: box.w, h: box.h }, layer: 'absolute', row: rowIndex });
+        entries.push({ control: c, rect: { x: abs.x + (c.placement?.offsetX ?? 0), y: abs.y + (c.placement?.offsetY ?? 0), w: box.w, h: box.h }, layer: 'absolute', row: rowIndex, section: row.section });
         // An absolutely-positioned control still occupies its authored column: the device reserves the
         // grid cell even when it draws the control at `positionExact`. Without this, every flow control
         // after it shifts one column LEFT — the cab Preamp's VU meter lands on top of High Cut Slope
@@ -165,7 +168,7 @@ export function placePage(page: LayoutPage): PlacedPage {
       const x = baselineX + idx * spacingX + (col != null ? (c.placement?.offsetX ?? 0) : carryX);
       const y = baselineY! + (c.placement?.offsetY ?? 0);
       slot = idx + 1;
-      entries.push({ control: c, rect: { x, y, w: box.w, h: box.h }, layer: 'flow', row: rowIndex });
+      entries.push({ control: c, rect: { x, y, w: box.w, h: box.h }, layer: 'flow', row: rowIndex, section: row.section });
     }
   });
 
@@ -202,6 +205,7 @@ export function placePage(page: LayoutPage): PlacedPage {
         control: e.control,
         layer: e.layer,
         row: e.row,
+        section: e.section,
         alternateKey: alts[i].key,
         alternateIndex: alts[i].index,
         // Left-align rail controls at a small inset, matching the tab rail's title padding — the device's
@@ -225,6 +229,7 @@ export function placePage(page: LayoutPage): PlacedPage {
     control: e.control,
     layer: e.layer,
     row: e.row,
+    section: e.section,
     alternateKey: altKey,
     alternateIndex: altIndex,
     x: (e.rect.x - originX) * DEVICE_SCALE,
