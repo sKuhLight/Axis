@@ -160,6 +160,22 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
     await expect(page.locator('.map .body')).toBeVisible();
   });
 
+  test('keeps a top-row selected mini-map block outline clear of the scroll edge', async ({ page }) => {
+    await bootWithLayout(page);
+    await selectDriveBlock(page);
+
+    const bounds = await page.locator('.map .body').evaluate((body) => {
+      const selected = body.querySelector<HTMLElement>('.mc.block.open');
+      if (!selected) return null;
+      const bodyBox = body.getBoundingClientRect();
+      const selectedBox = selected.getBoundingClientRect();
+      return { topInset: selectedBox.top - bodyBox.top };
+    });
+
+    // The outline extends 2px past the selected cell's scaled box.
+    expect(bounds?.topInset).toBeGreaterThanOrEqual(2);
+  });
+
   test('renders the layout page as a tab with rows top→bottom and mapped widget views', async ({ page }) => {
     await bootWithLayout(page);
 

@@ -50,7 +50,9 @@
   const cols = $derived(editor.layout.cols || 12);
   const GAP = 6;
   const PAD_X = 28; // .body horizontal padding (14 + 14)
-  const PAD_TOP = 1; // .body top padding
+  // Selected cells add a 2px outer ring and scale slightly, so the scroll body
+  // needs clearance above row zero to avoid clipping that treatment.
+  const PAD_TOP = 5;
   let bodyEl = $state<HTMLDivElement | null>(null);
   let bodyW = $state(0); // measured band width (Svelte resize-observes bind:clientWidth)
   /** Uncapped per-cell space: at this size the grid EXACTLY fills the band width. */
@@ -344,7 +346,7 @@
     overflow-y: auto;
     flex: 1;
     min-height: 0;
-    padding: 1px var(--d-pad-x) var(--d-pad-x);
+    padding: 5px var(--d-pad-x) var(--d-pad-x);
     /* zoomed-in overflow pans by touch/wheel — no scrollbar chrome (auto-centering finds the open block) */
     scrollbar-width: none;
   }
