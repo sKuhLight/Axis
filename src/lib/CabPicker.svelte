@@ -88,7 +88,7 @@
   const allRows = $derived.by<Row[]>(() => {
     if (mode === 'dyna') return (cs?.dynaOptions ?? []).map((o) => ({ id: `dyna:dyna:${o.label}`, name: o.label, sub: `Dyna #${o.value}`, index: o.value, value: o.value }));
     const list = irs[bank] ?? [];
-    return list.map((name, i) => ({ id: `legacy:${bank}:${name}`, name, sub: `${bank} #${i + 1}`, index: i, value: i }));
+    return list.map((name, i) => ({ id: `legacy:${bank}:${i}`, name, sub: `${bank} #${i + 1}`, index: i, value: i }));
   });
 
   const CAP = 250; // cap rendered rows (Factory banks have 1024 IRs) — search to narrow

@@ -3,7 +3,7 @@ import { idb } from './idb';
 
 export type CabIrs = Record<string, string[]>;
 
-const PREFIX = 'cab.irs.v1';
+const PREFIX = 'cab.irs.v2';
 
 function validCatalog(v: unknown): v is CabIrs {
   return !!v && typeof v === 'object' && Object.values(v as Record<string, unknown>).every((x) => Array.isArray(x) && x.every((s) => typeof s === 'string'));
