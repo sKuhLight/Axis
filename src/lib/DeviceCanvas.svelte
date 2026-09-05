@@ -393,6 +393,7 @@
             {@const m = liveMonitor(c)}
             {@const fill = monFill(m)}
             <div class="meter" class:horz={pc.w > pc.h} title="{c.label} (read-only)">
+              <div class="mlbl">{c.label}</div>
               <div class="mtrack">
                 <div
                   class="mfill"
@@ -534,6 +535,8 @@
   .meter.horz { flex-direction: row; align-items: center; }
   .meter.horz .mtrack { height: 8px; width: auto; align-self: center; }
   .meter.horz .mfill { top: 0; right: auto; height: auto; width: var(--f); }
+  .mlbl { font-size: 11px; font-weight: 700; color: var(--textdim); white-space: nowrap; line-height: 1; }
+  .meter.horz .mlbl { max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
   .mval { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
 
   .graph { width: 100%; height: 100%; overflow: hidden; }
