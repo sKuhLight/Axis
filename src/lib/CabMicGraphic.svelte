@@ -11,7 +11,6 @@
   import { getEditorSurface } from './editorSurface';
   import type { NamedParam } from './types';
   import type { CabMicGraphSpec } from './cabMicGraphs';
-  import { fmtControlValue } from './format';
 
   const editor = getEditorSurface();
 
@@ -22,12 +21,8 @@
   // track `editor.setParam`'s in-place `norm`/`value` writes instead of the snapshot.
   const liveParam = (id?: number): NamedParam | undefined =>
     id == null ? undefined : editor.params.find((p) => p.id === id);
-  const liveEnum = (id?: number) => (id == null ? undefined : editor.enums.find((e) => e.id === id));
   const position = $derived(liveParam(graph.position.id));
   const distance = $derived(liveParam(graph.distance?.id));
-  const pan = $derived(liveParam(graph.pan.id));
-  const level = $derived(liveParam(graph.level?.id));
-  const mic = $derived(liveEnum(graph.mic?.id));
 
   const W = 240;
   const H = 210;
@@ -57,22 +52,6 @@
   function up() {
     dragging = false;
   }
-
-  const micLabel = $derived(mic?.options.find((o) => o.value === mic.value)?.label);
-  function setMic(e: Event) {
-    if (mic) editor.setEnum(mic, Number((e.currentTarget as HTMLSelectElement).value));
-  }
-  // Label and value are separate so a live drag only re-renders the changing value — the fixed "POS"/
-  // "PAN"/"DIST"/"LVL" labels are stable nodes and don't flicker as the numbers update.
-  type HudRow = { label: string; value?: string };
-  const readouts = $derived.by<HudRow[]>(() => {
-    const rows: HudRow[] = [];
-    if (position) rows.push({ label: 'POS', value: fmtControlValue(position) });
-    if (pan) rows.push({ label: 'PAN', value: fmtControlValue(pan) });
-    if (distance) rows.push({ label: 'DIST', value: fmtControlValue(distance) });
-    if (level) rows.push({ label: 'LVL', value: fmtControlValue(level) });
-    return rows;
-  });
 
   const gid = $derived(`cabmic-${graph.key}`);
 </script>
@@ -134,18 +113,6 @@
       <circle cx={dotX} cy={CY} r={dotR} fill={accent} stroke="var(--bg)" stroke-width="2" />
     </g>
   </svg>
-  <div class="hud mono">
-    {#if mic}
-      <select class="mic" value={mic.value} onchange={setMic} title="Mic — {micLabel ?? graph.title}" aria-label="{graph.title} mic">
-        {#each mic.options as o (o.value)}
-          <option value={o.value}>{o.label}</option>
-        {/each}
-      </select>
-    {/if}
-    {#each readouts as r (r.label)}
-      <span class="row"><span class="k">{r.label}</span>{#if r.value != null}<span class="v">{r.value}</span>{/if}</span>
-    {/each}
-  </div>
 </div>
 
 <style>
@@ -166,55 +133,5 @@
   }
   .dot:active {
     cursor: grabbing;
-  }
-  .hud {
-    position: absolute;
-    top: 8px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-    padding: 5px 8px;
-    border: 1px solid var(--border2);
-    border-radius: 7px;
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    color: var(--textdim);
-    font-size: 10px;
-    pointer-events: none;
-  }
-  .row {
-    display: flex;
-    align-items: baseline;
-    justify-content: flex-end;
-    gap: 6px;
-  }
-  .mic {
-    pointer-events: auto;
-    font: inherit;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--border2);
-    border-radius: 5px;
-    padding: 2px 4px;
-    cursor: pointer;
-    outline: none;
-    max-width: 96px;
-  }
-  .mic:hover,
-  .mic:focus {
-    border-color: var(--accent);
-  }
-  .k {
-    color: var(--textdim);
-    font-weight: 600;
-  }
-  .v {
-    min-width: 34px;
-    text-align: right;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
   }
 </style>
