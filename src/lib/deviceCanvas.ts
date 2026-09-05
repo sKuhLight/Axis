@@ -9,7 +9,9 @@
 //   • a Parameters row's baseline is (parametersX, parametersY + paramsRowIndex * parametersSpacingY);
 //     a Mixer row's baseline is (mixerX, mixerY + mixerRowIndex * mixerSpacingY).
 //   • a control with `placement.col` sits at baselineX + col * sectionSpacingX; a control without one
-//     occupies the next authored flow slot (spacers consume a slot); `offsetX`/`offsetY` nudge it.
+//     occupies the next authored flow slot. Spacers AND absolutely-positioned controls both consume a
+//     slot — the device reserves the column even when it draws a control at `positionExact`.
+//     `offsetX`/`offsetY` nudge a control off its slot.
 //   • `placement.positionExact` overrides x/y outright; Bypass / Scene Ignore / Kill Dry use the
 //     PageLayout's own button anchors when supplied.
 //   • widget outer size comes from the control's served `bounds` (the editor's component metadata);
@@ -139,7 +141,12 @@ export function placePage(page: LayoutPage): PlacedPage {
       const abs = absoluteAnchor(c, geo);
       if (abs) {
         entries.push({ control: c, rect: { x: abs.x + (c.placement?.offsetX ?? 0), y: abs.y + (c.placement?.offsetY ?? 0), w: box.w, h: box.h }, layer: 'absolute', row: rowIndex });
-        continue; // absolute controls do not consume a flow slot
+        // An absolutely-positioned control still occupies its authored column: the device reserves the
+        // grid cell even when it draws the control at `positionExact`. Without this, every flow control
+        // after it shifts one column LEFT — the cab Preamp's VU meter lands on top of High Cut Slope
+        // instead of in the column the device left open for it.
+        slot += 1;
+        continue;
       }
       const col = c.placement?.col;
       const idx = col ?? slot;
