@@ -94,7 +94,7 @@
   .wrap.dense .switch { width: 36px; height: 18px; border-radius: 9px; }
   .wrap.dense .knob { top: 2px; left: 2px; width: 12px; height: 12px; }
   .wrap.dense .switch.on .knob { left: 20px; }
-  .wrap.dense .label { font-size: 10px; }
+  .wrap.dense .label { font-size: 12px; }
   .label {
     font-weight: 600;
     font-size: 12px;
