@@ -383,7 +383,7 @@
       <Toggle dense label={c.label} value={e.value} options={e.options} onChange={(v) => editor.setEnum(e, v)} />
     {:else if view === 'button'}
       {#if c.rawWidget === 'btnBypass'}
-        <button class="btn act" class:on={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>
+        <button class="btn act" class:on={!editor.selected?.bypassed} class:byp={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>
           {editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}
         </button>
       {:else if e}
@@ -583,7 +583,7 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .btn.on { background: var(--ok-tint); border-color: var(--ok-border); color: var(--ok); }
-  .btn.act.on { background: rgba(214, 84, 63, 0.16); border-color: #d6543f; color: #d6543f; }
+  .btn.act.byp { background: var(--danger-tint); border-color: var(--danger-border); color: var(--danger); }
 
   .meter { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; height: 100%; }
   .meter .mtrack { position: relative; flex: 1; width: 10px; border-radius: 3px; background: var(--track); overflow: hidden; }
