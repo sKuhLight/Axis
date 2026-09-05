@@ -1,5 +1,6 @@
 import { forgefx } from './forgefx';
 import { idb } from './idb';
+import type { CabState } from './types';
 
 export type CabIrs = Record<string, string[]>;
 
@@ -37,4 +38,15 @@ export async function refreshCabIrsCache(): Promise<CabIrs> {
   const fresh = await forgefx.cabIrs({ refresh: true });
   await storeCabIrs(fresh);
   return fresh;
+}
+
+/** The lightweight cab-state route deliberately does not read the live USER catalog. */
+export function applyCabIrNames(state: CabState, irs: CabIrs): CabState {
+  return {
+    ...state,
+    slots: state.slots.map((slot) => ({
+      ...slot,
+      irName: irs[slot.bank.label]?.[slot.irIndex] || slot.irName
+    }))
+  };
 }

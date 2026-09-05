@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getEditorSurface } from './editorSurface';
   import { catFor } from './catalog';
-  import { loadCabIrsCachedFirst } from './cabIrsCache';
+  import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState } from './types';
 
   const editor = getEditorSurface();
@@ -62,7 +62,7 @@
     const eid = editor.selected.effectId;
     Promise.all([editor.cabState(eid), loadCabIrsCachedFirst()])
       .then(([state, banks]) => {
-        cs = state;
+        cs = applyCabIrNames(state, banks);
         irs = banks;
         // Open on the slot whoever launched us asked for (the per-slot identity card passes its own),
         // clamped in case a variant serves fewer slots than the caller assumed.
@@ -145,7 +145,7 @@
     // refresh so the highlight + header follow the device
     editor
       .cabState(editor.selected!.effectId)
-      .then((s) => (cs = s))
+      .then((s) => (cs = applyCabIrNames(s, irs)))
       .catch(() => {});
   }
 

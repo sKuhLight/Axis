@@ -18,6 +18,7 @@
   import { deriveAdsrGraphs } from './adsrGraphs';
   import { deriveMegaTapGraphs } from './megaTapGraphs';
   import { deriveCabMicGraphs } from './cabMicGraphs';
+  import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState, CabSlot, EnumParam, LayoutControl } from './types';
 
   const editor = getEditorSurface();
@@ -67,10 +68,9 @@
       cabState = null;
       return;
     }
-    editor
-      .cabState(eid)
-      .then((s) => {
-        if (isCab && sel?.effectId === eid) cabState = s;
+    Promise.all([editor.cabState(eid), loadCabIrsCachedFirst()])
+      .then(([state, irs]) => {
+        if (isCab && sel?.effectId === eid) cabState = applyCabIrNames(state, irs);
       })
       .catch(() => (cabState = null));
   });
