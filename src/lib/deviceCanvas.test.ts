@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { placePage, placeLayout, parsePositionExact, DEVICE_SCALE, type PlacedControl } from './deviceCanvas';
+import { placePage, placeLayout, parsePositionExact, DEVICE_SCALE, RAIL_INSET, type PlacedControl } from './deviceCanvas';
 import { widgetBox, dropdownFieldHeight } from './deviceWidgets';
 import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from './types';
 
@@ -137,6 +137,40 @@ describe('placePage (exact geometry)', () => {
       rows: [{ section: 'parameters', controls: [ctl({ rawWidget: 'toggle', placement: { col: 0, offsetY: -70 } })] }],
     };
     expect(placePage(off).controls[0].y / DEVICE_SCALE).toBe(50 - 70);
+  });
+
+  it('splits identity-column controls into the rail and keeps content origin at the content edge', () => {
+    // The cab authors Input Mode at x=196 (inside the identity column, left of parametersX=305) and the
+    // slot heading at x=315 (content). The rail holds the former at its device coordinate; the surface
+    // collapses to the content edge, not to the rail control.
+    const page: LayoutPage = {
+      name: 'P', geometry: LAYOUT_MIXER2,
+      rows: [{ section: 'parameters', controls: [
+        ctl({ rawWidget: 'dropdown1Tight', placement: { positionExact: '196,230' } }),
+        ctl({ rawWidget: 'labelBold', placement: { positionExact: '315,63' } }),
+      ] }],
+    };
+    const placed = placePage(page);
+    expect(placed.rail.map((c) => c.control.rawWidget)).toEqual(['dropdown1Tight']);
+    expect(placed.rail[0].x).toBe(RAIL_INSET);
+    expect(placed.rail[0].y / DEVICE_SCALE).toBe(230);
+    expect(placed.controls.map((c) => c.control.rawWidget)).toEqual(['labelBold']);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(0);
+  });
+
+  it('a dialog layout (no mixer rail) reserves no identity column, so left-side content stays content', () => {
+    const page: LayoutPage = {
+      name: 'P', geometry: { name: 'LAYOUT_MIXER0', parametersX: 305, parametersY: 50, parametersSpacingX: 85, parametersSpacingY: 180 },
+      rows: [{ section: 'parameters', controls: [
+        ctl({ rawWidget: 'dropdown1', placement: { positionExact: '10,50' } }),
+        ctl({ rawWidget: 'knob', placement: { positionExact: '205,50' } }),
+      ] }],
+    };
+    const placed = placePage(page);
+    expect(placed.rail).toEqual([]);
+    expect(placed.controls.map((c) => c.control.rawWidget)).toEqual(['dropdown1', 'knob']);
+    expect(placed.controls[0].x / DEVICE_SCALE).toBe(0);
+    expect(placed.controls[1].x / DEVICE_SCALE).toBeCloseTo(195);
   });
 
   it('btnBypass / btnIgnoreScene use the PageLayout button anchors, not the flow slot', () => {

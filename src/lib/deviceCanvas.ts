@@ -26,6 +26,9 @@ import { widgetBox } from './deviceWidgets';
 export const CANVAS_W = 1280;
 /** Rendered at 0.95:1 with the device's own canvas — the block editor is a fixed 1240px-wide surface. */
 export const DEVICE_SCALE = 0.95;
+/** Left inset (rendered px) for identity-column controls, matching the tab rail's title padding so they
+ *  sit flush under the page tabs instead of at the rail's outer edge. */
+export const RAIL_INSET = 22;
 
 /** One control, placed. `x`/`y`/`w`/`h` are in RENDERED px (device px x {@link DEVICE_SCALE}). */
 export interface PlacedControl {
@@ -47,6 +50,10 @@ export interface PlacedControl {
 export interface PlacedPage {
   name: string;
   controls: PlacedControl[];
+  /** Controls the device authors in its own identity column (x < `parametersX`) — the block's
+   *  page-level identity controls (e.g. the cab's Input Mode / Zoom). Drawn in the tab rail, not on
+   *  the control surface; their `x`/`y` are relative to the identity column's top-left origin. */
+  rail: PlacedControl[];
   /** Rendered width of the page's content — the device's empty identity rail (~305px) is collapsed so
    *  the leftmost control sits at the surface origin and the canvas never pads an empty column. */
   width: number;
@@ -175,30 +182,63 @@ export function placePage(page: LayoutPage): PlacedPage {
   const bottom = ordered.reduce((m, e) => Math.max(m, e.rect.y + e.rect.h), 0);
 
   // The device's canvas reserves a wide left rail (its own block-identity column — e.g. Amp's
-  // parametersX = 305) that the block editor now draws as its own tab rail beside the canvas. Collapse
-  // that empty column: shift the page so its leftmost control sits at the surface origin, and size the
-  // canvas to the content rather than the full 1280px slot. The device's relative spacing — columns,
-  // offsets and absolute anchors — is untouched.
-  const left = ordered.reduce((m, e) => Math.min(m, e.rect.x), Infinity);
-  const right = ordered.reduce((m, e) => Math.max(m, e.rect.x + e.rect.w), -Infinity);
+  // parametersX = 305) that the block editor draws as its own tab rail beside the canvas. Controls the
+  // device authors INSIDE that column (x < parametersX, on pages that declare a mixer rail) are the
+  // block's page-level identity controls and stay in the rail; everything else is content. Collapse the
+  // now-empty column for the content: shift it so its leftmost control sits at the surface origin, and
+  // size the canvas to the content rather than the full 1280px slot. The device's relative spacing —
+  // columns, offsets and absolute anchors — is untouched.
+  const hasRail = geo?.mixerX != null; // dialog layouts (no mixer) use the full canvas and reserve no identity column
+  const railX = hasRail ? num(geo?.parametersX, 0) : 0;
+
+  // Split into rail (identity-column controls) vs surface (content) in ONE pass, keeping each entry's
+  // alternate key/index so both halves resolve against the same authored order.
+  const surface: { entry: (typeof entries)[number]; altKey: string; altIndex: number }[] = [];
+  const rail: PlacedControl[] = [];
+  for (let i = 0; i < ordered.length; i++) {
+    const e = ordered[i];
+    if (hasRail && e.rect.x < railX) {
+      rail.push({
+        control: e.control,
+        layer: e.layer,
+        row: e.row,
+        alternateKey: alts[i].key,
+        alternateIndex: alts[i].index,
+        // Left-align rail controls at a small inset, matching the tab rail's title padding — the device's
+        // own x (e.g. 196 of 305) would shove them toward the rail's right edge.
+        x: RAIL_INSET,
+        y: e.rect.y * DEVICE_SCALE,
+        w: e.rect.w * DEVICE_SCALE,
+        h: e.rect.h * DEVICE_SCALE
+      });
+    } else {
+      surface.push({ entry: e, altKey: alts[i].key, altIndex: alts[i].index });
+    }
+  }
+
+  const left = surface.reduce((m, s) => Math.min(m, s.entry.rect.x), Infinity);
+  const right = surface.reduce((m, s) => Math.max(m, s.entry.rect.x + s.entry.rect.w), -Infinity);
   const originX = Number.isFinite(left) ? left : 0;
   const contentW = Number.isFinite(right) ? right - originX : 0;
+
+  const controls: PlacedControl[] = surface.map(({ entry: e, altKey, altIndex }) => ({
+    control: e.control,
+    layer: e.layer,
+    row: e.row,
+    alternateKey: altKey,
+    alternateIndex: altIndex,
+    x: (e.rect.x - originX) * DEVICE_SCALE,
+    y: e.rect.y * DEVICE_SCALE,
+    w: e.rect.w * DEVICE_SCALE,
+    h: e.rect.h * DEVICE_SCALE
+  }));
 
   return {
     name: page.name,
     width: contentW * DEVICE_SCALE,
     height: bottom * DEVICE_SCALE,
-    controls: ordered.map((e, i) => ({
-      control: e.control,
-      layer: e.layer,
-      row: e.row,
-      alternateKey: alts[i].key,
-      alternateIndex: alts[i].index,
-      x: (e.rect.x - originX) * DEVICE_SCALE,
-      y: e.rect.y * DEVICE_SCALE,
-      w: e.rect.w * DEVICE_SCALE,
-      h: e.rect.h * DEVICE_SCALE
-    }))
+    controls,
+    rail
   };
 }
 

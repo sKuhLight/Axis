@@ -81,9 +81,10 @@
   // ── pages ──
   const pages = $derived(placeLayout(editor.blockLayout));
   // The device's editor reserves an identity column (~305 device px) to the left of its controls, and
-  // `placePage` collapses that column (its leftmost control lands at the surface origin). The block
-  // editor fills the space with its page tabs, drawn in RENDERED px (outside the 0.95 scale) so tab
-  // type stays full-size; the canvas surface then sits to the rail's right with a small gap.
+  // `placePage` collapses that column for the CONTENT while splitting out the controls the device
+  // authors inside it (the block's page-level identity controls). The block editor fills the column with
+  // its page tabs plus those rail controls; the canvas surface then sits to the rail's right with a
+  // small gap. Tabs are drawn in RENDERED px (outside the 0.95 scale) so tab type stays full-size.
   const TAB_RAIL_W = (305 * DEVICE_SCALE) / 2 - 8;
   const RAIL_PAD = 13;
   let pageName = $state('');
@@ -126,8 +127,9 @@
       return p && 'options' in p ? p.options.find((o) => o.value === p.value)?.label : undefined;
     }
   });
-  const alternates = $derived(page ? resolveAlternates(page.controls, altContext) : new Map<string, number>());
+  const alternates = $derived(page ? resolveAlternates([...page.controls, ...page.rail], altContext) : new Map<string, number>());
   const drawn = $derived(page ? page.controls.filter((c) => isVisible(c, alternates)) : []);
+  const drawnRail = $derived(page ? page.rail.filter((c) => isVisible(c, alternates)) : []);
 
   // ── graph binding ──
   // A graph's spec is keyed by (page index, graph ordinal on that page) — the same coordinates the
@@ -300,6 +302,145 @@
   const matches = (c: LayoutControl) => !query || (c.label ?? '').toLowerCase().includes(query);
 </script>
 
+{#snippet cell(pc: PlacedControl)}
+  {@const c = pc.control}
+  {@const view = viewOf(pc)}
+  {@const p = named(c)}
+  {@const e = enm(c)}
+  <div
+    class="cell {view}"
+    class:dim={query.length > 0 && !matches(c)}
+    class:hit={query.length > 0 && matches(c)}
+    style:left="{dp(pc.x)}px"
+    style:top="{dp(pc.y)}px"
+    style:width="{dp(pc.w)}px"
+    style:height="{dp(pc.h)}px"
+    onmouseenter={() => showHelp(c)}
+    onmouseleave={clearHelp}
+    onwheel={(ev) => (view === 'knob' || view === 'fader' ? wheel(ev, p) : undefined)}
+    oncontextmenu={(ev) => openMenu(pc, ev)}
+    role="presentation"
+  >
+    {#if view === 'knob' && p}
+      <Knob
+        value={p.norm ?? 0}
+        label={c.label}
+        valueText={valText(p)}
+        color={accent}
+        size={Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
+        onInput={(v) => setNorm(p, v)}
+        onReset={() => resetToDefault(p)}
+      />
+    {:else if view === 'fader' && p}
+      <div class="fader">
+        <div class="fv mono">{valText(p)}</div>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="ftrack"
+          onpointerdown={(ev) => {
+            const el = ev.currentTarget as HTMLElement;
+            el.setPointerCapture(ev.pointerId);
+            const set = (y: number) => {
+              const r = el.getBoundingClientRect();
+              setNorm(p, 1 - (y - r.top) / r.height);
+            };
+            set(ev.clientY);
+            el.onpointermove = (m) => m.buttons && set(m.clientY);
+            el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null; };
+          }}
+        >
+          <div class="ffill" style:height="{(p.norm ?? 0) * 100}%"></div>
+          <div class="fhandle" style:bottom="calc({(p.norm ?? 0) * 100}% - 5px)"></div>
+        </div>
+        <div class="fl">{c.label}</div>
+      </div>
+    {:else if view === 'dropdown' && e}
+      <Dropdown
+        label={c.label}
+        value={e.value}
+        options={e.options}
+        {accent}
+        fixedWidth={dp(pc.w)}
+        fieldHeight={dropdownFieldHeight(dp(pc.h))}
+        hideLabel={dp(pc.h) < 40}
+        onChange={(v) => editor.setEnum(e, v)}
+      />
+    {:else if view === 'toggle' && e}
+      <Toggle dense label={c.label} value={e.value} options={e.options} onChange={(v) => editor.setEnum(e, v)} />
+    {:else if view === 'button'}
+      {#if c.rawWidget === 'btnBypass'}
+        <button class="btn act" class:on={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>
+          {editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}
+        </button>
+      {:else if e}
+        <button class="btn" class:on={e.value === (e.options[1]?.value ?? 1)} title={c.label} onclick={() => bumpEnum(e, e.value === (e.options[1]?.value ?? 1) ? -1 : 1)}>
+          {c.label}
+        </button>
+      {:else}
+        <button class="btn" title={c.label} onclick={() => onPseudoClick(c)}>{c.label}</button>
+      {/if}
+    {:else if view === 'meter'}
+      {@const m = liveMonitor(c)}
+      {@const fill = monFill(m)}
+      <div class="meter" class:horz={pc.w > pc.h} title="{c.label} (read-only)">
+        <div class="mlbl">{c.label}</div>
+        <div class="mtrack">
+          <div
+            class="mfill"
+            style:--f="{fill * 100}%"
+            style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}
+          ></div>
+        </div>
+        <div class="mval mono">{monText(c, m)}</div>
+      </div>
+    {:else if view === 'graph'}
+      {@const kind = graphKind(c.rawWidget)}
+      {@const slot = graphSlotOf.get(c) ?? 0}
+      <div class="graph">
+        {#if kind === 'freq'}
+          {@const g = eqGraphOn(pageIndex)}
+          {#if g}<EQGraph bands={g.bands} gainRange={g.gainRange} {accent} onSet={(pp, n) => editor.setParam(pp, n)} />{/if}
+        {:else if kind === 'mod'}
+          {@const g = slotted(modulationGraphs, pageIndex, slot)}
+          {#if g}<ModulationGraph graph={g} {accent} />{/if}
+        {:else if kind === 'comp'}
+          {@const g = slotted(compressorGraphs, pageIndex, slot)}
+          {#if g}<CompressorGraph graph={g} {accent} live={mons.find((m) => m.role === 'gainReduction') ?? null} />{/if}
+        {:else if kind === 'cabAlign'}
+          {@const g = slotted(cabAlignmentGraphs, pageIndex, slot)}
+          {#if g}<CabAlignmentGraph graph={g} {accent} />{/if}
+        {:else if kind === 'adsr'}
+          {@const g = slotted(adsrGraphs, pageIndex, slot)}
+          {#if g}<AdsrGraph graph={g} {accent} />{/if}
+        {:else if kind === 'megatap'}
+          {@const g = slotted(megaTapGraphs, pageIndex, slot)}
+          {#if g}<MegaTapGraph graph={g} {accent} />{/if}
+        {/if}
+      </div>
+    {:else if view === 'dynacab'}
+      {@const g = cabMicOn(c)}
+      <div class="graph">
+        {#if g}<CabMicGraphic graph={g} {accent} onSet={(pp, n) => editor.setParam(pp, n)} />{/if}
+      </div>
+    {:else if view === 'separator'}
+      <div class="rule"></div>
+    {:else if view === 'ticks'}
+      <div class="ticks"></div>
+    {:else if view === 'readout'}
+      <div class="readout mono" title={c.label}>
+        {pseudoText(c) ?? (e ? (e.options.find((o) => o.value === e.value)?.label ?? String(e.value)) : valText(p))}
+      </div>
+    {:else if view === 'spacer'}
+      <span></span>
+    {:else}
+      <!-- label: the device's own control-group headings and static text -->
+      <div class="lbl" class:heading={c.rawWidget === 'sectionLabel'} class:bold={c.rawWidget === 'labelBold'} title={c.label}>
+        {pseudoText(c) ?? c.label}
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
 {#if !page}
   <div class="empty">No device layout for this block.</div>
 {:else}
@@ -318,144 +459,16 @@
           <button class="tab" class:on={p.name === page?.name} onclick={() => (pageName = p.name)}>{p.name}</button>
         {/each}
       </nav>
+      {#if drawnRail.length}
+        <div class="rail-surface" style:width="{dp(TAB_RAIL_W)}px" style:height="{dp(page.height)}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
+          {#each drawnRail as pc (pc.control.rawWidget + pc.alternateKey + pc.alternateIndex)}
+            {@render cell(pc)}
+          {/each}
+        </div>
+      {/if}
       <div class="surface" style:width="{dp(page.width)}px" style:height="{dp(page.height)}px" style:left="{TAB_RAIL_W + RAIL_PAD}px" style:--c={accent} style:transform="scale({DEVICE_SCALE})">
       {#each drawn as pc (pc.control.rawWidget + pc.alternateKey + pc.alternateIndex)}
-        {@const c = pc.control}
-        {@const view = viewOf(pc)}
-        {@const p = named(c)}
-        {@const e = enm(c)}
-        <div
-          class="cell {view}"
-          class:dim={query.length > 0 && !matches(c)}
-          class:hit={query.length > 0 && matches(c)}
-          style:left="{dp(pc.x)}px"
-          style:top="{dp(pc.y)}px"
-          style:width="{dp(pc.w)}px"
-          style:height="{dp(pc.h)}px"
-          onmouseenter={() => showHelp(c)}
-          onmouseleave={clearHelp}
-          onwheel={(ev) => (view === 'knob' || view === 'fader' ? wheel(ev, p) : undefined)}
-          oncontextmenu={(ev) => openMenu(pc, ev)}
-          role="presentation"
-        >
-          {#if view === 'knob' && p}
-            <Knob
-              value={p.norm ?? 0}
-              label={c.label}
-              valueText={valText(p)}
-              color={accent}
-              size={Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
-              onInput={(v) => setNorm(p, v)}
-              onReset={() => resetToDefault(p)}
-            />
-          {:else if view === 'fader' && p}
-            <div class="fader">
-              <div class="fv mono">{valText(p)}</div>
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div
-                class="ftrack"
-                onpointerdown={(ev) => {
-                  const el = ev.currentTarget as HTMLElement;
-                  el.setPointerCapture(ev.pointerId);
-                  const set = (y: number) => {
-                    const r = el.getBoundingClientRect();
-                    setNorm(p, 1 - (y - r.top) / r.height);
-                  };
-                  set(ev.clientY);
-                  el.onpointermove = (m) => m.buttons && set(m.clientY);
-                  el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null; };
-                }}
-              >
-                <div class="ffill" style:height="{(p.norm ?? 0) * 100}%"></div>
-                <div class="fhandle" style:bottom="calc({(p.norm ?? 0) * 100}% - 5px)"></div>
-              </div>
-              <div class="fl">{c.label}</div>
-            </div>
-          {:else if view === 'dropdown' && e}
-            <Dropdown
-              label={c.label}
-              value={e.value}
-              options={e.options}
-              {accent}
-              fixedWidth={dp(pc.w)}
-              fieldHeight={dropdownFieldHeight(dp(pc.h))}
-              hideLabel={dp(pc.h) < 40}
-              onChange={(v) => editor.setEnum(e, v)}
-            />
-          {:else if view === 'toggle' && e}
-            <Toggle dense label={c.label} value={e.value} options={e.options} onChange={(v) => editor.setEnum(e, v)} />
-          {:else if view === 'button'}
-            {#if c.rawWidget === 'btnBypass'}
-              <button class="btn act" class:on={editor.selected?.bypassed} onclick={() => editor.toggleBypass()}>
-                {editor.selected?.bypassed ? 'Bypassed' : 'Engaged'}
-              </button>
-            {:else if e}
-              <button class="btn" class:on={e.value === (e.options[1]?.value ?? 1)} title={c.label} onclick={() => bumpEnum(e, e.value === (e.options[1]?.value ?? 1) ? -1 : 1)}>
-                {c.label}
-              </button>
-            {:else}
-              <button class="btn" title={c.label} onclick={() => onPseudoClick(c)}>{c.label}</button>
-            {/if}
-          {:else if view === 'meter'}
-            {@const m = liveMonitor(c)}
-            {@const fill = monFill(m)}
-            <div class="meter" class:horz={pc.w > pc.h} title="{c.label} (read-only)">
-              <div class="mlbl">{c.label}</div>
-              <div class="mtrack">
-                <div
-                  class="mfill"
-                  style:--f="{fill * 100}%"
-                  style:background={fill >= 0.92 ? '#d6543f' : fill >= 0.75 ? '#f5a623' : accent}
-                ></div>
-              </div>
-              <div class="mval mono">{monText(c, m)}</div>
-            </div>
-          {:else if view === 'graph'}
-            {@const kind = graphKind(c.rawWidget)}
-            {@const slot = graphSlotOf.get(c) ?? 0}
-            <div class="graph">
-              {#if kind === 'freq'}
-                {@const g = eqGraphOn(pageIndex)}
-                {#if g}<EQGraph bands={g.bands} gainRange={g.gainRange} {accent} onSet={(pp, n) => editor.setParam(pp, n)} />{/if}
-              {:else if kind === 'mod'}
-                {@const g = slotted(modulationGraphs, pageIndex, slot)}
-                {#if g}<ModulationGraph graph={g} {accent} />{/if}
-              {:else if kind === 'comp'}
-                {@const g = slotted(compressorGraphs, pageIndex, slot)}
-                {#if g}<CompressorGraph graph={g} {accent} live={mons.find((m) => m.role === 'gainReduction') ?? null} />{/if}
-              {:else if kind === 'cabAlign'}
-                {@const g = slotted(cabAlignmentGraphs, pageIndex, slot)}
-                {#if g}<CabAlignmentGraph graph={g} {accent} />{/if}
-              {:else if kind === 'adsr'}
-                {@const g = slotted(adsrGraphs, pageIndex, slot)}
-                {#if g}<AdsrGraph graph={g} {accent} />{/if}
-              {:else if kind === 'megatap'}
-                {@const g = slotted(megaTapGraphs, pageIndex, slot)}
-                {#if g}<MegaTapGraph graph={g} {accent} />{/if}
-              {/if}
-            </div>
-          {:else if view === 'dynacab'}
-            {@const g = cabMicOn(c)}
-            <div class="graph">
-              {#if g}<CabMicGraphic graph={g} {accent} onSet={(pp, n) => editor.setParam(pp, n)} />{/if}
-            </div>
-          {:else if view === 'separator'}
-            <div class="rule"></div>
-          {:else if view === 'ticks'}
-            <div class="ticks"></div>
-          {:else if view === 'readout'}
-            <div class="readout mono" title={c.label}>
-              {pseudoText(c) ?? (e ? (e.options.find((o) => o.value === e.value)?.label ?? String(e.value)) : valText(p))}
-            </div>
-          {:else if view === 'spacer'}
-            <span></span>
-          {:else}
-            <!-- label: the device's own control-group headings and static text -->
-            <div class="lbl" class:heading={c.rawWidget === 'sectionLabel'} class:bold={c.rawWidget === 'labelBold'} title={c.label}>
-              {pseudoText(c) ?? c.label}
-            </div>
-          {/if}
-        </div>
+        {@render cell(pc)}
         {/each}
       </div>
     </div>
@@ -507,6 +520,9 @@
   .scroller { flex: 1; overflow: auto; min-height: 0; }
   .canvas { position: relative; }
   .surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
+  /* The identity column's controls, scaled exactly like the surface but living in the tab rail's strip.
+     Sits under the tabs (z-index 0 vs the tabs' 1) so page tabs stay on top. */
+  .rail-surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
   .cell { position: absolute; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }
