@@ -80,7 +80,7 @@
   const libraryEntries = $derived.by(() => {
     const queryText = query.trim().toLowerCase();
     return blockLibrary.candidates.filter((candidate) =>
-      candidate.category?.trim().toLowerCase() === blockSlug &&
+      candidate.slug === blockSlug &&
       (!queryText || candidate.name.toLowerCase().includes(queryText))
     );
   });

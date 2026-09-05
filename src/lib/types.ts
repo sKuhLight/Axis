@@ -496,6 +496,8 @@ export interface BlockLibraryCandidate {
   path: string;
   blocksDir: string;
   category: string | null;
+  /** Pack slug the category folder resolves to (e.g. "peq", "wah"), or null for a root-level file. */
+  slug: string | null;
   name: string;
   size: number;
   mtime: string;
