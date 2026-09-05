@@ -541,7 +541,7 @@
     background: var(--c); border: 2px solid var(--bg2);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
-  .fl { font-size: 9px; font-weight: 600; color: var(--textdim); white-space: nowrap; cursor: pointer; }
+  .fl { font-size: 11px; font-weight: 600; color: var(--textdim); white-space: nowrap; cursor: pointer; }
 
   .btn {
     width: 100%; height: 100%; padding: 0 4px; border: 1px solid var(--border2); border-radius: 6px;
