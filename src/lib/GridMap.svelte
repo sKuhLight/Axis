@@ -48,7 +48,7 @@
 
   const rows = $derived(editor.layout.rows || 4);
   const cols = $derived(editor.layout.cols || 12);
-  const GAP = 6;
+  const GAP = 15;
   const PAD_X = 28; // .body horizontal padding (14 + 14)
   // Selected cells add a 2px outer ring and scale slightly, so the scroll body
   // needs clearance above row zero to avoid clipping that treatment.
@@ -102,19 +102,23 @@
       for (const fr of c.fromRows) {
         const key = `${fr},${c.col - 1}->${c.row},${c.col}`;
         if (list.some((w) => w.key === key)) continue;
-        const src = cellAt.get(`${fr},${c.col - 1}`);
         const x1 = cx(c.col - 1) + cell;
         const y1 = cy(fr) + cell / 2;
         const mx = (x1 + x2) / 2;
         list.push({
           key,
           d: `M${x1} ${y1} C${mx} ${y1},${mx} ${y2},${x2} ${y2}`,
-          stroke: src && src.kind === 'block' ? src.color : 'var(--border3)'
+          stroke: 'var(--text2)'
         });
       }
     }
     return list;
   });
+  const bypasses = $derived(
+    [...editor.layout.cells, ...editor.layout.shunts].filter(
+      (cell) => cell.kind === 'block' && cell.bypassed
+    )
+  );
 
   // ✛ Quick Build — opens the Quick Build bottom sheet (the block palette) instead of the old palette flow
   function openAdd() {
@@ -186,7 +190,7 @@
       <div class="canvas" style="width:{canvasW}px; height:{canvasH}px;">
         <svg class="wires" width={canvasW} height={canvasH}>
           {#each wires as w (w.key)}
-            <path d={w.d} fill="none" stroke={w.stroke} stroke-width="1.6" opacity="0.6" />
+            <path d={w.d} fill="none" stroke={w.stroke} stroke-width="2" opacity="0.85" />
           {/each}
         </svg>
         <div class="cells" style="grid-template-columns:repeat({cols}, {cell}px); grid-template-rows:repeat({rows}, {cell}px); gap:{GAP}px;">
@@ -255,6 +259,17 @@
             {/each}
           {/each}
         </div>
+        <svg class="bypass-wires" width={canvasW} height={canvasH}>
+          {#each bypasses as bypass (`${bypass.row},${bypass.col}`)}
+            <path
+              d="M{bypass.col * (cell + GAP)} {bypass.row * (cell + GAP) + cell / 2} H{bypass.col * (cell + GAP) + cell}"
+              fill="none"
+              stroke="var(--text2)"
+              stroke-width="2"
+              opacity="0.85"
+            />
+          {/each}
+        </svg>
       </div>
     </div>
   {/if}
@@ -363,6 +378,13 @@
     overflow: visible;
     pointer-events: none;
     z-index: 0;
+  }
+  .bypass-wires {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 3;
   }
   .cells {
     position: relative;
