@@ -15,7 +15,7 @@ import type { WidgetInstance } from '../../workbench/core';
  *   fcdevice→axis.fcDevice, fclayouts→axis.fcLayouts, fcswitch→axis.fcSwitchView.
  */
 export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
-  'axis.preset': 250,
+  'axis.preset': 420,
   // Holds the scene chips AND the active scene's inline name. Deliberately NOT
   // raised for the name: the top zones fit jointly (WorkbenchHost `fitGroup`,
   // gap 12), and at a 1440 viewport the group budget measures 1338px against a

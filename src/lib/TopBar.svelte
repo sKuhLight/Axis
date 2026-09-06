@@ -358,6 +358,7 @@
   }
   .topbar.mob .pset {
     flex: 1;
+    width: auto;
   }
   .pbtn {
     width: 34px;
@@ -383,6 +384,8 @@
     color: var(--text);
   }
   .pset {
+    flex: none;
+    width: 270px;
     display: flex;
     align-items: center;
     gap: 9px;
@@ -402,6 +405,8 @@
     cursor: default;
   }
   .pname-in {
+    min-width: 0;
+    flex: 1;
     font-size: 17px;
     font-weight: 700;
     width: 150px;
@@ -441,6 +446,8 @@
     color: var(--amber);
   }
   .pname {
+    min-width: 0;
+    flex: 1;
     font-size: 17px;
     font-weight: 700;
     color: var(--text);

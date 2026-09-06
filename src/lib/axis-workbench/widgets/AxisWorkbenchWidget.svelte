@@ -932,7 +932,7 @@
     border-radius: 8px;
   }
   .axis-preset {
-    flex: 1 1 0;
+    width: 420px;
     padding: 0;
     gap: 0;
   }
