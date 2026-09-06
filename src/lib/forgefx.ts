@@ -18,6 +18,7 @@ import type {
   Health,
   PresetBlock,
   PresetGrid,
+  SceneNames,
   PresetRef,
   FcModel,
   FcReadState,
@@ -225,6 +226,7 @@ export const forgefx = {
   currentPreset: () => req<PresetRef>('/preset'),
   preset: (n: number) => req<PresetRef>(`/presets/${n}`),
   grid: () => req<PresetGrid>('/preset/grid'),
+  sceneNames: () => req<SceneNames>('/preset/scene-names'),
   // LEGACY /am4/* aliases (deprecated server-side) — kept ONLY for the v1-server fallback paths.
   /** @deprecated legacy v1 fallback — API v2 serves the AM4 through the unified grid(). */
   am4Grid: () => req<PresetGrid>('/am4/grid'),

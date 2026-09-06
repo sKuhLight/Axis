@@ -953,6 +953,10 @@ export interface PresetGrid {
    *  'live' = the FM3's sub-0x2E layout query (fast, no CRC over the grid). */
   source?: 'dump' | 'live';
 }
+/** Current preset scene labels, loaded separately so FM3 live-grid rendering is not delayed. */
+export interface SceneNames {
+  names: string[];
+}
 
 // ── Cross-device preset converter (P4a · META-24 · AXIS-47/48) ──
 // POST /api/preset/convert — port a preset to another Fractal device, best-effort, with a per-decision

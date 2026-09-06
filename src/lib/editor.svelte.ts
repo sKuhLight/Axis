@@ -1285,6 +1285,14 @@ class EditorStore {
       this.sceneNames = grid.scenes ?? [];
       this.everLoaded = true;
       this.status = 'ready';
+      if (!legacyAm4) {
+        const layout = this.layout;
+        // The FM3 live grid returns defaults on a cold label cache. Fetch names only after the canvas
+        // is ready, and discard a response from an earlier preset reload.
+        void forgefx.sceneNames().then(({ names }) => {
+          if (this.layout === layout) this.sceneNames = names;
+        }).catch(() => {});
+      }
       this.fetchMeters(); // background: fill every block's level meter
       this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
       this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
