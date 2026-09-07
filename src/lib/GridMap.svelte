@@ -151,7 +151,29 @@
     editor.quickBuildOpen = true;
   }
 
+  type Drag = { cell: Cell; startX: number; startY: number; x: number; y: number };
+  let dragStart = $state<Drag | null>(null);
+  let drag = $state<Drag | null>(null);
+  let dragTarget = $state<{ row: number; col: number } | null>(null);
+  let ignoreClick = $state<string | null>(null);
+
+  function cellFromPoint(x: number, y: number): { row: number; col: number } | null {
+    const el = document.elementFromPoint(x, y);
+    if (!el?.closest('.map')) return null;
+    const cell = el.closest<HTMLElement>('[data-idx]');
+    if (!cell?.dataset.idx) return null;
+    const [row, col] = cell.dataset.idx.split(',').map(Number);
+    return Number.isFinite(row) && Number.isFinite(col) ? { row, col } : null;
+  }
+
+  function onBlockDown(cl: Cell, e: PointerEvent) {
+    // Keep touch free for scrolling and tapping the compact map; desktop uses drag-to-move.
+    if (e.pointerType !== 'mouse' || e.button !== 0 || editor.linkFrom) return;
+    dragStart = { cell: cl, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY };
+  }
+
   function onCell(r: number, c: number) {
+    if (ignoreClick === `${r},${c}`) return;
     if (editor.linkFrom) {
       editor.completeLink(r, c); // any later column — blocks, shunts or empty (connect lays shunts)
       return;
@@ -173,6 +195,40 @@
   const showPort = (cl: Cell) => editor.canGridRoute && cl.col < cols - 1 && cl.pack !== 'Output';
   // while armed, every cell in a LATER column is a valid destination
   const isTarget = (c: number) => !!armed && c > armed.col;
+
+  onMount(() => {
+    const move = (e: PointerEvent) => {
+      if (!drag) {
+        if (!dragStart || Math.hypot(e.clientX - dragStart.startX, e.clientY - dragStart.startY) < 6) return;
+        drag = dragStart;
+        dragStart = null;
+      }
+      drag = { ...drag, x: e.clientX, y: e.clientY };
+      dragTarget = cellFromPoint(e.clientX, e.clientY);
+    };
+    const up = (e: PointerEvent) => {
+      const source = drag;
+      const target = dragTarget;
+      dragStart = null;
+      drag = null;
+      dragTarget = null;
+      if (!source || !target) return;
+      ignoreClick = `${target.row},${target.col}`;
+      setTimeout(() => (ignoreClick = null), 0);
+      const occupied = cellAt.get(`${target.row},${target.col}`);
+      if (occupied?.kind === 'block') {
+        editor.showToast('Cell occupied', '#d6543f');
+        return;
+      }
+      editor.move(source.cell, target.row, target.col);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  });
 
   // auto-center the relevant cell — the armed link source while routing, else the open block —
   // whenever it, the cell size (zoom/fit) or the band width changes, so overflow never needs
@@ -231,12 +287,15 @@
                   class:open
                   class:byp={cl.bypassed}
                   class:tgt={isTarget(c)}
+                  class:dragging={drag?.cell === cl}
+                  class:drop-target={dragTarget?.row === r && dragTarget?.col === c}
                   style="--c:{cat.accent}; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px;"
                   data-idx="{r},{c}"
                   role="button"
                   tabindex="0"
                   title={cl.display}
                   onclick={() => onCell(r, c)}
+                  onpointerdown={(e) => onBlockDown(cl, e)}
                   onkeydown={(e) => e.key === 'Enter' && onCell(r, c)}
                   onmouseenter={() => setGridHover(r, c)}
                   onmouseleave={() => clearGridHover(r, c)}
@@ -249,6 +308,7 @@
                       class:armed={!!armed && armed.row === r && armed.col === c}
                       title="Route from here"
                       aria-label="Route from {cl.display}"
+                      onpointerdown={(e) => e.stopPropagation()}
                       onclick={(e) => onPort(cl, e)}
                     ></button>
                   {/if}
@@ -258,6 +318,7 @@
                   class="mc shunt"
                   class:open={editor.selKey === `${r},${c}`}
                   class:tgt={isTarget(c)}
+                  class:drop-target={dragTarget?.row === r && dragTarget?.col === c}
                   data-idx="{r},{c}"
                   role="button"
                   tabindex="0"
@@ -279,7 +340,7 @@
                   {/if}
                 </div>
               {:else}
-                <button class="mc empty" class:tgt={isTarget(c)} data-idx="{r},{c}" title="Add a block here" onclick={() => onCell(r, c)}>
+                <button class="mc empty" class:tgt={isTarget(c)} class:drop-target={dragTarget?.row === r && dragTarget?.col === c} data-idx="{r},{c}" title="Add a block here" onclick={() => onCell(r, c)}>
                   <span class="plus">+</span>
                 </button>
               {/if}
@@ -301,6 +362,13 @@
     </div>
   {/if}
 </div>
+
+{#if drag}
+  {@const cat = catFor(drag.cell.pack, baseName(drag.cell.display))}
+  <div class="drag-ghost" style="left:{drag.x}px; top:{drag.y}px; --c:{cat.accent}; --gridmap-cell:{cell}px; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px;">
+    <span class="glyph">{@html cat.glyph}</span>
+  </div>
+{/if}
 
 <style>
   .map {
@@ -427,6 +495,8 @@
     cursor: pointer;
     box-sizing: border-box;
     padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
     transition: transform 0.1s, box-shadow 0.1s;
   }
   .mc.block {
@@ -435,6 +505,31 @@
   }
   .mc.block:hover {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .mc.block.dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+  .mc.drop-target {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  .drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    width: var(--gridmap-cell, 28px);
+    height: var(--gridmap-cell, 28px);
+    transform: translate(-50%, -50%) rotate(-4deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--c) 26%, var(--bg2));
+    box-shadow: 0 16px 36px color-mix(in srgb, var(--bg) 65%, transparent);
+    color: var(--text);
+    font-size: var(--glyph-size, 13px);
+    line-height: 1;
+    pointer-events: none;
   }
   .mc.block .glyph {
     font-size: var(--glyph-size, 13px);
