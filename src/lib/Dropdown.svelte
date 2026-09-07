@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Compact dropdown: label-on-top field (112–236px) that opens a fixed popup menu.
+  // Compact dropdown: label-on-top field (112–236px) that opens a readable popup menu.
   // Multiple of these flow in a flex-wrap row (laid out by the parent), so they don't waste space.
   import { tick } from 'svelte';
   import { effectiveZoom } from './workbench/svelte/contextMenu';
@@ -39,6 +39,8 @@
     const maxLen = options.reduce((m, o) => Math.max(m, o.label.length), label.length);
     return Math.max(112, Math.min(236, Math.round(maxLen * 8 + 50)));
   });
+  // Device-authored fields can be deliberately tiny. The menu is independent so option names remain legible.
+  const menuWidth = $derived(Math.max(180, Math.min(280, Math.round(Math.max(...options.map((o) => o.label.length), 0) * 8 + 60), width)));
 
   let open = $state(false);
   let menu = $state<{ left: number; top: number; width: number } | null>(null);
@@ -59,7 +61,13 @@
     const below = window.innerHeight - r.bottom;
     const top = below < 200 && r.top > below ? r.top - Math.min(248, options.length * 38 + 12) - 4 : r.bottom + 4;
     const z = zoomNow();
-    return { left: r.left / z, top: top / z, width: r.width / z };
+    const viewportWidth = window.innerWidth / z;
+    const width = menuWidth;
+    return {
+      left: Math.max(8, Math.min(r.left / z, viewportWidth - width - 8)),
+      top: top / z,
+      width
+    };
   }
 
   function toggle() {
