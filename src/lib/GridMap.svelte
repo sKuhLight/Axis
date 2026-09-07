@@ -5,6 +5,7 @@
   // tap a port (◉) to arm link mode, then tap ANY cell in a later column — editor.connect() lays
   // shunts through the gaps, so the destination is never restricted to the adjacent column.
   // Arm state is editor.linkFrom (shared with the SignalGrid: arm here, complete there — or vice versa).
+  import { onMount } from 'svelte';
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
@@ -20,10 +21,35 @@
     catch { return true; }
   };
   let collapsed = $state(loadCollapsed());
+  // Hold H for a quick name legend without permanently crowding the compact map.
+  let showBlockTags = $state(false);
   const toggle = () => {
     collapsed = !collapsed;
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* */ }
   };
+
+  onMount(() => {
+    const isEditing = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditing(event.target) || event.metaKey || event.ctrlKey || event.altKey || event.key.toLowerCase() !== 'h') return;
+      showBlockTags = true;
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'h') showBlockTags = false;
+    };
+    const clearTags = () => { showBlockTags = false; };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', clearTags);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', clearTags);
+    };
+  });
 
   // ── fit-to-width sizing + zoom ──
   // zoom 1 = the comfortable default (fit, cells capped at 32px); zooming IN grows the cells ONLY
@@ -215,6 +241,7 @@
                   onmouseenter={() => setGridHover(r, c)}
                   onmouseleave={() => clearGridHover(r, c)}
                 >
+                  {#if showBlockTags}<span class="block-tag">{baseName(cl.display || cl.pack || '') || 'Block'}</span>{/if}
                   <span class="glyph">{@html cat.glyph}</span>
                   {#if showPort(cl)}
                     <button
@@ -413,6 +440,26 @@
     font-size: var(--glyph-size, 13px);
     line-height: 1;
     color: var(--text);
+  }
+  .block-tag {
+    position: absolute;
+    /* Center the label on the tile edge so every floating label has an unambiguous owner. */
+    bottom: 100%;
+    transform: translateY(50%);
+    z-index: 5;
+    max-width: 120px;
+    overflow: hidden;
+    padding: 2px 5px;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font: 600 9px/1.1 var(--font-mono);
+    pointer-events: none;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent);
   }
   .mc.block.byp {
     opacity: 0.45;
