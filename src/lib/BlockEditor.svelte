@@ -284,7 +284,7 @@
           {:else if editor.sheetState === 'nopack'}
             <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
           {:else if editor.sheetState === 'loading'}
-            <div class="content scroll"><p class="hint">Reading parameters…</p></div>
+            <div class="content scroll"></div>
           {:else if editor.sheetState === 'error'}
             <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
           {:else}

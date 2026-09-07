@@ -1412,8 +1412,8 @@ class EditorStore {
   #loadParams = async () => {
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
-    // Blank the surface ONLY when nothing on screen belongs to this block. 'loading' swaps the
-    // ControlSurface out for the "Reading parameters…" hint, and that unmount wipes its component
+    // Blank the surface ONLY when nothing on screen belongs to this block. The loading state swaps the
+    // ControlSurface out, which wipes its component
     // state — live search, arrange mode, open dropdowns, measured width, scroll position, active page.
     // The background refresh paths (#refreshScene, the SSE 'changed' debounce, the preset-watch tick)
     // re-read the block ALREADY open, so there they must update the values in place instead.
