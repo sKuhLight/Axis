@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { fmtControlValue } from './format';
   import type { AdsrGraphSpec } from './adsrGraphs';
 
   let { graph, accent = '#35c9d6' }: { graph: AdsrGraphSpec; accent?: string } = $props();
@@ -28,12 +27,6 @@
     // attack/decay/release shape of a hardware envelope display (vs. linear ramps).
     return `M ${p0.x} ${p0.y} Q ${p0.x} ${p1.y} ${p1.x} ${p1.y} Q ${p1.x} ${p2.y} ${p2.x} ${p2.y} L ${p3.x} ${p3.y} Q ${p3.x} ${p4.y} ${p4.x} ${p4.y}`;
   });
-  const readouts = $derived([
-    graph.attack && `A ${fmtControlValue(graph.attack)}`,
-    graph.decay && `D ${fmtControlValue(graph.decay)}`,
-    graph.sustain && `S ${fmtControlValue(graph.sustain)}`,
-    graph.release && `R ${fmtControlValue(graph.release)}`
-  ].filter((value): value is string => !!value));
 </script>
 
 <div class="wrap">
@@ -48,12 +41,9 @@
     <text x={PAD} y={H - 6} fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">LEVEL</text>
     <text x={W - PAD} y={H - 6} text-anchor="end" fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">TIME</text>
   </svg>
-  <div class="hud mono">{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
 
 <style>
   .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
-  .hud { position: absolute; top: 8px; right: 10px; display: flex; gap: 10px; align-items: center; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 7px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--textdim); font-size: 10px; pointer-events: none; }
-  @media (max-width: 600px) { .hud span:nth-of-type(n + 3) { display: none; } }
 </style>

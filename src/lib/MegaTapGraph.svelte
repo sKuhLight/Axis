@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtControlValue, paramValue } from './format';
+  import { paramValue } from './format';
   import type { MegaTapGraphSpec } from './megaTapGraphs';
 
   let { graph, accent = '#35c9d6' }: { graph: MegaTapGraphSpec; accent?: string } = $props();
@@ -13,7 +13,6 @@
     const t = count === 1 ? 0.5 : index / (count - 1);
     return { x: 20 + Math.pow(t, timeCurve) * (W - 40), h: 12 + Math.pow(1 - t, ampCurve) * (H - 42) };
   }));
-  const readouts = $derived([graph.taps && `TAPS ${fmtControlValue(graph.taps)}`, graph.predelay && `PRE ${fmtControlValue(graph.predelay)}`, label(graph.timeShape) && `TIME ${label(graph.timeShape)}`, label(graph.ampShape) && `AMP ${label(graph.ampShape)}`].filter((value): value is string => !!value));
 </script>
 
 <div class="wrap">
@@ -25,12 +24,9 @@
     <text x="18" y={H - 6} fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">TIME</text>
     <text x={W - 18} y="13" text-anchor="end" fill="var(--textmuted)" font-size="9" font-family="var(--font-mono)">AMPLITUDE</text>
   </svg>
-  <div class="hud mono">{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
 
 <style>
   .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
-  .hud { position: absolute; top: 8px; right: 10px; display: flex; gap: 10px; align-items: center; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 7px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--textdim); font-size: 10px; pointer-events: none; }
-  @media (max-width: 600px) { .hud span:nth-of-type(n + 3) { display: none; } }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtControlValue, paramValue } from './format';
+  import { paramValue } from './format';
   import { currentLabel, type ModulationGraphSpec } from './modulationGraphs';
 
   let { graph, accent = '#35c9d6' }: { graph: ModulationGraphSpec; accent?: string } = $props();
@@ -25,12 +25,6 @@
     }
     return points.join(' ');
   });
-  const readouts = $derived([
-    graph.rate && `RATE ${fmtControlValue(graph.rate)}`,
-    graph.depth && `DEPTH ${fmtControlValue(graph.depth)}`,
-    graph.duty && `DUTY ${fmtControlValue(graph.duty)}`,
-    graph.phase && `PHASE ${fmtControlValue(graph.phase)}`
-  ].filter((value): value is string => !!value));
 </script>
 
 <div class="wrap">
@@ -40,13 +34,9 @@
     <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="var(--border2)" />
     <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
   </svg>
-  <div class="hud mono"><b>{currentLabel(graph.type) ?? 'Sine'}</b>{#each readouts as value}<span>{value}</span>{/each}</div>
 </div>
 
 <style>
   .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
-  .hud { position: absolute; top: 8px; right: 10px; display: flex; gap: 10px; align-items: center; padding: 5px 8px; border: 1px solid var(--border2); border-radius: 7px; background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--textdim); font-size: 10px; pointer-events: none; }
-  .hud b { color: var(--text); font-weight: 700; }
-  @media (max-width: 600px) { .hud span:nth-of-type(n + 3) { display: none; } }
 </style>
