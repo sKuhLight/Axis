@@ -19,7 +19,7 @@
   import { deriveMegaTapGraphs } from './megaTapGraphs';
   import { deriveCabMicGraphs } from './cabMicGraphs';
   import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
-  import type { CabState, CabSlot, EnumParam, LayoutControl } from './types';
+  import type { BlockSummary, CabState, CabSlot, EnumParam, LayoutControl } from './types';
 
   const editor = getEditorSurface();
 
@@ -27,6 +27,13 @@
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
+  let blockFamilies = $state<BlockSummary[]>([]);
+  const blockLabel = $derived.by(() => {
+    if (!sel) return '';
+    return baseName(blockFamilies.find((family) => family.page === sel.effectId)?.name ?? (sel.display || sel.pack || ''))
+      ?? cat?.short
+      ?? 'Block';
+  });
   const isCab = $derived(sel?.pack === 'Cab');
 
   // ── save-to-library (POST /fm3edit/blocks/save) ──
@@ -164,6 +171,7 @@
   onMount(() => {
     const focusControlSearch = () => controlSearch?.focus();
     window.addEventListener('axis:focus-control-search', focusControlSearch);
+    void forgefx.blocks().then((families) => (blockFamilies = families)).catch(() => {});
     return () => window.removeEventListener('axis:focus-control-search', focusControlSearch);
   });
 
@@ -241,7 +249,7 @@
             <!-- block type icon + name, mirroring the Signal Grid tile's glyph-over-label anatomy -->
             <div class="identity">
               <div class="icon" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{@html cat.glyph}</div>
-              <span class="name" title={sel.display}>{cat.short}</span>
+              <span class="name" title={sel.display}>{blockLabel}</span>
             </div>
 
             {#if sel.pack && sel.channel != null}
