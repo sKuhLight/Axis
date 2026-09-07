@@ -30,10 +30,10 @@ const PITCH_GLYPH = svg(
 
 // keyed by pack name (preferred) — falls back to base display name for packless blocks
 const CATALOG: Record<string, CatEntry> = {
-  Input: { accent: '#4f6bed', glyph: svg('<path d="M3 12h9M9.5 8.5 13 12l-3.5 3.5"/><path d="M17 4.5v15"/>'), short: 'In' },
-  Output: { accent: '#2fa15f', glyph: svg('<path d="M7 4.5v15"/><path d="M11 12h9M16.5 8.5 20 12l-3.5 3.5"/>'), short: 'Out' },
+  Input: { accent: '#4f6bed', glyph: svg('<path d="M3 12h9M9.5 8.5 13 12l-3.5 3.5"/><circle cx="17" cy="12" r="1.6" fill="currentColor" stroke="none"/>'), short: 'In' },
+  Output: { accent: '#2fa15f', glyph: svg('<circle cx="7" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M11 12h9M16.5 8.5 20 12l-3.5 3.5"/>'), short: 'Out' },
   Amp: { accent: '#d98a2b', glyph: svg('<rect x="1.5" y="6.5" width="21" height="11" rx="2"/><path d="M1.5 11.5h21"/><circle cx="6" cy="9" r="1"/><circle cx="10" cy="9" r="1"/><circle cx="14" cy="9" r="1"/>'), short: 'Amp' },
-  Cab: { accent: '#5f6168', glyph: svg('<rect x="4" y="2.5" width="16" height="19" rx="2.5"/><circle cx="12" cy="12.5" r="5.5"/><circle cx="12" cy="12.5" r="1.7"/>'), short: 'Cab' },
+  Cab: { accent: '#5f6168', glyph: svg('<rect x="4" y="2.5" width="16" height="19" rx="2.5"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>'), short: 'Cab' },
   Drive: { accent: '#d6543f', glyph: svg('<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="8.6" cy="7.2" r="1.05"/><circle cx="12" cy="6.2" r="1.05"/><circle cx="15.4" cy="7.2" r="1.05"/><circle cx="12" cy="16.2" r="2.7"/>'), short: 'Drive' },
   Comp: { accent: '#b3a52b', glyph: svg('<path d="M12 2.3v3.6"/><path d="M9.4 4.1 12 6.7l2.6-2.6"/><path d="M12 21.7v-3.6"/><path d="M9.4 19.9 12 17.3l2.6 2.6"/><path d="M4.3 12c1.9-3.4 3.9-3.4 5.9 0s3.8 3.4 5.7 0 3.9-3.4 5.9 0"/>'), short: 'Comp' },
   MultiComp: { accent: '#b3a52b', glyph: svg('<path d="M12 1.5v2.5M10.2 2.2 12 4l1.8-1.8M12 22.5V20M10.2 21.8 12 20l1.8 1.8"/><path d="M3 7c1.5-1.4 3-1.4 4.5 0s3 1.4 4.5 0 3-1.4 4.5 0 3 1.4 4.5 0"/><path d="M3 12c1.5-1.4 3-1.4 4.5 0s3 1.4 4.5 0 3-1.4 4.5 0 3 1.4 4.5 0"/><path d="M3 17c1.5-1.4 3-1.4 4.5 0s3 1.4 4.5 0 3-1.4 4.5 0 3 1.4 4.5 0"/>'), short: 'Comp' },
@@ -46,9 +46,9 @@ const CATALOG: Record<string, CatEntry> = {
   Rotary: { accent: '#c95b7a', glyph: svg('<circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 10 12 3c4 1 5 4 2 7M13.7 13 20 16c-3 3-6 2-6.3-2M10.3 13 4 16c-1-4 1-6 6.3-3"/><circle cx="12" cy="12" r="9" opacity=".4"/>'), short: 'Rotary' },
   Tremolo: { accent: '#cf9242', glyph: svg('<path d="M5 2 2 5l6 3-6 3 6 3-6 3 6 3-3 2"/><path d="M12 2 9 5l6 3-6 3 6 3-6 3 6 3-3 2"/><path d="M19 2 16 5l6 3-6 3 6 3-6 3 6 3-3 2"/>'), short: 'Trem' },
   Pitch: { accent: '#5fb0d6', glyph: PITCH_GLYPH, short: 'Pitch' },
-  Wah: { accent: '#d68a4f', glyph: svg('<rect x="5" y="2" width="14" height="20" rx="3.2"/><path d="M9 5.5h6l-1 13H10Z"/><path d="M8.5 5h7" opacity=".55"/>'), short: 'Wah' },
-  Formant: { accent: '#b5654d', glyph: svg('<path d="M10 3C6.7 3 4.5 5.8 4.5 9.5c0 2.5 1 4.7 2.8 6V21h6v-4.2c1.5-1.2 2.2-3.1 2.2-5.3C15.5 6.5 13.4 3 10 3Z"/><path d="m15.2 9.2 2 1.4-2 1.2"/><path d="m19 11 3-1M19 13h4M19 15l3 1"/>'), short: 'Formnt' },
-  Enhancer: { accent: '#9b8cf0', glyph: svg('<path d="M12 3.5v17"/><path d="M8.6 12H2.6M5.4 8.8 2.2 12l3.2 3.2"/><path d="M15.4 12h6M18.6 8.8 21.8 12l-3.2 3.2"/>'), short: 'Enhnce' },
+  Wah: { accent: '#d68a4f', glyph: svg('<rect x="5" y="2" width="14" height="20" rx="3.2" opacity=".55"/><path d="M9 5.5h6l-1 13H10Z"/><path d="M8.5 5h7" opacity=".55"/>'), short: 'Wah' },
+  Formant: { accent: '#b5654d', glyph: svg('<path d="M12 2.5v2.2"/><circle cx="12" cy="2.5" r="1.8" fill="currentColor" stroke="none"/><rect x="4" y="5" width="16" height="14" rx="3.6"/><path d="M2.5 10v4M21.5 10v4"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/><path d="M8.3 15.2h7.4" stroke-width="1.25"/>'), short: 'Formnt' },
+  Enhancer: { accent: '#9b8cf0', glyph: svg('<circle cx="6" cy="12" r="5.3" stroke-dasharray=".7 1.6" stroke-width=".9" opacity=".55"/><circle cx="18" cy="12" r="5.3" stroke-dasharray=".7 1.6" stroke-width=".9" opacity=".55"/><circle cx="12" cy="12" r="5.3"/>'), short: 'Enhnce' },
   Filter: { accent: '#d65b9e', glyph: svg('<path d="M2 9h9c1 0 1.3-2 2.3-2s1.2 2 2.2 4.5S18 19 21 19"/>'), short: 'Filter' },
   Peq: { accent: '#7fae4a', glyph: svg('<path d="M2 16.2 5.5 14.6 8.4 9.4 11 13.4 13.8 8.2 16.8 13.6 21.8 15.4"/><rect x="1" y="15.1" width="2.2" height="2.2" fill="currentColor" stroke="none"/><rect x="7.3" y="8.3" width="2.2" height="2.2" fill="currentColor" stroke="none"/><rect x="9.9" y="12.3" width="2.2" height="2.2" fill="currentColor" stroke="none"/><rect x="12.7" y="7.1" width="2.2" height="2.2" fill="currentColor" stroke="none"/><rect x="15.7" y="12.5" width="2.2" height="2.2" fill="currentColor" stroke="none"/><rect x="20.7" y="14.3" width="2.2" height="2.2" fill="currentColor" stroke="none"/>'), short: 'PEQ' },
   Geq: { accent: '#7fae4a', glyph: svg('<path d="M5 3.5v17M12 3.5v17M19 3.5v17"/><rect x="3.2" y="7" width="3.6" height="3.4" rx="1.1"/><rect x="10.2" y="13" width="3.6" height="3.4" rx="1.1"/><rect x="17.2" y="9.4" width="3.6" height="3.4" rx="1.1"/>'), short: 'GEQ' },
@@ -61,8 +61,8 @@ const CATALOG: Record<string, CatEntry> = {
   Synth: { accent: '#7a5bd6', glyph: svg('<path d="M2 16 6 8l4 8 4-8 4 8 4-8"/><path d="M2 6h4v5h4V6h4v5h4V6h4" opacity=".55"/>'), short: 'Synth' },
   Gate: { accent: '#9aa15f', glyph: svg('<path d="M7.5 15V5c0-2 2.6-2 2.6 0v6M10.1 11V3c0-2 2.6-2 2.6 0v8M12.7 11V5c0-2 2.6-2 2.6 0v6M15.3 11V8.5c0-2 2.6-2 2.6 0v7c0 3.4-2.1 5.5-5.5 5.5h-2.1c-2.2 0-3.8-1-5-2.8l-2-2.7c-1-1.4.8-2.7 2-1.3l2.3 1.8L7.5 15"/>'), short: 'Gate' },
   RingMod: { accent: '#9b6fd6', glyph: svg('<path d="M12 3c-5 0-8 3-8 8 0 4 3 8 8 10 5-2 8-6 8-10 0-5-3-8-8-8Z"/><ellipse cx="8.8" cy="13" rx="2.1" ry="3.3" transform="rotate(-28 8.8 13)" fill="currentColor" stroke="none"/><ellipse cx="15.2" cy="13" rx="2.1" ry="3.3" transform="rotate(28 15.2 13)" fill="currentColor" stroke="none"/>', 'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'), short: 'RngMod' },
-  Megatap: { accent: '#4a82e0', glyph: MULTITAP_GLYPH, short: 'Megtap' },
-  TenTap: { accent: '#4a82e0', glyph: MULTITAP_GLYPH, short: '10-Tap' },
+  Megatap: { accent: '#8068d7', glyph: MULTITAP_GLYPH, short: 'Megtap' },
+  TenTap: { accent: '#3fa890', glyph: MULTITAP_GLYPH, short: '10-Tap' },
   Plex: { accent: '#4a82e0', glyph: svg('<circle cx="5" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="18" r="1.5" fill="currentColor" stroke="none"/><path d="M5 16.5C6.5 10 10.5 10 12 16.5"/><path d="M12 16.5c1.5-6.5 5.5-6.5 7 0"/><path d="M5 16.2C8 4.5 16 4.5 19 16.2"/>'), short: 'Plex' },
   Multiplexer: { accent: '#4a90b8', glyph: svg('<path d="M3 12h5c3 0 3-7 6-7h7M8 12h13M8 12c3 0 3 7 6 7h7"/>'), short: 'Mux' }
 };
