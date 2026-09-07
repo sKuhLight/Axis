@@ -27,6 +27,7 @@ import type {
   TelemetryMode,
   DebugReport,
   ModModel,
+  ModSlotResult,
   PresetSummary,
   DecodedBlock,
   VersionInfo,
@@ -485,6 +486,9 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ slot, targetEffectId, targetParam, source })
     }),
+  /** Resolve which modifier slot is bound to a target (or the first free slot) — read-only. */
+  modSlot: (targetEffectId: number, targetParam: number) =>
+    req<ModSlotResult>(`/mod/slot?targetEffectId=${targetEffectId}&targetParam=${targetParam}`),
   /** Raw param values for an effect (FC 199 / Modifier 3), keyed by paramId. */
   rawBlock: (eid: number) => req<{ eid: number; values: Record<string, number> }>(`/preset/blocks/${eid}/raw`),
   /** Read specific paramIds via per-pid GET (FC current state). Returns {pid: value}. */

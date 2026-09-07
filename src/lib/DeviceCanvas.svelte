@@ -253,8 +253,7 @@
         label: c.label,
         block: editor.selected?.display ?? 'Block',
         targetEffectId: targetEid,
-        targetParam: c.paramId,
-        slot: 1
+        targetParam: c.paramId
       });
       editor.showToast(`∿ ${c.label} → Modifier panel`, '#f5a623');
       return;

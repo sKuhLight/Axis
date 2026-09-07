@@ -48,20 +48,26 @@
   // "Live" when the editor should fetch/read/write: the flyout when open, the dock whenever targeted.
   const active = $derived(isDock ? hasTarget : open);
 
-  // ── enum vocabularies (ordinal lists; channel/damping/etc. labels are conventional) ──
-  const CHANNELS = ['All', '1', '2', '3', '4'];
-  const UPDATE = ['Fast', 'Medium', 'Slow'];
-  const DAMP = ['None', 'Linear', 'Exponential', 'Logarithmic'];
-  const ENGAGE = ['Off', 'Fast Pos', 'Slow Pos', 'Auto'];
+  // ── enum vocabularies (device-true ordinal lists — FM3/FM9/Axe-Fx III MOD_AUTOENGAGE etc.) ──
+  const CHANNELS = ['All', 'Ch A', 'Ch B', 'Ch C', 'Ch D'];
+  const UPDATE = ['Slow', 'Medium', 'Fast'];
+  const DAMP = ['Exponential', 'Linear'];
+  const ENGAGE = ['Off', 'Slow Spd', 'Med Spd', 'Fast Spd', 'Slow Pos', 'Med Pos', 'Fast Pos'];
 
   // ── address map ──
   let fetched = $state<ModModel | null>(null);
   const mm = $derived(model ?? fetched);
+  // The chosen modifier slot: resolved from the target on binding-capable devices, else the prop.
+  const canBind = $derived(targetEffectId != null && targetParam != null);
+  const bindable = $derived(canBind && mm?.bindingSupported === true);
+  let resolvedSlot = $state<number | null>(null);
+  let resolveError = $state<string | null>(null);
+  let resolveKey = $state('');
+  const editSlot = $derived(resolvedSlot ?? Math.max(1, slot));
   // the chosen modifier slot's effectId (slot N = base + N-1); curve/field writes + binding go here
-  const eid = $derived((mm?.effectId ?? 3) + (Math.max(1, slot) - 1));
+  const eid = $derived((mm?.effectId ?? 3) + (editSlot - 1));
   // source list (name → ordinal) from the model, with an explicit None=0 at the top
   const SOURCES = $derived<{ name: string; ordinal: number }[]>([{ name: 'None', ordinal: 0 }, ...(mm?.sources ?? [])]);
-  const canBind = $derived(targetEffectId != null && targetParam != null);
   let loading = $state(false);
 
   $effect(() => {
@@ -72,6 +78,26 @@
         .then((m) => (fetched = m))
         .finally(() => (loading = false));
     }
+  });
+
+  // Resolve which modifier slot is bound to this target BEFORE reading/writing, so the editor opens the
+  // REAL slot (not slot 1) and its source/curve/range/damping all read back correctly. Read-only; a
+  // no-free-slot or failure blocks writes instead of silently falling back to slot 1 and clobbering
+  // an unrelated assignment.
+  $effect(() => {
+    if (!active || !bindable) return;
+    const key = `${targetEffectId}:${targetParam}`;
+    if (resolveKey === key) return;
+    resolveKey = key;
+    resolvedSlot = null;
+    resolveError = null;
+    forgefx
+      .modSlot(targetEffectId!, targetParam!)
+      .then((r) => {
+        if (r.ok && r.slot != null) resolvedSlot = r.slot;
+        else resolveError = r.error === 'no_free_slot' ? 'no_free_slot' : 'resolve_failed';
+      })
+      .catch(() => (resolveError = 'resolve_failed'));
   });
 
   // ── local edit state (no read-back yet — sensible defaults from the design's defaultMod) ──
@@ -100,8 +126,8 @@
       channel: 0,
       pcReset: false,
       updateRate: 0,
-      damping: 2,
-      autoEngage: 1,
+      damping: 0,
+      autoEngage: 0,
       min: 0,
       max: 100,
       attack: 20,
@@ -126,6 +152,7 @@
   let loadedKey = $state(''); // guards one load per (target, eid)
   $effect(() => {
     if (!active || !mm) return;
+    if (bindable && resolvedSlot == null) return; // wait for slot resolution before reading (never slot 1)
     const key = `${eid}:${targetEffectId}:${targetParam}`;
     if (loadedKey === key) return;
     loadedKey = key;
@@ -264,10 +291,11 @@
     m = { ...m, source: ordinal };
     sourceOpen = false;
     if (canBind) {
+      if (bindable && (resolvedSlot == null || resolveError)) return; // unresolved/error → never write
       binding = true;
       bindMsg = '';
       forgefx
-        .modBind(slot, targetEffectId!, targetParam!, ordinal)
+        .modBind(editSlot, targetEffectId!, targetParam!, ordinal)
         .then((r) => (bindMsg = r?.ok ? (ordinal ? 'assigned' : 'cleared') : `error: ${r?.error ?? 'failed'}`))
         .catch((e) => (bindMsg = `error: ${e?.message ?? e}`))
         .finally(() => (binding = false));
@@ -348,13 +376,36 @@
       <!-- flyout banner: live binding status -->
       <div class="banner" class:ok={canBind}>
         {#if canBind}
-          Modifier slot {slot} → <b>{label}</b>{#if bindMsg}<span class="bindmsg"> · {bindMsg}</span>{:else if binding}<span class="bindmsg"> · binding…</span>{/if}
+          Modifier slot {editSlot} → <b>{label}</b>{#if bindMsg}<span class="bindmsg"> · {bindMsg}</span>{:else if binding}<span class="bindmsg"> · binding…</span>{/if}
         {:else}
-          Editing modifier slot {slot} (effect {eid}) — right-click a control and choose Edit Modifier to assign it to that control.
+          Editing modifier slot {editSlot} (effect {eid}) — right-click a control and choose Edit Modifier to assign it to that control.
         {/if}
       </div>
     {/if}
 
+    {#if bindable && resolveError}
+      <div class="body">
+        <div class="empty">
+          <div class="empty-glyph">∿</div>
+          <div class="empty-title">{resolveError === 'no_free_slot' ? 'No free modifier slot' : 'Couldn\u2019t resolve modifier'}</div>
+          <div class="empty-sub">
+            {#if resolveError === 'no_free_slot'}
+              All {mm?.slotCount ?? 0} modifier slots are assigned. Clear an unused modifier on the device, then try “{label}” again.
+            {:else}
+              The modifier slot for “{label}” couldn’t be read. Check the device connection and try again.
+            {/if}
+          </div>
+        </div>
+      </div>
+    {:else if bindable && resolvedSlot == null}
+      <div class="body">
+        <div class="empty">
+          <div class="empty-glyph">∿</div>
+          <div class="empty-title">Resolving modifier…</div>
+          <div class="empty-sub">Finding the modifier slot assigned to “{label}”.</div>
+        </div>
+      </div>
+    {:else}
     <div class="body">
       <!-- SOURCE / CHANNEL / PC RESET -->
       <div class="section src-section">
@@ -464,6 +515,7 @@
           <div class="srcopt" class:sel={s.ordinal === m.source} class:none={s.ordinal === 0} onclick={() => pickSource(s.ordinal)}>{s.name}</div>
         {/each}
       </div>
+    {/if}
     {/if}
   {/if}
 </div>

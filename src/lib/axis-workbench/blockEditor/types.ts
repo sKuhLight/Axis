@@ -40,6 +40,7 @@ export interface AxisModifierTarget {
   targetEffectId: number | null;
   /** Target parameter id for the /mod/bind call, or null when not addressable. */
   targetParam: number | null;
-  /** Modifier slot (1-based) to edit. */
-  slot: number;
+  /** Modifier slot (1-based) to edit — optional; the editor resolves it from the target when the
+   *  device supports binding (gen-3), and only falls back to this for non-target editing. */
+  slot?: number;
 }

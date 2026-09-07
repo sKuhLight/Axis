@@ -373,6 +373,19 @@ export interface ModModel {
   bindingSupported?: boolean;
 }
 
+/** Result of GET /mod/slot — the resolved modifier slot for a (targetEffectId, targetParam) pair. */
+export interface ModSlotResult {
+  ok: boolean;
+  /** true = an existing modifier is bound to the target; false = a free slot was chosen for a new bind. */
+  matched?: boolean;
+  /** 1-based resolved slot (present when ok). */
+  slot?: number;
+  /** Device's total modifier slot count (present on the no-free-slot error). */
+  slotCount?: number;
+  /** Present when !ok — `'no_free_slot'` means every slot is assigned elsewhere. */
+  error?: string;
+}
+
 /** One row of the monitor (meter) param table. */
 export interface MonitorParam {
   family: string;

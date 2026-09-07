@@ -54,6 +54,12 @@ describe('Block editor modifier controller (§1 ownership + §3 target binding)'
     expect(c.snapshot.target).toBeNull();
   });
 
+  it('accepts a target without a slot (the editor resolves it from the device)', () => {
+    const c = new AxisBlockEditorModifierController();
+    c.targetParameter({ label: 'Gain', block: 'Amp 1', targetEffectId: 106, targetParam: 4 });
+    expect(c.snapshot.target).toEqual({ label: 'Gain', block: 'Amp 1', targetEffectId: 106, targetParam: 4 });
+  });
+
   it('notifies subscribers on registration and target changes', () => {
     const c = new AxisBlockEditorModifierController();
     const seen: (number | null)[] = [];
