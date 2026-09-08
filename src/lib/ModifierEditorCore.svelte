@@ -10,6 +10,7 @@
   // but only written when the model exposes their pid (flagged "pending decode" otherwise).
   import { forgefx } from './forgefx';
   import { editor } from './editor.svelte';
+  import { modifierBindings } from './modifierBindings.svelte';
   import type { ModModel } from './types';
 
   const mob = $derived(editor.isMobile);
@@ -296,7 +297,10 @@
       bindMsg = '';
       forgefx
         .modBind(editSlot, targetEffectId!, targetParam!, ordinal)
-        .then((r) => (bindMsg = r?.ok ? (ordinal ? 'assigned' : 'cleared') : `error: ${r?.error ?? 'failed'}`))
+        .then((r) => {
+          bindMsg = r?.ok ? (ordinal ? 'assigned' : 'cleared') : `error: ${r?.error ?? 'failed'}`;
+          if (r?.ok) modifierBindings.refresh();
+        })
         .catch((e) => (bindMsg = `error: ${e?.message ?? e}`))
         .finally(() => (binding = false));
     } else {

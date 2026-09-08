@@ -13,6 +13,8 @@
   //     (`graphKind`) — both tables live in `deviceWidgets.ts`, next to the sizes;
   //   • how a control binds to a live parameter, by the device-true `paramId` the layout carries.
   import { getEditorSurface } from './editorSurface';
+  import { editor as liveEditor } from './editor.svelte';
+  import { modifierBindings } from './modifierBindings.svelte';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
   import { widgetView, graphKind, dropdownFieldHeight } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
@@ -208,6 +210,11 @@
     return v;
   }
 
+  // ── modifier badges ──
+  // A control has a modifier attached when a modifier slot's source points at its (effectId, paramId).
+  const modded = (c: LayoutControl) =>
+    c.paramId != null && modifierBindings.has(editor.selected?.effectId, c.paramId);
+
   // ── value plumbing ──
   const valText = (p: NamedParam | undefined) => (p ? fmtControlValue(p) : '–');
   const setNorm = (p: NamedParam, n: number) => editor.setParam(p, Math.max(0, Math.min(1, n)));
@@ -357,6 +364,15 @@
     if (!searchPage) return;
     if (page && !matchesPage(page)) pageName = searchPage.name;
   });
+
+  // Re-enumerate active modifiers whenever the block, the preset or the device's binding capability
+  // changes — the badge set is device-global and cached, so this only costs one read per change.
+  $effect(() => {
+    void editor.selected?.effectId;
+    void liveEditor.preset?.number;
+    void liveEditor.caps?.modifiers?.bind;
+    modifierBindings.refresh();
+  });
 </script>
 
 {#snippet cell(pc: PlacedControl)}
@@ -364,10 +380,12 @@
   {@const view = viewOf(pc)}
   {@const p = named(c)}
   {@const e = enm(c)}
+  {@const hasMod = modded(c)}
   <div
     class="cell {view}"
     class:dim={query.length > 0 && !matches(c)}
     class:hit={query.length > 0 && matches(c)}
+    class:modded={hasMod}
     style:left="{dp(pc.x - mixerShift(pc))}px"
     style:top="{dp(pc.y)}px"
     style:width="{dp(pc.w)}px"
@@ -382,6 +400,7 @@
       {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
       {#if editing === p}
         <div class="knob-edit" style="width:{knobSize + 8}px">
+          {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
           <div class="knob-edit-box" style="height:{knobSize}px">
             <input
               class="vinput"
@@ -405,33 +424,36 @@
           valueText={valText(p)}
           color={accent}
           size={knobSize}
+          modded={hasMod}
+          onModifier={() => openMod(c)}
           onInput={(v) => setNorm(p, v)}
           onEdit={() => beginEdit(p)}
         />
       {/if}
-    {:else if view === 'fader' && p}
-      <div class="fader">
-        <div class="fv mono">{valText(p)}</div>
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="ftrack"
-          onpointerdown={(ev) => {
-            const el = ev.currentTarget as HTMLElement;
-            el.setPointerCapture(ev.pointerId);
-            const set = (y: number) => {
-              const r = el.getBoundingClientRect();
-              setNorm(p, 1 - (y - r.top) / r.height);
-            };
-            set(ev.clientY);
-            el.onpointermove = (m) => m.buttons && set(m.clientY);
-            el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null; };
-          }}
-        >
-          <div class="ffill" style:height="{(p.norm ?? 0) * 100}%"></div>
-          <div class="fhandle" style:bottom="calc({(p.norm ?? 0) * 100}% - 5px)"></div>
+      {:else if view === 'fader' && p}
+        <div class="fader">
+          {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
+          <div class="fv mono">{valText(p)}</div>
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="ftrack"
+            onpointerdown={(ev) => {
+              const el = ev.currentTarget as HTMLElement;
+              el.setPointerCapture(ev.pointerId);
+              const set = (y: number) => {
+                const r = el.getBoundingClientRect();
+                setNorm(p, 1 - (y - r.top) / r.height);
+              };
+              set(ev.clientY);
+              el.onpointermove = (m) => m.buttons && set(m.clientY);
+              el.onpointerup = () => { el.onpointermove = null; el.onpointerup = null; };
+            }}
+          >
+            <div class="ffill" style:height="{(p.norm ?? 0) * 100}%"></div>
+            <div class="fhandle" style:bottom="calc({(p.norm ?? 0) * 100}% - 5px)"></div>
+          </div>
+          <div class="fl">{c.label}</div>
         </div>
-        <div class="fl">{c.label}</div>
-      </div>
     {:else if view === 'dropdown' && e}
       <Dropdown
         label={c.label}
@@ -648,6 +670,7 @@
   .cell { position: absolute; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }
+  .cell.modded { overflow: visible; }
   .vinput {
     width: calc(100% - 6px);
     min-width: 0;
@@ -661,6 +684,7 @@
     outline: none;
   }
   .knob-edit {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -682,6 +706,23 @@
     white-space: pre-line;
     height: 1.1em;
   }
+  .mod-pill {
+    position: absolute;
+    top: -4px;
+    right: 0;
+    z-index: 1;
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid var(--amber-border);
+    border-radius: 4px;
+    background: var(--amber-tint);
+    color: var(--amber);
+    font: 600 8px/1.2 var(--font-mono);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent);
+  }
 
   /* Bridges the workbench ContextMenu's `--aw-*` tokens onto the app tokens so the menu stays styled
      in the monolith shell too (inside the workbench, `.aw-root` already defines these identically). */
@@ -700,7 +741,7 @@
     --aw-font-mono: var(--font-mono);
   }
 
-  .fader { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; width: 100%; }  .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
+  .fader { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; width: 100%; }  .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
   .ftrack {
     position: relative; flex: 1; width: 8px; border-radius: 4px;
     background: var(--track); cursor: pointer; touch-action: none;

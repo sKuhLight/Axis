@@ -8,6 +8,8 @@
     valueText = '',
     color = '#35c9d6',
     size = 56,
+    modded = false,
+    onModifier = () => {},
     disabled = false,
     onInput = (_v: number) => {},
     onEdit = () => {}
@@ -17,6 +19,8 @@
     valueText?: string;
     color?: string;
     size?: number;
+    modded?: boolean;
+    onModifier?: () => void;
     disabled?: boolean;
     onInput?: (v: number) => void;
     onEdit?: () => void;
@@ -56,6 +60,7 @@
 </script>
 
 <div class="knob" style="width:{size + 8}px">
+  {#if modded}<button class="mod-pill" type="button" aria-label="Edit modifier for {label}" onclick={onModifier}>MOD</button>{/if}
   <div
     class="box"
     class:disabled
@@ -82,7 +87,7 @@
 </div>
 
 <style>
-  .knob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .knob { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .box { position: relative; cursor: pointer; touch-action: none; user-select: none; }
   .box.disabled { opacity: 0.4; cursor: default; }
   .box svg { display: block; }
@@ -93,4 +98,5 @@
   /* The caption reserves exactly one line of the flex column: a wrapped second line paints BELOW it
      (overflow: visible) instead of growing the column and shoving the dial up off its row. */
   .lbl { font-size: 12px; font-weight: 600; color: var(--textdim); text-align: center; max-width: 76px; line-height: 1.1; white-space: pre-line; cursor: pointer; height: 1.1em; }
+  .mod-pill { position: absolute; top: -4px; right: 0; z-index: 1; padding: 1px 5px; border: 1px solid var(--amber-border); border-radius: 4px; background: var(--amber-tint); color: var(--amber); font: 600 8px/1.2 var(--font-mono); letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent); }
 </style>
