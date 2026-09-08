@@ -134,22 +134,27 @@ describe('deriveModulationGraphs', () => {
 describe('modulationValue', () => {
   it('renders every FM3 LFO type with its defining shape', () => {
     expect(modulationValue('SINE', 0.25)).toBeCloseTo(1);
-    expect(modulationValue('TRIANGLE', 0.25)).toBeCloseTo(-1);
+    expect(modulationValue('TRIANGLE', 0)).toBeCloseTo(-1);
+    expect(modulationValue('TRIANGLE', 0.5)).toBeCloseTo(1);
     expect(modulationValue('SQUARE', 0.25)).toBe(1);
     expect(modulationValue('SQUARE', 0.75)).toBe(-1);
     expect(modulationValue('SAW UP', 0.25)).toBeCloseTo(-0.5);
     expect(modulationValue('SAW DOWN', 0.25)).toBeCloseTo(0.5);
-    expect(modulationValue('LOG', 0.5)).toBeGreaterThan(0);
-    expect(modulationValue('EXP', 0.5)).toBeLessThan(0);
-    expect(modulationValue('TRAPEZOID', 0.25)).toBe(-1);
-    expect(modulationValue('TRAPEZOID', 0.75)).toBe(1);
-    expect(modulationValue('RANDOM', 0.1)).toBe(modulationValue('RANDOM', 0.11));
+    expect(modulationValue('LOG', 0.25)).toBeCloseTo(1);
+    expect(modulationValue('LOG', 0.75)).toBeCloseTo(-1);
+    expect(modulationValue('EXP', 0.25)).toBeCloseTo(1);
+    expect(modulationValue('EXP', 0.75)).toBeCloseTo(-1);
+    expect(modulationValue('TRAPEZOID', 0)).toBe(-1);
+    expect(modulationValue('TRAPEZOID', 0.5)).toBe(1);
+    expect(modulationValue('RANDOM', 0.1)).toBe(modulationValue('RANDOM', 0.49));
+    expect(modulationValue('RANDOM', 0.51)).toBe(modulationValue('RANDOM', 0.99));
+    expect(modulationValue('RANDOM', 0.49)).not.toBe(modulationValue('RANDOM', 0.51));
   });
 
   it('uses Shape to skew Triangle rise and fall times', () => {
     const shape = 0.242;
-    const trough = 0.25;
-    const peak = trough + shape;
+    const trough = 0;
+    const peak = shape;
 
     expect(modulationValue('TRIANGLE', trough, { shape })).toBeCloseTo(-1);
     expect(modulationValue('TRIANGLE', peak, { shape })).toBeCloseTo(1);
@@ -160,9 +165,10 @@ describe('modulationValue', () => {
   it('makes Astable curved, distinct from Triangle, and responsive to Shape', () => {
     expect(modulationValue('ASTABLE', 0.125, { shape: 0.242 })).not.toBeCloseTo(modulationValue('TRIANGLE', 0.125));
     expect(modulationValue('ASTABLE', 0.125, { shape: 0.1 })).not.toBeCloseTo(modulationValue('ASTABLE', 0.125, { shape: 0.9 }));
-    expect(modulationValue('ASTABLE', 0.25, { shape: 0.242 })).toBeCloseTo(-1);
-    expect(modulationValue('ASTABLE', 0.75, { shape: 0.242 })).toBeCloseTo(1);
-    expect(modulationValue('ASTABLE', 0.5, { shape: 0.242 })).not.toBeCloseTo(0);
+    expect(modulationValue('ASTABLE', 0, { shape: 0.242 })).toBeCloseTo(1);
+    expect(modulationValue('ASTABLE', 0.5, { shape: 0.242 })).toBeCloseTo(-1);
+    expect(modulationValue('ASTABLE', 0.75, { shape: 0.462 })).toBeGreaterThan(0);
+    expect(modulationValue('ASTABLE', 0.25, { shape: 0.958 })).toBeLessThan(0);
   });
 });
 

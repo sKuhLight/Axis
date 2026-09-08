@@ -13,9 +13,8 @@
   const typeValue = $derived(graph.type?.value);
   const typeOptions = $derived(graph.type?.options);
   const shapeName = $derived(typeOptions?.find((option) => option.value === typeValue)?.label.toLowerCase());
-  const phase = $derived((paramValue(graph.phase ?? {}) / 360) % 1);
   const amplitudeParam = $derived(graph.depth ?? graph.width);
-  const amplitude = $derived(amplitudeParam ? Math.max(0, Math.min(1, amplitudeParam.norm ?? 0)) * 0.84 : 0.72);
+  const amplitude = $derived(amplitudeParam ? Math.max(0, Math.min(1, amplitudeParam.norm ?? 0)) : 0.72);
   const center = $derived(graph.center ? ((graph.center.norm ?? 0.5) - 0.5) * 2 : 0);
   const duty = $derived(graph.duty ? Math.max(0.05, Math.min(0.95, graph.duty.norm ?? 0.5)) : 0.5);
   const shape = $derived(Math.max(0.01, Math.min(0.99, graph.shape?.norm ?? 0.5)));
@@ -44,7 +43,7 @@
     // Pre-roll settles the periodic low-pass before the visible sweep starts.
     for (let i = -samples; i <= end; i++) {
       const position = i / samples;
-      const t = (position + phase) % 1;
+      const t = position % 1;
       let v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
       if (quantize) v = (Math.round(((v + 1) / 2) * (quantize - 1)) / (quantize - 1)) * 2 - 1;
       filtered += alpha * (v - filtered);

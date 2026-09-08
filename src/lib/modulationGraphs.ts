@@ -50,34 +50,34 @@ export function modulationValue(type: string, t: number, options: ModulationWave
   const phase = ((t % 1) + 1) % 1;
   const name = type.trim().toLowerCase();
   const shape = Math.max(0.01, Math.min(0.99, options.shape ?? 0.5));
-  const trianglePhase = (phase + 0.75) % 1;
-  const triangle = trianglePhase < shape
-    ? -1 + (2 * trianglePhase) / shape
-    : 1 - (2 * (trianglePhase - shape)) / (1 - shape);
+  const sine = Math.sin(phase * Math.PI * 2);
+  const triangle = phase < shape
+    ? -1 + (2 * phase) / shape
+    : 1 - (2 * (phase - shape)) / (1 - shape);
 
-  if (name === 'sine') return Math.sin(phase * Math.PI * 2);
+  if (name === 'sine') return sine;
   if (name === 'triangle') return triangle;
   if (name === 'square' || name === 'pulse') return phase < Math.max(0.05, Math.min(0.95, options.duty ?? 0.5)) ? 1 : -1;
   if (name === 'saw up' || name === 'ramp up') return 2 * phase - 1;
   if (name === 'saw down' || name === 'ramp down') return 1 - 2 * phase;
-  if (name === 'log') return 2 * Math.log10(1 + 9 * phase) - 1;
-  if (name === 'exp') return (2 * (Math.pow(10, phase) - 1)) / 9 - 1;
+  const normalizedSine = (sine + 1) / 2;
+  if (name === 'log') return 2 * Math.log10(1 + 9 * normalizedSine) - 1;
+  if (name === 'exp') return (2 * (Math.pow(10, normalizedSine) - 1)) / 9 - 1;
   if (name === 'trapezoid') return Math.max(-1, Math.min(1, triangle * 2));
   if (name === 'random' || name === 'noise') {
-    const sample = Math.floor(phase * 8) + (options.randomSeed ?? 0) * 8;
+    const sample = Math.floor(phase * 2) + (options.randomSeed ?? 0) * 2;
     const x = Math.sin(sample * 12.9898 + 78.233) * 43758.5453;
     return (x - Math.floor(x)) * 2 - 1;
   }
   if (name === 'astable') {
     const curvature = shape * 2;
-    const rising = phase >= 0.25 && phase < 0.75;
-    const u = rising
-      ? (phase - 0.25) * 2
-      : phase < 0.25 ? (phase + 0.25) * 2 : (phase - 0.75) * 2;
-    const ramp = (1 - Math.exp(-curvature * u)) / (1 - Math.exp(-curvature));
-    return rising ? -1 + 2 * ramp : 1 - 2 * ramp;
+    const u = (phase % 0.5) * 2;
+    const ramp = Math.abs(curvature) < 0.001
+      ? u
+      : Math.expm1(-curvature * u) / Math.expm1(-curvature);
+    return phase < 0.5 ? 1 - 2 * ramp : -1 + 2 * ramp;
   }
-  return Math.sin(phase * Math.PI * 2);
+  return sine;
 }
 
 function graphTitle(rawWidget: string, row: LayoutControl[], pageName: string): string {
