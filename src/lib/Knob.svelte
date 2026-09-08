@@ -1,6 +1,7 @@
 <script lang="ts">
   // Live rotary knob — matches the design prototype (135° start, 270° sweep, cyan
-  // value arc, amber pointer). Vertical drag sets the value; double-click resets.
+  // value arc, amber pointer). Vertical drag sets the value; a clean tap (no drag)
+  // requests inline editing.
   let {
     value = 0, // normalized 0..1
     label = '',
@@ -9,7 +10,7 @@
     size = 56,
     disabled = false,
     onInput = (_v: number) => {},
-    onReset = () => {}
+    onEdit = () => {}
   }: {
     value?: number;
     label?: string;
@@ -18,7 +19,7 @@
     size?: number;
     disabled?: boolean;
     onInput?: (v: number) => void;
-    onReset?: () => void;
+    onEdit?: () => void;
   } = $props();
 
   const TRACK = 113.1; // 270° of r=24
@@ -27,12 +28,14 @@
   const angle = $derived(-135 + clamp(value) * 270);
 
   let dragging = false;
+  let moved = false;
   let startY = 0;
   let startVal = 0;
 
   function down(e: PointerEvent) {
-    if (disabled) return;
+    if (disabled || e.button !== 0) return;
     dragging = true;
+    moved = false;
     startY = e.clientY;
     startVal = value;
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -41,12 +44,14 @@
   function move(e: PointerEvent) {
     if (!dragging) return;
     const dy = startY - e.clientY; // up = increase
-    onInput(clamp(startVal + dy / 160));
+    if (Math.abs(dy) > 3) moved = true;
+    if (moved) onInput(clamp(startVal + dy / 160));
   }
   function up(e: PointerEvent) {
     if (!dragging) return;
     dragging = false;
     (e.target as Element).releasePointerCapture?.(e.pointerId);
+    if (!moved) onEdit();
   }
 </script>
 
@@ -58,7 +63,6 @@
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}
-    ondblclick={() => onReset()}
     role="slider"
     aria-valuenow={Math.round(clamp(value) * 100)}
     aria-valuemin="0"

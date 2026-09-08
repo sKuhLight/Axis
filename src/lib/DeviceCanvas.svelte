@@ -211,10 +211,38 @@
   // ── value plumbing ──
   const valText = (p: NamedParam | undefined) => (p ? fmtControlValue(p) : '–');
   const setNorm = (p: NamedParam, n: number) => editor.setParam(p, Math.max(0, Math.min(1, n)));
-  const resetToDefault = (p: NamedParam) => {
-    if (p.default == null) return;
-    editor.setParam(p, normFromValue(p.default, p));
+  // ── tap-to-type (knob) ──
+  // A clean tap turns the value into a small text input. The typed value is a plain number in the device's display
+  // units (e.g. 63 for %, 440 for Hz); `normFromValue` maps it back through the taper and clamps.
+  let editing = $state<NamedParam | null>(null);
+  let editText = $state('');
+  const plainValue = (p: NamedParam) => {
+    const v = p.min != null && p.max != null ? paramValue(p) : (p.value ?? 0);
+    return Number.isFinite(v) ? parseFloat(v.toFixed(3)).toString() : '';
   };
+  function beginEdit(p: NamedParam) {
+    editing = p;
+    editText = plainValue(p);
+  }
+  function commitEdit() {
+    const p = editing;
+    if (!p) return;
+    const v = parseFloat(editText);
+    if (Number.isFinite(v)) setNorm(p, normFromValue(v, p));
+    editing = null;
+  }
+  function cancelEdit() {
+    editing = null;
+  }
+  function focusAndSelect(node: HTMLInputElement) {
+    node.focus();
+    node.select();
+  }
+  $effect(() => {
+    void editor.selected?.effectId;
+    void pageIndex;
+    editing = null;
+  });
   function wheel(e: WheelEvent, p: NamedParam | undefined) {
     if (!p) return;
     e.preventDefault();
@@ -351,15 +379,36 @@
     role="presentation"
   >
     {#if view === 'knob' && p}
-      <Knob
-        value={p.norm ?? 0}
-        label={c.label}
-        valueText={valText(p)}
-        color={accent}
-        size={Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
-        onInput={(v) => setNorm(p, v)}
-        onReset={() => resetToDefault(p)}
-      />
+      {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
+      {#if editing === p}
+        <div class="knob-edit" style="width:{knobSize + 8}px">
+          <div class="knob-edit-box" style="height:{knobSize}px">
+            <input
+              class="vinput"
+              use:focusAndSelect
+              value={editText}
+              oninput={(e) => (editText = e.currentTarget.value)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') commitEdit();
+                else if (e.key === 'Escape') cancelEdit();
+              }}
+              onblur={commitEdit}
+              aria-label="{c.label} value"
+            />
+          </div>
+          <div class="vinput-lbl">{c.label}</div>
+        </div>
+      {:else}
+        <Knob
+          value={p.norm ?? 0}
+          label={c.label}
+          valueText={valText(p)}
+          color={accent}
+          size={knobSize}
+          onInput={(v) => setNorm(p, v)}
+          onEdit={() => beginEdit(p)}
+        />
+      {/if}
     {:else if view === 'fader' && p}
       <div class="fader">
         <div class="fv mono">{valText(p)}</div>
@@ -599,6 +648,40 @@
   .cell { position: absolute; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }
+  .vinput {
+    width: calc(100% - 6px);
+    min-width: 0;
+    padding: 2px 6px;
+    border: 1px solid var(--c);
+    border-radius: 6px;
+    background: var(--surface2);
+    color: var(--text);
+    font: 700 12px/1 var(--font-mono);
+    text-align: center;
+    outline: none;
+  }
+  .knob-edit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .knob-edit-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+  .vinput-lbl {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--textdim);
+    text-align: center;
+    max-width: 76px;
+    line-height: 1.1;
+    white-space: pre-line;
+    height: 1.1em;
+  }
 
   /* Bridges the workbench ContextMenu's `--aw-*` tokens onto the app tokens so the menu stays styled
      in the monolith shell too (inside the workbench, `.aw-root` already defines these identically). */
@@ -617,8 +700,7 @@
     --aw-font-mono: var(--font-mono);
   }
 
-  .fader { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; width: 100%; }
-  .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
+  .fader { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; width: 100%; }  .fv { font: 700 9px/1 var(--font-mono); color: var(--textfaint); }
   .ftrack {
     position: relative; flex: 1; width: 8px; border-radius: 4px;
     background: var(--track); cursor: pointer; touch-action: none;
