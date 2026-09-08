@@ -16,7 +16,10 @@
   };
   const accent = $derived(ACCENT[editor.virtual?.slug ?? ''] ?? '#35c9d6');
   // Virtual Controllers uses the same served layout and live params as a block editor.
-  const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
+  const modulationGraphs = $derived.by(() => {
+    for (const option of editor.enums) void option.value;
+    return deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
+  });
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
 </script>
 

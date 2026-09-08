@@ -44,6 +44,7 @@ export interface EditorSurface {
   externalDrop: { row: number; col: number; valid: boolean } | null;
   params: NamedParam[];
   enums: EnumParam[];
+  bpm: number;
 
   // ── responsive / mobile grid ──
   readonly isMobile: boolean;

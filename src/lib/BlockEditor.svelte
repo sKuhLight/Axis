@@ -99,7 +99,11 @@
       blockTypeName: editor.blockType?.name
     })
   );
-  const modulationGraphs = $derived(deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
+  const modulationGraphs = $derived.by(() => {
+    // Graph shape follows enum changes such as FLANGER_LFOTYPE, not just layout replacement.
+    for (const option of editor.enums) void option.value;
+    return deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
+  });
   const compressorGraphs = $derived(deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const cabAlignmentGraphs = $derived(deriveCabAlignmentGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));

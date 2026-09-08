@@ -1,29 +1,73 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { paramValue } from './format';
-  import { currentLabel, type ModulationGraphSpec } from './modulationGraphs';
+  import { currentLabel, modulationRate, modulationValue, type ModulationGraphSpec } from './modulationGraphs';
 
-  let { graph, accent = '#35c9d6' }: { graph: ModulationGraphSpec; accent?: string } = $props();
+  let { graph, accent = '#35c9d6', bpm = 120 }: { graph: ModulationGraphSpec; accent?: string; bpm?: number } = $props();
 
-  const W = 360;
-  const H = 130;
-  const shapeName = $derived((currentLabel(graph.type) ?? 'Sine').toLowerCase());
+  const W = 96;
+  const H = 96;
+  let elapsed = $state(0);
+  let reducedMotion = $state(false);
+  // Read the enum fields directly so this component follows the dropdown's optimistic value update.
+  const typeValue = $derived(graph.type?.value);
+  const typeOptions = $derived(graph.type?.options);
+  const shapeName = $derived(typeOptions?.find((option) => option.value === typeValue)?.label.toLowerCase());
   const phase = $derived((paramValue(graph.phase ?? {}) / 360) % 1);
-  const amplitude = $derived(graph.depth ? 0.14 + (graph.depth.norm ?? 0) * 0.7 : 0.72);
+  const amplitudeParam = $derived(graph.depth ?? graph.width);
+  const amplitude = $derived(amplitudeParam ? Math.max(0, Math.min(1, amplitudeParam.norm ?? 0)) * 0.84 : 0.72);
+  const center = $derived(graph.center ? ((graph.center.norm ?? 0.5) - 0.5) * 2 : 0);
   const duty = $derived(graph.duty ? Math.max(0.05, Math.min(0.95, graph.duty.norm ?? 0.5)) : 0.5);
+  const shape = $derived(Math.max(0.01, Math.min(0.99, graph.shape?.norm ?? 0.5)));
+  const freeRate = $derived(graph.rate ? paramValue(graph.rate) : 0.5);
+  const rate = $derived(Math.max(0.01, modulationRate(Number.isFinite(freeRate) ? freeRate : 0.5, currentLabel(graph.tempo), bpm)));
+  const running = $derived(currentLabel(graph.run)?.trim().toLowerCase() !== 'stop');
+  const highCut = $derived(graph.highCut ? paramValue(graph.highCut) : Infinity);
   const curve = $derived.by(() => {
+    if (!shapeName) return '';
     const points: string[] = [];
-    for (let i = 0; i <= 96; i++) {
-      const x = (i / 96) * W;
-      const t = (i / 96 + phase) % 1;
-      let v: number;
-      if (/square|pulse/.test(shapeName)) v = t < duty ? 1 : -1;
-      else if (/triangle/.test(shapeName)) v = 1 - 4 * Math.abs(t - 0.5);
-      else if (/saw|ramp/.test(shapeName)) v = 1 - 2 * t;
-      else if (/random|noise/.test(shapeName)) v = Math.sin(i * 13.17) * 0.7 + Math.sin(i * 3.91) * 0.3;
-      else v = Math.sin(t * Math.PI * 2);
-      points.push(`${x.toFixed(1)},${(H / 2 - v * amplitude * H * 0.42).toFixed(1)}`);
+    // The hardware graph is an oscilloscope: the trace remains until the sweep restarts.
+    const scan = reducedMotion || !running ? 1 : (elapsed * rate) % 1;
+    const cycle = running && !reducedMotion ? Math.floor(elapsed * rate) : 0;
+    const samples = 96;
+    const end = Math.floor(scan * samples);
+    const alpha = Number.isFinite(highCut)
+      ? 1 - Math.exp((-2 * Math.PI * Math.max(0.01, highCut)) / (rate * samples))
+      : 1;
+    let filtered = 0;
+    // Pre-roll settles the periodic low-pass before the visible sweep starts.
+    for (let i = -samples; i <= end; i++) {
+      const position = i / samples;
+      const t = (position + phase) % 1;
+      const v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
+      filtered += alpha * (v - filtered);
+      if (i < 0) continue;
+      const x = position * W;
+      const output = Math.max(-1, Math.min(1, center + filtered * amplitude));
+      points.push(`${x.toFixed(1)},${(H / 2 - output * H * 0.42).toFixed(1)}`);
     }
     return points.join(' ');
+  });
+
+  onMount(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    const tick = (now: number) => {
+      frame = 0;
+      elapsed = now / 1000;
+      if (!reducedMotion) frame = requestAnimationFrame(tick);
+    };
+    const updateMotion = () => {
+      reducedMotion = media.matches;
+      if (!reducedMotion && !frame) frame = requestAnimationFrame(tick);
+    };
+    updateMotion();
+    media.addEventListener('change', updateMotion);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      media.removeEventListener('change', updateMotion);
+    };
   });
 </script>
 
@@ -37,6 +81,6 @@
 </div>
 
 <style>
-  .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
+  .wrap { position: relative; width: min(100%, 83px); aspect-ratio: 1; margin: 0 auto; }
   svg { display: block; width: 100%; height: 100%; }
 </style>

@@ -27,6 +27,8 @@ const SHUNT_BASE = 1024; // gen-3 routing/shunt base effect id (matches editor.s
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
 class ConvertEditor {
+  bpm = 120;
+
   constructor() {
     // Grid-target commit hook: fold the in-memory routing/position edits back into the committed state so
     // Save-to-library / Apply-to-device reflect them (slot/chain targets pass through unchanged).

@@ -431,7 +431,7 @@
           {#if g}<EQGraph bands={g.bands} gainRange={g.gainRange} {accent} onSet={(pp, n) => editor.setParam(pp, n)} />{/if}
         {:else if kind === 'mod'}
           {@const g = slotted(modulationGraphs, pageIndex, slot)}
-          {#if g}<ModulationGraph graph={g} {accent} />{/if}
+          {#if g}<ModulationGraph graph={g} {accent} bpm={editor.bpm} />{/if}
         {:else if kind === 'comp'}
           {@const g = slotted(compressorGraphs, pageIndex, slot)}
           {#if g}<CompressorGraph graph={g} {accent} live={mons.find((m) => m.role === 'gainReduction') ?? null} />{/if}
