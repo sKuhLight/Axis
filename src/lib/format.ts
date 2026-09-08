@@ -58,14 +58,14 @@ export function withUnit(num: string, unit?: string): string {
 }
 
 /** Precise, unit-bearing value for a continuously adjustable control. */
-export function fmtControlValue(p: DispRange): string {
+export function fmtControlValue(p: DispRange, fineDecimals = 2): string {
   const value = paramValue(p);
   if (!Number.isFinite(value)) return '--';
   const raw = Math.abs(value) >= 100
     ? value.toFixed(0)
     : Math.abs(value) >= 10
       ? value.toFixed(1)
-      : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+      : value.toFixed(fineDecimals).replace(/0+$/, '').replace(/\.$/, '');
   return withUnit(raw, p.unit);
 }
 

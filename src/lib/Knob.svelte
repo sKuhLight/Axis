@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { dampedModifierSource, lfoModifierSourceValue, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
 
   // Live rotary knob — matches the design prototype (135° start, 270° sweep, cyan
   // value arc, amber pointer). Vertical drag sets the value; a clean tap (no drag)
@@ -14,6 +15,9 @@
     onModifier = () => {},
     disabled = false,
     freeMotion = false,
+    visualization = null,
+    bpm = 120,
+    formatValue = null,
     onInput = (_v: number) => {},
     onEdit = () => {}
   }: {
@@ -27,6 +31,9 @@
     disabled?: boolean;
     /** Keep the pointer under the user's hand while a discrete parent value changes at thresholds. */
     freeMotion?: boolean;
+    visualization?: LfoModifierVisualization | null;
+    bpm?: number;
+    formatValue?: ((value: number) => string) | null;
     onInput?: (v: number) => void;
     onEdit?: () => void;
   } = $props();
@@ -40,7 +47,14 @@
   let startVal = 0;
   let visualValue = $state(untrack(() => value));
   let lastExternalValue = $state(untrack(() => value));
-  const shownValue = $derived(freeMotion ? visualValue : value);
+  let reducedMotion = $state(false);
+  let frame = 0;
+  let lastNow = 0;
+  let smoothedSource: number | null = null;
+  let animatedValue = $state<number | null>(null);
+  const editableValue = $derived(freeMotion ? visualValue : value);
+  const shownValue = $derived(dragging ? editableValue : (animatedValue ?? editableValue));
+  const shownValueText = $derived(animatedValue != null && !dragging && formatValue ? formatValue(shownValue) : valueText);
   const dash = $derived(`${clamp(shownValue) * TRACK} 300`);
   const angle = $derived(-135 + clamp(shownValue) * 270);
 
@@ -55,7 +69,7 @@
     dragging = true;
     moved = false;
     startY = e.clientY;
-    startVal = shownValue;
+    startVal = editableValue;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     e.preventDefault();
   }
@@ -75,6 +89,50 @@
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     if (!moved) onEdit();
   }
+
+  const tick = (now: number) => {
+    frame = 0;
+    if (visualization && !reducedMotion) {
+      const source = lfoModifierSourceValue(visualization, now / 1000, bpm);
+      if (source == null) {
+        animatedValue = null;
+        smoothedSource = null;
+      } else {
+        const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
+        const previous = smoothedSource ?? 0.5;
+        smoothedSource = dampedModifierSource(previous, source, dt, visualization.attackSeconds, visualization.releaseSeconds);
+        animatedValue = mapModifierSource(smoothedSource, visualization.mapping);
+      }
+      lastNow = now;
+      frame = requestAnimationFrame(tick);
+    }
+  };
+
+  $effect(() => {
+    void visualization;
+    smoothedSource = null;
+    animatedValue = null;
+    lastNow = 0;
+    if (visualization && !reducedMotion && !frame) frame = requestAnimationFrame(tick);
+    if ((!visualization || reducedMotion) && frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+  });
+
+  onMount(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotion = () => {
+      reducedMotion = media.matches;
+      if (reducedMotion) animatedValue = null;
+    };
+    updateMotion();
+    media.addEventListener('change', updateMotion);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      media.removeEventListener('change', updateMotion);
+    };
+  });
 </script>
 
 <div class="knob" style="width:{size + 8}px">
@@ -87,7 +145,7 @@
     onpointermove={move}
     onpointerup={up}
     role="slider"
-    aria-valuenow={Math.round(clamp(shownValue) * 100)}
+    aria-valuenow={Math.round(clamp(editableValue) * 100)}
     aria-valuemin="0"
     aria-valuemax="100"
     aria-label={label}
@@ -99,7 +157,7 @@
       <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
       <g transform="rotate({angle} 32 32)"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623" /></g>
     </svg>
-    <div class="val mono">{valueText}</div>
+    <div class="val mono">{shownValueText}</div>
   </div>
   <div class="lbl">{label}</div>
 </div>

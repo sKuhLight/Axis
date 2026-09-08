@@ -215,6 +215,8 @@
   // A control has a modifier attached when a modifier slot's source points at its (effectId, paramId).
   const modded = (c: LayoutControl) =>
     c.paramId != null && modifierBindings.has(editor.selected?.effectId, c.paramId);
+  const modVisualization = (c: LayoutControl) =>
+    c.paramId == null ? null : modifierBindings.visualization(editor.selected?.effectId, c.paramId);
 
   // ── value plumbing ──
   const valText = (p: NamedParam | undefined) => (p ? fmtControlValue(p) : '–');
@@ -390,6 +392,7 @@
   {@const p = named(c)}
   {@const e = enm(c)}
   {@const hasMod = modded(c)}
+  {@const visualization = modVisualization(c)}
   <div
     class="cell {view}"
     class:dim={query.length > 0 && !matches(c)}
@@ -434,6 +437,9 @@
           color={accent}
           size={knobSize}
           modded={hasMod}
+          visualization={p ? visualization : null}
+          bpm={liveEditor.bpm}
+          formatValue={p ? (norm) => fmtControlValue({ ...p, norm }, 1) : null}
           onModifier={() => openMod(c)}
           freeMotion={!!e}
           onInput={(v) => p ? setNorm(p, v) : setEnumNorm(e!, v)}

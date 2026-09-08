@@ -268,7 +268,8 @@ export const forgefx = {
     }),
 
   // ── live block parameters (addressed by the placed instance's effect id) ──
-  blockParams: (eid: number) => req<BlockParams>(`/preset/blocks/${eid}/params`),
+  blockParams: (eid: number, options: { observe?: boolean } = {}) =>
+    req<BlockParams>(`/preset/blocks/${eid}/params${options.observe === false ? '?observe=0' : ''}`),
   /** Set a parameter. continuous=true (knob, value 0..1) by default; false sends an enum ordinal. */
   setParam: (eid: number, paramId: number, value: number, continuous = true) =>
     req<{ ok: boolean }>(`/preset/blocks/${eid}/params/${paramId}`, {

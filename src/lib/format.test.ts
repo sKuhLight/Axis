@@ -91,6 +91,10 @@ describe('fmtControlValue', () => {
     expect(fmtControlValue(at(2.82, '%'))).toBe('2.82%');
   });
 
+  it('can stabilize animated readouts at one decimal', () => {
+    expect(fmtControlValue(at(2.82, '%'), 1)).toBe('2.8%');
+  });
+
   it('reduces precision as values grow while preserving units', () => {
     expect(fmtControlValue(at(12.34, 'dB'))).toBe('12.3 dB');
     expect(fmtControlValue(at(123.4, 'Hz'))).toBe('123 Hz');

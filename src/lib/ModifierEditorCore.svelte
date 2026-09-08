@@ -12,6 +12,7 @@
   import { editor } from './editor.svelte';
   import { modifierBindings } from './modifierBindings.svelte';
   import type { ModModel } from './types';
+  import { onDestroy } from 'svelte';
 
   const mob = $derived(editor.isMobile);
 
@@ -181,12 +182,27 @@
   const srcOn = $derived(m.source > 0);
 
   // ── write any modifier field to the device, encoded by its kind (from the model) ──
+  let lastWrite = Promise.resolve();
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  function refreshBindingsAfterWrite() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      void lastWrite.then(() => modifierBindings.refresh());
+    }, 120);
+  }
+  onDestroy(() => {
+    if (refreshTimer) clearTimeout(refreshTimer);
+  });
   function writeField(key: string, ui: number) {
     const f = mm?.fields?.[key];
     if (!f) return; // model not loaded → keep it local-only
-    if (f.kind === 'ordinal' || f.kind === 'ref') forgefx.setParam(eid, f.pid, Math.round(ui), false).catch(() => {});
-    else if (f.kind === 'bipolar') forgefx.setParam(eid, f.pid, (clamp(ui) - 50) / 50, false).catch(() => {});
-    else forgefx.setParam(eid, f.pid, clamp(ui) / 100, true).catch(() => {});
+    const write = f.kind === 'ordinal' || f.kind === 'ref'
+      ? forgefx.setParam(eid, f.pid, Math.round(ui), false)
+      : f.kind === 'bipolar'
+        ? forgefx.setParam(eid, f.pid, (clamp(ui) - 50) / 50, false)
+        : forgefx.setParam(eid, f.pid, clamp(ui) / 100, true);
+    lastWrite = write.then(() => undefined).catch(() => undefined);
   }
 
   // ── knob drag (vertical), mirrors the design's onModKnobDown ──
@@ -207,6 +223,7 @@
     if (!drag) return;
     (e.target as Element).releasePointerCapture?.(e.pointerId);
     drag = null;
+    refreshBindingsAfterWrite();
   }
   function knobWheel(e: WheelEvent, key: keyof Vals) {
     if (e.deltaY === 0) return;
@@ -214,6 +231,7 @@
     const nv = clamp((m[key] as number) + e.deltaY / 16);
     m = { ...m, [key]: nv };
     writeField(key as string, nv);
+    refreshBindingsAfterWrite();
   }
 
   // ── knob formatting (ported from the design's modKnobFmt) ──
