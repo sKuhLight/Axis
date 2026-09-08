@@ -10,9 +10,10 @@
   // but only written when the model exposes their pid (flagged "pending decode" otherwise).
   import { forgefx } from './forgefx';
   import { editor } from './editor.svelte';
+  import { dampedModifierSource, lfoModifierSourceValue, lfoSourceFromName, mapModifierResponse, type ModifierMapping } from './lfoModifier';
   import { modifierBindings } from './modifierBindings.svelte';
   import type { ModModel } from './types';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   const mob = $derived(editor.isMobile);
 
@@ -279,21 +280,24 @@
     writeField(key as string, next ? 1 : 0);
   }
 
+  const responseMapping = $derived<ModifierMapping>({
+    min: m.min / 100,
+    max: m.max / 100,
+    start: m.start / 100,
+    mid: m.mid / 100,
+    end: m.end / 100,
+    slope: m.slope / 100,
+    scale: m.scale / 50,
+    offset: (m.offset - 50) / 50
+  });
+
   // ── response curve path (ported from the design's modCurve) ──
   const curve = $derived.by(() => {
-    const s = m.start / 100,
-      mid = m.mid / 100,
-      e = m.end / 100,
-      scaleF = m.scale / 50,
-      off = (m.offset - 50) / 50,
-      slope = (m.slope - 50) / 50;
     let cur = '',
       fill = 'M0 100';
     for (let i = 0; i <= 50; i++) {
       const x = i / 50;
-      const base = x < 0.5 ? s + (mid - s) * (x * 2) : mid + (e - mid) * ((x - 0.5) * 2);
-      let y = (base - 0.5) * scaleF + 0.5 + off * 0.4 + slope * (x - 0.5) * 0.6;
-      y = Math.max(0, Math.min(1, y));
+      const y = mapModifierResponse(x, responseMapping);
       const px = (x * 100).toFixed(1),
         py = ((1 - y) * 100).toFixed(1);
       cur += (i ? ' L' : 'M') + px + ' ' + py;
@@ -301,6 +305,62 @@
     }
     fill += ' L100 100 Z';
     return { cur, fill };
+  });
+
+  const selectedLfoSource = $derived(lfoSourceFromName(SOURCES.find((source) => source.ordinal === m.source)?.name));
+  const visualization = $derived.by(() => {
+    if (!active || !selectedLfoSource) return null;
+    const cached = modifierBindings.visualization(targetEffectId, targetParam);
+    return cached?.source.number === selectedLfoSource.number && cached.source.output === selectedLfoSource.output ? cached : null;
+  });
+  let reducedMotion = $state(false);
+  let marker = $state<{ x: number; y: number } | null>(null);
+  let frame = 0;
+  let lastNow = 0;
+  let smoothedSource: number | null = null;
+
+  const tickResponse = (now: number) => {
+    frame = 0;
+    if (visualization && !reducedMotion) {
+      const source = lfoModifierSourceValue(visualization, now / 1000, editor.bpm);
+      if (source == null) {
+        marker = null;
+        smoothedSource = null;
+      } else {
+        const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
+        const previous = smoothedSource ?? 0.5;
+        smoothedSource = dampedModifierSource(previous, source, dt, visualization.attackSeconds, visualization.releaseSeconds);
+        marker = { x: smoothedSource, y: mapModifierResponse(smoothedSource, responseMapping) };
+      }
+      lastNow = now;
+      frame = requestAnimationFrame(tickResponse);
+    }
+  };
+
+  $effect(() => {
+    void visualization;
+    smoothedSource = null;
+    marker = null;
+    lastNow = 0;
+    if (visualization && !reducedMotion && !frame) frame = requestAnimationFrame(tickResponse);
+    if ((!visualization || reducedMotion) && frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+  });
+
+  onMount(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotion = () => {
+      reducedMotion = media.matches;
+      if (reducedMotion) marker = null;
+    };
+    updateMotion();
+    media.addEventListener('change', updateMotion);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      media.removeEventListener('change', updateMotion);
+    };
   });
 
   // Picking a source binds this modifier slot to the control it was opened for.
@@ -466,6 +526,9 @@
             <path d={curve.fill} fill="color-mix(in srgb, var(--accent) 10%, transparent)" stroke="none" />
             <path d={curve.cur} fill="none" style="stroke:var(--accent)" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
           </svg>
+          {#if marker}
+            <span class="response-marker" style={`left:${marker.x * 100}%;top:${(1 - marker.y) * 100}%`}></span>
+          {/if}
           <div class="axis x">SOURCE →</div>
           <div class="axis y">↑ VALUE</div>
         </div>
@@ -864,6 +927,16 @@
     width: 100%;
     height: 100%;
     touch-action: none;
+  }
+  .response-marker {
+    position: absolute;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--amber);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
   }
   .axis {
     position: absolute;

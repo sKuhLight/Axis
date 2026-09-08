@@ -33,7 +33,7 @@ export function lfoSourceFromName(name: string | undefined): LfoSource | null {
   return { number: Number(match[1]) as 1 | 2, output: match[2]!.toUpperCase() as 'A' | 'B' };
 }
 
-export function mapModifierSource(source: number, mapping: ModifierMapping): number {
+export function mapModifierResponse(source: number, mapping: ModifierMapping): number {
   const x = clamp(source);
   const base = x < 0.5
     ? mapping.start + (mapping.mid - mapping.start) * (x * 2)
@@ -42,7 +42,11 @@ export function mapModifierSource(source: number, mapping: ModifierMapping): num
     + 0.5
     + mapping.offset * 0.4
     + (mapping.slope - 0.5) * 1.2 * (x - 0.5);
-  return clamp(mapping.min + clamp(shaped) * (mapping.max - mapping.min));
+  return clamp(shaped);
+}
+
+export function mapModifierSource(source: number, mapping: ModifierMapping): number {
+  return clamp(mapping.min + mapModifierResponse(source, mapping) * (mapping.max - mapping.min));
 }
 
 export function dampedModifierSource(previous: number, next: number, elapsedSeconds: number, attackSeconds: number, releaseSeconds: number): number {

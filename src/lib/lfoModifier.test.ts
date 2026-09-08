@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dampedModifierSource, lfoModifierValue, lfoSourceFromName, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
+import { dampedModifierSource, lfoModifierValue, lfoSourceFromName, mapModifierResponse, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
 import type { EnumParam, NamedParam } from './types';
 
 const named = (norm: number, min = 0, max = 1): NamedParam => ({ id: 1, name: '', norm, value: min + norm * (max - min), min, max });
@@ -24,6 +24,12 @@ describe('LFO modifier visualization', () => {
     expect(mapModifierSource(0.5, { ...base.mapping, min: 0.2, max: 0.8 })).toBeCloseTo(0.5);
     expect(mapModifierSource(1, { ...base.mapping, min: 0.2, max: 0.8 })).toBeCloseTo(0.8);
     expect(mapModifierSource(0, { ...base.mapping, min: 0.8, max: 0.2 })).toBeCloseTo(0.8);
+  });
+
+  it('keeps response graph coordinates independent of the parameter range', () => {
+    const mapping = { ...base.mapping, min: 0.3, max: 0.6, mid: 0.8 };
+    expect(mapModifierResponse(0.5, mapping)).toBeCloseTo(0.8);
+    expect(mapModifierSource(0.5, mapping)).toBeCloseTo(0.54);
   });
 
   it('samples the waveform and applies Output B phase', () => {
