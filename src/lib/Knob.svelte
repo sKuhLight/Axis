@@ -3,8 +3,11 @@
   import { dampedModifierSource, lfoModifierSourceValue, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
 
   // Live rotary knob — matches the design prototype (135° start, 270° sweep, cyan
-  // value arc, amber pointer). Vertical drag sets the value; a clean tap (no drag)
-  // requests inline editing.
+  // value arc). The current position is a short radial tick in the ring colour,
+  // sitting in the moat between the face disc and the ring — deliberately NOT
+  // amber, so it reads as "this knob's value" rather than "this knob is modulated"
+  // (that is the MOD badge's job). Vertical drag sets the value; a clean tap (no
+  // drag) requests inline editing.
   let {
     value = 0, // normalized 0..1
     label = '',
@@ -56,11 +59,18 @@
   const shownValue = $derived(dragging ? editableValue : (animatedValue ?? editableValue));
   const shownValueText = $derived(animatedValue != null && !dragging && formatValue ? formatValue(shownValue) : valueText);
   // The MOD marker sits on the dial face. The face spans r=15 of a 64-unit viewBox, so it is
-  // ~0.47x the dial wide; the 7px "MOD" badge measures ~21px, which stops fitting below ~51px.
+  // ~0.47x the dial wide; the 8.5px "MOD" badge measures ~25px, which stops fitting below ~58px.
   // Under that the badge degrades to a dot rather than spilling over the face.
-  const MOD_PILL_MIN = 51;
+  const MOD_PILL_MIN = 58;
   const modAsDot = $derived(size < MOD_PILL_MIN);
-  const dash = $derived(`${clamp(shownValue) * TRACK} 300`);
+  // Butt caps on both the track and the value arc: a round cap overhangs the path
+  // end by half the stroke width, which either pushed the arc past the position
+  // tick or, once pulled back to compensate, left a gap at 100%. A flat radial cut
+  // ends exactly at the value and mirrors the tick's own shape. The arc is simply
+  // not drawn at the minimum.
+  const arcLen = $derived(clamp(shownValue) * TRACK);
+  const showArc = $derived(arcLen > 0.5);
+  const dash = $derived(`${arcLen} 300`);
   const angle = $derived(-135 + clamp(shownValue) * 270);
 
   $effect(() => {
@@ -157,10 +167,14 @@
     tabindex="0"
   >
     <svg width={size} height={size} viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="round" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
-      <circle cx="32" cy="32" r="24" fill="none" stroke={color} stroke-width="5" stroke-linecap="round" stroke-dasharray={dash} transform="rotate(135 32 32)" />
+      <circle cx="32" cy="32" r="24" fill="none" style="stroke:var(--border2)" stroke-width="5" stroke-linecap="butt" stroke-dasharray="113.1 300" transform="rotate(135 32 32)" />
+      {#if showArc}
+        <circle cx="32" cy="32" r="24" fill="none" stroke={color} stroke-width="5" stroke-linecap="butt" stroke-dasharray={dash} transform="rotate(135 32 32)" />
+      {/if}
       <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
-      <g transform="rotate({angle} 32 32)"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623" /></g>
+      <!-- x offset by half the 3-wide stroke so the tick's leading (clockwise) edge, not its
+           centre, sits on the value ray — flush with the arc's flat end. -->
+      <g transform="rotate({angle} 32 32)"><line x1="30.5" y1="16.5" x2="30.5" y2="9.5" stroke={color} stroke-width="3" stroke-linecap="round" /></g>
     </svg>
     {#if modded}
       <button
@@ -201,9 +215,9 @@
      therefore the LAST element in the column — nothing may be placed under it. */
   .lbl { font-size: 12px; font-weight: 600; color: var(--textdim); text-align: center; max-width: 76px; line-height: 1.1; white-space: pre-line; cursor: pointer; height: 1.1em; }
   /* MOD sits centred on the dial FACE. The face is empty now that the readout moved to its chip,
-     and the pointer orbits at 11.5 of 32 viewBox units from centre — outside the pill's corners at
-     every angle — so the badge never collides with it. */
-  .mod-pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; padding: 0 3px; border: 1px solid var(--amber-border); border-radius: 3px; background: var(--amber-tint); color: var(--amber); font: 600 7px/1.5 var(--font-mono); letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; }
+     and the position tick lives at r=15.5–22.5 of the 32-unit viewBox — well outside the pill's
+     corners at every angle — so the badge never collides with it. */
+  .mod-pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; padding: 0 3px; border: 1px solid var(--amber-border); border-radius: 3px; background: var(--amber-tint); color: var(--amber); font: 600 8.5px/1.5 var(--font-mono); letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; }
   /* The face is r=15 of a 64 viewBox, so its usable width is ~0.47x the dial. Below MOD_PILL_MIN
      the word no longer fits and the badge becomes a dot — modifier state stays visible at every
      size, which is exactly where a dense board needs it most. */
