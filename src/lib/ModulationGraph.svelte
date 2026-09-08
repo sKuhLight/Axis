@@ -22,6 +22,12 @@
   const freeRate = $derived(graph.rate ? paramValue(graph.rate) : 0.5);
   const rate = $derived(Math.max(0.01, modulationRate(Number.isFinite(freeRate) ? freeRate : 0.5, currentLabel(graph.tempo), bpm)));
   const running = $derived(currentLabel(graph.run)?.trim().toLowerCase() !== 'stop');
+  const quantize = $derived.by(() => {
+    const label = currentLabel(graph.quantize)?.trim();
+    if (!label || label.toUpperCase() === 'OFF') return 0;
+    const levels = Number(label);
+    return Number.isFinite(levels) && levels >= 2 ? levels : 0;
+  });
   const highCut = $derived(graph.highCut ? paramValue(graph.highCut) : Infinity);
   const curve = $derived.by(() => {
     if (!shapeName) return '';
@@ -39,7 +45,8 @@
     for (let i = -samples; i <= end; i++) {
       const position = i / samples;
       const t = (position + phase) % 1;
-      const v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
+      let v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
+      if (quantize) v = (Math.round(((v + 1) / 2) * (quantize - 1)) / (quantize - 1)) * 2 - 1;
       filtered += alpha * (v - filtered);
       if (i < 0) continue;
       const x = position * W;
