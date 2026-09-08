@@ -19,6 +19,7 @@
   import { widgetView, graphKind, dropdownFieldHeight } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
   import { fmtControlValue, normFromValue, paramValue } from './format';
+  import { enumKnobLabel, enumKnobNorm, enumKnobValueAt } from './enumKnob';
   import Knob from './Knob.svelte';
   import Toggle from './Toggle.svelte';
   import Dropdown from './Dropdown.svelte';
@@ -218,6 +219,10 @@
   // ── value plumbing ──
   const valText = (p: NamedParam | undefined) => (p ? fmtControlValue(p) : '–');
   const setNorm = (p: NamedParam, n: number) => editor.setParam(p, Math.max(0, Math.min(1, n)));
+  function setEnumNorm(e: EnumParam, norm: number) {
+    const value = enumKnobValueAt(e, norm);
+    if (value != null && value !== e.value) editor.setEnum(e, value);
+  }
   // ── tap-to-type (knob) ──
   // A clean tap turns the value into a small text input. The typed value is a plain number in the device's display
   // units (e.g. 63 for %, 440 for Hz); `normFromValue` maps it back through the taper and clamps.
@@ -250,13 +255,17 @@
     void pageIndex;
     editing = null;
   });
-  function wheel(e: WheelEvent, p: NamedParam | undefined) {
-    if (!p) return;
+  function wheel(e: WheelEvent, p: NamedParam | undefined, en: EnumParam | undefined) {
+    if (!p && !en) return;
     e.preventDefault();
     const dy = e.deltaY !== 0 ? e.deltaY : e.deltaX;
     if (dy === 0) return;
+    if (en) {
+      bumpEnum(en, dy < 0 ? -1 : 1);
+      return;
+    }
     const step = e.shiftKey ? 0.002 : 0.02;
-    setNorm(p, (p.norm ?? 0) + (dy < 0 ? -step : step));
+    setNorm(p!, (p!.norm ?? 0) + (dy < 0 ? -step : step));
   }
   function bumpEnum(e: EnumParam, dir: number) {
     const i = e.options.findIndex((o) => o.value === e.value);
@@ -392,13 +401,13 @@
     style:height="{dp(pc.h)}px"
     onmouseenter={() => showHelp(c)}
     onmouseleave={clearHelp}
-    onwheel={(ev) => (view === 'knob' || view === 'fader' ? wheel(ev, p) : undefined)}
+    onwheel={(ev) => (view === 'knob' || view === 'fader' ? wheel(ev, p, e) : undefined)}
     oncontextmenu={(ev) => openMenu(pc, ev)}
     role="presentation"
   >
-    {#if view === 'knob' && p}
+    {#if view === 'knob' && (p || e)}
       {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
-      {#if editing === p}
+      {#if p && editing === p}
         <div class="knob-edit" style="width:{knobSize + 8}px">
           {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
           <div class="knob-edit-box" style="height:{knobSize}px">
@@ -419,15 +428,16 @@
         </div>
       {:else}
         <Knob
-          value={p.norm ?? 0}
+          value={p ? (p.norm ?? 0) : enumKnobNorm(e!)}
           label={c.label}
-          valueText={valText(p)}
+          valueText={p ? valText(p) : enumKnobLabel(e!)}
           color={accent}
           size={knobSize}
           modded={hasMod}
           onModifier={() => openMod(c)}
-          onInput={(v) => setNorm(p, v)}
-          onEdit={() => beginEdit(p)}
+          freeMotion={!!e}
+          onInput={(v) => p ? setNorm(p, v) : setEnumNorm(e!, v)}
+          onEdit={() => { if (p) beginEdit(p); }}
         />
       {/if}
       {:else if view === 'fader' && p}

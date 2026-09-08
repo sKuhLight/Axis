@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   // Live rotary knob — matches the design prototype (135° start, 270° sweep, cyan
   // value arc, amber pointer). Vertical drag sets the value; a clean tap (no drag)
   // requests inline editing.
@@ -11,6 +13,7 @@
     modded = false,
     onModifier = () => {},
     disabled = false,
+    freeMotion = false,
     onInput = (_v: number) => {},
     onEdit = () => {}
   }: {
@@ -22,26 +25,37 @@
     modded?: boolean;
     onModifier?: () => void;
     disabled?: boolean;
+    /** Keep the pointer under the user's hand while a discrete parent value changes at thresholds. */
+    freeMotion?: boolean;
     onInput?: (v: number) => void;
     onEdit?: () => void;
   } = $props();
 
   const TRACK = 113.1; // 270° of r=24
   const clamp = (n: number) => Math.max(0, Math.min(1, n));
-  const dash = $derived(`${clamp(value) * TRACK} 300`);
-  const angle = $derived(-135 + clamp(value) * 270);
 
   let dragging = false;
   let moved = false;
   let startY = 0;
   let startVal = 0;
+  let visualValue = $state(untrack(() => value));
+  let lastExternalValue = $state(untrack(() => value));
+  const shownValue = $derived(freeMotion ? visualValue : value);
+  const dash = $derived(`${clamp(shownValue) * TRACK} 300`);
+  const angle = $derived(-135 + clamp(shownValue) * 270);
+
+  $effect(() => {
+    const external = value;
+    if (!dragging && external !== lastExternalValue) visualValue = external;
+    lastExternalValue = external;
+  });
 
   function down(e: PointerEvent) {
     if (disabled || e.button !== 0) return;
     dragging = true;
     moved = false;
     startY = e.clientY;
-    startVal = value;
+    startVal = shownValue;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     e.preventDefault();
   }
@@ -49,7 +63,11 @@
     if (!dragging) return;
     const dy = startY - e.clientY; // up = increase
     if (Math.abs(dy) > 3) moved = true;
-    if (moved) onInput(clamp(startVal + dy / 160));
+    if (moved) {
+      const next = clamp(startVal + dy / 160);
+      if (freeMotion) visualValue = next;
+      onInput(next);
+    }
   }
   function up(e: PointerEvent) {
     if (!dragging) return;
@@ -69,7 +87,7 @@
     onpointermove={move}
     onpointerup={up}
     role="slider"
-    aria-valuenow={Math.round(clamp(value) * 100)}
+    aria-valuenow={Math.round(clamp(shownValue) * 100)}
     aria-valuemin="0"
     aria-valuemax="100"
     aria-label={label}
