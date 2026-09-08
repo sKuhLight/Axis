@@ -55,6 +55,11 @@
   const editableValue = $derived(freeMotion ? visualValue : value);
   const shownValue = $derived(dragging ? editableValue : (animatedValue ?? editableValue));
   const shownValueText = $derived(animatedValue != null && !dragging && formatValue ? formatValue(shownValue) : valueText);
+  // The MOD marker sits on the dial face. The face spans r=15 of a 64-unit viewBox, so it is
+  // ~0.47x the dial wide; the 7px "MOD" badge measures ~21px, which stops fitting below ~51px.
+  // Under that the badge degrades to a dot rather than spilling over the face.
+  const MOD_PILL_MIN = 51;
+  const modAsDot = $derived(size < MOD_PILL_MIN);
   const dash = $derived(`${clamp(shownValue) * TRACK} 300`);
   const angle = $derived(-135 + clamp(shownValue) * 270);
 
@@ -136,7 +141,7 @@
 </script>
 
 <div class="knob" style="width:{size + 8}px">
-  {#if modded}<button class="mod-pill" type="button" aria-label="Edit modifier for {label}" onclick={onModifier}>MOD</button>{/if}
+  <div class="val mono">{shownValueText}</div>
   <div
     class="box"
     class:disabled
@@ -157,22 +162,51 @@
       <circle cx="32" cy="32" r="15" style="fill:var(--surface2)" stroke="#000" stroke-width="1" />
       <g transform="rotate({angle} 32 32)"><circle cx="32" cy="20.5" r="2.7" fill="#f5a623" /></g>
     </svg>
-    <div class="val mono">{shownValueText}</div>
+    {#if modded}
+      <button
+        class="mod-pill"
+        class:dot={modAsDot}
+        type="button"
+        aria-label="Edit modifier for {label}"
+        onpointerdown={(e) => e.stopPropagation()}
+        onclick={onModifier}
+      >{#if !modAsDot}MOD{/if}</button>
+    {/if}
   </div>
   <div class="lbl">{label}</div>
 </div>
 
 <style>
   .knob { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
   .box { position: relative; cursor: pointer; touch-action: none; user-select: none; }
   .box.disabled { opacity: 0.4; cursor: default; }
   .box svg { display: block; }
+  /* The readout is a recessed chip ABOVE the dial — the arrangement the device's own editor uses,
+     and the reason it never has a fit problem: the face stays empty, so unit-bearing values
+     ("12000.0 Hz", "-12.5 ct") get a full-width row instead of a 26px circle, and the dial stays
+     legible as it shrinks. It also keeps the caption LAST in the column, which matters: a wrapped
+     caption ("Delay Time") paints its second line below itself by design (see .lbl), so anything
+     placed under it collides. Widens past a small dial up to the same 76px the caption uses. */
   .val {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 600; color: var(--text2); pointer-events: none;
+    width: max-content; min-width: 100%; max-width: 76px;
+    padding: 2px 5px; border-radius: 3px;
+    background: var(--input); box-shadow: inset 0 1px 2px color-mix(in srgb, #000 55%, transparent);
+    font: 500 10px/1.4 var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
   }
   /* The caption reserves exactly one line of the flex column: a wrapped second line paints BELOW it
-     (overflow: visible) instead of growing the column and shoving the dial up off its row. */
+     (overflow: visible) instead of growing the column and shoving the dial up off its row. It is
+     therefore the LAST element in the column — nothing may be placed under it. */
   .lbl { font-size: 12px; font-weight: 600; color: var(--textdim); text-align: center; max-width: 76px; line-height: 1.1; white-space: pre-line; cursor: pointer; height: 1.1em; }
-  .mod-pill { position: absolute; top: -4px; right: 0; z-index: 1; padding: 1px 5px; border: 1px solid var(--amber-border); border-radius: 4px; background: var(--amber-tint); color: var(--amber); font: 600 8px/1.2 var(--font-mono); letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 5px color-mix(in srgb, var(--bg) 65%, transparent); }
+  /* MOD sits centred on the dial FACE. The face is empty now that the readout moved to its chip,
+     and the pointer orbits at 11.5 of 32 viewBox units from centre — outside the pill's corners at
+     every angle — so the badge never collides with it. */
+  .mod-pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; padding: 0 3px; border: 1px solid var(--amber-border); border-radius: 3px; background: var(--amber-tint); color: var(--amber); font: 600 7px/1.5 var(--font-mono); letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; }
+  /* The face is r=15 of a 64 viewBox, so its usable width is ~0.47x the dial. Below MOD_PILL_MIN
+     the word no longer fits and the badge becomes a dot — modifier state stays visible at every
+     size, which is exactly where a dense board needs it most. */
+  .mod-pill.dot { width: 6px; height: 6px; padding: 0; border-radius: 50%; border-color: var(--amber); background: var(--amber); }
+  .mod-pill:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 </style>

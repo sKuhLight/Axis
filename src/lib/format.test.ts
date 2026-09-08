@@ -16,6 +16,10 @@ describe('withUnit', () => {
     expect(withUnit('0.5', 'SECONDS')).toBe('0.5 SECONDS');
     expect(withUnit('128', 'SAMPLES')).toBe('128 SAMPLES');
     expect(withUnit('470', 'Hz')).toBe('470 Hz');
+    // 'ct' (cents) reaches Axis from the typecode-derived catalog class 0x7 — Pitch Detune,
+    // Plex Detune, Global Offset. It is a normal token: one space, casing verbatim.
+    expect(withUnit('-12.5', 'ct')).toBe('-12.5 ct');
+    expect(withUnit('0', 'ct')).toBe('0 ct');
   });
 
   it('attaches % with no space (device convention)', () => {
@@ -103,6 +107,13 @@ describe('fmtControlValue', () => {
   it('keeps a decimal place when a continuous value lands on a whole number', () => {
     expect(fmtControlValue(at(2, '%'))).toBe('2.0%');
     expect(fmtControlValue(at(12, 'dB'))).toBe('12.0 dB');
+  });
+
+  it('renders detune in cents, signed, at both precisions', () => {
+    // Pitch Detune is bipolar and lives well inside +/-100, so it keeps the fine decimals.
+    expect(fmtControlValue(at(-12.5, 'ct'))).toBe('-12.5 ct');
+    expect(fmtControlValue(at(-12.5, 'ct'), 1)).toBe('-12.5 ct');
+    expect(fmtControlValue(at(0, 'ct'))).toBe('0.0 ct');
   });
 
 });

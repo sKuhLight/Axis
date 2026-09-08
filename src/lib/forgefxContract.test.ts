@@ -202,6 +202,41 @@ describe('ForgeFX blockParams contract (fixtures/blockParams/*.json)', () => {
         expect(bad.success).toBe(false);
       });
 
+      it('display units survive the chain from the device typecode to the DTO', () => {
+        // Units are DERIVED two repos down, from the device's own `typecode` bitfield
+        // (forgefx-midi scripts/derive-gen3-units.ts), then mapped to a label by ForgeFX's
+        // UNIT_LABEL. Nothing in Axis can detect a break in that chain — a dropped unit just
+        // renders as a bare number, silently and plausibly. So assert the labels themselves.
+        const dto = fixture as BlockParams;
+
+        // Cab Low/High Cut arriving without Hz is the exact regression this work fixed. The cab
+        // exposes four mic slots per cut, and the unpopulated ones are `unusable` placeholders
+        // with no range and therefore no unit — so assert over the usable slots only.
+        if (name === 'cab') {
+          for (const cut of ['Low Cut', 'High Cut']) {
+            const slots = dto.named.filter((p) => p.name === cut && !p.unusable);
+            expect(slots.length, `cab fixture: no usable '${cut}'`).toBeGreaterThan(0);
+            for (const p of slots) {
+              expect(p.unit, `cab '${cut}' must carry Hz`).toBe('Hz');
+              expect(p.unitCode).toBe('hz');
+            }
+          }
+        }
+
+        // Every block here has continuous knobs, so a fixture with NO unit at all means the
+        // chain broke upstream rather than that this block genuinely has none.
+        const withUnit = dto.named.filter((p) => p.unit);
+        expect(withUnit.length, `${name} fixture: no param carries a display unit`).toBeGreaterThan(0);
+
+        // A unit must be a rendered LABEL ('dB', 'Hz', 'ct'), never a raw catalog code
+        // ('db', 'hz', 'cents') leaking through UNIT_LABEL. 'ms' is deliberately absent: it is the
+        // one code that is identical to its own label, so it cannot indicate a leak.
+        const codes = new Set(['db', 'hz', 'seconds', 'percent', 'bipolar_percent', 'cents', 'degrees', 'pf', 'ratio', 'numeric']);
+        for (const p of withUnit) {
+          expect(codes.has(p.unit!), `${name} '${p.name}': raw catalog code '${p.unit}' leaked as a display unit`).toBe(false);
+        }
+      });
+
       it('labels are served UNCHANGED — catalog-only, not deduped (Phase 1.3)', () => {
         // The deleted `dedupeLabels` pipeline appended " 1"/" 2" the moment a name repeated, so a
         // fixture with ANY verbatim-duplicate name (e.g. the cab's four "Low Cut" mic knobs) proves

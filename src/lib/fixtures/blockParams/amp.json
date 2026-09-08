@@ -130,6 +130,7 @@
       "name": "Low Cut Frequency",
       "value": 82.329,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 10,
       "max": 1000,
       "log": true,
@@ -137,7 +138,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 10.476,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float",
       "help": {
         "blurb": "Input low-cut frequency — a classic way to tighten an amp."
@@ -148,6 +149,7 @@
       "name": "High Cut Frequency",
       "value": 3293.179,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 400,
       "max": 40000,
       "log": true,
@@ -155,7 +157,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 1221.54,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float",
       "help": {
         "blurb": "High-cut placed between preamp and power amp; darkens distorted tone strongly."
@@ -166,6 +168,7 @@
       "name": "Tonestack Freq",
       "value": 573.862,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 200,
       "max": 2000,
       "log": true,
@@ -173,7 +176,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 293.556,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -214,6 +217,7 @@
       "name": "WSLPF",
       "value": 3293.179,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 400,
       "max": 40000,
       "log": true,
@@ -221,7 +225,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 682.963,
-      "unitCode": "unverified",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -229,6 +233,7 @@
       "name": "XFormer Low Freq",
       "value": 41.165,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 5,
       "max": 500,
       "log": true,
@@ -236,7 +241,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 5.749,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -244,6 +249,7 @@
       "name": "XFormer Hi Freq",
       "value": 11477.244,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 4000,
       "max": 40000,
       "log": true,
@@ -251,7 +257,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 5871.128,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -354,6 +360,7 @@
       "name": "Low Freq",
       "value": 114.772,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 40,
       "max": 400,
       "log": true,
@@ -361,7 +368,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 55.074,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -399,6 +406,7 @@
       "name": "Master Vol Cap",
       "value": 23.623,
       "norm": 0.45777764213995786,
+      "unit": "pF",
       "min": 1,
       "max": 1000,
       "log": true,
@@ -406,7 +414,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 1,
-      "unitCode": "numeric",
+      "unitCode": "pf",
       "kind": "float",
       "help": {
         "blurb": "Bright-cap across the Master Volume; affects brightness as Master changes."
@@ -417,6 +425,7 @@
       "name": "WSHPF",
       "value": 47.246,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 2,
       "max": 2000,
       "log": true,
@@ -424,7 +433,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 2,
-      "unitCode": "unverified",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -446,6 +455,7 @@
       "name": "B+ Time Constant",
       "value": 8.233,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 1,
       "max": 100,
       "log": true,
@@ -453,7 +463,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 3.854,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -518,6 +528,7 @@
       "name": "High Freq",
       "value": 1147.724,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 400,
       "max": 4000,
       "log": true,
@@ -525,7 +536,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 4000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -768,13 +779,14 @@
       "name": "Bias Excursion",
       "value": 91.556,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 200,
       "paramName": "DISTORT_BIASEXCURSION",
       "family": "DISTORT",
       "step": 0.002,
       "default": 100,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -782,6 +794,7 @@
       "name": "Excursion Time",
       "value": 2.058,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 0.25,
       "max": 25,
       "log": true,
@@ -789,7 +802,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 0.25,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -797,6 +810,7 @@
       "name": "Recovery Time",
       "value": 4.116,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 0.5,
       "max": 50,
       "log": true,
@@ -804,7 +818,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 0.5,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -812,6 +826,7 @@
       "name": "Triode 2 Plate Freq",
       "value": 3293.179,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 400,
       "max": 40000,
       "log": true,
@@ -819,7 +834,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 40000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -827,6 +842,7 @@
       "name": "Triode 1 Plate Freq",
       "value": 3293.179,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 400,
       "max": 40000,
       "log": true,
@@ -834,7 +850,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 40000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -872,6 +888,7 @@
       "name": "Frequency",
       "value": 823.295,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 100,
       "max": 10000,
       "log": true,
@@ -879,7 +896,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 385.358,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -887,13 +904,14 @@
       "name": "Gain",
       "value": -1.689,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -20,
       "max": 20,
       "paramName": "DISTORT_INEQGAIN",
       "family": "DISTORT",
       "step": 0.05,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -973,13 +991,14 @@
       "name": "Compression",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "DISTORT_CFTHRESH",
       "family": "DISTORT",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1059,13 +1078,14 @@
       "name": "AC Line Frequency",
       "value": 62.044,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 30,
       "max": 100,
       "paramName": "DISTORT_LINEFREQ",
       "family": "DISTORT",
       "step": 5,
       "default": 60,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -1119,13 +1139,14 @@
       "name": "Cathode Resistance",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "DISTORT_CBRATIO",
       "family": "DISTORT",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1133,6 +1154,7 @@
       "name": "Cathode Time Const",
       "value": 8.233,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 1,
       "max": 100,
       "log": true,
@@ -1140,7 +1162,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 1,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -1162,13 +1184,14 @@
       "name": "High Treble",
       "value": -1.013,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -12,
       "max": 12,
       "paramName": "DISTORT_HITREBLE",
       "family": "DISTORT",
       "step": 0.024,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -1263,13 +1286,14 @@
       "name": "Preamp Bias Excursion",
       "value": 91.556,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 200,
       "paramName": "DISTORT_TRIODE2RATIO",
       "family": "DISTORT",
       "step": 0.002,
       "default": 100,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1338,13 +1362,14 @@
       "name": "PI Bias Excursion",
       "value": 91.556,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 200,
       "paramName": "DISTORT_PIEXCURSION",
       "family": "DISTORT",
       "step": 0.002,
       "default": 100,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1366,6 +1391,7 @@
       "name": "Speaker Time Const",
       "value": 823.295,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 100,
       "max": 10000,
       "log": true,
@@ -1373,7 +1399,7 @@
       "family": "DISTORT",
       "step": 0,
       "default": 242.009,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -1456,13 +1482,14 @@
       "name": "Boost Level",
       "value": 10.987,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": 0,
       "max": 24,
       "paramName": "DISTORT_BOOSTLVL",
       "family": "DISTORT",
       "step": 0.05,
       "default": 12,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -1470,13 +1497,14 @@
       "name": "Speaker Compliance",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "DISTORT_SPKRDYNAMICS",
       "family": "DISTORT",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1498,12 +1526,13 @@
       "name": "Cab Resonance",
       "value": 91.556,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 200,
       "paramName": "DISTORT_CABRESONANCE",
       "family": "DISTORT",
       "step": 0.001,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -1538,12 +1567,13 @@
       "name": "Master Bias Excursion",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "DISTORT_BIASX",
       "family": "DISTORT",
       "step": 0.001,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -6536,8 +6566,8 @@
                   "offsetX": 52
                 },
                 "bounds": {
-                  "w": 215,
-                  "h": 20
+                  "w": 73,
+                  "h": 320
                 }
               },
               {
@@ -6547,8 +6577,8 @@
                 "widget": "slider",
                 "rawWidget": "slider",
                 "bounds": {
-                  "w": 215,
-                  "h": 20
+                  "w": 73,
+                  "h": 320
                 }
               },
               {
@@ -6558,8 +6588,8 @@
                 "widget": "slider",
                 "rawWidget": "slider",
                 "bounds": {
-                  "w": 215,
-                  "h": 20
+                  "w": 73,
+                  "h": 320
                 }
               },
               {
@@ -6569,8 +6599,8 @@
                 "widget": "slider",
                 "rawWidget": "slider",
                 "bounds": {
-                  "w": 215,
-                  "h": 20
+                  "w": 73,
+                  "h": 320
                 }
               },
               {
@@ -6580,8 +6610,8 @@
                 "widget": "slider",
                 "rawWidget": "slider",
                 "bounds": {
-                  "w": 215,
-                  "h": 20
+                  "w": 73,
+                  "h": 320
                 }
               }
             ]

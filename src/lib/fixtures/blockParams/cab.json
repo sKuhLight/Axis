@@ -56,13 +56,14 @@
       "name": "Level",
       "value": -21.689,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -40,
       "max": 0,
       "paramName": "CABINET_LEVEL1",
       "family": "CABINET",
       "step": 0.05,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float",
       "help": {
         "blurb": "Relative level of IR 1 in the blend. With a single IR loaded it has no effect.",
@@ -74,13 +75,14 @@
       "name": "Level",
       "value": -21.689,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -40,
       "max": 0,
       "paramName": "CABINET_LEVEL2",
       "family": "CABINET",
       "step": 0.05,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -169,13 +171,14 @@
       "name": "Distance 1",
       "value": 0.458,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 0,
       "max": 1,
       "paramName": "CABINET_DELAY1",
       "family": "CABINET",
       "step": 0.000001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float",
       "help": {
         "blurb": "Mic distance for IR 1 (mm); the sub-ms delay creates inter-mic phase effects."
@@ -186,13 +189,14 @@
       "name": "Distance 2",
       "value": 0.458,
       "norm": 0.45777764213995786,
+      "unit": "ms",
       "min": 0,
       "max": 1,
       "paramName": "CABINET_DELAY2",
       "family": "CABINET",
       "step": 0.000001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "ms",
       "kind": "float"
     },
     {
@@ -303,13 +307,14 @@
       "name": "Level",
       "value": -34.222,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -80,
       "max": 20,
       "paramName": "CABINET_LEVEL",
       "family": "CABINET",
       "step": 0.05,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float",
       "help": {
         "blurb": "Master output level of the whole Cab block (on the Mix page)."
@@ -373,13 +378,14 @@
       "name": "Room Level",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "CABINET_ROOMMIX",
       "family": "CABINET",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -416,6 +422,7 @@
       "name": "Low Cut",
       "value": 164.659,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 20,
       "max": 2000,
       "log": true,
@@ -423,7 +430,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -431,6 +438,7 @@
       "name": "High Cut",
       "value": 1646.589,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 200,
       "max": 20000,
       "log": true,
@@ -438,7 +446,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -446,6 +454,7 @@
       "name": "Proximity Frequency",
       "value": 57.386,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 20,
       "max": 200,
       "log": true,
@@ -453,7 +462,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 71.877,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -461,13 +470,14 @@
       "name": "Bass",
       "value": -1.013,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -12,
       "max": 12,
       "paramName": "CABINET_BASS",
       "family": "CABINET",
       "step": 0.025,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -475,13 +485,14 @@
       "name": "Mid",
       "value": -1.013,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -12,
       "max": 12,
       "paramName": "CABINET_MID",
       "family": "CABINET",
       "step": 0.025,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -489,13 +500,14 @@
       "name": "Treble",
       "value": -1.013,
       "norm": 0.45777764213995786,
+      "unit": "dB",
       "min": -12,
       "max": 12,
       "paramName": "CABINET_TREBLE",
       "family": "CABINET",
       "step": 0.025,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "db",
       "kind": "float"
     },
     {
@@ -566,13 +578,14 @@
       "name": "Floor Reflections",
       "value": -8.444,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": -100,
       "max": 100,
       "paramName": "CABINET_FLOORLVL",
       "family": "CABINET",
       "step": 0.002,
       "default": 49.998,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -580,13 +593,14 @@
       "name": "Air",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "CABINET_AIR",
       "family": "CABINET",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -594,6 +608,7 @@
       "name": "Frequency",
       "value": 5738.622,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 2000,
       "max": 20000,
       "log": true,
@@ -601,7 +616,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 2935.564,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -637,13 +652,14 @@
       "name": "Room Diffusion",
       "value": 45.778,
       "norm": 0.45777764213995786,
+      "unit": "%",
       "min": 0,
       "max": 100,
       "paramName": "CABINET_DIFFUSION",
       "family": "CABINET",
       "step": 0.001,
       "default": 0,
-      "unitCode": "numeric",
+      "unitCode": "percent",
       "kind": "float"
     },
     {
@@ -675,6 +691,7 @@
       "name": "Low Cut",
       "value": 57.386,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 20,
       "max": 200,
       "log": true,
@@ -682,7 +699,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -690,6 +707,7 @@
       "name": "Low Cut",
       "value": 57.386,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 20,
       "max": 200,
       "log": true,
@@ -697,7 +715,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -729,6 +747,7 @@
       "name": "High Cut",
       "value": 5738.622,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 2000,
       "max": 20000,
       "log": true,
@@ -736,7 +755,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -744,6 +763,7 @@
       "name": "High Cut",
       "value": 5738.622,
       "norm": 0.45777764213995786,
+      "unit": "Hz",
       "min": 2000,
       "max": 20000,
       "log": true,
@@ -751,7 +771,7 @@
       "family": "CABINET",
       "step": 0,
       "default": 20000,
-      "unitCode": "numeric",
+      "unitCode": "hz",
       "kind": "float"
     },
     {
@@ -3112,6 +3132,7 @@
     "family": "CABINET",
     "variantName": "0",
     "variantValue": "0",
+    "variantSelectorParamName": "CABINET_MODE",
     "pages": [
       {
         "name": "Cab",

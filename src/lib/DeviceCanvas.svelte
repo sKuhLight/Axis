@@ -409,7 +409,11 @@
     role="presentation"
   >
     {#if view === 'knob' && (p || e)}
-      {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 30))}
+      <!-- -46, not -30: the knob now carries a readout chip ABOVE the dial (a value like
+           "12000.0 Hz" never fitted on the dial face) plus the caption below. Some of that is
+           reclaimed from the old MOD pill, which used to overhang the column by 4px and now sits
+           inside the dial. -->
+      {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 46))}
       {#if p && editing === p}
         <div class="knob-edit" style="width:{knobSize + 8}px">
           {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
