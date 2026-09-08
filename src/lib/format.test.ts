@@ -97,6 +97,12 @@ describe('fmtControlValue', () => {
 
   it('reduces precision as values grow while preserving units', () => {
     expect(fmtControlValue(at(12.34, 'dB'))).toBe('12.3 dB');
-    expect(fmtControlValue(at(123.4, 'Hz'))).toBe('123 Hz');
+    expect(fmtControlValue(at(123.4, 'Hz'))).toBe('123.0 Hz');
   });
+
+  it('keeps a decimal place when a continuous value lands on a whole number', () => {
+    expect(fmtControlValue(at(2, '%'))).toBe('2.0%');
+    expect(fmtControlValue(at(12, 'dB'))).toBe('12.0 dB');
+  });
+
 });

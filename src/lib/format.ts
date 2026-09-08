@@ -61,11 +61,13 @@ export function withUnit(num: string, unit?: string): string {
 export function fmtControlValue(p: DispRange, fineDecimals = 2): string {
   const value = paramValue(p);
   if (!Number.isFinite(value)) return '--';
-  const raw = Math.abs(value) >= 100
+  const rounded = Math.abs(value) >= 100
     ? value.toFixed(0)
     : Math.abs(value) >= 10
       ? value.toFixed(1)
       : value.toFixed(fineDecimals).replace(/0+$/, '').replace(/\.$/, '');
+  // Continuous knob readouts keep a stable decimal affordance at whole values.
+  const raw = rounded.includes('.') ? rounded : `${rounded}.0`;
   return withUnit(raw, p.unit);
 }
 
