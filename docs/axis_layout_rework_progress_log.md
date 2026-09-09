@@ -1885,6 +1885,19 @@ Board schema `b10` re-seeds Default profiles for the new widgets; custom profile
 Predelay, Time Alpha, and Amplitude Alpha. Time and amplitude shape labels remain visible in the HUD.
 Board schema `b11` re-seeds Default profiles for the new widget; custom profiles remain unchanged.
 
+The pattern itself moved into `megaTapPattern.ts`, fitted against a live FM3. The block computes its
+taps in DSP and exposes none of them over MIDI, so they were measured as audio — an impulse through
+the block, its taps read off the output VU meters, which turn out to read power rather than dB. Rig,
+captures and residuals: `docs/handoff/megatap-shapes/measurements`. The graph had been drawing an
+invented curve: it ignored both Shape dropdowns, never found Delay Time (authored on the Basic page,
+not beside the graph) or Number of Taps (served as a discrete param, so it arrives on `enums` and the
+lookup only searched `params` — every graph drew eight taps), and did not re-derive when a Shape
+changed. What the hardware says: taps run k = 1..N across predelay + Delay Time with the last one
+always on the end; EXP/LOG bends their spacing exponentially with curvature linear in Alpha; and
+CONSTANT amplitude is a constant *slope*, not a constant level — Alpha 0% ramps the taps up out of
+silence, which is what the fm3-edit screenshots show. The SIGMOID, COSINE and SINE time shapes crowd
+taps closer than the meter can separate and remain approximations, flagged as such in the module.
+
 ## My Controls Sections — axis.sectionHeader
 
 My Controls could only grow as one undifferentiated grid; at twenty pinned controls there was no

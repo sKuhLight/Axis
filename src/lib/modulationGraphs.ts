@@ -63,7 +63,7 @@ export function modulationRate(freeRate: number, tempoLabel: string | undefined,
 }
 
 /** Bend a 0..1 ramp along an exponential; 0 curvature stays linear, higher values hold longer before the drop. */
-function curvedRamp(u: number, curvature: number): number {
+export function curvedRamp(u: number, curvature: number): number {
   return Math.abs(curvature) < 0.001 ? u : Math.expm1(curvature * u) / Math.expm1(curvature);
 }
 

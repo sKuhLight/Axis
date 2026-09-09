@@ -110,7 +110,11 @@
   // The DynaCab speaker cone. The served layout says whether the block has one (a `dynaCabControl`
   // control) and where — no mode flag needed here: ForgeFX already picked the DynaCab variant.
   const cabMicGraphs = $derived(deriveCabMicGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
-  const megaTapGraphs = $derived(deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
+  const megaTapGraphs = $derived.by(() => {
+    // Tap pattern follows the Shape dropdowns (MEGATAP_TIMESHAPE and friends), not just layout replacement.
+    for (const option of editor.enums) void option.value;
+    return deriveMegaTapGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
+  });
 
   // ── cab pseudo-params ──
   // The Cab page authors five controls per slot whose `paramId` is a UI pseudo-id (0xFF00+): the slot
