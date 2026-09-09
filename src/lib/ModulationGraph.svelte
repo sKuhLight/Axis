@@ -18,6 +18,12 @@
   const center = $derived(graph.center ? ((graph.center.norm ?? 0.5) - 0.5) * 2 : 0);
   const duty = $derived(graph.duty ? Math.max(0.05, Math.min(0.95, graph.duty.norm ?? 0.5)) : 0.5);
   const shape = $derived(Math.max(0.01, Math.min(0.99, graph.shape?.norm ?? 0.5)));
+  // Phase is authored in degrees; the graph starts that far into the cycle.
+  const phaseOffset = $derived.by(() => {
+    if (!graph.phase) return 0;
+    const degrees = paramValue(graph.phase);
+    return Number.isFinite(degrees) ? (((degrees / 360) % 1) + 1) % 1 : 0;
+  });
   const freeRate = $derived(graph.rate ? paramValue(graph.rate) : 0.5);
   const rate = $derived(Math.max(0.01, modulationRate(Number.isFinite(freeRate) ? freeRate : 0.5, currentLabel(graph.tempo), bpm)));
   const running = $derived(currentLabel(graph.run)?.trim().toLowerCase() !== 'stop');
@@ -43,14 +49,14 @@
     // Pre-roll settles the periodic low-pass before the visible sweep starts.
     for (let i = -samples; i <= end; i++) {
       const position = i / samples;
-      const t = position % 1;
+      const t = (position + phaseOffset) % 1;
       let v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
       if (quantize) v = (Math.round(((v + 1) / 2) * (quantize - 1)) / (quantize - 1)) * 2 - 1;
       filtered += alpha * (v - filtered);
       if (i < 0) continue;
       const x = position * W;
       const output = Math.max(-1, Math.min(1, center + filtered * amplitude));
-      points.push(`${x.toFixed(1)},${(H / 2 - output * H * 0.42).toFixed(1)}`);
+      points.push(`${x.toFixed(1)},${(H / 2 - output * H * 0.46).toFixed(1)}`);
     }
     return points.join(' ');
   });
