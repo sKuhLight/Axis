@@ -28,6 +28,25 @@ describe('deriveModulationGraphs', () => {
     ]);
   });
 
+  it('gives Controllers LFO graphs a time window and leaves block graphs on one cycle', () => {
+    const controllers: DeviceLayout = {
+      family: 'CONTROLLERS',
+      pages: [{
+        name: 'LFO 1 + 2',
+        rows: [{ section: 'parameters', controls: [control('CONTROLLERS_LFO1TYPE', 1, 'dropdown'), control(null, null, 'graph', 'graph_lfo')] }]
+      }]
+    };
+    const tremolo: DeviceLayout = {
+      family: 'TREMOLO',
+      pages: [{
+        name: 'Tremolo',
+        rows: [{ section: 'parameters', controls: [control('TREMOLO_LFOTYPE', 1, 'dropdown'), control(null, null, 'graph', 'graph_trem')] }]
+      }]
+    };
+    expect(deriveModulationGraphs({ layout: controllers, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: 2, randomSteps: 1 });
+    expect(deriveModulationGraphs({ layout: tremolo, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: undefined, randomSteps: undefined });
+  });
+
   it('binds Tremolo waveform controls from their authored row', () => {
     const layout: DeviceLayout = {
       family: 'TREMOLO',
@@ -214,6 +233,14 @@ describe('modulationValue', () => {
     expect(modulationValue('ASTABLE', 0.5, { shape: 0.242 })).toBeCloseTo(-1);
     expect(modulationValue('ASTABLE', 0.75, { shape: 0.462 })).toBeGreaterThan(0);
     expect(modulationValue('ASTABLE', 0.25, { shape: 0.958 })).toBeLessThan(0);
+  });
+});
+
+describe('modulationValue random', () => {
+  it('holds one value a cycle when the graph says so, and two by default', () => {
+    const at = (t: number, randomSteps?: number) => modulationValue('random', t, { randomSteps });
+    expect(at(0.1)).not.toBe(at(0.6));
+    expect(at(0.1, 1)).toBe(at(0.6, 1));
   });
 });
 

@@ -22,7 +22,22 @@ export interface ModulationGraphSpec {
   highCut?: NamedParam;
   width?: NamedParam;
   center?: NamedParam;
+  /** Seconds of LFO the box spans, for graphs the device editor draws as a fixed time window rather than
+   *  as a single cycle. Left unset for a graph that shows one period whatever the Rate is. */
+  windowSeconds?: number;
+  /** How many values a RANDOM cycle holds, for a graph whose LFO was measured. Left unset keeps the
+   *  two-per-cycle staircase the block graphs have always drawn. */
+  randomSteps?: number;
 }
+
+// The Controllers page draws a fixed slice of TIME, so its boxes hold more cycles the faster the LFO runs:
+// counted off fm3-edit, a triangle shows two peaks at 1 Hz and about six at 4 Hz, and the LFO 1 thumbnail
+// in docs/handoff (~0.5 Hz) holds 1.25. The block graphs (Tremolo, Phaser, Flanger) keep one period a box.
+const CONTROLLERS_WINDOW_SECONDS = 2;
+
+// Measured on a live FM3: with LFO 1 on RANDOM at 0.1 Hz, the value routed through a modifier holds a
+// plateau and steps at 10.5 s, 20.5 s and 30.5 s — one new value per cycle, not the two we draw by default.
+const CONTROLLERS_RANDOM_STEPS = 1;
 
 const currentLabel = (value: EnumParam | undefined): string | undefined =>
   value?.options.find((option) => option.value === value.value)?.label;
@@ -31,6 +46,8 @@ export interface ModulationWaveformOptions {
   duty?: number;
   shape?: number;
   randomSeed?: number;
+  /** Values a RANDOM cycle holds. Defaults to the two-step staircase. */
+  randomSteps?: number;
 }
 
 /** Resolve a tempo-synced division to cycles per second, falling back to the Rate control. */
@@ -86,7 +103,8 @@ export function modulationValue(type: string, t: number, options: ModulationWave
   }
   if (name === 'trapezoid') return Math.max(-1, Math.min(1, triangle * 2));
   if (name === 'random' || name === 'noise') {
-    const sample = Math.floor(phase * 2) + (options.randomSeed ?? 0) * 2;
+    const steps = Math.max(1, Math.round(options.randomSteps ?? 2));
+    const sample = Math.floor(phase * steps) + (options.randomSeed ?? 0) * steps;
     const x = Math.sin(sample * 12.9898 + 78.233) * 43758.5453;
     return (x - Math.floor(x)) * 2 - 1;
   }
@@ -167,7 +185,9 @@ export function deriveModulationGraphs(input: {
           phase: named(/(?<!START)PHASE$/),
           highCut: named(/(?:HICUT|LFOFILTER|LFOLPF)$/),
           width: named(/WIDTH$/),
-          center: named(/CENTER$/)
+          center: named(/CENTER$/),
+          windowSeconds: family === 'CONTROLLERS' ? CONTROLLERS_WINDOW_SECONDS : undefined,
+          randomSteps: family === 'CONTROLLERS' ? CONTROLLERS_RANDOM_STEPS : undefined
         });
       }
     }

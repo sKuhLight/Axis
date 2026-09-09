@@ -34,23 +34,32 @@
     return Number.isFinite(levels) && levels >= 2 ? levels : 0;
   });
   const highCut = $derived(graph.highCut ? paramValue(graph.highCut) : Infinity);
+  // How much LFO the box holds. A graph with no window spans exactly one cycle whatever the Rate is; one
+  // with a window spans a fixed slice of time, so a faster LFO packs more cycles into the same box.
+  const cycles = $derived(graph.windowSeconds ? Math.max(1, rate * graph.windowSeconds) : 1);
+  // The pen crosses the box once per drawn window, which for a one-cycle box is once per LFO cycle.
+  const sweepRate = $derived(graph.windowSeconds ? rate / cycles : rate);
   const curve = $derived.by(() => {
     if (!shapeName) return '';
     const points: string[] = [];
     // The hardware graph is an oscilloscope: the trace remains until the sweep restarts.
-    const scan = reducedMotion || !running ? 1 : (elapsed * rate) % 1;
-    const cycle = running && !reducedMotion ? Math.floor(elapsed * rate) : 0;
-    const samples = 96;
+    const scan = reducedMotion || !running ? 1 : (elapsed * sweepRate) % 1;
+    const sweep = running && !reducedMotion ? Math.floor(elapsed * sweepRate) : 0;
+    // Enough points that every drawn cycle keeps its corners, however many the window holds.
+    const samples = Math.min(768, 96 * Math.ceil(cycles));
     const end = Math.floor(scan * samples);
-    const alpha = Number.isFinite(highCut)
-      ? 1 - Math.exp((-2 * Math.PI * Math.max(0.01, highCut)) / (rate * samples))
-      : 1;
+    // Seconds per sample, so High Cut bends the trace by as much as it would in real time.
+    const dt = cycles / (rate * samples);
+    const alpha = Number.isFinite(highCut) ? 1 - Math.exp(-2 * Math.PI * Math.max(0.01, highCut) * dt) : 1;
     let filtered = 0;
     // Pre-roll settles the periodic low-pass before the visible sweep starts.
     for (let i = -samples; i <= end; i++) {
       const position = i / samples;
-      const t = (position + phaseOffset) % 1;
-      let v = modulationValue(shapeName, t, { duty, shape, randomSeed: cycle });
+      const elapsedCycles = position * cycles + phaseOffset;
+      // Random draws a fresh value per cycle, so every cycle in the window needs its own seed — and a
+      // window has to advance by all the cycles it holds, or the next sweep redraws part of this one.
+      const seed = cycles > 1 ? Math.floor(sweep * cycles + elapsedCycles) : sweep;
+      let v = modulationValue(shapeName, elapsedCycles % 1, { duty, shape, randomSeed: seed, randomSteps: graph.randomSteps });
       if (quantize) v = (Math.round(((v + 1) / 2) * (quantize - 1)) / (quantize - 1)) * 2 - 1;
       filtered += alpha * (v - filtered);
       if (i < 0) continue;
