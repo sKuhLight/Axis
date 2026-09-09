@@ -123,6 +123,14 @@
     return p && 'options' in p ? p : undefined;
   };
 
+  // The modulation-graph "Type" picker (LFO shape) is authored in device order; sort it alphabetically
+  // so a long shape list stays scannable. Every other enum keeps its authored order.
+  const LFO_TYPE_PARAM = /_LFO\d*TYPE$/;
+  const dropdownOptions = (c: LayoutControl, e: EnumParam): EnumParam['options'] =>
+    LFO_TYPE_PARAM.test(c.paramName ?? '')
+      ? [...e.options].sort((a, b) => a.label.localeCompare(b.label))
+      : e.options;
+
   const altContext = $derived<AlternateContext>({
     valueOf: (sym) => {
       const p = bySymbol.get(sym);
@@ -478,7 +486,7 @@
       <Dropdown
         label={c.label}
         value={e.value}
-        options={e.options}
+        options={dropdownOptions(c, e)}
         {accent}
         fixedWidth={dp(pc.w)}
         fieldHeight={dropdownFieldHeight(dp(pc.h))}
