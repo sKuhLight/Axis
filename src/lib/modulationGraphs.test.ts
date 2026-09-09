@@ -138,17 +138,62 @@ describe('modulationValue', () => {
     expect(modulationValue('TRIANGLE', 0.5)).toBeCloseTo(1);
     expect(modulationValue('SQUARE', 0.25)).toBe(1);
     expect(modulationValue('SQUARE', 0.75)).toBe(-1);
-    expect(modulationValue('SAW UP', 0.25)).toBeCloseTo(-0.5);
-    expect(modulationValue('SAW DOWN', 0.25)).toBeCloseTo(0.5);
-    expect(modulationValue('LOG', 0.25)).toBeCloseTo(1);
-    expect(modulationValue('LOG', 0.75)).toBeCloseTo(-1);
-    expect(modulationValue('EXP', 0.25)).toBeCloseTo(1);
-    expect(modulationValue('EXP', 0.75)).toBeCloseTo(-1);
+    expect(modulationValue('SAW UP', 0)).toBeCloseTo(-1);
+    expect(modulationValue('SAW UP', 1)).toBeCloseTo(-1);
+    expect(modulationValue('SAW DOWN', 0)).toBeCloseTo(1);
+    expect(modulationValue('LOG', 0)).toBeCloseTo(-1);
+    expect(modulationValue('LOG', 0.5)).toBeCloseTo(1);
+    expect(modulationValue('EXP', 0)).toBeCloseTo(-1);
+    expect(modulationValue('EXP', 0.5)).toBeCloseTo(1);
     expect(modulationValue('TRAPEZOID', 0)).toBe(-1);
     expect(modulationValue('TRAPEZOID', 0.5)).toBe(1);
     expect(modulationValue('RANDOM', 0.1)).toBe(modulationValue('RANDOM', 0.49));
     expect(modulationValue('RANDOM', 0.51)).toBe(modulationValue('RANDOM', 0.99));
     expect(modulationValue('RANDOM', 0.49)).not.toBe(modulationValue('RANDOM', 0.51));
+  });
+
+  it('curves Saw by Shape, mirroring the two directions in time', () => {
+    // Sampled FM3 output: neither direction is a straight line, and both are still monotonic.
+    expect(modulationValue('SAW DOWN', 0.25)).toBeGreaterThan(modulationValue('SAW DOWN', 0.75));
+    expect(modulationValue('SAW UP', 0.25)).toBeLessThan(modulationValue('SAW UP', 0.75));
+
+    // A straight saw sits at zero halfway through. Saw Down holds above zero past the midpoint;
+    // Saw Up has already climbed past it — the two are time-mirrors, not negations.
+    expect(modulationValue('SAW DOWN', 0.5)).toBeGreaterThan(0);
+    expect(modulationValue('SAW UP', 0.5)).toBeGreaterThan(0);
+
+    // Curvature tracks Shape (the triangle's fall/rise ratio), so a lower Shape bends it harder.
+    const mid = modulationValue('SAW DOWN', 0.5, { shape: 0.5 });
+    const skewed = modulationValue('SAW DOWN', 0.5, { shape: 0.242 });
+    expect(skewed).toBeGreaterThan(mid);
+  });
+
+  it('mirrors Exp and Log in both time and curvature around the Shape ramp', () => {
+    const shape = 0.242;
+
+    // Measured off the fm3-edit thumbnails: Log rises over Shape, Exp over the remainder of the cycle.
+    expect(modulationValue('LOG', shape, { shape })).toBeCloseTo(1);
+    expect(modulationValue('EXP', 1 - shape, { shape })).toBeCloseTo(1);
+    expect(modulationValue('LOG', 0, { shape })).toBeCloseTo(-1);
+    expect(modulationValue('EXP', 0, { shape })).toBeCloseTo(-1);
+
+    // Both track Shape rather than sitting on a fixed sine.
+    expect(modulationValue('EXP', 0.5, { shape })).not.toBeCloseTo(modulationValue('EXP', 0.5, { shape: 0.5 }));
+    expect(modulationValue('LOG', 0.5, { shape })).not.toBeCloseTo(modulationValue('LOG', 0.5, { shape: 0.5 }));
+
+    // Halfway up its own ramp Exp lags below the line and Log rides above it: pointed crest vs flat crest.
+    expect(modulationValue('EXP', (1 - shape) / 2, { shape })).toBeLessThan(0);
+    expect(modulationValue('LOG', shape / 2, { shape })).toBeGreaterThan(0);
+  });
+
+  it('holds Trapezoid at each extreme for a quarter of the cycle', () => {
+    const shape = 0.242;
+
+    // Rise saturates at a quarter of the way up the leg, so each plateau is 25% of the period.
+    expect(modulationValue('TRAPEZOID', shape * 0.75 + 0.001, { shape })).toBeCloseTo(1);
+    expect(modulationValue('TRAPEZOID', shape * 0.75 - 0.02, { shape })).toBeLessThan(1);
+    expect(modulationValue('TRAPEZOID', shape * 0.25 - 0.001, { shape })).toBeCloseTo(-1);
+    expect(modulationValue('TRAPEZOID', shape * 0.25 + 0.02, { shape })).toBeGreaterThan(-1);
   });
 
   it('uses Shape to skew Triangle rise and fall times', () => {

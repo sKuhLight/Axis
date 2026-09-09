@@ -45,6 +45,17 @@ export function modulationRate(freeRate: number, tempoLabel: string | undefined,
   return bpm > 0 && beats > 0 ? bpm / 60 / beats : freeRate;
 }
 
+/** Bend a 0..1 ramp along an exponential; 0 curvature stays linear, higher values hold longer before the drop. */
+function curvedRamp(u: number, curvature: number): number {
+  return Math.abs(curvature) < 0.001 ? u : Math.expm1(curvature * u) / Math.expm1(curvature);
+}
+
+// Curvature of the Exp/Log bend, fitted against LFO output sampled from a live FM3 (capture notes in
+// docs/handoff/modulation-graph-shapes). The hardware curve is gentler than the base-10 shape this code
+// used to apply — base 10 would be ln(10) ≈ 2.30 — and it is the same at every Shape setting.
+const EXP_CURVATURE = 1.45;
+const LOG_CURVATURE = -1.35;
+
 /** Value of an FM3 LFO waveform at normalized phase `t`. */
 export function modulationValue(type: string, t: number, options: ModulationWaveformOptions = {}): number {
   const phase = ((t % 1) + 1) % 1;
@@ -58,11 +69,21 @@ export function modulationValue(type: string, t: number, options: ModulationWave
   if (name === 'sine') return sine;
   if (name === 'triangle') return triangle;
   if (name === 'square' || name === 'pulse') return phase < Math.max(0.05, Math.min(0.95, options.duty ?? 0.5)) ? 1 : -1;
-  if (name === 'saw up' || name === 'ramp up') return 2 * phase - 1;
-  if (name === 'saw down' || name === 'ramp down') return 1 - 2 * phase;
-  const normalizedSine = (sine + 1) / 2;
-  if (name === 'log') return 2 * Math.log10(1 + 9 * normalizedSine) - 1;
-  if (name === 'exp') return (2 * (Math.pow(10, normalizedSine) - 1)) / 9 - 1;
+  // The hardware's saw is neither straight nor fixed-curvature: Shape bends it by the triangle's own
+  // fall/rise ratio, and the two directions are time-mirrors rather than negations of each other.
+  const sawCurvature = (1 - shape) / shape;
+  if (name === 'saw up' || name === 'ramp up') return 2 * curvedRamp(phase, -sawCurvature) - 1;
+  if (name === 'saw down' || name === 'ramp down') return 1 - 2 * curvedRamp(phase, sawCurvature);
+  // Exp and Log bend the Shape-controlled ramp, not a sine: curving a sine leaves the flanks rounded where
+  // the hardware runs them nearly straight into a pointed apex. The two are mirrored in time as well as in
+  // curvature — Log rises over Shape, Exp over the rest of the cycle.
+  if (name === 'log') return 2 * curvedRamp((triangle + 1) / 2, LOG_CURVATURE) - 1;
+  if (name === 'exp') {
+    const mirrored = phase < 1 - shape
+      ? -1 + (2 * phase) / (1 - shape)
+      : 1 - (2 * (phase - (1 - shape))) / shape;
+    return 2 * curvedRamp((mirrored + 1) / 2, EXP_CURVATURE) - 1;
+  }
   if (name === 'trapezoid') return Math.max(-1, Math.min(1, triangle * 2));
   if (name === 'random' || name === 'noise') {
     const sample = Math.floor(phase * 2) + (options.randomSeed ?? 0) * 2;
@@ -70,12 +91,9 @@ export function modulationValue(type: string, t: number, options: ModulationWave
     return (x - Math.floor(x)) * 2 - 1;
   }
   if (name === 'astable') {
-    const curvature = shape * 2;
     const u = (phase % 0.5) * 2;
-    const ramp = Math.abs(curvature) < 0.001
-      ? u
-      : Math.expm1(-curvature * u) / Math.expm1(-curvature);
-    return phase < 0.5 ? 1 - 2 * ramp : -1 + 2 * ramp;
+    const leg = curvedRamp(u, -shape * 2);
+    return phase < 0.5 ? 1 - 2 * leg : -1 + 2 * leg;
   }
   return sine;
 }
