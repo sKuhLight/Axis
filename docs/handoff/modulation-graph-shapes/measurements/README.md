@@ -29,6 +29,10 @@ modifier routes it onto an ordinary parameter, which `POST /preset/blocks/:eid/r
 0.242. The scripts alongside reproduce it (`capture.py` → `sweep.py` → `analyze.py`;
 `verify.py` scores a candidate implementation against the data).
 
+Folding recovers a waveform's shape but not where in the cycle it starts. `phase.py`
+recovers that: it stops LFO 1 and restarts it, which resets the LFO to its start phase
+and so gives an absolute time reference.
+
 ## What the data settled
 
 | finding | evidence |
@@ -40,8 +44,10 @@ modifier routes it onto an ordinary parameter, which `POST /preset/blocks/:eid/r
 | Saw directions are time-mirrors, not negations | Saw Up fits negative k at the same Shape |
 | Trapezoid's 25% plateaus were already correct | 24%/26% measured vs 25%/25% modelled |
 | Triangle needed no change | asymmetry is just Shape, 0.047 RMS |
+| Sine is Shape-skewed too, by exactly the triangle's ratio | crest @0.30 at Shape 0.242 vs the triangle's @0.28; `sin(π/2 · triangle)` scores 0.026 where a plain sine scores 0.186, and the mirrored direction 0.356 |
+| Every waveform starts at its **trough** at LFO Phase 0 | restart capture reads −1.00 at t0 for both sine and triangle (`phase.py`) |
 
-Mean RMS against the hardware fell from 0.202 to 0.096 across all twelve captures.
+Mean RMS against the hardware fell from 0.201 to 0.091 across all thirteen captures.
 
 ## Known residual
 

@@ -1,5 +1,6 @@
 import math, json
-D=json.load(open('hwcurves.json')); NB=200
+import os
+D=json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'fm3-lfo-folded.json'))); NB=200
 def ramp(u,k): return u if abs(k)<1e-6 else math.expm1(k*u)/math.expm1(k)
 def tri(p,s): return -1+2*p/s if p<s else 1-2*(p-s)/(1-s)
 EXP_K, LOG_K = 1.45, -1.35
@@ -15,8 +16,8 @@ def old(n,p,s):
     if n=='trapezoid': return max(-1,min(1,t*2))
 def new(n,p,s):
     k=(1-s)/s
-    if n=='sine': return math.sin(p*2*math.pi)
     t=tri(p,s)
+    if n=='sine': return math.sin(math.pi/2*t)
     if n=='triangle': return t
     if n=='saw down': return 1-2*ramp(p,k)
     if n=='saw up':   return 2*ramp(p,-k)-1

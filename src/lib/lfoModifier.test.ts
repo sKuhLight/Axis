@@ -33,11 +33,12 @@ describe('LFO modifier visualization', () => {
   });
 
   it('samples the waveform and applies Output B phase', () => {
-    expect(lfoModifierValue(base, 0, 120)).toBeCloseTo(0.5);
-    expect(lfoModifierValue(base, 0.25, 120)).toBeCloseTo(1);
+    // The hardware starts a waveform at its trough, so a 1 Hz sine bottoms out at t=0 and peaks at t=0.5.
+    expect(lfoModifierValue(base, 0, 120)).toBeCloseTo(0);
+    expect(lfoModifierValue(base, 0.5, 120)).toBeCloseTo(1);
     const outputB = { ...base, source: { number: 1 as const, output: 'B' as const }, graph: { ...base.graph, phase: named(1, 0, 180) } };
-    expect(lfoModifierValue(outputB, 0, 120)).toBeCloseTo(0.5);
-    expect(lfoModifierValue(outputB, 0.25, 120)).toBeCloseTo(0);
+    expect(lfoModifierValue(outputB, 0, 120)).toBeCloseTo(1);
+    expect(lfoModifierValue(outputB, 0.5, 120)).toBeCloseTo(0);
   });
 
   it('returns no visualization when the LFO is stopped', () => {

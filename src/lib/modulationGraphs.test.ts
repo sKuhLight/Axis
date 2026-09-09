@@ -152,7 +152,7 @@ describe('deriveModulationGraphs', () => {
 
 describe('modulationValue', () => {
   it('renders every FM3 LFO type with its defining shape', () => {
-    expect(modulationValue('SINE', 0.25)).toBeCloseTo(1);
+    expect(modulationValue('SINE', 0.5)).toBeCloseTo(1);
     expect(modulationValue('TRIANGLE', 0)).toBeCloseTo(-1);
     expect(modulationValue('TRIANGLE', 0.5)).toBeCloseTo(1);
     expect(modulationValue('SQUARE', 0.25)).toBe(1);
@@ -185,6 +185,21 @@ describe('modulationValue', () => {
     const mid = modulationValue('SAW DOWN', 0.5, { shape: 0.5 });
     const skewed = modulationValue('SAW DOWN', 0.5, { shape: 0.242 });
     expect(skewed).toBeGreaterThan(mid);
+  });
+
+  it('starts Sine at the trough and skews it by Shape, like the hardware', () => {
+    // Measured on a live FM3 by stopping LFO 1 and restarting it: at LFO Phase 0 the output leaves the
+    // trough, and at Shape 0.242 it crests 0.30 of the way through the cycle — the same fraction the
+    // triangle takes. Folded captures in docs/handoff/modulation-graph-shapes.
+    expect(modulationValue('SINE', 0, { shape: 0.5 })).toBeCloseTo(-1);
+    expect(modulationValue('SINE', 0.5, { shape: 0.5 })).toBeCloseTo(1);
+    expect(modulationValue('SINE', 0.25, { shape: 0.5 })).toBeCloseTo(0);
+
+    const shape = 0.242;
+    expect(modulationValue('SINE', shape, { shape })).toBeCloseTo(1);
+    expect(modulationValue('SINE', 0, { shape })).toBeCloseTo(-1);
+    // The rise is over well before the halfway point, where an unskewed sine would still be climbing.
+    expect(modulationValue('SINE', 0.5, { shape })).toBeLessThan(0.5);
   });
 
   it('mirrors Exp and Log in both time and curvature around the Shape ramp', () => {

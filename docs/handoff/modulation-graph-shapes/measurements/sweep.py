@@ -2,7 +2,7 @@ import sys, csv, math; sys.path.insert(0,'.')
 from lfo import *
 ORD={t:i for i,t in enumerate(TYPES)}
 FN=(math.log(0.1)-math.log(0.05))/(math.log(30)-math.log(0.05))
-PLAN=[('SINE',0.5),('TRIANGLE',0.5),('TRIANGLE',0.242),
+PLAN=[('SINE',0.5),('SINE',0.242),('TRIANGLE',0.5),('TRIANGLE',0.242),
       ('SAW DOWN',0.5),('SAW DOWN',0.242),('SAW UP',0.242),
       ('EXP',0.5),('EXP',0.242),('LOG',0.5),('LOG',0.242),
       ('TRAPEZOID',0.5),('TRAPEZOID',0.242)]

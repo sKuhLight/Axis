@@ -78,10 +78,14 @@ export function modulationValue(type: string, t: number, options: ModulationWave
   const phase = ((t % 1) + 1) % 1;
   const name = type.trim().toLowerCase();
   const shape = Math.max(0.01, Math.min(0.99, options.shape ?? 0.5));
-  const sine = Math.sin(phase * Math.PI * 2);
   const triangle = phase < shape
     ? -1 + (2 * phase) / shape
     : 1 - (2 * (phase - shape)) / (1 - shape);
+  // Sine is a half-sine over each of the triangle's limbs, so Shape skews it exactly as it skews the
+  // triangle: measured on a live FM3, both rise over the same 0.3 of the period at Shape 0.242. At
+  // Shape 0.5 this is a plain sine starting at the trough, which is where the hardware starts every
+  // waveform when LFO Phase is 0 (verified by stopping the LFO and restarting it).
+  const sine = Math.sin((Math.PI / 2) * triangle);
 
   if (name === 'sine') return sine;
   if (name === 'triangle') return triangle;
