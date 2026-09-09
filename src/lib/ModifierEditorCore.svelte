@@ -914,8 +914,10 @@
   .graph {
     position: relative;
     width: 100%;
-    aspect-ratio: 1.4/1;
-    max-height: 210px;
+    /* Square box so the 3×3 grid cells and the response curve read true, like the FM3 editor. */
+    aspect-ratio: 1;
+    max-width: 300px;
+    margin: 0 auto;
     background: var(--bg);
     border: 1px solid var(--surface2);
     border-radius: 10px;

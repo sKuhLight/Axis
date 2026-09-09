@@ -5,8 +5,9 @@
 
   let { graph, accent = '#35c9d6', live = null }: { graph: CompressorGraphSpec; accent?: string; live?: LiveMonitor | null } = $props();
 
-  const W = 360;
-  const H = 130;
+  // Square drawing box so the dB grid cells and the 1:1 reference line read true, like the FM3 editor.
+  const W = 200;
+  const H = 200;
   const MIN = -60;
   const MAX = 20;
   // Inset by the rect's corner radius (rx=10 below) so the curve/reference-line endpoints — which
@@ -72,7 +73,8 @@
 </div>
 
 <style>
-  .wrap { position: relative; width: 100%; height: 100%; min-height: 110px; }
+  /* Largest square that fits the slot: width drives it, max-height clamps it back when the slot is short. */
+  .wrap { position: relative; width: 100%; max-height: 100%; aspect-ratio: 1; margin: 0 auto; min-height: 110px; }
   svg { display: block; width: 100%; height: 100%; }
   .livedot { position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border2); pointer-events: none; transition: left 90ms linear, top 90ms linear; }
 </style>
