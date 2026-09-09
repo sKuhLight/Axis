@@ -402,7 +402,7 @@
   {@const hasMod = modded(c)}
   {@const visualization = modVisualization(c)}
   <div
-    class="cell {view}"
+    class="cell v-{view}"
     class:dim={query.length > 0 && !matches(c)}
     class:hit={query.length > 0 && matches(c)}
     class:modded={hasMod}
