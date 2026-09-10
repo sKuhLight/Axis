@@ -5,8 +5,8 @@
 //
 // The block family → [label, colour] map mirrors src/lib/PresetBrowser.svelte's CAT table verbatim so
 // docked rows read identically to the monolith surface. The CPU estimate reuses the query module's
-// estimateCpu (blockCount-derived) — it is a complexity indicator, NOT the device's live meter (which
-// isn't stored in a preset), hence the "~" prefix everywhere it renders.
+// estimateCpu (the monolith's weighted per-family DSP cost table, shared) — a complexity indicator,
+// NOT the device's live meter (which isn't stored in a preset), hence the "~" prefix everywhere.
 import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
 import { estimateCpu } from './presetBrowserWorkbenchQuery';
 

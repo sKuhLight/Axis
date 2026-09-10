@@ -84,8 +84,11 @@ describe('CPU meter (§4.3)', () => {
   });
 
   it('derives a meter from an entry', () => {
-    const meter = axisPbRowCpuMeter(entry({ blockCount: 10 }));
-    expect(meter.pct).toBe(35);
+    // weighted parity with the monolith: amp 28 + cab 12 + reverb 12 + base 8 = 60
+    const meter = axisPbRowCpuMeter(
+      entry({ blockCount: 3, blocks: [{ slug: 'amp' }, { slug: 'cab' }, { slug: 'reverb' }] })
+    );
+    expect(meter.pct).toBe(60);
     expect(meter.color).toBe('#33c46b');
   });
 });

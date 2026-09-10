@@ -17,6 +17,7 @@
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
+  import { estimateCpu } from './axis-workbench/presetBrowser/presetBrowserWorkbenchQuery';
   import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from './types';
 
   const ACCENT = '#35c9d6';
@@ -902,26 +903,15 @@
 
   // ── estimated CPU load ──────────────────────────────────────────────────────────────────────
   // The device reports real CPU at runtime (an undocumented SysEx) — it is NOT stored in a preset,
-  // so we can't read it offline. This is a per-block HEURISTIC: relative DSP weight per family
-  // (amp/cab/reverb/pitch dominate; EQ/drive/utility are cheap), summed over placed blocks + a fixed
-  // overhead, capped. It's a complexity indicator, not the device's meter — always shown with a ~.
-  const CPU_WEIGHT: Record<string, number> = {
-    amp: 28, cab: 12, reverb: 12, pitch: 14, multitap: 10, megatap: 10, synth: 9, delay: 8,
-    flanger: 5, phaser: 5, chorus: 5, rotary: 5, formant: 5, tremolo: 4, filter: 4, drive: 4,
-    enhancer: 3, comp: 3, wah: 3, ringmod: 3, geq: 2, peq: 2, gate: 2, volume: 1, input: 0, output: 0
-  };
+  // so we can't read it offline. This is a per-block HEURISTIC (relative DSP weight per family),
+  // shared with the workbench shell so `cpu<N>` filters identically in both. Always shown with a ~.
   // Recent first; never-loaded entries sink below every loaded one, then slot order so the large
   // never-loaded bucket stays stable. Mirrors sortEntries('recent') in presetBrowserWorkbenchData.
   function cmpRecent(a: LibEntry, b: LibEntry) {
     // `?? 0` is safe: every real stamp is a positive epoch, so never-loaded entries sort last.
     return (presetRecency.at(b.id) ?? 0) - (presetRecency.at(a.id) ?? 0) || a.summary.number - b.summary.number;
   }
-  const CPU_BASE = 8;
-  function estCpu(e: LibEntry): number {
-    let sum = CPU_BASE;
-    for (const b of e.summary.blocks) sum += CPU_WEIGHT[b.slug ?? ''] ?? 4;
-    return Math.max(20, Math.min(99, Math.round(sum)));
-  }
+  const estCpu = (e: LibEntry): number => estimateCpu(e.summary);
   const cpuColor = (c: number) => (c >= 80 ? '#e87b6a' : c >= 62 ? '#f5a623' : '#33c46b');
 </script>
 

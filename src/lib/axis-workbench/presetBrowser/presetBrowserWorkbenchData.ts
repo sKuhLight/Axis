@@ -129,7 +129,8 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
   count: number;
 }
 
-import { entryHaystack, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
+import { entryHaystack, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbDecodedBlock, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
+export type { AxisPbDecodedBlock } from './presetBrowserWorkbenchQuery';
 import {
   AXIS_PB_PRESENCE_VIEWS,
   entryInPresenceView,
@@ -200,7 +201,11 @@ export function preparePresetBrowserIndex(
   entries: AxisPresetBrowserLibEntryLike[],
   tagsOf: (entryId: string) => string[],
   realNameFor?: AxisPbRealNameLookup,
-  lastLoadedAt?: (entryId: string) => number | null
+  lastLoadedAt?: (entryId: string) => number | null,
+  /** Decoded blocks per entry (library.paramsOf). Optional — omitted, block conditions stay
+   *  summary-level (TYPE against the model list; non-TYPE conds exclude the entry). Stored by
+   *  reference: `library`'s param cache is already plain (`$state.raw`), so no deep copy. */
+  paramsOf?: (entry: AxisPresetBrowserLibEntryLike) => AxisPbDecodedBlock[] | null
 ): AxisPresetBrowserIndex {
   const match = new Map<string, AxisPbPreparedEntry>();
   const deviceSlots = new Set<number>();
@@ -215,7 +220,7 @@ export function preparePresetBrowserIndex(
       amps: [...norm.amps],
       tags: [...norm.tags]
     };
-    const m = matchEntryFromSummary(summary);
+    const m = matchEntryFromSummary(summary, paramsOf?.(entry));
     match.set(entry.id, { summary, match: m, hay: entryHaystack(m, realNameFor) });
     if (summary.sourceId === 'device' && summary.number != null) deviceSlots.add(summary.number);
   }
@@ -310,7 +315,7 @@ function sortEntries(
   if (sort === 'name') {
     list.sort((a, b) => (desc ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name)));
   } else if (sort === 'cpu') {
-    // higher CPU first by default — summary-level estimate mirrors query.estimateCpu (blockCount-derived).
+    // higher CPU first by default — blockCount is a cheap monotonic proxy for the estimateCpu weight sum.
     list.sort((a, b) => (desc ? b.blockCount - a.blockCount : a.blockCount - b.blockCount));
   } else if (sort === 'recent') {
     // Primary key is the recency stamp (flipped by direction); the number tiebreak stays ASCENDING in

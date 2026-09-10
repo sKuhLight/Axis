@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   condsEqual,
   condsToQuery,
+  estimateCpu,
   matchEntryFromSummary,
   matchNumeric,
   matchPreset,
@@ -10,20 +11,25 @@ import {
   parseUnifiedQuery,
   serializeUnifiedQuery,
   splitTop,
+  type AxisPbDecodedParam,
   type AxisPbMatchEntry
 } from '../presetBrowser/presetBrowserWorkbenchQuery';
 import type { AxisPresetBrowserEntrySummary } from '../presetBrowser/presetBrowserWorkbenchData';
 
-const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => ({
-  name: 'Studio Clean',
-  tags: ['Clean', 'Live'],
-  author: 'Cliff',
-  sceneCount: 3,
-  cpu: 42,
-  models: { amp: ['5153 red', 'deluxe verb'], reverb: ['large hall'] },
-  blockSlugs: ['amp', 'reverb', 'delay'],
-  ...over
-});
+const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => {
+  const blockSlugs = over.blockSlugs ?? ['amp', 'reverb', 'delay'];
+  return {
+    name: 'Studio Clean',
+    tags: ['Clean', 'Live'],
+    author: 'Cliff',
+    sceneCount: 3,
+    cpu: 42,
+    models: { amp: ['5153 red', 'deluxe verb'], reverb: ['large hall'] },
+    blockSlugs,
+    blocks: blockSlugs.map((slug) => ({ slug, params: [] })),
+    ...over
+  };
+};
 
 describe('Preset Browser query grammar', () => {
   it('splits on a top-level char, paren-aware', () => {
@@ -139,6 +145,68 @@ describe('Preset Browser matching', () => {
   });
 });
 
+describe('Preset Browser deep param matching (hydrated blocks)', () => {
+  const hydrated = (params: AxisPbDecodedParam[], slug = 'amp'): AxisPbMatchEntry =>
+    entry({ blockSlugs: [slug], blocks: [{ slug, params }] });
+
+  it('matches numeric ops > < >= <= != against hydrated params', () => {
+    const e = hydrated([{ label: 'Gain', name: 'AMP_GAIN', kind: 'float', value: 7.5, enumLabel: null }]);
+    expect(matchPreset(e, parseQuery('AMP(GAIN>7)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('AMP(GAIN<7)'), '')).toBe(false);
+    expect(matchPreset(e, parseQuery('AMP(GAIN>=7.5)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('AMP(GAIN<=7.4)'), '')).toBe(false);
+    expect(matchPreset(e, parseQuery('AMP(GAIN!=7.5)'), '')).toBe(false);
+    expect(matchPreset(e, parseQuery('AMP(GAIN!=2)'), '')).toBe(true);
+  });
+
+  it('matches a range literal GAIN>3-7 (inclusive)', () => {
+    const at = (v: number) => hydrated([{ label: 'Gain', name: 'AMP_GAIN', value: v, enumLabel: null }]);
+    expect(matchPreset(at(5), parseQuery('AMP(GAIN>3-7)'), '')).toBe(true);
+    expect(matchPreset(at(7), parseQuery('AMP(GAIN>3-7)'), '')).toBe(true);
+    expect(matchPreset(at(9), parseQuery('AMP(GAIN>3-7)'), '')).toBe(false);
+  });
+
+  it('= honours the monolith decimal-rounding tolerance (Threshold=-37 matches -36.98)', () => {
+    const e = hydrated([{ label: 'Threshold', name: 'COMP_THRESH', value: -36.98, enumLabel: null }], 'comp');
+    expect(matchPreset(e, parseQuery('COMP(Threshold=-37)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('COMP(Threshold=-36.5)'), '')).toBe(false);
+  });
+
+  it('matches an enum/enumLabel substring, and != negates it', () => {
+    const e = hydrated([{ label: 'Type', name: 'AMP_TYPE', kind: 'enum', value: null, enumLabel: '5153 100W Blue' }]);
+    expect(matchPreset(e, parseQuery('AMP(TYPE=5153)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('AMP(TYPE=marshall)'), '')).toBe(false);
+    expect(matchPreset(e, parseQuery('AMP(TYPE!=marshall)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('AMP(TYPE!=5153)'), '')).toBe(false);
+  });
+
+  it('EXCLUDES an entry with a non-TYPE condition when its params are not hydrated (the regression)', () => {
+    const e = entry({ blockSlugs: ['amp'], blocks: [{ slug: 'amp', params: [] }] });
+    expect(matchPreset(e, parseQuery('AMP(GAIN>7)'), '')).toBe(false);
+  });
+
+  it('still matches a TYPE-only condition via the model list with no hydration', () => {
+    const e = entry({
+      blockSlugs: ['amp'],
+      blocks: [{ slug: 'amp', params: [] }],
+      models: { amp: ['5153 100W Blue'] }
+    });
+    expect(matchPreset(e, parseQuery('AMP(TYPE=5153)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('AMP(TYPE=marshall)'), '')).toBe(false);
+  });
+});
+
+describe('estimateCpu weighted parity with the monolith cost table', () => {
+  it('sums per-family weights + base, clamped to 20..99', () => {
+    // amp 28 + cab 12 + reverb 12 + base 8 = 60
+    expect(estimateCpu({ blocks: [{ slug: 'amp' }, { slug: 'cab' }, { slug: 'reverb' }] })).toBe(60);
+    // no blocks → base 8 clamped up to 20
+    expect(estimateCpu({ blocks: [] })).toBe(20);
+    // unknown family weighs 4 each: 25×4 + 8 = 108 clamped down to 99
+    expect(estimateCpu({ blocks: Array.from({ length: 25 }, () => ({ slug: 'wobble' })) })).toBe(99);
+  });
+});
+
 describe('matchEntryFromSummary (regression: decoded models must survive summary normalization)', () => {
   const summaryEntry = (over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBrowserEntrySummary => ({
     id: 'dev:1',
@@ -180,5 +248,18 @@ describe('matchEntryFromSummary (regression: decoded models must survive summary
   it('does not throw on an entry with empty models/amps maps', () => {
     const matched = matchEntryFromSummary(summaryEntry({ blocks: [], models: {}, amps: [] }));
     expect(matchPreset(matched, parseQuery('AMP(TYPE=5153)'), '')).toBe(false);
+  });
+
+  it('threads decoded blocks into deep param matching when provided', () => {
+    const matched = matchEntryFromSummary(summaryEntry(), [
+      { slug: 'amp', params: [{ label: 'Gain', name: 'AMP_GAIN', value: 8, enumLabel: null }] }
+    ]);
+    expect(matchPreset(matched, parseQuery('AMP(GAIN>7)'), '')).toBe(true);
+    expect(matchPreset(matched, parseQuery('AMP(GAIN<7)'), '')).toBe(false);
+  });
+
+  it('excludes a non-TYPE condition when no decoded blocks are provided', () => {
+    const matched = matchEntryFromSummary(summaryEntry());
+    expect(matchPreset(matched, parseQuery('AMP(GAIN>7)'), '')).toBe(false);
   });
 });

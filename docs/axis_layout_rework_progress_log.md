@@ -2191,3 +2191,15 @@ FM3-Edit XML (still in the temp opencode dir, never committed). Three renderer b
 Gates: `npm run check` 0 errors / 0 warnings; `npx vitest run` 1658 passed, 1 pre-existing unrelated
 failure (`convertConflicts.test.ts` `◈`→SVG, not touched). New tests: decoration-row cursor, zero-width
 label sizing, `dropdownFieldHeight`. Operator re-screenshot requested to confirm parity.
+
+## Preset Browser deep param filtering — workbench parity (2026-09-10, `feature-deletion`)
+
+The workbench Preset Browser query silently matched EVERY preset for a non-`TYPE` param condition
+(`` `AMP(GAIN>7)` `` returned the whole library); the legacy shell filtered correctly. `matchParamCond`
+moved from `presetBrowserWorkbenchParams.ts` to `presetBrowserWorkbenchQuery.ts` (re-exported), the
+matchable shape (`AxisPbMatchEntry`) now carries decoded blocks, `matchBlockCond` mirrors the monolith
+(`typeOnly` model-list fallback → deep `matchParamCond`, which EXCLUDES an entry whose params aren't
+hydrated), and both index-build call sites feed `library.paramsOf` into `preparePresetBrowserIndex`.
+`estimateCpu` now uses the monolith's weighted `CPU_WEIGHT`/`CPU_BASE` table (shared — the monolith
+imports it, its local copy deleted) so `cpu<55` agrees across shells. The line-233 "still monolith-only"
+note about deep param matching is now resolved for the filter path.

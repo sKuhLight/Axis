@@ -13,6 +13,7 @@
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
     preparePresetBrowserIndex,
+    type AxisPbDecodedBlock,
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
@@ -137,8 +138,12 @@
   // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
   // keeps the Map/Set contents unproxied so matching reads stay cheap.
   let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
+  // Reads the `$state.raw` #paramsCache (reassigned, not mutated, by hydrateParams) inside the effect,
+  // so clicking "Load params" rebuilds the index with deep param matching wired in.
+  const paramsForIndex = (e: AxisPresetBrowserLibEntryLike): AxisPbDecodedBlock[] | null =>
+    (library.paramsOf(e as unknown as Parameters<typeof library.paramsOf>[0]) as AxisPbDecodedBlock[] | null) ?? null;
   $effect(() => {
-    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at);
+    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
   });
   // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful once a
   // device scan has run (slotIsEmpty reads cacheBuilt + entries); no scan → no empty rows.

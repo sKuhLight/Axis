@@ -16,6 +16,7 @@
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
     preparePresetBrowserIndex,
+    type AxisPbDecodedBlock,
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
@@ -75,8 +76,12 @@
   // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
   // keeps the Map/Set contents unproxied so matching reads stay cheap.
   let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
+  // Reads the `$state.raw` #paramsCache (reassigned by hydrateParams) inside the effect, so deep param
+  // matching wires in once params load. Mirror of the same index build in AxisPresetBrowserPartPanel.
+  const paramsForIndex = (e: AxisPresetBrowserLibEntryLike): AxisPbDecodedBlock[] | null =>
+    (library.paramsOf(e as unknown as Parameters<typeof library.paramsOf>[0]) as AxisPbDecodedBlock[] | null) ?? null;
   $effect(() => {
-    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at);
+    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
   });
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
     if (!library.cacheBuilt) return [];

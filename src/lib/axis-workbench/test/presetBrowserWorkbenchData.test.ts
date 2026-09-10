@@ -3,6 +3,7 @@ import {
   createAxisPresetBrowserDataView,
   buildEmptyDeviceSlotEntries,
   normalizeAxisPresetBrowserSourceId,
+  preparePresetBrowserIndex,
   type AxisPresetBrowserLibEntryLike
 } from '../presetBrowser/presetBrowserWorkbenchData';
 
@@ -323,4 +324,36 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.selectedEntry).toMatchObject({ id: 'dev:2', empty: true, number: 2, name: '<EMPTY>' });
   });
 
+});
+
+describe('preparePresetBrowserIndex — decoded blocks feed deep param filtering', () => {
+  const withAmp: AxisPresetBrowserLibEntryLike = {
+    id: 'file:hot',
+    source: 'file',
+    summary: {
+      number: 1,
+      name: 'Hot Lead',
+      scenes: [],
+      blocks: [{ effectId: 1, slug: 'amp', name: 'Amp 1' }],
+      models: { amp: ['5153'] }
+    }
+  };
+  type Conds = Parameters<typeof createAxisPresetBrowserDataView>[0]['conditions'];
+  const gainCond: Conds = [{ kind: 'block', block: 'amp', params: [{ name: 'GAIN', op: '>', val: '7' }] }];
+  const typeCond: Conds = [{ kind: 'block', block: 'amp', params: [{ name: 'TYPE', op: '=', val: '5153' }] }];
+  const visible = (index: ReturnType<typeof preparePresetBrowserIndex>, conditions: Conds) =>
+    createAxisPresetBrowserDataView({ entries: [withAmp], prepared: index.match, conditions }).visibleEntries.map((e) => e.id);
+
+  it('matches a non-TYPE param condition when paramsOf supplies decoded blocks', () => {
+    const index = preparePresetBrowserIndex([withAmp], () => [], undefined, undefined, () => [
+      { slug: 'amp', params: [{ label: 'Gain', name: 'AMP_GAIN', value: 9, enumLabel: null }] }
+    ]);
+    expect(visible(index, gainCond)).toEqual(['file:hot']);
+  });
+
+  it('omitting paramsOf keeps summary-level behaviour: non-TYPE excludes, TYPE still resolves', () => {
+    const index = preparePresetBrowserIndex([withAmp], () => []);
+    expect(visible(index, gainCond)).toEqual([]);
+    expect(visible(index, typeCond)).toEqual(['file:hot']);
+  });
 });

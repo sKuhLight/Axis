@@ -1,14 +1,18 @@
 // Per-block parameter listing + drag-into-filters model for the docked Preset Browser detail pane (V13f).
 //
 // Ported from src/lib/PresetBrowser.svelte (`blocksOf`, `detailParams`, `fmtVal`, `fmtNum`,
-// `matchedKeys`, `matchParamCond`, `paramDragPayload`, `startDrag`/`onQueryDrop` payload codec). Pure
-// logic over decoded blocks: it selects the params worth showing per block, formats their values, works
-// out which cells are highlighted by the active query, and encodes/parses the drag payload used to drop a
-// param onto the FILTERS row. The docked runtime reaches the SAME decoded blocks the monolith uses
-// (library.paramsOf via the runtime host), so this is FULL param parity — not a summary-only fallback.
+// `matchedKeys`, `paramDragPayload`, `startDrag`/`onQueryDrop` payload codec). Pure logic over decoded
+// blocks: it selects the params worth showing per block, formats their values, works out which cells are
+// highlighted by the active query, and encodes/parses the drag payload used to drop a param onto the
+// FILTERS row. `matchParamCond` moved to presetBrowserWorkbenchQuery.ts (it drives the filter path now,
+// not just these highlights) and is re-exported here. The docked runtime reaches the SAME decoded blocks
+// the monolith uses (library.paramsOf via the runtime host), so this is FULL param parity.
 
-import type { AxisPbCond, AxisPbParamCond } from './presetBrowserWorkbenchQuery';
-import { cmp } from './presetBrowserWorkbenchQuery';
+import type { AxisPbCond } from './presetBrowserWorkbenchQuery';
+// matchParamCond now lives in the query module (it is on the filter path, not just the detail
+// highlight path). Re-exported here so `matchedKeys` and existing callers keep their import.
+export { matchParamCond } from './presetBrowserWorkbenchQuery';
+import { matchParamCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbDragPayload } from './presetBrowserWorkbenchFilters';
 import { axisPbCatColor, axisPbCatLabel } from './presetBrowserWorkbenchRowChips';
 import type { SpecDecodedBlock, SpecDecodedParam } from './presetBrowserWorkbenchSpecs';
@@ -42,37 +46,6 @@ export function fmtVal(p: { value: number | null; enumLabel?: string | null; uni
 // (verbatim from monolith `detailParams`).
 export function detailParams(b: DetailBlock): DetailParam[] {
   return b.params.filter((p) => p.enumLabel != null || (p.value != null && Math.abs(p.value) > 1e-4)).slice(0, 12);
-}
-
-// Single param-cond match against one decoded block param set (verbatim from monolith `matchParamCond`),
-// used to compute detail highlights (deep match — needs hydrated params, reachable in the docked context).
-export function matchParamCond(b: DetailBlock, pc: AxisPbParamCond): boolean {
-  const isType = /^type$/i.test(pc.name);
-  for (const p of b.params) {
-    const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && p.name.toLowerCase().endsWith('_type'));
-    if (!labelHit) continue;
-    if (p.kind === 'enum' || p.enumLabel != null) {
-      const sv = (p.enumLabel ?? '').toLowerCase();
-      const q = pc.val.toLowerCase();
-      return pc.op === '!=' ? !sv.includes(q) : sv.includes(q);
-    }
-    if (p.value == null) continue;
-    const range = pc.val.match(/^\s*(-?\d+\.?\d*)\s*-\s*(-?\d+\.?\d*)\s*$/);
-    if (range) {
-      const a = +range[1];
-      const bb = +range[2];
-      return p.value >= Math.min(a, bb) && p.value <= Math.max(a, bb);
-    }
-    const t = parseFloat(pc.val);
-    if (isNaN(t)) return false;
-    if (pc.op === '=') {
-      const dec = (pc.val.split('.')[1] ?? '').length;
-      const f = Math.pow(10, Math.min(dec, 2));
-      return Math.round(p.value * f) === Math.round(t * f);
-    }
-    return cmp(p.value, pc.op, t);
-  }
-  return false;
 }
 
 // Which detail cells are highlighted (matched by an active block-param condition), keyed `blockIndex:paramId`

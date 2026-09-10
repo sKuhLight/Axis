@@ -1,12 +1,16 @@
 import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
 
 // Preset Browser query language — ported from src/lib/PresetBrowser.svelte (§2.3 of
-// docs/workbench-dc-parity/06-preset-browser.md). This is the pure, summary-level subset of the
-// monolith grammar: it operates on the entry summaries the workbench parts already carry (name,
-// tags, model list, block categories, scene count, CPU estimate). Deep per-parameter matching
-// (matchParamCond over decoded blocks) needs hydrated params and stays in the monolith; block
-// conditions here match on presence + TYPE against the summary model list, mirroring the monolith's
-// `typeOnly` fallback path.
+// docs/workbench-dc-parity/06-preset-browser.md). It operates on the entry summaries the workbench
+// parts carry (name, tags, model list, block categories, scene count, CPU estimate) AND, when the
+// host feeds decoded blocks in (library.paramsOf via preparePresetBrowserIndex), on full per-block
+// parameter conditions — `matchParamCond` is the same deep matcher the monolith uses, ported here
+// verbatim. With no hydrated params a non-TYPE condition EXCLUDES the entry (mirroring the
+// monolith's `matchParamCond` fall-through); a TYPE-only condition still resolves against the
+// summary model list (the monolith's `typeOnly` fallback).
+//
+// This module stays pure and dependency-free — it runs in the `node` vitest project, which never
+// compiles rune stores. Anything store-shaped (real-name lookup, decoded blocks) is injected.
 
 // Filterable block category ids (picker order, §2.3). Upper-cased tokens map back to these slugs.
 export const AXIS_PB_FILTERABLE_BLOCKS = [
@@ -178,6 +182,57 @@ export function matchNumeric(value: number, op: string, raw: string): boolean {
   return cmp(value, op, t);
 }
 
+// Minimal structural shape of one decoded param the deep matcher needs. `DetailParam`
+// (presetBrowserWorkbenchParams.ts) and `types.ts` `DecodedParam` are both structurally assignable.
+export interface AxisPbDecodedParam {
+  label: string;
+  name: string;
+  kind?: string;
+  value: number | null;
+  enumLabel?: string | null;
+}
+
+// Minimal structural shape of one decoded block. `DetailBlock` stays structurally assignable.
+export interface AxisPbDecodedBlock {
+  slug: string;
+  params: AxisPbDecodedParam[];
+}
+
+// Single param-cond match against one decoded block's param set (verbatim from monolith
+// `matchParamCond`, PresetBrowser.svelte). Deep match — needs hydrated params; a condition naming a
+// param that isn't decoded (including an unhydrated block) falls through to `false`, which is what
+// makes a non-TYPE condition EXCLUDE an unhydrated entry rather than silently include it.
+export function matchParamCond(b: AxisPbDecodedBlock, pc: AxisPbParamCond): boolean {
+  const isType = /^type$/i.test(pc.name);
+  for (const p of b.params) {
+    const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && p.name.toLowerCase().endsWith('_type'));
+    if (!labelHit) continue;
+    if (p.kind === 'enum' || p.enumLabel != null) {
+      const sv = (p.enumLabel ?? '').toLowerCase();
+      const q = pc.val.toLowerCase();
+      return pc.op === '!=' ? !sv.includes(q) : sv.includes(q);
+    }
+    if (p.value == null) continue;
+    const range = pc.val.match(/^\s*(-?\d+\.?\d*)\s*-\s*(-?\d+\.?\d*)\s*$/);
+    if (range) {
+      const a = +range[1];
+      const bb = +range[2];
+      return p.value >= Math.min(a, bb) && p.value <= Math.max(a, bb);
+    }
+    const t = parseFloat(pc.val);
+    if (isNaN(t)) return false;
+    // `=` is tolerant to display rounding: compare at the query value's decimal precision (else a
+    // dragged "Threshold=-37" never matches a stored -36.98).
+    if (pc.op === '=') {
+      const dec = (pc.val.split('.')[1] ?? '').length;
+      const f = Math.pow(10, Math.min(dec, 2));
+      return Math.round(p.value * f) === Math.round(t * f);
+    }
+    return cmp(p.value, pc.op, t);
+  }
+  return false;
+}
+
 export interface AxisPbMatchEntry {
   name: string;
   tags: string[];
@@ -186,6 +241,10 @@ export interface AxisPbMatchEntry {
   cpu: number;
   models: Partial<Record<string, string[]>>;
   blockSlugs: string[];
+  /** Decoded blocks when the host hydrated params (fed in by `matchEntryFromSummary`), else
+   *  type-only blocks (slug + empty params) synthesized from the summary — mirrors the monolith's
+   *  `blocksOf` fallback so TYPE conditions keep working with no hydration. Stored by reference. */
+  blocks: AxisPbDecodedBlock[];
 }
 
 // Real-world device name lookup (manufacturer + the unit a model is based on), injected rather than
@@ -194,9 +253,13 @@ export interface AxisPbMatchEntry {
 // `deviceRealNames.realNameFor` (src/lib/deviceRealNames.svelte.ts), wired in by the panel component.
 export type AxisPbRealNameLookup = (slug: string, modelName: string) => string;
 
-// Adapt an entry summary to the matchable shape. `cpu` is an estimate (blockCount-derived) when the
-// summary carries none.
-export function matchEntryFromSummary(entry: AxisPresetBrowserEntrySummary): AxisPbMatchEntry {
+// Adapt an entry summary to the matchable shape. `decodedBlocks` (library.paramsOf output) enables
+// full per-parameter matching; omitted/empty, block conditions synthesize type-only blocks from the
+// summary and non-TYPE param conditions exclude the entry, mirroring the monolith.
+export function matchEntryFromSummary(
+  entry: AxisPresetBrowserEntrySummary,
+  decodedBlocks?: AxisPbDecodedBlock[] | null
+): AxisPbMatchEntry {
   // Generic roster instance labels ("Amp 1") are a fallback only — the decoded `entry.models`
   // (real amp/block type names, e.g. "5153 100W Blue") is the source of truth per slug when present.
   const models: Record<string, string[]> = {};
@@ -209,6 +272,12 @@ export function matchEntryFromSummary(entry: AxisPresetBrowserEntrySummary): Axi
   for (const [slug, names] of Object.entries(entry.models)) {
     if (names.length) models[slug] = names;
   }
+  const blocks: AxisPbDecodedBlock[] =
+    decodedBlocks && decodedBlocks.length
+      ? decodedBlocks
+      : entry.blocks
+          .filter((b) => b.slug)
+          .map((b) => ({ slug: (b.slug ?? '').toLowerCase(), params: [] as AxisPbDecodedParam[] }));
   return {
     name: entry.name,
     tags: entry.tags,
@@ -216,28 +285,45 @@ export function matchEntryFromSummary(entry: AxisPresetBrowserEntrySummary): Axi
     sceneCount: entry.sceneCount,
     cpu: estimateCpu(entry),
     models,
-    blockSlugs: entry.blocks.map((b) => (b.slug ?? '').toLowerCase()).filter(Boolean)
+    blockSlugs: entry.blocks.map((b) => (b.slug ?? '').toLowerCase()).filter(Boolean),
+    blocks
   };
 }
 
-// Coarse CPU estimate for summary-only rows (each non-IO block ≈ 3.5%). The monolith uses the decoded
-// CPU cost table; this keeps `cpu` conditions functional at the summary level.
-export function estimateCpu(entry: AxisPresetBrowserEntrySummary): number {
-  return Math.min(99, Math.round(entry.blockCount * 3.5));
+// Per-block relative DSP weight (verbatim from the monolith's decoded CPU cost table,
+// PresetBrowser.svelte `CPU_WEIGHT`/`CPU_BASE`): amp/cab/reverb/pitch dominate, EQ/drive/utility are
+// cheap, summed over placed blocks + a fixed overhead, clamped 20..99. A complexity indicator, not
+// the device's live meter (which isn't stored in a preset), hence the "~" prefix where it renders.
+const CPU_BASE = 8;
+const CPU_WEIGHT: Record<string, number> = {
+  amp: 28, cab: 12, reverb: 12, pitch: 14, multitap: 10, megatap: 10, synth: 9, delay: 8,
+  flanger: 5, phaser: 5, chorus: 5, rotary: 5, formant: 5, tremolo: 4, filter: 4, drive: 4,
+  enhancer: 3, comp: 3, wah: 3, ringmod: 3, geq: 2, peq: 2, gate: 2, volume: 1, input: 0, output: 0
+};
+
+export function estimateCpu(entry: { blocks: { slug?: string | null }[] }): number {
+  let sum = CPU_BASE;
+  for (const b of entry.blocks) sum += CPU_WEIGHT[b.slug ?? ''] ?? 4;
+  return Math.max(20, Math.min(99, Math.round(sum)));
 }
 
 function matchBlockCond(entry: AxisPbMatchEntry, cond: Extract<AxisPbCond, { kind: 'block' }>): boolean {
-  if (!entry.blockSlugs.includes(cond.block)) return false;
+  // Mirrors the monolith's `matchCond` block branch (PresetBrowser.svelte).
+  const bs = entry.blocks.filter((b) => b.slug === cond.block);
+  if (!bs.length) return false;
   if (!cond.params.length) return true;
-  const models = (entry.models[cond.block] ?? []).map((m) => m.toLowerCase());
-  // Summary level only resolves TYPE-style params against the model list; other params are treated as
-  // unconstrained (the monolith resolves them once params are hydrated).
-  return cond.params.every((pc) => {
-    if (!/^type$/i.test(pc.name)) return true;
-    const q = pc.val.toLowerCase();
-    const hit = models.some((m) => m.includes(q));
-    return pc.op === '!=' ? !hit : hit;
-  });
+  // TYPE-only conditions resolve against the summary model list even without hydrated params.
+  const typeOnly = cond.params.every((pc) => /^type$/i.test(pc.name));
+  if (typeOnly && bs.every((b) => !b.params.length)) {
+    const models = (entry.models[cond.block] ?? []).map((m) => m.toLowerCase());
+    return cond.params.every((pc) => {
+      const hit = models.some((m) => m.includes(pc.val.toLowerCase()));
+      return pc.op === '!=' ? !hit : hit;
+    });
+  }
+  // Otherwise: some instance of this block satisfies every param cond (deep match; a non-TYPE cond
+  // against an unhydrated block falls through to false in matchParamCond and excludes the entry).
+  return bs.some((b) => cond.params.every((pc) => matchParamCond(b, pc)));
 }
 
 export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
