@@ -99,8 +99,17 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
  */
 export async function collapseRail(page: Page): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  // Move the pointer away from the rail (top bar centre) so hover-intent drops.
-  await page.mouse.move(720, 20);
+  // The rail collapses on `pointerleave` (railLeave) or, if the pointer isn't over
+  // it, on `focusout`. After a viewport/profile swap the previously-focused nav
+  // entry can be unmounted with `railExpanded` still true and no event left to
+  // reset it — a bare `mouse.move` away then fires no `pointerleave` because the
+  // pointer was never tracked as over the rail. Hover the rail first so the move
+  // away is a genuine enter→leave pair that always collapses it.
+  const rail = page.locator('.aw-rail');
+  if (await rail.count()) {
+    await rail.hover();
+    await page.mouse.move(720, 20); // top bar centre — clear of the rail
+  }
   await expect(page.locator('.aw-rail.aw-rail-expanded')).toHaveCount(0);
 }
 

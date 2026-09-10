@@ -37,8 +37,8 @@ describe('packForSlug', () => {
       const pack = packForSlug(slug);
       expect(pack, slug).not.toBeNull();
       const entry = catFor(pack);
-      // FALLBACK has a dashed-square glyph; a real catalog hit never does.
-      expect(entry.glyph, slug).not.toContain('stroke-dasharray');
+      // FALLBACK carries the placeholder '—' short label; a real catalog hit never does.
+      expect(entry.short, slug).not.toBe('—');
     }
   });
   it('returns null for an unknown slug', () => {

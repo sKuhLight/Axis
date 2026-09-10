@@ -115,7 +115,7 @@ describe('constants', () => {
 
   it('familyCat resolves a family slug through catalog.catFor', () => {
     expect(familyCat('amp').short).toBe('Amp');
-    expect(familyCat('drive').glyph).toBe('◈');
+    expect(familyCat('drive').short).toBe('Drive');
     expect(familyCat('totally-unknown').short).toBe('—'); // fallback entry
   });
 });

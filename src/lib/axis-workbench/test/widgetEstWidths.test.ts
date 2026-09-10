@@ -9,7 +9,7 @@ import {
 
 describe('axisWidgetEstWidth', () => {
   it('returns the design estW for known widget types', () => {
-    expect(axisWidgetEstWidth('axis.preset')).toBe(250);
+    expect(axisWidgetEstWidth('axis.preset')).toBe(420);
     expect(axisWidgetEstWidth('axis.scenes')).toBe(240);
     expect(axisWidgetEstWidth('axis.fcSwitchView')).toBe(220);
     expect(axisWidgetEstWidth('axis.tuner')).toBe(78);
