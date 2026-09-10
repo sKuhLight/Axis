@@ -188,8 +188,8 @@
   .node:active {
     cursor: grabbing;
   }
-  /* Top-RIGHT: the surface overlays the widget's title on the top-left corner of the graph
-     (ControlSurface `.eqtitle`), so the readout would sit under it while dragging. */
+  /* Top-RIGHT: the host overlays the widget's title on the top-left corner of the graph,
+     so a top-left readout would sit under it while dragging. */
   .rd {
     position: absolute;
     top: 8px;

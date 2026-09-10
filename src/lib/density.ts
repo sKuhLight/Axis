@@ -5,9 +5,9 @@
 // shrinks only the chrome, which is the whole point: a docked Block Editor pane was spending ~61% of its
 // height on headers and footers, leaving one row of controls. Both axes coexist.
 //
-// One source of truth. `DensityScale` holds plain numbers so the JS layout math can read them directly
-// (ControlSurface's cell cap needs `tileMax` as a number), and `densityTokens()` projects the same numbers
-// into the CSS custom properties the stylesheets consume. Never hardcode a chrome height that has a token.
+// One source of truth. `DensityScale` holds plain numbers so the JS layout math can read them directly,
+// and `densityTokens()` projects the same numbers into the CSS custom properties the stylesheets
+// consume. Never hardcode a chrome height that has a token.
 
 export type Density = 'comfortable' | 'compact' | 'tight';
 
@@ -41,17 +41,13 @@ export interface DensityScale {
   /** workbench toolbar widget chip (its own control class — the widget-fit compact/mini ladder is derived
    *  from this, so the two sizing mechanisms stay ordered at every density) */
   widgetH: number;
-  /** ControlSurface: largest a board cell may grow to. Without a cap `cell` is just
-   *  containerW/cols, which inflated knobs to 171px (a 133px dial) on a wide pane. */
-  tileMax: number;
 }
 
 export const AXIS_DENSITIES: Record<Density, DensityScale> = {
-  comfortable: { ctlH: 44, ctlHSm: 34, ctlHXs: 28, padX: 14, padY: 10, gap: 8, font: 13, fontSm: 11, fontLg: 15, widgetH: 38, tileMax: 132 },
-  // Shipped default. tileMax 104 is not arbitrary — it is the same legible-tile unit ControlSurface's
-  // `fitCols` already uses to decide how many columns fit.
-  compact: { ctlH: 36, ctlHSm: 28, ctlHXs: 24, padX: 10, padY: 6, gap: 6, font: 12, fontSm: 10.5, fontLg: 14, widgetH: 32, tileMax: 104 },
-  tight: { ctlH: 30, ctlHSm: 24, ctlHXs: 20, padX: 8, padY: 4, gap: 5, font: 11, fontSm: 10, fontLg: 13, widgetH: 27, tileMax: 88 }
+  comfortable: { ctlH: 44, ctlHSm: 34, ctlHXs: 28, padX: 14, padY: 10, gap: 8, font: 13, fontSm: 11, fontLg: 15, widgetH: 38 },
+  // Shipped default.
+  compact: { ctlH: 36, ctlHSm: 28, ctlHXs: 24, padX: 10, padY: 6, gap: 6, font: 12, fontSm: 10.5, fontLg: 14, widgetH: 32 },
+  tight: { ctlH: 30, ctlHSm: 24, ctlHXs: 20, padX: 8, padY: 4, gap: 5, font: 11, fontSm: 10, fontLg: 13, widgetH: 27 }
 };
 
 export const DEFAULT_DENSITY: Density = 'compact';
@@ -72,8 +68,7 @@ const TOKEN_NAME: Record<keyof DensityScale, string> = {
   font: 'd-font',
   fontSm: 'd-font-sm',
   fontLg: 'd-font-lg',
-  widgetH: 'd-widget-h',
-  tileMax: 'd-tile-max'
+  widgetH: 'd-widget-h'
 };
 
 /** Project a density level into the `token → 'Npx'` map the theme store writes onto <html>. */
@@ -82,9 +77,4 @@ export function densityTokens(density: Density): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of Object.keys(TOKEN_NAME) as (keyof DensityScale)[]) out[TOKEN_NAME[key]] = `${scale[key]}px`;
   return out;
-}
-
-/** The board cell cap for a density — ControlSurface reads this directly (see surfaceGrid.ts). */
-export function densityTileMax(density: Density): number {
-  return AXIS_DENSITIES[readDensity(density)].tileMax;
 }

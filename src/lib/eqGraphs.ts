@@ -26,8 +26,7 @@ import { graphKind } from './deviceWidgets';
  *  Input EQ than on Speaker) and one graph can appear on several pages (the Filter block repeats its
  *  curve on Filter / LFO / Modulation). */
 export interface EqGraphSpec {
-  /** Control-surface catalog key. The first graph keeps the historical `eq` so boards users already
-   *  arranged and persisted (`axs.surface3.<slug>.<profile>`) keep their widget. */
+  /** Stable graph key. The first graph keeps the historical `eq`. */
   key: string;
   /** Layout page indices that show this graph. */
   pages: number[];

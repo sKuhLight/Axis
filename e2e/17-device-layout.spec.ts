@@ -1,10 +1,16 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { bootCleanWorkbench } from './support/workbench';
 
-// AXIS-36 (Layer 3) — the ControlSurface "Default" board renders the editor-true DeviceLayout v2:
-// pages become tabs, and INSIDE a page controls flow left→right per row / rows top→bottom, with each
-// widget kind mapped to its surface view. Driven against a fully MOCKED backend (single Drive block
-// whose params carry a v2 layout) so nothing touches the operator's live FM3 on :5056.
+// The Block Editor's embedded Grid Map (GridMap.svelte): starts collapsed on a clean boot, and a
+// selected top-row block keeps its mini-map outline clear of the scroll edge. Driven against a fully
+// MOCKED backend (single Drive block whose params carry a v2 layout) so nothing touches the
+// operator's live FM3 on :5056.
+//
+// NOTE: this file used to also assert the ControlSurface "Default" board (`.boardwrap`/`.rail`,
+// column-authored placement, the mixer rail). That component was removed when the Block Editor
+// switched to rendering the device's own pixel-exact canvas (DeviceCanvas.svelte); those board
+// tests were deleted with it. DeviceCanvas has unit coverage in `src/lib/deviceCanvas.test.ts` but
+// no e2e rendering spec yet.
 
 const SHUNT_BASE = 1024;
 
@@ -140,16 +146,16 @@ async function bootWithLayout(page: Page): Promise<void> {
 }
 
 /**
- * Expand the Block Editor's embedded Grid Map and tap the mocked Drive block (row 0, col 0) to
- * mount the ControlSurface board for it. Split out from `bootWithLayout()` because the map starts
- * collapsed by default (its own tested behaviour) and cells only render when expanded.
+ * Expand the Block Editor's embedded Grid Map and tap the mocked Drive block (row 0, col 0). Split
+ * out from `bootWithLayout()` because the map starts collapsed by default (its own tested behaviour)
+ * and cells only render when expanded.
  */
 async function selectDriveBlock(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Expand map' }).click();
   await page.locator('.mc.block[data-idx="0,0"]').click();
 }
 
-test.describe('ControlSurface device-layout board (AXIS-36)', () => {
+test.describe('Block Editor grid map', () => {
   test('starts the block editor map collapsed on a clean boot', async ({ page }) => {
     await bootWithLayout(page);
 
@@ -174,131 +180,5 @@ test.describe('ControlSurface device-layout board (AXIS-36)', () => {
 
     // The outline extends 2px past the selected cell's scaled box.
     expect(bounds?.topInset).toBeGreaterThanOrEqual(2);
-  });
-
-  test('renders the layout page as a tab with rows top→bottom and mapped widget views', async ({ page }) => {
-    await bootWithLayout(page);
-
-    // Tap the Drive block → the embedded Block Editor mounts the ControlSurface for it.
-    await selectDriveBlock(page);
-    await expect(page.locator('.boardwrap')).toBeVisible();
-
-    // The layout's single page becomes a tab named "Drive".
-    await expect(page.locator('.tab', { hasText: 'Drive' }).first()).toBeVisible();
-
-    // Row 0 knobs render with the layout's labels.
-    const gain = page.locator('.lbl', { hasText: 'Gain' }).first();
-    const tone = page.locator('.lbl', { hasText: 'Tone' }).first();
-    await expect(gain).toBeVisible();
-    await expect(tone).toBeVisible();
-
-    // Widget mapping: the multi-option enum (Mode) becomes a dropdown/select field; the slider (Level)
-    // renders as a horizontal slider row.
-    await expect(page.locator('.boardwrap .selfield')).toHaveCount(1);
-    const level = page.locator('.slbl', { hasText: 'Level' }).first();
-    await expect(level).toBeVisible();
-
-    // Rows flow top→bottom: the row-0 Gain knob sits above the row-1 Level slider.
-    const gy = await gain.boundingBox();
-    const ly = await level.boundingBox();
-    expect(gy).toBeTruthy();
-    expect(ly).toBeTruthy();
-    expect(gy!.y).toBeLessThan(ly!.y);
-  });
-
-  test('mouse wheel over a continuous control changes its value without pinning it', async ({ page }) => {
-    await bootWithLayout(page);
-    await selectDriveBlock(page);
-    await expect(page.locator('.boardwrap')).toBeVisible();
-
-    const gain = page.locator('.boardwrap .card').filter({ has: page.locator('.lbl', { hasText: 'Gain' }) }).first();
-    const valueArc = gain.locator('svg circle').nth(1);
-    const before = await valueArc.getAttribute('stroke-dasharray');
-
-    await gain.hover();
-    await page.mouse.wheel(0, -120);
-    await expect.poll(() => valueArc.getAttribute('stroke-dasharray')).not.toBe(before);
-    await expect(page.locator('.pindrag-layer')).toHaveCount(0);
-  });
-
-  test('places controls at the columns the device authored, not in array order', async ({ page }) => {
-    await bootWithLayout(page);
-    await selectDriveBlock(page);
-    await expect(page.locator('.boardwrap')).toBeVisible();
-
-    // `placement.col` carries the TRUE visual order: Gain is listed first but authored at col 2, Tone
-    // second but authored at col 0. Flowing the array (the old behaviour) would put Gain on the left.
-    const gain = page.locator('.lbl', { hasText: 'Gain' }).first();
-    const tone = page.locator('.lbl', { hasText: 'Tone' }).first();
-    const g = await gain.boundingBox();
-    const t = await tone.boundingBox();
-    expect(g).toBeTruthy();
-    expect(t).toBeTruthy();
-    expect(t!.x).toBeLessThan(g!.x); // Tone (col 0) left of Gain (col 2)
-    expect(Math.abs(t!.y - g!.y)).toBeLessThan(4); // same row
-    // col 1 is a spacer, so the two knobs are NOT adjacent — there is a real hole between them.
-    expect(g!.x - (t!.x + t!.width)).toBeGreaterThan(t!.width * 0.5);
-  });
-
-  test('block-level controls render as a fixed rail, right of the page, that does not move on page change', async ({ page }) => {
-    await bootWithLayout(page);
-    await selectDriveBlock(page);
-    await expect(page.locator('.boardwrap')).toBeVisible();
-
-    // The mixer-section controls leave the page grid entirely and render in `.rail`.
-    const rail = page.locator('.rail');
-    await expect(rail).toBeVisible();
-    const balance = rail.locator('.card').filter({ has: page.locator('.lbl', { hasText: 'Balance' }) }).first();
-    const bypass = rail.locator('.card').filter({ has: page.locator('.action') }).first(); // "Engaged"/"Bypassed"
-    await expect(balance).toBeVisible();
-    await expect(bypass).toBeVisible();
-    // …and nowhere else: they must not still be sitting in the page grid.
-    await expect(page.locator('.boardwrap .card').filter({ has: page.locator('.action') })).toHaveCount(0);
-
-    // The rail sits to the RIGHT of every page card.
-    const railBox = (await rail.boundingBox())!;
-    const boardBox = (await page.locator('.boardwrap').boundingBox())!;
-    expect(railBox.x).toBeGreaterThanOrEqual(boardBox.x + boardBox.width - 1);
-
-    // Buttons are bottom-anchored below the knobs; the dropdown zone sits between them.
-    const before = { bal: (await balance.boundingBox())!, byp: (await bypass.boundingBox())! };
-    expect(before.bal.y).toBeLessThan(before.byp.y);
-    await expect(rail.locator('.selfield')).toHaveCount(1); // Bypass Mode
-
-    // Switch to page 2, which drops the dropdown. Only the slack changes — the knob and the button
-    // stay exactly where they were. This is the whole point of the rail.
-    await page.locator('.tab', { hasText: 'Tone' }).first().click();
-    await expect(rail.locator('.selfield')).toHaveCount(0);
-    const after = { bal: (await balance.boundingBox())!, byp: (await bypass.boundingBox())! };
-    expect(Math.abs(after.bal.x - before.bal.x)).toBeLessThan(1);
-    expect(Math.abs(after.bal.y - before.bal.y)).toBeLessThan(1);
-    expect(Math.abs(after.byp.x - before.byp.x)).toBeLessThan(1);
-    expect(Math.abs(after.byp.y - before.byp.y)).toBeLessThan(1);
-  });
-
-  test('dropdown popover renders directly under its trigger, not the grid cell edge', async ({ page }) => {
-    await bootWithLayout(page);
-    await selectDriveBlock(page);
-    await expect(page.locator('.boardwrap')).toBeVisible();
-
-    // Regression guard (AXIS dropdown-offset bug): the popover used to be positioned from the
-    // widget's grid cell bottom, which sits well below the trigger because `.card` centers its
-    // content — a select field is shorter than the knob-sized cell it lives in. The popover must
-    // track the actual rendered trigger element instead.
-    const trigger = page.locator('.boardwrap .selfield');
-    await trigger.click();
-    const menu = page.locator('.selmenu');
-    await expect(menu).toBeVisible();
-
-    const t = await trigger.boundingBox();
-    const m = await menu.boundingBox();
-    expect(t).toBeTruthy();
-    expect(m).toBeTruthy();
-
-    // Menu top should sit just under the trigger's bottom edge (a couple px, not a whole cell).
-    expect(m!.y - (t!.y + t!.height)).toBeGreaterThanOrEqual(0);
-    expect(m!.y - (t!.y + t!.height)).toBeLessThan(10);
-    // Left edge aligns with the trigger, not an unrelated grid column.
-    expect(Math.abs(m!.x - t!.x)).toBeLessThan(2);
   });
 });

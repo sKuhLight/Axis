@@ -31,24 +31,22 @@ fractal-midi  ──►  ForgeFX  ──►  Axis
   family, with the user able to switch between Default, a Blank canvas, and their own custom
   profiles.
 
-## What ships today — the Control Surface
+## What ships today — the device canvas
 
-**Implemented.** The block editor body is a **widget-grid Control Surface**
-([`src/lib/ControlSurface.svelte`](../src/lib/ControlSurface.svelte)): controls are tiles (knob,
-fader, slider, number, switch, select, EQ, action) you can arrange, resize, and retype, organized
-into **pages/tabs**.
+**Implemented.** The block editor body renders the device's **own pixel-exact editor canvas**
+([`src/lib/DeviceCanvas.svelte`](../src/lib/DeviceCanvas.svelte) +
+[`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts) /
+[`src/lib/deviceWidgets.ts`](../src/lib/deviceWidgets.ts)): every control is drawn at the coordinate
+the device authored on its fixed ~1240px canvas, sized from the served `bounds`, with nothing
+snapped, packed, reflowed, or re-ordered. Pages come straight from the served layout's own pages.
+This matches FM3-Edit by construction rather than by per-block heuristics. (Axis previously
+re-derived its own arrangeable widget grid from the flat parameter list; that grid — and the
+`ControlSurface` component behind it — was removed.)
 
-Today those tabs are built **client-side** from the flat parameter list ForgeFX returns
-([`src/lib/layouts.ts`](../src/lib/layouts.ts)):
-
-- **Ideal** *(built-in)* — a heuristic pick of the most musician-facing knobs.
-- **Advanced** *(built-in)* — the remaining knobs plus all discrete selectors.
-- **EQ** *(built-in, amp only)* — the amp's graphic-EQ band params.
-- **Custom tabs** — any number of user-created tabs, each a named set of param ids.
-
-Custom tabs and swipe-control assignments are **persisted client-side** (`localStorage`), keyed by
-**block-family slug + device-true paramId**, so a custom Amp view applies to every amp. This is the
-layout machinery in place now; it does **not** yet read the served `layout` field.
+Swipe-control assignments are still **persisted client-side** (`localStorage`), keyed by
+**block-family slug + device-true paramId**. The client-side tab heuristics in
+[`src/lib/layouts.ts`](../src/lib/layouts.ts) remain as the fallback for a block the server serves
+no `layout` for.
 
 ## What's being built — Axis-Layouts (layout profiles)
 
@@ -65,49 +63,33 @@ named, switchable **layout profiles** per context (per block family, and per vir
 > **Status note.** The served `layout` is consumed: `BlockParams` carries it
 > ([`src/lib/types.ts`](../src/lib/types.ts)), the editor store ingests it
 > ([`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts)), and
-> [`src/lib/deviceLayoutBoard.ts`](../src/lib/deviceLayoutBoard.ts) turns it into the Default board.
+> [`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts) places its pages onto the canvas.
 > The built-in Ideal/Advanced/EQ tabs in `src/lib/layouts.ts` are now only the FALLBACK for a block
 > the server serves no layout for — note its `Ideal` is a keyword heuristic and is unrelated to the
 > device's real "Ideal" tab.
 
-## Placement: how a served control becomes a grid cell
+## Placement: how a served control lands on the canvas
 
-The device places every control on its own fixed ~1240px canvas, and says where in four fields:
-`placement.col`, `placement.offsetX`, `placement.offsetY`, `placement.positionExact`.
-[`src/lib/deviceGeometry.ts`](../src/lib/deviceGeometry.ts) resolves all four onto one number line;
-`deviceLayoutBoard.ts` snaps that line to the board grid. Two axes, modelled differently because the
-device authors them differently:
+The device places every control on its own fixed ~1240px canvas, and says where in the served
+`PageLayout` geometry (`parametersX/Y` + `parametersSpacingX/Y`, `mixerX/Y` + `mixerSpacingX/Y`,
+explicit Bypass / Scene Ignore / Kill Dry anchors) plus each control's `placement`
+(`col`, `offsetX`, `offsetY`, `positionExact`). [`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts)
+is a **renderer, not an arranger**: it reads that geometry and draws each control exactly where the
+device authored it. Nothing snaps, packs, reflows, clamps, repacks, centers, or infers group
+membership.
 
-- **Horizontal is absolute.** `col` and `positionExact.x` are two spellings of the same canvas x, so
-  both go through `pxToCol`. `COL_PITCH` is *derived* as `CANVAS_W / DEVICE_COLS` precisely so
-  `pxToCol(colToPx(c)) === c` — authored columns survive the round trip as an identity of the
-  definition, not as a tuned approximation.
-- **Vertical is relative.** `offsetY` nudges a control off its row's baseline, which is how ONE device
-  row draws MORE THAN ONE visual line — the amp's Ideal page puts five toggles 70px above the knobs
-  that share their column numbers. `splitByOffsetY` recovers those lines. `positionExact.y` is an
-  absolute canvas coordinate instead, so those controls cluster among themselves
-  (`clusterByCanvasRow`) and are placed below the row's own content. There is no reliable constant
-  converting a row index to a canvas y, so the two are deliberately never mixed onto one axis.
+- Each section (`parameters`, `mixer`) has its own row cursor. A flow row's baseline is
+  `(sectionX, sectionY + cursor * sectionSpacingY)`, and the cursor advances only for flow rows — a
+  row whose controls are *all* absolutely anchored is decoration (section headings, the cab identity
+  cluster, a graph overlay) and does not move the cursor, or every following flow row drops a pitch.
+- A control with `placement.col` sits at `baselineX + col * sectionSpacingX`; one without occupies
+  the next authored flow slot. Spacers and absolutely-positioned controls both consume a slot.
+  `offsetX`/`offsetY` nudge a control off its slot; `positionExact` overrides x/y outright.
+- Widget outer size comes from the control's served `bounds`; a `sectionLabel`'s width is
+  `render.sectionSpan.pixels` or `cols * sectionSpacingX`.
 
-### Two tiers, and where the grid stops
-
-Measured across all 1015 Axe-Fx III pages, 92% are grid-shaped: 500 carry no `positionExact` at all,
-and 433 carry one or two outliers (the amp's HEADROOM meter) that snap invisibly. The rest are
-**pixel-composed**: 34 of 152 distinct pages — Cab, Align, Speaker, PEQ, Filter, Scene Levels,
-Modifier, Tuner — place controls as little as 1–4px apart, which no column pitch can separate.
-`isPanelCluster` identifies them from the geometry (never from a family name — a hardcoded list is
-what produced the per-block patch cycle this replaced).
-
-The grid tier lays every page out without overlap or overflow; five pages (`CONTROLLERS/CS per Scene`,
-`FC/Devices`, `MIDIBLOCK/One Scene`, `VOCODER/Level`, `VOCODER/Pan`) have more section headings than
-the grid has columns and crowd them onto the last column. Those pages want a **panel tier** — the
-cluster rendered as one grid widget that positions its children by the device's own pixels — which is
-not built yet. `src/lib/deviceLayoutSweep.test.ts` runs every page of all three devices through the
-builder and pins that list by name, so an ordinary page cannot silently join it.
-
-The hand-written `cabIdentityCards.ts`, `cabMicGraphs.ts`, `cabAlignmentGraphs.ts` and `eqGraphs.ts`
-are each a panel-tier widget built by hand for one block; they are the candidates to retire into a
-generic panel once it exists.
+The graph modules `cabMicGraphs.ts`, `cabAlignmentGraphs.ts` and `eqGraphs.ts` each derive one
+block's curve overlay from the layout's own tokens.
 
 ## Virtual-effect screens — Setup / Controllers / Modifier / FC
 
@@ -121,9 +103,9 @@ generic panel once it exists.
 | `3` | Modifier |
 | `199` | Foot Controller (FC) |
 
-The design points the **same Control Surface** at one of these effect ids — i.e. "Setup" is the
-block editor pointed at effect id `1` — and renders it with the Default layout profile seeded from
-the served layout, just like an audio block.
+The design points the **same block editor** at one of these effect ids — i.e. "Setup" is the block
+editor pointed at effect id `1` — and renders its served layout on the device canvas, just like an
+audio block.
 
 > **Status note.** The tool rail ([`src/lib/ToolRail.svelte`](../src/lib/ToolRail.svelte)) currently
 > implements only the **Build** (grid) screen; the Controllers / Footswitches / Scenes / Perform /

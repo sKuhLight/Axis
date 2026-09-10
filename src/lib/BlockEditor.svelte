@@ -124,8 +124,8 @@
   // The Cab page authors five controls per slot whose `paramId` is a UI pseudo-id (0xFF00+): the slot
   // heading, the cabinet NAME, and the Picker / Mute / Solo buttons. The block protocol has no value
   // for those, so the canvas asks the host what to show and what a click means. Everything the cab
-  // page draws now comes from the device's own layout — which is what retires the hand-built
-  // `cabIdentityCards` slot cards (`MAX_SLOTS`, the `CAB n` title literals, the page/row anchoring).
+  // page draws now comes from the device's own layout, which is what let the old hand-built slot
+  // cards (fixed slot count, `CAB n` title literals, hardcoded page/row anchoring) be removed.
   const cabSlotIndex = (paramName: string | null | undefined) => {
     const m = /(\d+)$/.exec(paramName ?? '');
     return m ? Number(m[1]) : null;

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAxisControlArrangeEnabled,
   isAxisLayoutEditingEnabled,
   isAxisWorkbenchFeatureEnabled
 } from '../featureGate';
@@ -26,20 +25,10 @@ describe('isAxisLayoutEditingEnabled', () => {
   });
 });
 
-describe('isAxisControlArrangeEnabled', () => {
-  it('is off unless explicitly enabled', () => {
-    expect(isAxisControlArrangeEnabled({})).toBe(false);
-    expect(isAxisControlArrangeEnabled({ VITE_AXIS_CONTROL_ARRANGE: '0' })).toBe(false);
-    expect(isAxisControlArrangeEnabled({ VITE_AXIS_CONTROL_ARRANGE: 'true' })).toBe(false);
-    expect(isAxisControlArrangeEnabled({ VITE_AXIS_CONTROL_ARRANGE: '1' })).toBe(true);
-  });
-});
-
-describe('the three gates are independent', () => {
+describe('the two gates are independent', () => {
   it('does not let one env var move another gate', () => {
     const env = { VITE_AXIS_WORKBENCH: '0', VITE_AXIS_LAYOUT_EDIT: '1' };
     expect(isAxisWorkbenchFeatureEnabled(env)).toBe(false);
     expect(isAxisLayoutEditingEnabled(env)).toBe(true);
-    expect(isAxisControlArrangeEnabled(env)).toBe(false);
   });
 });

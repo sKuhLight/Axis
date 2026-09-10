@@ -1,11 +1,11 @@
 // Data-source SEAM for the editor-backed grid components (SignalGrid / GridMap /
-// BlockEditor / ControlSurface / EQGraph / CabPicker). Today every one of them resolves
+// BlockEditor / EQGraph / CabPicker). Today every one of them resolves
 // the live device-backed `editor` singleton; this indirection lets a later milestone drive
 // them from an OFFLINE buffer (an alternative EditorSurface set into Svelte context) without
 // touching the components. With no provider set, getEditorSurface() falls back to the singleton
 // → behaviourally identical to a direct `import { editor }`.
 //
-// EditorSurface is the exact subset of the EditorStore that those six components read/call
+// EditorSurface is the exact subset of the EditorStore that those five components read/call
 // (plus cabState, routed off the direct forgefx client). The compile-time guard at the bottom
 // of editor.svelte.ts (`_editorSatisfiesSurface`) forces the singleton to satisfy this shape.
 import { getContext, hasContext } from 'svelte';

@@ -3,7 +3,6 @@ import {
   AXIS_DENSITIES,
   DENSITIES,
   DEFAULT_DENSITY,
-  densityTileMax,
   densityTokens,
   readDensity,
   type DensityScale
@@ -66,18 +65,5 @@ describe('densityTokens', () => {
 
   it('falls back to the default level for an unknown value', () => {
     expect(densityTokens('nonsense' as never)).toEqual(densityTokens(DEFAULT_DENSITY));
-  });
-});
-
-describe('densityTileMax', () => {
-  it('returns the board cell cap for each level', () => {
-    expect(densityTileMax('comfortable')).toBe(132);
-    expect(densityTileMax('compact')).toBe(104);
-    expect(densityTileMax('tight')).toBe(88);
-  });
-
-  // The bug this cap exists to prevent: a wide pane inflated cells to 171px (a 133px dial).
-  it('caps well below the 171px cell that motivated it', () => {
-    for (const d of DENSITIES) expect(densityTileMax(d)).toBeLessThan(171);
   });
 });

@@ -338,8 +338,8 @@
   //
   // The popover measures its OWN zoom rather than needing a scrim: it is fixed inside the same
   // zoomed subtree, so its visual/layout width ratio IS the factor a viewport-spanning probe would
-  // report — the trick ControlSurface uses off its pin layer. `max-width: calc(100vw - 24px)` scales
-  // both measurements alike, so a narrow viewport doesn't skew it.
+  // report. `max-width: calc(100vw - 24px)` scales both measurements alike, so a narrow viewport
+  // doesn't skew it.
   function placePopover(el: HTMLElement | null, at: WorkbenchMenuPosition): WorkbenchMenuPosition {
     if (!el?.offsetWidth) return at;
     const rect = el.getBoundingClientRect();

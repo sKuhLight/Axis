@@ -66,7 +66,6 @@
   --d-font-sm: 11px; /* meta + mono labels */
   --d-font-lg: 15px; /* band title */
   --d-widget-h: 38px; /* workbench toolbar widget chip (compact/mini fit ladder derives from this) */
-  --d-tile-max: 132px; /* ControlSurface board cell cap (mirrored in JS via density.ts) */
   --axis-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --axis-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --axis-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));

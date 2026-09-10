@@ -43,8 +43,8 @@ Read `src/lib/axis-workbench/CLAUDE.md` first if you have not already this sessi
    `buildDock()` in `axisWorkbenchLayoutPresets.ts` — keep ALL six presets (`default`,
    `stage`, `studio`, `compact`, `tablet`, `mobile`) consistent.
 7. **Runtime hosting** *(conditional — only if the panel binds a live runtime)*: build
-   the types/controller/runtime/host/data quintet and declare it in
-   `axisWorkbenchRuntimeAdapters.ts` — use `/new-runtime-adapter` for this part.
+   the types/controller/runtime/host/data quintet under `<x>/` — use
+   `/new-runtime-adapter` for this part.
 8. **Tests** — extract non-trivial pure logic into `.ts` modules with node-env unit tests
    under `src/lib/axis-workbench/test/` (never mount `.svelte` in vitest); add Playwright
    e2e coverage for dock/navigation behavior when the panel adds visible chrome

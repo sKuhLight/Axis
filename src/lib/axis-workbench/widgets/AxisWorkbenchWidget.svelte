@@ -370,8 +370,7 @@
 
   // Fixed-position tooltip: a purely-CSS `:hover` `.axtip` sat inside the panel's
   // `overflow: hidden` body, so the leftmost control's tooltip was clipped/hidden
-  // behind the dock on its left. Position it against the viewport (like
-  // ControlSurface's value bubble) and clamp it on-screen.
+  // behind the dock on its left. Position it against the viewport and clamp it on-screen.
   let paramEl = $state<HTMLElement | null>(null);
   let paramTipEl = $state<HTMLElement | null>(null);
   let paramTipHover = $state(false);
@@ -614,7 +613,7 @@
     onfocus={() => (paramTipFocus = true)}
     onblur={() => (paramTipFocus = false)}
   >
-    <!-- control-surface-style tooltip: which block this control belongs to + how to act -->
+    <!-- tooltip: which block this control belongs to + how to act -->
     <span
       class="axtip"
       class:show={paramTipVisible && paramTipPos !== null}
@@ -1262,7 +1261,7 @@
     white-space: nowrap;
     color: var(--text2);
   }
-  /* control-surface-style hover/focus tooltip (design axtip): source block · param */
+  /* hover/focus tooltip (design axtip): source block · param */
   .axtipwrap {
     position: relative;
   }

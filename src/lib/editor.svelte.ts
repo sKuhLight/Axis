@@ -15,14 +15,13 @@ import { planConnect, planReplaceShunt } from './gridRouting';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { geqBandsFromLayout } from './eq';
-import { surfApplyRemote } from './surfaceStore.svelte';
 import { isWebBuild } from './buildMode';
 import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';
 import { gridHover } from './gridHover.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from './types';
 import type { EditorSurface } from './editorSurface';
-import { monitorsByFamily } from './deviceLayoutBoard';
+import { monitorsByFamily } from './deviceMonitors';
 
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
@@ -141,7 +140,8 @@ class EditorStore {
   /** effectId the currently-held params/enums/layout were read for, so #loadParams can tell a FIRST
    *  read of a block (blank the surface) from a refresh of the one already on screen (update in place). */
   #paramsEid: number | null = null;
-  /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
+  /** Device-authentic editor pages for the open block/virtual effect — the BlockEditor renders the
+   *  device's own pixel-exact canvas from these. */
   blockLayout = $state<DeviceLayout | null>(null);
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
@@ -365,7 +365,7 @@ class EditorStore {
   get selected(): Cell | null {
     if (this.virtual) {
       // virtual effects (Setup/Controllers/Modifier/FC) aren't on the grid — synthesize a cell so the
-      // same param/load/write machinery (and the ControlSurface) work unchanged.
+      // same param/load/write machinery (and the BlockEditor) work unchanged.
       const v = this.virtual;
       return { row: -1, col: -1, kind: 'block', effectId: v.eid, display: v.name, pack: v.slug, color: '#35c9d6', fromRows: [] };
     }
@@ -1157,7 +1157,6 @@ class EditorStore {
     const cache = (k: string) => { try { localStorage.setItem(k, JSON.stringify(data)); } catch { /* */ } };
     if (id === 'swipe' && data && typeof data === 'object') { this.swipeControls = data as Record<string, SwipeCtrl[]>; cache('axis.swipe.v1'); }
     else if (id === 'layouts' && data && typeof data === 'object') { this.customLayouts = data as Record<string, TabDef[]>; cache('axis.layouts.v1'); }
-    else if (id === 'surface') surfApplyRemote(data);
     else if (id === 'savedFilters') cache('axs.pb.saved');
     else if (id === 'tags' || id === 'collections' || id === 'favs' || id === 'tagColors') library.applyRemoteConfig(id, data);
   };
@@ -1413,8 +1412,8 @@ class EditorStore {
     const c = this.selected;
     if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
     // Blank the surface ONLY when nothing on screen belongs to this block. The loading state swaps the
-    // ControlSurface out, which wipes its component
-    // state — live search, arrange mode, open dropdowns, measured width, scroll position, active page.
+    // BlockEditor out, which wipes its component
+    // state — live search, open dropdowns, measured width, scroll position, active page.
     // The background refresh paths (#refreshScene, the SSE 'changed' debounce, the preset-watch tick)
     // re-read the block ALREADY open, so there they must update the values in place instead.
     if (this.#paramsEid !== c.effectId) {
@@ -1437,7 +1436,7 @@ class EditorStore {
       this.blockType = r.type ?? null;
       this.blockSlug = r.slug ?? null;
       if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
-      this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
+      this.blockLayout = r.layout ?? null; // device-authentic pages drive the BlockEditor's pixel-exact canvas
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
         const fallback = this.params[0];
@@ -2104,7 +2103,7 @@ export const editor = new EditorStore();
 export { baseName, packFor };
 
 // Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
-// editor-backed grid components (SignalGrid / GridMap / BlockEditor / ControlSurface / EQGraph /
+// editor-backed grid components (SignalGrid / GridMap / BlockEditor / EQGraph /
 // CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
 // (the interface is a subset the singleton satisfies) — never the reverse.
 export const _editorSatisfiesSurface: EditorSurface = editor;

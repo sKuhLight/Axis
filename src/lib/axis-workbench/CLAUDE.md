@@ -50,9 +50,9 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
-  the Axis theme and ribbon extras. `featureGate.ts` holds all three build gates:
-  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`), `VITE_AXIS_LAYOUT_EDIT`
-  and `VITE_AXIS_CONTROL_ARRANGE` (both **off** unless `'1'`).
+  the Axis theme and ribbon extras. `featureGate.ts` holds both build gates:
+  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`) and `VITE_AXIS_LAYOUT_EDIT`
+  (**off** unless `'1'`).
 - **Layout editing is off by default.** `axisWorkbenchStore.svelte.ts` passes
   `layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)` to
   `createWorkbenchController` — the ONE construction site. `workbench/` must keep
@@ -111,8 +111,7 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   `axisNavigationActiveState.ts` computes nav tinting.
 - Runtime adapters: `blockEditor/`, `fc/`, `presetBrowser/` — each has `types.ts` (parts
   array + `panelType(part)` helper) and a controller; `fc/` and `presetBrowser/` add
-  runtime/host/data modules. `axisWorkbenchRuntimeAdapters.ts` declares the adapter
-  manifests. See "Runtime adapters" below.
+  runtime/host/data modules. See "Runtime adapters" below.
 
 ## Registration flow
 
@@ -150,19 +149,22 @@ bypasses the manifest.
    preset's `buildNavigation`; register a `createAxisNavigationPanelAction` in
    `axisWorkbenchRegistry.ts`; add an `axisNavigationActiveState.ts` tint if applicable.
 6. Preset docks: add to `buildDock()` in the presets if the panel is docked by default.
-7. Runtime-hosting panels: build the types/controller/runtime/host/data quintet and
-   declare it in `axisWorkbenchRuntimeAdapters.ts` (see next section).
+7. Runtime-hosting panels: build the types/controller/runtime/host/data quintet
+   (see next section).
 8. Tests: pure modules unit-tested; e2e for dock/navigation behavior.
 
 ## Runtime adapters
 
-Scaffold `<x>/types.ts` + `<x>Controller.ts` + `<x>Runtime.ts` + `<x>Host.ts` +
-`<x>Data.ts` following the `fc/` template. The host factory (e.g.
-`createAxisFcWorkbenchHost()`) is the **single file allowed to import app modules**
-(editor/device runtime); controllers, runtimes, and data modules stay pure and
-unit-tested. Register the adapter in `axisWorkbenchRuntimeAdapters.ts`. Panels mount via
-`bindAxisRuntimeHost({ runtime, host, onSnapshot, start })` from `runtimeBinding.ts`;
-`runtimeHostStack.ts` is a LIFO stack so multiple panels can bind concurrently.
+An adapter is a filesystem convention, not a registry entry: create the directory
+`<x>/` under `axis-workbench/` holding the quintet `<x>/types.ts` +
+`<x>Controller.ts` + `<x>Runtime.ts` + `<x>Host.ts` + `<x>Data.ts`, following the
+`fc/` template. The host factory (e.g. `createAxisFcWorkbenchHost()`) is the
+**single file allowed to import app modules** (editor/device runtime); controllers,
+runtimes, and data modules stay pure and unit-tested. The panel is wired the normal
+way in `axisWorkbenchRegistry.ts` (its part types come from `<x>/types.ts`); it then
+mounts via `bindAxisRuntimeHost({ runtime, host, onSnapshot, start })` from
+`runtimeBinding.ts`. `runtimeHostStack.ts` is a LIFO stack so multiple panels can
+bind concurrently.
 
 ## Testing convention
 

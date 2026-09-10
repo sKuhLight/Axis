@@ -1,7 +1,7 @@
 // OFFLINE editor surface for the cross-device preset converter (P4b · META-24 · AXIS-48).
 //
-// A drop-in `EditorSurface` (see editorSurface.ts) that drives the REAL SignalGrid / BlockEditor /
-// ControlSurface from the pure `convertScratch` buffer with ZERO device I/O. A later milestone sets
+// A drop-in `EditorSurface` (see editorSurface.ts) that drives the REAL SignalGrid / BlockEditor
+// from the pure `convertScratch` buffer with ZERO device I/O. A later milestone sets
 // this singleton into Svelte context so those components render + edit a converted preset exactly as
 // they render a live device — every mutator reroutes to `convertScratch` (never `forgefx`), and every
 // device-only concern (meters, monitors, cab, telemetry, cursor-mirror) degrades to a safe stub.

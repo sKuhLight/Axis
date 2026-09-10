@@ -13,8 +13,8 @@ panels while keeping everything except one host file pure and unit-testable.
 
 1. Restate which subsystem the adapter wraps, what snapshot shape panels will consume,
    and which panel part(s) it serves.
-2. Check `src/lib/axis-workbench/axisWorkbenchRegistryManifest.ts` and
-   `axisWorkbenchRuntimeAdapters.ts` for an existing adapter or type-string collision.
+2. Check `src/lib/axis-workbench/axisWorkbenchRegistryManifest.ts` and the existing
+   adapter directories (`fc/`, `presetBrowser/`, `blockEditor/`) for a type-string collision.
 3. Study the reference template before writing code: `src/lib/axis-workbench/fc/`
    (`types.ts`, `fcWorkbenchController.ts`, `fcWorkbenchRuntime.ts`, `fcWorkbenchHost.ts`,
    `fcWorkbenchData.ts`).
@@ -33,12 +33,13 @@ panels while keeping everything except one host file pure and unit-testable.
 
 ## Wiring
 
-6. Declare the adapter manifest in
-   `src/lib/axis-workbench/axisWorkbenchRuntimeAdapters.ts`.
-7. Derive the part-panel types in `axisWorkbenchRegistryManifest.ts` from the parts array
+An adapter is a filesystem convention — the quintet under `<x>/` — not a registry entry.
+There is no adapter manifest to update.
+
+6. Derive the part-panel types in `axisWorkbenchRegistryManifest.ts` from the parts array
    (mirror how `fc`/`presetBrowser`/`blockEditor` are imported there), and wire the panel
    components in `axisWorkbenchRegistry.ts`.
-8. Panels mount the runtime via
+7. Panels mount the runtime via
    `bindAxisRuntimeHost({ runtime, host, onSnapshot, start })` from
    `src/lib/axis-workbench/runtimeBinding.ts`. Binding goes through
    `runtimeHostStack.ts` (LIFO) so multiple panels can bind concurrently — never wire a

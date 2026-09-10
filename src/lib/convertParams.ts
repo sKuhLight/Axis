@@ -1,6 +1,6 @@
 // Pure mapping from a converted block's ConverterParam[] to the editor's NamedParam[] / EnumParam[].
 //
-// The offline convert editor drives the REAL ControlSurface, which renders knobs from NamedParam and
+// The offline convert editor drives the REAL BlockEditor, which renders knobs from NamedParam and
 // dropdowns from EnumParam. The cross-device converter (forgefx-midi §4 param mapping) enriches each
 // mapped param with display metadata when a real per-device catalog covers it: `min`/`max`/`unit`/`log`
 // for a true knob sweep, `normalized` for the knob position, and `enumOptions` (ordered, index = ordinal)

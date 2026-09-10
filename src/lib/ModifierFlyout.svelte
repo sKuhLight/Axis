@@ -1,8 +1,8 @@
 <script lang="ts">
   // Modifier editor flyout — the old-shell overlay presentation. All behavior lives in the shared
   // ModifierEditorCore (also used by the docked `be-part="modifier"` panel, 05-block-editor.md §3);
-  // this wrapper just pins the public props the ControlSurface / BlockEditor overlay relies on and
-  // renders the core in its right-anchored, scrim-backed slide-in variant. Behavior is unchanged.
+  // this wrapper just pins the public props the BlockEditor overlay relies on and renders the core in
+  // its right-anchored, scrim-backed slide-in variant. Behavior is unchanged.
   import ModifierEditorCore from './ModifierEditorCore.svelte';
   import type { ModModel } from './types';
 

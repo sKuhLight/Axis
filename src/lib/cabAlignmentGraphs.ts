@@ -30,8 +30,8 @@ export function deriveCabAlignmentGraphs(input: {
     // as the unit/zoom state changes. They are alternate renderings of ONE graph, not separate graphs —
     // `CabAlignmentGraph.svelte` already draws the zoomed span itself from the live `CABINET_ZOOM` value.
     // Binding every match produced a second, fully-duplicate "Cab Alignment" card. Bind only the page's
-    // first match; a later match's slot is left unmapped, so `deviceLayoutBoard` resolves it to a gap
-    // instead of a second widget.
+    // first match; a later match's slot resolves to no spec, so the canvas leaves that graph box empty
+    // instead of drawing a second card.
     let pageBound = false;
     for (const control of controls) {
       if (control.widget !== 'graph') continue;

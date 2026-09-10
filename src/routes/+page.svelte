@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { editor } from '$lib/editor.svelte';
   import { history } from '$lib/history.svelte';
-  import { surfInit } from '$lib/surfaceStore.svelte';
   import HistoryPanel from '$lib/HistoryPanel.svelte';
   import ToolRail from '$lib/ToolRail.svelte';
   import TopBar from '$lib/TopBar.svelte';
@@ -48,7 +47,6 @@
   function startApp() {
     if (started) return;
     started = true;
-    void surfInit(); // load control-surface layouts from the config store (host: cache is already seeded)
     editor.init();
     editor.poll();
     void colorLabels.refresh(); // FM3-Edit preset-color import (replicated-purring-bachman); one-time-ever check, silent no-op if absent

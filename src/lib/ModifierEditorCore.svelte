@@ -3,8 +3,8 @@
   //   variant="flyout" → the right-anchored slide-in over a scrim (old shell; ModifierFlyout wraps this)
   //   variant="dock"   → the pane-filling docked `be-part="modifier"` panel (design §3, 05-block-editor.md)
   //
-  // Ported from design/Control Surface (Widget Grid).dc.html (MODIFIER FLYOUT ~line 278). Edits the
-  // device's active modifier slot. Curve fields (min/max/start/mid/end/slope/scale/offset) are wired
+  // Edits the device's active modifier slot. Curve fields
+  // (min/max/start/mid/end/slope/scale/offset) are wired
   // live via forgefx.setParam; source picking binds the slot to the opened control via forgefx.modBind.
   // Channel / PC Reset / Update Rate / Attack / Release / Damping / Auto Engage / Off Value are rendered
   // but only written when the model exposes their pid (flagged "pending decode" otherwise).
@@ -624,7 +624,7 @@
 
 <style>
   /* ── flyout chrome: pane-local right-anchored slide-in over a scrim ──
-       ControlSurface can live in a workbench dock, so viewport-fixed positioning
+       the block editor can live in a workbench dock, so viewport-fixed positioning
        would place this under a sibling right dock instead of inside its pane. */
   .scrim {
     position: absolute;

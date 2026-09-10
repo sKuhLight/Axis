@@ -109,8 +109,8 @@ export interface LayoutCrossBlock {
 
 /** Where the device's own editor draws a control, on its ~1240px canvas.
  *
- *  All four fields are load-bearing and all four are read — see `deviceGeometry.ts`, which resolves them
- *  onto one number line. `col` and `positionExact.x` are two spellings of the same canvas x; `offsetX`
+ *  All four fields are load-bearing and all four are read — see `deviceCanvas.ts`, which places each
+ *  control from them. `col` and `positionExact.x` are two spellings of the same canvas x; `offsetX`
  *  nudges a column horizontally; `offsetY` nudges a control off its row's baseline, which is how a single
  *  device row draws more than one visual line. */
 export interface LayoutPlacement {
@@ -224,7 +224,7 @@ export interface BlockParams {
   named: NamedParam[];
   enums: EnumParam[];
   type: { value: number; name: string } | null;
-  /** Device-authentic editor pages (seeds the ControlSurface "Default" layout). */
+  /** Device-authentic editor pages — the BlockEditor renders the device's own pixel-exact canvas from these. */
   layout?: DeviceLayout;
 }
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   // Docks the shared virtual-effect editor (Setup / Controllers) as a Workbench pane.
   // The panel's target slug (state.slug) is opened through the normal editor.openVirtual
-  // path — the same widget-grid Control Surface the old shell mounts via VirtualScreen —
-  // so Setup/Controllers are reachable in the Workbench instead of dead-ending (T09).
+  // path — the same VirtualScreen the old shell mounts — so Setup/Controllers are
+  // reachable in the Workbench instead of dead-ending (T09).
   import { untrack } from 'svelte';
   import { editor } from '../../editor.svelte';
   import VirtualScreen from '../../VirtualScreen.svelte';

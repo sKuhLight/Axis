@@ -72,9 +72,9 @@ export interface GeqBand {
  *  ALSO SURVIVES THE LAYOUT REWORK. The rework's rule is "if the device says it, don't infer it" — and
  *  the device does NOT say it here: a graphic EQ has no `graph_*` control anywhere in its layout (see
  *  `deriveEqGraphs`'s Geq fallback), so there is nothing to read instead. What the rework DID retire is
- *  this function's effect on ARRANGEMENT: the bands used to be collapsed into one `FaderBank` widget
- *  that replaced them on the board. The device canvas draws each slider at its own coordinate, so the
- *  band set now only answers "which params share a response curve", never "where do they go". */
+ *  this function's effect on ARRANGEMENT: the bands used to be collapsed into one combined fader-bank
+ *  widget that replaced them on the board. The device canvas draws each slider at its own coordinate, so
+ *  the band set now only answers "which params share a response curve", never "where do they go". */
 const MIN_BANDS = 4;
 
 /** The graphic-EQ bands of a block, in device order, or `[]` when its layout has no band row.
