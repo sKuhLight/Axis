@@ -22,6 +22,7 @@ import { gridHover } from './gridHover.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from '$lib/api/types';
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from '$lib/device/deviceMonitors';
+import { overlays } from '$lib/overlay/overlays.svelte';
 
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
@@ -298,9 +299,14 @@ class EditorStore {
     autoSync: boolean;
   }>({ available: false, configured: false, root: null, exists: true, syncing: false, lastSync: null, note: null, autoSync: loadLocalAutoSync() });
   // ── Axis hub (single rail entry point: Storage · Connection · Privacy · About) ──
-  axisOpen = $state(false);
+  // Modal open-state lives in the overlay registry (src/lib/overlay/overlays.svelte.ts) — the
+  // single owner of "which overlay is open" and of Escape priority. These accessors keep the
+  // long-standing `editor.xOpen` call sites (and the EditorSurface contract) working unchanged.
+  get axisOpen() { return overlays.isOpen('axisHub'); }
+  set axisOpen(v: boolean) { if (v) overlays.open('axisHub'); else overlays.close('axisHub'); }
   axisTab = $state<'storage' | 'privacy' | 'about' | 'device' | 'performance'>('about');
-  themeOpen = $state(false); // Appearance / theme picker modal
+  get themeOpen() { return overlays.isOpen('theme'); } // Appearance / theme picker modal
+  set themeOpen(v: boolean) { if (v) overlays.open('theme'); else overlays.close('theme'); }
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
@@ -333,23 +339,30 @@ class EditorStore {
   portOverride = $state<ConnPick | null>(null);
   /** Forced device-profile key ('fm3'|'fm9'|'axe3'|'axe2'|'vp4'|'am4'), or null when auto-detecting. */
   profileOverride = $state<string | null>(null);
-  paletteOpen = $state(false);
+  get paletteOpen() { return overlays.isOpen('palette'); }
+  set paletteOpen(v: boolean) { if (v) overlays.open('palette'); else overlays.close('palette'); }
   paletteMode = $state<'place' | 'retype'>('place');
   placeTarget = $state<{ row: number; col: number } | null>(null);
-  quickBuildOpen = $state(false);
+  get quickBuildOpen() { return overlays.isOpen('quickBuild'); }
+  set quickBuildOpen(v: boolean) { if (v) overlays.open('quickBuild'); else overlays.close('quickBuild'); }
   /** The cell a Quick Build (or other external) drag is currently over + whether the drop is valid. */
   externalDrop = $state<{ row: number; col: number; valid: boolean } | null>(null);
-  presetOpen = $state(false);
+  get presetOpen() { return overlays.isOpen('presetPicker'); }
+  set presetOpen(v: boolean) { if (v) overlays.open('presetPicker'); else overlays.close('presetPicker'); }
   /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to this
    *  callback (e.g. the cross-device converter save dialog) INSTEAD of loading the preset onto the
    *  device, then closes. Null = normal load-a-preset mode. Cleared whenever the picker closes. */
   presetPick = $state<((slot: number, name: string) => void) | null>(null);
   /** The slim, workbench-only preset search overlay opened from the Grid page's top-bar preset widget
    *  (see AxisPresetBrowserSearchOverlay.svelte) — search + results only, no navigation away from Grid. */
-  presetSearchOpen = $state(false);
-  cabPickerOpen = $state(false);
+  get presetSearchOpen() { return overlays.isOpen('presetSearch'); }
+  set presetSearchOpen(v: boolean) { if (v) overlays.open('presetSearch'); else overlays.close('presetSearch'); }
+  get cabPickerOpen() { return overlays.isOpen('cabPicker'); }
+  set cabPickerOpen(v: boolean) { if (v) overlays.open('cabPicker'); else overlays.close('cabPicker'); }
   cabPickerSlot = $state(0);
-  deviceToolsOpen = $state(false); // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
+  // Device Tools modal (preset backup/restore/decode, firmware validate, modifier view)
+  get deviceToolsOpen() { return overlays.isOpen('deviceTools'); }
+  set deviceToolsOpen(v: boolean) { if (v) overlays.open('deviceTools'); else overlays.close('deviceTools'); }
   toast = $state<{ text: string; accent: string } | null>(null);
 
   #toastT: ReturnType<typeof setTimeout> | null = null;
@@ -2060,7 +2073,8 @@ class EditorStore {
   };
 
   // ── save (DESTRUCTIVE: overwrites a preset slot) ──
-  saveOpen = $state(false);
+  get saveOpen() { return overlays.isOpen('save'); }
+  set saveOpen(v: boolean) { if (v) overlays.open('save'); else overlays.close('save'); }
   saveTarget = $state<number>(0);
   openSave = () => {
     this.saveTarget = this.preset?.number ?? this.lastPreset ?? 0;

@@ -5,10 +5,10 @@
  *
  * Import this once for its side effect — `src/routes/+page.svelte` does, at module load.
  *
- * Transitional state (M3): every overlay in the historical `+page.svelte` Escape chain is
- * registered here as a delegate reading its current home (`editor.xOpen`, a domain store).
- * As each dialog migrates onto the shared dialog shell and moves its flag into the registry
- * itself, its delegate registration is removed and `overlays` owns the boolean directly.
+ * Only the overlays whose state genuinely lives elsewhere need an entry here. The former
+ * `editor.xOpen` booleans (palette, cabPicker, quickBuild, presetPicker, presetSearch,
+ * deviceTools, save, axisHub, theme) are owned by the registry directly — `editor` now
+ * exposes thin accessors delegating to `overlays.open/close/isOpen`.
  */
 
 import { overlays } from './overlays.svelte';
@@ -38,27 +38,6 @@ export function registerOverlays(): void {
     }
   });
 
-  overlays.register('cabPicker', {
-    isOpen: () => editor.cabPickerOpen,
-    close: () => {
-      editor.cabPickerOpen = false;
-    }
-  });
-
-  overlays.register('palette', {
-    isOpen: () => editor.paletteOpen,
-    close: () => {
-      editor.paletteOpen = false;
-    }
-  });
-
-  overlays.register('quickBuild', {
-    isOpen: () => editor.quickBuildOpen,
-    close: () => {
-      editor.quickBuildOpen = false;
-    }
-  });
-
   // The converter carries a whole flow state machine; the dialogs just reflect `.open`.
   overlays.register('convertScratch', {
     isOpen: () => convertScratch.open,
@@ -67,20 +46,6 @@ export function registerOverlays(): void {
   overlays.register('convert', {
     isOpen: () => convert.open,
     close: () => convert.close()
-  });
-
-  overlays.register('presetPicker', {
-    isOpen: () => editor.presetOpen,
-    close: () => {
-      editor.presetOpen = false;
-    }
-  });
-
-  overlays.register('presetSearch', {
-    isOpen: () => editor.presetSearchOpen,
-    close: () => {
-      editor.presetSearchOpen = false;
-    }
   });
 
   // Tap-to-connect: Escape disarms the pending source before anything else closes.
