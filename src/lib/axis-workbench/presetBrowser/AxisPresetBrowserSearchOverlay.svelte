@@ -8,9 +8,9 @@
   // only opens from Grid, where no Preset Browser page/panel is concurrently mounted to collide with.
   import { onMount, tick } from 'svelte';
   import { editor } from '../../editor.svelte';
-  import { library, type LibEntry } from '../../library.svelte';
-  import { presetRecency } from '../../presetRecency.svelte';
-  import { deviceRealNames } from '../../deviceRealNames.svelte';
+  import { library, type LibEntry } from '$lib/preset/library.svelte';
+  import { presetRecency } from '$lib/preset/presetRecency.svelte';
+  import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
   import { bindAxisRuntimeHost } from '../runtimeBinding';
   import {
     createAxisPresetBrowserDataView,
@@ -31,7 +31,7 @@
   import { resolvePresetLoadAction } from './presetBrowserWorkbenchLoadAction';
   import { axisPbRowBlockChips } from './presetBrowserWorkbenchRowChips';
   import { matchingChainChips } from './presetBrowserWorkbenchChainMatch';
-  import { openConvertedInConverter } from '../../presetConvertSource';
+  import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,

@@ -1,5 +1,5 @@
 // Pure logic for the Quick Build sidecar (q → right sidecar of placeable blocks, dragged onto the grid).
-import type { Cell } from './grid';
+import type { Cell } from '$lib/device/grid';
 
 /** A Quick Build drop is valid onto an empty cell or a shunt (which `editor.place` replaces in place);
  *  dropping onto an occupied BLOCK is rejected (no silent overwrite). */

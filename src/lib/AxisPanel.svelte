@@ -6,8 +6,8 @@
   import { appSettings } from './appSettings.svelte';
   import { blockLibrary } from './blockLibrary.svelte';
   import { defaultBlockLibraryPath } from './blockLibraryPath';
-  import { library } from './library.svelte';
-  import { deviceDefs } from './deviceDefs.svelte';
+  import { library } from '$lib/preset/library.svelte';
+  import { deviceDefs } from '$lib/device/deviceDefs.svelte';
   import { isDirect } from './forgefx';
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';

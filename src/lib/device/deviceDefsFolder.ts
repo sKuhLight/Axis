@@ -7,7 +7,7 @@
 // `effectDefinitions_*.cache` matching the connected model+firmware, then returns its bytes for the
 // octet-stream import endpoint. All pure filename parsing/matching lives in `deviceDefs.ts`.
 
-import { idb } from './idb';
+import { idb } from '$lib/idb';
 import { matchEditorCacheFile } from './deviceDefs';
 
 // Minimal typings — the DOM lib doesn't always ship the File System Access API surface we use.

@@ -13,9 +13,9 @@
   import { EMPTY_LAYOUT, titleCase } from '$lib/convert/convertScratchAdapter';
   import { sourceOutcomeFor } from '$lib/convert/convertDecorations';
   import { sevToken } from '$lib/convert/convertConflicts';
-  import { catFor } from '../../catalog';
+  import { catFor } from '$lib/device/catalog';
   import { baseName } from '../../editor.svelte';
-  import type { Cell } from '../../grid';
+  import type { Cell } from '$lib/device/grid';
   import type { PanelInstance } from '../../workbench';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();

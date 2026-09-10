@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { quickBuildDropValid, packForSlug } from './quickBuild';
-import { catFor } from './catalog';
-import type { Cell } from './grid';
+import { catFor } from '$lib/device/catalog';
+import type { Cell } from '$lib/device/grid';
 
 const block = (row: number, col: number): Cell => ({
   row, col, kind: 'block', effectId: row * 12 + col, display: 'Amp 1', pack: 'Amp', color: '#f5a623', fromRows: []

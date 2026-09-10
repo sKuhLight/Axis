@@ -9,8 +9,8 @@
 //
 // Framework-free (no runes / DOM / network) and unit-tested (convertGridAdapter.test.ts).
 
-import type { Cell, Layout } from '$lib/grid';
-import { layoutFromGrid } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
+import { layoutFromGrid } from '$lib/device/grid';
 import type { ScratchState } from './convertScratch';
 import type { ConverterBlock, ConverterPreset, GridCell, PresetGrid } from '$lib/types';
 

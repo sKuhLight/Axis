@@ -20,7 +20,7 @@
 
 import { type EQBand, type EQShape, geqBandsFromLayout, shapeFromLabel } from './eq';
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
-import { graphKind } from '$lib/deviceWidgets';
+import { graphKind } from '$lib/device/deviceWidgets';
 
 /** One graph and the pages that show it. A block can have several (the amp draws a different curve on
  *  Input EQ than on Speaker) and one graph can appear on several pages (the Filter block repeats its

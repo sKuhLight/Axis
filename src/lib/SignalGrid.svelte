@@ -3,10 +3,10 @@
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
-  import { catFor, shade } from './catalog';
+  import { catFor, shade } from '$lib/device/catalog';
   import { fmtNumber, paramUnit } from './format';
-  import type { Cell } from './grid';
-  import { planConnect } from './gridRouting';
+  import type { Cell } from '$lib/device/grid';
+  import { planConnect } from '$lib/device/gridRouting';
   import { blockHelp, helpSlugForPack, resetHelpCache } from './help';
   import { theme } from './theme.svelte';
   import { setGridHover, clearGridHover } from './gridHover.svelte';

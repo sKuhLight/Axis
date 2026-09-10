@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { applyRouteOps, connectOnLayout, moveOnLayout, removeAtOnLayout, disconnectOnLayout, bypassOnLayout } from './convertGridEdit';
-import type { Cell, Layout } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
 
 const SHUNT_BASE = 1024;
 

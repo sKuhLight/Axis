@@ -5,7 +5,7 @@
   // effectDefinitions_*.cache anywhere on the card · read the definitions off the device (live SSE
   // progress) · locate an editor folder (Chromium). Dismissible per device+firmware. Clones the
   // CachePrompt bottom-sheet UX. All ordering/gating lives in deviceDefs.ts (pure, tested).
-  import { editor } from './editor.svelte';
+  import { editor } from '$lib/editor.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
   
   const online = $derived(editor.conn.state === 'online');

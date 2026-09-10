@@ -17,7 +17,7 @@
 //   • widget outer size comes from the control's served `bounds` (the editor's component metadata);
 //     a `sectionLabel`'s width is `render.sectionSpan.pixels` or `cols * sectionSpacingX`.
 
-import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout, LayoutRow } from './types';
+import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout, LayoutRow } from '$lib/types';
 import { widgetBox } from './deviceWidgets';
 
 /** Width of the device editor's control canvas, in its own pixels. The editors' `slotDivider` is 1280

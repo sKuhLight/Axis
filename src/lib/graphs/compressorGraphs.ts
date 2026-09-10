@@ -3,7 +3,7 @@
 // Sustain-style models (Pedal, Pedal1, JFET2 — a "Compression" knob and no Threshold/Ratio) get the
 // curve below, fitted to the FM3 editor's own drawing. See SUSTAIN_* for why it is fitted, not derived.
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
-import { graphKind, graphSlotsForPage } from '$lib/deviceWidgets';
+import { graphKind, graphSlotsForPage } from '$lib/device/deviceWidgets';
 
 export interface CompressorGraphSpec {
   key: string;

@@ -7,13 +7,13 @@
 // imported file → cached bytes, local folder → disk read, device slot → v2 backup dump or v1
 // snapshot-then-download.
 
-import { forgefx } from './forgefx';
-import { editor } from './editor.svelte';
+import { forgefx } from '$lib/forgefx';
+import { editor } from '$lib/editor.svelte';
 import { library, type LibEntry } from './library.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';
 import type { ConvertedPresetDoc } from '$lib/convert/convertScratch';
-import { isAxisWorkbenchFeatureEnabled } from './axis-workbench/featureGate';
+import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
 
 /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly; v1 snapshots then downloads. */
 async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
@@ -69,8 +69,8 @@ async function openConverterSurface(): Promise<void> {
   if (isAxisWorkbenchFeatureEnabled(import.meta.env)) {
     if (!convertScratch.seed()) return;
     const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
-      import('./axis-workbench/axisWorkbenchStore.svelte'),
-      import('./axis-workbench/axisWorkbenchPages')
+      import('$lib/axis-workbench/axisWorkbenchStore.svelte'),
+      import('$lib/axis-workbench/axisWorkbenchPages')
     ]);
     axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
   } else {

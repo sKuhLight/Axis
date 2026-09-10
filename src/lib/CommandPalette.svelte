@@ -6,8 +6,8 @@
   import { blockLibrary } from './blockLibrary.svelte';
   import { forgefx } from './forgefx';
   import { detailParams, fmtVal } from './axis-workbench/presetBrowser/presetBrowserWorkbenchParams';
-  import { catFor, shade } from './catalog';
-  import { categoryOf, packFor } from './blocks';
+  import { catFor, shade } from '$lib/device/catalog';
+  import { categoryOf, packFor } from '$lib/device/blocks';
   import type { BlockLibraryCandidate, DecodedBlockFile } from './types';
 
   const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };

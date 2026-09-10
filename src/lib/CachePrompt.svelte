@@ -3,7 +3,7 @@
   // shown when connected and no cache exists yet. Powers the quick picker names, Preset Browser search,
   // and param queries — like the OG editor's index. Dismissable per session.
   import { editor } from './editor.svelte';
-  import { library } from './library.svelte';
+  import { library } from '$lib/preset/library.svelte';
   
   let dismissed = $state(false);
   const show = $derived(!dismissed && !library.cacheBuilt && !library.scanning && editor.conn.state === 'online');

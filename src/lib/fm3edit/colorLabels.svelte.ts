@@ -10,10 +10,10 @@
 // gone from that preset now. A NEW preset that later picks up an already-seen FM3 color still gets
 // tagged, because provenance is per-id, not per-tag-name (see library.applyColorLabelGroups's
 // `skipIds` doc comment).
-import { forgefx } from './forgefx';
-import { library } from './library.svelte';
-import { editor } from './editor.svelte';
-import type { ColorLabelGroup } from './types';
+import { forgefx } from '$lib/forgefx';
+import { library } from '$lib/preset/library.svelte';
+import { editor } from '$lib/editor.svelte';
+import type { ColorLabelGroup } from '$lib/types';
 
 const OFFERED_KEY = 'axs.colorLabels.offered'; // FM3 tag name -> preset ids already offered that tag
 const AUTO_CHECKED_KEY = 'axs.colorLabels.autoChecked'; // '1' once the one-time-ever auto-check has run

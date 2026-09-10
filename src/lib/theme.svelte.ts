@@ -3,7 +3,7 @@
 // fonts. Applying it writes CSS custom properties onto <html>, so every `var(--token)` in the app follows.
 // Persisted to localStorage under 'axis.theme'.
 
-import { DEFAULT_DENSITY, densityTokens, readDensity, type Density } from './density';
+import { DEFAULT_DENSITY, densityTokens, readDensity, type Density } from '$lib/device/density';
 
 export type ThemeBase = 'dark' | 'light';
 export interface ThemeCfg {

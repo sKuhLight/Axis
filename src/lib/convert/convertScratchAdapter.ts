@@ -6,9 +6,9 @@
 //
 // Framework-free (no runes / DOM / network) and unit-tested (convertScratchAdapter.test.ts).
 
-import type { Cell, Layout } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
 import { blockAt, blockEffectId, type ScratchState } from './convertScratch';
-import { catFor } from '$lib/catalog';
+import { catFor } from '$lib/device/catalog';
 
 /** family slug → CATALOG key, mirroring ConvertScratchView's `titleCase` so the offline grid tiles get
  *  the same accent / glyph / short label as the bespoke fake-grid view. */

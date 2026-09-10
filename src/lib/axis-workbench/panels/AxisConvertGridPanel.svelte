@@ -14,9 +14,9 @@
   import { validateSlot, scratchToPreset } from '$lib/convert/convertScratch';
   import { deviceName, deviceIdFromModel } from '$lib/convert/convertReport';
   import { editor } from '../../editor.svelte';
-  import { library } from '../../library.svelte';
+  import { library } from '$lib/preset/library.svelte';
   import { forgefx } from '../../forgefx';
-  import { entrySyxBytes, bytesToBase64 } from '../../presetConvertSource';
+  import { entrySyxBytes, bytesToBase64 } from '$lib/preset/presetConvertSource';
   import {
     canExportTarget,
     exportTargetName,

@@ -10,7 +10,7 @@
 // of editor.svelte.ts (`_editorSatisfiesSurface`) forces the singleton to satisfy this shape.
 import { getContext, hasContext } from 'svelte';
 import { editor } from './editor.svelte';
-import type { Cell, Layout } from './grid';
+import type { Cell, Layout } from '$lib/device/grid';
 import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, MonitorEntry, CabState } from './types';
 import type { SwipeCtrl } from './layouts';
 

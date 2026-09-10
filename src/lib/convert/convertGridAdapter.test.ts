@@ -10,7 +10,7 @@ import {
   keyForGridCell
 } from './convertGridAdapter';
 import type { ScratchState, ScratchBlock } from './convertScratch';
-import type { Cell } from '$lib/grid';
+import type { Cell } from '$lib/device/grid';
 import type { ConverterBlock, ConverterPreset } from '$lib/types';
 
 function block(partial: Partial<ScratchBlock> & { key: string; family: string }): ScratchBlock {

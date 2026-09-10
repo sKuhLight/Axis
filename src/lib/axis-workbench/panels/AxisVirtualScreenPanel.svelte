@@ -5,7 +5,7 @@
   // reachable in the Workbench instead of dead-ending (T09).
   import { untrack } from 'svelte';
   import { editor } from '../../editor.svelte';
-  import VirtualScreen from '../../VirtualScreen.svelte';
+  import VirtualScreen from '$lib/device/VirtualScreen.svelte';
   import type { PanelInstance } from '../../workbench';
 
   let { panel }: { panel: PanelInstance } = $props();

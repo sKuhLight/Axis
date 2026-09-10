@@ -8,7 +8,7 @@
 //
 // Framework-free (no runes / DOM / network) and unit-tested (convertGridSerialize.test.ts).
 
-import type { Cell, Layout } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
 import type { ScratchState, ScratchBlock } from './convertScratch';
 import type { ConverterGridCell } from './convertGridAdapter';
 

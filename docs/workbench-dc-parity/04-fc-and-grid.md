@@ -541,7 +541,7 @@ Fonts: `--font-ui: 'Hanken Grotesk',system-ui,sans-serif`, `--font-mono: 'JetBra
 
 ## 5. Delta checklist vs current production
 
-Compared against: `src/lib/axis-workbench/panels/AxisSignalGridPanel.svelte`, `src/lib/axis-workbench/panels/fc/AxisFcPartPanel.svelte`, `src/lib/axis-workbench/fc/*` (controller/runtime/data/types), `src/lib/SignalGrid.svelte`, `src/lib/FcEditor.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
+Compared against: `src/lib/axis-workbench/panels/AxisSignalGridPanel.svelte`, `src/lib/axis-workbench/panels/fc/AxisFcPartPanel.svelte`, `src/lib/axis-workbench/fc/*` (controller/runtime/data/types), `src/lib/SignalGrid.svelte`, `src/lib/device/FcEditor.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
 
 ### P0 — structural gaps (spec not present in production)
 

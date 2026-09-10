@@ -18,7 +18,7 @@ import { connectOnLayout, disconnectOnLayout, moveOnLayout, removeAtOnLayout, by
 import { applyGridEditsToState } from './convertGridSerialize';
 import { paramValue } from '$lib/format';
 import { buildParams, buildEnums } from './convertParams';
-import type { Cell, Layout } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
 import type { EditorSurface } from '$lib/editorSurface';
 import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState } from '$lib/types';
 import type { SwipeCtrl } from '$lib/layouts';

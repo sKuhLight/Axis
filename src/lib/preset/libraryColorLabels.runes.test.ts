@@ -1,10 +1,10 @@
 // Reactivity contract for library.applyColorLabelGroups (replicated-purring-bachman) — mirrors
 // library.runes.test.ts's module-mock setup so the singleton constructs cleanly in node.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { PresetSummary, ColorLabelGroup } from './types';
+import type { PresetSummary, ColorLabelGroup } from '$lib/types';
 import type { LibEntry } from './library.svelte';
 
-vi.mock('./forgefx', () => ({
+vi.mock('$lib/forgefx', () => ({
   forgefx: {
     presetParams: vi.fn(),
     decodePresetFile: vi.fn(),
@@ -13,10 +13,10 @@ vi.mock('./forgefx', () => ({
     deleteDoc: vi.fn(async () => ({}))
   }
 }));
-vi.mock('./buildMode', () => ({ isWebBuild: () => true }));
-vi.mock('./idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
-vi.mock('./cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
-vi.mock('./syncBus', () => ({ notifyMutation: () => {} }));
+vi.mock('$lib/buildMode', () => ({ isWebBuild: () => true }));
+vi.mock('$lib/idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
+vi.mock('$lib/device/cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
+vi.mock('$lib/syncBus', () => ({ notifyMutation: () => {} }));
 
 function memoryStorage(): Storage {
   const m = new Map<string, string>();

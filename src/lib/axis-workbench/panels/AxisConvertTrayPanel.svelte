@@ -11,7 +11,7 @@
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 
   import type { PanelInstance } from '../../workbench';
-  import type { Cell } from '../../grid';
+  import type { Cell } from '$lib/device/grid';
   import { convert } from '$lib/convert/convert.svelte';
   import { convertScratch } from '$lib/convert/convertScratch.svelte';
   import { reportGroups, sevToken } from '$lib/convert/convertConflicts';

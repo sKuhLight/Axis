@@ -6,10 +6,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { pickAlternate, resolveAlternates, isVisible, NO_ALTERNATE_CONTEXT, type AlternateContext } from './deviceAlternates';
-import type { LayoutControl, LayoutPage } from './types';
+import type { LayoutControl, LayoutPage } from '$lib/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const MIDI = resolve(HERE, '../../../forgefx-midi/dist/gen3');
+const MIDI = resolve(HERE, '../../../../forgefx-midi/dist/gen3');
 const DEVICES = ['axe-fx-iii', 'fm9', 'fm3'] as const;
 const available = DEVICES.filter((d) => existsSync(`${MIDI}/${d}/layouts.generated.js`));
 

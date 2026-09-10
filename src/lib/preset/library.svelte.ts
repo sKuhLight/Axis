@@ -2,17 +2,17 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { z } from 'zod';
-import { forgefx } from './forgefx';
-import { isWebBuild } from './buildMode';
-import { refreshCabIrsCache } from './cabIrsCache';
-import { idb } from './idb';
-import { notifyMutation } from './syncBus';
-import type { PresetSummary, DecodedBlock, ColorLabelGroup } from './types';
+import { forgefx } from '$lib/forgefx';
+import { isWebBuild } from '$lib/buildMode';
+import { refreshCabIrsCache } from '$lib/device/cabIrsCache';
+import { idb } from '$lib/idb';
+import { notifyMutation } from '$lib/syncBus';
+import type { PresetSummary, DecodedBlock, ColorLabelGroup } from '$lib/types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from '$lib/convert/convertScratch';
 import { deviceName } from '$lib/convert/convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
 import { renameTagAssignments, renameTagColorKey } from './tagRename';
-import { mapFm3Color } from './fm3ColorMap';
+import { mapFm3Color } from '$lib/fm3edit/fm3ColorMap';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
 // letting a malformed cache break the library). Permissive: only the fields the UI relies on.

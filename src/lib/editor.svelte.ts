@@ -3,25 +3,25 @@
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
 import { forgefx, ForgeError, setRequestFailureReporter, isDirect, CLIENT_ID } from './forgefx';
-import { library } from './library.svelte';
+import { library } from '$lib/preset/library.svelte';
 import { appSettings } from './appSettings.svelte';
 import { defaultBlockLibraryPath } from './blockLibraryPath';
 import { blockLibrary } from './blockLibrary.svelte';
-import { deviceDefs } from './deviceDefs.svelte';
+import { deviceDefs } from '$lib/device/deviceDefs.svelte';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
-import { layoutFromGrid, type Cell, type Layout } from './grid';
-import { planConnect, planReplaceShunt } from './gridRouting';
-import { baseName, packFor, statusColor } from './blocks';
+import { layoutFromGrid, type Cell, type Layout } from '$lib/device/grid';
+import { planConnect, planReplaceShunt } from '$lib/device/gridRouting';
+import { baseName, packFor, statusColor } from '$lib/device/blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
 import { geqBandsFromLayout } from '$lib/graphs/eq';
 import { isWebBuild } from './buildMode';
 import { paramValue } from './format';
-import { presetRecency } from './presetRecency.svelte';
+import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import { gridHover } from './gridHover.svelte';
 import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from './types';
 import type { EditorSurface } from './editorSurface';
-import { monitorsByFamily } from './deviceMonitors';
+import { monitorsByFamily } from '$lib/device/deviceMonitors';
 
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';

@@ -8,7 +8,7 @@
   import type { Snippet } from 'svelte';
   import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
   import { axisPbRowBlockChips, type AxisPbRowBlockChip } from './presetBrowserWorkbenchRowChips';
-  import { library } from '../../library.svelte';
+  import { library } from '$lib/preset/library.svelte';
 
   let {
     entry,

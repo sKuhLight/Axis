@@ -8,7 +8,7 @@
 // These tests pin both halves of that trade — contents stay unproxied, reassignment still propagates.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { DecodedBlock, DecodedParam, PresetSummary } from './types';
+import type { DecodedBlock, DecodedParam, PresetSummary } from '$lib/types';
 import type { LibEntry } from './library.svelte';
 import { fallbackSwatch, tagSwatchCss } from './tagColors';
 
@@ -21,7 +21,7 @@ const device = vi.fn<() => Promise<unknown>>();
 const presetSummary = vi.fn<(n: number, full: number) => Promise<PresetSummary>>();
 const presetLocations = vi.fn<() => Promise<{ count: number; locations: { location: number; code: string | null; name: string; isEmpty: boolean }[] }>>();
 
-vi.mock('./forgefx', () => ({
+vi.mock('$lib/forgefx', () => ({
   forgefx: {
     presetParams: (n: number) => presetParams(n),
     decodePresetFile: (buf: ArrayBuffer) => decodePresetFile(buf),
@@ -34,11 +34,11 @@ vi.mock('./forgefx', () => ({
   }
 }));
 // isWebBuild() → true short-circuits the constructor's config-publish block.
-vi.mock('./buildMode', () => ({ isWebBuild: () => true }));
+vi.mock('$lib/buildMode', () => ({ isWebBuild: () => true }));
 // available() → false skips the IndexedDB restore AND every persist call.
-vi.mock('./idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
-vi.mock('./cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
-vi.mock('./syncBus', () => ({ notifyMutation: () => {} }));
+vi.mock('$lib/idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
+vi.mock('$lib/device/cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
+vi.mock('$lib/syncBus', () => ({ notifyMutation: () => {} }));
 
 function memoryStorage(): Storage {
   const m = new Map<string, string>();

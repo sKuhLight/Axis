@@ -9,9 +9,9 @@
 //
 // Framework-free (no runes / DOM / network) and unit-tested (convertGridEdit.test.ts).
 
-import type { Cell, Layout } from '$lib/grid';
-import { packFor, statusColor } from '$lib/blocks';
-import { planConnect, planReplaceShunt, type RouteCell } from '$lib/gridRouting';
+import type { Cell, Layout } from '$lib/device/grid';
+import { packFor, statusColor } from '$lib/device/blocks';
+import { planConnect, planReplaceShunt, type RouteCell } from '$lib/device/gridRouting';
 import type { HistoryOp } from '$lib/history.svelte';
 
 const SHUNT_COLOR = '#3a3a44'; // matches grid.ts layoutFromGrid shunt fill

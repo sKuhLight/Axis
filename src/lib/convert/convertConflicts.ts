@@ -22,7 +22,7 @@ import {
   type Severity
 } from './convertReport';
 import { remainingConflicts, type ScratchState } from './convertScratch';
-import { catFor, type CatEntry } from '$lib/catalog';
+import { catFor, type CatEntry } from '$lib/device/catalog';
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────
 

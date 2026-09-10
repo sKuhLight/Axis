@@ -1,6 +1,6 @@
-import { forgefx } from './forgefx';
-import { idb } from './idb';
-import type { CabState } from './types';
+import { forgefx } from '$lib/forgefx';
+import { idb } from '$lib/idb';
+import type { CabState } from '$lib/types';
 
 export type CabIrs = Record<string, string[]>;
 

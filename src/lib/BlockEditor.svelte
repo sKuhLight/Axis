@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
-  import { catFor, shade } from './catalog';
+  import { catFor, shade } from '$lib/device/catalog';
   import { appSettings } from './appSettings.svelte';
   import { defaultBlockLibraryPath } from './blockLibraryPath';
   import { forgefx, ForgeError } from './forgefx';
   import Icon from './Icon.svelte';
-  import DeviceCanvas from './DeviceCanvas.svelte';
+  import DeviceCanvas from '$lib/device/DeviceCanvas.svelte';
   import GridMap from './GridMap.svelte';
   import QuickBuild from './QuickBuild.svelte';
   import BlockLibrarySaveDialog from './BlockLibrarySaveDialog.svelte';
@@ -18,7 +18,7 @@
   import { deriveAdsrGraphs } from '$lib/graphs/adsrGraphs';
   import { deriveMegaTapGraphs } from '$lib/graphs/megaTapGraphs';
   import { deriveCabMicGraphs } from '$lib/graphs/cabMicGraphs';
-  import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
+  import { applyCabIrNames, loadCabIrsCachedFirst } from '$lib/device/cabIrsCache';
   import type { BlockSummary, CabState, CabSlot, EnumParam, LayoutControl } from './types';
 
   const editor = getEditorSurface();

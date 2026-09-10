@@ -6,19 +6,19 @@
   // design prototype (design/Preset Browser.dc.html), bound to the `library` store + `editor`.
   import { tick } from 'svelte';
   import { create, insertMultiple, search } from '@orama/orama';
-  import { editor } from './editor.svelte';
+  import { editor } from '$lib/editor.svelte';
   import { library } from './library.svelte';
   import { presetRecency } from './presetRecency.svelte';
-  import { forgefx, ForgeError } from './forgefx';
-  import { deviceRealNames } from './deviceRealNames.svelte';
-  import { notifyMutation } from './syncBus';
+  import { forgefx, ForgeError } from '$lib/forgefx';
+  import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
+  import { notifyMutation } from '$lib/syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
   import { convert } from '$lib/convert/convert.svelte';
-  import Icon, { type IconName } from './Icon.svelte';
-  import MiniGrid from './MiniGrid.svelte';
+  import Icon, { type IconName } from '$lib/Icon.svelte';
+  import MiniGrid from '$lib/MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
-  import { estimateCpu } from './axis-workbench/presetBrowser/presetBrowserWorkbenchQuery';
-  import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from './types';
+  import { estimateCpu } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchQuery';
+  import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from '$lib/types';
 
   const ACCENT = '#35c9d6';
   // block family slug → [label, color]. Colors carried from the design; unknown slugs get a fallback.

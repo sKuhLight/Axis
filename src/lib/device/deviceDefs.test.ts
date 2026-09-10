@@ -11,7 +11,7 @@ import {
   isBuildProgressPhase,
   type DeviceDefsInputs
 } from './deviceDefs';
-import type { DeviceCacheStatus } from './types';
+import type { DeviceCacheStatus } from '$lib/types';
 
 const baseEnv = { isElectron: false, hasDirectoryPicker: false };
 const inputs = (o: Partial<DeviceDefsInputs>): DeviceDefsInputs => ({

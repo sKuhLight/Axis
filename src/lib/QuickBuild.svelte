@@ -5,8 +5,8 @@
   // shunt replacement. Mirrors AxisConvertMinimapPanel's pointer-drag + elementFromPoint hit-testing.
   import { editor } from './editor.svelte';
   import { forgefx } from './forgefx';
-  import { catFor, shade } from './catalog';
-  import { categoryOf } from './blocks';
+  import { catFor, shade } from '$lib/device/catalog';
+  import { categoryOf } from '$lib/device/blocks';
   import { quickBuildDropValid, packForSlug } from './quickBuild';
   import type { BlockSummary } from './types';
 

@@ -12,10 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { placePage, placeLayout, parsePositionExact, DEVICE_SCALE, RAIL_INSET, type PlacedControl } from './deviceCanvas';
 import { widgetBox, dropdownFieldHeight } from './deviceWidgets';
-import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from './types';
+import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from '$lib/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const MIDI = resolve(HERE, '../../../forgefx-midi/dist/gen3');
+const MIDI = resolve(HERE, '../../../../forgefx-midi/dist/gen3');
 const DEVICES = ['axe-fx-iii', 'fm9', 'fm3'] as const;
 const available = DEVICES.filter((d) => existsSync(`${MIDI}/${d}/layouts.generated.js`));
 

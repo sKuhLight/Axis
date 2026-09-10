@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { library, type LibEntry } from '../../../library.svelte';
+  import { library, type LibEntry } from '$lib/preset/library.svelte';
   import { editor } from '../../../editor.svelte';
   import { history } from '../../../history.svelte';
-  import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
+  import { startCrossConvert, openConvertedInConverter } from '$lib/preset/presetConvertSource';
   import { convert } from '$lib/convert/convert.svelte';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
@@ -53,8 +53,8 @@
     renameTagCount,
     frequentTagRow
   } from '../../presetBrowser/presetBrowserWorkbenchFrequentTags';
-  import { presetRecency } from '../../../presetRecency.svelte';
-  import { deviceRealNames } from '../../../deviceRealNames.svelte';
+  import { presetRecency } from '$lib/preset/presetRecency.svelte';
+  import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
   import { axisPbRowAnatomy } from '../../presetBrowser/presetBrowserWorkbenchRowChips';
   import {
     axisPbRowClickIntent,
@@ -109,7 +109,7 @@
     type WorkbenchMenuPosition
   } from '../../../workbench/svelte/contextMenu';
   import { longPress } from '../../longPress';
-  import { TAG_SWATCH_COUNT, tagSwatchCss } from '../../../tagColors';
+  import { TAG_SWATCH_COUNT, tagSwatchCss } from '$lib/preset/tagColors';
 
   let { panel }: { panel: PanelInstance } = $props();
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);

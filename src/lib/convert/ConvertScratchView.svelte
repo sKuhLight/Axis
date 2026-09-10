@@ -10,8 +10,8 @@
   import { editor } from '$lib/editor.svelte';
   import { deviceName, deviceIdFromModel, formatEvent, eventSeverity, type Severity } from './convertReport';
   import { conflictsForBlock, blockBadgeSeverity, type ScratchBlock } from './convertScratch';
-  import { catFor, shade } from '$lib/catalog';
-  import { baseName } from '$lib/blocks';
+  import { catFor, shade } from '$lib/device/catalog';
+  import { baseName } from '$lib/device/blocks';
   import { theme } from '$lib/theme.svelte';
 
   const s = $derived(convertScratch.state);

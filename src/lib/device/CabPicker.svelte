@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { getEditorSurface } from './editorSurface';
+  import { getEditorSurface } from '$lib/editorSurface';
   import { catFor } from './catalog';
   import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
-  import type { CabState } from './types';
+  import type { CabState } from '$lib/types';
 
   const editor = getEditorSurface();
 

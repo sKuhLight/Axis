@@ -34,9 +34,9 @@ fractal-midi  ──►  ForgeFX  ──►  Axis
 ## What ships today — the device canvas
 
 **Implemented.** The block editor body renders the device's **own pixel-exact editor canvas**
-([`src/lib/DeviceCanvas.svelte`](../src/lib/DeviceCanvas.svelte) +
-[`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts) /
-[`src/lib/deviceWidgets.ts`](../src/lib/deviceWidgets.ts)): every control is drawn at the coordinate
+([`src/lib/device/DeviceCanvas.svelte`](../src/lib/device/DeviceCanvas.svelte) +
+[`src/lib/device/deviceCanvas.ts`](../src/lib/device/deviceCanvas.ts) /
+[`src/lib/device/deviceWidgets.ts`](../src/lib/device/deviceWidgets.ts)): every control is drawn at the coordinate
 the device authored on its fixed ~1240px canvas, sized from the served `bounds`, with nothing
 snapped, packed, reflowed, or re-ordered. Pages come straight from the served layout's own pages.
 This matches FM3-Edit by construction rather than by per-block heuristics. (Axis previously

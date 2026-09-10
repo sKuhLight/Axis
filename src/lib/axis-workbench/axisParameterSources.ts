@@ -1,8 +1,8 @@
 import type { WorkbenchParameterSource } from '../workbench';
 import type { EnumParam, NamedParam } from '../types';
 import { AXIS_PARAM_CONTROL_BINDING } from './axisWorkbenchBindings';
-import { catFor } from '../catalog';
-import { baseName } from '../blocks';
+import { catFor } from '$lib/device/catalog';
+import { baseName } from '$lib/device/blocks';
 
 export interface AxisParameterSourceBase {
   effectId: number;

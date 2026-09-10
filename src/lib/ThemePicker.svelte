@@ -2,7 +2,7 @@
   // Theme & appearance picker (the new global theme engine's UI). Presets, accent, light/dark, UI scale,
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
-  import { DENSITIES } from './density';
+  import { DENSITIES } from '$lib/device/density';
   import { editor } from './editor.svelte';
 
   let { onclose }: { onclose: () => void } = $props();

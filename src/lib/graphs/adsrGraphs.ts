@@ -1,5 +1,5 @@
 import type { DeviceLayout, NamedParam } from '$lib/types';
-import { graphKind, graphSlotsForPage } from '$lib/deviceWidgets';
+import { graphKind, graphSlotsForPage } from '$lib/device/deviceWidgets';
 
 export interface AdsrGraphSpec {
   key: string;

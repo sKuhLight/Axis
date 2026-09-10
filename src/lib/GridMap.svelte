@@ -9,9 +9,9 @@
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
-  import { catFor } from './catalog';
+  import { catFor } from '$lib/device/catalog';
   import { setGridHover, clearGridHover } from './gridHover.svelte';
-  import type { Cell } from './grid';
+  import type { Cell } from '$lib/device/grid';
 
   const COLLAPSE_KEY = 'axs.gridmap.collapsed';
   const ZOOM_KEY = 'axs.gridmap.zoom';

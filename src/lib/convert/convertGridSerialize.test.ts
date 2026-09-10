@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { layoutToRouting, applyGridEditsToState } from './convertGridSerialize';
 import { gridLayoutFromScratch } from './convertGridAdapter';
 import { scratchToPreset } from './convertScratch';
-import type { Cell, Layout } from '$lib/grid';
+import type { Cell, Layout } from '$lib/device/grid';
 import type { ScratchState, ScratchBlock } from './convertScratch';
 import type { ConverterPreset } from '$lib/types';
 

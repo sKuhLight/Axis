@@ -7,22 +7,22 @@
   import TopBar from '$lib/TopBar.svelte';
   import SignalGrid from '$lib/SignalGrid.svelte';
   import BlockEditor from '$lib/BlockEditor.svelte';
-  import VirtualScreen from '$lib/VirtualScreen.svelte';
-  import PresetBrowser from '$lib/PresetBrowser.svelte';
-  import FcEditor from '$lib/FcEditor.svelte';
+  import VirtualScreen from '$lib/device/VirtualScreen.svelte';
+  import PresetBrowser from '$lib/preset/PresetBrowser.svelte';
+  import FcEditor from '$lib/device/FcEditor.svelte';
   import CommandPalette from '$lib/CommandPalette.svelte';
-  import CabPicker from '$lib/CabPicker.svelte';
-  import DeviceTools from '$lib/DeviceTools.svelte';
+  import CabPicker from '$lib/device/CabPicker.svelte';
+  import DeviceTools from '$lib/device/DeviceTools.svelte';
   import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
   import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
   import { convert } from '$lib/convert/convert.svelte';
   import { convertScratch } from '$lib/convert/convertScratch.svelte';
-  import PresetPicker from '$lib/PresetPicker.svelte';
-  import SaveDialog from '$lib/SaveDialog.svelte';
+  import PresetPicker from '$lib/preset/PresetPicker.svelte';
+  import SaveDialog from '$lib/preset/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';
   import CachePrompt from '$lib/CachePrompt.svelte';
-  import ColorLabelsPrompt from '$lib/ColorLabelsPrompt.svelte';
-  import DeviceDefsPrompt from '$lib/DeviceDefsPrompt.svelte';
+  import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
+  import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/AxisPanel.svelte';
   import ThemePicker from '$lib/ThemePicker.svelte';
   import Notices from '$lib/Notices.svelte';
@@ -38,7 +38,7 @@
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
   import { pollIntervalsFor } from '$lib/pollIntervals';
-  import { colorLabels } from '$lib/colorLabels.svelte';
+  import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
 
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
   // live. In the desktop build (directBoot.active=false) it starts immediately.

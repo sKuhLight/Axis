@@ -3,7 +3,7 @@
 // `color-assignments_iii.dat` (hex values as parsed by colorLabelsImport's `0xAARRGGBB` → `#RRGGBB`).
 // Reuses Axis's existing 9-swatch tag palette (tagColors.ts) rather than storing arbitrary hex, so the
 // hand-picked swatch system stays untouched.
-import { TAG_SWATCH_COUNT, tagSwatchCss } from './tagColors';
+import { TAG_SWATCH_COUNT, tagSwatchCss } from '$lib/preset/tagColors';
 
 export interface Fm3ColorMapping {
   name: string;
