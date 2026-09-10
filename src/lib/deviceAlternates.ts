@@ -11,7 +11,7 @@
 // value, not of the layout, and is resolved via `shapeFromLabel` (documented below), never a
 // hardcoded family list.
 
-import { shapeFromLabel } from './eq';
+import { shapeFromLabel } from '$lib/graphs/eq';
 import type { LayoutControl } from './types';
 
 /** Live state the gates read, by editor param SYMBOL — never by paramId, which is family-scoped and

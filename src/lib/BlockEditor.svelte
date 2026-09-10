@@ -11,13 +11,13 @@
   import GridMap from './GridMap.svelte';
   import QuickBuild from './QuickBuild.svelte';
   import BlockLibrarySaveDialog from './BlockLibrarySaveDialog.svelte';
-  import { deriveEqGraphs } from './eqGraphs';
-  import { deriveModulationGraphs } from './modulationGraphs';
-  import { deriveCompressorGraphs } from './compressorGraphs';
-  import { deriveCabAlignmentGraphs } from './cabAlignmentGraphs';
-  import { deriveAdsrGraphs } from './adsrGraphs';
-  import { deriveMegaTapGraphs } from './megaTapGraphs';
-  import { deriveCabMicGraphs } from './cabMicGraphs';
+  import { deriveEqGraphs } from '$lib/graphs/eqGraphs';
+  import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
+  import { deriveCompressorGraphs } from '$lib/graphs/compressorGraphs';
+  import { deriveCabAlignmentGraphs } from '$lib/graphs/cabAlignmentGraphs';
+  import { deriveAdsrGraphs } from '$lib/graphs/adsrGraphs';
+  import { deriveMegaTapGraphs } from '$lib/graphs/megaTapGraphs';
+  import { deriveCabMicGraphs } from '$lib/graphs/cabMicGraphs';
   import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
   import type { BlockSummary, CabState, CabSlot, EnumParam, LayoutControl } from './types';
 

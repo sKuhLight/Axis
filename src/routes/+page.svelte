@@ -13,10 +13,10 @@
   import CommandPalette from '$lib/CommandPalette.svelte';
   import CabPicker from '$lib/CabPicker.svelte';
   import DeviceTools from '$lib/DeviceTools.svelte';
-  import ConvertDialog from '$lib/ConvertDialog.svelte';
-  import ConvertScratchView from '$lib/ConvertScratchView.svelte';
-  import { convert } from '$lib/convert.svelte';
-  import { convertScratch } from '$lib/convertScratch.svelte';
+  import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
+  import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
+  import { convert } from '$lib/convert/convert.svelte';
+  import { convertScratch } from '$lib/convert/convertScratch.svelte';
   import PresetPicker from '$lib/PresetPicker.svelte';
   import SaveDialog from '$lib/SaveDialog.svelte';
   import TunerOverlay from '$lib/TunerOverlay.svelte';

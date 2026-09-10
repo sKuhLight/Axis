@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { dampedModifierSource, lfoModifierSourceValue, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
+  import { dampedModifierSource, lfoModifierSourceValue, mapModifierSource, type LfoModifierVisualization } from '$lib/graphs/lfoModifier';
 
   // Live rotary knob — matches the design prototype (135° start, 270° sweep, cyan
   // value arc). The current position is a short radial tick in the ring colour,

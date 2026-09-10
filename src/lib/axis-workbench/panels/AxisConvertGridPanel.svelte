@@ -4,15 +4,15 @@
   // PanelHost subtrees), so the embedded SignalGrid reads the converted scratch buffer, not the device.
   import { setContext } from 'svelte';
   import { EDITOR_SURFACE_KEY } from '../../editorSurface';
-  import { convertEditor } from '../../convertEditor.svelte';
+  import { convertEditor } from '$lib/convert/convertEditor.svelte';
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 
   import SignalGrid from '../../SignalGrid.svelte';
   import type { PanelInstance } from '../../workbench';
-  import { convert } from '../../convert.svelte';
-  import { convertScratch } from '../../convertScratch.svelte';
-  import { validateSlot, scratchToPreset } from '../../convertScratch';
-  import { deviceName, deviceIdFromModel } from '../../convertReport';
+  import { convert } from '$lib/convert/convert.svelte';
+  import { convertScratch } from '$lib/convert/convertScratch.svelte';
+  import { validateSlot, scratchToPreset } from '$lib/convert/convertScratch';
+  import { deviceName, deviceIdFromModel } from '$lib/convert/convertReport';
   import { editor } from '../../editor.svelte';
   import { library } from '../../library.svelte';
   import { forgefx } from '../../forgefx';
@@ -25,9 +25,9 @@
     exportToast,
     exportFidelityToast,
     exportErrorToast
-  } from '../../convertExport';
+  } from '$lib/convert/convertExport';
   import { AXIS_DEFAULT_GRID_VIEW } from '../gridView';
-  import { cellDecorationFor, type CellDecoration } from '../../convertDecorations';
+  import { cellDecorationFor, type CellDecoration } from '$lib/convert/convertDecorations';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();
 

@@ -13,7 +13,7 @@
   import { deviceRealNames } from './deviceRealNames.svelte';
   import { notifyMutation } from './syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
-  import { convert } from './convert.svelte';
+  import { convert } from '$lib/convert/convert.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';

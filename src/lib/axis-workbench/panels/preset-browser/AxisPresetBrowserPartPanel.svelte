@@ -4,7 +4,7 @@
   import { editor } from '../../../editor.svelte';
   import { history } from '../../../history.svelte';
   import { startCrossConvert, openConvertedInConverter } from '../../../presetConvertSource';
-  import { convert } from '../../../convert.svelte';
+  import { convert } from '$lib/convert/convert.svelte';
   import type { PanelInstance } from '../../../workbench';
   import { bindAxisRuntimeHost } from '../../runtimeBinding';
   import { isSaveDirty } from '../../widgets/saveDirtyState';

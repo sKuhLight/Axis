@@ -1,6 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig, configDefaults } from 'vitest/config';
 import { compileModule } from 'svelte/compiler';
 import type { Plugin } from 'vite';
+
+// SvelteKit resolves `$lib` → `src/lib` for the app build and `svelte-check`, but this config is
+// standalone (no SvelteKit plugin), so vitest needs the alias spelled out. Domain-folder modules
+// under `src/lib/` reach across folders with `$lib/<folder>/x`; without this they don't resolve here.
+const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
 
 // Compile `*.svelte.ts` rune modules in CLIENT mode for the `runes` project.
 //
@@ -33,6 +39,7 @@ export default defineConfig({
   test: {
     projects: [
       {
+        resolve: { alias: { $lib: lib } },
         test: {
           name: 'node',
           include: ['src/**/*.test.ts'],
@@ -42,7 +49,7 @@ export default defineConfig({
       },
       {
         plugins: [svelteRuneModules()],
-        resolve: { conditions: ['browser'] },
+        resolve: { conditions: ['browser'], alias: { $lib: lib } },
         test: {
           name: 'runes',
           include: ['src/**/*.runes.test.ts'],

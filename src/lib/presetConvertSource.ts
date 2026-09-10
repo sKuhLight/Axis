@@ -10,9 +10,9 @@
 import { forgefx } from './forgefx';
 import { editor } from './editor.svelte';
 import { library, type LibEntry } from './library.svelte';
-import { convert } from './convert.svelte';
-import { convertScratch } from './convertScratch.svelte';
-import type { ConvertedPresetDoc } from './convertScratch';
+import { convert } from '$lib/convert/convert.svelte';
+import { convertScratch } from '$lib/convert/convertScratch.svelte';
+import type { ConvertedPresetDoc } from '$lib/convert/convertScratch';
 import { isAxisWorkbenchFeatureEnabled } from './axis-workbench/featureGate';
 
 /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly; v1 snapshots then downloads. */

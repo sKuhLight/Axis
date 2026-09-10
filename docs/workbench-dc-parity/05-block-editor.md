@@ -346,7 +346,7 @@ modCurve(){ const m=this.getMod(this.state.modParam);
 
 ## 6. Delta checklist vs current production
 
-Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`, `src/lib/BlockEditor.svelte`, `src/lib/ControlSurface.svelte`, `src/lib/ModifierFlyout.svelte`, `src/lib/EQGraph.svelte`.
+Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`, `src/lib/BlockEditor.svelte`, `src/lib/ControlSurface.svelte`, `src/lib/ModifierFlyout.svelte`, `src/lib/graphs/EQGraph.svelte`.
 
 ### P0 — structural gaps
 

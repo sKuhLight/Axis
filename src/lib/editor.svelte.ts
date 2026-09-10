@@ -14,7 +14,7 @@ import { layoutFromGrid, type Cell, type Layout } from './grid';
 import { planConnect, planReplaceShunt } from './gridRouting';
 import { baseName, packFor, statusColor } from './blocks';
 import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
-import { geqBandsFromLayout } from './eq';
+import { geqBandsFromLayout } from '$lib/graphs/eq';
 import { isWebBuild } from './buildMode';
 import { paramValue } from './format';
 import { presetRecency } from './presetRecency.svelte';

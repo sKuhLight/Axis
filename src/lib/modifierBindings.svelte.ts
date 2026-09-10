@@ -5,8 +5,8 @@
 import { forgefx } from './forgefx';
 import { editor } from './editor.svelte';
 import { boundTargetKeys, modifierTargetKey, type ModSlotBinding } from './modifierBindings';
-import { deriveModulationGraphs } from './modulationGraphs';
-import { lfoSourceFromName, type LfoModifierVisualization, type ModifierMapping } from './lfoModifier';
+import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
+import { lfoSourceFromName, type LfoModifierVisualization, type ModifierMapping } from '$lib/graphs/lfoModifier';
 import type { NamedParam } from './types';
 
 class ModifierBindingsStore {

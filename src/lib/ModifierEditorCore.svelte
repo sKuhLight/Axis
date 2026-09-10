@@ -10,7 +10,7 @@
   // but only written when the model exposes their pid (flagged "pending decode" otherwise).
   import { forgefx } from './forgefx';
   import { editor } from './editor.svelte';
-  import { dampedModifierSource, lfoModifierSourceValue, lfoSourceFromName, mapModifierResponse, type ModifierMapping } from './lfoModifier';
+  import { dampedModifierSource, lfoModifierSourceValue, lfoSourceFromName, mapModifierResponse, type ModifierMapping } from '$lib/graphs/lfoModifier';
   import { modifierBindings } from './modifierBindings.svelte';
   import type { ModModel } from './types';
   import { onDestroy, onMount } from 'svelte';

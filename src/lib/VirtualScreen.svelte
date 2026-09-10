@@ -4,8 +4,8 @@
   // come from the served layout, reads/writes go through the normal param path.
   import { editor } from './editor.svelte';
   import DeviceCanvas from './DeviceCanvas.svelte';
-  import { deriveModulationGraphs } from './modulationGraphs';
-  import { deriveAdsrGraphs } from './adsrGraphs';
+  import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
+  import { deriveAdsrGraphs } from '$lib/graphs/adsrGraphs';
 
   // accent per context (matches the rail's visual language)
   const ACCENT: Record<string, string> = {
