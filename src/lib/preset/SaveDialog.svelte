@@ -1,5 +1,6 @@
 <script lang="ts">
   import { editor } from '$lib/editor/editor.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
   let target = $state(0);
   $effect(() => {
@@ -15,10 +16,17 @@
   const src = $derived(editor.bufferSource);
 </script>
 
-{#if editor.saveOpen}
-  <div class="bg" class:mob role="presentation" onclick={() => (editor.saveOpen = false)}>
-    <div class="card" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-      <div class="head">
+<Dialog
+  open={editor.saveOpen}
+  onClose={() => (editor.saveOpen = false)}
+  size="sm"
+  accent="amber"
+  sheet={mob}
+  labelledBy="save-dlg-title"
+  class="save-dlg"
+>
+  <div class="wrap">
+      <div class="head" id="save-dlg-title">
         <span class="dot"></span>
         <span class="title">Save preset</span>
       </div>
@@ -52,44 +60,13 @@
         <button class="btn cancel" onclick={() => (editor.saveOpen = false)}>Cancel</button>
         <button class="btn save" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</button>
       </div>
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    z-index: 210;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .card {
-    width: 420px;
-    max-width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
-    padding: 20px;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  .bg.mob {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .card.mob {
-    width: 100%;
-    max-width: 100%;
-    border-radius: 18px 18px 0 0;
-    padding: 20px 18px calc(20px + var(--axis-safe-bottom));
-    animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
-  }
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`.
+     The mobile bottom-sheet's safe-area padding is added by Dialog on the card itself. */
+  .wrap { padding: 20px; }
   .head {
     display: flex;
     align-items: center;

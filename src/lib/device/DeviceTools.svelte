@@ -5,6 +5,7 @@
   // Legacy v1 fallback: an AM4 on a pre-v2 server keeps the old /am4/* routes behind the same UI.
   import { editor } from '$lib/editor/editor.svelte';
   import { forgefx } from '$lib/api/forgefx';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import type { SyxDecodeResult } from '$lib/api/types';
 
   // Loose display view over BOTH modifier-model DTOs (unified gen-3 ModModel + legacy Am4ModifierModel).
@@ -137,10 +138,9 @@
   }
 </script>
 
-{#if editor.deviceToolsOpen}
-  <div class="bg" role="presentation" onclick={close}>
-    <div class="card" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') close(); }}>
-      <header>
+<Dialog open={editor.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
+  <div class="dt">
+      <header id="device-tools-title">
         <h2>Device Tools</h2>
         <span class="sub mono">{editor.conn.device ?? 'no device'}</span>
         <span class="spacer"></span>
@@ -233,15 +233,13 @@
           {/if}
         </section>
       {/if}
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: grid; place-items: center; z-index: 60; }
-  .card { width: min(680px, 94vw); max-height: 90vh; overflow: auto; background: var(--panel, #1b1c20); color: var(--fg, #e8e8ea);
-    border: 1px solid var(--line, #33343a); border-radius: 12px; padding: 0 18px 18px; }
-  header { position: sticky; top: 0; background: inherit; display: flex; align-items: center; gap: 10px; padding: 14px 0 10px; border-bottom: 1px solid var(--line, #33343a); }
+  /* card frame comes from Dialog; the old `.card` scrolled as a whole with a sticky header. */
+  .dt { flex: 1; min-height: 0; overflow: auto; color: var(--fg, #e8e8ea); padding: 0 18px 18px; }
+  header { position: sticky; top: 0; background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 14px 0 10px; border-bottom: 1px solid var(--line, #33343a); }
   h2 { margin: 0; font-size: 16px; }
   .sub { opacity: 0.6; font-size: 11px; }
   .spacer { flex: 1; }

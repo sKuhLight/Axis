@@ -4,17 +4,17 @@
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
   import { DENSITIES } from '$lib/device/density';
   import { editor } from '$lib/editor/editor.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
-  let { onclose }: { onclose: () => void } = $props();
+  const onclose = () => (editor.themeOpen = false);
   const cfg = $derived(theme.cfg);
   const mob = $derived(editor.isMobile);
   const densityLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1);
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="bg" class:mob role="presentation" onclick={onclose}>
-  <div class="card scroll" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-    <div class="head">
+<Dialog open={editor.themeOpen} onClose={onclose} size="sm" maxHeight="88vh" sheet={mob} labelledBy="theme-dlg-title" class="theme-dlg">
+  <div class="card scroll" class:mob>
+    <div class="head" id="theme-dlg-title">
       <div><div class="h1">Appearance</div><div class="sub">Theme, accent, scale &amp; density — saved on this device</div></div>
       <button class="x" aria-label="Close" onclick={onclose}>✕</button>
     </div>
@@ -79,13 +79,12 @@
       </label>
     </div>
   </div>
-</div>
+</Dialog>
 
 <style>
-  .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 380; display: flex; align-items: center; justify-content: center; padding: 24px; animation: axsOverlay 0.18s ease-out; }
-  .card { width: 420px; max-width: 100%; max-height: 88vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55); color: var(--text); padding: 22px 22px 24px; animation: axsPalette 0.16s ease-out; }
-  .bg.mob { align-items: flex-end; padding: 0; }
-  .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding-bottom: calc(24px + var(--axis-safe-bottom)); animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
+  /* card frame comes from Dialog; `.card` here is now the scrollable padded body. */
+  .card { width: 100%; overflow-y: auto; color: var(--text); padding: 22px 22px 24px; }
+  .card.mob { padding-bottom: calc(24px + var(--axis-safe-bottom)); }
   .head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
   .h1 { font-size: 19px; font-weight: 800; color: var(--text); }
   .sub { font-size: 12.5px; color: var(--textdim); margin-top: 2px; }

@@ -177,7 +177,7 @@
   <ColorLabelsPrompt />
   <DeviceDefsPrompt />
   <AxisPanel />
-  {#if editor.themeOpen}<ThemePicker onclose={() => (editor.themeOpen = false)} />{/if}
+  <ThemePicker />
   <Notices />
   <Tour />
   <Toast />
