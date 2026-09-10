@@ -78,14 +78,26 @@ export function curvedRamp(u: number, curvature: number): number {
 const EXP_CURVATURE = 1.45;
 const LOG_CURVATURE = -1.35;
 
+// Duty Cycle is a comparator threshold: the LFO spends exactly `duty` of its cycle above the midline.
+// Biasing the Shape-skewed triangle by `1 - 2*duty` and renormalizing so the wave still reaches full
+// scale reproduces the family fm3-edit draws for every continuous waveform — a narrowing spike below
+// 50%, a widening flat-topped pulse above it, the plain waveform at 50% — and leaves the crest sitting
+// where Shape puts it. Read off fm3-edit at Shape 61.3%: at Duty 12.9/62.7/76.1% the trace runs above
+// the midline for 14/61/72% of the box, and its flat top spans 0/27/59%.
+function dutyBiased(value: number, duty: number): number {
+  const threshold = 1 - 2 * duty;
+  return Math.max(-1, Math.min(1, (value - threshold) / (1 - Math.abs(threshold))));
+}
+
 /** Value of an FM3 LFO waveform at normalized phase `t`. */
 export function modulationValue(type: string, t: number, options: ModulationWaveformOptions = {}): number {
   const phase = ((t % 1) + 1) % 1;
   const name = type.trim().toLowerCase();
   const shape = Math.max(0.01, Math.min(0.99, options.shape ?? 0.5));
-  const triangle = phase < shape
+  const duty = Math.max(0.05, Math.min(0.95, options.duty ?? 0.5));
+  const triangle = dutyBiased(phase < shape
     ? -1 + (2 * phase) / shape
-    : 1 - (2 * (phase - shape)) / (1 - shape);
+    : 1 - (2 * (phase - shape)) / (1 - shape), duty);
   // Sine is a half-sine over each of the triangle's limbs, so Shape skews it exactly as it skews the
   // triangle: measured on a live FM3, both rise over the same 0.3 of the period at Shape 0.242. At
   // Shape 0.5 this is a plain sine starting at the trough, which is where the hardware starts every
@@ -94,7 +106,7 @@ export function modulationValue(type: string, t: number, options: ModulationWave
 
   if (name === 'sine') return sine;
   if (name === 'triangle') return triangle;
-  if (name === 'square' || name === 'pulse') return phase < Math.max(0.05, Math.min(0.95, options.duty ?? 0.5)) ? 1 : -1;
+  if (name === 'square' || name === 'pulse') return phase < duty ? 1 : -1;
   // The hardware's saw is neither straight nor fixed-curvature: Shape bends it by the triangle's own
   // fall/rise ratio, and the two directions are time-mirrors rather than negations of each other.
   const sawCurvature = (1 - shape) / shape;
@@ -105,9 +117,9 @@ export function modulationValue(type: string, t: number, options: ModulationWave
   // curvature — Log rises over Shape, Exp over the rest of the cycle.
   if (name === 'log') return 2 * curvedRamp((triangle + 1) / 2, LOG_CURVATURE) - 1;
   if (name === 'exp') {
-    const mirrored = phase < 1 - shape
+    const mirrored = dutyBiased(phase < 1 - shape
       ? -1 + (2 * phase) / (1 - shape)
-      : 1 - (2 * (phase - (1 - shape))) / shape;
+      : 1 - (2 * (phase - (1 - shape))) / shape, duty);
     return 2 * curvedRamp((mirrored + 1) / 2, EXP_CURVATURE) - 1;
   }
   if (name === 'trapezoid') return Math.max(-1, Math.min(1, triangle * 2));

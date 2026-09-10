@@ -271,3 +271,51 @@ describe('modulationRate', () => {
     expect(modulationRate(1, '1/4 TRIP', 120)).toBeCloseTo(3);
   });
 });
+
+describe('LFO Duty Cycle', () => {
+  const aboveMidline = (type: string, duty: number, shape = 0.613) => {
+    let above = 0;
+    for (let i = 0; i < 2000; i++) if (modulationValue(type, i / 2000, { duty, shape }) > 0) above++;
+    return above / 2000;
+  };
+  const flatTop = (type: string, duty: number, shape = 0.613) => {
+    let top = 0;
+    for (let i = 0; i < 2000; i++) if (modulationValue(type, i / 2000, { duty, shape }) > 0.999) top++;
+    return top / 2000;
+  };
+
+  it('leaves every waveform alone at 50%', () => {
+    for (const type of ['sine', 'triangle', 'exp', 'log', 'trapezoid']) {
+      for (const phase of [0, 0.13, 0.37, 0.5, 0.74, 0.91]) {
+        expect(modulationValue(type, phase, { duty: 0.5, shape: 0.37 }))
+          .toBeCloseTo(modulationValue(type, phase, { shape: 0.37 }), 10);
+      }
+    }
+  });
+
+  // Read off fm3-edit at Shape 61.3%: Duty is the share of the cycle spent above the midline.
+  it('sets the share of the cycle a sine spends above the midline', () => {
+    expect(aboveMidline('sine', 0.129)).toBeCloseTo(0.129, 2);
+    expect(aboveMidline('sine', 0.627)).toBeCloseTo(0.627, 2);
+    expect(aboveMidline('sine', 0.761)).toBeCloseTo(0.761, 2);
+  });
+
+  it('narrows a sine to a spike below 50% and flattens its top above', () => {
+    expect(flatTop('sine', 0.129)).toBeLessThan(0.02); // a rounded apex, not a plateau
+    expect(flatTop('sine', 0.627)).toBeCloseTo(0.27, 1);
+    expect(flatTop('sine', 0.761)).toBeCloseTo(0.55, 1);
+  });
+
+  it('keeps the crest where Shape puts it', () => {
+    let peak = 0;
+    for (let i = 0; i < 2000; i++) {
+      if (modulationValue('sine', i / 2000, { duty: 0.129, shape: 0.613 }) > modulationValue('sine', peak / 2000, { duty: 0.129, shape: 0.613 })) peak = i;
+    }
+    expect(peak / 2000).toBeCloseTo(0.613, 2);
+  });
+
+  it('still cuts a square at its pulse width', () => {
+    expect(aboveMidline('square', 0.2)).toBeCloseTo(0.2, 2);
+    expect(aboveMidline('square', 0.8)).toBeCloseTo(0.8, 2);
+  });
+});
