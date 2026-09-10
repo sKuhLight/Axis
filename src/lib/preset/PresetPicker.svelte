@@ -1,6 +1,7 @@
 <script lang="ts">
   import { editor } from '$lib/editor/editor.svelte';
   import { library } from './library.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
   type Recent = { n: number; name: string };
   let recents = $state<Recent[]>([]);
@@ -93,15 +94,21 @@
     if (e.key === 'Enter') {
       if (typedNum !== null) go(typedNum);
       else if (rows[0]) go(rows[0].n, rows[0].name);
-    } else if (e.key === 'Escape') {
-      close();
     }
+    // Escape is handled by the dialog shell.
   }
 </script>
 
-{#if editor.presetOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={close}>
-    <div class="card" class:sheet={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+<Dialog
+  open={editor.presetOpen}
+  onClose={close}
+  width="680px"
+  maxHeight="84vh"
+  align="top"
+  mobileFull={editor.isMobile}
+  class="preset-picker-dlg"
+>
+  <div class="wrap">
       <div class="head">
         <div class="title-row">
           <span class="title">{pickMode ? 'Choose a slot' : 'Presets'}</span>
@@ -159,46 +166,16 @@
       <div class="foot mono">
         <span>Type # + ⏎ {pickMode ? 'Choose' : 'Load'}</span><span>★ Favorite</span><span>Esc Close</span>
       </div>
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    z-index: 200;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .bg.mob {
-    align-items: stretch;
-    padding: 0;
-  }
-  .card {
-    width: 680px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  .card.sheet {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border-radius: 0;
-    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
+    min-height: 0;
+    flex: 1;
   }
   .head {
     padding: 16px 18px 13px;

@@ -15,7 +15,9 @@
    *
    * Per-dialog differences are props, not forks:
    *   - `size` / `width` — card width
+   *   - `align` — `'top'` anchors the card near the top of the viewport (search palettes)
    *   - `sheet` — mobile bottom-sheet presentation (pass `editor.isMobile`)
+   *   - `mobileFull` — mobile full-screen presentation (pass `editor.isMobile`)
    *   - `accent` — `'amber'` for destructive dialogs (Save)
    *   - `title` — render the standard header row; omit it to supply your own header markup
    */
@@ -28,7 +30,10 @@
     title,
     size = 'md',
     width,
+    maxHeight,
+    align = 'center',
     sheet = false,
+    mobileFull = false,
     accent = 'default',
     labelledBy,
     describedBy,
@@ -41,7 +46,10 @@
     title?: string;
     size?: 'sm' | 'md' | 'lg';
     width?: string;
+    maxHeight?: string;
+    align?: 'center' | 'top';
     sheet?: boolean;
+    mobileFull?: boolean;
     accent?: 'default' | 'amber';
     labelledBy?: string;
     describedBy?: string;
@@ -52,14 +60,16 @@
 </script>
 
 {#if open}
-  <div class="dlg-scrim-wrap" class:sheet role="presentation">
+  <div class="dlg-scrim-wrap" class:sheet class:mobile-full={mobileFull} data-align={align} role="presentation">
     <button type="button" class="dlg-scrim" aria-label="Close" onclick={onClose}></button>
     <div
       class="dlg-card {klass}"
       class:sheet
+      class:mobile-full={mobileFull}
       data-size={size}
       data-accent={accent}
       style:--dlg-w={width ?? null}
+      style:--dlg-max-h={maxHeight ?? null}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -93,8 +103,15 @@
     padding: 24px;
     animation: axsOverlay 0.16s ease-out;
   }
+  .dlg-scrim-wrap[data-align='top'] {
+    align-items: flex-start;
+    padding-top: 7vh;
+  }
   .dlg-scrim-wrap.sheet {
     align-items: flex-end;
+    padding: 0;
+  }
+  .dlg-scrim-wrap.mobile-full {
     padding: 0;
   }
   .dlg-scrim {
@@ -110,9 +127,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     width: var(--dlg-w, 560px);
     max-width: 100%;
-    max-height: 88vh;
+    max-height: var(--dlg-max-h, 88vh);
     background: var(--surface);
     border: 1px solid var(--border2);
     border-radius: 16px;
@@ -136,6 +154,15 @@
     border-radius: 18px 18px 0 0;
     padding-bottom: var(--axis-safe-bottom);
     animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
+  }
+  .dlg-card.mobile-full {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
   .dlg-head {
