@@ -32,6 +32,7 @@
   import { axisPbRowBlockChips } from './presetBrowserWorkbenchRowChips';
   import { matchingChainChips } from './presetBrowserWorkbenchChainMatch';
   import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
@@ -162,9 +163,8 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (rows[cursor]) loadEntry(rows[cursor]);
-    } else if (e.key === 'Escape') {
-      close();
     }
+    // Escape is handled by the dialog shell.
   }
 
   function loadMore() {
@@ -189,9 +189,16 @@
   const pad = (n: number) => String(n).padStart(3, '0');
 </script>
 
-{#if editor.presetSearchOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={close}>
-    <div class="card" class:sheet={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+<Dialog
+  open={editor.presetSearchOpen}
+  onClose={close}
+  width="720px"
+  maxHeight="84vh"
+  align="top"
+  mobileFull={editor.isMobile}
+  class="preset-search-dlg"
+>
+  <div class="wrap">
       <div class="head">
         <div class="title-row">
           <span class="title">Find a preset</span>
@@ -258,46 +265,16 @@
       <div class="foot mono">
         <span>↑↓ Navigate</span><span>⏎ Load selected</span><span>Esc Close</span>
       </div>
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    z-index: 200;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .bg.mob {
-    align-items: stretch;
-    padding: 0;
-  }
-  .card {
-    width: 720px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  .card.sheet {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border-radius: 0;
-    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .head {
     padding: 16px 18px 13px;
