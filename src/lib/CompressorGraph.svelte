@@ -1,6 +1,9 @@
 <script lang="ts">
   import { paramValue } from './format';
-  import { compressorDotPosition, type CompressorGraphSpec } from './compressorGraphs';
+  import {
+    compressorDotPosition, sustainCurveY, sustainDotPosition, sustainTransfer,
+    type CompressorGraphSpec
+  } from './compressorGraphs';
   import type { LiveMonitor } from './types';
 
   let { graph, accent = '#35c9d6', live = null }: { graph: CompressorGraphSpec; accent?: string; live?: LiveMonitor | null } = $props();
@@ -10,17 +13,36 @@
   const H = 200;
   const MIN = -60;
   const MAX = 20;
-  // Inset by the rect's corner radius (rx=10 below) so the curve/reference-line endpoints — which
-  // sit exactly at (MIN,MIN) and (MAX,MAX) — land inside the rounded corners instead of poking past them.
-  const PAD = 10;
-  const hasTransfer = $derived(!!graph.threshold && !!graph.ratio);
+  // The plot area IS the box: the curve runs edge to edge, as it does in the FM3 editor, and the grid
+  // lines land on true quarters. Anything that would poke past the rounded corners (the 1:1 line's
+  // endpoints, the live dot at rest) is clipped by `.wrap`, which carries the same corner radius.
+  const PAD = 0;
+  // Two kinds of compressor own this slot. Threshold/Ratio models compute their curve from their own
+  // two params. Sustain-style models (a "Compression" knob, no Threshold/Ratio) get the fitted editor
+  // curve — the device reports Threshold/Ratio frozen for them, so there is nothing to compute from;
+  // see the SUSTAIN_* note in `compressorGraphs.ts`.
+  const ratioStyle = $derived(!!graph.threshold && !!graph.ratio);
+  const sustainStyle = $derived(!ratioStyle && !!graph.sustain);
+  const hasTransfer = $derived(ratioStyle || sustainStyle);
+  const transfer = $derived(sustainStyle ? sustainTransfer(paramValue(graph.sustain!)) : null);
   const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
   const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
+  // The sustain model works in normalised graph space (0..1 on both axes) because that is how the
+  // editor's own quartered grid is drawn; this plots it on the same dB window as the other curve.
+  const xOfNorm = (n: number) => xOf(MIN + n * (MAX - MIN));
+  const yOfNorm = (n: number) => yOf(MIN + n * (MAX - MIN));
   const curve = $derived.by(() => {
     if (!hasTransfer) return '';
+    const points: string[] = [];
+    if (transfer) {
+      for (let i = 0; i <= 96; i++) {
+        const input = i / 96;
+        points.push(`${xOfNorm(input).toFixed(1)},${yOfNorm(sustainCurveY(input, transfer)).toFixed(1)}`);
+      }
+      return points.join(' ');
+    }
     const threshold = paramValue(graph.threshold!);
     const ratio = Math.max(1, paramValue(graph.ratio!));
-    const points: string[] = [];
     for (let i = 0; i <= 96; i++) {
       const input = MIN + ((MAX - MIN) * i) / 96;
       const output = input <= threshold ? input : threshold + (input - threshold) / ratio;
@@ -36,6 +58,14 @@
   // only the total absence of a live reading (metering off) hides it outright.
   const dot = $derived.by(() => {
     if (!hasTransfer || live?.db == null) return null;
+    if (transfer) {
+      // Same idea on the sustain curve, in its normalised space: reduction maps to a point on the
+      // curve, and no reduction rests at the silent corner.
+      const pos = sustainDotPosition(transfer, -live.db / (MAX - MIN));
+      if (!pos) return { input: MIN, output: MIN };
+      const input = Math.min(1, pos.input);
+      return { input: MIN + input * (MAX - MIN), output: MIN + sustainCurveY(input, transfer) * (MAX - MIN) };
+    }
     const threshold = paramValue(graph.threshold!);
     const ratio = Math.max(1, paramValue(graph.ratio!));
     const pos = compressorDotPosition(threshold, ratio, -live.db);
@@ -63,8 +93,8 @@
     {#if hasTransfer}
       <polyline points={curve} fill="none" stroke={accent} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
     {:else}
-      <text x={W / 2} y={H / 2 - 4} text-anchor="middle" fill="var(--textdim)" font-size="12">Sustain-style compressor</text>
-      <text x={W / 2} y={H / 2 + 13} text-anchor="middle" fill="var(--textmuted)" font-size="10">Transfer curve unavailable</text>
+      <text x={W / 2} y={H / 2 - 4} text-anchor="middle" fill="var(--textdim)" font-size="12">No transfer controls</text>
+      <text x={W / 2} y={H / 2 + 13} text-anchor="middle" fill="var(--textmuted)" font-size="10">This model exposes no curve</text>
     {/if}
   </svg>
   {#if dotPct}
@@ -74,7 +104,9 @@
 
 <style>
   /* Largest square that fits the slot: width drives it, max-height clamps it back when the slot is short. */
-  .wrap { position: relative; width: 100%; max-height: 100%; aspect-ratio: 1; margin: 0 auto; min-height: 110px; }
+  /* Square box, clipped to the same corner radius the SVG border draws (rx=10 of a 200-unit
+     viewBox = 5% of the side), so an edge-to-edge curve and a resting dot cannot overhang it. */
+  .wrap { position: relative; width: 100%; max-height: 100%; aspect-ratio: 1; margin: 0 auto; min-height: 110px; overflow: hidden; border-radius: 5%; }
   svg { display: block; width: 100%; height: 100%; }
   .livedot { position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border2); pointer-events: none; transition: left 90ms linear, top 90ms linear; }
 </style>

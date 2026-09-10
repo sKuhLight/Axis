@@ -1,5 +1,5 @@
 import type { DeviceLayout, EnumParam, NamedParam } from './types';
-import { graphKind } from './deviceWidgets';
+import { graphKind, graphSlotsForPage } from './deviceWidgets';
 
 export interface MegaTapGraphSpec {
   key: string;
@@ -32,10 +32,10 @@ export function deriveMegaTapGraphs(input: { layout: DeviceLayout | null | undef
   for (const [page, layoutPage] of (input.layout?.pages ?? []).entries()) {
     const controls = (layoutPage.rows ?? []).flatMap((row) => row.controls ?? []);
     const id = (name: string) => controls.find((control) => control.paramName === name)?.paramId;
-    let slot = 0;
+    const slots = graphSlotsForPage(controls);
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
-      const graphSlot = slot++;
+      const graphSlot = slots.get(control)!;
       if (graphKind(control.rawWidget) !== 'megatap') continue;
       const named = (name: string) => params.get(id(name) ?? -1) ?? paramsBySymbol.get(name);
       const typed = (name: string) => enums.get(id(name) ?? -1) ?? enumsBySymbol.get(name);

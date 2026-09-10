@@ -1,7 +1,8 @@
-// Parameter-driven modulation waveforms. Graph slots are identified by their ordinal on a page because
-// the Controllers layout places LFO 1 and LFO 2 on the same page.
+// Parameter-driven modulation waveforms. Graph slots come from the device's own `render.graphIndex`
+// (see `graphSlotsForPage`), which matters here because the Controllers layout places LFO 1 and LFO 2
+// on one page — the device calls them 2 and 3, where counting them would call them 0 and 1.
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
-import { graphKind } from './deviceWidgets';
+import { graphKind, graphSlotsForPage } from './deviceWidgets';
 
 
 export interface ModulationGraphSpec {
@@ -144,11 +145,11 @@ export function deriveModulationGraphs(input: {
     const family = input.layout?.family?.replace(/^OLD_/, '')
       ?? pageControls.find((control) => control.paramName)?.paramName?.replace(/^OLD_/, '').split('_')[0];
     const graphCount = pageControls.filter((control) => control.widget === 'graph' && graphKind(control.rawWidget) === 'mod').length;
-    let slot = 0;
+    const slots = graphSlotsForPage(pageControls);
     for (const row of layoutPage.rows ?? []) {
       for (const control of row.controls ?? []) {
         if (control.widget !== 'graph') continue;
-        const graphSlot = slot++;
+        const graphSlot = slots.get(control)!;
         if (graphKind(control.rawWidget) !== 'mod') continue;
         const local = row.controls ?? [];
         // A single graph owns its full page. Multi-LFO pages keep each graph isolated to its authored row.

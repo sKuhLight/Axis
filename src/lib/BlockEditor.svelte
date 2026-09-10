@@ -104,7 +104,11 @@
     for (const option of editor.enums) void option.value;
     return deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
   });
-  const compressorGraphs = $derived(deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
+  const compressorGraphs = $derived.by(() => {
+    // Curve shape follows enum changes such as COMP_KNEE and COMP_TYPE, not just layout replacement.
+    for (const option of editor.enums) void option.value;
+    return deriveCompressorGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
+  });
   const cabAlignmentGraphs = $derived(deriveCabAlignmentGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums }));
   const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
   // The DynaCab speaker cone. The served layout says whether the block has one (a `dynaCabControl`

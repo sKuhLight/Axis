@@ -1,5 +1,5 @@
 import type { DeviceLayout, EnumParam, NamedParam } from './types';
-import { graphKind } from './deviceWidgets';
+import { graphKind, graphSlotsForPage } from './deviceWidgets';
 
 export interface CabAlignmentGraphSpec {
   key: string;
@@ -24,7 +24,7 @@ export function deriveCabAlignmentGraphs(input: {
   for (const [page, layoutPage] of (input.layout?.pages ?? []).entries()) {
     const controls = (layoutPage.rows ?? []).flatMap((row) => row.controls ?? []);
     const ids = new Map(controls.filter((control) => control.paramName && control.paramId != null).map((control) => [control.paramName!, control.paramId!]));
-    let slot = 0;
+    const slots = graphSlotsForPage(controls);
     // The device authors up to FOUR of these on one page — `graph_cab`/`graph_cabZoom` (and their `_mm`
     // successors) all sit at the same `positionExact`, one firmware-gated pair standing in for the other
     // as the unit/zoom state changes. They are alternate renderings of ONE graph, not separate graphs —
@@ -35,7 +35,7 @@ export function deriveCabAlignmentGraphs(input: {
     let pageBound = false;
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
-      const graphSlot = slot++;
+      const graphSlot = slots.get(control)!;
       if (graphKind(control.rawWidget) !== 'cabAlign' || pageBound) continue;
       pageBound = true;
       out.push({

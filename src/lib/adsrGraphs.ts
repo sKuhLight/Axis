@@ -1,5 +1,5 @@
 import type { DeviceLayout, NamedParam } from './types';
-import { graphKind } from './deviceWidgets';
+import { graphKind, graphSlotsForPage } from './deviceWidgets';
 
 export interface AdsrGraphSpec {
   key: string;
@@ -31,10 +31,10 @@ export function deriveAdsrGraphs(input: {
       const id = controls.find((control) => control.paramName === `CONTROLLERS_ADSR${adsr}${suffix}`)?.paramId;
       return id == null ? undefined : params.get(id);
     };
-    let slot = 0;
+    const slots = graphSlotsForPage(controls);
     for (const control of controls) {
       if (control.widget !== 'graph') continue;
-      const graphSlot = slot++;
+      const graphSlot = slots.get(control)!;
       if (graphKind(control.rawWidget) !== 'adsr') continue;
       out.push({
         key: `adsr${adsr}`,

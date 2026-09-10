@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import ampFixture from './fixtures/blockParams/amp.json';
 import cabFixture from './fixtures/blockParams/cab.json';
+import compFixture from './fixtures/blockParams/comp.json';
 import reverbFixture from './fixtures/blockParams/reverb.json';
 import type { BlockParams } from './types';
 
@@ -149,7 +150,7 @@ const blockParamsSchema = z.object({
   layout: deviceLayoutSchema.optional()
 });
 
-const FIXTURES: Record<string, unknown> = { amp: ampFixture, cab: cabFixture, reverb: reverbFixture };
+const FIXTURES: Record<string, unknown> = { amp: ampFixture, cab: cabFixture, comp: compFixture, reverb: reverbFixture };
 
 describe('ForgeFX blockParams contract (fixtures/blockParams/*.json)', () => {
   for (const [name, fixture] of Object.entries(FIXTURES)) {

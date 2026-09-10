@@ -16,7 +16,7 @@
   import { editor as liveEditor } from './editor.svelte';
   import { modifierBindings } from './modifierBindings.svelte';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
-  import { widgetView, graphKind, dropdownFieldHeight } from './deviceWidgets';
+  import { widgetView, graphKind, graphSlotsForPage, dropdownFieldHeight } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
   import { fmtControlValue, normFromValue, paramValue } from './format';
   import { enumKnobLabel, enumKnobNorm, enumKnobValueAt } from './enumKnob';
@@ -160,14 +160,16 @@
   });
 
   // ── graph binding ──
-  // A graph's spec is keyed by (page index, graph ordinal on that page) — the same coordinates the
-  // derive modules assign, computed from the ORIGINAL layout order because `placePage` sorts its output
-  // by position. Keyed off the control object itself so the two orders never have to agree.
+  // A graph's spec is keyed by (page index, slot) — the same coordinates the derive modules assign, via
+  // the same `graphSlotsForPage` they call, so the two can never disagree about which graph is which.
+  // The slot is the device's own `render.graphIndex` where it authors one, falling back to the layout
+  // ordinal. Computed from the ORIGINAL layout order because `placePage` sorts its output by position,
+  // and keyed off the control object itself so the two orders never have to agree.
   const graphSlotOf = $derived.by(() => {
     const m = new WeakMap<LayoutControl, number>();
     for (const p of editor.blockLayout?.pages ?? []) {
-      let slot = 0;
-      for (const row of p.rows ?? []) for (const c of row.controls ?? []) if (c.widget === 'graph') m.set(c, slot++);
+      const controls = (p.rows ?? []).flatMap((row) => row.controls ?? []);
+      for (const [c, slot] of graphSlotsForPage(controls)) m.set(c, slot);
     }
     return m;
   });

@@ -1849,8 +1849,24 @@ they acquire the new graph widgets; custom profiles remain unchanged.
 
 `CompressorGraph.svelte` renders the Compressor Basic-page slot for every FM3 compressor model. It binds
 Threshold, Ratio, Knee, Attack, and Release from the selected layout page and draws a read-only static
-transfer curve only when Threshold and Ratio are live. Sustain-style models retain their graph slot but
-state that a transfer curve is unavailable rather than inventing a ratio from the Compression knob.
+transfer curve from Threshold and Ratio where the model exposes them.
+
+Sustain-style models (Pedal, Pedal1, JFET2 — a "Compression" knob and no Threshold/Ratio) used to say
+"transfer curve unavailable", while FM3-Edit drew a real curve for them. The device explains why Axis
+could not: a live FM3 reports COMP_THRESH frozen at -40 dB and COMP_RATIO at 2.0 across the whole
+Compression sweep AND all 19 Comp Types, so those params are inert for these models — and COMP_XMARK /
+COMP_YMARK are not in the block body at all. The editor has no more device access than we do, so it
+computes its curve client-side; Axis now draws the same curve, fitted to captures of the editor's own
+drawing (a limiter: unity, soft knee, flat ceiling, with Compression moving a gain and the ceiling).
+Worst-case deviation 1.97 px in a 344 px box. Captures, digitiser, fit and the device measurements are
+in `docs/handoff/compressor-graph/`; `compressorGraphs.test.ts` asserts the parity. Dynamics and
+Compander author no graph control on the device, so Axis draws none — matching the device is the rule.
+
+Graph slots are no longer counted positionally: `render.graphIndex`, which the device authors on every
+graph control, is the instance id (Controllers calls its two same-page LFO graphs 2 and 3; the
+compressor calls its transfer curve 1 and its Sidechain EQ 0). `graphSlotsForPage` in `deviceWidgets.ts`
+is the single source both `DeviceCanvas` and every `deriveXGraphs` bind through, falling back to the
+ordinal where a layout authors no ids.
 
 Board schema `b7` re-seeds Default profiles so they acquire the Compressor widget; custom profiles remain
 unchanged. `compressorGraphs.test.ts` covers both threshold/ratio and Sustain-style variants.

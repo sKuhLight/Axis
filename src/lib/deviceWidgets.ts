@@ -304,3 +304,38 @@ const GRAPH_KIND: Record<string, GraphKind> = {
 export function graphKind(rawWidget: string | null | undefined): GraphKind | null {
   return GRAPH_KIND[(rawWidget ?? '').trim()] ?? null;
 }
+
+/** The device's own identity for a graph slot, from the layout control's `render.graphIndex`.
+ *
+ *  The editor authors this on every graph control it draws, and it is an instance id scoped to the
+ *  BLOCK, not an ordinal within the page: Controllers numbers its two same-page LFO graphs `2` and `3`
+ *  (its ADSRs are `0` and `1`), and the Compressor numbers its Basic-page transfer curve `1` and its
+ *  Sidechain filter response `0`. A few controls carry a comma-list (`'0,1'`, `'0,1,2,3'` on the cab
+ *  page) — the leading entry identifies the slot, the rest name the extra curves that widget draws.
+ *
+ *  `null` when the control carries none, which is the signal to fall back to the positional ordinal:
+ *  legacy/migrated layout data, and any non-FM3 device whose layouts predate this metadata. */
+export function graphInstance(control: { render?: { graphIndex?: string } } | null | undefined): number | null {
+  const head = (control?.render?.graphIndex ?? '').split(',')[0]?.trim();
+  if (!head) return null;
+  const n = Number(head);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** Slot number for every graph control on ONE page, keyed by the control itself.
+ *
+ *  Both sides of the binding — each `deriveXGraphs` and `DeviceCanvas`'s own lookup — must agree on
+ *  these numbers, so they call this rather than counting separately. The device's `graphIndex` wins
+ *  when the page's graph controls ALL carry one; a page that mixes authored and missing ids falls back
+ *  to ordinals wholesale, because mixing an id space with an ordinal space could collide.
+ *
+ *  Ordinals count every `widget === 'graph'` control in the page's ORIGINAL order, including graph
+ *  kinds a caller does not draw — a derive module must therefore take its number before filtering by
+ *  kind, exactly as it did when this was inline. */
+export function graphSlotsForPage<T extends { widget?: string; render?: { graphIndex?: string } }>(controls: readonly T[]): Map<T, number> {
+  const graphs = controls.filter((c) => c.widget === 'graph');
+  const out = new Map<T, number>();
+  const authored = graphs.every((c) => graphInstance(c) != null);
+  graphs.forEach((c, ordinal) => out.set(c, authored ? graphInstance(c)! : ordinal));
+  return out;
+}
