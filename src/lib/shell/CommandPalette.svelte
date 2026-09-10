@@ -8,6 +8,7 @@
   import { detailParams, fmtVal } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchParams';
   import { catFor, shade } from '$lib/device/catalog';
   import { categoryOf, packFor } from '$lib/device/blocks';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import type { BlockLibraryCandidate, DecodedBlockFile } from '$lib/api/types';
 
   const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };
@@ -298,9 +299,8 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       pick(view.flat[hi]);
-    } else if (e.key === 'Escape') {
-      editor.paletteOpen = false;
     }
+    // Escape is handled by the dialog shell.
   }
 
   function chipFor(r: { sub: string; kind: string }) {
@@ -310,9 +310,16 @@
   }
 </script>
 
-{#if editor.paletteOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
-    <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+<Dialog
+  open={editor.paletteOpen}
+  onClose={() => (editor.paletteOpen = false)}
+  width="760px"
+  maxHeight="84vh"
+  align="top"
+  sheet={editor.isMobile}
+  class="cmd-palette-dlg"
+>
+  <div class="wrap" class:sheet={editor.isMobile}>
       {#if retype}
         <div class="tabs" role="tablist" aria-label="Block change options">
           <button class:on={paletteTab === 'types'} role="tab" aria-selected={paletteTab === 'types'} onclick={() => (paletteTab = 'types')}>Types</button>
@@ -437,49 +444,16 @@
           </div>
         </div>
       {/if}
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    z-index: 200;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .card {
-    width: 760px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  /* mobile: dock the palette to the bottom as a slide-up sheet */
-  .bg.mob {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .card.mob {
-    width: 100%;
-    max-width: 100%;
-    max-height: 88vh;
-    border-radius: 18px 18px 0 0;
-    border-bottom: 0;
-    padding-bottom: var(--axis-safe-bottom);
-    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .tabs { display: flex; gap: 3px; margin: 14px 16px 0; padding: 3px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; }
   .tabs button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--textdim); font: 700 13px var(--font-ui); cursor: pointer; }
@@ -565,7 +539,7 @@
     flex: none;
   }
   /* mobile: wrap categories onto multiple rows instead of a hidden horizontal scrollbar */
-  .card.mob .cats {
+  .wrap.sheet .cats {
     flex-wrap: wrap;
     overflow-x: visible;
   }
