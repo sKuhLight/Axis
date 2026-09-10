@@ -13,6 +13,7 @@
   import { catFor, shade } from '$lib/device/catalog';
   import { baseName } from '$lib/device/blocks';
   import { theme } from '$lib/platform/theme.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
   const s = $derived(convertScratch.state);
   const light = $derived(theme.cfg.base === 'light');
@@ -300,17 +301,9 @@
   </div>
 
   <!-- ── commit confirm dialog ── -->
-  {#if commitOpen}
-    <div class="bg" role="presentation" onclick={() => (commitOpen = false)}>
-      <div
-        class="card"
-        role="dialog"
-        aria-label="Commit converted preset"
-        tabindex="-1"
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => { if (e.key === 'Escape') commitOpen = false; }}
-      >
-        <header><h2>Commit “{s.name}”</h2><span class="spacer"></span><button class="x" aria-label="Close" onclick={() => (commitOpen = false)}>✕</button></header>
+  <Dialog open={commitOpen} onClose={() => (commitOpen = false)} width="min(560px, 94vw)" maxHeight="90vh" labelledBy="commit-dlg-title" class="commit-dlg">
+    <div class="cwrap">
+        <header id="commit-dlg-title"><h2>Commit “{s.name}”</h2><span class="spacer"></span><button class="x" aria-label="Close" onclick={() => (commitOpen = false)}>✕</button></header>
         <div class="cbody">
           <section class="opt">
             <h3>Save to library</h3>
@@ -345,13 +338,13 @@
           </section>
         </div>
         <footer><span class="spacer"></span><button class="ghost" onclick={() => (commitOpen = false)}>Close</button></footer>
-      </div>
     </div>
-  {/if}
+  </Dialog>
 {/if}
 
 <style>
   .scv { position: fixed; inset: 0; z-index: 75; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+  .cwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .top { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border2); background: var(--surface); flex: none; }
   .route { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
   .dev { font-size: 15px; font-weight: 700; }
@@ -441,11 +434,9 @@
   .ghost:hover { border-color: var(--border3); }
   .ghost.danger { color: var(--danger, #d6543f); }
 
-  /* commit dialog */
-  .bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: grid; place-items: center; z-index: 80; }
-  .card { width: min(560px, 94vw); max-height: 90vh; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 18px 50px rgba(0,0,0,0.5); }
-  .card header { display: flex; align-items: center; gap: 10px; padding: 14px 18px 12px; border-bottom: 1px solid var(--border2); }
-  .card h2 { margin: 0; font-size: 15px; }
+  /* commit dialog — card frame comes from Dialog */
+  .cwrap header { display: flex; align-items: center; gap: 10px; padding: 14px 18px 12px; border-bottom: 1px solid var(--border2); }
+  .cwrap h2 { margin: 0; font-size: 15px; }
   .x { background: none; border: none; color: var(--textdim); font-size: 15px; cursor: pointer; }
   .cbody { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
   .opt { border: 1px solid var(--border2); border-radius: 11px; padding: 13px 14px; }
@@ -459,7 +450,7 @@
   .bar { height: 7px; border-radius: 4px; background: var(--bg2); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
   .pcap { font-size: 10.5px; color: var(--textdim); }
-  .card footer { display: flex; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border2); }
+  .cwrap footer { display: flex; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border2); }
 
   @media (max-width: 720px) {
     .body { flex-direction: column; }

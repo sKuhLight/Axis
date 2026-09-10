@@ -10,6 +10,7 @@
   import ConvertReport from './ConvertReport.svelte';
   import { CONVERTER_DEVICES, deviceName, deviceIdFromModel } from './convertReport';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import type { ConverterDeviceId } from '$lib/api/types';
 
   // Workbench shell → the review hop routes to the REAL SignalGrid convert page; the legacy monolith
@@ -129,17 +130,9 @@
   }
 </script>
 
-{#if convert.open}
-  <div class="bg" role="presentation" onclick={close}>
-    <div
-      class="card"
-      role="dialog"
-      aria-label="Convert preset"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => { if (e.key === 'Escape') close(); }}
-    >
-      <header>
+<Dialog open={convert.open} onClose={close} size="lg" width="min(720px, 94vw)" maxHeight="90vh" labelledBy="convert-dlg-title" class="convert-dlg">
+  <div class="wrap">
+      <header id="convert-dlg-title">
         <h2>Convert preset</h2>
         <span class="spacer"></span>
         <button class="x" aria-label="Close" onclick={close}>✕</button>
@@ -205,13 +198,12 @@
           </button>
         </footer>
       {/if}
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: grid; place-items: center; z-index: 70; }
-  .card { width: min(720px, 94vw); max-height: 90vh; display: flex; flex-direction: column; background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   header { display: flex; align-items: center; gap: 10px; padding: 14px 18px 12px; border-bottom: 1px solid var(--border2); }
   h2 { margin: 0; font-size: 16px; }
   .spacer { flex: 1; }
