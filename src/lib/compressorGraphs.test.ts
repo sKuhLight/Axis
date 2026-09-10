@@ -55,13 +55,13 @@ const kneeAt = (value: number): EnumParam => ({ id: 5, name: 'Knee Type', value,
 
 describe('ratio-style transfer curve', () => {
   it('approaches unity gain well below threshold and the ratio slope well above it', () => {
-    const t = ratioTransfer(-10, 4, kneeAt(0)); // HARD — the tightest corner, so the asymptotes bite soonest
+    const t = ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(0) }); // HARD — the tightest corner, so the asymptotes bite soonest
     expect(ratioCurveY(-50, t)).toBeCloseTo(-50, 3);
     expect(ratioCurveY(30, t)).toBeCloseTo(-10 + 40 / 4, 3); // T + (x-T)/R
   });
 
   it('rounds the corner instead of breaking it — the whole point of the knee', () => {
-    const t = ratioTransfer(-10, 4, kneeAt(2)); // MEDIUM
+    const t = ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(2) }); // MEDIUM
     const hardCorner = -10; // the two-segment curve would pass exactly through (T, T)
     expect(ratioCurveY(-10, t)).toBeLessThan(hardCorner);
     // and the rounding is symmetric about threshold: the curve sits half a knee's worth below the corner
@@ -69,18 +69,22 @@ describe('ratio-style transfer curve', () => {
   });
 
   it('draws a softer corner for a softer Knee Type', () => {
-    const drop = (option: number) => -10 - ratioCurveY(-10, ratioTransfer(-10, 4, kneeAt(option)));
+    const drop = (option: number) => -10 - ratioCurveY(-10, ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(option) }));
     const drops = [0, 1, 2, 3, 4].map(drop);
     for (let i = 1; i < drops.length; i++) expect(drops[i]).toBeGreaterThan(drops[i - 1]);
   });
 
-  it('falls back to the device default (MEDIUM) when the variant authors no Knee dropdown', () => {
-    expect(kneeSharpness(null)).toBe(kneeSharpness(kneeAt(2)));
-    expect(kneeSharpness(kneeAt(99))).toBe(kneeSharpness(kneeAt(2)));
+  it('uses the model\'s own knee when the variant authors no Knee dropdown', () => {
+    // Variants with no dropdown are drawn with the model's own knee, NOT the device's default option:
+    // preset 376 (Analog) stores MED-HARD yet the editor draws it far softer.
+    expect(kneeSharpness(null, 'Analog')).toBeLessThan(kneeSharpness(kneeAt(1)));
+    expect(kneeSharpness(null, 'JFET1')).toBeGreaterThan(kneeSharpness(kneeAt(1)));
+    expect(kneeSharpness(null, 'Unknown Variant')).toBeCloseTo(0.115, 5);
+    expect(kneeSharpness(kneeAt(99))).toBe(kneeSharpness(kneeAt(2))); // out-of-range option
   });
 
   it('is monotonic across the plotted window', () => {
-    const t = ratioTransfer(-10, 4, kneeAt(4));
+    const t = ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(4) });
     let prev = -Infinity;
     for (let db = -60; db <= 20; db += 0.5) {
       const y = ratioCurveY(db, t);
@@ -93,27 +97,33 @@ describe('ratio-style transfer curve', () => {
 describe('parity with the FM3 editor (Threshold/Ratio)', () => {
   // Digitised from `docs/handoff/compressor-graph/measurements/knee/official-{007,013}.png` — FM3-Edit's
   // own graph for two presets whose Threshold, Ratio, Knee Type and Level were read off the device.
-  // Normalised to the editor's plot box: x and y both 0..1, y up. Both presets are Knee MED-HARD,
-  // Ratio 4, Auto Makeup OFF, Mix 100%, input Gain 0.
+  // Normalised to the editor's plot box: x and y both 0..1, y up. All three have Auto Makeup OFF,
+  // Mix 100% and input Gain 0 — the two the curve does not model.
   const CAPTURES = [
     {
-      name: '007 (Studio FB, VCA Bus Compressor)',
-      threshold: -11.804, ratio: 4, level: 0.555,
+      name: '007 (Studio FB, VCA Bus Compressor)', variant: 'Studio FB',
+      threshold: -11.804, ratio: 4, level: 0.555, knee: 1,
       points: [[0.0274, 0.0338], [0.0518, 0.0567], [0.1006, 0.1047], [0.1524, 0.156], [0.2012, 0.205], [0.25, 0.2543], [0.3018, 0.3063], [0.3506, 0.3559], [0.4024, 0.4057], [0.4512, 0.4553], [0.5, 0.5045], [0.5518, 0.5568], [0.6006, 0.6057], [0.6524, 0.653], [0.7012, 0.6834], [0.75, 0.7004], [0.8018, 0.7148], [0.8506, 0.7266], [0.9024, 0.7387], [0.9512, 0.7515]]
     },
     {
-      name: '013 (Studio FF, Modern VCA Compressor)',
-      threshold: -25, ratio: 4, level: 6,
+      name: '013 (Studio FF, Modern VCA Compressor)', variant: 'Studio FF',
+      threshold: -25, ratio: 4, level: 6, knee: 1,
       points: [[0.0274, 0.0884], [0.0518, 0.1092], [0.1006, 0.1583], [0.1524, 0.2108], [0.2012, 0.2577], [0.25, 0.3069], [0.3018, 0.359], [0.3506, 0.4084], [0.4024, 0.4604], [0.4512, 0.5099], [0.5, 0.5566], [0.5518, 0.5989], [0.6006, 0.6191], [0.6524, 0.6336], [0.7012, 0.6454], [0.75, 0.657], [0.8018, 0.6712], [0.8506, 0.683], [0.9024, 0.6951], [0.9512, 0.7079]]
+    },
+    {
+      // No Knee dropdown: the device still stores COMP_KNEE = MED-HARD, and the editor ignores it.
+      name: '376 (Analog, Analog Compressor)', variant: 'Analog',
+      threshold: -20, ratio: 2, level: 0, knee: null,
+      points: [[0.0274, 0.0282], [0.0518, 0.0509], [0.1006, 0.0999], [0.1524, 0.1502], [0.2012, 0.1992], [0.25, 0.2484], [0.3018, 0.2994], [0.3506, 0.3474], [0.4024, 0.3968], [0.4512, 0.4435], [0.5, 0.4873], [0.5518, 0.5322], [0.6006, 0.5698], [0.6524, 0.6076], [0.7012, 0.6381], [0.75, 0.6669], [0.8018, 0.695], [0.8506, 0.7209], [0.9024, 0.7496], [0.9512, 0.7734]]
     }
-  ] as const;
+  ] as { name: string; variant: string; threshold: number; ratio: number; level: number; knee: number | null; points: number[][] }[];
 
   const SPAN = GRAPH_MAX_DB - GRAPH_MIN_DB;
   const PX = 1 / 344; // the editor's plot box in the captures is 344 px tall
 
   for (const capture of CAPTURES) {
     it(`reproduces the editor's curve on preset ${capture.name}`, () => {
-      const t = ratioTransfer(capture.threshold, capture.ratio, kneeAt(1), capture.level);
+      const t = ratioTransfer({ threshold: capture.threshold, ratio: capture.ratio, knee: capture.knee ? kneeAt(capture.knee) : null, level: capture.level, variant: capture.variant });
       let worst = 0;
       for (const [x, y] of capture.points) {
         const drawn = (ratioCurveY(GRAPH_MIN_DB + x * SPAN, t) - GRAPH_MIN_DB) / SPAN;
@@ -125,7 +135,7 @@ describe('parity with the FM3 editor (Threshold/Ratio)', () => {
 
   it('needs the measured window and Level — the old -60..+20 window without Level is wildly off', () => {
     const capture = CAPTURES[1];
-    const t = ratioTransfer(capture.threshold, capture.ratio, kneeAt(1)); // no level
+    const t = ratioTransfer({ threshold: capture.threshold, ratio: capture.ratio, knee: kneeAt(1) }); // no level
     const oldMin = -60, oldSpan = 80;
     let worst = 0;
     for (const [x, y] of capture.points) {
@@ -137,7 +147,7 @@ describe('parity with the FM3 editor (Threshold/Ratio)', () => {
 
 describe('ratioDotPosition', () => {
   it('inverts the curve it draws, so the dot rides the line rather than floating off it', () => {
-    const t = ratioTransfer(-10, 4, kneeAt(2));
+    const t = ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(2) });
     const pos = ratioDotPosition(t, 6);
     expect(pos).not.toBeNull();
     expect(pos!.input - pos!.output).toBeCloseTo(6); // reproduces the gain reduction it was given
@@ -145,11 +155,11 @@ describe('ratioDotPosition', () => {
   });
 
   it('returns null for a sustain-style compressor (ratio <= 1)', () => {
-    expect(ratioDotPosition(ratioTransfer(-10, 1, kneeAt(2)), 6)).toBeNull();
+    expect(ratioDotPosition(ratioTransfer({ threshold: -10, ratio: 1, knee: kneeAt(2) }), 6)).toBeNull();
   });
 
   it('returns null when there is no reduction to place (idle, or a makeup-gain-flavored reading)', () => {
-    const t = ratioTransfer(-10, 4, kneeAt(2));
+    const t = ratioTransfer({ threshold: -10, ratio: 4, knee: kneeAt(2) });
     expect(ratioDotPosition(t, 0)).toBeNull();
     expect(ratioDotPosition(t, -3)).toBeNull();
     // real hardware's idle GR noise floor (never bit-exact 0) shouldn't resolve to a point either
@@ -157,7 +167,7 @@ describe('ratioDotPosition', () => {
   });
 
   it('survives reduction deep enough to overflow the naive inverse', () => {
-    const pos = ratioDotPosition(ratioTransfer(-10, 20, kneeAt(0)), 40);
+    const pos = ratioDotPosition(ratioTransfer({ threshold: -10, ratio: 20, knee: kneeAt(0) }), 40);
     expect(pos).not.toBeNull();
     expect(Number.isFinite(pos!.input)).toBe(true);
   });

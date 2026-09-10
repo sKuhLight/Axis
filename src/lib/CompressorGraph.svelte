@@ -35,7 +35,9 @@
   // Threshold/Ratio models get their corner rounded by COMP_KNEE, which is how the FM3 editor draws it;
   // a hard corner was the visible difference on presets like 007. Variants with no Knee dropdown fall
   // back to the device's own default. See the knee note in `compressorGraphs.ts`.
-  const ratio = $derived(ratioStyle ? ratioTransfer(paramValue(graph.threshold!), paramValue(graph.ratio!), graph.knee, levelDb) : null);
+  const ratio = $derived(ratioStyle
+    ? ratioTransfer({ threshold: paramValue(graph.threshold!), ratio: paramValue(graph.ratio!), knee: graph.knee, level: levelDb, variant: graph.variant })
+    : null);
   const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
   const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
   // The sustain model works in normalised graph space (0..1 on both axes) because that is how the

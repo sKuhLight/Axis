@@ -14,6 +14,8 @@ export interface CompressorGraphSpec {
   sustain?: NamedParam;
   knee?: EnumParam;
   level?: NamedParam;
+  /** `DeviceLayout.variantName` — the model whose graph this is, which the knee depends on. */
+  variant?: string;
   attack?: NamedParam;
   release?: NamedParam;
 }
@@ -151,22 +153,42 @@ export function sustainDotPosition(transfer: SustainTransfer, grNorm: number): {
  *  coincidence — the sustain fit landed on exactly this form with `slope = 1` (a limiter), so treating
  *  the editor as drawing one softplus-kneed curve for every compressor makes the two paths one model.
  *
- *  `COMP_KNEE` picks the sharpness. Its five options are HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
- *  (device enum 0..4, default MEDIUM). MED-HARD is measured: 0.36/dB, fitted to FM3-Edit's graph on
- *  presets 007 and 013 (both MED-HARD), which reproduces both to 1.4 px in a 344 px box.
+ *  `COMP_KNEE` picks the sharpness where the variant authors the dropdown (Studio FF, Studio FB, Pedal,
+ *  JFET2). Its five options are HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT (device enum 0..4, default
+ *  MEDIUM). MED-HARD is measured at 0.36/dB, from FM3-Edit's graph on presets 007 and 013.
  *
- *  PARTLY PROVISIONAL: only MED-HARD is measured. The other four halve and double from it, which is an
- *  interpolation — both captured presets happened to share a Knee Type, so the spacing between options
- *  is unmeasured. A capture of one preset at HARD and at SOFT would pin it down; see the "Known gap"
- *  section of `docs/handoff/compressor-graph/README.md`. */
+ *  Where the variant authors NO dropdown, the knee is the model's own and `COMP_KNEE` is ignored —
+ *  proved by preset 376 (Analog), which stores MED-HARD like 007 and 013 but is drawn far softer at
+ *  0.111/dB. So this is a per-variant table, not a fallback to the device's default option.
+ *
+ *  PARTLY PROVISIONAL: MED-HARD (0.36), Analog (0.111) and JFET1 (hard — 0.58 and up all fit equally,
+ *  so the table takes the HARD value) are measured. The other four COMP_KNEE options halve and double
+ *  from MED-HARD, which is an interpolation: every captured preset that authors the dropdown happened
+ *  to be MED-HARD, so the spacing between options is unmeasured. See the "Known gap" section of
+ *  `docs/handoff/compressor-graph/README.md`. */
 const KNEE_SHARPNESS_PER_DB = [0.72, 0.36, 0.18, 0.09, 0.045];
 const KNEE_DEFAULT_OPTION = 2; // MEDIUM — the device's own default for COMP_KNEE
 
-/** Knee sharpness in 1/dB for a bound `COMP_KNEE`; the device default when the variant authors none
- *  (Analog and JFET1 have no Knee dropdown, and the editor still rounds their corner). */
-export function kneeSharpness(knee: EnumParam | null | undefined): number {
-  const option = Math.round(knee?.value ?? KNEE_DEFAULT_OPTION);
-  return KNEE_SHARPNESS_PER_DB[option] ?? KNEE_SHARPNESS_PER_DB[KNEE_DEFAULT_OPTION];
+/** Layout variants with no Knee Type control, keyed by `DeviceLayout.variantName`. */
+const VARIANT_KNEE_SHARPNESS: Record<string, number> = {
+  Analog: 0.111, // preset 376, VCA "Analog Compressor" — 0.8 px worst case
+  JFET1: 0.72 // preset 018, "JFET Studio Compressor" — measured only as "hard", see above
+};
+
+/** The knee for a variant with no control and no measurement of its own. Deliberately the same value
+ *  the sustain limiter fit landed on (k = 12 in normalised units over this 100 dB window = 0.12/dB) —
+ *  which is also, independently, within 8% of Analog's measured 0.111. Two unrelated fits agreeing is
+ *  the reason this is a considered default rather than a shrug. */
+const DEFAULT_KNEE_SHARPNESS = 0.115;
+
+/** Knee sharpness in 1/dB. `COMP_KNEE` wins when the variant authors it; otherwise the variant's own. */
+export function kneeSharpness(knee: EnumParam | null | undefined, variant?: string | null): number {
+  if (knee) {
+    const option = Math.round(knee.value);
+    return KNEE_SHARPNESS_PER_DB[option] ?? KNEE_SHARPNESS_PER_DB[KNEE_DEFAULT_OPTION];
+  }
+  const byVariant = variant == null ? undefined : VARIANT_KNEE_SHARPNESS[variant];
+  return byVariant ?? DEFAULT_KNEE_SHARPNESS;
 }
 
 export interface RatioTransfer {
@@ -179,8 +201,21 @@ export interface RatioTransfer {
   level: number;
 }
 
-export function ratioTransfer(threshold: number, ratio: number, knee: EnumParam | null | undefined, level = 0): RatioTransfer {
-  return { threshold, ratio: Math.max(1, ratio), knee: kneeSharpness(knee), level };
+export function ratioTransfer(input: {
+  threshold: number;
+  ratio: number;
+  knee?: EnumParam | null;
+  /** COMP_LEVEL in dB. */
+  level?: number;
+  /** `DeviceLayout.variantName`, which decides the knee when the variant authors no Knee control. */
+  variant?: string | null;
+}): RatioTransfer {
+  return {
+    threshold: input.threshold,
+    ratio: Math.max(1, input.ratio),
+    knee: kneeSharpness(input.knee, input.variant),
+    level: input.level ?? 0
+  };
 }
 
 /** Output dB for an input dB — the curve the graph plots. */
@@ -237,6 +272,7 @@ export function deriveCompressorGraphs(input: {
         sustain: param('COMP_SUSTAIN'),
         knee: enumParam('COMP_KNEE'),
         level: param('COMP_LEVEL'),
+        variant: input.layout?.variantName,
         attack: param('COMP_ATTACK'),
         release: param('COMP_RELEASE')
       });

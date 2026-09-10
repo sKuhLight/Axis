@@ -76,19 +76,24 @@ form was fitted to the editor's own drawing rather than assumed.
 
 ### What the editor actually plots
 
-`measurements/knee/official-007.png` and `official-013.png` are FM3-Edit's graph for two real presets
-whose parameters were read off the device first, so unlike the sustain captures these solve for the
-*editor's* unknowns rather than for the curve:
+`measurements/knee/official-*.png` are FM3-Edit's graph for four real presets whose parameters were
+read off the device first, so unlike the sustain captures these solve for the *editor's* unknowns
+rather than for the curve:
 
-| | preset 007 | preset 013 |
-|---|---|---|
-| Block | Comp 2, Studio FB, VCA Bus Compressor | Comp 1, Studio FF, Modern VCA Compressor |
-| Threshold | −11.804 dB | −25.0 dB |
-| Ratio | 4 | 4 |
-| Knee Type | MED-HARD | MED-HARD |
-| **Level** | **+0.555 dB** | **+6.0 dB** |
-| Auto Makeup / Mix / input Gain | OFF / 100% / 0 | OFF / 100% / 0 |
-| Detector | RMS+PEAK | RMS+PEAK |
+| | 007 | 013 | 376 | 018 |
+|---|---|---|---|---|
+| Variant | Studio FB | Studio FF | Analog | JFET1 |
+| Comp Type | VCA Bus | Modern VCA | Analog | JFET Studio |
+| Threshold | −11.804 dB | −25.0 dB | −20.0 dB | −37.0 dB |
+| Ratio | 4 | 4 | **2** | 4 |
+| Knee Type | MED-HARD | MED-HARD | *no control* (stores MED-HARD) | *no control* (stores HARD) |
+| Level | +0.555 dB | **+6.0 dB** | 0 dB | **−3.0 dB** |
+| Auto Makeup | OFF | OFF | OFF | **ON** |
+| Mix / input Gain | 100% / 0 | 100% / 0 | 100% / 0 | 100% / 0 |
+| Detector | RMS+PEAK | RMS+PEAK | RMS | PEAK |
+
+018 is excluded from the fit — see "Auto Makeup" below. The other three cover two Ratios, a positive
+and a zero Level, and both a variant that authors a Knee dropdown and one that does not.
 
 `digitize_knee.py` extracts both curves against their own grid; `fit_knee.py` solves for the window and
 `k`. Three things fall out:
@@ -96,13 +101,14 @@ whose parameters were read off the device first, so unlike the sustain captures 
 - **Sub-threshold slope 0.99** on both — the two axes share one dB span, and below threshold the curve
   is exactly unity plus a constant.
 - **Above-threshold slope 0.25** on both — Ratio 4 is plotted literally, no fudge.
-- **That constant is COMP_LEVEL.** 007 needs +0.55 dB of lift and 013 needs +6.0, matching their Level
-  exactly. This is the whole reason 013's curve sat visibly low before: 007's Level is invisible and
-  013's is 7.5% of the box.
+- **That constant is COMP_LEVEL.** 007 needs +0.55 dB of lift, 013 needs +6.0 and 376 needs 0, matching
+  their Level exactly. This is the whole reason 013's curve sat visibly low before: 007's Level is
+  invisible and 013's is 7.5% of the box.
 
-With Level accounted for, the two presets independently place the axis floor at **−79.6** and **−79.9**
-dB. Free-fitting the window lands on −82.2 … +21.7 at 0.28 px rms; pinning the round **−80 … +20** costs
-0.70 px rms and 1.4 px worst case, so that is what ships. `knee-vs-editor.svg` overlays the two.
+With Level accounted for, the presets independently place the axis floor at −79.6 / −79.9 / −78.8 dB.
+Free-fitting the window over all three lands on −82.2 … +21.7 at 0.28 px rms; pinning the round
+**−80 … +20** costs 0.60 px rms and **1.4 px worst case**, so that is what ships. `knee-vs-editor.svg`
+overlays all four.
 
 Note this is emphatically **not** the Threshold knob's own range. `COMP_THRESH` is served as −60 … +20
 and Axis used to plot that window — the natural-looking choice, and wrong by up to **49 px** against
@@ -111,23 +117,46 @@ dB rather than round numbers.
 
 ### Knee sharpness
 
-`COMP_KNEE` sets `k`. The device serves five options — HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
-(0..4, default MEDIUM) — and `KNEE_SHARPNESS_PER_DB` in `compressorGraphs.ts` maps them to
-`0.72 / 0.36 / 0.18 / 0.09 / 0.045` per dB.
+`COMP_KNEE` sets `k` **only where the variant authors the dropdown** (Studio FF, Studio FB, Pedal,
+JFET2). Preset 376 proves the rest: it is an Analog, which has no Knee control, and it *stores*
+MED-HARD exactly like 007 and 013 — yet the editor draws it at 0.111/dB, a third as sharp. So the knee
+for those variants is the model's own and the stored value is ignored.
 
-**Only MED-HARD is measured**, at 0.36/dB from the fit above. The other four halve and double from it,
-which is an interpolation: both captured presets happened to share a Knee Type, so the *spacing*
-between options is unmeasured. One preset captured at HARD and at SOFT, everything else held, would
+| | k (1/dB) | source |
+|---|---|---|
+| COMP_KNEE = HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT | 0.72 / **0.36** / 0.18 / 0.09 / 0.045 | MED-HARD measured; the rest halve and double from it |
+| Analog (no control) | **0.111** | preset 376, 0.8 px worst case |
+| JFET1 (no control) | 0.72 | preset 018 — only resolvable as "hard": every k ≥ 0.58 fits equally |
+| any other variant with no control | 0.115 | the sustain limiter's own k (12 normalised over 100 dB = 0.12) |
+
+That last row is worth noting: the sustain fit and Analog's fit are completely independent — different
+captures, different presets, different model family — and land within 8% of each other. That is why
+0.115 is a considered default rather than a shrug.
+
+**Unmeasured:** the *spacing* between COMP_KNEE options. Every captured preset that authors the
+dropdown happened to be MED-HARD. One preset captured at HARD and at SOFT, everything else held, would
 pin it down — `digitize_knee.py` handles that capture shape as-is.
+
+### Auto Makeup
+
+Preset 018 has COMP_AUTO ON, and it is the one capture the model does not reproduce. Fitting it needs a
+total offset of **+9.2 dB** against a Level of −3.0 — so Auto Makeup is adding roughly **+12 dB** — and
+even then it leaves a 2.2 px residual, meaning it is not a pure constant gain either.
+
+One data point cannot give a law: none of the obvious candidates match (−T·(1−1/R) = 27.75,
+−T/R = 9.25, −T·(1−1/R)/2 = 13.88 for this preset's T = −37, R = 4). Auto Makeup is therefore **not
+drawn**, and a preset with it ON renders about 12 dB low. Two captures of the same preset with Auto
+Makeup toggled would isolate it exactly, and two or three more at different Thresholds would give the
+law.
 
 ## Known gap
 
 The ceiling drops by 0.33 between Compression 0 and 2 and there are **no captures in that gap** — the
 exponential's shape there is extrapolation, not measurement. Captures at 0.5 / 1 / 1.5 would settle it.
 
-COMP_AUTO (Auto Makeup) was OFF and COMP_MIX was 100% on every capture, so neither is drawn. Both
-would move the curve — Auto Makeup adds gain the device does not report, and Mix below 100% blends the
-output back toward unity. Captures with either changed would settle them.
+COMP_MIX was 100% on every capture, so it is not drawn; below 100% the real block blends its output
+back toward unity, which would flatten the curve toward the 1:1 line. Auto Makeup has its own section
+above.
 
 Orange Squeezer and Tube (COMP_TYPE 18 and 5) author Threshold *and* Compression but no Ratio. They
 take the same sustain curve, driven by Compression; how their Threshold knob interacts with it is

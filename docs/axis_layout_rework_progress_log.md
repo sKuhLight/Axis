@@ -1864,8 +1864,11 @@ corner where the editor draws a soft one — on preset 007 that was the entire v
 curve is now `y = x - (1 - 1/R) * softplus(x - T, k)`, the same shape the sustain fit below landed on
 (the sustain model is this with `1 - 1/R = 1`, i.e. a limiter), so both compressor families are one
 curve with two ways of getting its parameters. `COMP_KNEE` sets `k` across its five options
-(HARD..SOFT); only the MEDIUM entry is evidence-backed — the rest are interpolated, and the README
-records what capture would settle them.
+(HARD..SOFT) where the variant authors the dropdown; where it does not, the knee is the model's own and
+the stored COMP_KNEE is ignored — proved by preset 376 (Analog), which stores MED-HARD like presets 007
+and 013 yet is drawn a third as sharp. Four captures cover Studio FF, Studio FB, Analog and JFET1;
+three of the four match to 1.4 px. The fourth (018) has Auto Makeup ON, which adds roughly 12 dB the
+device does not report and Axis does not draw — the README records what capture would settle it.
 
 Sustain-style models (Pedal, Pedal1, JFET2 — a "Compression" knob and no Threshold/Ratio) used to say
 "transfer curve unavailable", while FM3-Edit drew a real curve for them. The device explains why Axis

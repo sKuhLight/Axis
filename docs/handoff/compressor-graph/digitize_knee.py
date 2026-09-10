@@ -39,7 +39,7 @@ def digitize(f):
 if __name__ == '__main__':
     here = os.path.dirname(os.path.abspath(__file__))
     out = {}
-    for name in ('007', '013'):
+    for name in ('007', '013', '018', '376'):
         r = digitize(os.path.join(here, f'measurements/knee/official-{name}.png'))
         out[name] = r
         p = r['pts']
