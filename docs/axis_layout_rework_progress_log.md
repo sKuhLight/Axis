@@ -1849,7 +1849,15 @@ they acquire the new graph widgets; custom profiles remain unchanged.
 
 `CompressorGraph.svelte` renders the Compressor Basic-page slot for every FM3 compressor model. It binds
 Threshold, Ratio, Knee, Attack, and Release from the selected layout page and draws a read-only static
-transfer curve from Threshold and Ratio where the model exposes them.
+transfer curve from Threshold, Ratio and Knee where the model exposes them.
+
+The corner is rounded, not broken. Axis used to draw the textbook two-segment curve and produced a hard
+corner where the editor draws a soft one — on preset 007 that was the entire visible difference. The
+curve is now `y = x - (1 - 1/R) * softplus(x - T, k)`, the same shape the sustain fit below landed on
+(the sustain model is this with `1 - 1/R = 1`, i.e. a limiter), so both compressor families are one
+curve with two ways of getting its parameters. `COMP_KNEE` sets `k` across its five options
+(HARD..SOFT); only the MEDIUM entry is evidence-backed — the rest are interpolated, and the README
+records what capture would settle them.
 
 Sustain-style models (Pedal, Pedal1, JFET2 — a "Compression" knob and no Threshold/Ratio) used to say
 "transfer curve unavailable", while FM3-Edit drew a real curve for them. The device explains why Axis

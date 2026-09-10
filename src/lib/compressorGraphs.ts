@@ -1,4 +1,5 @@
-// Compressor transfer graphs. Threshold/Ratio models get a curve calculated from their own two params;
+// Compressor transfer graphs. Threshold/Ratio models get a curve calculated from their own params —
+// including COMP_KNEE, which rounds the corner the way the FM3 editor draws it, see the knee note;
 // Sustain-style models (Pedal, Pedal1, JFET2 — a "Compression" knob and no Threshold/Ratio) get the
 // curve below, fitted to the FM3 editor's own drawing. See SUSTAIN_* for why it is fitted, not derived.
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
@@ -61,6 +62,18 @@ function softplus(z: number, k: number): number {
   return Math.log1p(Math.exp(kz)) / k;
 }
 
+/** Inverse of {@link softplus}: the input level that produces `s` of reduction, or `null` when there is
+ *  no reduction to invert. Guarded at the top tail the same way — past ~40 the softplus is its own
+ *  asymptote, so the inverse is the identity and `exp` would overflow to Infinity if we let it. */
+function inverseSoftplus(s: number, k: number): number | null {
+  if (!(s > 0)) return null;
+  const ks = k * s;
+  if (ks > 40) return s;
+  const e = Math.exp(ks);
+  if (!(e > 1)) return null; // reduction below the resolution of the inverse
+  return Math.log(e - 1) / k;
+}
+
 export interface SustainTransfer {
   /** Gain applied ahead of the detector, in normalised graph units. */
   gain: number;
@@ -86,25 +99,74 @@ export function sustainCurveY(x: number, transfer: SustainTransfer): number {
 }
 
 /** Where on the sustain curve the signal currently sits, from gain reduction (normalised to the same
- *  axis span as the curve). The softplus inverts exactly, so unlike the Threshold/Ratio path this is a
- *  closed form rather than a search. `null` when there is no reduction to place — see the note on
- *  {@link compressorDotPosition}, which this mirrors. */
+ *  axis span as the curve). `null` when there is no reduction to place — see the note on
+ *  {@link ratioDotPosition}, which this mirrors. */
 export function sustainDotPosition(transfer: SustainTransfer, grNorm: number): { input: number; output: number } | null {
-  if (!(grNorm > 0)) return null;
-  const e = Math.exp(transfer.knee * grNorm);
-  if (!(e > 1)) return null; // reduction below the resolution of the inverse
-  const u = transfer.ceiling + Math.log(e - 1) / transfer.knee;
+  const z = inverseSoftplus(grNorm, transfer.knee);
+  if (z == null) return null;
+  const u = transfer.ceiling + z;
   return { input: u - transfer.gain, output: u - grNorm };
 }
 
-/** Invert the piecewise-linear transfer curve to find the point currently producing `grDb` of gain
- *  reduction. There's no live "input level" telemetry for compressors (the device reports gain
- *  reduction only), so this only resolves a point while gr is meaningfully above zero (input above
- *  threshold) — below threshold the real input is unknowable and callers should treat `null` as
- *  "resting/idle" rather than guessing a spot on the curve. */
-export function compressorDotPosition(threshold: number, ratio: number, grDb: number): { input: number; output: number } | null {
-  if (ratio <= 1 || grDb <= GR_NOISE_FLOOR_DB) return null;
-  const input = threshold + (grDb * ratio) / (ratio - 1);
+/** ── Threshold/Ratio compressors: the knee ──────────────────────────────────────────────────────────
+ *
+ *  The Studio / Analog / JFET1 variants compute their curve from their own Threshold and Ratio, so
+ *  unlike the sustain models above there is nothing to fit — except the corner. Axis used to draw the
+ *  textbook two-segment curve (unity below threshold, `T + (x-T)/R` above) and got a hard corner where
+ *  the FM3 editor draws a rounded one, which is the whole visible difference on a preset like 007.
+ *
+ *  The rounding is the same shape as the sustain curve's: `y = x - slope * softplus(x - T, k)`, which
+ *  is unity gain far below threshold and `T + (x-T)/R` far above, joined smoothly. That is not a
+ *  coincidence — the sustain fit landed on exactly this form with `slope = 1` (a limiter), so treating
+ *  the editor as drawing one softplus-kneed curve for every compressor makes the two paths one model.
+ *
+ *  `COMP_KNEE` picks the sharpness. Its five options are HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
+ *  (device enum 0..4, default MEDIUM), and the table below halves the sharpness at each step from the
+ *  sustain fit's own value (12 in normalised units over a −60..+20 dB window = 0.15/dB) sitting at
+ *  MEDIUM.
+ *
+ *  PROVISIONAL: only the MEDIUM entry is evidence-backed. The other four are an interpolation, not a
+ *  measurement — capturing FM3-Edit's graph at each Knee Type would pin them down, and until that is
+ *  done a HARD or SOFT setting is the right *shape* with an approximate width. See the "Known gap"
+ *  section of `docs/handoff/compressor-graph/README.md`. */
+const KNEE_SHARPNESS_PER_DB = [0.6, 0.3, 0.15, 0.075, 0.0375];
+const KNEE_DEFAULT_OPTION = 2; // MEDIUM — the device's own default for COMP_KNEE
+
+/** Knee sharpness in 1/dB for a bound `COMP_KNEE`; the device default when the variant authors none
+ *  (Analog and JFET1 have no Knee dropdown, and the editor still rounds their corner). */
+export function kneeSharpness(knee: EnumParam | null | undefined): number {
+  const option = Math.round(knee?.value ?? KNEE_DEFAULT_OPTION);
+  return KNEE_SHARPNESS_PER_DB[option] ?? KNEE_SHARPNESS_PER_DB[KNEE_DEFAULT_OPTION];
+}
+
+export interface RatioTransfer {
+  /** dB. */
+  threshold: number;
+  ratio: number;
+  /** Knee sharpness in 1/dB — higher is a tighter corner. */
+  knee: number;
+}
+
+export function ratioTransfer(threshold: number, ratio: number, knee: EnumParam | null | undefined): RatioTransfer {
+  return { threshold, ratio: Math.max(1, ratio), knee: kneeSharpness(knee) };
+}
+
+/** Output dB for an input dB — the curve the graph plots. */
+export function ratioCurveY(inputDb: number, transfer: RatioTransfer): number {
+  return inputDb - (1 - 1 / transfer.ratio) * softplus(inputDb - transfer.threshold, transfer.knee);
+}
+
+/** Invert the curve to find the point currently producing `grDb` of gain reduction. There's no live
+ *  "input level" telemetry for compressors (the device reports gain reduction only), so this only
+ *  resolves a point while gr is meaningfully above zero (input above threshold) — below threshold the
+ *  real input is unknowable and callers should treat `null` as "resting/idle" rather than guessing a
+ *  spot on the curve. */
+export function ratioDotPosition(transfer: RatioTransfer, grDb: number): { input: number; output: number } | null {
+  const slope = 1 - 1 / transfer.ratio;
+  if (slope <= 0 || grDb <= GR_NOISE_FLOOR_DB) return null;
+  const z = inverseSoftplus(grDb / slope, transfer.knee);
+  if (z == null) return null;
+  const input = transfer.threshold + z;
   return { input, output: input - grDb };
 }
 

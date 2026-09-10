@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { compressorDotPosition, deriveCompressorGraphs, sustainCurveY, sustainDotPosition, sustainTransfer } from './compressorGraphs';
+import {
+  deriveCompressorGraphs, kneeSharpness, ratioCurveY, ratioDotPosition, ratioTransfer,
+  sustainCurveY, sustainDotPosition, sustainTransfer
+} from './compressorGraphs';
 import type { BlockParams, DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
 import compFixture from './fixtures/blockParams/comp.json';
 
@@ -47,24 +50,71 @@ describe('deriveCompressorGraphs', () => {
   });
 });
 
-describe('compressorDotPosition', () => {
-  it('inverts the transfer curve to the point producing the given gain reduction', () => {
-    const pos = compressorDotPosition(-10, 4, 6);
+/** A COMP_KNEE reading at a given option index (0 HARD … 4 SOFT). */
+const kneeAt = (value: number): EnumParam => ({ id: 5, name: 'Knee Type', value, options: [] });
+
+describe('ratio-style transfer curve', () => {
+  it('approaches unity gain well below threshold and the ratio slope well above it', () => {
+    const t = ratioTransfer(-10, 4, kneeAt(0)); // HARD — the tightest corner, so the asymptotes bite soonest
+    expect(ratioCurveY(-50, t)).toBeCloseTo(-50, 3);
+    expect(ratioCurveY(30, t)).toBeCloseTo(-10 + 40 / 4, 3); // T + (x-T)/R
+  });
+
+  it('rounds the corner instead of breaking it — the whole point of the knee', () => {
+    const t = ratioTransfer(-10, 4, kneeAt(2)); // MEDIUM
+    const hardCorner = -10; // the two-segment curve would pass exactly through (T, T)
+    expect(ratioCurveY(-10, t)).toBeLessThan(hardCorner);
+    // and the rounding is symmetric about threshold: the curve sits half a knee's worth below the corner
+    expect(hardCorner - ratioCurveY(-10, t)).toBeCloseTo((1 - 1 / 4) * Math.LN2 / kneeSharpness(kneeAt(2)), 6);
+  });
+
+  it('draws a softer corner for a softer Knee Type', () => {
+    const drop = (option: number) => -10 - ratioCurveY(-10, ratioTransfer(-10, 4, kneeAt(option)));
+    const drops = [0, 1, 2, 3, 4].map(drop);
+    for (let i = 1; i < drops.length; i++) expect(drops[i]).toBeGreaterThan(drops[i - 1]);
+  });
+
+  it('falls back to the device default (MEDIUM) when the variant authors no Knee dropdown', () => {
+    expect(kneeSharpness(null)).toBe(kneeSharpness(kneeAt(2)));
+    expect(kneeSharpness(kneeAt(99))).toBe(kneeSharpness(kneeAt(2)));
+  });
+
+  it('is monotonic across the plotted window', () => {
+    const t = ratioTransfer(-10, 4, kneeAt(4));
+    let prev = -Infinity;
+    for (let db = -60; db <= 20; db += 0.5) {
+      const y = ratioCurveY(db, t);
+      expect(y).toBeGreaterThan(prev);
+      prev = y;
+    }
+  });
+});
+
+describe('ratioDotPosition', () => {
+  it('inverts the curve it draws, so the dot rides the line rather than floating off it', () => {
+    const t = ratioTransfer(-10, 4, kneeAt(2));
+    const pos = ratioDotPosition(t, 6);
     expect(pos).not.toBeNull();
-    expect(pos!.input).toBeCloseTo(-2);
-    expect(pos!.output).toBeCloseTo(-8);
     expect(pos!.input - pos!.output).toBeCloseTo(6); // reproduces the gain reduction it was given
+    expect(pos!.output).toBeCloseTo(ratioCurveY(pos!.input, t), 6); // lands ON the drawn curve
   });
 
   it('returns null for a sustain-style compressor (ratio <= 1)', () => {
-    expect(compressorDotPosition(-10, 1, 6)).toBeNull();
+    expect(ratioDotPosition(ratioTransfer(-10, 1, kneeAt(2)), 6)).toBeNull();
   });
 
   it('returns null when there is no reduction to place (idle, or a makeup-gain-flavored reading)', () => {
-    expect(compressorDotPosition(-10, 4, 0)).toBeNull();
-    expect(compressorDotPosition(-10, 4, -3)).toBeNull();
+    const t = ratioTransfer(-10, 4, kneeAt(2));
+    expect(ratioDotPosition(t, 0)).toBeNull();
+    expect(ratioDotPosition(t, -3)).toBeNull();
     // real hardware's idle GR noise floor (never bit-exact 0) shouldn't resolve to a point either
-    expect(compressorDotPosition(-10, 4, 0.04)).toBeNull();
+    expect(ratioDotPosition(t, 0.04)).toBeNull();
+  });
+
+  it('survives reduction deep enough to overflow the naive inverse', () => {
+    const pos = ratioDotPosition(ratioTransfer(-10, 20, kneeAt(0)), 40);
+    expect(pos).not.toBeNull();
+    expect(Number.isFinite(pos!.input)).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { paramValue } from './format';
   import {
-    compressorDotPosition, sustainCurveY, sustainDotPosition, sustainTransfer,
+    ratioCurveY, ratioDotPosition, ratioTransfer, sustainCurveY, sustainDotPosition, sustainTransfer,
     type CompressorGraphSpec
   } from './compressorGraphs';
   import type { LiveMonitor } from './types';
@@ -25,6 +25,10 @@
   const sustainStyle = $derived(!ratioStyle && !!graph.sustain);
   const hasTransfer = $derived(ratioStyle || sustainStyle);
   const transfer = $derived(sustainStyle ? sustainTransfer(paramValue(graph.sustain!)) : null);
+  // Threshold/Ratio models get their corner rounded by COMP_KNEE, which is how the FM3 editor draws it;
+  // a hard corner was the visible difference on presets like 007. Variants with no Knee dropdown fall
+  // back to the device's own default. See the knee note in `compressorGraphs.ts`.
+  const ratio = $derived(ratioStyle ? ratioTransfer(paramValue(graph.threshold!), paramValue(graph.ratio!), graph.knee) : null);
   const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
   const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
   // The sustain model works in normalised graph space (0..1 on both axes) because that is how the
@@ -41,12 +45,9 @@
       }
       return points.join(' ');
     }
-    const threshold = paramValue(graph.threshold!);
-    const ratio = Math.max(1, paramValue(graph.ratio!));
     for (let i = 0; i <= 96; i++) {
       const input = MIN + ((MAX - MIN) * i) / 96;
-      const output = input <= threshold ? input : threshold + (input - threshold) / ratio;
-      points.push(`${xOf(input).toFixed(1)},${yOf(output).toFixed(1)}`);
+      points.push(`${xOf(input).toFixed(1)},${yOf(ratioCurveY(input, ratio!)).toFixed(1)}`);
     }
     return points.join(' ');
   });
@@ -66,14 +67,12 @@
       const input = Math.min(1, pos.input);
       return { input: MIN + input * (MAX - MIN), output: MIN + sustainCurveY(input, transfer) * (MAX - MIN) };
     }
-    const threshold = paramValue(graph.threshold!);
-    const ratio = Math.max(1, paramValue(graph.ratio!));
-    const pos = compressorDotPosition(threshold, ratio, -live.db);
+    const pos = ratioDotPosition(ratio!, -live.db);
     if (!pos) return { input: MIN, output: MIN };
     // Clamp ALONG the curve (recompute via the same formula `curve` samples), not per-axis — heavy
     // reduction can push the inferred input past the graph's right edge, and clamping x alone while
     // keeping the unclamped y would float the dot above the line instead of riding it to the edge.
-    if (pos.input > MAX) return { input: MAX, output: threshold + (MAX - threshold) / ratio };
+    if (pos.input > MAX) return { input: MAX, output: ratioCurveY(MAX, ratio!) };
     return pos;
   });
   // Percent-of-box position for the CSS dot overlay — kept out of the SVG's own coordinate space

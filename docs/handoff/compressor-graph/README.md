@@ -55,6 +55,35 @@ Worst-case deviation from the editor's drawn curve, over every digitised point o
 **1.97 px**. `fit-vs-editor.svg` overlays the two. `compressorGraphs.test.ts` asserts the parity
 against points embedded from these captures, so a regression fails the suite.
 
+## The Threshold/Ratio models share the same knee
+
+The Studio / Analog / JFET1 variants need no fitting for their *curve* — Threshold and Ratio are live
+and give the two asymptotes directly. What they did need is the corner. Axis drew the textbook
+two-segment curve (unity below threshold, `T + (x-T)/R` above) and produced a hard corner where the
+editor draws a rounded one; on preset 007 that is the entire visible difference between the two
+graphs.
+
+The rounding uses the same shape the sustain fit landed on:
+
+```
+y(x) = x - (1 - 1/R) * softplus(x - T, k)
+```
+
+which is unity gain far below threshold, `T + (x-T)/R` far above, and smooth in between. The sustain
+model is this with `1 - 1/R = 1` (a limiter), so the two compressor families are now one curve with
+two ways of getting its parameters — that unification is the evidence for the shape, since the sustain
+form was fitted to the editor's own drawing rather than assumed.
+
+`COMP_KNEE` sets `k`. The device serves five options — HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
+(0..4, default MEDIUM) — and `KNEE_SHARPNESS_PER_DB` in `compressorGraphs.ts` maps them to
+`0.6 / 0.3 / 0.15 / 0.075 / 0.0375` per dB.
+
+**Only the MEDIUM entry is evidence-backed**: 0.15/dB is the sustain fit's own `k` of 12 in normalised
+units over the −60..+20 dB window. The other four halve/double from it, which is an interpolation, not
+a measurement. Capturing FM3-Edit's graph at each of the five Knee Types on one Studio preset, at a
+fixed Threshold and Ratio, would pin them down — `digitize.py` already handles that capture shape.
+Until then a non-MEDIUM Knee Type draws the right shape at an approximate width.
+
 ## Known gap
 
 The ceiling drops by 0.33 between Compression 0 and 2 and there are **no captures in that gap** — the
