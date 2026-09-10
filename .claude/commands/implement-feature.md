@@ -34,7 +34,8 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 4 — UI-surface decision (see src/lib/CLAUDE.md)
 
-- Editor-flag modal → reaches both shells automatically.
+- Overlay-registry modal (`ui/Dialog.svelte` + `overlays.isOpen(id)`) → reaches
+  both shells automatically.
 - Feature inside an embedded editor (SignalGrid / BlockEditor / FcEditor /
   VirtualScreen / ModifierEditorCore) → both shells automatically.
 - TopBar / ToolRail chrome → monolith only; plan the mirrored workbench

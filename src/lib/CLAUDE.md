@@ -94,14 +94,35 @@ surface), `device/`, `preset/`, `fm3edit/`, `shell/` (frozen legacy-monolith
 chrome), `ancillary/` (settings hub, onboarding, notices). Cross-folder imports
 use the `$lib/<folder>/x` alias; same-folder imports are relative (`./sibling`).
 Direct singleton import (`const cents = $derived(editor.tuner.cents ?? 0)`);
-actions inline (`onclick={() => editor.toggleTuner()}`). Modal pattern: a boolean
-`$state` flag on `editor` (`xOpen`), the component gates on `{#if editor.xOpen}`,
-and it is mounted UNCONDITIONALLY in `+page.svelte` below the shell branch;
-Escape is handled centrally in `+page.svelte` in priority order. Theming: use
-tokens from `src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`,
-`--amber`, `--danger`, `--font-mono`) — the monolith is not hex-linted (only
-`workbench/svelte/` is), but prefer tokens anyway. Minimal end-to-end reference
-feature: `editor/TunerOverlay.svelte` + `editor.toggleTuner`.
+actions inline (`onclick={() => editor.toggleTuner()}`). Theming: use tokens from
+`src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`, `--amber`,
+`--danger`, `--font-mono`) — the monolith is not hex-linted (only
+`workbench/svelte/` is), but prefer tokens anyway.
+
+### Overlay / modal pattern
+
+Every modal renders through **`ui/Dialog.svelte`** — the one shell that owns the
+scrim, card chrome, focus trap (`workbench/svelte/focusTrap.ts`) and
+Escape-to-close. Props cover the per-dialog differences (`size`/`width`,
+`align`, `sheet`/`mobileFull`, `accent`, `dismissible`, `title`); don't fork it.
+Mount the dialog UNCONDITIONALLY in `+page.svelte` below the shell `{#if}` branch
+and pass `open` + `onClose`.
+
+Open-state and Escape priority live in the **overlay registry**
+(`overlay/overlays.svelte.ts`). `overlays.open/close/toggle/isOpen(id)` drive the
+registry-owned overlays; `+page.svelte`'s keydown handler calls
+`overlays.escape()` (no chain) and the registry closes the single
+highest-priority open overlay. `ESCAPE_ORDER` in that file is the priority table.
+Overlays whose state genuinely lives elsewhere (tuner = device-synced, the
+converter flow, link-arm, the block-editor drawer) register an `OverlayDelegate`
+in `overlay/overlayRegistrations.ts`. `editor` keeps thin `get/set xOpen`
+accessors delegating to `overlays` so long-standing call sites and the
+`EditorSurface` contract still work.
+
+Adding a dialog: pick/add an `OverlayId`, give it an `ESCAPE_ORDER` slot, render
+via `Dialog`, drive `open` from `overlays.isOpen(id)` (or a domain store).
+Minimal end-to-end reference: `editor/TunerOverlay.svelte` (Dialog shell +
+delegate) and `device/DeviceTools.svelte` (Dialog shell + registry-owned flag).
 
 ## Dual-shell decision tree
 
@@ -110,7 +131,7 @@ decides how much mirroring work it costs:
 
 | Feature lives in… | Reaches both shells? | What you must do |
 |---|---|---|
-| Editor-flag modal (`{#if editor.xOpen}`) | Yes, automatically | Nothing — shared modal layer sits below the shell `{#if}` branch |
+| Overlay-registry modal (`Dialog` + `overlays.isOpen(id)`) | Yes, automatically | Nothing — the shared modal layer sits below the shell `{#if}` branch |
 | Embedded editor component (`SignalGrid` / `BlockEditor` / `FcEditor` / `VirtualScreen` / `ModifierEditorCore`) | Yes, automatically | Nothing — the workbench embeds these directly |
 | Monolith chrome (`TopBar` / `ToolRail`) | No — monolith only | Build a mirrored widget/panel via `/new-widget` / `/new-panel` |
 | Preset-browser logic (`PresetBrowser.svelte` / `library.svelte.ts`) | No | MUST manually mirror into `src/lib/axis-workbench/presetBrowser/` — query grammar + row/menu logic verbatim. Deep per-parameter matching (`matchParamCond` over decoded blocks) and the weighted CPU estimate are now shared in `presetBrowserWorkbenchQuery.ts`; the workbench hosts feed `library.paramsOf` into `preparePresetBrowserIndex` so `` `AMP(GAIN>7)` `` filters identically in both shells (and excludes entries whose params aren't hydrated). |

@@ -204,6 +204,9 @@ normalization step needs an idempotence check in its unit test.
 - `../../editor.svelte` — the central coupling (about a dozen importing files).
 - `../../forgefx` — device runtime hosts + store persistence.
 - `../../history.svelte`, `../../types`.
+- `$lib/overlay/overlays.svelte` — modal open-state + Escape priority
+  (`axisWorkbenchRegistry.ts` reads/writes the theme + Axis-hub overlays here;
+  `AxisPresetBrowserSearchOverlay.svelte` renders through `$lib/ui/Dialog.svelte`).
 - Directly embedded app components: `SignalGrid`, `BlockEditor`, `FcEditor`,
   `VirtualScreen`, `ModifierEditorCore`, `library.svelte`.
 
