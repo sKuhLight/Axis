@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ConversionEvent, ConverterPreset } from '$lib/types';
+import type { ConversionEvent, ConverterPreset } from '$lib/api/types';
 import {
   seedScratch,
   seedScratchFromResponse,

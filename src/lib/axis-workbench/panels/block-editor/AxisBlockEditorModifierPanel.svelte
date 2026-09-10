@@ -3,7 +3,7 @@
   // binds to whatever parameter an editor's ∿ badge last targeted, via the typed shared controller
   // (the production replacement for the design's `__BEBus` modParam/modBlock + modPartMounted rule).
   // The overlay flyout in the old shell (ModifierFlyout) is untouched — both reuse ModifierEditorCore.
-  import ModifierEditorCore from '../../../ModifierEditorCore.svelte';
+  import ModifierEditorCore from '$lib/editor/ModifierEditorCore.svelte';
   import type { PanelInstance } from '../../../workbench';
   import { parseAxisBlockEditorPart, type AxisBlockEditorPart } from '../../blockEditor/types';
   import {

@@ -7,12 +7,12 @@
   // the connected unit matches the target). All logic is the pure convertScratch.ts core via the store.
   import { convert } from './convert.svelte';
   import { convertScratch } from './convertScratch.svelte';
-  import { editor } from '$lib/editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import { deviceName, deviceIdFromModel, formatEvent, eventSeverity, type Severity } from './convertReport';
   import { conflictsForBlock, blockBadgeSeverity, type ScratchBlock } from './convertScratch';
   import { catFor, shade } from '$lib/device/catalog';
   import { baseName } from '$lib/device/blocks';
-  import { theme } from '$lib/theme.svelte';
+  import { theme } from '$lib/platform/theme.svelte';
 
   const s = $derived(convertScratch.state);
   const light = $derived(theme.cfg.base === 'light');

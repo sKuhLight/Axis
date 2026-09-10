@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { paramValue } from '$lib/format';
+  import { paramValue } from '$lib/ui/format';
   import { megaTapTaps } from './megaTapPattern';
   import type { MegaTapGraphSpec } from './megaTapGraphs';
 

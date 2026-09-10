@@ -4,13 +4,13 @@
   // report. Mounted unconditionally in +page.svelte; gated on `convert.open`. The block-focus hook is
   // wired here to the live editor (best-effort family match) and passed to ConvertReport as a prop — the
   // P4b seam that the fake-grid phase re-points.
-  import { editor } from '$lib/editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import { convert } from './convert.svelte';
   import { convertScratch } from './convertScratch.svelte';
   import ConvertReport from './ConvertReport.svelte';
   import { CONVERTER_DEVICES, deviceName, deviceIdFromModel } from './convertReport';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
-  import type { ConverterDeviceId } from '$lib/types';
+  import type { ConverterDeviceId } from '$lib/api/types';
 
   // Workbench shell → the review hop routes to the REAL SignalGrid convert page; the legacy monolith
   // keeps the fake-grid view (ConvertScratchView) as its fallback (removed in M5).

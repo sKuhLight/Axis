@@ -4,7 +4,7 @@
   // path — the same VirtualScreen the old shell mounts — so Setup/Controllers are
   // reachable in the Workbench instead of dead-ending (T09).
   import { untrack } from 'svelte';
-  import { editor } from '../../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import VirtualScreen from '$lib/device/VirtualScreen.svelte';
   import type { PanelInstance } from '../../workbench';
 

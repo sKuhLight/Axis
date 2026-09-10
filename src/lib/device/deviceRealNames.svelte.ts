@@ -9,8 +9,8 @@
 // `loadTypes`), which wraps the same `forgefx.blockTypes(slug)` endpoint CommandPalette.svelte already
 // uses for its "real names" retype toggle.
 
-import { forgefx } from '$lib/forgefx';
-import type { BlockTypeOption } from '$lib/types';
+import { forgefx } from '$lib/api/forgefx';
+import type { BlockTypeOption } from '$lib/api/types';
 
 function toRealNameMap(list: BlockTypeOption[]): Map<string, string> {
   const m = new Map<string, string>();

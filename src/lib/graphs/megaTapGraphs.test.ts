@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveMegaTapGraphs } from './megaTapGraphs';
-import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = ''): LayoutControl => ({ label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget });
 const param = (id: number, paramName?: string): NamedParam => ({ id, name: `p${id}`, value: 0, norm: 0.5, min: 0, max: 100, paramName });

@@ -5,8 +5,8 @@
 // shell + the (small) impure device/browser plumbing. It deliberately does NOT import the editor store
 // (the editor imports IT, to route `cacheBuild` SSE events) — device context is passed in on refresh.
 
-import { forgefx, ForgeError } from '$lib/forgefx';
-import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceCaps, DeviceEvent } from '$lib/types';
+import { forgefx, ForgeError } from '$lib/api/forgefx';
+import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceCaps, DeviceEvent } from '$lib/api/types';
 import {
   deviceDefsActions,
   shouldOfferDeviceDefs,

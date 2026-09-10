@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SignalGrid from '../../SignalGrid.svelte';
+  import SignalGrid from '$lib/editor/SignalGrid.svelte';
   import WidgetZone from '../../workbench/svelte/WidgetZone.svelte';
   import { selectVisibleWidgetsByZone } from '../../workbench';
   import { getWorkbenchContext } from '../../workbench/svelte/context';

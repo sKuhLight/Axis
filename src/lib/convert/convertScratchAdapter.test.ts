@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { scratchToLayout, keyAt, keyForEffectId, titleCase } from './convertScratchAdapter';
 import type { ScratchState, ScratchBlock } from './convertScratch';
-import type { ConverterPreset } from '$lib/types';
+import type { ConverterPreset } from '$lib/api/types';
 
 // minimal ConverterPreset stub — the adapter never reads `base`, so an empty shell is fine.
 const base: ConverterPreset = { name: 'Test', sourceDevice: 'fm9', blocks: [] } as unknown as ConverterPreset;

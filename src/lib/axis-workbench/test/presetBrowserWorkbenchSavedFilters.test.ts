@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 // Isolate the pure saved-filter logic from the network mirror: putDoc is a no-op in tests.
-vi.mock('../../forgefx', () => ({ forgefx: { putDoc: vi.fn(() => Promise.resolve()) } }));
+vi.mock('$lib/api/forgefx', () => ({ forgefx: { putDoc: vi.fn(() => Promise.resolve()) } }));
 
 import {
   addSavedFilter,

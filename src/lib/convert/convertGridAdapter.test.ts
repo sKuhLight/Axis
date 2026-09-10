@@ -11,7 +11,7 @@ import {
 } from './convertGridAdapter';
 import type { ScratchState, ScratchBlock } from './convertScratch';
 import type { Cell } from '$lib/device/grid';
-import type { ConverterBlock, ConverterPreset } from '$lib/types';
+import type { ConverterBlock, ConverterPreset } from '$lib/api/types';
 
 function block(partial: Partial<ScratchBlock> & { key: string; family: string }): ScratchBlock {
   return { instance: 1, params: [], position: null, ...partial } as ScratchBlock;

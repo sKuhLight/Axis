@@ -10,7 +10,7 @@ import type {
   ConversionEventKind,
   ConverterDeviceId,
   ConvertResponse
-} from '$lib/types';
+} from '$lib/api/types';
 
 // ── target devices ────────────────────────────────────────────────────────────────────────────────
 

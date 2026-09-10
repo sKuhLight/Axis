@@ -11,8 +11,8 @@
 // has an independent lifecycle from live device state and must outlive the editor's per-preset reloads
 // so P4b can keep the last conversion around.
 
-import { forgefx, ForgeError } from '$lib/forgefx';
-import type { ConverterDeviceId, ConvertResponse } from '$lib/types';
+import { forgefx, ForgeError } from '$lib/api/forgefx';
+import type { ConverterDeviceId, ConvertResponse } from '$lib/api/types';
 import type { ConvertedPresetDoc } from './convertScratch';
 import {
   initialConvertState,

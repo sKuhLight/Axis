@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { library, type LibEntry } from '$lib/preset/library.svelte';
-  import { editor } from '../../../editor.svelte';
-  import { history } from '../../../history.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { history } from '$lib/editor/history.svelte';
   import { startCrossConvert, openConvertedInConverter } from '$lib/preset/presetConvertSource';
   import { convert } from '$lib/convert/convert.svelte';
   import type { PanelInstance } from '../../../workbench';

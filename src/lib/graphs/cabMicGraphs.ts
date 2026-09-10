@@ -18,7 +18,7 @@
 // paramId` map resolves a symbol to the device-true id for THIS block; a slot whose position or pan
 // isn't live is skipped rather than half-drawn.
 
-import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 
 export interface CabMicGraphSpec {
   key: string; // 'cabmic1' | 'cabmic2' | …

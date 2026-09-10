@@ -1,4 +1,4 @@
-import { paramValue } from '$lib/format';
+import { paramValue } from '$lib/ui/format';
 import { currentLabel, modulationRate, modulationValue, type ModulationGraphSpec } from './modulationGraphs';
 
 export interface LfoSource {

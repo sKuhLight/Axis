@@ -1,4 +1,4 @@
-import type { DeviceLayout, EnumParam, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, NamedParam } from '$lib/api/types';
 import { graphKind, graphSlotsForPage } from '$lib/device/deviceWidgets';
 
 export interface MegaTapGraphSpec {

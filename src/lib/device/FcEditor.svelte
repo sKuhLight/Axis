@@ -12,9 +12,9 @@
   // confirmed. Controls whose metadata is absent from the model (colors, custom labels, function
   // lists) are hidden rather than gated on the device.
   import { onMount } from 'svelte';
-  import { editor } from '$lib/editor.svelte';
-  import { forgefx } from '$lib/forgefx';
-  import type { FcModel } from '$lib/types';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { forgefx } from '$lib/api/forgefx';
+  import type { FcModel } from '$lib/api/types';
 
   const ACC = 'var(--amber)'; // FC accent follows the theme's amber token
   let model = $state<FcModel | null>(null);

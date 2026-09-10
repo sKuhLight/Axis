@@ -4,7 +4,7 @@
   // and the event list grouped by severity (loss → warn → info) then by kind. Rows that reference a
   // block are clickable to focus that block IN THE CURRENT EDITOR (best-effort — P4b rewires the hook
   // for the fake grid). All formatting/grouping/filtering is the pure convertReport.ts (tested there).
-  import type { ConvertResponse, ConverterDeviceId } from '$lib/types';
+  import type { ConvertResponse, ConverterDeviceId } from '$lib/api/types';
   import {
     deviceName,
     formatEvent,

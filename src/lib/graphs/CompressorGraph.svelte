@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { paramValue } from '$lib/format';
+  import { paramValue } from '$lib/ui/format';
   import {
     GRAPH_MAX_DB, GRAPH_MIN_DB,
     ratioCurveY, ratioDotPosition, ratioTransfer, sustainCurveY, sustainDotPosition, sustainTransfer,
     type CompressorGraphSpec
   } from './compressorGraphs';
-  import type { LiveMonitor } from '$lib/types';
+  import type { LiveMonitor } from '$lib/api/types';
 
   let { graph, accent = '#35c9d6', live = null }: { graph: CompressorGraphSpec; accent?: string; live?: LiveMonitor | null } = $props();
 

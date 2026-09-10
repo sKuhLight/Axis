@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveModulationGraphs, modulationRate, modulationValue } from './modulationGraphs';
-import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = ''): LayoutControl => ({
   label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget

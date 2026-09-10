@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { geqBandsFromLayout, hzFromLabel, shapeFromLabel } from './eq';
-import type { DeviceLayout, LayoutControl } from '$lib/types';
+import type { DeviceLayout, LayoutControl } from '$lib/api/types';
 
 const slider = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'slider', rawWidget: '' });
 const knob = (label: string, paramId: number): LayoutControl => ({ label, paramName: label, paramId, widget: 'knob', rawWidget: '' });

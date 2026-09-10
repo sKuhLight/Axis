@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { paramValue } from '$lib/format';
+  import { paramValue } from '$lib/ui/format';
   import type { CabAlignmentGraphSpec } from './cabAlignmentGraphs';
 
   let { graph, accent = '#35c9d6' }: { graph: CabAlignmentGraphSpec; accent?: string } = $props();

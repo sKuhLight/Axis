@@ -12,7 +12,7 @@ export default defineConfig({
     alias: {
       // Vite dev pre-bundling resolves lazy dynamic imports too. The real serial transport lives in the
       // ForgeFX server/Electron Node process; browser/direct mode uses Web MIDI/Serial instead.
-      serialport: fileURLToPath(new URL('./src/lib/shims/serialport.ts', import.meta.url))
+      serialport: fileURLToPath(new URL('./src/lib/platform/shims/serialport.ts', import.meta.url))
     }
   },
   build: {

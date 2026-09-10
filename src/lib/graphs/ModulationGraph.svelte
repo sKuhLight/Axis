@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { paramValue } from '$lib/format';
+  import { paramValue } from '$lib/ui/format';
   import { currentLabel, modulationRate, modulationValue, type ModulationGraphSpec } from './modulationGraphs';
 
   let { graph, accent = '#35c9d6', bpm = 120 }: { graph: ModulationGraphSpec; accent?: string; bpm?: number } = $props();

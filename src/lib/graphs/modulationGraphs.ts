@@ -1,7 +1,7 @@
 // Parameter-driven modulation waveforms. Graph slots come from the device's own `render.graphIndex`
 // (see `graphSlotsForPage`), which matters here because the Controllers layout places LFO 1 and LFO 2
 // on one page — the device calls them 2 and 3, where counting them would call them 0 and 1.
-import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 import { graphKind, graphSlotsForPage } from '$lib/device/deviceWidgets';
 
 

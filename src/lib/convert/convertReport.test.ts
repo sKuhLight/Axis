@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ConversionEvent, ConvertResponse } from '$lib/types';
+import type { ConversionEvent, ConvertResponse } from '$lib/api/types';
 import {
   eventSeverity,
   eventBlockKey,

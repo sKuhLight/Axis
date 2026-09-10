@@ -12,7 +12,7 @@ protocol)**. Axis talks ONLY to the ForgeFX HTTP API. Protocol facts (frames,
 opcodes, address models) are never authored here — if a feature needs new device
 data, the work starts two repos down and surfaces as a new endpoint.
 
-## HTTP client (`src/lib/forgefx.ts`)
+## HTTP client (`src/lib/api/forgefx.ts`)
 
 One default-export object `forgefx` of ~60 one-liner methods, all delegating to a
 private generic `req<T>(path, init?)`:
@@ -32,7 +32,7 @@ private generic `req<T>(path, init?)`:
   binary helpers branch on `isDirect()`. Any new SSE or binary feature must
   handle both modes, or it silently no-ops in the web build.
 
-## Types contract (`src/lib/types.ts`)
+## Types contract (`src/lib/api/types.ts`)
 
 All API shapes are **hand-mirrored interfaces** — no codegen, no OpenAPI. The
 chain is: ForgeFX route JSON → `types.ts` interface → `req<T>` → store `$state` →
@@ -43,13 +43,13 @@ server shape change not reflected in `types.ts` typechecks green; missing caps
 fields silently hide features. The manual mirror discipline stands, but
 `blockParams` (`NamedParam`/`EnumParam`/`DeviceLayout` and its `LayoutPage`/
 `LayoutRow`/`LayoutControl`) now has a **contract test**:
-`forgefxContract.test.ts` Zod-parses real ForgeFX response fixtures
-(`fixtures/blockParams/*.json`, provenance in that dir's README) against a
+`api/forgefxContract.test.ts` Zod-parses real ForgeFX response fixtures
+(`api/fixtures/blockParams/*.json`, provenance in that dir's README) against a
 schema mirroring the widened contract — this is what actually fails at test
 time on drift, not just at runtime in the field. v2 caps fields are optional
 (`?`) by design so legacy payloads degrade to the `isAm4` fallback branches.
 
-## Store pattern (`src/lib/editor.svelte.ts`, ~1865 lines)
+## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1865 lines)
 
 `class EditorStore` exported as a singleton `export const editor`; components
 import it directly — no context or props threading.
@@ -78,8 +78,8 @@ import it directly — no context or props threading.
   };
   ```
 
-Other stores: `library.svelte.ts` (device scan, `.syx` import, Zod-validated persisted
-summaries, Orama index), `history.svelte.ts` (undo/redo, IndexedDB; binds a
+Other stores: `preset/library.svelte.ts` (device scan, `.syx` import, Zod-validated
+persisted summaries, Orama index), `editor/history.svelte.ts` (undo/redo, IndexedDB; binds a
 narrow host interface to avoid an editor↔history import cycle).
 
 **Own module vs extend editor:** give state its own `*.svelte.ts` when it has an
@@ -88,16 +88,20 @@ state flowing through poll/SSE with the shared connection/caps stays in `editor`
 
 ## Component pattern
 
-Flat, one `.svelte` per feature directly under `src/lib/`. Direct singleton
-import (`const cents = $derived(editor.tuner.cents ?? 0)`); actions inline
-(`onclick={() => editor.toggleTuner()}`). Modal pattern: a boolean `$state` flag
-on `editor` (`xOpen`), the component gates on `{#if editor.xOpen}`, and it is
-mounted UNCONDITIONALLY in `+page.svelte` below the shell branch; Escape is
-handled centrally in `+page.svelte` in priority order. Theming: use tokens from
-`src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`, `--amber`,
-`--danger`, `--font-mono`) — the monolith is not hex-linted (only
+One `.svelte` per feature, filed under its domain folder in `src/lib/`: `ui/`
+(presentation primitives, no domain knowledge), `editor/` (the live editing
+surface), `device/`, `preset/`, `fm3edit/`, `shell/` (frozen legacy-monolith
+chrome), `ancillary/` (settings hub, onboarding, notices). Cross-folder imports
+use the `$lib/<folder>/x` alias; same-folder imports are relative (`./sibling`).
+Direct singleton import (`const cents = $derived(editor.tuner.cents ?? 0)`);
+actions inline (`onclick={() => editor.toggleTuner()}`). Modal pattern: a boolean
+`$state` flag on `editor` (`xOpen`), the component gates on `{#if editor.xOpen}`,
+and it is mounted UNCONDITIONALLY in `+page.svelte` below the shell branch;
+Escape is handled centrally in `+page.svelte` in priority order. Theming: use
+tokens from `src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`,
+`--amber`, `--danger`, `--font-mono`) — the monolith is not hex-linted (only
 `workbench/svelte/` is), but prefer tokens anyway. Minimal end-to-end reference
-feature: `TunerOverlay.svelte` + `editor.toggleTuner`.
+feature: `editor/TunerOverlay.svelte` + `editor.toggleTuner`.
 
 ## Dual-shell decision tree
 

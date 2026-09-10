@@ -14,7 +14,7 @@
   import { sourceOutcomeFor } from '$lib/convert/convertDecorations';
   import { sevToken } from '$lib/convert/convertConflicts';
   import { catFor } from '$lib/device/catalog';
-  import { baseName } from '../../editor.svelte';
+  import { baseName } from '$lib/editor/editor.svelte';
   import type { Cell } from '$lib/device/grid';
   import type { PanelInstance } from '../../workbench';
 

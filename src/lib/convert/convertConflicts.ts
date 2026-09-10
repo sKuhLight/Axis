@@ -12,7 +12,7 @@
 //
 // Framework-free; fully unit-tested in convertConflicts.test.ts.
 
-import type { ConversionEvent, ConverterDeviceId, ConverterParam } from '$lib/types';
+import type { ConversionEvent, ConverterDeviceId, ConverterParam } from '$lib/api/types';
 import {
   eventSeverity,
   eventBlockKey,

@@ -125,7 +125,11 @@ async function bootWithLayout(page: Page): Promise<void> {
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-  await page.route('**/api/**', async (route) => {
+  // Match ONLY real backend calls (`/api/...` right after the origin) — not Vite's
+  // module requests for `src/lib/api/*`, which a substring `**/api/**` glob would also
+  // catch and answer with JSON, breaking the module graph.
+  const isBackend = (url: URL) => url.pathname.startsWith('/api/');
+  await page.route(isBackend, async (route) => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '');
     if (path === '/device') return json(route, DEVICE);
     if (path === '/device/detect') return json(route, DETECT);

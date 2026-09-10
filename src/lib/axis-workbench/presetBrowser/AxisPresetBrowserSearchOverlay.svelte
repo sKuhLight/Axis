@@ -7,7 +7,7 @@
   // it shares those singletons rather than a separate instance, which is safe because this overlay
   // only opens from Grid, where no Preset Browser page/panel is concurrently mounted to collide with.
   import { onMount, tick } from 'svelte';
-  import { editor } from '../../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import { library, type LibEntry } from '$lib/preset/library.svelte';
   import { presetRecency } from '$lib/preset/presetRecency.svelte';
   import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';

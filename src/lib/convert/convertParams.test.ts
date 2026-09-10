@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildParams, buildEnums } from './convertParams';
-import type { ConverterParam } from '$lib/types';
+import type { ConverterParam } from '$lib/api/types';
 
 // The converter attaches display metadata to a mapped param when a real per-device catalog covers it.
 function p(extra: Partial<ConverterParam> & { nativeName: string; value: number }): ConverterParam {

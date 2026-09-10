@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeTrafficRates, formatRate } from '../widgets/telemetryTraffic';
-import type { TrafficSnapshot } from '../../types';
+import type { TrafficSnapshot } from '$lib/api/types';
 
 const snap = (over: Partial<TrafficSnapshot> = {}): TrafficSnapshot => ({
   txMsgs: 0,

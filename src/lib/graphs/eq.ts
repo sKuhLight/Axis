@@ -1,7 +1,7 @@
 // EQ helpers: band-type → curve shape, the EQ graph's band contract, and graphic-EQ band discovery
 // from the device layout.
 
-import type { DeviceLayout, NamedParam } from '$lib/types';
+import type { DeviceLayout, NamedParam } from '$lib/api/types';
 
 export type EQShape = 'bell' | 'lowshelf' | 'highshelf' | 'lowcut' | 'highcut';
 

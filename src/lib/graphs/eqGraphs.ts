@@ -19,7 +19,7 @@
 // explicit binding to its type enum anyway. Each row reads like one row of the device's own page.
 
 import { type EQBand, type EQShape, geqBandsFromLayout, shapeFromLabel } from './eq';
-import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 import { graphKind } from '$lib/device/deviceWidgets';
 
 /** One graph and the pages that show it. A block can have several (the amp draws a different curve on

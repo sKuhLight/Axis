@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import { library } from './library.svelte';
 
   type Recent = { n: number; name: string };

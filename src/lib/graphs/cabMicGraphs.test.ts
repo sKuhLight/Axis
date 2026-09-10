@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { deriveCabMicGraphs } from './cabMicGraphs';
-import type { DeviceLayout, EnumParam, LayoutControl, LayoutPage, NamedParam } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, LayoutPage, NamedParam } from '$lib/api/types';
 
 // ── fixture builders ──
 // Shaped after the REAL DynaCab page (Axe-Fx III `CABINET` variant "1", page "Cab 1+2"): the cone is a

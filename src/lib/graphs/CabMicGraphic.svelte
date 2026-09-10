@@ -8,8 +8,8 @@
   // placement — so it stays a text readout, never a drag axis, to avoid implying a spatial meaning it
   // doesn't have. Distance (mic-to-cone) isn't a point on this flat image either; it reads instead as
   // a depth cue — the dot grows and glows warmer as the mic gets closer — and stays a readout + knob.
-  import { getEditorSurface } from '$lib/editorSurface';
-  import type { NamedParam } from '$lib/types';
+  import { getEditorSurface } from '$lib/editor/editorSurface';
+  import type { NamedParam } from '$lib/api/types';
   import type { CabMicGraphSpec } from './cabMicGraphs';
 
   const editor = getEditorSurface();

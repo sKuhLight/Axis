@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryEntry } from '../../history.svelte';
+import type { HistoryEntry } from '$lib/editor/history.svelte';
 import { isSaveDirty } from '../widgets/saveDirtyState';
 
 let seq = 0;

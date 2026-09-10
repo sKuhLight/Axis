@@ -16,7 +16,7 @@ import type {
   ConverterParam,
   ConverterPreset,
   ConvertResponse
-} from '$lib/types';
+} from '$lib/api/types';
 import type { Severity } from './convertReport';
 
 // ── target topology ──────────────────────────────────────────────────────────────────────────────

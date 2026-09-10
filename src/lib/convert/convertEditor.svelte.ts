@@ -16,12 +16,12 @@ import { scratchToLayout, keyAt, EMPTY_LAYOUT } from './convertScratchAdapter';
 import { gridLayoutFromScratch, effectKeyMap, isGridTarget, keyForGridCell } from './convertGridAdapter';
 import { connectOnLayout, disconnectOnLayout, moveOnLayout, removeAtOnLayout, bypassOnLayout } from './convertGridEdit';
 import { applyGridEditsToState } from './convertGridSerialize';
-import { paramValue } from '$lib/format';
+import { paramValue } from '$lib/ui/format';
 import { buildParams, buildEnums } from './convertParams';
 import type { Cell, Layout } from '$lib/device/grid';
-import type { EditorSurface } from '$lib/editorSurface';
-import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState } from '$lib/types';
-import type { SwipeCtrl } from '$lib/layouts';
+import type { EditorSurface } from '$lib/editor/editorSurface';
+import type { NamedParam, EnumParam, DetectResult, DeviceLayout, LiveMonitor, CabState } from '$lib/api/types';
+import type { SwipeCtrl } from '$lib/editor/layouts';
 
 const SHUNT_BASE = 1024; // gen-3 routing/shunt base effect id (matches editor.svelte.ts SHUNT_ID)
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
@@ -427,7 +427,7 @@ class ConvertEditor {
   monitorFor = (_effectId: number): LiveMonitor | null => null;
   monitorsFor = (_effectId: number): LiveMonitor[] => [];
   /** Offline conversion has no connected device, so no monitors — every param is an ordinary param. */
-  readonly openBlockMonitors = new Map<number, import('$lib/types').MonitorEntry>();
+  readonly openBlockMonitors = new Map<number, import('$lib/api/types').MonitorEntry>();
   controlsFor = (_cell: Cell): SwipeCtrl[] => [];
   meterFor = (
     _cell: Cell

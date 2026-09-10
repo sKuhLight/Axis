@@ -12,7 +12,7 @@
 import type { Cell, Layout } from '$lib/device/grid';
 import { layoutFromGrid } from '$lib/device/grid';
 import type { ScratchState } from './convertScratch';
-import type { ConverterBlock, ConverterPreset, GridCell, PresetGrid } from '$lib/types';
+import type { ConverterBlock, ConverterPreset, GridCell, PresetGrid } from '$lib/api/types';
 
 /** The converter's grid cells carry a `blockKey` back-reference (the ScratchBlock they belong to) on top
  *  of the wire `GridCell` shape. `types.ts` types `routing.gridCells` as `unknown`; this is the concrete

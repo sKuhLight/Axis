@@ -12,17 +12,17 @@
   //   • how to paint each widget family (`widgetView`) and which graph a `graph_*` token wants
   //     (`graphKind`) — both tables live in `deviceWidgets.ts`, next to the sizes;
   //   • how a control binds to a live parameter, by the device-true `paramId` the layout carries.
-  import { getEditorSurface } from '$lib/editorSurface';
-  import { editor as liveEditor } from '$lib/editor.svelte';
-  import { modifierBindings } from '$lib/modifierBindings.svelte';
+  import { getEditorSurface } from '$lib/editor/editorSurface';
+  import { editor as liveEditor } from '$lib/editor/editor.svelte';
+  import { modifierBindings } from '$lib/editor/modifierBindings.svelte';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
   import { widgetView, graphKind, graphSlotsForPage, dropdownFieldHeight } from './deviceWidgets';
   import { resolveAlternates, isVisible, type AlternateContext } from './deviceAlternates';
-  import { fmtControlValue, normFromValue, paramValue } from '$lib/format';
-  import { enumKnobLabel, enumKnobNorm, enumKnobValueAt } from '$lib/enumKnob';
-  import Knob from '$lib/Knob.svelte';
-  import Toggle from '$lib/Toggle.svelte';
-  import Dropdown from '$lib/Dropdown.svelte';
+  import { fmtControlValue, normFromValue, paramValue } from '$lib/ui/format';
+  import { enumKnobLabel, enumKnobNorm, enumKnobValueAt } from '$lib/ui/enumKnob';
+  import Knob from '$lib/ui/Knob.svelte';
+  import Toggle from '$lib/ui/Toggle.svelte';
+  import Dropdown from '$lib/ui/Dropdown.svelte';
   import EQGraph from '$lib/graphs/EQGraph.svelte';
   import ModulationGraph from '$lib/graphs/ModulationGraph.svelte';
   import CompressorGraph from '$lib/graphs/CompressorGraph.svelte';
@@ -30,7 +30,7 @@
   import AdsrGraph from '$lib/graphs/AdsrGraph.svelte';
   import MegaTapGraph from '$lib/graphs/MegaTapGraph.svelte';
   import CabMicGraphic from '$lib/graphs/CabMicGraphic.svelte';
-  import ModifierFlyout from '$lib/ModifierFlyout.svelte';
+  import ModifierFlyout from '$lib/editor/ModifierFlyout.svelte';
   import type { EqGraphSpec } from '$lib/graphs/eqGraphs';
   import type { ModulationGraphSpec } from '$lib/graphs/modulationGraphs';
   import type { CompressorGraphSpec } from '$lib/graphs/compressorGraphs';
@@ -38,7 +38,7 @@
   import type { AdsrGraphSpec } from '$lib/graphs/adsrGraphs';
   import type { MegaTapGraphSpec } from '$lib/graphs/megaTapGraphs';
   import type { CabMicGraphSpec } from '$lib/graphs/cabMicGraphs';
-  import type { EnumParam, LayoutControl, LiveMonitor, NamedParam } from '$lib/types';
+  import type { EnumParam, LayoutControl, LiveMonitor, NamedParam } from '$lib/api/types';
   import { axisBlockEditorModifierController } from '$lib/axis-workbench/blockEditor/blockEditorModifierController';
   import { getOptionalWorkbenchContext } from '$lib/workbench/svelte/context';
   import { buildAxisPinMenuItems } from '$lib/axis-workbench/pinMenu';

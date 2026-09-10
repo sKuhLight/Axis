@@ -1,8 +1,8 @@
 <script lang="ts">
   import '../app.css';
   import { onMount } from 'svelte';
-  import { appSettings } from '$lib/appSettings.svelte';
-  import { theme } from '$lib/theme.svelte';
+  import { appSettings } from '$lib/platform/appSettings.svelte';
+  import { theme } from '$lib/platform/theme.svelte';
   // Apply saved global settings ASAP on the client (SSR is off).
   if (typeof document !== 'undefined') {
     theme.init();

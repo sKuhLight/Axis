@@ -6,7 +6,7 @@
   // click-to-locate (focus the block + open its cell) + RESOLVED ✓ once cleared. Sets the offline surface
   // into context so a focus hop can drive the offline editor.
   import { setContext } from 'svelte';
-  import { EDITOR_SURFACE_KEY } from '../../editorSurface';
+  import { EDITOR_SURFACE_KEY } from '$lib/editor/editorSurface';
   import { convertEditor } from '$lib/convert/convertEditor.svelte';
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 

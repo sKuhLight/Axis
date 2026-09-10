@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { NamedParam } from '$lib/types';
-  import { paramValue, normFromValue, fmtCompact } from '$lib/format';
+  import type { NamedParam } from '$lib/api/types';
+  import { paramValue, normFromValue, fmtCompact } from '$lib/ui/format';
   import type { EQBand, EQShape } from './eq';
-  import { getEditorSurface } from '$lib/editorSurface';
+  import { getEditorSurface } from '$lib/editor/editorSurface';
   const editor = getEditorSurface();
 
   const mob = $derived(editor.isMobile);

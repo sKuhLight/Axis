@@ -13,7 +13,7 @@
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
   import { seedAxisProfiles } from './axisWorkbenchLayoutActions';
-  import { editor } from '../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import {
     createAxisMobileBlockFlowMemory,
     decideAxisMobileBlockFlow,

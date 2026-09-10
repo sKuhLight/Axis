@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAdsrGraphs } from './adsrGraphs';
-import type { DeviceLayout, LayoutControl, NamedParam } from '$lib/types';
+import type { DeviceLayout, LayoutControl, NamedParam } from '$lib/api/types';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = ''): LayoutControl => ({
   label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget

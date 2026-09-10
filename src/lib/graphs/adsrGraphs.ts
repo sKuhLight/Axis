@@ -1,4 +1,4 @@
-import type { DeviceLayout, NamedParam } from '$lib/types';
+import type { DeviceLayout, NamedParam } from '$lib/api/types';
 import { graphKind, graphSlotsForPage } from '$lib/device/deviceWidgets';
 
 export interface AdsrGraphSpec {

@@ -27,7 +27,7 @@ import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationAction
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
 import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds, axisSectionHeaderLabel, isAxisSectionHeader } from './myControlsSections';
 import { AXIS_MY_CONTROLS_ZONE } from './myControlsPanel';
-import { editor } from '../editor.svelte';
+import { editor } from '$lib/editor/editor.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
@@ -39,7 +39,7 @@ import {
 } from './axisWorkbenchRegistryManifest';
 
 async function axisEditor() {
-  return (await import('../editor.svelte')).editor;
+  return (await import('$lib/editor/editor.svelte')).editor;
 }
 
 const registry = createWorkbenchRenderRegistry(FallbackPanel, FallbackWidget, FallbackNavigation);

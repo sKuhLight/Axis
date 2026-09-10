@@ -1,7 +1,7 @@
 // Build the Signal Grid from the REAL decoded preset grid (/preset/grid):
 // true block placement (row/col) + true routing (per-cell input mask → cables).
 // Block contents/bypass/channel are layered on from /status by id where available.
-import type { GridCell, PresetBlock, PresetGrid } from '$lib/types';
+import type { GridCell, PresetBlock, PresetGrid } from '$lib/api/types';
 import { statusColor, packFor } from './blocks';
 
 export interface Cell {

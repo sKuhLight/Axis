@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { editor } from '../../editor.svelte';
-  import BlockEditor from '../../BlockEditor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
+  import BlockEditor from '$lib/editor/BlockEditor.svelte';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
 
   const { controller } = getWorkbenchContext();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '../../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import type { PanelInstance } from '../../workbench';
 
   let { panel }: { panel: PanelInstance } = $props();

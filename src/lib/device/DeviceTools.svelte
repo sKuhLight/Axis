@@ -3,9 +3,9 @@
   // restore (caps.restoreDump), offline .syx decode (works for both device families), firmware
   // validation (caps.firmwareValidate) and a read-only modifier-model view (caps.modifiers.model).
   // Legacy v1 fallback: an AM4 on a pre-v2 server keeps the old /am4/* routes behind the same UI.
-  import { editor } from '$lib/editor.svelte';
-  import { forgefx } from '$lib/forgefx';
-  import type { SyxDecodeResult } from '$lib/types';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { forgefx } from '$lib/api/forgefx';
+  import type { SyxDecodeResult } from '$lib/api/types';
 
   // Loose display view over BOTH modifier-model DTOs (unified gen-3 ModModel + legacy Am4ModifierModel).
   type ModView = {

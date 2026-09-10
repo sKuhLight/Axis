@@ -12,7 +12,7 @@
 // hardcoded family list.
 
 import { shapeFromLabel } from '$lib/graphs/eq';
-import type { LayoutControl } from '$lib/types';
+import type { LayoutControl } from '$lib/api/types';
 
 /** Live state the gates read, by editor param SYMBOL — never by paramId, which is family-scoped and
  *  shifts with the block's type. */

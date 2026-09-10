@@ -3,7 +3,7 @@
 // `GET /preset/monitors` returns a flat `paramName → { pid, role, family, dB range }` table. Blocks read
 // it to tell which of their controls are read-only meters rather than editable knobs.
 
-import type { MonitorEntry, MonitorParams } from '$lib/types';
+import type { MonitorEntry, MonitorParams } from '$lib/api/types';
 
 /** Monitor rows for ONE device family (e.g. `DISTORT`), keyed by device-true pid.
  *

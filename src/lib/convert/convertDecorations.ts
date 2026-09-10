@@ -12,7 +12,7 @@
 // the operator must see it. Otherwise the badge follows the worst CONTENT severity and the ring appears
 // only for a content `loss`. The report keeps content severity (it classifies, it doesn't gate).
 
-import type { ConversionEvent, ConverterDeviceId } from '$lib/types';
+import type { ConversionEvent, ConverterDeviceId } from '$lib/api/types';
 import type { ScratchState } from './convertScratch';
 import {
   blockConflicts,

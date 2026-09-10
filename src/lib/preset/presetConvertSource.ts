@@ -7,8 +7,8 @@
 // imported file → cached bytes, local folder → disk read, device slot → v2 backup dump or v1
 // snapshot-then-download.
 
-import { forgefx } from '$lib/forgefx';
-import { editor } from '$lib/editor.svelte';
+import { forgefx } from '$lib/api/forgefx';
+import { editor } from '$lib/editor/editor.svelte';
 import { library, type LibEntry } from './library.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';

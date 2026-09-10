@@ -3,7 +3,7 @@
 // launches — gated by a persisted flag set immediately after the first attempt, regardless of outcome.
 // Mirrors library.runes.test.ts's mock-and-dynamic-import setup.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { ColorLabelGroup, ColorLabelSources, ColorLabelImportResult } from '$lib/types';
+import type { ColorLabelGroup, ColorLabelSources, ColorLabelImportResult } from '$lib/api/types';
 
 const colorLabelSources = vi.fn<() => Promise<ColorLabelSources | null>>();
 const importColorLabels = vi.fn<(source: { path: string }) => Promise<ColorLabelImportResult>>();
@@ -12,11 +12,11 @@ const applyColorLabelGroups = vi.fn<
 >();
 const showToast = vi.fn();
 
-vi.mock('$lib/forgefx', () => ({
+vi.mock('$lib/api/forgefx', () => ({
   forgefx: { colorLabelSources: () => colorLabelSources(), importColorLabels: (s: { path: string }) => importColorLabels(s) }
 }));
 vi.mock('$lib/preset/library.svelte', () => ({ library: { applyColorLabelGroups: (g: ColorLabelGroup[], o?: unknown) => applyColorLabelGroups(g, o as never) } }));
-vi.mock('$lib/editor.svelte', () => ({ editor: { showToast: (t: string, a?: string) => showToast(t, a) } }));
+vi.mock('$lib/editor/editor.svelte', () => ({ editor: { showToast: (t: string, a?: string) => showToast(t, a) } }));
 
 function memoryStorage(): Storage {
   const m = new Map<string, string>();

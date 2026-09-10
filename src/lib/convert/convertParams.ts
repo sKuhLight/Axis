@@ -10,8 +10,8 @@
 // Framework-free (no runes / DOM) so it is unit-tested directly; `convertEditor.svelte.ts` is the only
 // caller and simply snapshots the results into its `params` / `enums` reactive arrays on openCell.
 
-import { normFromValue } from '$lib/format';
-import type { NamedParam, EnumParam, ConverterParam } from '$lib/types';
+import { normFromValue } from '$lib/ui/format';
+import type { NamedParam, EnumParam, ConverterParam } from '$lib/api/types';
 
 /** Read a finite numeric extra off a loosely-typed ConverterParam (IR carries display range / unit). */
 function num(o: Record<string, unknown>, k: string): number | undefined {

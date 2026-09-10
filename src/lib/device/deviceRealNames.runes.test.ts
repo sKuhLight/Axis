@@ -2,10 +2,10 @@
 // runtime (see vitest.config.ts) — needed because `deviceRealNames` is a `.svelte.ts` rune store.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { BlockTypeOption } from '$lib/types';
+import type { BlockTypeOption } from '$lib/api/types';
 
 const blockTypes = vi.fn<(slug: string) => Promise<BlockTypeOption[]>>();
-vi.mock('$lib/forgefx', () => ({ forgefx: { blockTypes: (slug: string) => blockTypes(slug) } }));
+vi.mock('$lib/api/forgefx', () => ({ forgefx: { blockTypes: (slug: string) => blockTypes(slug) } }));
 
 const { deviceRealNames } = await import('./deviceRealNames.svelte');
 

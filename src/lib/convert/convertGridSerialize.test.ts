@@ -4,7 +4,7 @@ import { gridLayoutFromScratch } from './convertGridAdapter';
 import { scratchToPreset } from './convertScratch';
 import type { Cell, Layout } from '$lib/device/grid';
 import type { ScratchState, ScratchBlock } from './convertScratch';
-import type { ConverterPreset } from '$lib/types';
+import type { ConverterPreset } from '$lib/api/types';
 
 function block(partial: Partial<ScratchBlock> & { key: string; family: string }): ScratchBlock {
   return { instance: 1, params: [], position: null, ...partial } as ScratchBlock;

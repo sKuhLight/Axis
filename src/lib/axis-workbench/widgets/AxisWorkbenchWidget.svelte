@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { editor } from '../../editor.svelte';
-  import { history } from '../../history.svelte';
-  import { fmtControlValue } from '../../format';
-  import { LEGAL, openExternal } from '../../legal';
-  import { KOFI_URL, COPYRIGHT } from '../../support';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { history } from '$lib/editor/history.svelte';
+  import { fmtControlValue } from '$lib/ui/format';
+  import { LEGAL, openExternal } from '$lib/ancillary/legal';
+  import { KOFI_URL, COPYRIGHT } from '$lib/ancillary/support';
   import type { WidgetInstance, WidgetSize, WorkbenchCommand } from '../../workbench';
   import { getOptionalWorkbenchContext, isPanelWidgetZone } from '../../workbench';
   import {
@@ -36,7 +36,7 @@
   import { isSaveDirty } from './saveDirtyState';
   import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
-  import type { TelemetryMode, TrafficSnapshot } from '../../types';
+  import type { TelemetryMode, TrafficSnapshot } from '$lib/api/types';
 
   let {
     widget,

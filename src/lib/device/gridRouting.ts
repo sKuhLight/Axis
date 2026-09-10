@@ -7,7 +7,7 @@
 //
 // Coordinates are 0-indexed (like `Layout`); the editor's `#W` shifts them to the
 // 1-indexed write API. `HistoryOp` is imported type-only so this stays a plain module.
-import type { HistoryOp } from '$lib/history.svelte';
+import type { HistoryOp } from '$lib/editor/history.svelte';
 
 /** Minimal projection of a grid cell the planners need (positions + wiring + identity). */
 export interface RouteCell {

@@ -2,7 +2,7 @@
   // Full-view rail screen for a virtual effect (Setup / Controllers / Modifier / FC). It's the same
   // device-canvas editor as a block, pointed at effectId 1/2/3/199 — device-authentic editor pages
   // come from the served layout, reads/writes go through the normal param path.
-  import { editor } from '$lib/editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import DeviceCanvas from './DeviceCanvas.svelte';
   import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
   import { deriveAdsrGraphs } from '$lib/graphs/adsrGraphs';

@@ -3,8 +3,8 @@ import {
   deriveCompressorGraphs, GRAPH_MAX_DB, GRAPH_MIN_DB, kneeSharpness, ratioCurveY, ratioDotPosition,
   ratioTransfer, sustainCurveY, sustainDotPosition, sustainTransfer
 } from './compressorGraphs';
-import type { BlockParams, DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/types';
-import compFixture from '$lib/fixtures/blockParams/comp.json';
+import type { BlockParams, DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
+import compFixture from '$lib/api/fixtures/blockParams/comp.json';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = '', render?: LayoutControl['render']): LayoutControl => ({
   label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget, ...(render ? { render } : {})

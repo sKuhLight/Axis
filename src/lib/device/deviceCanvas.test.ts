@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { placePage, placeLayout, parsePositionExact, DEVICE_SCALE, RAIL_INSET, type PlacedControl } from './deviceCanvas';
 import { widgetBox, dropdownFieldHeight } from './deviceWidgets';
-import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from '$lib/types';
+import type { DeviceLayout, LayoutControl, LayoutPage, LayoutPageLayout } from '$lib/api/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIDI = resolve(HERE, '../../../../forgefx-midi/dist/gen3');

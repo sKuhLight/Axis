@@ -7,8 +7,8 @@
 // happen inside the explicit commit actions. Independent module (not on `editor`) because it outlives the
 // editor's per-preset reloads and has its own lifecycle, exactly like `convert.svelte.ts`.
 
-import { forgefx } from '$lib/forgefx';
-import type { BlockTypeOption, ConverterDeviceId } from '$lib/types';
+import { forgefx } from '$lib/api/forgefx';
+import type { BlockTypeOption, ConverterDeviceId } from '$lib/api/types';
 import { convert } from './convert.svelte';
 import {
   seedScratchFromResponse,

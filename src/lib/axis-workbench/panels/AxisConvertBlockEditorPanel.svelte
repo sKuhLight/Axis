@@ -8,15 +8,15 @@
   // resolves the type conflict; the mappable params carry over automatically (the converter already
   // mapped them into the block — we surface, we don't re-map).
   import { setContext } from 'svelte';
-  import { EDITOR_SURFACE_KEY } from '../../editorSurface';
+  import { EDITOR_SURFACE_KEY } from '$lib/editor/editorSurface';
   import { convertEditor } from '$lib/convert/convertEditor.svelte';
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 
   import type { PanelInstance } from '../../workbench';
-  import type { BlockTypeOption } from '../../types';
+  import type { BlockTypeOption } from '$lib/api/types';
   import { convert } from '$lib/convert/convert.svelte';
   import { convertScratch } from '$lib/convert/convertScratch.svelte';
-  import { editor } from '../../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import { deviceName, familyLabel } from '$lib/convert/convertReport';
   import { blockParamViews, paramKeptCounts, familyCat, type ParamStatus } from '$lib/convert/convertConflicts';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { deriveEqGraphs } from './eqGraphs';
-import type { DeviceLayout, EnumParam, LayoutControl, LayoutWidget, NamedParam, LayoutPage } from '$lib/types';
+import type { DeviceLayout, EnumParam, LayoutControl, LayoutWidget, NamedParam, LayoutPage } from '$lib/api/types';
 
 // ── fixture builders ──
 // Layout controls carry the ForgeFX symbol + this variant's device-true paramId, exactly as served.

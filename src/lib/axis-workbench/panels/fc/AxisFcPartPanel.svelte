@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import FcEditor from '$lib/device/FcEditor.svelte';
-  import SignalGrid from '../../../SignalGrid.svelte';
+  import SignalGrid from '$lib/editor/SignalGrid.svelte';
   import type { PanelInstance } from '../../../workbench';
   import { getWorkbenchContext } from '../../../workbench/svelte/context';
   import { axisGridViewFromWidgets } from '../../gridView';

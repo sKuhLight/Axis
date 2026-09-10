@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dampedModifierSource, lfoModifierValue, lfoSourceFromName, mapModifierResponse, mapModifierSource, type LfoModifierVisualization } from './lfoModifier';
-import type { EnumParam, NamedParam } from '$lib/types';
+import type { EnumParam, NamedParam } from '$lib/api/types';
 
 const named = (norm: number, min = 0, max = 1): NamedParam => ({ id: 1, name: '', norm, value: min + norm * (max - min), min, max });
 const enm = (label: string): EnumParam => ({ id: 1, name: '', value: 0, options: [{ value: 0, label }] });

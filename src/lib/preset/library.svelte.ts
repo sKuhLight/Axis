@@ -2,12 +2,12 @@
 // then search/filter by name + block + scene + tag/collection, with favorites. Persists metadata +
 // the scanned summaries to localStorage. UI-agnostic: the Library screen binds to this; no rendering here.
 import { z } from 'zod';
-import { forgefx } from '$lib/forgefx';
-import { isWebBuild } from '$lib/buildMode';
+import { forgefx } from '$lib/api/forgefx';
+import { isWebBuild } from '$lib/platform/buildMode';
 import { refreshCabIrsCache } from '$lib/device/cabIrsCache';
-import { idb } from '$lib/idb';
-import { notifyMutation } from '$lib/syncBus';
-import type { PresetSummary, DecodedBlock, ColorLabelGroup } from '$lib/types';
+import { idb } from '$lib/platform/idb';
+import { notifyMutation } from '$lib/editor/syncBus';
+import type { PresetSummary, DecodedBlock, ColorLabelGroup } from '$lib/api/types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from '$lib/convert/convertScratch';
 import { deviceName } from '$lib/convert/convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';

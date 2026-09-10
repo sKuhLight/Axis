@@ -6,7 +6,7 @@
 // definitions came from, and how to parse/match an official editor cache filename. The store
 // (`deviceDefs.svelte.ts`) and component (`DeviceDefsPrompt.svelte`) are thin shells over these.
 
-import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceDefsOrigin } from '$lib/types';
+import type { DeviceCacheStatus, DeviceCacheSources, CloudCacheStatus, DeviceDefsOrigin } from '$lib/api/types';
 
 /** The ways a user can obtain a definition profile, most-preferred first. `fullCapture` is the
  *  secondary taper/curve read — a superset of `readFromDevice`, so it always trails it. */
