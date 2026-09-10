@@ -71,6 +71,16 @@
   --axis-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --axis-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 
+  /* ── overlay layer ── shared by the dialog shell (src/lib/ui/Dialog.svelte). Every modal
+     dialog renders on one stacking layer (they are mutually exclusive in practice); the
+     first-run prompts sit a step above, toasts above those. Backdrop values are shared so
+     every dialog dims the page identically. */
+  --z-modal: 340;
+  --z-prompt: 400;
+  --z-toast: 500;
+  --overlay-scrim: rgba(6, 6, 8, 0.64);
+  --overlay-blur: 3px;
+
   /* ── backwards-compat aliases (older components still reference these; they now follow the theme) ── */
   --bg-rail: var(--bg2);
   --panel: var(--bg);
