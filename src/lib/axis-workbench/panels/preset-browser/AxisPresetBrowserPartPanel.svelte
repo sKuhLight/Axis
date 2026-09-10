@@ -145,10 +145,12 @@
   $effect(() => {
     index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
   });
-  // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful once a
-  // device scan has run (slotIsEmpty reads cacheBuilt + entries); no scan → no empty rows.
+  // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful with a
+  // device actually connected: `editor.presetCount` is a 512-slot guess until a device is adopted, and a
+  // cleared slot is a device concept — offline (even with a stale `cacheBuilt` flag from a past scan)
+  // there is nothing to load into, so synthesizing hundreds of phantom rows is just noise.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!library.cacheBuilt) return [];
+    if (!library.cacheBuilt || editor.conn.state !== 'online') return [];
     return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const data = $derived(createAxisPresetBrowserDataView({

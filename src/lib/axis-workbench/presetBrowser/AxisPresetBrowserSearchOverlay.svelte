@@ -83,8 +83,10 @@
   $effect(() => {
     index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
   });
+  // Mirror of the same gate in AxisPresetBrowserPartPanel: `<EMPTY>` rows only with a device connected —
+  // `editor.presetCount` is a guess until one is adopted, and there is nothing to load into offline.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!library.cacheBuilt) return [];
+    if (!library.cacheBuilt || editor.conn.state !== 'online') return [];
     return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const activeConditions = $derived.by(() => {
