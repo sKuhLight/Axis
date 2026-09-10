@@ -1,5 +1,6 @@
 <script lang="ts">
   import { editor } from './editor.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
   // Standard 6-string reference (low→high). Highlight the one matching the detected note letter.
   const STRINGS = ['E', 'A', 'D', 'G', 'B', 'E'];
@@ -14,67 +15,40 @@
   const noteLetter = $derived(note ? note[0] : null);
 </script>
 
-{#if editor.tuner.active}
-  <div class="tuner-wrap" data-screen="Tuner">
-    <button class="bg" aria-label="Close tuner" onclick={() => editor.toggleTuner()}></button>
-    <div class="card">
-      <header>
-        <span class="ttl mono">TUNER</span>
-        <button class="close" aria-label="Close" onclick={() => editor.toggleTuner()}>✕</button>
-      </header>
+<Dialog open={editor.tuner.active} onClose={() => editor.toggleTuner()} width="440px" class="tuner-dlg">
+  <div class="body" data-screen="Tuner">
+    <header>
+      <span class="ttl mono">TUNER</span>
+      <button class="close" aria-label="Close" onclick={() => editor.toggleTuner()}>✕</button>
+    </header>
 
-      <div class="note" class:lit={note != null} class:tuned={inTune}>
-        {note ?? '—'}{#if note != null && octave != null}<span class="oct">{octave}</span>{/if}
-      </div>
-      <div class="cents mono">
-        {#if note != null}{cents > 0 ? '+' : ''}{Math.round(cents)}¢{#if freq}<span class="hz"> · {freq.toFixed(1)} Hz</span>{/if}{:else}listening…{/if}
-      </div>
+    <div class="note" class:lit={note != null} class:tuned={inTune}>
+      {note ?? '—'}{#if note != null && octave != null}<span class="oct">{octave}</span>{/if}
+    </div>
+    <div class="cents mono">
+      {#if note != null}{cents > 0 ? '+' : ''}{Math.round(cents)}¢{#if freq}<span class="hz"> · {freq.toFixed(1)} Hz</span>{/if}{:else}listening…{/if}
+    </div>
 
-      <div class="meter">
-        <div class="ticks">
-          {#each [-50, -25, 0, 25, 50] as t}
-            <span class="tick" class:center={t === 0} style="left:{50 + t}%"></span>
-          {/each}
-        </div>
-        <div class="needle" class:tuned={inTune} style="left:{needlePct}%"></div>
-      </div>
-
-      <div class="strings">
-        {#each STRINGS as s, i (i)}
-          <span class="str" class:on={noteLetter === s}>{s}</span>
+    <div class="meter">
+      <div class="ticks">
+        {#each [-50, -25, 0, 25, 50] as t}
+          <span class="tick" class:center={t === 0} style="left:{50 + t}%"></span>
         {/each}
       </div>
+      <div class="needle" class:tuned={inTune} style="left:{needlePct}%"></div>
+    </div>
+
+    <div class="strings">
+      {#each STRINGS as s, i (i)}
+        <span class="str" class:on={noteLetter === s}>{s}</span>
+      {/each}
     </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .tuner-wrap {
-    position: fixed;
-    inset: 0;
-    z-index: 120;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: axsOverlay 0.18s ease;
-  }
-  .bg {
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(4px);
-    cursor: pointer;
-  }
-  .card {
-    position: relative;
-    width: min(440px, 92vw);
+  .body {
     padding: 18px 22px 24px;
-    background: linear-gradient(180deg, var(--surface), var(--bg2));
-    border: 1px solid var(--surface-3);
-    border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
-    animation: axsPalette 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   header {
     display: flex;
