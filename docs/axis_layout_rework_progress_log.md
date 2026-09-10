@@ -1933,6 +1933,29 @@ CONSTANT amplitude is a constant *slope*, not a constant level — Alpha 0% ramp
 silence, which is what the fm3-edit screenshots show. The SIGMOID, COSINE and SINE time shapes crowd
 taps closer than the meter can separate and remain approximations, flagged as such in the module.
 
+The three approximate time shapes were then settled with a second instrument. The VU meters sample at
+~400 Hz over HTTP and cannot separate taps under ~25 ms; recording the FM3's USB audio does not help
+on its own, because pulsing the Synth level costs two HTTP round trips and the impulse is ~50 ms wide
+however short the sleep between them — EXP/LOG at Alpha 100% puts its first four taps inside 55 ms.
+The fix is to stop using an impulse: drone white noise, carry a dry reference to the other channel on
+a parallel grid row, and deconvolve one out of the other. That resolves taps ~1 ms apart. One trap —
+the FM3's white noise is a **loop**, autocorrelating 0.81 at 3750 ms, so a 4000 ms window folds its
+last tap back onto 250 ms as the strongest peak in the response; measuring at 3000 ms puts every
+ghost outside the window.
+
+What that settled: every time shape samples its curve at **k/(N+1)** and normalises so the last tap
+ends the window. EXP/LOG and SIGMOID are then the *same* law at the *same* curvature — 20.0 per unit
+Alpha — with EXP/LOG bending the whole train and SIGMOID bending each half and mirroring them. COSINE
+and SINE modulate the gap between taps at full depth, Alpha sweeping the rate from one cycle across
+the train to eight, COSINE a quarter cycle ahead of SINE. All of it fits to ≤0.0009 of the window for
+the two bends and ≤0.002 for the periodic pair at 32 taps.
+
+Two earlier conclusions were wrong and are corrected: the time curvature is 20.0, not 17.2 (the old
+figure came from reading the tap index as k/N), and the "SIGMOID's centre would have to sit at
+u ≈ 0.62" objection was an artifact of that same index convention — at k/(N+1) the centre is 0.5.
+Only COSINE/SINE at low tap counts above Alpha 50% remain approximate, where the block asks for up to
+eight cycles across as few as eight taps and the modulation runs past its own Nyquist limit.
+
 ## My Controls Sections — axis.sectionHeader
 
 My Controls could only grow as one undifferentiated grid; at twenty pinned controls there was no

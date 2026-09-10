@@ -66,3 +66,49 @@ if __name__ == '__main__':
     arm_synth()
     arm_megatap()
     report()
+
+
+# --- noise / cross-correlation rig -------------------------------------------------------------
+#
+# The gated-burst rig cannot resolve close taps: pulsing Voice 1 Level takes two HTTP round trips, so
+# the impulse is ~50 ms wide however short the sleep between them, and EXP/LOG at Alpha 100 puts its
+# first four taps inside 55 ms. Instead, drone white noise and record the excitation alongside the
+# response: row 2 carries a dry shunt straight to the Output, the Megatap is panned hard right, so
+# the left channel is the noise and the right channel is the noise plus the taps. Cross-correlating
+# the two recovers the block's impulse response, and its resolution is set by the noise bandwidth
+# rather than by any gate.
+
+SHUNT = 1024   # capabilities.shuntBase
+
+
+def build_grid_parallel():
+    req('/preset/select', {'number': SCRATCH_PRESET}, 'POST')
+    time.sleep(1.0)
+    for row, col, bid in ((1, 1, INPUT), (1, 2, SYNTH), (1, 3, MEGATAP), (1, 4, OUTPUT), (2, 3, SHUNT)):
+        req('/preset/grid/cell', {'row': row, 'col': col, 'blockId': bid}, 'PUT')
+        time.sleep(0.4)
+    for srcRow, srcCol, destRow in ((1, 1, 1), (1, 2, 1), (1, 2, 2), (1, 3, 1), (2, 3, 1)):
+        req('/preset/grid/cable', {'srcRow': srcRow, 'srcCol': srcCol, 'destRow': destRow, 'connect': True}, 'POST')
+        time.sleep(0.3)
+
+
+def arm_noise(level=0.5):
+    """Drone full-band white noise out of Voice 1 - the excitation for the correlation rig."""
+    setp(SYNTH, SY['TYPE1'], 5, continuous=False)      # WHT NOISE
+    setp(SYNTH, SY['TRACK1'], 0, continuous=False)     # OFF - drones with no input
+    setp(SYNTH, 11, 7, continuous=False)
+    setp(SYNTH, 29, 7, continuous=False)
+    for pid, v in ((SY['ATTACK1'], 0.0), (SY['HICUT1'], 1.0), (SY['PAN1'], 0.5),
+                   (SY['LEVEL1'], level), (SY['LEVEL2'], 0.0),
+                   (SY['MIX'], 1.0), (SY['LEVEL'], 0.8), (SY['PAN'], 0.5)):
+        setp(SYNTH, pid, v)
+        time.sleep(0.05)
+
+
+def arm_megatap_right(taps=16, time_ms=4000, predelay_ms=0):
+    """As `arm_megatap`, but with the whole tap train panned hard right and every tap centred."""
+    arm_megatap(taps=taps, time_ms=time_ms, predelay_ms=predelay_ms)
+    setp(MEGATAP, MT['PAN'], 1.0)
+    setp(MEGATAP, MT['PANALPHA'], 0.5)
+    setp(MEGATAP, MT['SPREAD'], 0.0)
+    setp(MEGATAP, MT['PANSHAPE'], 0, continuous=False)

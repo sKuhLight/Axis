@@ -1,12 +1,15 @@
 // The FM3 Megatap tap pattern: where each tap lands in the delay window and how loud it is.
 //
 // The block computes its taps in DSP and exposes none of them over MIDI, so every constant here was
-// measured as audio off a live FM3 — an impulse through the block, its taps read from the output VU
-// meters. Rig, raw captures and per-shape residuals: docs/handoff/megatap-shapes.
+// measured as audio off a live FM3. Levels come from the output VU meters. Tap *times* come from a
+// correlation rig instead — white noise through the block with a dry reference beside it, so
+// deconvolving one channel out of the other recovers the tap train directly — because the meters
+// cannot separate taps closer than ~25 ms and three of the four time shapes crowd well past that.
+// Rig, raw captures and per-shape residuals: docs/handoff/megatap-shapes.
 import { curvedRamp } from './modulationGraphs';
 
 export interface MegaTapTap {
-  /** Delay of this tap from the impulse in ms, excluding predelay. */
+  /** Delay of this tap from the note in ms, excluding predelay. */
   ms: number;
   /** Level relative to the loudest tap, 0..1. */
   amp: number;
@@ -24,21 +27,35 @@ export interface MegaTapPatternInput {
 }
 
 // Alpha bends a shape through `curvedRamp`, and the curvature it asks for is linear in Alpha. The
-// slope differs per shape because each one bends a different ramp; all four were fitted per Alpha
-// against the hardware and then checked for linearity:
-//   tap times (EXP/LOG)   -8.58 / -4.30 / 0 / +4.28 / +8.55 at Alpha 0/25/50/75/100%  -> 17.2
-//   INCREASING, UP / DOWN -9.87 / -4.97 / 0 / +5.00 / +10.02                          -> 20.0
-//   DECREASING            +8.83 / +4.41 / 0 / -4.46 /  -8.87                          -> 17.7 (mirrored)
-//   DOWN / UP             +7.06 / +4.01 / 0 / -4.01 /  -7.66                          -> 16.0 (mirrored)
-// Residuals are 1.5-3 ms on a 4000 ms window for the times, and 0.001-0.004 of full scale for the
+// slope differs per shape because each one bends a different ramp; all were fitted per Alpha against
+// the hardware and then checked for linearity:
+//   tap times (EXP/LOG, SIGMOID)  -10.0 / -5.0 / 0 / +5.0 / +10.0 at Alpha 0/25/50/75/100%  -> 20.0
+//   INCREASING, UP / DOWN         -9.87 / -4.97 / 0 / +5.00 / +10.02                        -> 20.0
+//   DECREASING                    +8.83 / +4.41 / 0 / -4.46 /  -8.87                        -> 17.7 (mirrored)
+//   DOWN / UP                     +7.06 / +4.01 / 0 / -4.01 /  -7.66                        -> 16.0 (mirrored)
+// Residuals are under 3 ms on a 3000 ms window for the times, and 0.001-0.004 of full scale for the
 // levels. Alpha 50% is dead centre for every shape: linear spacing, flat or straight-line levels.
-const TIME_CURVATURE = 17.2;
+const TIME_CURVATURE = 20.0;
 const RISE_CURVATURE = 20.0;
 const FALL_CURVATURE = 17.7;
 const TROUGH_CURVATURE = 16.0;
-// SIGMOID is fitted rather than derived: its per-capture spread tracked Alpha at roughly this slope
-// below 50% (-22.5 / -9.6 / -3.2 / 0 measured at Alpha 0 / 25 / 37.5 / 50%) and more weakly above it.
-const SIGMOID_SPREAD = 40;
+// COSINE and SINE modulate the *spacing* periodically rather than bending it one way. The gap either
+// side of Alpha is a full-depth cosine - the gaps run right down to zero - and Alpha sweeps its
+// frequency linearly from one cycle across the train to eight.
+const PERIODIC_MIN_CYCLES = 1;
+const PERIODIC_MAX_CYCLES = 8;
+
+/**
+ * Where tap `k` (1-based) samples its curve: k/(N+1).
+ *
+ * Every time shape uses this, and the train is then renormalized so the last tap lands on the end of
+ * the window. It is the only sampling that is symmetric about its own centre - which is what makes
+ * the measured trains satisfy p(k) + p(N+1-k) = const - and that still collapses to the measured k/N
+ * at Alpha 50%, where the curve is a straight line. Reading it as k/N instead forces the curve's
+ * centre to (N+1)/2N, which is the "centre would have to sit at u = 0.62" that the earlier VU-meter
+ * analysis hit and could not explain; it was an artifact of the index convention, not the block.
+ */
+const tapU = (index: number, count: number) => (index + 1) / (count + 1);
 
 const clamp01 = (value: number) => (value < 0 ? 0 : value > 1 ? 1 : value);
 
@@ -48,34 +65,61 @@ function jitter(seed: number): number {
   return x - Math.floor(x);
 }
 
+/** The gap before tap `k` (1-based) for the two periodic shapes, sampled at the middle of that gap. */
+function periodicGap(k: number, count: number, alpha: number, phase: number): number {
+  const cycles = PERIODIC_MIN_CYCLES + (PERIODIC_MAX_CYCLES - PERIODIC_MIN_CYCLES) * alpha;
+  return 1 + Math.cos((2 * Math.PI * cycles * (k - 0.5)) / (count + 1) + phase);
+}
+
 /**
  * Where tap `index` (0-based, of `count`) lands in the delay window, 0..1.
  *
- * EXP/LOG is exact — an exponential bend of the tap index, within a couple of ms of the hardware at
- * every Alpha. The other three are approximations: they crowd taps closer than the output meter can
- * separate over much of the Alpha range, so no capture pinned their law (see the README next to the
- * data). SIGMOID gets the shape it clearly has — spacing that widens toward the middle below Alpha
- * 50% and narrows toward it above, fitted to about 0.03-0.08 of the window against 0.0005 for
- * EXP/LOG — while COSINE and SINE fall back to even spacing, which is what they measure at Alpha
- * 50% and never more than about 0.09 of the window away elsewhere.
+ * All four shapes are measured, not invented. EXP/LOG and SIGMOID are the same exponential bend at
+ * the same curvature — EXP/LOG bends the whole train one way, SIGMOID bends each half of it and
+ * mirrors them — and both land within 3 ms of the hardware on a 3000 ms window at every Alpha and
+ * every tap count. COSINE and SINE instead modulate the spacing: the gap between taps is a
+ * full-depth cosine whose frequency Alpha sweeps from one cycle across the train to eight, which
+ * reproduces 32-tap trains to about 2 ms.
+ *
+ * The one soft spot is COSINE/SINE at low tap counts above Alpha 50%, where the block is asking for
+ * up to eight cycles across as few as eight taps and the modulation runs past its own Nyquist limit.
+ * There the drawing drifts up to about 0.06 of the window; no variation of the sampling convention
+ * did better (see the README next to the data).
  */
 export function megaTapTimeValue(shape: string, index: number, count: number, alpha: number): number {
   const n = Math.max(1, count);
   const a = clamp01(alpha);
   const name = shape.trim().toUpperCase();
+  const last = tapU(n - 1, n);
+
+  if (name === 'COSINE' || name === 'SINE') {
+    // Measured as gaps rather than positions: they run from ~0 to ~2x the even spacing, so the pair
+    // is a cosine of full depth. COSINE sits a quarter cycle ahead of SINE, which is the only thing
+    // that distinguishes them.
+    const phase = name === 'COSINE' ? Math.PI / 2 : 0;
+    let acc = 0;
+    let total = 0;
+    for (let k = 1; k <= n; k++) {
+      const gap = Math.max(0, periodicGap(k, n, a, phase));
+      total += gap;
+      if (k <= index + 1) acc += gap;
+    }
+    return total > 0 ? acc / total : tapU(index, n) / last;
+  }
 
   if (name === 'SIGMOID') {
-    // Spacing bent symmetrically about the middle of the train, then accumulated.
-    const gap = (u: number) => Math.exp((a - 0.5) * SIGMOID_SPREAD * (u - 0.5) ** 2);
-    let total = 0;
-    for (let k = 1; k <= n; k++) total += gap((k - 0.5) / n);
-    let acc = 0;
-    for (let k = 1; k <= index + 1; k++) acc += gap((k - 0.5) / n);
-    return total > 0 ? acc / total : (index + 1) / n;
+    // The EXP/LOG bend applied to each half of the train and mirrored, which is the same idiom the
+    // UP / DOWN amplitude shape uses. The sign is flipped: below Alpha 50% SIGMOID pushes taps out
+    // toward both ends of the window, where EXP/LOG pushes them all toward the finish.
+    const s = (0.5 - a) * TIME_CURVATURE;
+    const fold = (u: number) => (u <= 0.5 ? 0.5 * curvedRamp(2 * u, s) : 1 - 0.5 * curvedRamp(2 * (1 - u), s));
+    const end = fold(last);
+    return end > 0 ? fold(tapU(index, n)) / end : tapU(index, n) / last;
   }
-  if (name === 'COSINE' || name === 'SINE') return (index + 1) / n;
 
-  return curvedRamp((index + 1) / n, (a - 0.5) * TIME_CURVATURE);
+  const c = (a - 0.5) * TIME_CURVATURE;
+  const end = curvedRamp(last, c);
+  return end > 0 ? curvedRamp(tapU(index, n), c) / end : tapU(index, n) / last;
 }
 
 /** Level of tap `index` (0-based, of `count`) relative to the loudest tap, 0..1. */
