@@ -28,6 +28,7 @@ import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
 import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds, axisSectionHeaderLabel, isAxisSectionHeader } from './myControlsSections';
 import { AXIS_MY_CONTROLS_ZONE } from './myControlsPanel';
 import { editor } from '$lib/editor/editor.svelte';
+import { overlays } from '$lib/overlay/overlays.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
@@ -115,7 +116,7 @@ registry.registerWidgetMenu({
 // are tracked and the tint stays live.
 registry.registerNavigationState({
   isActive: (entryId) =>
-    isAxisNavigationEntryActive({ themeOpen: editor.themeOpen, accountOpen: editor.axisOpen }, entryId)
+    isAxisNavigationEntryActive({ themeOpen: overlays.isOpen('theme'), accountOpen: overlays.isOpen('axisHub') }, entryId)
 });
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
@@ -148,7 +149,7 @@ registry.registerAction({
   }
 });
 registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('about') });
-registry.registerAction({ id: 'axis.openTheme', run: async () => { (await axisEditor()).themeOpen = true; } });
+registry.registerAction({ id: 'axis.openTheme', run: async () => { overlays.open('theme'); } });
 // Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
 // Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels
 // until their editors are ported.
