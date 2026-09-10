@@ -1,6 +1,8 @@
 <script lang="ts">
   // Save-to-library overlay: asks for a block name and whether to save the current channel only or
   // all channels, then hands off to the parent (which calls forgefx.saveBlockLibraryBlock).
+  import Dialog from '$lib/ui/Dialog.svelte';
+
   let {
     open,
     defaultName,
@@ -30,13 +32,6 @@
     }
   });
 
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.stopPropagation(); // don't let the central Escape handler close the block editor too
-      onClose();
-    }
-  }
-
   async function submit() {
     const trimmed = name.trim();
     if (!trimmed || saving) return;
@@ -49,11 +44,9 @@
   }
 </script>
 
-{#if open}
-  <div class="overlay">
-    <button class="bg" type="button" aria-label="Close save dialog" onclick={() => onClose()}></button>
-    <div class="card" role="dialog" aria-modal="true" tabindex="-1" onkeydown={onKeydown}>
-      <div class="head">
+<Dialog {open} onClose={onClose} width="380px" labelledBy="blsd-title" class="bl-save-dlg">
+  <div class="wrap">
+      <div class="head" id="blsd-title">
         <span class="dot"></span>
         <span class="title">Save block to library</span>
       </div>
@@ -93,42 +86,13 @@
           {saving ? 'Saving…' : 'Save to library'}
         </button>
       </div>
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 210;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .bg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    border: 0;
-    cursor: default;
-    animation: axsOverlay 0.12s ease;
-  }
-  .card {
-    position: relative;
-    width: 380px;
-    max-width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
     padding: 20px;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
     display: flex;
     flex-direction: column;
     gap: 14px;
