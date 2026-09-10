@@ -5,6 +5,7 @@
   //  • the major-error "upload a debug report" prompt (with an optional contact field)
   import { editor } from '$lib/editor/editor.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL } from './support';
 
@@ -18,10 +19,8 @@
 </script>
 
 <!-- ── first-run telemetry consent ── -->
-{#if editor.consentPromptOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="bg" role="presentation">
-    <div class="card" role="dialog" tabindex="-1">
+<Dialog open={editor.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
+    <div class="card">
       <div class="pad">
         <div class="head"><div class="logo">🛡</div><div><div class="h1">Help improve Axis?</div><div class="sub">Anonymous diagnostics — your choice</div></div></div>
         <p class="muted">Axis can send <strong>anonymous</strong> error &amp; performance data when something goes wrong, so bugs get fixed faster. No personal data, no presets, no account info — just what broke and on which device.</p>
@@ -36,8 +35,7 @@
         <p class="legal">You can change this any time in <strong>Axis → Privacy</strong>. See our <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>
       </div>
     </div>
-  </div>
-{/if}
+</Dialog>
 
 <!-- ── one-time Ko-fi nudge ── -->
 {#if editor.kofiNoticeOpen}
@@ -55,9 +53,8 @@
 <!-- ── major-error → upload report ── -->
 {#if editor.reportPrompt}
   {@const p = editor.reportPrompt}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="bg" role="presentation" onclick={editor.dismissReportPrompt}>
-    <div class="card sm" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+  <Dialog open={true} onClose={editor.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
+    <div class="card sm">
       <div class="pad">
         <div class="head"><div class="logo warn">⚠</div><div><div class="h1">Something went wrong</div><div class="sub">{[p.route, p.status].filter(Boolean).join(' · ') || p.kind}</div></div></div>
         <p class="muted">Axis hit an error{p.route ? ` talking to your device (${p.route}${p.status ? ` · ${p.status}` : ''})` : ''}. You can send a debug report so we can fix it.</p>
@@ -76,13 +73,12 @@
         <button class="link dim center" onclick={editor.dismissReportPrompt}>Not now</button>
       </div>
     </div>
-  </div>
+</Dialog>
 {/if}
 
 <style>
-  .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 360; display: flex; align-items: flex-start; justify-content: center; padding: 8vh 12px 12px; }
-  .card { position: relative; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
-  .card.sm { width: 400px; }
+  /* card frame comes from Dialog; `.card` here is now the scrollable padded body. */
+  .card { position: relative; width: 100%; overflow-y: auto; color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .pad { padding: 26px 24px 22px; }
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
   .logo { width: 46px; height: 46px; flex: none; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); }

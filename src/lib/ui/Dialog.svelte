@@ -34,6 +34,7 @@
     align = 'center',
     sheet = false,
     mobileFull = false,
+    dismissible = true,
     accent = 'default',
     labelledBy,
     describedBy,
@@ -50,6 +51,9 @@
     align?: 'center' | 'top';
     sheet?: boolean;
     mobileFull?: boolean;
+    /** When false, neither the scrim nor Escape closes the dialog (first-run prompts that
+     *  require an explicit choice). Defaults to true. */
+    dismissible?: boolean;
     accent?: 'default' | 'amber';
     labelledBy?: string;
     describedBy?: string;
@@ -61,7 +65,11 @@
 
 {#if open}
   <div class="dlg-scrim-wrap" class:sheet class:mobile-full={mobileFull} data-align={align} role="presentation">
-    <button type="button" class="dlg-scrim" aria-label="Close" onclick={onClose}></button>
+    {#if dismissible}
+      <button type="button" class="dlg-scrim" aria-label="Close" onclick={onClose}></button>
+    {:else}
+      <div class="dlg-scrim" aria-hidden="true"></div>
+    {/if}
     <div
       class="dlg-card {klass}"
       class:sheet
@@ -76,7 +84,7 @@
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
       tabindex="-1"
-      use:focusTrap={{ onClose }}
+      use:focusTrap={{ onClose: dismissible ? onClose : undefined }}
     >
       {#if title}
         <header class="dlg-head">
