@@ -13,11 +13,38 @@ export interface CompressorGraphSpec {
   ratio?: NamedParam;
   sustain?: NamedParam;
   knee?: EnumParam;
+  level?: NamedParam;
   attack?: NamedParam;
   release?: NamedParam;
 }
 
 
+/** ── The window the editor plots ────────────────────────────────────────────────────────────────────
+ *
+ *  FM3-Edit's compressor graph spans **−80 … +20 dB on both axes**, with its grid at quarters of the
+ *  box (so the lines fall on −55 / −30 / −5 dB, which is why they are not round numbers).
+ *
+ *  Measured, not assumed: `docs/handoff/compressor-graph/measurements/knee/official-{007,013}.png` are
+ *  the editor's graph for two presets whose Threshold, Ratio, Knee Type and Level are known from the
+ *  device. Digitising them against their own grid gives a sub-threshold slope of 0.99 (so both axes
+ *  share one span) and an above-threshold slope of 0.25 (so Ratio 4 is plotted literally); the two
+ *  presets then independently place the axis floor at −79.6 and −79.9 dB. Free-fitting the window lands
+ *  on −82.2 … +21.7 at 0.28 px rms; pinning the round −80 … +20 costs 0.70 px rms and 1.4 px worst
+ *  case, so the round window is what ships.
+ *
+ *  NOT the threshold knob's own range. `COMP_THRESH` is served as −60 … +20, and Axis used to plot that
+ *  window — which is the natural-looking thing to do and is wrong by up to 49 px against these captures. */
+export const GRAPH_MIN_DB = -80;
+export const GRAPH_MAX_DB = 20;
+
+/** The editor draws COMP_LEVEL (the block's output level) as part of the transfer curve. Same two
+ *  captures: preset 007 needs +0.55 dB of lift and preset 013 needs +6.0 dB, matching their COMP_LEVEL
+ *  exactly — that difference is the whole reason 013's curve sat visibly too low before.
+ *
+ *  Unverified neighbours, deliberately not drawn: COMP_AUTO (Auto Makeup) was OFF on both captures, so
+ *  whatever gain it adds when ON is unknown; COMP_MIX was 100% on both, and at less than that the real
+ *  block blends back toward unity. Both would move this curve, and guessing at them would undo the
+ *  point of measuring. */
 // Real hardware never reports bit-exact 0 dB GR at idle (detector noise floor/quantization), so a
 // strict `grDb <= 0` guard almost never fires — it keeps resolving a "real" point a hair above
 // threshold instead of recognizing silence. Treat anything under this as imperceptible/no reduction.
@@ -80,22 +107,26 @@ export interface SustainTransfer {
   /** Flat output ceiling the curve asymptotes to, in normalised graph units. */
   ceiling: number;
   knee: number;
+  /** COMP_LEVEL, in normalised graph units — see the note above. */
+  level: number;
 }
 
-/** Transfer parameters for a Compression setting (0..10), in normalised graph space. */
-export function sustainTransfer(compression: number): SustainTransfer {
+/** Transfer parameters for a Compression setting (0..10), in normalised graph space. `level` is
+ *  COMP_LEVEL already divided by the axis span. */
+export function sustainTransfer(compression: number, level = 0): SustainTransfer {
   const c = Math.min(SUSTAIN_MAX, Math.max(0, compression));
   return {
     gain: SUSTAIN_GAIN_A * Math.log1p(SUSTAIN_GAIN_B * c),
     ceiling: SUSTAIN_CEIL_FLOOR + SUSTAIN_CEIL_A * Math.exp(-SUSTAIN_CEIL_B * c),
-    knee: SUSTAIN_KNEE
+    knee: SUSTAIN_KNEE,
+    level
   };
 }
 
 /** Output level for an input level, both normalised 0..1 — the curve the graph plots. */
 export function sustainCurveY(x: number, transfer: SustainTransfer): number {
   const u = x + transfer.gain;
-  return u - softplus(u - transfer.ceiling, transfer.knee);
+  return u - softplus(u - transfer.ceiling, transfer.knee) + transfer.level;
 }
 
 /** Where on the sustain curve the signal currently sits, from gain reduction (normalised to the same
@@ -105,7 +136,7 @@ export function sustainDotPosition(transfer: SustainTransfer, grNorm: number): {
   const z = inverseSoftplus(grNorm, transfer.knee);
   if (z == null) return null;
   const u = transfer.ceiling + z;
-  return { input: u - transfer.gain, output: u - grNorm };
+  return { input: u - transfer.gain, output: u - grNorm + transfer.level };
 }
 
 /** ── Threshold/Ratio compressors: the knee ──────────────────────────────────────────────────────────
@@ -121,15 +152,14 @@ export function sustainDotPosition(transfer: SustainTransfer, grNorm: number): {
  *  the editor as drawing one softplus-kneed curve for every compressor makes the two paths one model.
  *
  *  `COMP_KNEE` picks the sharpness. Its five options are HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
- *  (device enum 0..4, default MEDIUM), and the table below halves the sharpness at each step from the
- *  sustain fit's own value (12 in normalised units over a −60..+20 dB window = 0.15/dB) sitting at
- *  MEDIUM.
+ *  (device enum 0..4, default MEDIUM). MED-HARD is measured: 0.36/dB, fitted to FM3-Edit's graph on
+ *  presets 007 and 013 (both MED-HARD), which reproduces both to 1.4 px in a 344 px box.
  *
- *  PROVISIONAL: only the MEDIUM entry is evidence-backed. The other four are an interpolation, not a
- *  measurement — capturing FM3-Edit's graph at each Knee Type would pin them down, and until that is
- *  done a HARD or SOFT setting is the right *shape* with an approximate width. See the "Known gap"
+ *  PARTLY PROVISIONAL: only MED-HARD is measured. The other four halve and double from it, which is an
+ *  interpolation — both captured presets happened to share a Knee Type, so the spacing between options
+ *  is unmeasured. A capture of one preset at HARD and at SOFT would pin it down; see the "Known gap"
  *  section of `docs/handoff/compressor-graph/README.md`. */
-const KNEE_SHARPNESS_PER_DB = [0.6, 0.3, 0.15, 0.075, 0.0375];
+const KNEE_SHARPNESS_PER_DB = [0.72, 0.36, 0.18, 0.09, 0.045];
 const KNEE_DEFAULT_OPTION = 2; // MEDIUM — the device's own default for COMP_KNEE
 
 /** Knee sharpness in 1/dB for a bound `COMP_KNEE`; the device default when the variant authors none
@@ -145,15 +175,17 @@ export interface RatioTransfer {
   ratio: number;
   /** Knee sharpness in 1/dB — higher is a tighter corner. */
   knee: number;
+  /** COMP_LEVEL, dB. The editor plots the block's output level as part of the curve — see the note above. */
+  level: number;
 }
 
-export function ratioTransfer(threshold: number, ratio: number, knee: EnumParam | null | undefined): RatioTransfer {
-  return { threshold, ratio: Math.max(1, ratio), knee: kneeSharpness(knee) };
+export function ratioTransfer(threshold: number, ratio: number, knee: EnumParam | null | undefined, level = 0): RatioTransfer {
+  return { threshold, ratio: Math.max(1, ratio), knee: kneeSharpness(knee), level };
 }
 
 /** Output dB for an input dB — the curve the graph plots. */
 export function ratioCurveY(inputDb: number, transfer: RatioTransfer): number {
-  return inputDb - (1 - 1 / transfer.ratio) * softplus(inputDb - transfer.threshold, transfer.knee);
+  return inputDb + transfer.level - (1 - 1 / transfer.ratio) * softplus(inputDb - transfer.threshold, transfer.knee);
 }
 
 /** Invert the curve to find the point currently producing `grDb` of gain reduction. There's no live
@@ -167,7 +199,7 @@ export function ratioDotPosition(transfer: RatioTransfer, grDb: number): { input
   const z = inverseSoftplus(grDb / slope, transfer.knee);
   if (z == null) return null;
   const input = transfer.threshold + z;
-  return { input, output: input - grDb };
+  return { input, output: input - grDb + transfer.level };
 }
 
 /** Resolve a compressor graph from its entire page because Knee may live below the Basic-row slot. */
@@ -204,6 +236,7 @@ export function deriveCompressorGraphs(input: {
         ratio: param('COMP_RATIO'),
         sustain: param('COMP_SUSTAIN'),
         knee: enumParam('COMP_KNEE'),
+        level: param('COMP_LEVEL'),
         attack: param('COMP_ATTACK'),
         release: param('COMP_RELEASE')
       });

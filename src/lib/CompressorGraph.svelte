@@ -1,6 +1,7 @@
 <script lang="ts">
   import { paramValue } from './format';
   import {
+    GRAPH_MAX_DB, GRAPH_MIN_DB,
     ratioCurveY, ratioDotPosition, ratioTransfer, sustainCurveY, sustainDotPosition, sustainTransfer,
     type CompressorGraphSpec
   } from './compressorGraphs';
@@ -11,8 +12,10 @@
   // Square drawing box so the dB grid cells and the 1:1 reference line read true, like the FM3 editor.
   const W = 200;
   const H = 200;
-  const MIN = -60;
-  const MAX = 20;
+  // The window the FM3 editor plots, which is NOT the Threshold knob's own -60..+20 range — see the
+  // measurement note in `compressorGraphs.ts`.
+  const MIN = GRAPH_MIN_DB;
+  const MAX = GRAPH_MAX_DB;
   // The plot area IS the box: the curve runs edge to edge, as it does in the FM3 editor, and the grid
   // lines land on true quarters. Anything that would poke past the rounded corners (the 1:1 line's
   // endpoints, the live dot at rest) is clipped by `.wrap`, which carries the same corner radius.
@@ -24,11 +27,15 @@
   const ratioStyle = $derived(!!graph.threshold && !!graph.ratio);
   const sustainStyle = $derived(!ratioStyle && !!graph.sustain);
   const hasTransfer = $derived(ratioStyle || sustainStyle);
-  const transfer = $derived(sustainStyle ? sustainTransfer(paramValue(graph.sustain!)) : null);
+  // COMP_LEVEL rides along on both curves: the editor draws the block's output level as part of the
+  // transfer, measured off two presets whose Level differed. The sustain model works in normalised
+  // graph units, so its share is the same dB divided by the axis span.
+  const levelDb = $derived(graph.level ? paramValue(graph.level) : 0);
+  const transfer = $derived(sustainStyle ? sustainTransfer(paramValue(graph.sustain!), levelDb / (MAX - MIN)) : null);
   // Threshold/Ratio models get their corner rounded by COMP_KNEE, which is how the FM3 editor draws it;
   // a hard corner was the visible difference on presets like 007. Variants with no Knee dropdown fall
   // back to the device's own default. See the knee note in `compressorGraphs.ts`.
-  const ratio = $derived(ratioStyle ? ratioTransfer(paramValue(graph.threshold!), paramValue(graph.ratio!), graph.knee) : null);
+  const ratio = $derived(ratioStyle ? ratioTransfer(paramValue(graph.threshold!), paramValue(graph.ratio!), graph.knee, levelDb) : null);
   const xOf = (db: number) => PAD + ((db - MIN) / (MAX - MIN)) * (W - PAD * 2);
   const yOf = (db: number) => H - PAD - ((db - MIN) / (MAX - MIN)) * (H - PAD * 2);
   // The sustain model works in normalised graph space (0..1 on both axes) because that is how the
@@ -84,9 +91,11 @@
 <div class="wrap">
   <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Compressor transfer curve">
     <rect x="0.5" y="0.5" width={W - 1} height={H - 1} rx="10" fill="var(--bg)" stroke="var(--border)" />
-    {#each [-40, -20, 0] as db}
-      <line x1={xOf(db)} y1="0" x2={xOf(db)} y2={H} stroke="var(--border)" />
-      <line x1="0" y1={yOf(db)} x2={W} y2={yOf(db)} stroke="var(--border)" />
+    <!-- Quarters of the box, which is how the editor draws its grid — on a -80..+20 window that puts
+         the lines on -55 / -30 / -5 dB, so they are deliberately not round dB values. -->
+    {#each [0.25, 0.5, 0.75] as q}
+      <line x1={q * W} y1="0" x2={q * W} y2={H} stroke="var(--border)" />
+      <line x1="0" y1={q * H} x2={W} y2={q * H} stroke="var(--border)" />
     {/each}
     <line x1={xOf(MIN)} y1={yOf(MIN)} x2={xOf(MAX)} y2={yOf(MAX)} stroke="var(--border3)" stroke-dasharray="4 4" />
     {#if hasTransfer}

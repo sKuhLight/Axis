@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  deriveCompressorGraphs, kneeSharpness, ratioCurveY, ratioDotPosition, ratioTransfer,
-  sustainCurveY, sustainDotPosition, sustainTransfer
+  deriveCompressorGraphs, GRAPH_MAX_DB, GRAPH_MIN_DB, kneeSharpness, ratioCurveY, ratioDotPosition,
+  ratioTransfer, sustainCurveY, sustainDotPosition, sustainTransfer
 } from './compressorGraphs';
 import type { BlockParams, DeviceLayout, EnumParam, LayoutControl, NamedParam } from './types';
 import compFixture from './fixtures/blockParams/comp.json';
@@ -87,6 +87,51 @@ describe('ratio-style transfer curve', () => {
       expect(y).toBeGreaterThan(prev);
       prev = y;
     }
+  });
+});
+
+describe('parity with the FM3 editor (Threshold/Ratio)', () => {
+  // Digitised from `docs/handoff/compressor-graph/measurements/knee/official-{007,013}.png` — FM3-Edit's
+  // own graph for two presets whose Threshold, Ratio, Knee Type and Level were read off the device.
+  // Normalised to the editor's plot box: x and y both 0..1, y up. Both presets are Knee MED-HARD,
+  // Ratio 4, Auto Makeup OFF, Mix 100%, input Gain 0.
+  const CAPTURES = [
+    {
+      name: '007 (Studio FB, VCA Bus Compressor)',
+      threshold: -11.804, ratio: 4, level: 0.555,
+      points: [[0.0274, 0.0338], [0.0518, 0.0567], [0.1006, 0.1047], [0.1524, 0.156], [0.2012, 0.205], [0.25, 0.2543], [0.3018, 0.3063], [0.3506, 0.3559], [0.4024, 0.4057], [0.4512, 0.4553], [0.5, 0.5045], [0.5518, 0.5568], [0.6006, 0.6057], [0.6524, 0.653], [0.7012, 0.6834], [0.75, 0.7004], [0.8018, 0.7148], [0.8506, 0.7266], [0.9024, 0.7387], [0.9512, 0.7515]]
+    },
+    {
+      name: '013 (Studio FF, Modern VCA Compressor)',
+      threshold: -25, ratio: 4, level: 6,
+      points: [[0.0274, 0.0884], [0.0518, 0.1092], [0.1006, 0.1583], [0.1524, 0.2108], [0.2012, 0.2577], [0.25, 0.3069], [0.3018, 0.359], [0.3506, 0.4084], [0.4024, 0.4604], [0.4512, 0.5099], [0.5, 0.5566], [0.5518, 0.5989], [0.6006, 0.6191], [0.6524, 0.6336], [0.7012, 0.6454], [0.75, 0.657], [0.8018, 0.6712], [0.8506, 0.683], [0.9024, 0.6951], [0.9512, 0.7079]]
+    }
+  ] as const;
+
+  const SPAN = GRAPH_MAX_DB - GRAPH_MIN_DB;
+  const PX = 1 / 344; // the editor's plot box in the captures is 344 px tall
+
+  for (const capture of CAPTURES) {
+    it(`reproduces the editor's curve on preset ${capture.name}`, () => {
+      const t = ratioTransfer(capture.threshold, capture.ratio, kneeAt(1), capture.level);
+      let worst = 0;
+      for (const [x, y] of capture.points) {
+        const drawn = (ratioCurveY(GRAPH_MIN_DB + x * SPAN, t) - GRAPH_MIN_DB) / SPAN;
+        worst = Math.max(worst, Math.abs(drawn - y));
+      }
+      expect(worst).toBeLessThan(2 * PX);
+    });
+  }
+
+  it('needs the measured window and Level — the old -60..+20 window without Level is wildly off', () => {
+    const capture = CAPTURES[1];
+    const t = ratioTransfer(capture.threshold, capture.ratio, kneeAt(1)); // no level
+    const oldMin = -60, oldSpan = 80;
+    let worst = 0;
+    for (const [x, y] of capture.points) {
+      worst = Math.max(worst, Math.abs((ratioCurveY(oldMin + x * oldSpan, t) - oldMin) / oldSpan - y));
+    }
+    expect(worst).toBeGreaterThan(40 * PX); // ~49 px in the capture
   });
 });
 

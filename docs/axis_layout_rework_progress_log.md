@@ -1851,6 +1851,14 @@ they acquire the new graph widgets; custom profiles remain unchanged.
 Threshold, Ratio, Knee, Attack, and Release from the selected layout page and draws a read-only static
 transfer curve from Threshold, Ratio and Knee where the model exposes them.
 
+The graph's window is **−80 … +20 dB**, not the Threshold knob's own −60 … +20, and it includes
+COMP_LEVEL. Both were measured, not assumed: FM3-Edit's graph was captured for two presets whose
+Threshold / Ratio / Knee / Level were read off the device first, and digitising them gives a
+sub-threshold slope of 0.99, an above-threshold slope of 0.25, a lift matching each preset's Level, and
+an axis floor of −79.6 / −79.9 dB. Plotting the knob's range without Level — the natural-looking choice,
+and what Axis did — is off by up to 49 px in a 344 px box. The grid is at quarters of the box, so its
+lines now fall on −55 / −30 / −5 dB.
+
 The corner is rounded, not broken. Axis used to draw the textbook two-segment curve and produced a hard
 corner where the editor draws a soft one — on preset 007 that was the entire visible difference. The
 curve is now `y = x - (1 - 1/R) * softplus(x - T, k)`, the same shape the sustain fit below landed on

@@ -74,20 +74,60 @@ model is this with `1 - 1/R = 1` (a limiter), so the two compressor families are
 two ways of getting its parameters — that unification is the evidence for the shape, since the sustain
 form was fitted to the editor's own drawing rather than assumed.
 
+### What the editor actually plots
+
+`measurements/knee/official-007.png` and `official-013.png` are FM3-Edit's graph for two real presets
+whose parameters were read off the device first, so unlike the sustain captures these solve for the
+*editor's* unknowns rather than for the curve:
+
+| | preset 007 | preset 013 |
+|---|---|---|
+| Block | Comp 2, Studio FB, VCA Bus Compressor | Comp 1, Studio FF, Modern VCA Compressor |
+| Threshold | −11.804 dB | −25.0 dB |
+| Ratio | 4 | 4 |
+| Knee Type | MED-HARD | MED-HARD |
+| **Level** | **+0.555 dB** | **+6.0 dB** |
+| Auto Makeup / Mix / input Gain | OFF / 100% / 0 | OFF / 100% / 0 |
+| Detector | RMS+PEAK | RMS+PEAK |
+
+`digitize_knee.py` extracts both curves against their own grid; `fit_knee.py` solves for the window and
+`k`. Three things fall out:
+
+- **Sub-threshold slope 0.99** on both — the two axes share one dB span, and below threshold the curve
+  is exactly unity plus a constant.
+- **Above-threshold slope 0.25** on both — Ratio 4 is plotted literally, no fudge.
+- **That constant is COMP_LEVEL.** 007 needs +0.55 dB of lift and 013 needs +6.0, matching their Level
+  exactly. This is the whole reason 013's curve sat visibly low before: 007's Level is invisible and
+  013's is 7.5% of the box.
+
+With Level accounted for, the two presets independently place the axis floor at **−79.6** and **−79.9**
+dB. Free-fitting the window lands on −82.2 … +21.7 at 0.28 px rms; pinning the round **−80 … +20** costs
+0.70 px rms and 1.4 px worst case, so that is what ships. `knee-vs-editor.svg` overlays the two.
+
+Note this is emphatically **not** the Threshold knob's own range. `COMP_THRESH` is served as −60 … +20
+and Axis used to plot that window — the natural-looking choice, and wrong by up to **49 px** against
+these captures. The grid is at quarters of the box, so on this window its lines fall on −55 / −30 / −5
+dB rather than round numbers.
+
+### Knee sharpness
+
 `COMP_KNEE` sets `k`. The device serves five options — HARD / MED-HARD / MEDIUM / MED-SOFT / SOFT
 (0..4, default MEDIUM) — and `KNEE_SHARPNESS_PER_DB` in `compressorGraphs.ts` maps them to
-`0.6 / 0.3 / 0.15 / 0.075 / 0.0375` per dB.
+`0.72 / 0.36 / 0.18 / 0.09 / 0.045` per dB.
 
-**Only the MEDIUM entry is evidence-backed**: 0.15/dB is the sustain fit's own `k` of 12 in normalised
-units over the −60..+20 dB window. The other four halve/double from it, which is an interpolation, not
-a measurement. Capturing FM3-Edit's graph at each of the five Knee Types on one Studio preset, at a
-fixed Threshold and Ratio, would pin them down — `digitize.py` already handles that capture shape.
-Until then a non-MEDIUM Knee Type draws the right shape at an approximate width.
+**Only MED-HARD is measured**, at 0.36/dB from the fit above. The other four halve and double from it,
+which is an interpolation: both captured presets happened to share a Knee Type, so the *spacing*
+between options is unmeasured. One preset captured at HARD and at SOFT, everything else held, would
+pin it down — `digitize_knee.py` handles that capture shape as-is.
 
 ## Known gap
 
 The ceiling drops by 0.33 between Compression 0 and 2 and there are **no captures in that gap** — the
 exponential's shape there is extrapolation, not measurement. Captures at 0.5 / 1 / 1.5 would settle it.
+
+COMP_AUTO (Auto Makeup) was OFF and COMP_MIX was 100% on every capture, so neither is drawn. Both
+would move the curve — Auto Makeup adds gain the device does not report, and Mix below 100% blends the
+output back toward unity. Captures with either changed would settle them.
 
 Orange Squeezer and Tube (COMP_TYPE 18 and 5) author Threshold *and* Compression but no Ratio. They
 take the same sustain curve, driven by Compression; how their Threshold knob interacts with it is
