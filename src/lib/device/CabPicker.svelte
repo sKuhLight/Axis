@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getEditorSurface } from '$lib/editor/editorSurface';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import { catFor } from './catalog';
   import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState } from '$lib/api/types';
@@ -159,15 +160,21 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       pick(view.flat[hi]);
-    } else if (e.key === 'Escape') {
-      editor.cabPickerOpen = false;
     }
+    // Escape is handled by the dialog shell.
   }
 </script>
 
-{#if editor.cabPickerOpen}
-  <div class="bg" class:mob role="presentation" onclick={() => (editor.cabPickerOpen = false)}>
-    <div class="card" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+<Dialog
+  open={editor.cabPickerOpen}
+  onClose={() => (editor.cabPickerOpen = false)}
+  width="760px"
+  maxHeight="84vh"
+  align="top"
+  sheet={mob}
+  class="cab-picker-dlg"
+>
+  <div class="wrap" class:sheet={mob}>
       <div class="search">
         <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
         <input bind:this={inputEl} bind:value={query} oninput={() => (hi = 0)} onkeydown={onKey} placeholder={mode === 'dyna' ? 'Search DynaCabs…' : 'Search cab IRs…'} />
@@ -229,55 +236,24 @@
       {#if !mob}
         <div class="foot mono"><span>↑↓ Navigate</span><span>⏎ Load</span><span>★ Favorite</span><span>Esc Close</span></div>
       {/if}
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    z-index: 200;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .card {
-    width: 760px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
-  /* mobile: dock as a bottom sheet */
-  .bg.mob {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .card.mob {
-    width: 100%;
-    max-width: 100%;
-    max-height: 92vh;
-    border-radius: 18px 18px 0 0;
-    animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
-  }
-  .card.mob .search {
+  .wrap.sheet .search {
     padding: 15px 16px;
   }
-  .card.mob .chips {
+  .wrap.sheet .chips {
     flex-wrap: wrap;
   }
-  .card.mob .cur {
+  .wrap.sheet .cur {
     margin-left: 0;
     max-width: 100%;
   }
@@ -371,7 +347,7 @@
     flex: none;
   }
   /* mobile: wrap banks onto multiple rows instead of a hidden horizontal scrollbar */
-  .card.mob .cats {
+  .wrap.sheet .cats {
     flex-wrap: wrap;
     overflow-x: visible;
   }
