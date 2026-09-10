@@ -15,8 +15,6 @@
   import DeviceTools from '$lib/device/DeviceTools.svelte';
   import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
   import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
-  import { convert } from '$lib/convert/convert.svelte';
-  import { convertScratch } from '$lib/convert/convertScratch.svelte';
   import PresetPicker from '$lib/preset/PresetPicker.svelte';
   import SaveDialog from '$lib/preset/SaveDialog.svelte';
   import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
@@ -39,6 +37,8 @@
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
   import { pollIntervalsFor } from '$lib/editor/pollIntervals';
   import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
+  import { overlays } from '$lib/overlay/overlays.svelte';
+  import '$lib/overlay/overlayRegistrations';
 
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
   // live. In the desktop build (directBoot.active=false) it starts immediately.
@@ -117,17 +117,9 @@
         editor.presetSearchOpen = true;
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
-        if (editor.tuner.active) editor.toggleTuner();
-        else if (history.panelOpen) history.panelOpen = false;
-        else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
-        else if (editor.paletteOpen) editor.paletteOpen = false;
-        else if (editor.quickBuildOpen) editor.quickBuildOpen = false;
-        else if (convertScratch.open) convertScratch.close();
-        else if (convert.open) convert.close();
-        else if (editor.presetOpen) editor.presetOpen = false;
-        else if (editor.presetSearchOpen) editor.presetSearchOpen = false;
-        else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
-        else if (editor.editorOpen) editor.closeEditor();
+        // Priority order (and the tuner/link-arm/block-editor special cases) is data in
+        // src/lib/overlay/overlays.svelte.ts — closes exactly the top overlay per press.
+        overlays.escape();
       }
     };
     window.addEventListener('resize', onResize);
