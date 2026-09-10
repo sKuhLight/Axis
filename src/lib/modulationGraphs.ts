@@ -29,6 +29,10 @@ export interface ModulationGraphSpec {
   /** How many values a RANDOM cycle holds, for a graph whose LFO was measured. Left unset keeps the
    *  two-per-cycle staircase the block graphs have always drawn. */
   randomSteps?: number;
+  /** Draw the trace as a running oscilloscope. Set for every graph but the Tremolo box, which the FM3
+   *  editor draws as a static shape preview: only LFO Type, Duty Cycle and Shape move it, so it keeps
+   *  showing the waveform when Rate, Phase or Depth say there is nothing to see. */
+  live?: boolean;
 }
 
 // The Controllers page draws a fixed slice of TIME, so its boxes hold more cycles the faster the LFO runs:
@@ -192,7 +196,8 @@ export function deriveModulationGraphs(input: {
           width: named(/WIDTH$/),
           center: named(/CENTER$/),
           windowSeconds: family === 'CONTROLLERS' ? CONTROLLERS_WINDOW_SECONDS : undefined,
-          randomSteps: family === 'CONTROLLERS' ? CONTROLLERS_RANDOM_STEPS : undefined
+          randomSteps: family === 'CONTROLLERS' ? CONTROLLERS_RANDOM_STEPS : undefined,
+          live: control.rawWidget !== 'graph_trem'
         });
       }
     }

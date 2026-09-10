@@ -43,8 +43,9 @@ describe('deriveModulationGraphs', () => {
         rows: [{ section: 'parameters', controls: [control('TREMOLO_LFOTYPE', 1, 'dropdown'), control(null, null, 'graph', 'graph_trem')] }]
       }]
     };
-    expect(deriveModulationGraphs({ layout: controllers, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: 2, randomSteps: 1 });
-    expect(deriveModulationGraphs({ layout: tremolo, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: undefined, randomSteps: undefined });
+    expect(deriveModulationGraphs({ layout: controllers, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: 2, randomSteps: 1, live: true });
+    // The Tremolo box is a static shape preview in the FM3 editor, not a running scope.
+    expect(deriveModulationGraphs({ layout: tremolo, params: [], enums: [type] })[0]).toMatchObject({ windowSeconds: undefined, randomSteps: undefined, live: false });
   });
 
   it('binds Tremolo waveform controls from their authored row', () => {

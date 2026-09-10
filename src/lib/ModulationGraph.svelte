@@ -13,27 +13,32 @@
   const typeValue = $derived(graph.type?.value);
   const typeOptions = $derived(graph.type?.options);
   const shapeName = $derived(typeOptions?.find((option) => option.value === typeValue)?.label.toLowerCase());
+  // The FM3 editor draws the Tremolo box as a static shape preview: it fills the box whatever Depth,
+  // Width and Center say, and only LFO Type, Duty Cycle and Shape change it. Every other graph is a
+  // running scope, so what measures the live LFO below is gated on `live`.
+  const live = $derived(graph.live === true);
   const amplitudeParam = $derived(graph.depth ?? graph.width);
-  const amplitude = $derived(amplitudeParam ? Math.max(0, Math.min(1, amplitudeParam.norm ?? 0)) : 0.72);
-  const center = $derived(graph.center ? ((graph.center.norm ?? 0.5) - 0.5) * 2 : 0);
+  const amplitude = $derived(!live ? 1 : amplitudeParam ? Math.max(0, Math.min(1, amplitudeParam.norm ?? 0)) : 0.72);
+  const center = $derived(live && graph.center ? ((graph.center.norm ?? 0.5) - 0.5) * 2 : 0);
   const duty = $derived(graph.duty ? Math.max(0.05, Math.min(0.95, graph.duty.norm ?? 0.5)) : 0.5);
   const shape = $derived(Math.max(0.01, Math.min(0.99, graph.shape?.norm ?? 0.5)));
   // Phase is authored in degrees; the graph starts that far into the cycle.
   const phaseOffset = $derived.by(() => {
-    if (!graph.phase) return 0;
+    if (!live || !graph.phase) return 0;
     const degrees = paramValue(graph.phase);
     return Number.isFinite(degrees) ? (((degrees / 360) % 1) + 1) % 1 : 0;
   });
   const freeRate = $derived(graph.rate ? paramValue(graph.rate) : 0.5);
   const rate = $derived(Math.max(0.01, modulationRate(Number.isFinite(freeRate) ? freeRate : 0.5, currentLabel(graph.tempo), bpm)));
-  const running = $derived(currentLabel(graph.run)?.trim().toLowerCase() !== 'stop');
+  const running = $derived(live && currentLabel(graph.run)?.trim().toLowerCase() !== 'stop');
   const quantize = $derived.by(() => {
+    if (!live) return 0;
     const label = currentLabel(graph.quantize)?.trim();
     if (!label || label.toUpperCase() === 'OFF') return 0;
     const levels = Number(label);
     return Number.isFinite(levels) && levels >= 2 ? levels : 0;
   });
-  const highCut = $derived(graph.highCut ? paramValue(graph.highCut) : Infinity);
+  const highCut = $derived(live && graph.highCut ? paramValue(graph.highCut) : Infinity);
   // How much LFO the box holds. A graph with no window spans exactly one cycle whatever the Rate is; one
   // with a window spans a fixed slice of time, so a faster LFO packs more cycles into the same box.
   const cycles = $derived(graph.windowSeconds ? Math.max(1, rate * graph.windowSeconds) : 1);
@@ -42,8 +47,9 @@
   const curve = $derived.by(() => {
     if (!shapeName) return '';
     const points: string[] = [];
-    // The hardware graph is an oscilloscope: the trace remains until the sweep restarts.
-    const scan = reducedMotion || !running ? 1 : (elapsed * sweepRate) % 1;
+    // A live graph is an oscilloscope: the trace remains until the sweep restarts. A static one is
+    // always drawn whole.
+    const scan = !running || reducedMotion ? 1 : (elapsed * sweepRate) % 1;
     const sweep = running && !reducedMotion ? Math.floor(elapsed * sweepRate) : 0;
     // Enough points that every drawn cycle keeps its corners, however many the window holds.
     const samples = Math.min(768, 96 * Math.ceil(cycles));
@@ -71,6 +77,7 @@
   });
 
   onMount(() => {
+    if (!live) return;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame = 0;
     const tick = (now: number) => {
