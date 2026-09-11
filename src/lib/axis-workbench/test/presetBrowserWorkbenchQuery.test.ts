@@ -15,6 +15,7 @@ import {
   type AxisPbMatchEntry
 } from '../presetBrowser/presetBrowserWorkbenchQuery';
 import type { AxisPresetBrowserEntrySummary } from '../presetBrowser/presetBrowserWorkbenchData';
+import { AXIS_PB_CAT } from '../presetBrowser/presetBrowserWorkbenchRowChips';
 
 const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => {
   const blockSlugs = over.blockSlugs ?? ['amp', 'reverb', 'delay'];
@@ -59,6 +60,35 @@ describe('Preset Browser query grammar', () => {
   it('rejects unknown block tokens', () => {
     expect(parseTerm('WOBBLE')).toBeNull();
     expect(parseTerm('WOBBLE(X=1)')).toBeNull();
+  });
+
+  it('accepts every block slug the rowChips category map defines (F2 regression: parser and autocomplete vocab must match)', () => {
+    for (const slug of Object.keys(AXIS_PB_CAT)) {
+      expect(parseTerm(slug.toUpperCase())).toEqual({ kind: 'block', block: slug, params: [] });
+    }
+  });
+
+  it('parses FLANGER(...) to block "flanger", not the old bogus "flange" slug (F2 regression)', () => {
+    expect(parseTerm('FLANGER(TYPE=Deluxe)')).toEqual({
+      kind: 'block',
+      block: 'flanger',
+      params: [{ name: 'TYPE', op: '=', val: 'Deluxe' }]
+    });
+  });
+
+  it('a real-block param condition actually filters instead of being silently dropped (F2 regression)', () => {
+    const cond = parseTerm('FLANGER(TYPE=Deluxe)');
+    expect(cond).not.toBeNull();
+    const nonMatching: AxisPbMatchEntry = entry({
+      blockSlugs: ['flanger'],
+      blocks: [{ slug: 'flanger', params: [{ label: 'Type', name: 'FLANGER_TYPE', kind: 'enum', value: null, enumLabel: 'Classic' }] }]
+    });
+    expect(matchPreset(nonMatching, [cond!], '')).toBe(false);
+    const matching: AxisPbMatchEntry = entry({
+      blockSlugs: ['flanger'],
+      blocks: [{ slug: 'flanger', params: [{ label: 'Type', name: 'FLANGER_TYPE', kind: 'enum', value: null, enumLabel: 'Deluxe' }] }]
+    });
+    expect(matchPreset(matching, [cond!], '')).toBe(true);
   });
 
   it('round-trips conditions through condsToQuery serialization', () => {

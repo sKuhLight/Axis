@@ -11,7 +11,11 @@ import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData
 import { estimateCpu } from './presetBrowserWorkbenchQuery';
 
 // block family slug → [label, colour]. Verbatim from PresetBrowser.svelte CAT; unknown slugs fall back.
-const CAT: Record<string, [string, string]> = {
+// Exported as the canonical block-slug set: presetBrowserWorkbenchQuery.ts's `AXIS_PB_FILTERABLE_BLOCKS`
+// is a hand-mirrored literal of these keys (it can't import this module — this module already imports
+// `estimateCpu` from there, so the reverse import would be circular); its test round-trips every key
+// here through the parser to keep the two in step.
+export const AXIS_PB_CAT: Record<string, [string, string]> = {
   input: ['Input', '#4f6bed'],
   output: ['Output', '#2fa15f'],
   amp: ['Amp', '#d98a2b'],
@@ -44,11 +48,11 @@ const CAT: Record<string, [string, string]> = {
 const IO_SLUGS = new Set(['input', 'output', 'in', 'out']);
 
 export function axisPbCatLabel(slug: string): string {
-  return CAT[slug]?.[0] ?? (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : 'Block');
+  return AXIS_PB_CAT[slug]?.[0] ?? (slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : 'Block');
 }
 
 export function axisPbCatColor(slug: string): string {
-  return CAT[slug]?.[1] ?? '#7a7a84';
+  return AXIS_PB_CAT[slug]?.[1] ?? '#7a7a84';
 }
 
 export interface AxisPbRowBlockChip {
