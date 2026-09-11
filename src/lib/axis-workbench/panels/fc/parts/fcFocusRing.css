@@ -1,0 +1,10 @@
+/* Keyboard focus ring shared by every FC part panel (T18-adjacent — the panel is fully
+   operable from the keyboard). Plain (unscoped) CSS because the focusable buttons/inputs
+   it targets are rendered by sibling part components, not by FcPanelChrome itself. */
+.fc-part :is(button, input):focus-visible {
+  outline: 2px solid var(--aw-accent);
+  outline-offset: 2px;
+}
+.fc-part .fc-swatch:focus-visible {
+  outline-offset: 3px;
+}

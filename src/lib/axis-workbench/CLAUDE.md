@@ -96,10 +96,17 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   — `WidgetHost`'s "Remove Widget" defers to it, defaulting to just the widget itself
   when no provider is registered). A **blank divider** is not a section — it cascades
   nothing, same as removing an ordinary control.
-- `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
-  widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one
-  `activate()` click dispatcher. `widgets/widgetEstWidths.ts` holds
-  `AXIS_WIDGET_EST_WIDTHS` and `AXIS_WIDGET_KEEP_TYPES`.
+- `widgets/` — one component per widget type (`AxisLogoWidget.svelte`,
+  `AxisPresetWidget.svelte`, …), each registered directly against its own type in
+  `axisWorkbenchRegistry.ts` — no switch. Each widget owns its own scoped `<style>`;
+  `widgets/widgets.css` (imported once from `AxisWorkbenchShell.svelte`) holds only the
+  handful of primitives genuinely shared by several widgets (`.axis-widget` base chrome
+  and size variants, `.mono`/`.token`/`.strong`, the `.chip-row`/`.num-chip`/`.pill-chip`
+  family). Small logic genuinely shared by a few widgets gets its own module
+  (`widgetControls.ts`, `fcWidgetSnapshot.svelte.ts` for the three top-bar FC widgets) —
+  don't reach for the shared stylesheet or a shared module for something only one widget
+  uses. `widgets/widgetEstWidths.ts` holds `AXIS_WIDGET_EST_WIDTHS` and
+  `AXIS_WIDGET_KEEP_TYPES`.
 - `axisWorkbenchDefaults.ts` — default document, `createAxisWorkbenchPanels()`,
   `ensureAxisGridControlWidgets`, panelLibrary/widgetLibrary entries.
 - `axisWorkbenchLayoutPresets.ts` — six data-only presets (`default`, `stage`, `studio`,
@@ -141,8 +148,14 @@ bypasses the manifest.
 1. `panels/AxisXPanel.svelte` with `let { panel }: { panel: PanelInstance } = $props()`;
    use `getWorkbenchContext()` for controller/registry; read params from `panel.state`.
 2. Manifest: add `'axis.x'` to `AXIS_WORKBENCH_BASE_PANEL_TYPES` (or a new subsystem
-   `types.ts` with a parts array for multi-part panels).
-3. `axisWorkbenchRegistry.ts`: import the component and map it in the registerPanel loop.
+   `types.ts` with a parts array for multi-part panels). Multi-part panels get one
+   component per part (mirror `panels/fc/` / `panels/preset-browser/`) with shared
+   reactive setup factored into a `<subsystem>/<x>PartView.svelte.ts` factory — never a
+   single component switching on a `part` prop; that just re-inverts the registry M5
+   undid. Share markup/CSS across 2+ parts via a small subcomponent under
+   `panels/<subsystem>/parts/`, not a switch.
+3. `axisWorkbenchRegistry.ts`: import the component and map it directly to its type in a
+   `Record<string, WorkbenchPanelComponent>` (no ternary/switch chain).
 4. `axisWorkbenchDefaults.ts`: `createAxisWorkbenchPanels()` entry with `singletonKey`
    (plus `locked` / `closable` as appropriate) and an optional panelLibrary entry.
 5. Navigation (optional): nav id in the manifest; nav entry/order in defaults AND in every

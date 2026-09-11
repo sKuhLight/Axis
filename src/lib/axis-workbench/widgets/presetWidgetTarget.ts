@@ -1,6 +1,6 @@
 import { AXIS_PAGE_GRID } from '../axisWorkbenchPages';
 
-// This decision lives in its own module rather than inline in AxisWorkbenchWidget.svelte because
+// This decision lives in its own module rather than inline in AxisPresetWidget.svelte because
 // Vitest runs in the node environment with no DOM, and .svelte components are never unit-mounted
 // here (axis-workbench/CLAUDE.md) — so anything worth covering with a test gets pulled out into a
 // plain function. Same shape as presetBrowser/presetBrowserWorkbenchRowGesture.ts.

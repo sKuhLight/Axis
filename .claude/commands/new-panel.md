@@ -25,8 +25,18 @@ Read `src/lib/axis-workbench/CLAUDE.md` first if you have not already this sessi
    `axisWorkbenchRegistryManifest.ts` (or, for a multi-part subsystem, create a new
    `<subsystem>/types.ts` with a parts array + `panelType(part)` helper and derive the
    types in the manifest like the existing `fc`/`presetBrowser`/`blockEditor` imports).
+   For a multi-part subsystem, give EACH part its own leaf component (mirror
+   `panels/fc/AxisFcBoardPanel.svelte` / `panels/preset-browser/AxisPresetBrowserListPanel.svelte`)
+   — never one component switching on a `part` prop. Reactive setup shared by the parts
+   (runtime binding, derived selection state) goes in one `<subsystem>/<x>PartView.svelte.ts`
+   factory function (the rune-in-a-plain-function idiom — see
+   `fc/fcPartView.svelte.ts` / `presetBrowser/presetBrowserWorkbenchView.svelte.ts`), called
+   once per mounted leaf and passed down as a `view` prop; markup/CSS genuinely shared by
+   2+ parts (not all of them) goes in a small shared subcomponent under
+   `panels/<subsystem>/parts/`, not a shared switch.
 3. **Registry** — `src/lib/axis-workbench/axisWorkbenchRegistry.ts`: import the component
-   and map it in the registerPanel loop.
+   and map it directly to its type (a `Record<string, WorkbenchPanelComponent>` literal,
+   not a ternary/switch).
 4. **Defaults** — `src/lib/axis-workbench/axisWorkbenchDefaults.ts`: add a
    `createAxisWorkbenchPanels()` entry with a `singletonKey` (plus `locked` / `closable`
    as appropriate) and an optional panelLibrary entry.

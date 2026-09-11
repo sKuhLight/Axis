@@ -15,11 +15,8 @@
   import {
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
-    preparePresetBrowserIndex,
     shouldSynthesizeEmptyDeviceSlots,
-    type AxisPbDecodedBlock,
     type AxisPresetBrowserEntrySummary,
-    type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
   } from './presetBrowserWorkbenchData';
   import { presenceViews as presenceViewDefs } from './presetBrowserWorkbenchPresence';
@@ -35,6 +32,7 @@
   import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
   import Dialog from '$lib/ui/Dialog.svelte';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
+  import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
   // so open (and every keystroke) only pays for the rows actually on screen instead of all ~512.
@@ -74,18 +72,15 @@
   });
 
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
-  // Search index (per-entry matchable shape + haystack, plus the present device-slot set) built eagerly
-  // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
-  // keeps the Map/Set contents unproxied so matching reads stay cheap.
-  let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
-  // Reads the `$state.raw` #paramsCache (reassigned by hydrateParams) inside the effect, so deep param
-  // matching wires in once params load. Mirror of the same index build in AxisPresetBrowserPartPanel.
-  const paramsForIndex = (e: AxisPresetBrowserLibEntryLike): AxisPbDecodedBlock[] | null =>
-    (library.paramsOf(e as unknown as Parameters<typeof library.paramsOf>[0]) as AxisPbDecodedBlock[] | null) ?? null;
-  $effect(() => {
-    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
-  });
-  // Mirror of the same gate in AxisPresetBrowserPartPanel: `<EMPTY>` rows only with a device connected —
+  const presetIndex = createPresetBrowserIndex(
+    () => baseEntries,
+    library.tagsOf,
+    deviceRealNames.realNameFor,
+    presetRecency.at,
+    library.paramsOf
+  );
+  const index = $derived(presetIndex.current);
+  // Mirror of the docked panel gate: `<EMPTY>` rows only with a device connected —
   // `editor.presetCount` is a guess until one is adopted, and there is nothing to load into offline.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
     if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];

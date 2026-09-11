@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import './widgets/widgets.css';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
   import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLayoutDrawer.svelte';
   import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';

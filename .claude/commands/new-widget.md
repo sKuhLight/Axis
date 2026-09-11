@@ -18,11 +18,15 @@ Read `src/lib/axis-workbench/CLAUDE.md` first if you have not already this sessi
 
 1. **Manifest** — `src/lib/axis-workbench/axisWorkbenchRegistryManifest.ts`: append
    `'axis.X'` to `AXIS_WORKBENCH_WIDGET_TYPES`.
-2. **Render branch** — `src/lib/axis-workbench/widgets/AxisWorkbenchWidget.svelte`: add an
-   `{:else if kind === 'X'}` branch (kind is the type with the `axis.` prefix stripped).
-   If the widget is interactive, add its case to the `activate()` click dispatcher.
-   Style with design tokens only (`--aw-*` and app tokens like `--accent`, `--bg2`,
-   `--text`) — **no hex literals**.
+2. **New component** — `src/lib/axis-workbench/widgets/AxisXWidget.svelte`, its own file
+   (mirror an existing one, e.g. `AxisTempoWidget.svelte`), destructuring only the props
+   it needs from `AxisWorkbenchWidgetProps` (`widgetProps.ts`). Style with design tokens
+   only (`--aw-*` and app tokens like `--accent`, `--bg2`, `--text`) — **no hex literals**
+   — in the widget's own `<style>` block; only add to the shared `widgets/widgets.css` if
+   the rule is genuinely reused by several widgets already. Logic shared by a *few*
+   widgets (not just one) goes in its own module, e.g. `widgetControls.ts` or
+   `fcWidgetSnapshot.svelte.ts` — don't reach for a shared module for something only your
+   new widget uses.
 3. **Fit math** — `src/lib/axis-workbench/widgets/widgetEstWidths.ts`: add
    `AXIS_WIDGET_EST_WIDTHS['axis.X']`. A missing entry silently breaks overflow-fit math.
    *(Conditional)* Add to `AXIS_WIDGET_KEEP_TYPES` only if the widget must never be

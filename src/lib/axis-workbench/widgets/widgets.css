@@ -1,0 +1,120 @@
+/* Shared widget chrome: the base look every widget renders into, plus the handful of
+   primitives (chips, mono text) genuinely reused by several widgets. Anything that only
+   ever appears in ONE widget's markup lives in that widget's own <style> block instead —
+   see the per-widget .svelte files in this directory. Global (unscoped) because widgets
+   compose these classes without a shared wrapper component. */
+.axis-widget,
+.axis-widget button {
+  font-family: var(--font-ui);
+}
+.axis-widget {
+  max-width: 100%;
+  min-width: 0;
+  height: var(--d-widget-h);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--d-gap);
+  padding: 0 var(--d-pad-x);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg2);
+  color: var(--text2);
+  cursor: pointer;
+  overflow: hidden;
+  font: 700 var(--d-font) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+button.axis-widget,
+.axis-widget button {
+  appearance: none;
+  border: 0;
+}
+.aw-widget-group .axis-widget {
+  border-color: transparent;
+  background: transparent;
+}
+button.axis-widget:hover,
+.axis-widget button:hover {
+  color: var(--text);
+}
+button.axis-widget:hover {
+  border-color: var(--border3);
+}
+.axis-widget[data-size='compact'] {
+  height: calc(var(--d-widget-h) - 4px);
+  padding-inline: calc(var(--d-pad-x) * 0.75);
+  gap: var(--d-gap);
+}
+.axis-widget[data-size='mini'] {
+  height: calc(var(--d-widget-h) - 10px);
+  padding: 0 calc(var(--d-pad-x) * 0.5);
+  gap: 5px;
+  border-radius: 8px;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+.token {
+  flex: none;
+  color: var(--textfaint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.strong,
+.big {
+  color: var(--text);
+  font-weight: 800;
+}
+.big {
+  font-size: 14px;
+}
+/* chip row: scenes / gridMode / fcDevice / fcLayouts / fcSwitchView */
+.chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+.num-chip,
+.pill-chip {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--textfaint);
+  cursor: pointer;
+  font-weight: 700;
+}
+.num-chip {
+  min-width: 21px;
+  padding: 0 5px;
+  font: 800 11px/1 var(--font-mono);
+}
+.pill-chip {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+[data-size='compact'] .num-chip {
+  min-width: 18px;
+  height: 20px;
+  padding-inline: 3px;
+}
+[data-size='compact'] .pill-chip {
+  height: 20px;
+  padding: 4px 8px;
+  font-size: 10.5px;
+}
+[data-size='mini'] .num-chip,
+[data-size='mini'] .pill-chip {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+}
+.num-chip.on,
+.pill-chip.on {
+  background: var(--accent);
+  color: var(--accentink);
+}
