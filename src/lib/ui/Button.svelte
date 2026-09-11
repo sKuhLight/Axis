@@ -61,12 +61,14 @@
     padding: 0 15px;
     font-size: 12.5px;
   }
-  /* the small secondary ("Later"/"Cancel") toast button is lighter than its primary sibling —
-     observed as-is across CachePrompt/ColorLabelsPrompt/DeviceDefsPrompt, not a new variant. */
+  /* the small secondary ("Later"/"Cancel") toast button is transparent (it sits on the toast's
+     own --surface background) and lighter than its primary sibling — observed as-is across
+     CachePrompt/ColorLabelsPrompt/DeviceDefsPrompt, not a new variant. */
   .b[data-size='sm'][data-variant='secondary'] {
     padding: 0 11px;
     font-size: 12px;
     font-weight: 600;
+    background: transparent;
   }
   .b[data-size='md'] {
     height: 40px;

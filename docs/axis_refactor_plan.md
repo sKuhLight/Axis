@@ -882,6 +882,58 @@ Handoff prompt follows the M3 template: behaviour- and pixel-preserving, screens
 migrated component, one commit per primitive, tokens over hex, monolith frozen for structure
 (it may consume a primitive only if that's a pure markup-for-markup swap — otherwise leave it).
 
+> **M6 landed** on `full-refactor` (5 commits). The plan's headline `.card`/`.chip`/`.row` counts
+> turned out to be mostly noise on inspection — most `.card` hits were stale comments left over
+> from the M3 Dialog migration (already cleaned up then), and every `.chip` was a false cognate
+> (six components sharing a class name for unrelated shapes: a filter badge, an icon tile, a
+> stompbox toggle, a tag badge, a preset-slot tile). What survived scrutiny, each landed as its
+> own primitive:
+>
+> - **`ui/Button.svelte`** (variant × size) — the pill-button shape repeated across the bottom
+>   toasts and the two small save dialogs. Found and fixed two token-drift bugs in the process: a
+>   hardcoded accent-ink hex in `BlockLibrarySaveDialog`, and a hardcoded amber-ink hex repeated in
+>   two other files — the latter is now the `--amberink` token in `app.css`.
+> - **`ui/PromptToast.svelte` + `PromptRow.svelte` + `PromptProgressRow.svelte`** — the real find
+>   of this milestone, not mentioned in the plan's own duplication count: `CachePrompt`,
+>   `ColorLabelsPrompt` and `DeviceDefsPrompt` hand-rolled the same fixed-position bottom-toast
+>   shell (position, chrome, animation) down to three near-identical keyframe blocks, plus shared
+>   icon+message+actions and busy/progress row layouts. `DeviceDefsPrompt`'s multi-state
+>   consent/offer cards stayed local — genuinely different shape, not shared with anything.
+>   `PromptToast` also switched the toasts' hardcoded `z-index: 400` to the existing `--z-prompt`
+>   token, which was already documented for this exact layer but unused.
+> - **`ui/DialogBody.svelte`** — the scrollable-body remainder of `.card` left in `AxisPanel` and
+>   `Notices` after M3 moved the card frame itself onto `Dialog`.
+> - **`ui/FavoriteStar.svelte`** — `CabPicker`'s and `PresetPicker`'s identical star-toggle button.
+>   While there, fixed `PresetPicker`'s row hover/active tints — hardcoded `rgba()` literals
+>   approximating the accent/amber colors — to the `--accent-tint`/`--amber-tint` tokens
+>   `CabPicker` already used for the same states.
+> - **`ui/BootGateShell.svelte`** — `DirectGate` and `MobileGate` (Browser Direct / native mobile
+>   connect screens) were near-byte-identical outside their phase-specific body. Deliberately
+>   **not** built on `ui/Dialog.svelte` despite matching card dimensions: these gates replace the
+>   entire app before the runtime is ready (nothing behind them to scrim, no Escape, no overlay
+>   stacking), and `Dialog`'s footer snippet renders inside the card while this shell's footer is
+>   pinned to the viewport independent of card height — forcing it through `Dialog` would have
+>   meant extending the shared modal's API for a shape it wasn't built for.
+>
+> **Skipped, with reasons** (per the "rules that only look shared get inlined per component"
+> principle):
+>
+> - **No shared `Field`.** `BlockLibrarySaveDialog`'s and `SaveDialog`'s `.field`/`.lbl` share a
+>   class name but not a shape: one is a column layout at 10px/700-weight, the other an inline row
+>   at 9px/600-weight. False cognates on inspection, not a primitive.
+> - **`FcEditor`'s `.field`/`.flbl`** are genuinely the same shape as `BlockLibrarySaveDialog`'s,
+>   but `FcEditor` has 10+ call sites in a large, sensitive device-editing surface — migrating them
+>   was judged disproportionate risk for a ~10-line CSS win and left alone.
+> - **`shell/CommandPalette.svelte`** (frozen monolith chrome) shares `.chip`/`.row` class names
+>   with other files but not their shape (icon-tile chip, not a filter badge; a different row
+>   pattern than the list-row primitive candidates), so no markup-for-markup swap was available —
+>   left untouched.
+>
+> Verification: `npx vitest run` (149 files / 1758 tests), `npm run check`, and
+> `npx playwright test` (all specs) green after every commit; `DirectGate` additionally checked
+> visually via a headless screenshot (Browser Direct has no e2e coverage and no device backend to
+> drive it any other way).
+
 ---
 
 # M7 · Documentation consolidation

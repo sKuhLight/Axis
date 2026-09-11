@@ -148,26 +148,29 @@
   }
   /* SaveDialog's cancel button kept its pre-Button `--surface` background (one shade lighter
      than the shared secondary variant's `--bg2`) — a pre-existing, harmless inconsistency with
-     BlockLibrarySaveDialog's cancel button, preserved rather than silently homogenized. */
+     BlockLibrarySaveDialog's cancel button, preserved rather than silently homogenized.
+     `!important`: Button's own `.b[data-variant='secondary']` rule outranks a plain `:global(.x)`
+     class on specificity alone, so a normal override here would silently lose to it. */
   :global(.sd-cancel) {
-    background: var(--surface);
+    background: var(--surface) !important;
   }
-  /* save-to-disk (local-file write-back) — safe action, accent-colored, full width above the slot form */
+  /* save-to-disk (local-file write-back) — safe action, accent-colored, full width above the slot
+     form. Same specificity note as .sd-cancel above. */
   :global(.disk) {
     display: block;
     width: 100%;
     margin: 0 0 14px;
-    background: var(--surface2);
-    border: 1px solid var(--accent-border);
-    color: var(--accent);
+    background: var(--surface2) !important;
+    border: 1px solid var(--accent-border) !important;
+    color: var(--accent) !important;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   :global(.disk:hover) {
-    background: var(--accent-tint);
-    border-color: var(--accent);
+    background: var(--accent-tint) !important;
+    border-color: var(--accent) !important;
   }
   .or {
     display: flex;
