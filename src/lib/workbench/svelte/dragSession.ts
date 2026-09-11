@@ -26,6 +26,11 @@ export interface PointerDragSession {
   onDrop: (pointer: WorkbenchPointer, event: PointerEvent) => void;
   /** Fired once on release when the pointer never crossed the threshold (a tap). */
   onTap?: (event: PointerEvent) => void;
+  /**
+   * Fired once on `pointercancel` (touch scroll takeover, OS/browser gesture interruption, ...)
+   * INSTEAD OF `onDrop`/`onTap` — for callers that need to reset state the drag set up mid-gesture.
+   */
+  onCancel?: () => void;
 }
 
 /**
@@ -54,11 +59,23 @@ export function beginPointerDrag(session: PointerDragSession): void {
   const onUp = (ev: PointerEvent) => {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onCancel);
     if (dragging) session.onDrop({ x: ev.clientX, y: ev.clientY }, ev);
     else session.onTap?.(ev);
+  };
+
+  // pointercancel fires no pointerup, so without this the listeners above would stay attached
+  // forever and a later, unrelated pointerup anywhere would run the drop/tap action — tear down and
+  // bail on cancel instead, firing neither.
+  const onCancel = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+    session.onCancel?.();
   };
 
   event.preventDefault();
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onCancel);
 }
