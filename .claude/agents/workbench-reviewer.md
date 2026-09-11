@@ -25,8 +25,9 @@ do not trust the diff context alone.
 (a) **Widget registration completeness.** For every widget type added or renamed in the
 diff, grep all three locations and confirm each is present:
 `AXIS_WORKBENCH_WIDGET_TYPES` in
-`src/lib/axis-workbench/axisWorkbenchRegistryManifest.ts`; a `kind === '<name>'` render
-branch in `src/lib/axis-workbench/widgets/AxisWorkbenchWidget.svelte`; an
+`src/lib/axis-workbench/axisWorkbenchRegistryManifest.ts`; an entry in
+`AXIS_WIDGET_COMPONENTS` in `src/lib/axis-workbench/axisWorkbenchRegistry.ts` pointing at
+its own `widgets/AxisXWidget.svelte`; an
 `AXIS_WIDGET_EST_WIDTHS` entry in `src/lib/axis-workbench/widgets/widgetEstWidths.ts`.
 A missing estWidth entry does not throw — it silently breaks widget-fit math, so treat it
 as HIGH severity.

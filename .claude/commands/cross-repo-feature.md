@@ -59,5 +59,3 @@ running ForgeFX process on :5056.
   files, verification status), then set it Done.
 - Per-repo commits follow each repo's own conventions — see each repo's local
   `CLAUDE.md`. Commit only when the user asks.
-- On the Axis layout-rework branch: entry in
-  `docs/axis_layout_rework_progress_log.md`.

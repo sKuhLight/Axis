@@ -74,8 +74,6 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 8 — Close out
 
-- On the layout-rework branch: add an entry to
-  `docs/axis_layout_rework_progress_log.md`.
 - Plane: completion comment (what changed, files touched, verification status),
   then set the item Done.
 - Commit only when the user asks.

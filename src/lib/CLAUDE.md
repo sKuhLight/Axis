@@ -98,7 +98,7 @@ grow the composer. Cross-slice needs go through narrow host interfaces.
 
 `EditorStore` is composed from responsibility-specific slices. A slice is a
 plain class in its own `*.svelte.ts`, holding its own `$state`; `EditorStore`
-owns an instance and **re-exposes every member by delegation**, so the ~44
+owns an instance and **re-exposes every member by delegation**, so the ~60
 modules that import `editor` never change. Migrating call sites to import a
 slice directly is a separate, later change — never in the same commit as an
 extraction.
@@ -286,7 +286,7 @@ sidebar divider — this is a decision, not an oversight.
 - The monolith otherwise has thin unit coverage (`direct/nativeMidi`,
   `direct/ota`, and the telemetry slice). New features should extract pure logic
   and add a co-located vitest — an easy win.
-- All 19 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
+- All 20 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
   `bootCleanWorkbench`, viewport ≥ 1366 px). There is NO monolith-shell e2e
   harness — monolith behavior is verified manually.
 - CI now also runs the vitest unit suite; only Playwright e2e stays local. Green CI ≠ passing e2e.
@@ -322,5 +322,3 @@ build (reinstall/rebuild, no hot-reload).
   agents before committing non-trivial changes.
 - Task tracking in Plane is mandatory — see root `CLAUDE.md`, Task tracking
   section.
-- On the layout-rework branch, also update
-  `docs/axis_layout_rework_progress_log.md` after every step.

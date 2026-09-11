@@ -346,7 +346,12 @@ modCurve(){ const m=this.getMod(this.state.modParam);
 
 ## 6. Delta checklist vs current production
 
-Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`, `src/lib/BlockEditor.svelte`, `src/lib/ControlSurface.svelte`, `src/lib/ModifierFlyout.svelte`, `src/lib/graphs/EQGraph.svelte`.
+Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`, `src/lib/BlockEditor.svelte`, `src/lib/ModifierFlyout.svelte`, `src/lib/graphs/EQGraph.svelte`.
+
+> **Note (2026-09-11):** `src/lib/ControlSurface.svelte` was deleted as dead code (never
+> reachable from a route) during the architecture refactor. The arrange-mode P1 items below
+> that cite it as a comparison target can no longer be verified against that file — use the
+> design-spec text in this doc (§2.x) as the source of truth for arrange-mode parity instead.
 
 ### P0 — structural gaps
 

@@ -70,6 +70,5 @@ If e2e was touched: `npx playwright test <the spec you edited>` (dock/nav specs 
 `e2e/03-dock.spec.ts` and `e2e/04-nav.spec.ts`).
 
 Then:
-- Update `docs/axis_layout_rework_progress_log.md`.
 - Create or advance the work item in Plane (see root `CLAUDE.md`, Task tracking section).
 - Consider running the `workbench-reviewer` agent over the diff.

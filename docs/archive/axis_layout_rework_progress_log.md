@@ -1,5 +1,7 @@
 # Axis layout rework — running progress log
 
+> **Archived 2026-09-11.** Historical process document — describes intent and state at a past point in the Axis architecture refactor. Not current specification; see `docs/axis_refactor_plan.md` for the live plan and `src/lib/CLAUDE.md` / `src/lib/axis-workbench/CLAUDE.md` for current architecture.
+
 > Purpose: session-survivable state. Updated and committed **after every step** so any
 > session (or a fresh one after a token cutoff) knows exactly where to resume.
 > Canonical plan + task definitions: `docs/axis_layout_rework_review_and_remaining_plan.md`.

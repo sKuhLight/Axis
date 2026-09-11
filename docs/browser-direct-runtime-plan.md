@@ -1,5 +1,11 @@
 # Axis Browser Direct — Runtime Plan
 
+> **Note (2026-09-11):** Browser Direct itself has since shipped (`ui/BootGateShell.svelte`,
+> `platform/direct.svelte.ts`, `platform/MobileGate.svelte`). This plan predates the removal of
+> Axis Cloud (preset sync, accounts, and the Axis Remote relay — see `src/lib/CLAUDE.md`); its
+> "Axis Remote stays as-is" premise and the cloud/`Axis Remote` references below no longer hold.
+> Kept for the Browser Direct architecture rationale, not as current spec for cloud/remote.
+
 Branch (all repos): **`break-free`**
 
 ## Summary

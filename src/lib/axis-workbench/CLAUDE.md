@@ -130,8 +130,11 @@ bypasses the manifest.
 ## Recipe: add a widget
 
 1. `axisWorkbenchRegistryManifest.ts`: append `'axis.X'` to `AXIS_WORKBENCH_WIDGET_TYPES`.
-2. `widgets/AxisWorkbenchWidget.svelte`: add an `{:else if kind === 'X'}` render branch,
-   plus an `activate()` case if the widget is interactive. Design tokens only — no hex.
+2. New file `widgets/AxisXWidget.svelte` (mirror an existing one, e.g.
+   `AxisTempoWidget.svelte`), destructuring only the props it needs from
+   `AxisWorkbenchWidgetProps` (`widgetProps.ts`). Design tokens only — no hex. Wire it
+   into `AXIS_WIDGET_COMPONENTS` in `axisWorkbenchRegistry.ts` — a
+   `Record<string, WorkbenchWidgetComponent>` literal, one entry per type, no switch.
 3. `widgets/widgetEstWidths.ts`: add `AXIS_WIDGET_EST_WIDTHS['axis.X']` (and add to
    `AXIS_WIDGET_KEEP_TYPES` if the widget must survive overflow trimming). A missing
    estWidth entry silently breaks widget-fit math.
@@ -234,6 +237,4 @@ factories and embedded app components are exactly what stays behind.
   as checklists.
 - Review: run the `workbench-reviewer` agent over the diff before committing framework
   changes.
-- Framework changes on the layout-rework branch must be logged in
-  `docs/axis_layout_rework_progress_log.md` and tracked in Plane (see root `CLAUDE.md`,
-  Task tracking section).
+- Framework changes are tracked in Plane (see root `CLAUDE.md`, Task tracking section).

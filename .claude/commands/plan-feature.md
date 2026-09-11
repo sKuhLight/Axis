@@ -48,7 +48,4 @@ Produce a plan with these sections:
    criteria); set it In Progress when work starts. See the root CLAUDE.md,
    Task tracking section, for the tracker and policy.
 
-8. Progress log. If work will happen on the layout-rework branch, add a step entry
-   to `docs/axis_layout_rework_progress_log.md`.
-
 End by presenting the plan and waiting for approval. Make no edits.

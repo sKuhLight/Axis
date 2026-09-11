@@ -1,5 +1,7 @@
 # Axis Workbench Design-Aware Rebuild Plan for Claude Code
 
+> **Archived 2026-09-11.** Historical process document — describes intent and state at a past point in the Axis architecture refactor. Not current specification; see `docs/axis_refactor_plan.md` for the live plan and `src/lib/CLAUDE.md` / `src/lib/axis-workbench/CLAUDE.md` for current architecture.
+
 Date: 2026-07-05
 Audience: Claude Code working inside the `sKuhLight/Axis` repository
 Language: English

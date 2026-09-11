@@ -1,5 +1,7 @@
 # Axis Layout Rework - Current State Review and Remaining Implementation Plan
 
+> **Archived 2026-09-11.** Historical process document — describes intent and state at a past point in the Axis architecture refactor. Not current specification; see `docs/axis_refactor_plan.md` for the live plan and `src/lib/CLAUDE.md` / `src/lib/axis-workbench/CLAUDE.md` for current architecture.
+
 Date: 2026-07-06
 Branch: `layout-rework` (working-tree state, including uncommitted batch)
 Status: Canonical remaining-implementation plan for the layout rework
