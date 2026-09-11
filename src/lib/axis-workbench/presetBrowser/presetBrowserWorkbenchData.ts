@@ -129,7 +129,7 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
   count: number;
 }
 
-import { entryHaystack, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbDecodedBlock, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
+import { entryHaystack, estimateCpu, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbDecodedBlock, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
 export type { AxisPbDecodedBlock } from './presetBrowserWorkbenchQuery';
 import {
   AXIS_PB_PRESENCE_VIEWS,
@@ -319,8 +319,15 @@ function sortEntries(
   if (sort === 'name') {
     list.sort((a, b) => (desc ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name)));
   } else if (sort === 'cpu') {
-    // higher CPU first by default — blockCount is a cheap monotonic proxy for the estimateCpu weight sum.
-    list.sort((a, b) => (desc ? b.blockCount - a.blockCount : a.blockCount - b.blockCount));
+    // higher CPU first by default — sort on the same weighted estimateCpu the row meter and the
+    // `cpu<NN` filter use (blockCount is NOT a monotonic proxy for it: a 4-block amp/cab/reverb
+    // preset outweighs a 6-block utility one). Computed once per entry rather than per comparison.
+    const cpuOf = new Map(list.map((entry) => [entry.id, estimateCpu(entry)]));
+    list.sort((a, b) => {
+      const av = cpuOf.get(a.id)!;
+      const bv = cpuOf.get(b.id)!;
+      return desc ? bv - av : av - bv;
+    });
   } else if (sort === 'recent') {
     // Primary key is the recency stamp (flipped by direction); the number tiebreak stays ASCENDING in
     // both directions so the never-loaded bucket keeps stable slot order (pins the e2e ordering contract).
