@@ -2,6 +2,7 @@
   // Save-to-library overlay: asks for a block name and whether to save the current channel only or
   // all channels, then hands off to the parent (which calls forgefx.saveBlockLibraryBlock).
   import Dialog from '$lib/ui/Dialog.svelte';
+  import Button from '$lib/ui/Button.svelte';
 
   let {
     open,
@@ -81,10 +82,10 @@
         <p class="error mono">{error}</p>
       {/if}
       <div class="actions">
-        <button class="btn cancel" onclick={() => onClose()}>Cancel</button>
-        <button class="btn save" disabled={!name.trim() || !libraryPath || saving} onclick={() => void submit()}>
+        <Button variant="secondary" size="lg" onclick={() => onClose()}>Cancel</Button>
+        <Button variant="primary" size="lg" disabled={!name.trim() || !libraryPath || saving} onclick={() => void submit()}>
           {saving ? 'Saving…' : 'Save to library'}
-        </button>
+        </Button>
       </div>
   </div>
 </Dialog>
@@ -164,34 +165,5 @@
     gap: 10px;
     justify-content: flex-end;
     margin-top: 2px;
-  }
-  .btn {
-    height: var(--d-ctl-h);
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 1px solid var(--border2);
-    cursor: pointer;
-    font-weight: 700;
-    font-size: var(--d-font);
-  }
-  .btn.cancel {
-    background: var(--bg2);
-    color: var(--text-dim);
-  }
-  .btn.cancel:hover {
-    color: var(--text);
-    border-color: var(--border-strong);
-  }
-  .btn.save {
-    background: var(--accent);
-    color: #0b0b0d;
-    border-color: transparent;
-  }
-  .btn.save:hover:not(:disabled) {
-    filter: brightness(1.08);
-  }
-  .btn.save:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 </style>

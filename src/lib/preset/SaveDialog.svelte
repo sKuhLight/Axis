@@ -1,6 +1,7 @@
 <script lang="ts">
   import { editor } from '$lib/editor/editor.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import Button from '$lib/ui/Button.svelte';
 
   let target = $state(0);
   $effect(() => {
@@ -36,7 +37,7 @@
           This preset was loaded from your local folder. Save the edits back to
           <b class="mono">{src.path}</b> on disk — or store them to a device slot below.
         </p>
-        <button class="btn disk" onclick={() => editor.saveLocalFile()}>💾 Save to disk — Presets/{src.path}</button>
+        <Button size="md" class="disk" onclick={() => editor.saveLocalFile()}>💾 Save to disk — Presets/{src.path}</Button>
         <div class="or"><span>or store to a device slot</span></div>
       {:else}
         <p class="body">
@@ -58,8 +59,8 @@
       </p>
       <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
       <div class="actions">
-        <button class="btn cancel" onclick={() => (editor.saveOpen = false)}>Cancel</button>
-        <button class="btn save" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</button>
+        <Button variant="secondary" size="md" class="sd-cancel" onclick={() => (editor.saveOpen = false)}>Cancel</Button>
+        <Button variant="amber" size="md" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</Button>
       </div>
   </div>
 </Dialog>
@@ -145,32 +146,14 @@
     gap: 10px;
     justify-content: flex-end;
   }
-  .btn {
-    height: 40px;
-    padding: 0 18px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .cancel {
+  /* SaveDialog's cancel button kept its pre-Button `--surface` background (one shade lighter
+     than the shared secondary variant's `--bg2`) — a pre-existing, harmless inconsistency with
+     BlockLibrarySaveDialog's cancel button, preserved rather than silently homogenized. */
+  :global(.sd-cancel) {
     background: var(--surface);
-    border: 1px solid var(--border-2);
-    color: var(--text-dim);
-  }
-  .cancel:hover {
-    border-color: var(--border-strong);
-  }
-  .save {
-    background: var(--surface2);
-    border: 1px solid var(--amber-border);
-    color: #f5c878;
-  }
-  .save:hover {
-    border-color: var(--amber-border);
   }
   /* save-to-disk (local-file write-back) — safe action, accent-colored, full width above the slot form */
-  .disk {
+  :global(.disk) {
     display: block;
     width: 100%;
     margin: 0 0 14px;
@@ -182,7 +165,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .disk:hover {
+  :global(.disk:hover) {
     background: var(--accent-tint);
     border-color: var(--accent);
   }

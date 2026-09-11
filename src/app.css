@@ -26,6 +26,7 @@
 
   /* ── fixed semantic colors (not theme-driven) ── */
   --amber: #f5a623; /* knob pointer / secondary highlight */
+  --amberink: #f5c878; /* readable text on an amber-tinted surface (Save dialog, active-preset badges) */
   --blue: #4f6bed;
   --danger: #d6543f; /* bypass / destructive */
   --ok: #33c46b; /* connected / success */
