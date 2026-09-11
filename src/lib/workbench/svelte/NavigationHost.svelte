@@ -9,24 +9,23 @@
     canHideNavigationEntry,
     canMoveNavigationEntry,
     isPageNavigationEntry,
+    navigationEntryActive,
     navigationEntryCommand,
-    navigationEntryIndex,
-    pageNavigationEntryActive
+    navigationEntryIndex
   } from './navigation';
 
   const { controller, registry } = getWorkbenchContext();
   const entries = $derived(selectVisibleNavigationEntries($controller.document));
-  // Active-section tint (01-shell.md §9). Page-bound entries resolve generically
-  // (their page is the layout's activePageId — pageNavigationEntryActive); all
-  // other entries defer to the app-registered navigation-state provider
-  // (renderRegistry `registerNavigationState`). Read inside a $derived so it
-  // re-resolves whenever the document — or any reactive source the provider
-  // reads (editor runes) — changes. Keyed by entry id.
-  const activeEntryId = $derived.by<string | null>(() => {
+  // Page and action state are independent: an overlay action can remain tinted
+  // while the page beneath it is active. Read providers inside the derived so
+  // their reactive sources are tracked alongside document changes.
+  const activeEntryIds = $derived.by<Set<string>>(() => {
     void $controller; // track controller/document changes
     const layout = $controller.activeLayout;
-    return (
-      entries.find((entry) => pageNavigationEntryActive(entry, layout) ?? registry.isNavigationEntryActive(entry.id))?.id ?? null
+    return new Set(
+      entries
+        .filter((entry) => navigationEntryActive(entry, layout, (entryId) => registry.isNavigationEntryActive(entryId)))
+        .map((entry) => entry.id)
     );
   });
   let menuOpen = $state(false);
@@ -167,16 +166,16 @@
            now. -->
       <div
         class="aw-nav-entry"
-        class:active={activeEntryId === entry.id}
+        class:active={activeEntryIds.has(entry.id)}
         data-nav-entry={entry.id}
-        data-nav-active={activeEntryId === entry.id ? 'true' : undefined}
+        data-nav-active={activeEntryIds.has(entry.id) ? 'true' : undefined}
         data-fixed={entry.fixedSlot ?? 'none'}
         role="group"
         oncontextmenu={(event) => openMenu(entry, event)}
       >
         <Component
           entry={entry}
-          active={activeEntryId === entry.id}
+          active={activeEntryIds.has(entry.id)}
           dispatch={(command: WorkbenchCommand) => controller.dispatch(command)}
           runAction={() => runNavigation(entry)}
           editMode={$controller.editMode}

@@ -28,6 +28,15 @@ export function pageNavigationEntryActive(entry: NavigationEntryState, layout: W
   return !!layout && layout.activePageId === entry.pageId;
 }
 
+/** Resolve page bindings in the framework and action entries through the app provider. */
+export function navigationEntryActive(
+  entry: NavigationEntryState,
+  layout: WorkbenchLayout | undefined,
+  isActionActive: (entryId: string) => boolean
+): boolean {
+  return pageNavigationEntryActive(entry, layout) ?? isActionActive(entry.id);
+}
+
 /** Page entries can be deleted unless theirs is the last page of the layout. */
 export function canDeleteNavigationPage(layout: WorkbenchLayout | undefined): boolean {
   return !!layout && Object.keys(layout.pages ?? {}).length > 1;

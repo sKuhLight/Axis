@@ -6,6 +6,7 @@ import {
   canHideNavigationEntry,
   canMoveNavigationEntry,
   isPageNavigationEntry,
+  navigationEntryActive,
   navigationEntryCommand,
   navigationEntryIndex,
   pageNavigationEntryActive,
@@ -94,6 +95,16 @@ describe('page navigation entries', () => {
     // Non-page entries defer to the app provider (null).
     expect(pageNavigationEntryActive(nav({ id: 'grid', target: { command: 'app.grid' } }), layout)).toBeNull();
     expect(pageNavigationEntryActive(nav({ id: 'page:one', pageId: 'page.one' }), undefined)).toBe(false);
+  });
+
+  it('active-state: an action can be active while a page remains active', () => {
+    const layout = pagedLayout();
+    const provider = (entryId: string) => entryId === 'theme' || entryId === 'account';
+
+    expect(navigationEntryActive(nav({ id: 'page:one', pageId: 'page.one' }), layout, provider)).toBe(true);
+    expect(navigationEntryActive(nav({ id: 'theme', target: { command: 'axis.openTheme' } }), layout, provider)).toBe(true);
+    expect(navigationEntryActive(nav({ id: 'account', target: { command: 'axis.openAccount' } }), layout, provider)).toBe(true);
+    expect(navigationEntryActive(nav({ id: 'other', target: { command: 'axis.other' } }), layout, provider)).toBe(false);
   });
 
   it('delete gating: the last page of a layout cannot be deleted', () => {
