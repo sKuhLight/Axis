@@ -19,13 +19,13 @@ import { isWebBuild } from '$lib/platform/buildMode';
 import { paramValue } from '$lib/ui/format';
 import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import { gridHover } from './gridHover.svelte';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, ConnPick, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from '$lib/device/deviceMonitors';
 import { overlays } from '$lib/overlay/overlays.svelte';
 import { TelemetryStore, isTelemetryMode, type TelemetryHost, type ReportTrigger } from './telemetry.svelte';
+import { DeviceSessionStore, type DeviceSessionHost } from './deviceSession.svelte';
 
-type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
 const loadLocalAutoSync = (): boolean => { try { return localStorage.getItem(LOCAL_AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
 // Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
@@ -47,53 +47,26 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
 
 class EditorStore {
-  // ── connection / preset ──
-  conn = $state<Conn>({ state: 'connecting' });
-  /** Per-model capabilities from the device descriptor (scenes, channels, slot model, …) — drives UI gating. */
-  caps = $state<import('$lib/api/types').DeviceCaps | null>(null);
-  /** Negotiated backend API version (from /healthz `api.version` / /device `apiVersion`).
-   *  1 = legacy pre-caps server → the per-cluster gates below fall back to today's isAm4 branches. */
-  apiVersion = $state(1);
-  /** True when the backend speaks the capabilities-driven unified API (v2): every device goes through
-   *  the unified /preset/* + /scene routes and UI gating comes from `caps`, not the model id. */
-  get isV2(): boolean { return this.apiVersion >= 2; }
-  // ── capability gates (v2: caps-driven; v1 fallback: the legacy isAm4 branches) ──
-  /** Device answers the live current-preset query — safe to poll (watchPreset / poll ticks). */
-  get presetLiveQuery(): boolean { return this.isV2 ? !!this.caps?.presets?.liveQuery : !this.isAm4; }
-  /** Per-block meter/param sweep reads are supported (grid level fills + swipe controls). */
-  get hasBlockMeters(): boolean { return this.isV2 ? !!this.caps?.meters?.blockMeters : !this.isAm4; }
-  /** Live per-block audio monitors are supported (METER toggle). */
-  get hasLiveMonitors(): boolean { return this.isV2 ? !!this.caps?.meters?.liveMonitors : !this.isAm4; }
-  /** Device supports tempo read/write + tap. */
-  get hasTempo(): boolean { return this.isV2 ? !!this.caps?.tempo : !this.isAm4; }
-  /** Device has a tuner. */
-  get hasTuner(): boolean { return this.isV2 ? !!this.caps?.tuner : !this.isAm4; }
-  /** Device mirrors the UI selection on its own screen (grid cursor-select). */
-  get hasCursorSelect(): boolean { return this.isV2 ? !!this.caps?.gridCursorSelect : !this.isAm4; }
-  /** Blocks can expose params without a gen-3 definition pack (don't gate the editor on `pack`). */
-  get paramsWithoutPack(): boolean { return this.isV2 ? !!this.caps?.paramsWithoutPack : this.isAm4; }
-  /** Presets can be renamed (working buffer + stored slots). */
-  get canRenamePresets(): boolean { return this.isV2 ? !!this.caps?.presets?.canRename : !this.isAm4; }
-  /** Scene names are writable on this device. */
-  get canRenameScenes(): boolean { return this.isV2 ? !!this.caps?.sceneNamesWritable : !this.isAm4; }
-  /** Device supports full preset dumps → the library's deep param index (summary/params reads). */
-  get canDeepScan(): boolean { return this.isV2 ? !!this.caps?.presets?.canDeepScan : !this.isAm4; }
-  /** Library indexing is a stored-location NAME scan only (no per-preset dumps/params). */
-  get scanNamesOnly(): boolean {
-    return this.isV2 ? !!this.caps?.presets?.canScanNames && !this.caps?.presets?.canDeepScan : this.isAm4;
-  }
-  /** Save targets render as bank-letter codes (A01..Z04) instead of numeric slots. */
-  get bankLetterAddressing(): boolean { return !!this.caps?.presets && this.caps.presets.addressing === 'bankLetter'; }
-  /** Grid routing (cables/shunts) exists on this device — gates route ports/link mode (false on the AM4's flat chain). */
-  get canGridRoute(): boolean { return this.isV2 ? !!this.caps?.gridRouting : !this.isAm4; }
-  /** Number of scenes this device has (0 if none) — drives the topbar SCN selector. */
-  get sceneCount(): number { return this.caps?.hasScenes ? (this.caps.sceneCount || 0) : 0; }
-  /** Device server exposes the telemetry polling-mode control (META-17). Gates the AxisPanel Performance
-   *  tab + the workbench telemetry widget. Absent on old servers → false → all new UI hidden. */
-  get hasTelemetryControl(): boolean { return !!this.caps?.telemetryControl; }
-  detected = $state<DetectResult | null>(null); // which Fractal unit is attached (auto-detect)
-  preset = $state<{ number: number; name: string } | null>(null);
-  lastPreset = $state<number | null>(null);
+  // ── device-session slice (M4b) ──
+  // Connection state + heartbeat poll, negotiated API version + capability gates, the port/profile
+  // picker, the current preset REFERENCE, and the live scene + tempo. Owned by `DeviceSessionStore`;
+  // every member is re-exposed by the facade further down so the ~44 modules that import `editor`
+  // keep working. See `deviceSession.svelte.ts`.
+  /** The device-session slice's view of the rest of the store. Private field so nothing here leaks
+   *  onto `EditorStore`'s public API. Getters, so every read is live. MUST stay declared above
+   *  `#device`, which calls it. */
+  #deviceSessionHost = (): DeviceSessionHost => {
+    const e = this;
+    return {
+      load: () => e.load(),
+      scheduleSceneReload: (settleMs) => e.#scheduleSceneReload(settleMs),
+      showToast: (text, accent) => e.showToast(text, accent),
+      histSwitch: (n) => e.#histSwitch(n),
+      setLinkMs: (ms) => { e.#telemetry.linkMs = ms; },
+      reapplyPollingMode: () => e.#telemetry.reapplyPollingMode()
+    };
+  };
+  #device = new DeviceSessionStore(this.#deviceSessionHost());
 
   // ── grid ──
   status = $state<'loading' | 'ready' | 'offline'>('loading');
@@ -178,17 +151,7 @@ class EditorStore {
     if (eid == null) return;
     try { await forgefx.looperControl(eid, action, on); } catch { /* best-effort */ }
   };
-  scene = $state(1);
-  /** Scene names of the open preset (index 0 = scene 1), decoded from the grid read. Empty string = unnamed. */
-  sceneNames = $state<string[]>([]);
-  /** Display name for a 1-based scene number — the decoded name, or "Scene N" when blank/unknown. */
-  sceneName = (n: number): string => {
-    const s = this.sceneNames[n - 1]?.trim();
-    return s && s.length ? s : `Scene ${n}`;
-  };
   railActive = $state('build');
-  bpm = $state(120);
-  presetCount = $state(512); // FM3 preset slots
 
   // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
   mobCols = $state(4);
@@ -248,8 +211,8 @@ class EditorStore {
       showToast: (text, accent) => e.showToast(text, accent),
       persistProfile: () => e.#persistProfile(),
       onConsentResolved: () => e.#maybeShowKofi(),
-      applyTempo: (bpm) => e.#applyTempo(bpm),
-      applyScene: (index) => e.#applyScene(index),
+      applyTempo: (bpm) => e.#device.applyTempo(bpm),
+      applyScene: (index) => e.#device.applyScene(index),
       applyParamEcho: (effectId, paramId, norm) => e.#applyParamEcho(effectId, paramId, norm),
       applyConfig: (id, data) => e.#applyConfig(id, data),
       scheduleBlockStateReload: () => e.#scheduleBlockStateReload(),
@@ -298,13 +261,6 @@ class EditorStore {
   /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
   tourActive = $state(false);
   tourStep = $state(0);
-  // ── connection picker (serial + MIDI ports) ──
-  portsOpen = $state(false);
-  ports = $state<ConnInfo[]>([]);
-  portChosen = $state<ConnPick | null>(null);
-  portOverride = $state<ConnPick | null>(null);
-  /** Forced device-profile key ('fm3'|'fm9'|'axe3'|'axe2'|'vp4'|'am4'), or null when auto-detecting. */
-  profileOverride = $state<string | null>(null);
   get paletteOpen() { return overlays.isOpen('palette'); }
   set paletteOpen(v: boolean) { if (v) overlays.open('palette'); else overlays.close('palette'); }
   paletteMode = $state<'place' | 'retype'>('place');
@@ -465,15 +421,6 @@ class EditorStore {
   /** Read every placed block's meter + swipe-control values (background, debounced — load() runs
    * after every optimistic edit, so coalesce the N bulk reads). */
   #metersTimer: ReturnType<typeof setTimeout> | null = null;
-  /** A slow link — a generic MIDI interface into 5-pin DIN (≈31.25 kbaud) — can't carry high-rate meter
-   *  reads without saturating and inflating every edit to seconds, so meter/watch polling backs off there.
-   *  A device's OWN USB-MIDI port (Axe-Fx III / FM9, Fractal-named) is full USB speed → NOT slow. */
-  get slowLink(): boolean {
-    const c = this.portChosen;
-    if (c?.transport !== 'midi') return false;
-    const info = this.ports.find((p) => p.transport === 'midi' && p.id === (c.inId ?? c.id));
-    return info ? !info.fractal : false; // Fractal USB-MIDI = fast; generic adapter = slow; unknown → don't throttle
-  }
   fetchMeters = () => {
     if (!this.hasBlockMeters || this.slowLink) return; // no meter polling without the capability or on a slow MIDI link (keeps editing snappy)
     if (this.#metersTimer) clearTimeout(this.#metersTimer);
@@ -612,7 +559,7 @@ class EditorStore {
     }
     // negotiate the API version + capabilities BEFORE the first load(), so every caps gate below
     // (unified vs legacy routes, polling, meters, renames) is decided correctly from the start
-    await this.#handshake();
+    await this.#device.handshake();
     this.#telemetry.reapplyPollingMode(); // re-assert the saved polling mode once caps confirm the control exists
     if (this.presetLiveQuery) {
       try {
@@ -623,7 +570,7 @@ class EditorStore {
       }
     }
     await this.load();
-    this.#syncTelemetry();
+    this.#device.syncSceneTempo();
   };
 
   // one-shot check against GitHub releases — surface a top-bar pill when a newer beta is out
@@ -880,13 +827,6 @@ class EditorStore {
     this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
   };
   // ── device-event hooks (called by the telemetry slice, which owns the single event switch) ──
-  /** Tempo pushed by the device. */
-  #applyTempo = (bpm: number) => { this.bpm = bpm; };
-  /** Scene switched device-side: badge immediately, then lightweight reflect (no full preset dump). */
-  #applyScene = (index: number) => {
-    this.scene = index + 1;
-    this.#scheduleSceneReload();
-  };
   /** Another UI moved a knob — reflect it live if that block is open (cheap: update the arc), and keep
    *  the on-grid block level indicator (meter fill) in sync too, since it reads from `meters`, which the
    *  open-block knob update doesn't touch. */
@@ -924,81 +864,6 @@ class EditorStore {
     else if (id === 'savedFilters') cache('axs.pb.saved');
     else if (id === 'tags' || id === 'collections' || id === 'favs' || id === 'tagColors') library.applyRemoteConfig(id, data);
   };
-  // pull current scene + tempo once at load (device → UI), each gated by its capability so a device
-  // without the feature never eats a timeout (legacy v1: skip both on the AM4 — it ignores the frames)
-  #syncTelemetry = async () => {
-    if (!this.isV2 && this.isAm4) return; // legacy: gen-3 scene/tempo frames; the AM4 ignores them → 5s timeouts that clog the queue
-    try {
-      if (this.sceneCount > 0) { const si = (await forgefx.getScene()).index; if (si >= 0) this.scene = si + 1; } // ignore a failed read (-1)
-      if (this.hasTempo) this.bpm = (await forgefx.getTempo()).bpm;
-    } catch {
-      /* */
-    }
-  };
-
-  /** One-shot /device pull that adopts the negotiated API version + capabilities before first load. */
-  #handshake = async () => {
-    try {
-      const dev = await forgefx.device();
-      this.#adoptDevice(dev);
-      // Refresh the device-definitions profile status once per connect (self-describe / import / cloud).
-      // Degrades silently on older servers (the endpoints 404 → capOptional → null).
-      if (dev) void deviceDefs.refresh({ model: dev.model, modelByte: dev.modelByte, firmware: dev.firmware?.version ?? null, caps: dev.capabilities ?? null });
-    } catch {
-      /* engine not ready — poll() keeps retrying and adopts caps when it comes up */
-    }
-  };
-  /** Adopt a /device payload: capabilities, API version, preset-slot count. */
-  #adoptDevice = (dev: import('$lib/api/types').DeviceInfo | null) => {
-    if (!dev) return;
-    if (dev.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
-    if (dev.apiVersion) this.apiVersion = dev.apiVersion;
-    const count = dev.capabilities?.presets?.count;
-    if (count) this.presetCount = count;
-  };
-
-  #polling = false;
-  #pollTick = 0;
-  poll = async () => {
-    if (this.#polling) return; // never let interval ticks stack serial ops on a slow link
-    // A definitions walk/import owns the exclusive transport (FORGEFX-32) — /healthz and /device are
-    // free, but #adoptDevice fans out into real device reads on change. Sit the whole tick out.
-    if (deviceDefs.building || deviceDefs.importing) return;
-    this.#polling = true;
-    try {
-      const h = await forgefx.health();
-      const dev = await forgefx.device().catch(() => null); // both free — no device round-trip
-      this.conn = { state: 'online', fw: dev?.firmware?.version, device: h.device };
-      if (h.api?.version) this.apiVersion = h.api.version;
-      this.#adoptDevice(dev);
-      // The current-preset query is a real device round-trip. On a slow MIDI link it competes with what
-      // the user is doing (opening a block, editing), so run it only every ~4th tick there; connection
-      // state above stays fresh every tick.
-      if (this.presetLiveQuery && !(this.slowLink && this.#pollTick++ % 4 !== 0)) {
-        const t0 = performance.now();
-        const p = await forgefx.currentPreset().catch(() => null);
-        this.linkMs = Math.round(performance.now() - t0); // serial round-trip latency
-        if (p && p.number >= 0) {
-          this.preset = p;
-          this.#histSwitch(p.number);
-          // the current slot was just read cheaply — if the device reports it empty, drop the stale
-          // cached name so a preset cleared on the hardware stops showing up without a full rescan
-          library.clearSlotIfEmpty(p.number, p.name);
-        }
-      }
-    } catch {
-      this.conn = { state: 'offline' };
-    } finally {
-      this.#polling = false;
-    }
-  };
-
-  /** @deprecated AM4 (model 0x15) detection — kept ONLY for the legacy v1-server fallback paths
-   *  (API v2 gates everything through `caps`). Do not add new call sites. */
-  get isAm4(): boolean {
-    return this.detected?.modelId === 0x15;
-  }
-
   /** Point the history store at the active device+slot (idempotent — cheap to call from poll ticks). */
   #histSwitch = (n: number) => {
     void history.switchTo(this.detected?.short ?? this.layout.model ?? 'dev', n);
@@ -1612,43 +1477,7 @@ class EditorStore {
     }
   };
 
-  // ── scene / rename / tempo actions ──
-  // UI scenes are 1..8; the device is 0..7. Switching a scene changes per-scene bypass/channel,
-  // so reload the grid (badges) + the open block's params (channel may have changed).
-  selectScene = async (ui: number) => {
-    const prev = this.scene;
-    if (prev === ui) return;
-    this.scene = ui; // optimistic
-    try {
-      // API v2: the unified POST /scene switches every device; legacy v1 AM4 uses its own route.
-      await (!this.isV2 && this.isAm4 ? forgefx.am4SetScene(ui - 1) : forgefx.setScene(ui - 1));
-      history.record({ kind: 'scene', from: prev, to: ui });
-      // Lightweight reflect (no full preset dump) — same path as a footswitch scene change; coalesces
-      // with the scene SSE echo. Reflects bypass/channel + re-reads the open block, snappy & crash-free.
-      this.#scheduleSceneReload();
-    } catch {
-      this.scene = prev;
-    }
-  };
-  /** Rename a scene (1-based) in the working buffer, then re-read to confirm the device took it.
-   *  Optimistic; reverts on failure or if the read-back doesn't match. Not persisted to flash (store is separate). */
-  renameScene = async (ui: number, name: string) => {
-    if (!this.canRenameScenes || ui < 1 || ui > (this.sceneCount || 8)) return;
-    const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
-    const prev = this.sceneNames.slice();
-    const next = this.sceneNames.slice();
-    next[ui - 1] = clean;
-    this.sceneNames = next; // optimistic
-    try {
-      const r = await forgefx.setSceneName(ui - 1, clean);
-      if (!r.ok) throw new Error('rejected');
-      if ((prev[ui - 1] ?? '') !== clean) history.record({ kind: 'sceneName', index: ui - 1, from: prev[ui - 1] ?? '', to: clean });
-      await this.load(); // re-read grid → verifies the device stored the name (sceneNames refreshed)
-    } catch {
-      this.sceneNames = prev; // revert
-      this.showToast('Scene rename failed', '#d6543f');
-    }
-  };
+  // ── preset rename actions ──
   /** Rename the working-buffer preset, then re-read to confirm the device took it. Optimistic; reverts on
    *  failure. Not persisted to flash — Save (store) writes it to the slot. */
   renamePreset = async (name: string) => {
@@ -1699,73 +1528,6 @@ class EditorStore {
       if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot, { recency: false }); } catch { /* */ } } // restore on failure too
       this.showToast('Rename failed', '#d6543f');
       return false;
-    }
-  };
-  setBpm = async (bpm: number) => {
-    const n = Math.round(bpm);
-    if (!Number.isFinite(n) || n < 20 || n > 250) return;
-    this.bpm = n; // optimistic
-    await forgefx.setTempo(n).catch(() => {});
-  };
-  tapTempo = async () => {
-    await forgefx.tapTempo().catch(() => {});
-    try {
-      this.bpm = (await forgefx.getTempo()).bpm; // tap shifts tempo; pull the new value
-    } catch {
-      /* */
-    }
-  };
-  // ── connection picker ──
-  openPorts = async () => {
-    this.portsOpen = true;
-    await this.loadPorts();
-  };
-  loadPorts = async () => {
-    try {
-      const r = await forgefx.listPorts();
-      this.ports = [...r.ports].sort((a, b) => Number(b.fractal) - Number(a.fractal)); // Fractal first
-      this.portChosen = r.chosen;
-      this.portOverride = r.override;
-      this.profileOverride = r.profileOverride ?? null;
-    } catch {
-      /* offline */
-    }
-  };
-  // pick a port (or null to clear back to auto-detect); reconnect + re-detect + reload. Sends no `model`,
-  // so any forced device profile is preserved across a port change.
-  pickPort = async (conn: ConnPick | null) => {
-    this.portsOpen = false;
-    try {
-      await forgefx.selectPort(conn);
-      this.conn = { state: 'connecting' };
-      await this.poll();
-      const d = await forgefx.detect().catch(() => null);
-      if (d) this.detected = d;
-      await this.load();
-      await this.loadPorts();
-      this.#telemetry.reapplyPollingMode(); // reconnect → re-assert the saved polling mode
-      this.showToast(conn ? 'Connection changed' : 'Back to auto-detect', '#35c9d6');
-    } catch {
-      this.showToast('Could not switch connection', '#d6543f');
-    }
-  };
-  /** Force (or clear with 'auto') the device profile. Preserves any manual PORT override — passing the
-   *  current portOverride (not the resolved auto conn) so forcing a profile never pins an auto-detected
-   *  port. This is what makes an FM3 reachable over a generic MIDI→USB adapter (force FM3 + MIDI ports). */
-  pickProfile = async (model: ProfileKey) => {
-    try {
-      await forgefx.selectPort(this.portOverride, model);
-      this.profileOverride = model === 'auto' ? null : model;
-      this.conn = { state: 'connecting' };
-      await this.poll();
-      const d = await forgefx.detect().catch(() => null);
-      if (d) this.detected = d;
-      await this.load();
-      await this.loadPorts();
-      this.#telemetry.reapplyPollingMode(); // reconnect → re-assert the saved polling mode
-      this.showToast(model === 'auto' ? 'Device profile: auto-detect' : `Device profile forced: ${model.toUpperCase()}`, '#35c9d6');
-    } catch {
-      this.showToast('Could not set device profile', '#d6543f');
     }
   };
 
@@ -1854,6 +1616,66 @@ class EditorStore {
     this.vh = h;
     if (this.mobColsAuto) this.mobCols = this.fitCols(w);
   };
+
+  // ── device-session facade ────────────────────────────────────────────────────────────────────
+  // Straight delegation to `#device` (deviceSession.svelte.ts). Keeps `editor.conn`, `editor.caps`,
+  // every capability gate, `editor.poll()`, the port picker and the scene/tempo actions reading and
+  // writing exactly as they did before the extraction. ADD to this facade when the slice grows a
+  // member; never re-add state to `EditorStore`.
+  get conn() { return this.#device.conn; }
+  get caps() { return this.#device.caps; }
+  get apiVersion() { return this.#device.apiVersion; }
+  get isV2() { return this.#device.isV2; }
+  get presetLiveQuery() { return this.#device.presetLiveQuery; }
+  get hasBlockMeters() { return this.#device.hasBlockMeters; }
+  get hasLiveMonitors() { return this.#device.hasLiveMonitors; }
+  get hasTempo() { return this.#device.hasTempo; }
+  get hasTuner() { return this.#device.hasTuner; }
+  get hasCursorSelect() { return this.#device.hasCursorSelect; }
+  get paramsWithoutPack() { return this.#device.paramsWithoutPack; }
+  get canRenamePresets() { return this.#device.canRenamePresets; }
+  get canRenameScenes() { return this.#device.canRenameScenes; }
+  get canDeepScan() { return this.#device.canDeepScan; }
+  get scanNamesOnly() { return this.#device.scanNamesOnly; }
+  get bankLetterAddressing() { return this.#device.bankLetterAddressing; }
+  get canGridRoute() { return this.#device.canGridRoute; }
+  get sceneCount() { return this.#device.sceneCount; }
+  get hasTelemetryControl() { return this.#device.hasTelemetryControl; }
+  get isAm4() { return this.#device.isAm4; }
+  get slowLink() { return this.#device.slowLink; }
+  get presetCount() { return this.#device.presetCount; }
+  // Writable: all four were plain `$state` fields before the extraction and are still written from
+  // the parts of the store that have not been extracted yet (init, load, watchPreset, the preset
+  // renames + nav). Dropping a `set` here breaks assignment at RUNTIME and nothing catches it —
+  // `_editorSatisfiesSurface` cannot, because TypeScript ignores write-ability in assignability.
+  get detected() { return this.#device.detected; }
+  set detected(v) { this.#device.detected = v; }
+  get preset() { return this.#device.preset; }
+  set preset(v) { this.#device.preset = v; }
+  get lastPreset() { return this.#device.lastPreset; }
+  set lastPreset(v) { this.#device.lastPreset = v; }
+  get sceneNames() { return this.#device.sceneNames; }
+  set sceneNames(v) { this.#device.sceneNames = v; }
+  get scene() { return this.#device.scene; }
+  get bpm() { return this.#device.bpm; }
+  set bpm(v) { this.#device.bpm = v; } // no writer today, but `EditorSurface` hands it to components as mutable
+  sceneName = (n: number) => this.#device.sceneName(n);
+  poll = () => this.#device.poll();
+  selectScene = (ui: number) => this.#device.selectScene(ui);
+  renameScene = (ui: number, name: string) => this.#device.renameScene(ui, name);
+  setBpm = (bpm: number) => this.#device.setBpm(bpm);
+  tapTempo = () => this.#device.tapTempo();
+  // The monolith's ToolRail closes the port popover by assignment, so `portsOpen` keeps its setter.
+  get portsOpen() { return this.#device.portsOpen; }
+  set portsOpen(v) { this.#device.portsOpen = v; }
+  get ports() { return this.#device.ports; }
+  get portChosen() { return this.#device.portChosen; }
+  get portOverride() { return this.#device.portOverride; }
+  get profileOverride() { return this.#device.profileOverride; }
+  openPorts = () => this.#device.openPorts();
+  loadPorts = () => this.#device.loadPorts();
+  pickPort = (conn: ConnPick | null) => this.#device.pickPort(conn);
+  pickProfile = (model: ProfileKey) => this.#device.pickProfile(model);
 
   // ── telemetry facade ─────────────────────────────────────────────────────────────────────────
   // Straight delegation to `#telemetry` (telemetry.svelte.ts). This exists so the ~44 modules that

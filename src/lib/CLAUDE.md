@@ -49,24 +49,29 @@ schema mirroring the widened contract — this is what actually fails at test
 time on drift, not just at runtime in the field. v2 caps fields are optional
 (`?`) by design so legacy payloads degrade to the `isAm4` fallback branches.
 
-## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1900 lines)
+## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1730 lines)
 
 `class EditorStore` exported as a singleton `export const editor`; components
 import it directly — no context or props threading.
 
 - State: `$state` class fields grouped by `// ── section ──` banners. Derived
   state: `get` accessors. The dominant idiom is the capability gate:
-  `get hasTuner() { return this.isV2 ? !!this.caps?.tuner : <legacy isAm4 branch>; }`.
+  `get hasTuner() { return this.isV2 ? !!this.caps?.tuner : <legacy isAm4 branch>; }`
+  — **all of them now live in the `deviceSession` slice** (below). v2 `caps`
+  fields are optional by design, so a partial payload degrades to `false`, never
+  to "supported"; the `isAm4` branch is the legacy v1-server fallback only.
 - Lifecycle: `routes/+page.svelte` `onMount` drives `editor.init()`,
   `editor.poll()`, and the `setInterval` poll/`watchPreset` loops.
 - `poll()` / `watchPreset()` are re-entrancy-guarded (`#polling` / `#watching`)
   and throttled on slow links — **never add an unguarded device read to the poll
-  loop**.
+  loop**. `poll()` lives in the `deviceSession` slice; `watchPreset()` is still
+  on `EditorStore` (it belongs with preset nav, `presetBuffer`).
 - SSE: `openEvents` feeds `applyDeviceEvent`, a single `switch` over the
   `DeviceEvent` union. **Both now live in the telemetry slice** (below); cases
-  belonging to other slices call back through `TelemetryHost`. To react to a
-  device-side change (e.g. scene change), extend the existing `case` and reuse
-  the `#eventReload` debounce — do not add parallel timers or a second event path.
+  belonging to other slices call back through `TelemetryHost` — `tempo` and
+  `scene` land in `deviceSession`. To react to a device-side change, extend the
+  existing `case` and reuse the `#eventReload` debounce (which stays on
+  `EditorStore`, shared) — do not add parallel timers or a second event path.
 - **THE canonical action shape** — optimistic update, await, revert on catch:
 
   ```ts
@@ -96,12 +101,20 @@ modules that import `editor` never change. Migrating call sites to import a
 slice directly is a separate, later change — never in the same commit as an
 extraction.
 
-Extracted so far: **`editor/telemetry.svelte.ts`** (`TelemetryStore`) — the SSE
-event path, tuner/CPU/output-level/traffic/link-latency readouts, per-block live
-meters, the device-telemetry polling mode, and the privacy-gated diagnostics
-(consent, Faro RUM, debug reports, `scrubPII`).
-Still on `EditorStore`, in planned extraction order: `deviceSession`
-(connection, capability gates, connection picker), `presetBuffer` (versions,
+Extracted so far:
+
+- **`editor/telemetry.svelte.ts`** (`TelemetryStore`) — the SSE event path,
+  tuner/CPU/output-level/traffic/link-latency readouts, per-block live meters,
+  the device-telemetry polling mode, and the privacy-gated diagnostics (consent,
+  Faro RUM, debug reports, `scrubPII`).
+- **`editor/deviceSession.svelte.ts`** (`DeviceSessionStore`) — which device we
+  are talking to and what it can do: `conn` + the `poll()` heartbeat, the
+  negotiated `apiVersion` + `caps` and every capability gate, `slowLink`, the
+  serial/MIDI port picker and forced device profile, the current preset
+  REFERENCE (`preset` / `lastPreset` / `presetCount`, not its contents), and the
+  live `scene` / `sceneNames` / `bpm` with their actions.
+
+Still on `EditorStore`, in planned extraction order: `presetBuffer` (versions,
 local folder sync, preset nav, save), `gridEditing` + `paramEditing`.
 
 Four rules make this work:
@@ -130,9 +143,16 @@ Four rules make this work:
    state to `EditorStore`.
 4. **`_editorSatisfiesSurface` must still typecheck.** If it doesn't, the facade
    is incomplete — fix the facade, never weaken the guard or `EditorSurface`.
+   Know its ONE blind spot: TypeScript ignores write-ability in assignability, so
+   a getter-only facade member satisfies a mutable `EditorSurface` property and
+   the guard stays green. Dropping a `set` therefore fails at RUNTIME
+   (`Cannot set property … which has only a getter`), on a click path no test
+   covers — the 19 e2e specs are workbench-only and the monolith has no harness.
+   Decide write-ability by grepping for assignments, not by the compiler.
 
 Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
-fake host — `editor/telemetry.runes.test.ts` is the worked example.
+fake host — `editor/telemetry.runes.test.ts` and `editor/deviceSession.runes.test.ts`
+are the worked examples.
 
 ## Component pattern
 

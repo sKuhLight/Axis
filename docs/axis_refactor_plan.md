@@ -517,6 +517,47 @@ validates the facade pattern at low risk.
 > second meter loop and double the poll cadence. Pre-dates the refactor (identical on `main`); both
 > behaviours are pinned in `telemetry.runes.test.ts` so a fix has to update the test deliberately.
 
+> **M4b landed** on `full-refactor`. `editor/deviceSession.svelte.ts` (`DeviceSessionStore`,
+> 318 lines) + `editor/deviceSession.runes.test.ts` (44 tests); `editor.svelte.ts` ~1,900 → ~1,730
+> lines, facade extended, all importers untouched. Decisions taken:
+>
+> - **`poll()` moved in.** It writes almost nothing but device-session state (`conn`, `apiVersion`,
+>   `caps`, `presetCount`, `preset`), so leaving it on `EditorStore` would have meant a fat
+>   back-write surface on the host for no gain. `watchPreset()` did NOT move — it is a preset-change
+>   watcher that drives `load()` + `#loadParams()`; it belongs with preset nav in M4c.
+> - **Scene + tempo moved in**, per the M4a note: `scene` / `sceneNames` / `sceneName` / `bpm`,
+>   `selectScene` / `setBpm` / `tapTempo`, the boot-time scene+tempo pull (`#syncTelemetry`, renamed
+>   `syncSceneTempo` — it was named before telemetry became a separate slice and the old name now
+>   points at the wrong one), and the `applyTempo` / `applyScene` device-event hooks, which telemetry
+>   reaches through `TelemetryHost` → `EditorStore` → `DeviceSessionStore` exactly as rule 2 says.
+> - **`renameScene` moved in; `renamePreset` / `renameStoredPreset` did not.** The M4a note's "the
+>   renames belong to M4c" reads as the two PRESET renames — `renameScene` reads `canRenameScenes` /
+>   `sceneCount` and writes `sceneNames`, all M4b state, so keeping it out would have split one
+>   action from its only writer. Operator decision, recorded here.
+> - The host is six members (`load`, `scheduleSceneReload`, `showToast`, `histSwitch`, `setLinkMs`,
+>   `reapplyPollingMode`). `#histSwitch` and the shared `#eventReload` debounce stay on
+>   `EditorStore` — both have call sites in the not-yet-extracted preset paths.
+> - The slice imports `history`, `library` and `deviceDefs` directly. Those are peer STORES, not
+>   slices, so rule 2 does not apply (telemetry's direct `deviceDefs` import is the precedent).
+> - Facade setters kept for `detected`, `preset`, `lastPreset`, `sceneNames` (written by `init` /
+>   `load` / `watchPreset` / the preset renames, all still on `EditorStore`), `bpm` (declared
+>   mutable in `EditorSurface`) and `portsOpen` (the monolith's `ToolRail` closes the popover by
+>   assignment). Everything else is getter-only.
+>
+> **Behaviour worth knowing, pinned by test, not changed:** `pickProfile` is optimistic about
+> `profileOverride` but ends with `loadPorts()`, so the engine's answer overwrites it — an engine
+> that drops the forced profile leaves the UI showing auto-detect.
+>
+> **Guard blind spot found (M4c/M4d inherit it):** `_editorSatisfiesSurface` does NOT catch a
+> dropped facade setter. TypeScript ignores write-ability in assignability, so a getter-only member
+> satisfies a mutable `EditorSurface` property and the guard stays green; the failure is a runtime
+> `Cannot set property … which has only a getter` on a click path with no coverage (the e2e specs
+> are workbench-only, the monolith has no harness). Write-ability is decided by grepping for
+> assignments, not by the compiler — now stated in `src/lib/CLAUDE.md` (Store pattern § Slices,
+> rule 4). M4b's nine getter-only members (`conn`, `caps`, `apiVersion`, `presetCount`, `scene`,
+> `ports`, `portChosen`, `portOverride`, `profileOverride`) were each grepped: no assignment exists
+> anywhere in `src/`, `e2e/` or `electron/`.
+
 ### Handoff prompt — M4a (template for M4b–M4d)
 
 ````markdown
