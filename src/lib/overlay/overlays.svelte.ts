@@ -43,7 +43,7 @@ export type OverlayId =
  * (tuner → history → cabPicker → palette → quickBuild → convertScratch → convert →
  * presetPicker → presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`,
  * `save`, `axisHub`, `theme`) were never part of that chain; they sit lowest so an open
- * chain overlay always wins, and they close on Escape via the shared dialog shell.
+ * chain overlay always wins, but remain non-dismissible by Escape.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
   tuner: 0,
@@ -63,7 +63,10 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   theme: 230
 };
 
+const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'axisHub', 'theme']);
+
 const OVERLAY_IDS = Object.keys(ESCAPE_ORDER) as OverlayId[];
+const STACK_ORDER = [...OVERLAY_IDS].sort((a, b) => ESCAPE_ORDER[a] - ESCAPE_ORDER[b]);
 
 /**
  * An overlay whose open-state is not a registry-owned boolean. `isOpen`/`close` bridge to
@@ -127,7 +130,18 @@ class OverlayRegistry {
 
   #escDismissable(id: OverlayId): boolean {
     const d = this.#delegates.get(id);
-    return d ? d.escDismiss !== false : true;
+    return d ? d.escDismiss !== false : !ESCAPE_DISABLED.has(id);
+  }
+
+  /** True when this is the visually highest-priority open registry overlay. */
+  isTop(id: OverlayId): boolean {
+    if (!this.isOpen(id)) return false;
+    return !OVERLAY_IDS.some((other) => this.isOpen(other) && ESCAPE_ORDER[other] < ESCAPE_ORDER[id]);
+  }
+
+  /** CSS stack level matching Escape/focus priority (lower order renders above higher order). */
+  zIndex(id: OverlayId): number {
+    return 390 - STACK_ORDER.indexOf(id);
   }
 
   /**

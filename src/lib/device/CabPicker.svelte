@@ -166,6 +166,7 @@
 </script>
 
 <Dialog
+  overlay="cabPicker"
   open={editor.cabPickerOpen}
   onClose={() => (editor.cabPickerOpen = false)}
   width="760px"

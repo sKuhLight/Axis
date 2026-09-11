@@ -311,6 +311,7 @@
 </script>
 
 <Dialog
+  overlay="palette"
   open={editor.paletteOpen}
   onClose={() => (editor.paletteOpen = false)}
   width="760px"

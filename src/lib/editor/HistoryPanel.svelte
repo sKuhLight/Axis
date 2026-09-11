@@ -12,7 +12,7 @@
   const rows = $derived(history.entries.map((e, i) => ({ e, i })).reverse());
 </script>
 
-<Dialog open={history.panelOpen} onClose={close} class="history-dlg">
+<Dialog overlay="history" open={history.panelOpen} onClose={close} class="history-dlg">
   <div class="hp">
     <header>
       <h2>History</h2>

@@ -15,7 +15,7 @@
   const noteLetter = $derived(note ? note[0] : null);
 </script>
 
-<Dialog open={editor.tuner.active} onClose={() => editor.toggleTuner()} width="440px" class="tuner-dlg">
+<Dialog overlay="tuner" open={editor.tuner.active} onClose={() => editor.toggleTuner()} width="440px" class="tuner-dlg">
   <div class="body" data-screen="Tuner">
     <header>
       <span class="ttl mono">TUNER</span>

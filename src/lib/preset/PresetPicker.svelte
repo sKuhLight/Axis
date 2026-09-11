@@ -100,6 +100,7 @@
 </script>
 
 <Dialog
+  overlay="presetPicker"
   open={editor.presetOpen}
   onClose={close}
   width="680px"

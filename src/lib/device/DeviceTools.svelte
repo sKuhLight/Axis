@@ -138,7 +138,7 @@
   }
 </script>
 
-<Dialog open={editor.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
+<Dialog overlay="deviceTools" open={editor.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
   <div class="dt">
       <header id="device-tools-title">
         <h2>Device Tools</h2>

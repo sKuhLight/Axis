@@ -130,7 +130,7 @@
   }
 </script>
 
-<Dialog open={convert.open} onClose={close} size="lg" width="min(720px, 94vw)" maxHeight="90vh" labelledBy="convert-dlg-title" class="convert-dlg">
+<Dialog overlay="convert" open={convert.open} onClose={close} size="lg" width="min(720px, 94vw)" maxHeight="90vh" labelledBy="convert-dlg-title" class="convert-dlg">
   <div class="wrap">
       <header id="convert-dlg-title">
         <h2>Convert preset</h2>

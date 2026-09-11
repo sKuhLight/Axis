@@ -12,7 +12,7 @@
   const densityLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1);
 </script>
 
-<Dialog open={editor.themeOpen} onClose={onclose} size="sm" maxHeight="88vh" sheet={mob} labelledBy="theme-dlg-title" class="theme-dlg">
+<Dialog overlay="theme" open={editor.themeOpen} onClose={onclose} size="sm" maxHeight="88vh" sheet={mob} labelledBy="theme-dlg-title" class="theme-dlg">
   <div class="card scroll" class:mob>
     <div class="head" id="theme-dlg-title">
       <div><div class="h1">Appearance</div><div class="sub">Theme, accent, scale &amp; density — saved on this device</div></div>

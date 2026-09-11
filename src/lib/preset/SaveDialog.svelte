@@ -17,6 +17,7 @@
 </script>
 
 <Dialog
+  overlay="save"
   open={editor.saveOpen}
   onClose={() => (editor.saveOpen = false)}
   size="sm"

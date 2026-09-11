@@ -109,7 +109,7 @@
   </label>
 {/snippet}
 
-<Dialog open={editor.axisOpen} onClose={close} width="440px" maxHeight="86vh" align="top" sheet={mob} class="axis-hub-dlg">
+<Dialog overlay="axisHub" open={editor.axisOpen} onClose={close} width="440px" maxHeight="86vh" align="top" sheet={mob} class="axis-hub-dlg">
     <div class="card" class:mob>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 

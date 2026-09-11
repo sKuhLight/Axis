@@ -82,7 +82,7 @@ describe('escape() priority', () => {
     expect(overlays.escape()).toBe(false);
   });
 
-  it('never-in-chain overlays (deviceTools/save/axisHub/theme) yield to any chain overlay', () => {
+  it('historically non-dismissible overlays yield to chain overlays without later closing', () => {
     overlays.open('theme');
     overlays.open('quickBuild'); // order 40, far above theme's 230
 
@@ -91,7 +91,7 @@ describe('escape() priority', () => {
     expect(overlays.isOpen('theme')).toBe(true);
 
     overlays.escape();
-    expect(overlays.isOpen('theme')).toBe(false);
+    expect(overlays.isOpen('theme')).toBe(true);
   });
 
   it('the chain order matches the historical +page.svelte sequence', () => {
@@ -122,5 +122,14 @@ describe('escape() priority', () => {
     expect(overlays.isOpen('palette')).toBe(false);
     overlays.escape();
     expect(noEsc.box.open).toBe(true); // opted out — never closed by Escape
+  });
+
+  it('preserves the historically non-Escape-dismissible owned dialogs', () => {
+    for (const id of ['deviceTools', 'save', 'axisHub', 'theme'] as const) {
+      overlays.open(id);
+      expect(overlays.escape()).toBe(false);
+      expect(overlays.isOpen(id)).toBe(true);
+      overlays.close(id);
+    }
   });
 });

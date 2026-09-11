@@ -10,8 +10,7 @@
    *
    * The focus trap is `src/lib/workbench/svelte/focusTrap.ts` — app → workbench is the
    * allowed dependency direction. It moves focus into the card on open (an explicit
-   * `[data-autofocus]` element wins), traps Tab, closes on Escape, and restores focus to
-   * the opener on close.
+   * `[data-autofocus]` element wins), traps Tab, and restores focus to the opener on close.
    *
    * Per-dialog differences are props, not forks:
    *   - `size` / `width` — card width
@@ -23,10 +22,12 @@
    */
   import type { Snippet } from 'svelte';
   import { focusTrap } from '$lib/workbench/svelte/focusTrap';
+  import { overlays, type OverlayId } from '$lib/overlay/overlays.svelte';
 
   let {
     open,
     onClose,
+    overlay,
     title,
     size = 'md',
     width,
@@ -44,6 +45,7 @@
   }: {
     open: boolean;
     onClose: () => void;
+    overlay?: OverlayId;
     title?: string;
     size?: 'sm' | 'md' | 'lg';
     width?: string;
@@ -61,10 +63,31 @@
     children: Snippet;
     footer?: Snippet;
   } = $props();
+
+  const trapEnabled = $derived(!overlay || overlays.isTop(overlay));
+
+  function keepTopFocus(node: HTMLElement, enabled: boolean) {
+    function onFocus(event: FocusEvent) {
+      if (enabled && !node.contains(event.target as Node)) queueMicrotask(() => node.focus());
+    }
+    document.addEventListener('focusin', onFocus, true);
+    return {
+      update(next: boolean) { enabled = next; },
+      destroy() { document.removeEventListener('focusin', onFocus, true); }
+    };
+  }
 </script>
 
 {#if open}
-  <div class="dlg-scrim-wrap" class:sheet class:mobile-full={mobileFull} data-align={align} role="presentation">
+  <div
+    class="dlg-scrim-wrap"
+    class:sheet
+    class:mobile-full={mobileFull}
+    data-align={align}
+    data-overlay={overlay}
+    style:z-index={overlay ? overlays.zIndex(overlay) : null}
+    role="presentation"
+  >
     {#if dismissible}
       <button type="button" class="dlg-scrim" aria-label="Close" onclick={onClose}></button>
     {:else}
@@ -84,7 +107,8 @@
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
       tabindex="-1"
-      use:focusTrap={{ onClose: dismissible ? onClose : undefined }}
+      use:focusTrap={{ enabled: trapEnabled, onClose: overlay ? undefined : dismissible ? onClose : undefined }}
+      use:keepTopFocus={!!overlay && trapEnabled}
     >
       {#if title}
         <header class="dlg-head">

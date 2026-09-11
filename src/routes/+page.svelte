@@ -119,15 +119,18 @@
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
         // Priority order (and the tuner/link-arm/block-editor special cases) is data in
         // src/lib/overlay/overlays.svelte.ts — closes exactly the top overlay per press.
-        overlays.escape();
+        if (overlays.escape()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
       }
     };
     window.addEventListener('resize', onResize);
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, { capture: true });
     return () => {
       // The poll/watch intervals are owned by the $effect above (it clears them on teardown).
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, { capture: true });
     };
   });
 

@@ -191,6 +191,7 @@
 </script>
 
 <Dialog
+  overlay="presetSearch"
   open={editor.presetSearchOpen}
   onClose={close}
   width="720px"
