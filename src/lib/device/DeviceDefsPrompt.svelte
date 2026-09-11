@@ -7,7 +7,11 @@
   // CachePrompt bottom-sheet UX. All ordering/gating lives in deviceDefs.ts (pure, tested).
   import { editor } from '$lib/editor/editor.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
-  
+  import PromptToast from '$lib/ui/PromptToast.svelte';
+  import PromptRow from '$lib/ui/PromptRow.svelte';
+  import PromptProgressRow from '$lib/ui/PromptProgressRow.svelte';
+  import Button from '$lib/ui/Button.svelte';
+
   const online = $derived(editor.conn.state === 'online');
   const building = $derived(deviceDefs.building);
   const busy = $derived(deviceDefs.importing);
@@ -15,7 +19,6 @@
   const candidates = $derived(deviceDefs.sources?.candidates ?? []);
   // Show while: a build is running · a source was just acquired (success state) · the prompt is offered.
   const show = $derived(online && (!!building || deviceDefs.succeeded || deviceDefs.shouldShow));
-  const pct = $derived(building && building.total ? Math.round((building.done / building.total) * 100) : 0);
 
   let dragging = $state(false);
   // Explicit consent gate for the full (taper) capture — no request is made until the user confirms.
@@ -43,32 +46,31 @@
 
 {#if show}
   {#if building}
-    <div class="dd building">
-      <div class="row">
-        <span class="dot"></span>
-        <span class="txt">
-          Reading definitions from device…
-          {#if building.total}<b>{building.done}/{building.total}</b>{/if}
-          {#if building.phase}<span class="phase">{building.phase}</span>{/if}
-        </span>
-        {#if building.total}<div class="bar"><div class="fill" style="width:{pct}%"></div></div>{/if}
-        <button class="later" onclick={() => deviceDefs.cancel()}>Cancel</button>
-      </div>
-    </div>
+    <PromptToast maxWidth={460}>
+      <PromptProgressRow
+        label="Reading definitions from device…"
+        done={building.done}
+        total={building.total}
+        phase={building.phase}
+        grow
+        onCancel={() => deviceDefs.cancel()}
+      />
+    </PromptToast>
   {:else if deviceDefs.succeeded}
-    <div class="dd">
-      <div class="row">
-        <span class="ic ok">✓</span>
-        <div class="msg">
+    <PromptToast>
+      <PromptRow icon="✓" iconVariant="ok">
+        {#snippet message()}
           <b>Definitions ready</b>
           <span class="sub">Axis is now using definitions matched to this device &amp; firmware.</span>
-        </div>
-        <button class="later" onclick={() => deviceDefs.dismiss()}>Done</button>
-      </div>
-    </div>
+        {/snippet}
+        {#snippet actions()}
+          <Button variant="secondary" size="sm" height="30px" onclick={() => deviceDefs.dismiss()}>Done</Button>
+        {/snippet}
+      </PromptRow>
+    </PromptToast>
   {:else if fullConsent}
     <!-- Full (taper) capture — explicit consent BEFORE any request. Proceed → build('full'); cancel → nothing. -->
-    <div class="dd">
+    <PromptToast>
       <div class="row top">
         <span class="ic">⚠</span>
         <div class="msg">
@@ -83,14 +85,13 @@
           <span class="alabel">Start full capture</span>
           <span class="ahint">Also captures the exact knob tapers</span>
         </button>
-        <button class="later" onclick={() => (fullConsent = false)}>Cancel</button>
+        <Button variant="secondary" size="sm" height="30px" onclick={() => (fullConsent = false)}>Cancel</Button>
       </div>
-    </div>
+    </PromptToast>
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="dd offer"
-      class:drag={dragging}
+    <PromptToast
+      class={dragging ? 'dd-offer drag' : 'dd-offer'}
       ondragover={onDragOver}
       ondragleave={onDragLeave}
       ondrop={onDrop}
@@ -101,7 +102,7 @@
           <b>Get definitions for this device?</b>
           <span class="sub">Axis is using bundled definitions. Match them to your exact firmware for accurate model names, ranges &amp; parameters.</span>
         </div>
-        <button class="later" onclick={() => deviceDefs.dismiss()} title="Keep using the bundled definitions">Later</button>
+        <Button variant="secondary" size="sm" height="30px" title="Keep using the bundled definitions" onclick={() => deviceDefs.dismiss()}>Later</Button>
       </div>
 
       {#if deviceDefs.error}
@@ -151,36 +152,14 @@
           {/if}
         {/each}
       </div>
-    </div>
+    </PromptToast>
   {/if}
 {/if}
 
 <style>
-  .dd {
-    position: fixed;
-    left: 50%;
-    bottom: 18px;
-    transform: translateX(-50%);
-    z-index: 400;
-    max-width: 620px;
-    width: calc(100% - 40px);
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 13px;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
-    padding: 12px 14px;
-    animation: ddUp 0.18s ease-out;
-  }
-  .dd.building {
-    max-width: 460px;
-  }
-  .dd.offer.drag {
+  :global(.dd-offer.drag) {
     border-color: var(--accent);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 0 0 2px var(--accent);
-  }
-  @keyframes ddUp {
-    from { opacity: 0; transform: translate(-50%, 8px); }
-    to { opacity: 1; transform: translate(-50%, 0); }
   }
   .row {
     display: flex;
@@ -195,9 +174,6 @@
     color: var(--accent);
     flex: none;
     line-height: 1.3;
-  }
-  .ic.ok {
-    color: var(--ok, #33c46b);
   }
   .msg {
     flex: 1;
@@ -216,19 +192,6 @@
     color: var(--textdim);
     line-height: 1.35;
   }
-  .later {
-    flex: none;
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 9px;
-    border: 1px solid var(--border2);
-    background: transparent;
-    color: var(--textdim);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .later:hover { color: var(--text); border-color: var(--border3); }
   .acts {
     display: flex;
     flex-direction: column;
@@ -333,42 +296,5 @@
     cursor: pointer;
     padding: 0;
     text-decoration: underline;
-  }
-  .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex: none;
-    animation: ddPulse 1s ease-in-out infinite;
-  }
-  @keyframes ddPulse {
-    50% { opacity: 0.3; }
-  }
-  .txt {
-    font-size: 12px;
-    color: var(--text2);
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .phase {
-    font-size: 10.5px;
-    color: var(--textdim);
-    text-transform: capitalize;
-  }
-  .bar {
-    flex: 1;
-    height: 6px;
-    background: var(--track);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .fill {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.2s;
   }
 </style>
