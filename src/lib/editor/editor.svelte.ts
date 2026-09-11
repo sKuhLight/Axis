@@ -2,7 +2,7 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter, isDirect, CLIENT_ID } from '$lib/api/forgefx';
+import { forgefx, ForgeError, setRequestFailureReporter } from '$lib/api/forgefx';
 import { library } from '$lib/preset/library.svelte';
 import { appSettings } from '$lib/platform/appSettings.svelte';
 import { defaultBlockLibraryPath } from './blockLibraryPath';
@@ -19,38 +19,18 @@ import { isWebBuild } from '$lib/platform/buildMode';
 import { paramValue } from '$lib/ui/format';
 import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import { gridHover } from './gridHover.svelte';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot, DecodedBlockFile } from '$lib/api/types';
+import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
 import type { EditorSurface } from './editorSurface';
 import { monitorsByFamily } from '$lib/device/deviceMonitors';
 import { overlays } from '$lib/overlay/overlays.svelte';
+import { TelemetryStore, isTelemetryMode, type TelemetryHost, type ReportTrigger } from './telemetry.svelte';
 
 type Conn = { state: 'connecting' | 'online' | 'offline'; fw?: string; device?: string };
 const LOCAL_AUTOSYNC_KEY = 'axs.local.autosync';
 const loadLocalAutoSync = (): boolean => { try { return localStorage.getItem(LOCAL_AUTOSYNC_KEY) !== '0'; } catch { return true; } }; // default on
-// Telemetry consent defaults OFF. Anonymous instance id is a random uuid — never PII.
-const TELEMETRY_KEY = 'axs.telemetry.consent';
-const INSTANCE_KEY = 'axs.telemetry.instanceId';
-const loadTelemetryConsent = (): boolean => { try { return localStorage.getItem(TELEMETRY_KEY) === '1'; } catch { return false; } };
-function loadInstanceId(): string {
-  try {
-    let id = localStorage.getItem(INSTANCE_KEY);
-    if (!id) { id = (globalThis.crypto?.randomUUID?.() ?? `anon-${Date.now().toString(36)}`); localStorage.setItem(INSTANCE_KEY, id); }
-    return id;
-  } catch { return 'anon'; }
-}
 // Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
 const CONTACT_KEY = 'axs.profile.contact';
 const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KEY) ?? ''; } catch { return ''; } };
-// Device-telemetry polling mode (META-17). Local mirror so the poll intervals + UI have it synchronously
-// on boot (before /device confirms telemetryControl); the synced `config/profile` doc carries it across
-// devices. Default 'balanced' (mirrors the server default).
-const POLLING_MODE_KEY = 'axs.telemetry.pollingMode';
-const isTelemetryMode = (v: unknown): v is TelemetryMode => v === 'performance' || v === 'balanced' || v === 'reduced';
-const loadPollingMode = (): TelemetryMode => { try { const v = localStorage.getItem(POLLING_MODE_KEY); return isTelemetryMode(v) ? v : 'balanced'; } catch { return 'balanced'; } };
-// Whether the user has made a first-run telemetry choice (accept OR decline). Distinct from the consent
-// value: unset → show the first-run prompt once; set → respect the stored consent silently.
-const DECIDED_KEY = 'axs.telemetry.decided';
-const loadDecided = (): boolean => { try { return localStorage.getItem(DECIDED_KEY) === '1'; } catch { return false; } };
 // One-time "support development on Ko-fi" nudge (voluntary donation — allowed in-app).
 const KOFI_SEEN_KEY = 'axs.kofi.seen';
 const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
@@ -62,13 +42,6 @@ const TOUR_LAST = 8;
 // tour") — it bugs out at step 4 (Next won't advance) on mobile. Flip back to true once reworked.
 const TOUR_ENABLED: boolean = false;
 const loadTourDone = (): boolean => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
-/** Strip the obvious PII from a string before it leaves the machine: emails + usernames in home paths. */
-function scrubPII(s: string): string {
-  return s
-    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
-    .replace(/([Cc]:\\Users\\)[^\\\/\r\n"]+/g, '$1<user>')
-    .replace(/(\/(?:home|Users)\/)[^\/\r\n"]+/g, '$1<user>');
-}
 const EMPTY: Layout = { cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true };
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
@@ -135,8 +108,6 @@ class EditorStore {
   enums = $state<EnumParam[]>([]);
   blockType = $state<{ value: number; name: string } | null>(null);
   blockSlug = $state<string | null>(null); // catalog slug of the open block (from blockParams) — gates the looper poll
-  /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
-  looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
   /** effectId the currently-held params/enums/layout were read for, so #loadParams can tell a FIRST
    *  read of a block (blank the surface) from a refresh of the one already on screen (update in place). */
@@ -171,12 +142,6 @@ class EditorStore {
   #hydratePinnedTimer: ReturnType<typeof setTimeout> | null = null;
   /** Current model/type name of a placed block (for the grid tile sub-label). */
   typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
-  /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
-  liveMeters = $state<Record<number, import('$lib/api/types').LiveMonitor[]>>({});
-  /** Primary live meter for a block (first monitor; null if none / not yet read) — back-compat. */
-  monitorFor = (effectId: number): import('$lib/api/types').LiveMonitor | null => this.liveMeters[effectId]?.[0] ?? null;
-  /** ALL live meters a block reports (e.g. OUTPUT VU L+R, M-Comp 3 bands, cab gain+VU). */
-  monitorsFor = (effectId: number): import('$lib/api/types').LiveMonitor[] => this.liveMeters[effectId] ?? [];
   /** Per-preset monitor (meter) param table (GET /preset/monitors): device token → pid + role + dB
    *  range. This is how we know which paramIds are read-only MONITORS rather than editable params —
    *  the device also surfaces several of them in the ordinary block param list (amp `HEADROOM`/`B+`/
@@ -224,11 +189,6 @@ class EditorStore {
   railActive = $state('build');
   bpm = $state(120);
   presetCount = $state(512); // FM3 preset slots
-  /** Live CPU% (decoded from the device meters frame), null until first reading. FM3-family only. */
-  cpu = $state<number | null>(null);
-  /** Live output level meters in dB (−40…0, floor-clamped) — Output 1 & 2, each L/R — from the FM3's
-   *  Preset Leveling poll (fn 0x19, 5-septet RMS float → 10·log10 dB). Smoothed server-side. */
-  levels = $state<{ out1L: number; out1R: number; out2L: number; out2R: number } | null>(null);
 
   // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
   mobCols = $state(4);
@@ -264,20 +224,39 @@ class EditorStore {
     this.gridPage = Math.max(0, Math.min(this.pageCount - 1, p));
   };
 
-  // ── live telemetry (SSE) ──
-  tuner = $state<{ active: boolean; freq?: number; note?: string; cents?: number; octave?: number }>({ active: false });
-  // ── device-telemetry polling mode (META-17) ──
-  /** Active polling mode — drives the poll/watch interval selection (pollIntervals.ts) + the mode UI.
-   *  Seeded from the local mirror; reconciled with the server (PUT on reconnect, adopt on telemetryConfig
-   *  events). */
-  pollingMode = $state<TelemetryMode>(loadPollingMode());
-  /** Latest cumulative device-traffic snapshot (from the `traffic` DeviceEvent), or null until the first
-   *  one arrives. The workbench telemetry widget derives per-second rates from successive snapshots. */
-  traffic = $state<TrafficSnapshot | null>(null);
-  // CPU% is not transmitted by the FM3 (FM3-Edit computes it from a DSP cost model) — so the top-bar
-  // slot shows the real, measurable serial round-trip latency instead.
-  linkMs = $state<number | null>(null);
-  #events: EventSource | null = null;
+  // ── telemetry slice (M4a) ──
+  // SSE, tuner/CPU/levels/traffic readouts, live meters, polling mode, Faro + debug reports.
+  // Owned by `TelemetryStore`; every member below is re-exposed by the facade further down so the
+  // ~44 modules that import `editor` keep working. See `telemetry.svelte.ts`.
+  /** The telemetry slice's view of the rest of the store. Declared as a private field so nothing here
+   *  leaks onto `EditorStore`'s public API, and so the private members it forwards to stay private.
+   *  Getters, so every read is live. MUST stay declared above `#telemetry`, which calls it. */
+  #telemetryHost = (): TelemetryHost => {
+    const e = this;
+    return {
+      get status() { return e.status; },
+      get hasLiveMonitors() { return e.hasLiveMonitors; },
+      get slowLink() { return e.slowLink; },
+      get hasTelemetryControl() { return e.hasTelemetryControl; },
+      get connDevice() { return e.conn.device; },
+      get connFw() { return e.conn.fw; },
+      get contact() { return e.contact; },
+      get selectedEffectId() { return e.selected?.effectId ?? null; },
+      get blockSlug() { return e.blockSlug; },
+      get inLibrary() { return e.inLibrary; },
+      get onVirtualScreen() { return !!e.virtual; },
+      showToast: (text, accent) => e.showToast(text, accent),
+      persistProfile: () => e.#persistProfile(),
+      onConsentResolved: () => e.#maybeShowKofi(),
+      applyTempo: (bpm) => e.#applyTempo(bpm),
+      applyScene: (index) => e.#applyScene(index),
+      applyParamEcho: (effectId, paramId, norm) => e.#applyParamEcho(effectId, paramId, norm),
+      applyConfig: (id, data) => e.#applyConfig(id, data),
+      scheduleBlockStateReload: () => e.#scheduleBlockStateReload(),
+      scheduleStructuralReload: () => e.#scheduleStructuralReload()
+    };
+  };
+  #telemetry = new TelemetryStore(this.#telemetryHost());
   vw = $state(1280);
   vh = $state(800);
 
@@ -315,23 +294,10 @@ class EditorStore {
   hint = $state<string | null>(null);
   /** First-run popups: `consentPrompt` = telemetry accept/decline (only when telemetry is enabled in the
    *  build and the user hasn't decided yet); `kofiNotice` = a one-time "support development" nudge. */
-  consentPromptOpen = $state(false);
   kofiNoticeOpen = $state(false);
   /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
   tourActive = $state(false);
   tourStep = $state(0);
-  // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
-  // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
-  // upload is per-incident consent and works even when `consent` is false.
-  telemetry = $state<{ enabled: boolean; uploadEnabled: boolean; consent: boolean; instanceId: string; faroUrl: string; sending: boolean }>(
-    { enabled: false, uploadEnabled: false, consent: loadTelemetryConsent(), instanceId: loadInstanceId(), faroUrl: '', sending: false }
-  );
-  #faroStarted = false;
-  // Major-error → "Upload Debug Log" prompt. Set by offerDebugReport (debounced per category); the
-  // DiagnosticsPanel renders it as a dismissible card with an explicit Upload button.
-  reportPrompt = $state<{ kind: string; route?: string; status?: number; message?: string } | null>(null);
-  #lastOffer: Record<string, number> = {}; // per-category debounce for offerDebugReport
-  #recentEvents: { t: number; kind: string; text: string }[] = []; // recent-events ring for the debug report
   // ── connection picker (serial + MIDI ports) ──
   portsOpen = $state(false);
   ports = $state<ConnInfo[]>([]);
@@ -611,50 +577,6 @@ class EditorStore {
     forgefx.setParam(effectId, e.id, value, false).catch(() => {});
   };
 
-  // ── live audio meters (per-block monitor level, normalized→dB) ──
-  // GENTLE poll: reads ONLY the currently-selected block's monitor (one serial round-trip per tick),
-  // and ONLY while the block editor is open. Never sweep every placed block: a full-preset sweep
-  // serializes behind every other read on the shared request chain. (The one evidenced audio-dropout
-  // incident was AM4 background block re-reads every 1.5 s — FORGEFX-25, CHANGELOG 0.9.x — not
-  // metering; captures show FM3-Edit itself polls its meters round-robin at a ~60 ms tick.)
-  meteringOn = $state(true); // on by default, like the official editors; canMeterBlocks still gates it
-  /** Per-block metering is only offered when the device supports live monitors, over a fast link
-   *  (never a slow 5-pin-DIN MIDI adapter). The global IN/OUT display is separate. */
-  get canMeterBlocks(): boolean {
-    return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink;
-  }
-  #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
-  startLiveMeters = () => {
-    if (this.#liveMeterTimer) return; // already running
-    const tick = async () => {
-      this.#liveMeterTimer = null;
-      const eid = this.selected?.effectId;
-      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
-      if (ok) {
-        try {
-          const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
-          const next = { ...this.liveMeters };
-          next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
-          this.liveMeters = next;
-        } catch {
-          /* best-effort */
-        }
-        // Looper: also fetch the live waveform + playhead + level for the open Looper block.
-        if (this.blockSlug === 'looper') {
-          try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
-        }
-      }
-      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
-      this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
-    };
-    tick();
-  };
-  stopLiveMeters = () => {
-    if (this.#liveMeterTimer) clearTimeout(this.#liveMeterTimer);
-    this.#liveMeterTimer = null;
-    this.liveMeters = {};
-  };
-
   // ── lifecycle ──
   init = async () => {
     this.customLayouts = loadLayouts();
@@ -667,18 +589,18 @@ class EditorStore {
       toast: (text, accent) => this.showToast(text, accent),
       isLegacyAm4: () => !this.isV2 && this.isAm4
     });
-    setRequestFailureReporter(this.#onReqFailure); // auto-report every 5xx/network failure to Faro
+    setRequestFailureReporter(this.#telemetry.onReqFailure); // auto-report every 5xx/network failure to Faro
     this.loadPorts(); // know the transport early (drives slowLink → meter throttling over MIDI)
     // Desktop-only first-run + update flows: the remote web app has no desktop to update, and the tour /
     // telemetry-consent / Ko-fi first-run popups belong to the PC install (the host handles telemetry), so
     // skip them in the remote build — otherwise every browser session nags with banners it can't act on.
     if (!isWebBuild()) {
       this.#initUpdater();
-      this.#initTelemetry();
+      this.#telemetry.init();
     }
     this.#initLocalSync();
     this.#initLocal();
-    this.#openEvents();
+    this.#telemetry.openEvents();
     // auto-detect the attached unit FIRST (so load() knows whether to use the AM4 4-slot path), and
     // warn if it isn't a model we have a live codec for
     try {
@@ -691,7 +613,7 @@ class EditorStore {
     // negotiate the API version + capabilities BEFORE the first load(), so every caps gate below
     // (unified vs legacy routes, polling, meters, renames) is decided correctly from the start
     await this.#handshake();
-    this.#reapplyPollingMode(); // re-assert the saved polling mode once caps confirm the control exists
+    this.#telemetry.reapplyPollingMode(); // re-assert the saved polling mode once caps confirm the control exists
     if (this.presetLiveQuery) {
       try {
         const n = (await forgefx.currentPreset()).number;
@@ -839,19 +761,9 @@ class EditorStore {
     if (on) this.scheduleAutoSync();
   };
 
-  // ── telemetry / diagnostics ──
-  #initTelemetry = async () => {
-    try {
-      const s = await forgefx.telemetryStatus();
-      this.telemetry = { ...this.telemetry, enabled: s.enabled, uploadEnabled: s.uploadEnabled, faroUrl: s.faroUrl };
-      await this.#startFaro();
-      // First run: if the build ships live diagnostics and the user hasn't chosen yet, ask once. If they
-      // already chose (or telemetry is off in this build), fall through to the one-time Ko-fi nudge.
-      if (s.enabled && !loadDecided()) this.consentPromptOpen = true;
-      else this.#maybeShowKofi();
-    } catch { /* telemetry disabled / engine not ready */ }
-  };
-  /** Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
+  // ── first-run onboarding chain (consent → Ko-fi → tour) ──
+  /** Called by the telemetry slice once the consent question is settled (answered, or never asked).
+   *  Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
    *  consent prompt is currently up (never stack two first-run popups). If Ko-fi won't show, hand off to
    *  the tour so the first-run sequence continues (consent → Ko-fi → tour). */
   #maybeShowKofi = () => {
@@ -875,55 +787,6 @@ class EditorStore {
   tourNext = () => { if (this.tourStep >= TOUR_LAST) this.endTour(); else this.tourStep++; };
   tourPrev = () => { if (this.tourStep > 0) this.tourStep--; };
   endTour = () => { this.tourActive = false; try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* */ } };
-  /** Start live Faro RUM iff the operator enabled it, the user consented, and we have a collector URL.
-   *  Dynamic-imported so the SDK never loads for users/builds without telemetry. Idempotent. */
-  #startFaro = async () => {
-    const t = this.telemetry;
-    if (!t.enabled || !t.consent || !t.faroUrl) return;
-    try {
-      const m = await import('$lib/api/faro');
-      if (this.#faroStarted) { m.resumeFaro(); return; } // re-opted-in: resume the paused instance
-      this.#faroStarted = true;
-      await m.initFaro({ url: t.faroUrl, version: __APP_VERSION__, instanceId: t.instanceId });
-    } catch { this.#faroStarted = false; /* offline / blocked — never let telemetry break the app */ }
-  };
-  setTelemetryConsent = (on: boolean) => {
-    this.telemetry = { ...this.telemetry, consent: on };
-    try { localStorage.setItem(TELEMETRY_KEY, on ? '1' : '0'); localStorage.setItem(DECIDED_KEY, '1'); } catch { /* */ }
-    if (on) this.#startFaro(); // opting in mid-session starts (or resumes) RUM immediately
-    else import('$lib/api/faro').then((m) => m.pauseFaro()).catch(() => {}); // opting out stops sending at once
-    this.#persistProfile(); // mirror the choice to the synced profile when logged in
-  };
-  /** First-run consent choice (accept/decline). Records it, closes the prompt, then shows the Ko-fi nudge. */
-  decideTelemetry = (on: boolean) => {
-    this.consentPromptOpen = false;
-    this.setTelemetryConsent(on);
-    this.#maybeShowKofi();
-  };
-  // ── device-telemetry polling mode (META-17) ──
-  /** Set the polling mode from a LOCAL user action: optimistic update → PUT → revert on failure. Follows
-   *  the store's optimistic-update idiom. Persists (local mirror + synced profile) only after the PUT
-   *  succeeds, so a rejected change never leaks into the profile. A no-op if unchanged. */
-  setPollingMode = async (mode: TelemetryMode) => {
-    const prev = this.pollingMode;
-    if (prev === mode) return;
-    this.pollingMode = mode; // optimistic
-    try {
-      await forgefx.setTelemetryMode(mode);
-      try { localStorage.setItem(POLLING_MODE_KEY, mode); } catch { /* */ }
-      this.#persistProfile(); // mirror the choice to the synced profile when logged in
-    } catch {
-      this.pollingMode = prev; // revert — server rejected / unsupported
-      this.showToast('Could not change polling mode', '#d6543f');
-    }
-  };
-  /** Re-apply the saved polling mode to the device after a connect/reconnect, once caps confirm the
-   *  control exists. Fire-and-forget with error tolerance — an old/unsupported server just ignores it.
-   *  NOT a user action, so it never persists (the local mirror is already the source of the value). */
-  #reapplyPollingMode = () => {
-    if (!this.hasTelemetryControl) return;
-    forgefx.setTelemetryMode(this.pollingMode).catch(() => { /* unsupported / not ready — leave as-is */ });
-  };
 
   // ── Axis hub + profile (contact / synced prefs) ──
   openAxis = (tab: 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'about') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
@@ -960,77 +823,8 @@ class EditorStore {
       }
       // Adopt a stored polling mode: update state + local mirror, then push it to the device (if the
       // control is available). Not a fresh user action, so we don't re-persist the profile.
-      if (isTelemetryMode(p.pollingMode) && p.pollingMode !== this.pollingMode) {
-        this.pollingMode = p.pollingMode;
-        try { localStorage.setItem(POLLING_MODE_KEY, p.pollingMode); } catch { /* */ }
-        this.#reapplyPollingMode();
-      }
+      if (isTelemetryMode(p.pollingMode)) this.#telemetry.adoptPollingMode(p.pollingMode);
     } catch { /* no profile yet / engine not ready */ }
-  };
-  /** Silently report a failure to Faro with device context (model/firmware/route/status) + record it for
-   *  the debug-report trail. This is the FLEET signal — the real device bugs are server-side 5xx, not
-   *  JS crashes, so we report every one. No UI; opt-in gated (only sends when the user enabled telemetry). */
-  reportFailure = (trigger: NonNullable<typeof this.reportPrompt>) => {
-    this.recordEvent('error', `${trigger.kind} ${trigger.route ?? ''} ${trigger.status ?? ''} ${trigger.message ?? ''}`.trim());
-    if (this.#faroStarted) {
-      import('$lib/api/faro').then((m) => m.faroDeviceError({ ...trigger, model: this.conn.device, firmware: this.conn.fw })).catch(() => {});
-    }
-  };
-  /** Every ForgeFX request failure (5xx or network) auto-reports here — registered on the client so we
-   *  don't have to remember to instrument each call site. Classifies the route into a coarse `kind` so the
-   *  Grafana dashboard can group (device-comm / telemetry / engine). */
-  #onReqFailure = (info: { route: string; method: string; status: number; message: string }) => {
-    const kind = info.route.startsWith('/telemetry') ? 'telemetry'
-      : info.status === 0 ? 'engine' : 'device-comm';
-    this.reportFailure({ kind, route: info.route, status: info.status, message: info.message });
-  };
-  /** On a MAJOR error (grid decode fail, detect failure), also nudge the user to upload a full debug
-   *  report — debounced per category so it never spams. Reporting to Faro already happened via the req
-   *  hook / reportFailure; this just adds the explicit-upload prompt on top for the big ones. */
-  offerDebugReport = (trigger: NonNullable<typeof this.reportPrompt>) => {
-    this.reportFailure(trigger);
-    if (!this.telemetry.uploadEnabled) return; // nothing to upload to
-    const now = Date.now();
-    if (now - (this.#lastOffer[trigger.kind] ?? 0) < 5 * 60_000) return;
-    this.#lastOffer[trigger.kind] = now;
-    this.reportPrompt = trigger;
-  };
-  dismissReportPrompt = () => { this.reportPrompt = null; };
-  /** Record a recent app event for the debug-report trail (small ring; scrubbed on upload). */
-  recordEvent = (kind: string, text: string) => {
-    this.#recentEvents.push({ t: Date.now(), kind, text: text.slice(0, 300) });
-    if (this.#recentEvents.length > 60) this.#recentEvents.shift();
-  };
-  /** Assemble → scrub → upload a debug report (the "Upload Debug Log" action). Independent of live
-   *  telemetry consent — an explicit per-incident send. The log is read via the Electron bridge (the
-   *  renderer can't touch the FS); in a browser dev build it's empty and we still send diag + events. */
-  uploadDebugReport = async (trigger?: DebugReport['trigger']): Promise<boolean> => {
-    if (this.telemetry.sending) return false;
-    this.telemetry = { ...this.telemetry, sending: true };
-    try {
-      let log = '';
-      try { log = (await (globalThis as { axisDesktop?: { readDebugLog?: () => Promise<string> } }).axisDesktop?.readDebugLog?.()) ?? ''; } catch { /* */ }
-      let diag: unknown;
-      try { diag = await forgefx.diag(); } catch { /* */ }
-      const report: DebugReport = {
-        instanceId: this.telemetry.instanceId,
-        capturedAt: Date.now(),
-        app: { version: (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev', platform: navigator.platform },
-        trigger,
-        contact: this.contact.trim() ? this.contact.trim().slice(0, 100) : undefined, // user-supplied, opt-in — not scrubbed
-        diag,
-        log: scrubPII(log),
-        events: this.#recentEvents.slice(-60).map((e) => ({ ...e, text: scrubPII(e.text) }))
-      };
-      const r = await forgefx.uploadDebugReport(report);
-      this.showToast(`Debug report sent (${Math.max(1, Math.round((r.stored ?? 0) / 1024))} KB) — thank you`, '#33c46b');
-      return true;
-    } catch {
-      this.showToast("Couldn't reach the server — your log is still saved locally (Help → Open Debug Log)", '#d6543f');
-      return false;
-    } finally {
-      this.telemetry = { ...this.telemetry, sending: false };
-    }
   };
   /** Full device backup → the LOCAL version store, then mirror into the Sync/ folder when configured.
    *  Minutes on a full unit (the client override raises the request timeout accordingly). */
@@ -1046,17 +840,6 @@ class EditorStore {
     }
   };
 
-  // live tuner/tempo/scene/cpu pushes from the device (local: SSE). Browser Direct subscribes to the
-  // in-page runtime's event bus instead (see direct.svelte.ts) — SSE is skipped there.
-  #openEvents = () => {
-    if (this.#events) return;
-    if (isDirect()) return; // events arrive via the in-page runtime subscription instead
-    try {
-      this.#events = forgefx.events((e) => this.applyDeviceEvent(e));
-    } catch {
-      /* SSE unsupported / offline — telemetry stays at last-known */
-    }
-  };
   #eventReload: ReturnType<typeof setTimeout> | null = null;
   /** Reflect a scene change WITHOUT a full preset reload. A scene switch never changes the grid
    *  STRUCTURE (block placement/routing is preset-level) — only per-block bypass / active channel /
@@ -1096,74 +879,42 @@ class EditorStore {
     if (this.#eventReload) clearTimeout(this.#eventReload);
     this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
   };
-  /** Apply one live device event — from SSE (local) or the in-page runtime (Browser Direct). Drives
-   *  cross-UI sync: another window or the device itself changed something, so this UI follows. */
-  applyDeviceEvent = (e: DeviceEvent) => {
-    switch (e.type) {
-      case 'tempo': this.bpm = e.bpm; break;
-      case 'scene': {
-        this.scene = e.index + 1; // badge immediately, then lightweight reflect (no full preset dump)
-        this.#scheduleSceneReload();
-        break;
-      }
-      case 'tuner': this.tuner = { ...this.tuner, freq: e.freq, note: e.note, cents: e.cents, octave: e.octave }; break;
-      case 'cpu': this.cpu = e.percent; break;
-      case 'meters': this.levels = { out1L: e.out1L, out1R: e.out1R, out2L: e.out2L, out2R: e.out2R }; break;
-      case 'blockState': {
-        this.#scheduleBlockStateReload();
-        break;
-      }
-      case 'param': {
-        // another UI moved a knob — reflect it live if that block is open (cheap: update the arc)
-        if (this.selected?.effectId === e.effectId) {
-          const p = this.params.find((x) => x.id === e.paramId);
-          if (p && p.norm !== e.norm) { p.norm = e.norm; this.params = [...this.params]; }
-        }
-        // keep the on-grid block level indicator (meter fill) in sync too — it reads from `meters`, which the
-        // open-block knob update above doesn't touch, so without this the tile wouldn't move either direction.
-        const m = this.meters[e.effectId];
-        if (m) {
-          const prev = m.vals[e.paramId];
-          const value = prev ? paramValue({ norm: e.norm, min: prev.min, max: prev.max, unit: prev.unit, log: prev.log }) : 0;
-          m.vals = { ...m.vals, [e.paramId]: { ...(prev ?? { value: 0 }), norm: e.norm, value } };
-          this.meters = { ...this.meters, [e.effectId]: { ...m } };
-        }
-        break;
-      }
-      case 'changed': {
-        // structural change elsewhere (block placed/removed, preset switched, or a device-side edit the
-        // unit doesn't push — AM4 front-panel / AM4-Edit) — reload, debounced so a burst coalesces into
-        // one refresh. Also re-read the open block's knobs: load() only refreshes the grid + blocks, so
-        // without this a front-panel knob turn on the currently-open block would leave its arcs stale.
-        if (this.#eventReload) clearTimeout(this.#eventReload);
-        this.#eventReload = setTimeout(async () => {
-          await this.load();
-          if (this.selKey) await this.#loadParams();
-        }, 250);
-        break;
-      }
-      case 'config': if (e.origin !== CLIENT_ID) this.#applyConfig(e.id, e.data); break; // ignore our own echo
-      case 'telemetryConfig': {
-        // The polling mode changed server-side (another UI, or our own PUT's echo). Adopt it into state
-        // + the local mirror WITHOUT re-triggering a PUT or a profile persist — only a local user action
-        // (setPollingMode) writes back, so this can never loop.
-        if (isTelemetryMode(e.mode) && e.mode !== this.pollingMode) {
-          this.pollingMode = e.mode;
-          try { localStorage.setItem(POLLING_MODE_KEY, e.mode); } catch { /* */ }
-        }
-        break;
-      }
-      case 'traffic': {
-        this.traffic = { txMsgs: e.txMsgs, txBytes: e.txBytes, rxMsgs: e.rxMsgs, rxBytes: e.rxBytes, since: e.since, loops: e.loops };
-        break;
-      }
-      case 'cacheBuild': {
-        // Device-definitions build progress (A4) — hand off to the deviceDefs store.
-        deviceDefs.onBuildEvent(e);
-        break;
-      }
+  // ── device-event hooks (called by the telemetry slice, which owns the single event switch) ──
+  /** Tempo pushed by the device. */
+  #applyTempo = (bpm: number) => { this.bpm = bpm; };
+  /** Scene switched device-side: badge immediately, then lightweight reflect (no full preset dump). */
+  #applyScene = (index: number) => {
+    this.scene = index + 1;
+    this.#scheduleSceneReload();
+  };
+  /** Another UI moved a knob — reflect it live if that block is open (cheap: update the arc), and keep
+   *  the on-grid block level indicator (meter fill) in sync too, since it reads from `meters`, which the
+   *  open-block knob update doesn't touch. */
+  #applyParamEcho = (effectId: number, paramId: number, norm: number) => {
+    if (this.selected?.effectId === effectId) {
+      const p = this.params.find((x) => x.id === paramId);
+      if (p && p.norm !== norm) { p.norm = norm; this.params = [...this.params]; }
+    }
+    const m = this.meters[effectId];
+    if (m) {
+      const prev = m.vals[paramId];
+      const value = prev ? paramValue({ norm, min: prev.min, max: prev.max, unit: prev.unit, log: prev.log }) : 0;
+      m.vals = { ...m.vals, [paramId]: { ...(prev ?? { value: 0 }), norm, value } };
+      this.meters = { ...this.meters, [effectId]: { ...m } };
     }
   };
+  /** A structural change elsewhere (block placed/removed, preset switched, or a device-side edit the unit
+   *  doesn't push — AM4 front-panel / AM4-Edit). Reload, debounced on the SHARED `#eventReload` timer so a
+   *  burst coalesces into one refresh. Also re-read the open block's knobs: load() only refreshes the grid
+   *  + blocks, so without this a front-panel knob turn on the open block would leave its arcs stale. */
+  #scheduleStructuralReload = () => {
+    if (this.#eventReload) clearTimeout(this.#eventReload);
+    this.#eventReload = setTimeout(async () => {
+      await this.load();
+      if (this.selKey) await this.#loadParams();
+    }, 250);
+  };
+
   /** Apply a shared config doc pushed by another UI (host↔remote). Sets local state + the localStorage cache
    *  directly — never re-saves (which would re-broadcast and loop). */
   #applyConfig = (id: string, data: unknown) => {
@@ -1861,7 +1612,7 @@ class EditorStore {
     }
   };
 
-  // ── telemetry actions ──
+  // ── scene / rename / tempo actions ──
   // UI scenes are 1..8; the device is 0..7. Switching a scene changes per-scene bypass/channel,
   // so reload the grid (badges) + the open block's params (channel may have changed).
   selectScene = async (ui: number) => {
@@ -1964,14 +1715,6 @@ class EditorStore {
       /* */
     }
   };
-  toggleTuner = async () => {
-    const next = !this.tuner.active;
-    this.tuner = { active: next };
-    await forgefx.setTuner(next).catch(() => {
-      this.tuner = { active: !next };
-    });
-  };
-
   // ── connection picker ──
   openPorts = async () => {
     this.portsOpen = true;
@@ -2000,7 +1743,7 @@ class EditorStore {
       if (d) this.detected = d;
       await this.load();
       await this.loadPorts();
-      this.#reapplyPollingMode(); // reconnect → re-assert the saved polling mode
+      this.#telemetry.reapplyPollingMode(); // reconnect → re-assert the saved polling mode
       this.showToast(conn ? 'Connection changed' : 'Back to auto-detect', '#35c9d6');
     } catch {
       this.showToast('Could not switch connection', '#d6543f');
@@ -2019,7 +1762,7 @@ class EditorStore {
       if (d) this.detected = d;
       await this.load();
       await this.loadPorts();
-      this.#reapplyPollingMode(); // reconnect → re-assert the saved polling mode
+      this.#telemetry.reapplyPollingMode(); // reconnect → re-assert the saved polling mode
       this.showToast(model === 'auto' ? 'Device profile: auto-detect' : `Device profile forced: ${model.toUpperCase()}`, '#35c9d6');
     } catch {
       this.showToast('Could not set device profile', '#d6543f');
@@ -2111,6 +1854,47 @@ class EditorStore {
     this.vh = h;
     if (this.mobColsAuto) this.mobCols = this.fitCols(w);
   };
+
+  // ── telemetry facade ─────────────────────────────────────────────────────────────────────────
+  // Straight delegation to `#telemetry` (telemetry.svelte.ts). This exists so the ~44 modules that
+  // import `editor` keep reading `editor.tuner`, `editor.meteringOn`, `editor.uploadDebugReport()`
+  // and friends unchanged — the extraction is invisible to call sites. Migrating those call sites to
+  // import `TelemetryStore` directly is a separate, later change; until then ADD to this facade
+  // rather than re-adding state to `EditorStore`.
+  get tuner() { return this.#telemetry.tuner; }
+  get cpu() { return this.#telemetry.cpu; }
+  get levels() { return this.#telemetry.levels; }
+  get linkMs() { return this.#telemetry.linkMs; }
+  set linkMs(v) { this.#telemetry.linkMs = v; }
+  get traffic() { return this.#telemetry.traffic; }
+  get looperWave() { return this.#telemetry.looperWave; }
+  set looperWave(v) { this.#telemetry.looperWave = v; }
+  get pollingMode() { return this.#telemetry.pollingMode; }
+  get telemetry() { return this.#telemetry.telemetry; }
+  // Writable: both were plain `$state` fields before the extraction, and the overlay e2e harness
+  // drives them directly to stage a prompt. Product code only reads them.
+  get consentPromptOpen() { return this.#telemetry.consentPromptOpen; }
+  set consentPromptOpen(v) { this.#telemetry.consentPromptOpen = v; }
+  get reportPrompt() { return this.#telemetry.reportPrompt; }
+  set reportPrompt(v) { this.#telemetry.reportPrompt = v; }
+  get meteringOn() { return this.#telemetry.meteringOn; }
+  set meteringOn(v) { this.#telemetry.meteringOn = v; }
+  get liveMeters() { return this.#telemetry.liveMeters; }
+  get canMeterBlocks() { return this.#telemetry.canMeterBlocks; }
+  monitorFor = (effectId: number) => this.#telemetry.monitorFor(effectId);
+  monitorsFor = (effectId: number) => this.#telemetry.monitorsFor(effectId);
+  startLiveMeters = () => this.#telemetry.startLiveMeters();
+  stopLiveMeters = () => this.#telemetry.stopLiveMeters();
+  applyDeviceEvent = (e: DeviceEvent) => this.#telemetry.applyDeviceEvent(e);
+  toggleTuner = () => this.#telemetry.toggleTuner();
+  setPollingMode = (mode: TelemetryMode) => this.#telemetry.setPollingMode(mode);
+  setTelemetryConsent = (on: boolean) => this.#telemetry.setTelemetryConsent(on);
+  decideTelemetry = (on: boolean) => this.#telemetry.decideTelemetry(on);
+  uploadDebugReport = (trigger?: DebugReport['trigger']) => this.#telemetry.uploadDebugReport(trigger);
+  offerDebugReport = (trigger: ReportTrigger) => this.#telemetry.offerDebugReport(trigger);
+  reportFailure = (trigger: ReportTrigger) => this.#telemetry.reportFailure(trigger);
+  dismissReportPrompt = () => this.#telemetry.dismissReportPrompt();
+  recordEvent = (kind: string, text: string) => this.#telemetry.recordEvent(kind, text);
 }
 
 export const editor = new EditorStore();

@@ -49,7 +49,7 @@ schema mirroring the widened contract — this is what actually fails at test
 time on drift, not just at runtime in the field. v2 caps fields are optional
 (`?`) by design so legacy payloads degrade to the `isAm4` fallback branches.
 
-## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1865 lines)
+## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1900 lines)
 
 `class EditorStore` exported as a singleton `export const editor`; components
 import it directly — no context or props threading.
@@ -62,10 +62,11 @@ import it directly — no context or props threading.
 - `poll()` / `watchPreset()` are re-entrancy-guarded (`#polling` / `#watching`)
   and throttled on slow links — **never add an unguarded device read to the poll
   loop**.
-- SSE: `#openEvents` feeds `applyDeviceEvent`, a single `switch` over the
-  `DeviceEvent` union. To react to a device-side change (e.g. scene change),
-  extend the existing `case` and reuse the `#eventReload` debounce — do not add
-  parallel timers.
+- SSE: `openEvents` feeds `applyDeviceEvent`, a single `switch` over the
+  `DeviceEvent` union. **Both now live in the telemetry slice** (below); cases
+  belonging to other slices call back through `TelemetryHost`. To react to a
+  device-side change (e.g. scene change), extend the existing `case` and reuse
+  the `#eventReload` debounce — do not add parallel timers or a second event path.
 - **THE canonical action shape** — optimistic update, await, revert on catch:
 
   ```ts
@@ -85,6 +86,43 @@ narrow host interface to avoid an editor↔history import cycle).
 **Own module vs extend editor:** give state its own `*.svelte.ts` when it has an
 independent persistence lifecycle or must avoid an import cycle. Live device
 state flowing through poll/SSE with the shared connection/caps stays in `editor`.
+
+### Slices — the facade pattern (M4 of the architecture refactor)
+
+`EditorStore` is being decomposed one responsibility at a time. A slice is a
+plain class in its own `*.svelte.ts`, holding its own `$state`; `EditorStore`
+owns an instance and **re-exposes every member by delegation**, so the ~44
+modules that import `editor` never change. Migrating call sites to import a
+slice directly is a separate, later change — never in the same commit as an
+extraction.
+
+Extracted so far: **`editor/telemetry.svelte.ts`** (`TelemetryStore`) — the SSE
+event path, tuner/CPU/output-level/traffic/link-latency readouts, per-block live
+meters, the device-telemetry polling mode, and the privacy-gated diagnostics
+(consent, Faro RUM, debug reports, `scrubPII`).
+Still on `EditorStore`, in planned extraction order: `deviceSession`
+(connection, capability gates, connection picker), `presetBuffer` (versions,
+local folder sync, preset nav, save), `gridEditing` + `paramEditing`.
+
+Three rules make this work:
+
+1. **A slice never imports `editor.svelte.ts`** — that's a cycle. Everything it
+   needs from the rest of the store arrives through an injected host interface
+   (`TelemetryHost`), declared by the slice and built inside `EditorStore` as a
+   private `#telemetryHost()` factory so the host surface stays off the public
+   API. Use `get` accessors in it, not snapshots, so reads stay live. Keep it
+   narrow: everything added there is coupling the next extraction inherits.
+   (`editor/history.svelte.ts`'s `bindHost` is the older precedent.)
+2. **The facade is the compatibility layer.** A block of straight delegating
+   getters/setters at the bottom of `EditorStore`. State that call sites used to
+   write (e.g. `editor.meteringOn`) keeps a `set` — dropping one silently breaks
+   assignment. When a slice grows a member, ADD to the facade; do not re-add
+   state to `EditorStore`.
+3. **`_editorSatisfiesSurface` must still typecheck.** If it doesn't, the facade
+   is incomplete — fix the facade, never weaken the guard or `EditorSurface`.
+
+Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
+fake host — `editor/telemetry.runes.test.ts` is the worked example.
 
 ## Component pattern
 
@@ -191,11 +229,13 @@ sidebar divider — this is a decision, not an oversight.
     reactivity assertions then pass vacuously against real bugs. Components are
     still never unit-mounted; this is for stores.
   - `library.runes.test.ts` is the worked example (proxy-identity + derived
-    invalidation). `editor.svelte.ts` is still `vi.mock`'d out of
-    `editorSurface.test.ts` and is the obvious next candidate.
-- The monolith otherwise has almost no unit coverage (only `direct/nativeMidi`
-  and `direct/ota`). New features should extract pure logic and add a co-located
-  vitest — an easy win.
+    invalidation). `editor/telemetry.runes.test.ts` is the worked example for an
+    editor **slice**: construct the class with a fake host, assert the gates and
+    the reassignment idiom. `editor.svelte.ts` itself is still `vi.mock`'d out of
+    `editorSurface.test.ts`.
+- The monolith otherwise has thin unit coverage (`direct/nativeMidi`,
+  `direct/ota`, and the telemetry slice). New features should extract pure logic
+  and add a co-located vitest — an easy win.
 - All 19 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
   `bootCleanWorkbench`, viewport ≥ 1366 px). There is NO monolith-shell e2e
   harness — monolith behavior is verified manually.
