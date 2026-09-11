@@ -117,20 +117,24 @@
         editor.presetSearchOpen = true;
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
+        // The registry is the *fallback* owner of Escape, not its first responder: whatever is
+        // innermost gets first refusal. A sub-popover (query autocomplete, tag menu), an inline
+        // rename input, or a focus-trapped menu/drawer claims the key itself — by stopping
+        // propagation before it reaches this bubble-phase listener, or by calling
+        // preventDefault. Listening in the capture phase would take that first look away from
+        // them and close an unrelated overlay instead of the thing the user was looking at.
+        if (e.defaultPrevented) return;
         // Priority order (and the tuner/link-arm/block-editor special cases) is data in
         // src/lib/overlay/overlays.svelte.ts — closes exactly the top overlay per press.
-        if (overlays.escape()) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
+        if (overlays.escape()) e.preventDefault();
       }
     };
     window.addEventListener('resize', onResize);
-    window.addEventListener('keydown', onKey, { capture: true });
+    window.addEventListener('keydown', onKey);
     return () => {
       // The poll/watch intervals are owned by the $effect above (it clears them on teardown).
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('keydown', onKey, { capture: true });
+      window.removeEventListener('keydown', onKey);
     };
   });
 

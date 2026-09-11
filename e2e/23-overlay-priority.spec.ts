@@ -61,4 +61,46 @@ test.describe('Overlay priority', () => {
     await expect(page.locator('[data-overlay="reportPrompt"]')).toHaveCount(0);
     await expect(page.locator('[data-overlay="palette"]')).toBeVisible();
   });
+
+  test('an inner surface that claims Escape keeps the overlay behind it open', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate(async () => {
+      const { editor } = await import('/src/lib/editor/editor.svelte.ts');
+      editor.paletteOpen = true;
+    });
+
+    const palette = page.locator('[data-overlay="palette"]');
+    await expect(palette).toBeVisible();
+
+    // Stand-in for a sub-popover / inline rename inside a dialog: a handler that claims
+    // Escape by stopping propagation, and one that claims it with preventDefault alone.
+    // Either way the registry must leave the dialog alone.
+    await palette.locator('input').first().evaluate((el) => {
+      el.addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).key === 'Escape') e.stopPropagation();
+      });
+    });
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeVisible();
+
+    await palette.locator('input').first().evaluate((el) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      el.replaceWith(clone);
+      clone.focus();
+      clone.addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).key === 'Escape') e.preventDefault();
+      });
+    });
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeVisible();
+
+    // Nothing claims it — the registry closes the top overlay as before.
+    await palette.locator('input').first().evaluate((el) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      el.replaceWith(clone);
+      clone.focus();
+    });
+    await page.keyboard.press('Escape');
+    await expect(palette).toHaveCount(0);
+  });
 });
