@@ -12,19 +12,39 @@ import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData
 // This module stays pure and dependency-free — it runs in the `node` vitest project, which never
 // compiles rune stores. Anything store-shaped (real-name lookup, decoded blocks) is injected.
 
-// Filterable block category ids (picker order, §2.3). Upper-cased tokens map back to these slugs.
+// Canonical block-slug vocabulary the parser accepts. MUST stay in step with the category map in
+// presetBrowserWorkbenchRowChips.ts (`CAT`) — that map's keys are the source of truth for every real
+// block slug in this app; every key there must appear here too, or the parser silently drops
+// conditions the autocomplete (which suggests off the library's own slugs, presetBrowserWorkbenchSpecs.ts
+// `filterableSlugs`) just offered. Not imported directly (rowChips already imports `estimateCpu` from
+// this module, so importing back would be circular) — keep this list a literal, mirrored by hand.
 export const AXIS_PB_FILTERABLE_BLOCKS = [
+  'input',
+  'output',
   'amp',
-  'drive',
   'cab',
+  'drive',
   'comp',
+  'geq',
+  'peq',
   'chorus',
-  'flange',
+  'flanger',
   'phaser',
   'filter',
-  'enhance',
+  'enhancer',
+  'wah',
   'delay',
-  'reverb'
+  'reverb',
+  'pitch',
+  'synth',
+  'gate',
+  'ringmod',
+  'tremolo',
+  'rotary',
+  'volume',
+  'formant',
+  'multitap',
+  'megatap'
 ] as const;
 
 export type AxisPbBlockSlug = (typeof AXIS_PB_FILTERABLE_BLOCKS)[number];
