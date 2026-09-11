@@ -72,6 +72,7 @@
           id: 'rename-page',
           label: 'Rename Page…',
           separatorBefore: true,
+          disabled: !$controller.editMode,
           run: () => {
             renamingPageId = pageId;
             renameDraft = page?.label ?? menuEntry.label ?? '';
@@ -81,13 +82,14 @@
         {
           id: 'duplicate-page',
           label: 'Duplicate Page',
+          disabled: !$controller.editMode,
           run: () => controller.duplicatePage(pageId)
         },
         {
           id: 'delete-page',
           label: 'Delete Page',
           danger: true,
-          disabled: !canDeleteNavigationPage($controller.activeLayout),
+          disabled: !$controller.editMode || !canDeleteNavigationPage($controller.activeLayout),
           run: () => controller.removePage(pageId)
         }
       );
@@ -97,6 +99,7 @@
         id: 'mode',
         label: mode === 'bottom' ? 'Use Side Navigation' : 'Use Bottom Navigation',
         separatorBefore: true,
+        disabled: !$controller.editMode,
         run: () => controller.dispatch({ type: 'navigation.mode', mode: mode === 'bottom' ? 'side' : 'bottom' })
       },
       {
