@@ -222,6 +222,7 @@
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (dragging) {
         const intent = panelDropIntentAt(ev.clientX, ev.clientY, panelId);
         if (intent) controller.dispatch(panelDropCommand(panelId, intent));
@@ -231,9 +232,18 @@
       }
     };
 
+    // pointercancel fires no pointerup — abort the drag without dropping the panel or activating it.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (dragging) controller.setDrag(null);
+    };
+
     e.preventDefault();
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   // ── Spring-loaded tabs (T21 directive #3) ───────────────────────────────

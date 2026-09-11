@@ -121,10 +121,21 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      paramInteracting = false;
+    };
+    // pointercancel (e.g. a touch scroll takeover) fires no pointerup — without this the listeners
+    // above stay live and every stray pointermove keeps writing values to the connected device.
+    // Tear down and stop writing; do NOT send a final setPinnedParam.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       paramInteracting = false;
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   function paramWheel(event: WheelEvent) {

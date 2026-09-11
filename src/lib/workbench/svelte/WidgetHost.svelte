@@ -395,6 +395,7 @@
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (dragging) {
         const resolved = resolveDropAt(ev.clientX, ev.clientY);
         if (resolved && 'command' in resolved) controller.dispatch(resolved.command);
@@ -415,9 +416,21 @@
       }
     };
 
+    // A pointercancel (touch scroll takeover, OS interruption) never fires
+    // pointerup — without this the listeners would stay live and a later
+    // stray pointerup would fire the drop/tap path against a gesture that
+    // already ended. Abort silently: same teardown as onUp, no dispatch.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (dragging) controller.setDrag(null);
+    };
+
     e.preventDefault();
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   function moveByKey(e: KeyboardEvent) {
@@ -495,6 +508,7 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (!dragging) {
         // A tap on the grip (no reposition) opens the widget menu — floating
         // chips have no drag surface, so the grip is their menu affordance too.
@@ -510,8 +524,25 @@
       });
     };
 
+    // Same pointercancel guard as dragPointerDown: abort the gesture without
+    // persisting a position, so an interrupted drag doesn't leave the window
+    // listeners live for a later stray pointerup to act on. Also undo the
+    // imperative style write from onMove — since nothing is dispatched, the
+    // reactive `style` binding (keyed off unchanged widget.floatingRect) would
+    // otherwise never revert the node to its last persisted position.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (dragging && hostEl) {
+        hostEl.style.left = `${origin.x}px`;
+        hostEl.style.top = `${origin.y}px`;
+      }
+    };
+
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   // Self-heal: on mount and on viewport/zone resize, re-clamp a persisted

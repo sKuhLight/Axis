@@ -54,11 +54,20 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      document.body.style.cursor = '';
+    };
+    // pointercancel fires no pointerup — without this the resize stays "live" and the cursor stuck.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       document.body.style.cursor = '';
     };
     document.body.style.cursor = horizontalRegion ? 'ns-resize' : 'ew-resize';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 </script>
 
