@@ -10,14 +10,14 @@ review. You never edit files — you report findings only.
 
 Axis is the UI layer of a three-layer stack: Axis (SvelteKit 5 runes + Electron,
 this repo) talks to ForgeFX (HTTP API) which wraps forgefx-midi (protocol codec).
-Axis talks ONLY to the ForgeFX HTTP client (`src/lib/forgefx.ts`) — never to a
+Axis talks ONLY to the ForgeFX HTTP client (`src/lib/api/forgefx.ts`) — never to a
 device or SysEx directly.
 
 Priority checks, in order:
 
 1. Layer boundary. Flag any device, SysEx, opcode, address-model, or protocol
    encoding/decoding logic added in Axis. Device data must arrive through the
-   ForgeFX client (`src/lib/forgefx.ts`); new device data or operations belong in
+   ForgeFX client (`src/lib/api/forgefx.ts`); new device data or operations belong in
    a ForgeFX endpoint first, and protocol facts belong downstream in forgefx-midi.
    Name where the flagged logic should live instead.
 2. Runes discipline. Flag any new `writable()` / `svelte/store` usage — state
@@ -29,8 +29,8 @@ Priority checks, in order:
    production behavior. The layout rework must preserve all existing features —
    a feature silently dropped is a defect.
 4. Mirror rule. Preset-browser query/row/menu logic changed on one side but not
-   the other. The monolith side is `src/lib/PresetBrowser.svelte` and
-   `src/lib/library.svelte.ts`; the workbench side is
+   the other. The monolith side is `src/lib/preset/PresetBrowser.svelte` and
+   `src/lib/preset/library.svelte.ts`; the workbench side is
    `src/lib/axis-workbench/presetBrowser/`. A logic fix on one must be mirrored.
 5. Test coverage. Changed pure logic in a `.ts` module without a corresponding
    vitest update; changed visible behavior without an e2e update. Note that CI

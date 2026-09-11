@@ -16,7 +16,7 @@ Produce a plan with these sections:
    work belongs:
    - Rendering / interaction / UX → here, in Axis.
    - Device interaction or a new HTTP operation → add or extend a ForgeFX endpoint
-     first, then consume it via the ForgeFX client (`src/lib/forgefx.ts`).
+     first, then consume it via the ForgeFX client (`src/lib/api/forgefx.ts`).
    - Protocol facts (frames, opcodes, enums, address models) → forgefx-midi
      (downstream codec), not Axis.
    If the work needs downstream changes, say so explicitly and treat them as
@@ -28,8 +28,8 @@ Produce a plan with these sections:
      commands `/new-widget`, `/new-panel`, `/new-runtime-adapter` and follow the
      nested `src/lib/axis-workbench/CLAUDE.md` conventions.
    - Both: the monolith↔workbench mirror rule applies — preset-browser logic in
-     `src/lib/PresetBrowser.svelte` / `src/lib/library.svelte.ts` must be mirrored
-     into `src/lib/axis-workbench/presetBrowser/`.
+     `src/lib/preset/PresetBrowser.svelte` / `src/lib/preset/library.svelte.ts` must be
+     mirrored into `src/lib/axis-workbench/presetBrowser/`.
 
 4. Affected files. List the files you expect to add or change, with a one-line
    reason each. Respect the production-feature-keep rule: existing features must

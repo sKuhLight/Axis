@@ -44,8 +44,8 @@ projects: see each repo's local `CLAUDE.md`.
 
 ### 3c. Axis (UI layer)
 
-- Follow `/new-endpoint` order: `src/lib/types.ts` → `src/lib/forgefx.ts` →
-  `src/lib/editor.svelte.ts` wiring → UI (surface rules in `src/lib/CLAUDE.md`).
+- Follow `/new-endpoint` order: `src/lib/api/types.ts` → `src/lib/api/forgefx.ts` →
+  `src/lib/editor/editor.svelte.ts` wiring → UI (surface rules in `src/lib/CLAUDE.md`).
 - Gate: `npm run check && npm test`.
 - Browser refresh on :5173 and verify the flow end-to-end against the device/server.
 

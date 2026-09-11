@@ -45,7 +45,7 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 ## Step 5 — Implementation conventions checklist
 
 - [ ] Svelte 5 runes only — never `writable()`.
-- [ ] State lives in the editor singleton (`src/lib/editor.svelte.ts`) unless it has
+- [ ] State lives in the editor singleton (`src/lib/editor/editor.svelte.ts`) unless it has
       independent persistence or an import-cycle risk — then its own `*.svelte.ts`.
 - [ ] Actions: optimistic update → `await forgefx.*` → revert on catch.
 - [ ] Device-dependent behavior is capability-gated via a DeviceCaps getter

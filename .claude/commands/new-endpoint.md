@@ -19,21 +19,21 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 2 — The 4-step add (in this order)
 
-### 2a. Types — `src/lib/types.ts`
+### 2a. Types — `src/lib/api/types.ts`
 
 - Hand-mirror the request/response shape from the ForgeFX endpoint.
 - Mind the hand-mirrored contract: drift typechecks green but fails at runtime —
   copy the shape exactly from the server source, not from memory.
 - Make new v2 capability fields optional so legacy servers degrade gracefully.
 
-### 2b. Client method — `src/lib/forgefx.ts`
+### 2b. Client method — `src/lib/api/forgefx.ts`
 
 - Add ONE method to the `forgefx` object using `req<T>`.
 - Naming: reads = noun names; writes = verb-prefixed.
 - Use the correct HTTP method and body.
 - Override the 12s AbortSignal timeout for long-running operations.
 
-### 2c. Store wiring — `src/lib/editor.svelte.ts`
+### 2c. Store wiring — `src/lib/editor/editor.svelte.ts`
 
 - Add a store action/getter: optimistic update → `await forgefx.*` → revert on catch.
 - Reuse existing debounce/reload plumbing (e.g. `#eventReload`) rather than

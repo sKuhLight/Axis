@@ -63,13 +63,13 @@ Visible chrome (new widgets/panels/nav) needs Playwright e2e coverage (mirror
 
 (g) **Generic-layer purity.** Nothing under `src/lib/workbench/` may import from the app
 or from `src/lib/axis-workbench/`. Grep import paths in touched workbench files for
-`axis-workbench`, `../../editor`, `../../forgefx`, `../../history`, `$lib/` app modules,
-or any `.svelte`/`.ts` outside `src/lib/workbench/`.
+`axis-workbench`, `../../editor/editor`, `../../api/forgefx`, `../../editor/history`,
+`$lib/` app modules, or any `.svelte`/`.ts` outside `src/lib/workbench/`.
 
-(h) **Preset-browser mirror rule.** If the diff changes `src/lib/PresetBrowser.svelte` or
-`src/lib/library.svelte.ts` in a way that affects query grammar, row rendering, or menu
-logic, the same logic must be mirrored in `src/lib/axis-workbench/presetBrowser/` (and
-vice versa). Flag when only one side changed.
+(h) **Preset-browser mirror rule.** If the diff changes
+`src/lib/preset/PresetBrowser.svelte` or `src/lib/preset/library.svelte.ts` in a way that
+affects query grammar, row rendering, or menu logic, the same logic must be mirrored in
+`src/lib/axis-workbench/presetBrowser/` (and vice versa). Flag when only one side changed.
 
 (i) **Normalization idempotence.** If the diff touches the normalization chain in
 `src/lib/axis-workbench/axisWorkbenchStore.svelte.ts` (migrate → ensureGridControls →
