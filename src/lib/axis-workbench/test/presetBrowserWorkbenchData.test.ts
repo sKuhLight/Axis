@@ -239,11 +239,57 @@ describe('Preset Browser Workbench data view', () => {
   });
 
   it('sorts by CPU ascending (low first) and descending (high first)', () => {
+    // Regression (F3): this must sort on estimateCpu's weighted per-family sum, NOT blockCount — the
+    // fixture set deliberately disagrees on order between the two. blockCount order is
+    // local:edge(0) < dev:1(1) < file:ambient(2), but weighted CPU is local:edge(20, clamped base) <
+    // file:ambient(plex 4 + reverb 12 + base 8 = 24) < dev:1(amp 28 + base 8 = 36) — dev:1 and
+    // file:ambient swap places relative to blockCount order.
     const asc = createAxisPresetBrowserDataView({ entries, sort: 'cpu', sortDir: 'asc' });
-    expect(asc.visibleEntries.map((e) => e.blockCount)).toEqual([0, 1, 2]);
+    expect(asc.visibleEntries.map((e) => e.id)).toEqual(['local:edge', 'file:ambient', 'dev:1']);
 
     const desc = createAxisPresetBrowserDataView({ entries, sort: 'cpu', sortDir: 'desc' });
-    expect(desc.visibleEntries.map((e) => e.blockCount)).toEqual([2, 1, 0]);
+    expect(desc.visibleEntries.map((e) => e.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+  });
+
+  it('CPU sort puts the heavier-weighted preset first even when it has fewer blocks (F3 regression)', () => {
+    // 3 heavy blocks (amp 28 + cab 12 + reverb 12 + base 8 = 60) vs 6 cheap blocks (volume 1 + geq 2 +
+    // peq 2 + gate 2 + input 0 + output 0 + base 8 = 15, clamped up to 20). A blockCount-based sort
+    // would rank the 6-block entry above the 3-block one; the correct CPU-weighted sort must not.
+    const heavyFew: AxisPresetBrowserLibEntryLike = {
+      id: 'heavy-few',
+      source: 'local',
+      summary: {
+        name: 'Heavy Few',
+        scenes: [],
+        blocks: [
+          { slug: 'amp', name: 'Amp 1' },
+          { slug: 'cab', name: 'Cab 1' },
+          { slug: 'reverb', name: 'Reverb 1' }
+        ]
+      }
+    };
+    const cheapMany: AxisPresetBrowserLibEntryLike = {
+      id: 'cheap-many',
+      source: 'local',
+      summary: {
+        name: 'Cheap Many',
+        scenes: [],
+        blocks: [
+          { slug: 'volume', name: 'Volume 1' },
+          { slug: 'geq', name: 'GEQ 1' },
+          { slug: 'peq', name: 'PEQ 1' },
+          { slug: 'gate', name: 'Gate 1' },
+          { slug: 'input', name: 'Input 1' },
+          { slug: 'output', name: 'Output 1' }
+        ]
+      }
+    };
+
+    const desc = createAxisPresetBrowserDataView({ entries: [cheapMany, heavyFew], sort: 'cpu', sortDir: 'desc' });
+    expect(desc.visibleEntries.map((e) => e.id)).toEqual(['heavy-few', 'cheap-many']);
+
+    const asc = createAxisPresetBrowserDataView({ entries: [cheapMany, heavyFew], sort: 'cpu', sortDir: 'asc' });
+    expect(asc.visibleEntries.map((e) => e.id)).toEqual(['cheap-many', 'heavy-few']);
   });
 
   it('recent desc keeps the number-ascending tiebreak while recent asc flips only the primary key', () => {
