@@ -6,6 +6,7 @@
   import { editor } from '$lib/editor/editor.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import DialogBody from '$lib/ui/DialogBody.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL } from './support';
 
@@ -20,7 +21,7 @@
 
 <!-- ── first-run telemetry consent ── -->
 <Dialog overlay="consentPrompt" open={editor.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
-    <div class="card">
+    <DialogBody>
       <div class="pad">
         <div class="head"><div class="logo">🛡</div><div><div class="h1">Help improve Axis?</div><div class="sub">Anonymous diagnostics — your choice</div></div></div>
         <p class="muted">Axis can send <strong>anonymous</strong> error &amp; performance data when something goes wrong, so bugs get fixed faster. No personal data, no presets, no account info — just what broke and on which device.</p>
@@ -34,7 +35,7 @@
         </div>
         <p class="legal">You can change this any time in <strong>Axis → Privacy</strong>. See our <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>
       </div>
-    </div>
+    </DialogBody>
 </Dialog>
 
 <!-- ── one-time Ko-fi nudge ── -->
@@ -54,7 +55,7 @@
 {#if editor.reportPrompt}
   {@const p = editor.reportPrompt}
   <Dialog overlay="reportPrompt" open={true} onClose={editor.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
-    <div class="card sm">
+    <DialogBody class="sm">
       <div class="pad">
         <div class="head"><div class="logo warn">⚠</div><div><div class="h1">Something went wrong</div><div class="sub">{[p.route, p.status].filter(Boolean).join(' · ') || p.kind}</div></div></div>
         <p class="muted">Axis hit an error{p.route ? ` talking to your device (${p.route}${p.status ? ` · ${p.status}` : ''})` : ''}. You can send a debug report so we can fix it.</p>
@@ -72,13 +73,12 @@
         <button class="cta" disabled={!t.uploadEnabled || t.sending} onclick={() => sendNow(p)}>{t.sending ? 'Sending…' : 'Upload report'}</button>
         <button class="link dim center" onclick={editor.dismissReportPrompt}>Not now</button>
       </div>
-    </div>
+    </DialogBody>
 </Dialog>
 {/if}
 
 <style>
-  /* card frame comes from Dialog; `.card` here is now the scrollable padded body. */
-  .card { position: relative; width: 100%; overflow-y: auto; color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  /* card frame + scrollable body come from Dialog/DialogBody. */
   .pad { padding: 26px 24px 22px; }
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
   .logo { width: 46px; height: 46px; flex: none; border-radius: 13px; background: rgba(53, 201, 214, 0.12); border: 1px solid rgba(53, 201, 214, 0.3); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent); }

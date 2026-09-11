@@ -12,6 +12,7 @@
   import { directBoot } from '$lib/platform/direct.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import DialogBody from '$lib/ui/DialogBody.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
@@ -110,7 +111,7 @@
 {/snippet}
 
 <Dialog overlay="axisHub" open={editor.axisOpen} onClose={close} width="440px" maxHeight="86vh" align="top" sheet={mob} class="axis-hub-dlg">
-    <div class="card" class:mob>
+    <DialogBody class={mob ? 'mob' : ''}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar">
@@ -358,16 +359,12 @@
           <p class="legal">{COPYRIGHT} · Open-source · Not affiliated with Fractal Audio Systems</p>
         </div>
       {/if}
-    </div>
+    </DialogBody>
 </Dialog>
 
 <style>
-  /* card frame comes from Dialog; `.card` here is now the scrollable body (with the
-     absolutely-positioned close button anchored to it). */
-  .card { position: relative; width: 100%; overflow-y: auto; color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
-  .card::-webkit-scrollbar { width: 9px; }
-  .card::-webkit-scrollbar-track { background: transparent; }
-  .card::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  /* card frame + scrollable body come from Dialog/DialogBody; `.x` is the absolutely-positioned
+     close button anchored to the body. */
   .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: var(--surface2); border: 1px solid var(--border2); color: var(--textdim); font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
   .x:hover { color: var(--text); border-color: var(--border3); }
 
