@@ -2,6 +2,7 @@
   import { editor } from '$lib/editor/editor.svelte';
   import { library } from './library.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import FavoriteStar from '$lib/ui/FavoriteStar.svelte';
 
   type Recent = { n: number; name: string };
   let recents = $state<Recent[]>([]);
@@ -137,7 +138,7 @@
             <span class="rtext"><span class="rname">{r.name || `Preset ${r.n}`}</span></span>
             {#if editor.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
           </button>
-          <button class="star" class:on={isFav(r.n)} title={isFav(r.n) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleFav(r.n, r.name)}>{isFav(r.n) ? '★' : '☆'}</button>
+          <FavoriteStar on={isFav(r.n)} onclick={() => toggleFav(r.n, r.name)} />
         </div>
       {/snippet}
 
@@ -333,10 +334,10 @@
     border-radius: 11px;
   }
   .rowwrap:hover {
-    background: rgba(53, 201, 214, 0.1);
+    background: var(--accent-tint);
   }
   .rowwrap.active {
-    background: rgba(245, 166, 35, 0.07);
+    background: var(--amber-tint);
   }
   .row {
     flex: 1;
@@ -350,24 +351,6 @@
     background: transparent;
     cursor: pointer;
     text-align: left;
-  }
-  .star {
-    flex: none;
-    width: 38px;
-    height: 38px;
-    margin-right: 6px;
-    border: 0;
-    background: transparent;
-    color: var(--border3);
-    font-size: 17px;
-    cursor: pointer;
-    border-radius: 9px;
-  }
-  .star:hover {
-    color: var(--amber);
-  }
-  .star.on {
-    color: var(--amber);
   }
   .num {
     flex: none;

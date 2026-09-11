@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getEditorSurface } from '$lib/editor/editorSurface';
   import Dialog from '$lib/ui/Dialog.svelte';
+  import FavoriteStar from '$lib/ui/FavoriteStar.svelte';
   import { catFor } from './catalog';
   import { applyCabIrNames, loadCabIrsCachedFirst } from './cabIrsCache';
   import type { CabState } from '$lib/api/types';
@@ -227,7 +228,7 @@
                   </span>
                   {#if isCurrent(r)}<span class="now mono">● live</span>{:else if r.fi === hi}<span class="ret mono">↵</span>{/if}
                 </button>
-                <button class="star" class:on={isFav(r.id)} aria-label="Favorite" title={isFav(r.id) ? 'Unfavorite' : 'Favorite'} onclick={() => toggleFav(r.id)}>{isFav(r.id) ? '★' : '☆'}</button>
+                <FavoriteStar on={isFav(r.id)} size={16} onclick={() => toggleFav(r.id)} />
               </div>
             {/each}
           {/each}
@@ -457,22 +458,6 @@
     border: 1px solid var(--accent-border);
     border-radius: 5px;
     padding: 4px 6px;
-  }
-  .star {
-    flex: none;
-    width: 38px;
-    height: 38px;
-    margin-right: 6px;
-    border: 0;
-    background: transparent;
-    color: var(--border3);
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: 9px;
-  }
-  .star:hover,
-  .star.on {
-    color: var(--amber);
   }
   .empty {
     padding: 40px 20px;
