@@ -33,15 +33,24 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 - Use the correct HTTP method and body.
 - Override the 12s AbortSignal timeout for long-running operations.
 
-### 2c. Store wiring — `src/lib/editor/editor.svelte.ts`
+### 2c. Store wiring — `src/lib/editor/`
 
 - Add a store action/getter: optimistic update → `await forgefx.*` → revert on catch.
 - Reuse existing debounce/reload plumbing (e.g. `#eventReload`) rather than
   introducing new timers.
+- Pick the file by responsibility: the editor store is being split into slices.
+  Device connection / caps / ports / scene / tempo → `deviceSession.svelte.ts`;
+  SSE, meters, diagnostics → `telemetry.svelte.ts`; everything else is still
+  `editor.svelte.ts`. A slice needs a matching facade entry on `EditorStore` and
+  a `*.runes.test.ts` — see `src/lib/CLAUDE.md` (Store pattern § Slices).
 
 ### 2d. Capability gate (if device-dependent)
 
-- Add a DeviceCaps field and a `get hasX()` getter; gate the UI on it.
+- Add a DeviceCaps field and a `get hasX()` getter **in
+  `editor/deviceSession.svelte.ts`**, next to the other gates; gate the UI on it.
+- Make the caps field optional so a legacy payload degrades to `false`, never to
+  "supported", and add the `isAm4` fallback branch only if v1 servers need it.
+- Add the getter to the `EditorStore` facade so `editor.hasX` keeps working.
 - Never branch on model names.
 
 ## Step 3 — Transport check

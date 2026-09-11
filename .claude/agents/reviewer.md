@@ -21,7 +21,8 @@ Priority checks, in order:
    a ForgeFX endpoint first, and protocol facts belong downstream in forgefx-midi.
    Name where the flagged logic should live instead.
 2. Runes discipline. Flag any new `writable()` / `svelte/store` usage — state
-   lives in `*.svelte.ts` rune modules (`editor.svelte.ts` is the central store).
+   lives in `*.svelte.ts` rune modules (`editor/editor.svelte.ts` is the central
+   store, now delegating to slices — `deviceSession.svelte.ts`, `telemetry.svelte.ts`).
    Flag stale-closure bugs around `$state` / `$derived` / `$effect` (captured
    values that will not update, effects missing a dependency, derived values
    mutated directly).

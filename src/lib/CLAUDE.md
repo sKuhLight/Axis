@@ -36,7 +36,8 @@ private generic `req<T>(path, init?)`:
 
 All API shapes are **hand-mirrored interfaces** — no codegen, no OpenAPI. The
 chain is: ForgeFX route JSON → `types.ts` interface → `req<T>` → store `$state` →
-component `$derived`. `DeviceCaps` is load-bearing: capability gates hang off it.
+component `$derived`. `DeviceCaps` is load-bearing: every capability gate hangs
+off it (they live in `editor/deviceSession.svelte.ts`).
 Drift failure mode: typecheck alone cannot catch server↔`types.ts` shape drift —
 TS structural typing accepts any object with compatible optional fields, so a
 server shape change not reflected in `types.ts` typechecks green; missing caps
@@ -47,7 +48,8 @@ fields silently hide features. The manual mirror discipline stands, but
 (`api/fixtures/blockParams/*.json`, provenance in that dir's README) against a
 schema mirroring the widened contract — this is what actually fails at test
 time on drift, not just at runtime in the field. v2 caps fields are optional
-(`?`) by design so legacy payloads degrade to the `isAm4` fallback branches.
+(`?`) by design so legacy payloads degrade to `false` — never to "supported" —
+or to the legacy `isAm4` fallback branches on a v1 server.
 
 ## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1730 lines)
 

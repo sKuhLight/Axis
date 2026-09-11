@@ -29,7 +29,8 @@ are the Faro transport hitting that local block on every batch flush.
   [Grafana community thread](https://community.grafana.com/t/disable-metrics-collection-that-gets-blocked-by-content-blockers/124553).
 - **"It worked before"** is explained by a filter-list update (EasyPrivacy updates daily) or a
   newly (re)enabled extension/shield — not by any Axis change: `git log` shows `src/lib/faro.ts`
-  and the wiring in `editor.svelte.ts` untouched since the telemetry commits
+  and the wiring (then in `editor.svelte.ts`, since extracted to
+  `editor/telemetry.svelte.ts`) untouched since the telemetry commits
   (`d73ab57`, `b545afb`, `74e29d1`); the collector URL comes from `.env` and did not change.
 
 ### Who is affected
@@ -56,7 +57,7 @@ browser session:
   and `axis-device-comm: /presets/0/grid 503` / `axis-engine: signal timed out` errors with
   model + firmware context.
 
-**Fail-open is already correct.** `#startFaro()` in `editor.svelte.ts` swallows init errors,
+**Fail-open is already correct.** `#startFaro()` in `editor/telemetry.svelte.ts` swallows init errors,
 and a blocked transport only logs to the console — the app is unaffected. Nothing needs to be
 "fixed" for safety; the fix below is about not losing data from ad-block/Pi-hole users.
 

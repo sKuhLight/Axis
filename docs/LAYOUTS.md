@@ -45,7 +45,7 @@ re-derived its own arrangeable widget grid from the flat parameter list; that gr
 
 Swipe-control assignments are still **persisted client-side** (`localStorage`), keyed by
 **block-family slug + device-true paramId**. The client-side tab heuristics in
-[`src/lib/layouts.ts`](../src/lib/layouts.ts) remain as the fallback for a block the server serves
+[`src/lib/editor/layouts.ts`](../src/lib/editor/layouts.ts) remain as the fallback for a block the server serves
 no `layout` for.
 
 ## What's being built — Axis-Layouts (layout profiles)
@@ -61,10 +61,10 @@ named, switchable **layout profiles** per context (per block family, and per vir
   profile), switchable and persisted.
 
 > **Status note.** The served `layout` is consumed: `BlockParams` carries it
-> ([`src/lib/types.ts`](../src/lib/types.ts)), the editor store ingests it
-> ([`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts)), and
-> [`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts) places its pages onto the canvas.
-> The built-in Ideal/Advanced/EQ tabs in `src/lib/layouts.ts` are now only the FALLBACK for a block
+> ([`src/lib/api/types.ts`](../src/lib/api/types.ts)), the editor store ingests it
+> ([`src/lib/editor/editor.svelte.ts`](../src/lib/editor/editor.svelte.ts)), and
+> [`src/lib/device/deviceCanvas.ts`](../src/lib/device/deviceCanvas.ts) places its pages onto the canvas.
+> The built-in Ideal/Advanced/EQ tabs in `src/lib/editor/layouts.ts` are now only the FALLBACK for a block
 > the server serves no layout for — note its `Ideal` is a keyword heuristic and is unrelated to the
 > device's real "Ideal" tab.
 
@@ -73,7 +73,7 @@ named, switchable **layout profiles** per context (per block family, and per vir
 The device places every control on its own fixed ~1240px canvas, and says where in the served
 `PageLayout` geometry (`parametersX/Y` + `parametersSpacingX/Y`, `mixerX/Y` + `mixerSpacingX/Y`,
 explicit Bypass / Scene Ignore / Kill Dry anchors) plus each control's `placement`
-(`col`, `offsetX`, `offsetY`, `positionExact`). [`src/lib/deviceCanvas.ts`](../src/lib/deviceCanvas.ts)
+(`col`, `offsetX`, `offsetY`, `positionExact`). [`src/lib/device/deviceCanvas.ts`](../src/lib/device/deviceCanvas.ts)
 is a **renderer, not an arranger**: it reads that geometry and draws each control exactly where the
 device authored it. Nothing snaps, packs, reflows, clamps, repacks, centers, or infers group
 membership.
@@ -107,7 +107,7 @@ The design points the **same block editor** at one of these effect ids — i.e. 
 editor pointed at effect id `1` — and renders its served layout on the device canvas, just like an
 audio block.
 
-> **Status note.** The tool rail ([`src/lib/ToolRail.svelte`](../src/lib/ToolRail.svelte)) currently
+> **Status note.** The tool rail ([`src/lib/shell/ToolRail.svelte`](../src/lib/shell/ToolRail.svelte)) currently
 > implements only the **Build** (grid) screen; the Controllers / Footswitches / Scenes / Perform /
 > Sets / Settings rail items are **stubs** that announce "coming soon." Wiring these screens to the
 > virtual-effect endpoints (effect id `1`/`2`/`3`/`199`) is in progress. See the broader
