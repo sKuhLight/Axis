@@ -490,6 +490,14 @@ validates the facade pattern at low risk.
 >   stays on `EditorStore` — it is shared with `selectScene` / `setChannel`.
 > - The host interface is built by a private `#telemetryHost()` factory inside `EditorStore`, not
 >   by passing `this`, so the host surface never lands on the public API.
+> - **Slices are siblings, never a stack.** A slice imports neither `editor.svelte.ts` nor any
+>   other slice; it declares what it needs on its own host interface and `EditorStore` wires it.
+>   So when M4b moves the capability gates into `deviceSession`, telemetry's reads of
+>   `hasLiveMonitors` / `slowLink` / `hasTelemetryControl` / `status` keep going
+>   `TelemetryStore` → `TelemetryHost` → `EditorStore` → `DeviceSessionStore`. `deviceSession` is
+>   what every later slice depends on; letting them reference it directly would rebuild the god
+>   object one dependency at a time and fix an inter-slice initialization order. Full rationale in
+>   `src/lib/CLAUDE.md` (Store pattern § Slices, rule 2).
 > - `poll()` / `watchPreset()` stayed on `EditorStore` (they are preset/device reads → M4b/M4c).
 >   The slice owns `pollingMode` only. `linkMs` is slice state written by `poll()` through a facade
 >   setter.

@@ -104,7 +104,7 @@ Still on `EditorStore`, in planned extraction order: `deviceSession`
 (connection, capability gates, connection picker), `presetBuffer` (versions,
 local folder sync, preset nav, save), `gridEditing` + `paramEditing`.
 
-Three rules make this work:
+Four rules make this work:
 
 1. **A slice never imports `editor.svelte.ts`** — that's a cycle. Everything it
    needs from the rest of the store arrives through an injected host interface
@@ -113,12 +113,22 @@ Three rules make this work:
    API. Use `get` accessors in it, not snapshots, so reads stay live. Keep it
    narrow: everything added there is coupling the next extraction inherits.
    (`editor/history.svelte.ts`'s `bindHost` is the older precedent.)
-2. **The facade is the compatibility layer.** A block of straight delegating
+2. **A slice never imports ANOTHER slice either.** Slices are siblings, not a
+   stack: a slice declares what it needs on its own host interface, and
+   `EditorStore` is the single place that wires the need to the provider. When
+   the telemetry slice reads `hasLiveMonitors` or `slowLink` — which the
+   `deviceSession` slice will own — that read still goes `TelemetryStore` →
+   `TelemetryHost` → `EditorStore` → `DeviceSessionStore`. The extra hop is the
+   point. `deviceSession` is what every other slice depends on, so letting them
+   reference it directly would just rebuild the god object one dependency at a
+   time, and would fix an initialization order between slices that later
+   extractions then have to respect.
+3. **The facade is the compatibility layer.** A block of straight delegating
    getters/setters at the bottom of `EditorStore`. State that call sites used to
    write (e.g. `editor.meteringOn`) keeps a `set` — dropping one silently breaks
    assignment. When a slice grows a member, ADD to the facade; do not re-add
    state to `EditorStore`.
-3. **`_editorSatisfiesSurface` must still typecheck.** If it doesn't, the facade
+4. **`_editorSatisfiesSurface` must still typecheck.** If it doesn't, the facade
    is incomplete — fix the facade, never weaken the guard or `EditorSurface`.
 
 Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
