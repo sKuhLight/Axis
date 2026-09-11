@@ -51,7 +51,7 @@ time on drift, not just at runtime in the field. v2 caps fields are optional
 (`?`) by design so legacy payloads degrade to `false` — never to "supported" —
 or to the legacy `isAm4` fallback branches on a v1 server.
 
-## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1730 lines)
+## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1500 lines)
 
 `class EditorStore` exported as a singleton `export const editor`; components
 import it directly — no context or props threading.
@@ -66,8 +66,8 @@ import it directly — no context or props threading.
   `editor.poll()`, and the `setInterval` poll/`watchPreset` loops.
 - `poll()` / `watchPreset()` are re-entrancy-guarded (`#polling` / `#watching`)
   and throttled on slow links — **never add an unguarded device read to the poll
-  loop**. `poll()` lives in the `deviceSession` slice; `watchPreset()` is still
-  on `EditorStore` (it belongs with preset nav, `presetBuffer`).
+  loop**. `poll()` lives in the `deviceSession` slice, `watchPreset()` in
+  `presetBuffer`; `+page.svelte` still drives both through the `editor` facade.
 - SSE: `openEvents` feeds `applyDeviceEvent`, a single `switch` over the
   `DeviceEvent` union. **Both now live in the telemetry slice** (below); cases
   belonging to other slices call back through `TelemetryHost` — `tempo` and
@@ -115,9 +115,18 @@ Extracted so far:
   serial/MIDI port picker and forced device profile, the current preset
   REFERENCE (`preset` / `lastPreset` / `presetCount`, not its contents), and the
   live `scene` / `sceneNames` / `bpm` with their actions.
+- **`editor/presetBuffer.svelte.ts`** (`PresetBufferStore`) — which preset is in
+  the edit buffer and where it can be put: slot nav (`selectPreset` /
+  `stepPreset` / the AM4 fallback), the buffer + stored renames, the DESTRUCTIVE
+  `save`, `watchPreset`, `bufferSource` (the local file the buffer came from),
+  the version store (snapshot / load-into-buffer / full device backup) and the
+  local `Presets/` + `Sync/` folder with its debounced `syncBus` mirror. The
+  buffer's CONTENTS — the decoded grid and the open block — are NOT in here; the
+  slice asks for them to be re-read through `PresetBufferHost.load` /
+  `reloadOpenParams`.
 
-Still on `EditorStore`, in planned extraction order: `presetBuffer` (versions,
-local folder sync, preset nav, save), `gridEditing` + `paramEditing`.
+Still on `EditorStore`, in planned extraction order: `gridEditing` +
+`paramEditing`.
 
 Four rules make this work:
 
@@ -153,8 +162,10 @@ Four rules make this work:
    Decide write-ability by grepping for assignments, not by the compiler.
 
 Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
-fake host — `editor/telemetry.runes.test.ts` and `editor/deviceSession.runes.test.ts`
-are the worked examples.
+fake host — `editor/telemetry.runes.test.ts`, `editor/deviceSession.runes.test.ts`
+and `editor/presetBuffer.runes.test.ts` are the worked examples. A rune can't be
+written in a `.test.ts`, so reactivity is pinned the way a derived reader observes
+it: reassignment identity and `$state` proxy identity, not a live `$derived`.
 
 ## Component pattern
 

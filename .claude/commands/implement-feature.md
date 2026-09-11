@@ -49,8 +49,10 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
       independent persistence or an import-cycle risk — then its own `*.svelte.ts`.
       The singleton is being split into slices: device connection / caps / ports /
       scene / tempo → `deviceSession.svelte.ts`; SSE, meters, diagnostics →
-      `telemetry.svelte.ts`; the rest is still `editor.svelte.ts`. A slice member
-      needs a facade entry on `EditorStore` — see `src/lib/CLAUDE.md`.
+      `telemetry.svelte.ts`; preset nav / renames / save / versions / local folder →
+      `presetBuffer.svelte.ts`; the rest (grid + param editing) is still
+      `editor.svelte.ts`. A slice member needs a facade entry on `EditorStore` —
+      see `src/lib/CLAUDE.md`.
 - [ ] Actions: optimistic update → `await forgefx.*` → revert on catch.
 - [ ] Device-dependent behavior is capability-gated via a DeviceCaps getter
       (`get hasX()` in `editor/deviceSession.svelte.ts`) — never model-name checks.

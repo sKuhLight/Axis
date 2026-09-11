@@ -558,6 +558,64 @@ validates the facade pattern at low risk.
 > `ports`, `portChosen`, `portOverride`, `profileOverride`) were each grepped: no assignment exists
 > anywhere in `src/`, `e2e/` or `electron/`.
 
+> **M4c landed** on `full-refactor`. `editor/presetBuffer.svelte.ts` (`PresetBufferStore`,
+> 387 lines) + `editor/presetBuffer.runes.test.ts` (50 tests); `editor.svelte.ts` ~1,730 → ~1,500
+> lines, facade extended, all importers untouched. Decisions taken:
+>
+> - **The slice owns the buffer's IDENTITY, not its contents.** Preset nav, both renames, the
+>   destructive `save`, `watchPreset`, `bufferSource`, the version store and the local
+>   `Presets/`+`Sync/` folder moved in; the decoded grid, the open block and `load()`/`#loadParams()`
+>   stayed on `EditorStore` (they are M4d). The slice asks for a re-read through
+>   `PresetBufferHost.load` / `reloadOpenParams` — the latter wraps the `if (this.selKey)` guard that
+>   was repeated at four call sites, so the slice never has to know what "the open block" is.
+> - **`watchPreset` moved in**, as M4b said it should. It is the only preset-side poll tick, and its
+>   slow-link throttle + `#watching` guard came with it unchanged.
+> - **The local folder came along** rather than becoming its own slice (operator decision). It is
+>   nothing but a disk mirror of the version store + `Presets/` library, both of which are in here;
+>   splitting it would have meant a second host interface whose only caller is this slice.
+> - **`init()` now makes three calls where it made two** — `#preset.initSync()` (the `syncBus` hook),
+>   `void #loadProfile()` (hub/profile, stays on `EditorStore`), `#preset.initLocal()` (the engine
+>   probe). The old `#initLocalSync` did the hook and awaited `#loadProfile`; keeping all three calls
+>   in that order preserves the boot request sequence exactly.
+> - **`openSlotPicker` did NOT move.** It sets `presetPick` + opens the picker overlay and touches no
+>   buffer state at all — it is overlay wiring (M3), so it stayed next to `presetPick`. The slice
+>   closes the picker with a direct `overlays.close('presetPicker')`; `overlays` is a peer store, not
+>   a slice, so rule 2 does not apply (same precedent as `library` / `history` / `presetRecency`).
+> - **`legacyAm4` is one host getter, not `isV2` + `isAm4`.** Every use in the moved code was the
+>   `!isV2 && isAm4` pair, and collapsing it keeps two more device-session members off the host.
+> - Facade setters kept for `bufferSource` (the preset browser + the workbench preset host assign it
+>   on a local-file load), `saveOpen` (`SaveDialog` closes itself by assignment) and `saveTarget`
+>   (bound by the dialog). Each was grepped per rule 4; `local`, `watchPreset` and the rest are
+>   getter-only / method-only, with no assignment anywhere in `src/`, `e2e/` or `electron/`.
+> - `presetOpen` / `presetPick` stay on `EditorStore` (overlay layer), as do `#histSwitch`,
+>   `#eventReload` and the toast.
+>
+> **Review fix landed in the same commit:** the slice's runes test re-pinned only some of its mocks
+> in `beforeEach` (`vi.clearAllMocks()` clears call records, not implementations), so a rejection
+> staged by the preset-nav tests leaked into the rename tests and let the `renameStoredPreset`
+> round-trip pass from inside `selectPreset`'s `catch`. Every overridable mock is re-pinned now, and
+> the round-trip asserts the hop's EFFECTS (`host.load` twice, `histSwitch` 40 → 12), not just the
+> request arguments.
+>
+> **Layer smell found, not fixed** (global rule 3): both renames carry
+> `name.replace(/[^\x20-\x7e]/g, '').slice(0, 32)` — the device's preset-name charset and field
+> width, encoded in the UI layer. They are protocol facts and belong in forgefx-midi, with ForgeFX
+> normalizing on `setPresetName`; a device with a narrower name field truncates wrong here. Moved
+> verbatim, pre-dates the refactor.
+>
+> **Still unguarded by construction** (third extraction running): nothing tests the FACADE. The runes
+> test drives the slice with a fake host, `editorSurface.test.ts` mocks `editor` out, and the e2e
+> specs are workbench-only — so rule 4's blind spot (a dropped `set` failing only at runtime) is
+> still caught by grep alone. An `editor.runes.test.ts` asserting that `editor.bufferSource = x`,
+> `editor.saveOpen = true` and `editor.saveTarget = 3` write through would close it for all four
+> slices at once; deliberately not bundled into M4c.
+>
+> **Behaviour worth knowing, pinned by test, not changed:** on a device rejection (`store` → `ok:
+> false`) the save dialog still closes before the "Save rejected by device" toast — the user loses
+> the dialog whether or not the write landed. And `renameStoredPreset` on a name-scan device (AM4)
+> deliberately skips the `store`, because there the rename hits the stored location directly and a
+> store would write the stale buffer name back over it.
+
 ### Handoff prompt — M4a (template for M4b–M4d)
 
 ````markdown

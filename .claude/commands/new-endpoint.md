@@ -40,6 +40,7 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
   introducing new timers.
 - Pick the file by responsibility: the editor store is being split into slices.
   Device connection / caps / ports / scene / tempo → `deviceSession.svelte.ts`;
+  preset nav / save / versions / local folder → `presetBuffer.svelte.ts`;
   SSE, meters, diagnostics → `telemetry.svelte.ts`; everything else is still
   `editor.svelte.ts`. A slice needs a matching facade entry on `EditorStore` and
   a `*.runes.test.ts` — see `src/lib/CLAUDE.md` (Store pattern § Slices).
