@@ -62,13 +62,28 @@
     };
   });
 
-  // Fresh search every time the overlay opens, same as PresetPicker's open effect.
+  // `axisPresetBrowserWorkbenchController.queryText` is a shared singleton field also read by the
+  // docked Preset Browser page — clearing it for a fresh quick-search here would otherwise wipe out
+  // whatever the user had typed on that page. Snapshot it on open, restore it on close, driven off the
+  // open/close TRANSITION (not every effect run) so the restore never fights the open-clear.
+  let savedQuery: string | null = null;
+  let wasSearchOpen = false;
   $effect(() => {
-    if (!editor.presetSearchOpen) return;
-    axisPresetBrowserWorkbenchController.setQuery('');
-    highlightIndex = 0;
-    visibleCount = INITIAL_ROWS;
-    void tick().then(() => inputEl?.focus());
+    const open = editor.presetSearchOpen;
+    if (open && !wasSearchOpen) {
+      // Fresh search every time the overlay opens, same as PresetPicker's open effect.
+      savedQuery = axisPresetBrowserWorkbenchController.snapshot.queryText;
+      axisPresetBrowserWorkbenchController.setQuery('');
+      highlightIndex = 0;
+      visibleCount = INITIAL_ROWS;
+      void tick().then(() => inputEl?.focus());
+    } else if (!open && wasSearchOpen) {
+      // Covers every dismissal path (Escape, backdrop click, close button, loadEntry) since they all
+      // funnel through close() flipping this flag.
+      axisPresetBrowserWorkbenchController.setQuery(savedQuery ?? '');
+      savedQuery = null;
+    }
+    wasSearchOpen = open;
   });
 
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
