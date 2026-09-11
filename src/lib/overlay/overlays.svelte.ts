@@ -85,15 +85,22 @@ class OverlayRegistry {
   #owned = $state<Partial<Record<OverlayId, boolean>>>({});
   /** Bridges to overlays whose state lives elsewhere. */
   #delegates = new Map<OverlayId, OverlayDelegate>();
+  #closeEffects = new Map<OverlayId, () => void>();
 
   /** Wire an overlay whose state lives outside the registry. Called once at boot. */
   register(id: OverlayId, delegate: OverlayDelegate): void {
     this.#delegates.set(id, delegate);
   }
 
-  /** Test-only: drop all delegate registrations. */
+  /** Register cleanup that must run regardless of which UI path closes an owned overlay. */
+  onClose(id: OverlayId, effect: () => void): void {
+    this.#closeEffects.set(id, effect);
+  }
+
+  /** Test-only: drop all registrations and owned state. */
   _resetForTest(): void {
     this.#delegates.clear();
+    this.#closeEffects.clear();
     this.#owned = {};
   }
 
@@ -117,10 +124,15 @@ class OverlayRegistry {
   close(id: OverlayId): void {
     const d = this.#delegates.get(id);
     if (d) {
-      if (d.isOpen()) d.close();
+      if (d.isOpen()) {
+        d.close();
+        this.#closeEffects.get(id)?.();
+      }
       return;
     }
+    const wasOpen = this.#owned[id] === true;
     this.#owned[id] = false;
+    if (wasOpen) this.#closeEffects.get(id)?.();
   }
 
   toggle(id: OverlayId): void {

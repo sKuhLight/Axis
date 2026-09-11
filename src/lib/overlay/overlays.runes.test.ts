@@ -45,6 +45,15 @@ describe('registry-owned overlays', () => {
     expect(() => overlays.open('tuner')).toThrow(/delegate-backed/);
     expect(closed).toBe(false);
   });
+
+  it('runs owned-overlay cleanup for registry-driven closes', () => {
+    let cleaned = false;
+    overlays.onClose('presetPicker', () => (cleaned = true));
+    overlays.open('presetPicker');
+
+    overlays.close('presetPicker');
+    expect(cleaned).toBe(true);
+  });
 });
 
 describe('escape() priority', () => {

@@ -59,6 +59,10 @@ export function registerOverlays(): void {
     isOpen: () => editor.editorOpen,
     close: () => editor.closeEditor()
   });
+
+  overlays.onClose('presetPicker', () => {
+    editor.presetPick = null;
+  });
 }
 
 // Auto-register on import so a stray `overlays.escape()` before `+page.svelte` mounts still
