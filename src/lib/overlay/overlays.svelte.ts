@@ -35,7 +35,9 @@ export type OverlayId =
   | 'deviceTools'
   | 'save'
   | 'axisHub'
-  | 'theme';
+  | 'theme'
+  | 'consentPrompt'
+  | 'reportPrompt';
 
 /**
  * Escape precedence — lower closes first. Entries 0–100 mirror, in order, the historical
@@ -46,6 +48,8 @@ export type OverlayId =
  * chain overlay always wins, but remain non-dismissible by Escape.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
+  consentPrompt: -20,
+  reportPrompt: -10,
   tuner: 0,
   history: 10,
   cabPicker: 20,
@@ -63,7 +67,8 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   theme: 230
 };
 
-const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'axisHub', 'theme']);
+const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'axisHub', 'theme', 'consentPrompt']);
+const ESCAPE_BLOCKING = new Set<OverlayId>(['consentPrompt']);
 
 const OVERLAY_IDS = Object.keys(ESCAPE_ORDER) as OverlayId[];
 const STACK_ORDER = [...OVERLAY_IDS].sort((a, b) => ESCAPE_ORDER[a] - ESCAPE_ORDER[b]);
@@ -78,6 +83,8 @@ export interface OverlayDelegate {
   close: () => void;
   /** Whether Escape should close it. Defaults to true. */
   escDismiss?: boolean;
+  /** Whether a non-dismissible overlay consumes Escape instead of yielding to overlays behind it. */
+  escBlock?: boolean;
 }
 
 class OverlayRegistry {
@@ -145,6 +152,10 @@ class OverlayRegistry {
     return d ? d.escDismiss !== false : !ESCAPE_DISABLED.has(id);
   }
 
+  #escBlocking(id: OverlayId): boolean {
+    return this.#delegates.get(id)?.escBlock === true || ESCAPE_BLOCKING.has(id);
+  }
+
   /** True when this is the visually highest-priority open registry overlay. */
   isTop(id: OverlayId): boolean {
     if (!this.isOpen(id)) return false;
@@ -164,10 +175,11 @@ class OverlayRegistry {
   escape(): boolean {
     let top: OverlayId | null = null;
     for (const id of OVERLAY_IDS) {
-      if (!this.#escDismissable(id) || !this.isOpen(id)) continue;
+      if (!this.isOpen(id) || (!this.#escDismissable(id) && !this.#escBlocking(id))) continue;
       if (top === null || ESCAPE_ORDER[id] < ESCAPE_ORDER[top]) top = id;
     }
     if (top === null) return false;
+    if (!this.#escDismissable(top)) return true;
     this.close(top);
     return true;
   }

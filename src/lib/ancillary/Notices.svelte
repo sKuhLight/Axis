@@ -19,7 +19,7 @@
 </script>
 
 <!-- ── first-run telemetry consent ── -->
-<Dialog open={editor.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
+<Dialog overlay="consentPrompt" open={editor.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
     <div class="card">
       <div class="pad">
         <div class="head"><div class="logo">🛡</div><div><div class="h1">Help improve Axis?</div><div class="sub">Anonymous diagnostics — your choice</div></div></div>
@@ -53,7 +53,7 @@
 <!-- ── major-error → upload report ── -->
 {#if editor.reportPrompt}
   {@const p = editor.reportPrompt}
-  <Dialog open={true} onClose={editor.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
+  <Dialog overlay="reportPrompt" open={true} onClose={editor.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
     <div class="card sm">
       <div class="pad">
         <div class="head"><div class="logo warn">⚠</div><div><div class="h1">Something went wrong</div><div class="sub">{[p.route, p.status].filter(Boolean).join(' · ') || p.kind}</div></div></div>

@@ -133,6 +133,16 @@ describe('escape() priority', () => {
     expect(noEsc.box.open).toBe(true); // opted out — never closed by Escape
   });
 
+  it('a non-dismissible top overlay consumes Escape instead of closing one behind it', () => {
+    const blocker = toggleable(true);
+    overlays.register('history', { ...blocker.delegate, escDismiss: false, escBlock: true });
+    overlays.open('palette');
+
+    expect(overlays.escape()).toBe(true);
+    expect(blocker.box.open).toBe(true);
+    expect(overlays.isOpen('palette')).toBe(true);
+  });
+
   it('preserves the historically non-Escape-dismissible owned dialogs', () => {
     for (const id of ['deviceTools', 'save', 'axisHub', 'theme'] as const) {
       overlays.open(id);
@@ -140,5 +150,16 @@ describe('escape() priority', () => {
       expect(overlays.isOpen(id)).toBe(true);
       overlays.close(id);
     }
+  });
+
+  it('puts prompts in the Escape stack and lets consent block everything behind it', () => {
+    overlays.open('palette');
+    overlays.open('reportPrompt');
+    overlays.open('consentPrompt');
+
+    expect(overlays.escape()).toBe(true);
+    expect(overlays.isOpen('consentPrompt')).toBe(true);
+    expect(overlays.isOpen('reportPrompt')).toBe(true);
+    expect(overlays.isOpen('palette')).toBe(true);
   });
 });

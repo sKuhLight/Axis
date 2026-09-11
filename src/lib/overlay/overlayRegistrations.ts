@@ -60,6 +60,17 @@ export function registerOverlays(): void {
     close: () => editor.closeEditor()
   });
 
+  overlays.register('consentPrompt', {
+    isOpen: () => editor.consentPromptOpen,
+    close: () => {},
+    escDismiss: false,
+    escBlock: true
+  });
+  overlays.register('reportPrompt', {
+    isOpen: () => editor.reportPrompt !== null,
+    close: () => editor.dismissReportPrompt()
+  });
+
   overlays.onClose('presetPicker', () => {
     editor.presetPick = null;
   });
