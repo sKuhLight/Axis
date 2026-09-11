@@ -2,28 +2,24 @@
 // rail / top bar / grid / editor / palette all read and drive. Wraps the ForgeFX
 // HTTP client and preserves the live-verified write wiring (place, re-cabling move,
 // cables, params, bypass, channel, retype).
-import { forgefx, ForgeError, setRequestFailureReporter } from '$lib/api/forgefx';
+import { forgefx, setRequestFailureReporter } from '$lib/api/forgefx';
 import { library } from '$lib/preset/library.svelte';
 import { appSettings } from '$lib/platform/appSettings.svelte';
 import { defaultBlockLibraryPath } from './blockLibraryPath';
 import { blockLibrary } from './blockLibrary.svelte';
 import { history } from './history.svelte';
 import { notifyMutation } from './syncBus';
-import { layoutFromGrid, type Cell, type Layout } from '$lib/device/grid';
-import { planConnect, planReplaceShunt } from '$lib/device/gridRouting';
-import { baseName, packFor, statusColor } from '$lib/device/blocks';
-import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, type SwipeCtrl } from './layouts';
-import { geqBandsFromLayout } from '$lib/graphs/eq';
+import type { Cell } from '$lib/device/grid';
+import { baseName, packFor } from '$lib/device/blocks';
 import { isWebBuild } from '$lib/platform/buildMode';
-import { paramValue } from '$lib/ui/format';
-import { gridHover } from './gridHover.svelte';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, ConnPick, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
+import type { NamedParam, EnumParam, ConnPick, ProfileKey, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
 import type { EditorSurface } from './editorSurface';
-import { monitorsByFamily } from '$lib/device/deviceMonitors';
 import { overlays } from '$lib/overlay/overlays.svelte';
 import { TelemetryStore, isTelemetryMode, type TelemetryHost, type ReportTrigger } from './telemetry.svelte';
 import { DeviceSessionStore, type DeviceSessionHost } from './deviceSession.svelte';
 import { PresetBufferStore, type PresetBufferHost } from './presetBuffer.svelte';
+import { GridEditingStore, type GridEditingHost } from './gridEditing.svelte';
+import { ParamEditingStore, type ParamEditingHost } from './paramEditing.svelte';
 
 // Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
 const CONTACT_KEY = 'axs.profile.contact';
@@ -39,9 +35,6 @@ const TOUR_LAST = 8;
 // tour") — it bugs out at step 4 (Next won't advance) on mobile. Flip back to true once reworked.
 const TOUR_ENABLED: boolean = false;
 const loadTourDone = (): boolean => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
-const EMPTY: Layout = { cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true };
-const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
-const SHUNT_ID = 1024; // FM3 routing/shunt cell base effect id (decoder: eid > 1000)
 
 class EditorStore {
   // ── device-session slice (M4b) ──
@@ -78,8 +71,8 @@ class EditorStore {
   #presetBufferHost = (): PresetBufferHost => {
     const e = this;
     return {
-      load: () => e.load(),
-      reloadOpenParams: async () => { if (e.selKey) await e.#loadParams(); },
+      load: () => e.#grid.load(),
+      reloadOpenParams: async () => { if (e.#param.selKey) await e.#param.reloadParams(); },
       showToast: (text, accent) => e.showToast(text, accent),
       histSwitch: (n) => e.#histSwitch(n),
       get status() { return e.status; },
@@ -97,124 +90,47 @@ class EditorStore {
   };
   #preset = new PresetBufferStore(this.#presetBufferHost());
 
-  // ── grid ──
-  status = $state<'loading' | 'ready' | 'offline'>('loading');
-  layout = $state<Layout>(EMPTY);
-  everLoaded = $state(false);
+  // ── grid-editing slice (M4d) ──
+  #gridEditingHost = (): GridEditingHost => {
+    const e = this;
+    return {
+      get legacyAm4() { return !e.isV2 && e.isAm4; },
+      get capabilityShuntBase() { return e.caps?.shuntBase; },
+      get selected() { return e.#param.selected; },
+      get virtualActive() { return !!e.#param.virtual; },
+      closeEditor: () => e.#param.closeEditor(),
+      setSelectionKey: (key) => e.#param.setSelectionKey(key),
+      setSceneNames: (names) => { e.sceneNames = names; },
+      onGridLoaded: () => e.#param.onGridLoaded(),
+      startLiveMeters: () => e.startLiveMeters(),
+      showToast: (text, accent) => e.showToast(text, accent),
+      offerLoadFailure: (route, message) => e.offerDebugReport({ kind: 'device-comm', route, message })
+    };
+  };
+  #grid = new GridEditingStore(this.#gridEditingHost());
 
-  // ── selection / editor ──
-  selKey = $state<string | null>(null); // "row,col"
-  editorOpen = $state(false);
-  editorH = $state(380);
-  params = $state<NamedParam[]>([]);
-  enums = $state<EnumParam[]>([]);
-  blockType = $state<{ value: number; name: string } | null>(null);
-  blockSlug = $state<string | null>(null); // catalog slug of the open block (from blockParams) — gates the looper poll
-  sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
-  /** effectId the currently-held params/enums/layout were read for, so #loadParams can tell a FIRST
-   *  read of a block (blank the surface) from a refresh of the one already on screen (update in place). */
-  #paramsEid: number | null = null;
-  /** Device-authentic editor pages for the open block/virtual effect — the BlockEditor renders the
-   *  device's own pixel-exact canvas from these. */
-  blockLayout = $state<DeviceLayout | null>(null);
-  /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
-  virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
-  /** True when the full Preset Browser rail screen is open (replaces the grid/editor view). */
+  // ── parameter-editing slice (M4d) ──
+  #paramEditingHost = (): ParamEditingHost => {
+    const e = this;
+    return {
+      get layout() { return e.#grid.layout; },
+      get status() { return e.#grid.status; },
+      get legacyAm4() { return !e.isV2 && e.isAm4; },
+      get paramsWithoutPack() { return e.paramsWithoutPack; },
+      get hasCursorSelect() { return e.hasCursorSelect; },
+      get hasBlockMeters() { return e.hasBlockMeters; },
+      get slowLink() { return e.slowLink; },
+      loadGrid: () => e.#grid.load(),
+      scheduleBlockStateReload: () => e.#scheduleBlockStateReload(),
+      showToast: (text, accent) => e.showToast(text, accent),
+      clearLooperWave: () => { e.looperWave = null; }
+    };
+  };
+  #param = new ParamEditingStore(this.#paramEditingHost());
+
+  // ── shell view state ──
   inLibrary = $state(false);
-
-  // ── view + chrome ──
-  activePage = $state<string>(''); // active tab id for the open block
-
-  // ── parameter tabs (per-family custom layouts) ──
-  customLayouts = $state<Record<string, TabDef[]>>({});
-  editingTabs = $state(false);
-
-  // ── swipe controls: knobs assigned to direct grid adjustment, per family slug ──
-  swipeControls = $state<Record<string, SwipeCtrl[]>>({});
-  // always-on per-block meter values (keyed effectId) + which control is active per block
-  meters = $state<Record<number, { defaultId: number; defaultName: string; typeName: string; vals: Record<number, MeterVal> }>>({});
-  activeCtl = $state<Record<number, number>>({});
-  // ── pinned-param hydration: full param/enum data for placed blocks that host a
-  // custom-panel control but are NOT the open block, so those controls read/write
-  // live regardless of what (if anything) is selected. Same DTO the open block
-  // uses (blockParams → named/enums), fetched on demand for mounted pinned widgets
-  // only and invalidated on every preset/scene reload. Keyed by effectId. */
-  pinnedParams = $state<Record<number, { named: NamedParam[]; enums: EnumParam[] }>>({});
-  #pinnedRefs = new Map<number, number>(); // effectId → count of mounted pinned widgets
-  #hydratePinnedTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Current model/type name of a placed block (for the grid tile sub-label). */
-  typeNameFor = (effectId: number): string => this.meters[effectId]?.typeName ?? '';
-  /** Per-preset monitor (meter) param table (GET /preset/monitors): device token → pid + role + dB
-   *  range. This is how we know which paramIds are read-only MONITORS rather than editable params —
-   *  the device also surfaces several of them in the ordinary block param list (amp `HEADROOM`/`B+`/
-   *  `Gain`, cab `VU`, comp/input/output `Gain`…), where they would otherwise render as writable knobs.
-   *
-   *  Deliberately NOT gated on `meteringOn`/`canMeterBlocks`: it drives suppression of those phantom
-   *  params, which has to hold even when live metering is switched off. */
-  monitorParams = $state<import('$lib/api/types').MonitorParams | null>(null);
-  #monitorParamsLoad: Promise<void> | null = null;
-  /** Load the monitor table once (deduped, best-effort — on failure we fall back to the previous
-   *  behaviour rather than blocking the editor). */
-  loadMonitorParams = (): Promise<void> => {
-    if (this.monitorParams) return Promise.resolve();
-    this.#monitorParamsLoad ??= forgefx
-      .monitors()
-      .then((t) => { this.monitorParams = t ?? {}; })
-      .catch(() => { this.monitorParams = {}; }) // treat "no table" as "no monitors"
-      .finally(() => { this.#monitorParamsLoad = null; });
-    return this.#monitorParamsLoad;
-  };
-  /** Monitor rows for ONE device family (e.g. `DISTORT`), keyed by device-true pid.
-   *  MUST be family-scoped: pids repeat across families, so matching on pid alone would turn the amp's
-   *  `Bass 1` (pid 8) into `INPUT_GAINMONITOR`'s level meter. */
-  monitorsByPid = (family: string | null | undefined): Map<number, import('$lib/api/types').MonitorEntry> =>
-    monitorsByFamily(this.monitorParams, family);
-  /** Monitor rows for the OPEN block, keyed by pid — family comes from its device layout
-   *  (`DeviceLayout.family` is the DEVICE family `DISTORT`, unlike `familyKey` which is the pack slug). */
-  get openBlockMonitors(): Map<number, import('$lib/api/types').MonitorEntry> {
-    return this.monitorsByPid(this.blockLayout?.family);
-  }
-  /** Toggle a looper transport control (record/play/stop/overdub/undo/once/reverse/half) on the open block. */
-  looperControl = async (action: string, on: boolean) => {
-    const eid = this.selected?.effectId;
-    if (eid == null) return;
-    try { await forgefx.looperControl(eid, action, on); } catch { /* best-effort */ }
-  };
   railActive = $state('build');
-
-  // ── mobile grid: column density (3–12) + horizontal paging through the 12 columns ──
-  mobCols = $state(4);
-  mobColsAuto = $state(true); // auto-fit column count to viewport width until the user pinches/± (then fixed)
-  gridPage = $state(0);
-  /** Column count that fits the width at a comfortable ~96px tile pitch (3–12). */
-  fitCols = (w: number) => Math.max(3, Math.min(12, Math.round((w - 24) / 96)));
-  get pageCount() {
-    return Math.ceil(12 / Math.max(3, Math.min(12, this.mobCols)));
-  }
-  changeCols = (d: number) => {
-    const nc = Math.max(3, Math.min(12, this.mobCols + d));
-    if (nc === this.mobCols) return;
-    this.mobColsAuto = false;
-    this.mobCols = nc;
-    this.gridPage = Math.min(this.gridPage, this.pageCount - 1);
-  };
-  setCols = (n: number) => {
-    this.mobColsAuto = false;
-    this.mobCols = Math.max(3, Math.min(12, n));
-    this.gridPage = Math.min(this.gridPage, this.pageCount - 1);
-  };
-  colsFit = () => {
-    this.mobColsAuto = false;
-    this.mobCols = this.mobCols >= 12 ? 4 : 12; // toggle overview ↔ edit density
-    this.gridPage = 0;
-    this.showToast(this.mobCols >= 12 ? 'Overview' : 'Edit view', '#35c9d6');
-  };
-  changePage = (d: number) => {
-    this.gridPage = Math.max(0, Math.min(this.pageCount - 1, this.gridPage + d));
-  };
-  setPage = (p: number) => {
-    this.gridPage = Math.max(0, Math.min(this.pageCount - 1, p));
-  };
 
   // ── telemetry slice (M4a) ──
   // SSE, tuner/CPU/levels/traffic readouts, live meters, polling mode, Faro + debug reports.
@@ -242,7 +158,7 @@ class EditorStore {
       onConsentResolved: () => e.#maybeShowKofi(),
       applyTempo: (bpm) => e.#device.applyTempo(bpm),
       applyScene: (index) => e.#device.applyScene(index),
-      applyParamEcho: (effectId, paramId, norm) => e.#applyParamEcho(effectId, paramId, norm),
+      applyParamEcho: (effectId, paramId, norm) => e.#param.applyParamEcho(effectId, paramId, norm),
       applyConfig: (id, data) => e.#applyConfig(id, data),
       scheduleBlockStateReload: () => e.#scheduleBlockStateReload(),
       scheduleStructuralReload: () => e.#scheduleStructuralReload()
@@ -283,8 +199,6 @@ class EditorStore {
   placeTarget = $state<{ row: number; col: number } | null>(null);
   get quickBuildOpen() { return overlays.isOpen('quickBuild'); }
   set quickBuildOpen(v: boolean) { if (v) overlays.open('quickBuild'); else overlays.close('quickBuild'); }
-  /** The cell a Quick Build (or other external) drag is currently over + whether the drop is valid. */
-  externalDrop = $state<{ row: number; col: number; valid: boolean } | null>(null);
   get presetOpen() { return overlays.isOpen('presetPicker'); }
   set presetOpen(v: boolean) { if (v) overlays.open('presetPicker'); else overlays.close('presetPicker'); }
   /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to this
@@ -304,7 +218,6 @@ class EditorStore {
   toast = $state<{ text: string; accent: string } | null>(null);
 
   #toastT: ReturnType<typeof setTimeout> | null = null;
-  #sendTimers: Record<string | number, ReturnType<typeof setTimeout>> = {};
 
   // ── derived ──
   // Phones AND tablets use the compact layout (burger + slide-in drawer that hides scenes/nav/status);
@@ -313,241 +226,14 @@ class EditorStore {
   get isMobile() {
     return this.vw < 1366;
   }
-  get selected(): Cell | null {
-    if (this.virtual) {
-      // virtual effects (Setup/Controllers/Modifier/FC) aren't on the grid — synthesize a cell so the
-      // same param/load/write machinery (and the BlockEditor) work unchanged.
-      const v = this.virtual;
-      return { row: -1, col: -1, kind: 'block', effectId: v.eid, display: v.name, pack: v.slug, color: '#35c9d6', fromRows: [] };
-    }
-    if (!this.selKey) return null;
-    return [...this.layout.cells, ...this.layout.shunts].find((c) => `${c.row},${c.col}` === this.selKey) ?? null;
-  }
-  get firstEmptyCell(): { row: number; col: number } | null {
-    const filled = new Set([...this.layout.cells, ...this.layout.shunts].map((c) => `${c.row},${c.col}`));
-    for (let col = 0; col < this.layout.cols; col++)
-      for (let row = 0; row < this.layout.rows; row++) if (!filled.has(`${row},${col}`)) return { row, col };
-    return null;
-  }
-
-  // write API is 1-indexed; the decoded grid is 0-indexed
-  #W = (n: number) => n + 1;
-  slugOf = (c: Cell) => (c.pack ?? '').toLowerCase();
-
-  // ── parameter tabs ──
-  // family key for layouts = the block's pack slug (all amps share 'amp', etc.)
-  get familyKey(): string {
-    const c = this.selected;
-    return c?.pack ? c.pack.toLowerCase() : '';
-  }
-  get tabs(): ResolvedTab[] {
-    // amp exposes a built-in graphic EQ on a dedicated EQ tab; its bands come from the device layout
-    // (the param list names them `Bass 2`/`Mid 2`/… — see geqBandsFromLayout).
-    const eqIds = this.selected?.pack === 'Amp' ? geqBandsFromLayout(this.blockLayout).map((b) => b.paramId) : [];
-    return resolveTabs(this.params, this.enums, this.customLayouts[this.familyKey] ?? [], eqIds);
-  }
-  #persistLayouts = () => {
-    this.customLayouts = { ...this.customLayouts }; // new ref so $state reacts
-    saveLayouts(this.customLayouts);
-  };
-  addTab = () => {
-    const fam = this.familyKey;
-    if (!fam) return;
-    const tab: TabDef = { id: newTabId(), name: 'New Tab', paramIds: [] };
-    this.customLayouts[fam] = [...(this.customLayouts[fam] ?? []), tab];
-    this.#persistLayouts();
-    this.activePage = tab.id;
-    this.editingTabs = true;
-  };
-  renameTab = (id: string, name: string) => {
-    const list = this.customLayouts[this.familyKey];
-    const t = list?.find((x) => x.id === id);
-    if (!t) return;
-    t.name = name.trim() || t.name;
-    this.#persistLayouts();
-  };
-  deleteTab = (id: string) => {
-    const fam = this.familyKey;
-    const list = this.customLayouts[fam];
-    if (!list) return;
-    this.customLayouts[fam] = list.filter((x) => x.id !== id);
-    if (this.activePage === id) this.activePage = '__ideal';
-    this.#persistLayouts();
-  };
-  toggleParamInTab = (id: string, paramId: number) => {
-    const t = this.customLayouts[this.familyKey]?.find((x) => x.id === id);
-    if (!t) return;
-    t.paramIds = t.paramIds.includes(paramId) ? t.paramIds.filter((x) => x !== paramId) : [...t.paramIds, paramId];
-    this.#persistLayouts();
-  };
-
-  // ── swipe controls ──
-  swipeFor = (slug: string): SwipeCtrl[] => this.swipeControls[slug] ?? [];
-  isSwipeControl = (paramId: number) => this.swipeFor(this.familyKey).some((c) => c.id === paramId);
-  toggleSwipeControl = (p: NamedParam) => {
-    if (p.id == null) return;
-    const fam = this.familyKey;
-    if (!fam) return;
-    const list = this.swipeControls[fam] ?? [];
-    this.swipeControls[fam] = list.some((c) => c.id === p.id) ? list.filter((c) => c.id !== p.id) : [...list, { id: p.id, name: p.name }];
-    this.swipeControls = { ...this.swipeControls };
-    saveSwipe(this.swipeControls);
-    this.fetchMeters(); // pick up the new control's value
-  };
-  /** The ordered controls a block exposes: user ⚡ assignments, else the auto-picked primary. */
-  controlsFor = (cell: Cell): SwipeCtrl[] => {
-    const user = this.swipeFor(this.slugOf(cell));
-    if (user.length) return user;
-    const m = this.meters[cell.effectId];
-    return m ? [{ id: m.defaultId, name: m.defaultName }] : [];
-  };
-  /** Meter readout for a block's currently-active swipe control: fill (norm) + display value/unit. */
-  meterFor = (cell: Cell): { norm: number; value: number; unit?: string; min?: number; max?: number; log?: boolean; count: number; active: number; name: string } | null => {
-    const ctrls = this.controlsFor(cell);
-    if (!ctrls.length) return null;
-    const active = Math.min(this.activeCtl[cell.effectId] ?? 0, ctrls.length - 1);
-    const v = this.meters[cell.effectId]?.vals[ctrls[active].id];
-    return { norm: v?.norm ?? 0, value: v?.value ?? 0, unit: v?.unit, min: v?.min, max: v?.max, log: v?.log, count: ctrls.length, active, name: ctrls[active].name };
-  };
-  cycleControl = (cell: Cell, dir: number) => {
-    const n = this.controlsFor(cell).length;
-    if (n <= 1) return;
-    this.activeCtl[cell.effectId] = (((this.activeCtl[cell.effectId] ?? 0) + dir) % n + n) % n;
-    this.activeCtl = { ...this.activeCtl };
-  };
-  /** Adjust the active swipe control by a normalized delta (vertical drag / wheel on the tile). */
-  adjustSwipe = (cell: Cell, deltaNorm: number) => {
-    const ctrls = this.controlsFor(cell);
-    if (!ctrls.length) return;
-    const active = Math.min(this.activeCtl[cell.effectId] ?? 0, ctrls.length - 1);
-    const ctl = ctrls[active];
-    const m = this.meters[cell.effectId] ?? { defaultId: ctl.id, defaultName: ctl.name, typeName: '', vals: {} as Record<number, MeterVal> };
-    const prev = m.vals[ctl.id];
-    const norm = clamp01((prev?.norm ?? 0.5) + deltaNorm);
-    m.vals = { ...m.vals, [ctl.id]: { ...(prev ?? { value: 0 }), norm, value: paramValue({ norm, min: prev?.min, max: prev?.max, unit: prev?.unit, log: prev?.log }) } };
-    this.meters = { ...this.meters, [cell.effectId]: m };
-    // keep the open editor's knob in sync if this is the selected block
-    if (this.selected?.effectId === cell.effectId) {
-      const p = this.params.find((x) => x.id === ctl.id);
-      if (p) p.norm = norm;
-    }
-    clearTimeout(this.#sendTimers[ctl.id]);
-    this.#sendTimers[ctl.id] = setTimeout(() => forgefx.setParam(cell.effectId, ctl.id, norm, true).catch(() => {}), 50);
-  };
-  /** Read every placed block's meter + swipe-control values (background, debounced — load() runs
-   * after every optimistic edit, so coalesce the N bulk reads). */
-  #metersTimer: ReturnType<typeof setTimeout> | null = null;
-  fetchMeters = () => {
-    if (!this.hasBlockMeters || this.slowLink) return; // no meter polling without the capability or on a slow MIDI link (keeps editing snappy)
-    if (this.#metersTimer) clearTimeout(this.#metersTimer);
-    this.#metersTimer = setTimeout(async () => {
-      const wants: Record<string, number[]> = {};
-      for (const [slug, list] of Object.entries(this.swipeControls)) if (list.length) wants[slug] = list.map((c) => c.id);
-      try {
-        const rows = await forgefx.meters(wants);
-        const next: Record<number, { defaultId: number; defaultName: string; typeName: string; vals: Record<number, MeterVal> }> = {};
-        for (const r of rows) next[r.effectId] = { defaultId: r.defaultId, defaultName: r.defaultName, typeName: r.typeName, vals: r.vals };
-        this.meters = next;
-      } catch {
-        /* meters are best-effort */
-      }
-    }, 350);
-  };
-
-  // ── pinned-param hydration (custom-panel controls stay live without an open block) ──
-  /** A mounted pinned param widget registers its bound block; the return unregisters it.
-   *  Ref-counted so several controls off the same block share one hydration. */
-  registerPinnedBlock = (effectId: number | undefined): (() => void) => {
-    if (effectId == null || effectId < 0) return () => {};
-    this.#pinnedRefs.set(effectId, (this.#pinnedRefs.get(effectId) ?? 0) + 1);
-    this.#scheduleHydratePinned();
-    return () => {
-      const next = (this.#pinnedRefs.get(effectId) ?? 1) - 1;
-      if (next > 0) { this.#pinnedRefs.set(effectId, next); return; }
-      this.#pinnedRefs.delete(effectId);
-      if (this.pinnedParams[effectId]) {
-        const { [effectId]: _drop, ...rest } = this.pinnedParams;
-        this.pinnedParams = rest;
-      }
-    };
-  };
-  /** Live params+enums for a block: the open block's own arrays, else the hydrated
-   *  pinned copy (empty until hydration lands). Both writable through set*ById. */
-  pinnedView = (effectId: number | undefined): { named: NamedParam[]; enums: EnumParam[] } => {
-    if (effectId != null && this.selected?.effectId === effectId) return { named: this.params, enums: this.enums };
-    return (effectId != null && this.pinnedParams[effectId]) || { named: [], enums: [] };
-  };
-  #scheduleHydratePinned = () => {
-    if (this.#hydratePinnedTimer) clearTimeout(this.#hydratePinnedTimer);
-    this.#hydratePinnedTimer = setTimeout(() => void this.#hydratePinned(), 250);
-  };
-  /** Invalidate every hydrated block (preset/scene changed) and re-fetch the mounted ones. */
-  #invalidatePinned = () => {
-    if (Object.keys(this.pinnedParams).length) this.pinnedParams = {};
-    if (this.#pinnedRefs.size) this.#scheduleHydratePinned();
-  };
-  #hydratePinned = async () => {
-    this.#hydratePinnedTimer = null;
-    // A slow 5-pin MIDI link can't afford extra per-block reads — leave those controls
-    // as read-only previews (click opens the block) instead of inflating edit latency.
-    if (!this.#pinnedRefs.size || this.slowLink || this.status !== 'ready') return;
-    const placed = new Set([...this.layout.cells, ...this.layout.shunts].map((c) => c.effectId));
-    for (const eid of this.#pinnedRefs.keys()) {
-      if (eid === this.selected?.effectId) continue; // open block is already live via editor.params
-      if (!placed.has(eid) || this.pinnedParams[eid]) continue; // not in this preset, or already hydrated
-      try {
-        const r = !this.isV2 && this.isAm4 ? await forgefx.am4BlockParams(eid) : await forgefx.blockParams(eid);
-        this.pinnedParams = {
-          ...this.pinnedParams,
-          [eid]: { named: r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase())), enums: r.enums ?? [] }
-        };
-      } catch {
-        /* best-effort — the control falls back to a read-only preview */
-      }
-    }
-  };
-  #cellFor = (effectId: number): Cell | undefined =>
-    [...this.layout.cells, ...this.layout.shunts].find((c) => c.effectId === effectId);
-  /** Continuous write for a pinned control whose block may not be open. Delegates to the
-   *  normal path when it IS open; otherwise writes by effectId + optimistically updates the
-   *  hydrated copy so the tile tracks the gesture. */
-  setPinnedParam = (effectId: number, p: NamedParam, v: number) => {
-    if (this.selected?.effectId === effectId) { this.setParam(p, v); return; }
-    if (p.id == null) return;
-    const from = p.norm ?? 0;
-    p.norm = v; // optimistic on the hydrated object
-    this.pinnedParams = { ...this.pinnedParams }; // nudge reactivity
-    const cell = this.#cellFor(effectId);
-    history.recordGesture({
-      kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v,
-      block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log
-    });
-    clearTimeout(this.#sendTimers[p.id]);
-    this.#sendTimers[p.id] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
-  };
-  /** Discrete write for a pinned control whose block may not be open. */
-  setPinnedEnum = (effectId: number, e: EnumParam, value: number) => {
-    if (this.selected?.effectId === effectId) { this.setEnum(e, value); return; }
-    const from = e.value;
-    e.value = value; // optimistic
-    this.pinnedParams = { ...this.pinnedParams };
-    const cell = this.#cellFor(effectId);
-    if (from !== value) history.record({
-      kind: 'param', eid: effectId, paramId: e.id, continuous: false, from, to: value,
-      block: cell?.display ?? e.name, param: e.name,
-      fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
-    });
-    forgefx.setParam(effectId, e.id, value, false).catch(() => {});
-  };
 
   // ── lifecycle ──
   init = async () => {
-    this.customLayouts = loadLayouts();
-    this.swipeControls = loadSwipe();
+    this.#param.init();
     // history's inverse writes go straight to forgefx; it calls back here for UI refresh + toasts
     history.bindHost({
       load: () => this.load(),
-      reloadParams: () => this.#loadParams(),
+      reloadParams: () => this.#param.reloadParams(),
       echoParam: (eid, pid, norm) => this.applyDeviceEvent({ type: 'param', effectId: eid, paramId: pid, norm }),
       toast: (text, accent) => this.showToast(text, accent),
       isLegacyAm4: () => !this.isV2 && this.isAm4
@@ -715,18 +401,13 @@ class EditorStore {
       // no lightweight path (AM4: /preset/scene-state is 501) → full reload. load() only refreshes
       // grid+blocks, so the open block's per-channel params (incl. blockType — the Type row) must be
       // re-read here too, exactly like the lightweight path below does.
-      await this.load();
-      if (this.selKey) await this.#loadParams();
+      await this.#grid.load();
+      if (this.#param.selKey) await this.#param.reloadParams();
       return;
     }
-    const byId = new Map(st.map((b) => [b.effectId, b]));
-    const apply = (c: Cell): Cell => {
-      const s = byId.get(c.effectId);
-      return s ? { ...c, bypassed: s.bypassed ?? undefined, channel: s.channel ?? undefined } : c;
-    };
-    this.layout = { ...this.layout, cells: this.layout.cells.map(apply), shunts: this.layout.shunts.map(apply) };
-    this.#invalidatePinned(); // per-channel param values changed → re-hydrate pinned controls
-    if (this.selKey) await this.#loadParams(); // open block's params are per-channel → re-read it
+    this.#grid.applySceneState(st);
+    this.#param.invalidatePinned();
+    if (this.#param.selKey) await this.#param.reloadParams();
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
    *  into one lightweight refresh). */
@@ -740,23 +421,6 @@ class EditorStore {
     if (this.#eventReload) clearTimeout(this.#eventReload);
     this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
   };
-  // ── device-event hooks (called by the telemetry slice, which owns the single event switch) ──
-  /** Another UI moved a knob — reflect it live if that block is open (cheap: update the arc), and keep
-   *  the on-grid block level indicator (meter fill) in sync too, since it reads from `meters`, which the
-   *  open-block knob update doesn't touch. */
-  #applyParamEcho = (effectId: number, paramId: number, norm: number) => {
-    if (this.selected?.effectId === effectId) {
-      const p = this.params.find((x) => x.id === paramId);
-      if (p && p.norm !== norm) { p.norm = norm; this.params = [...this.params]; }
-    }
-    const m = this.meters[effectId];
-    if (m) {
-      const prev = m.vals[paramId];
-      const value = prev ? paramValue({ norm, min: prev.min, max: prev.max, unit: prev.unit, log: prev.log }) : 0;
-      m.vals = { ...m.vals, [paramId]: { ...(prev ?? { value: 0 }), norm, value } };
-      this.meters = { ...this.meters, [effectId]: { ...m } };
-    }
-  };
   /** A structural change elsewhere (block placed/removed, preset switched, or a device-side edit the unit
    *  doesn't push — AM4 front-panel / AM4-Edit). Reload, debounced on the SHARED `#eventReload` timer so a
    *  burst coalesces into one refresh. Also re-read the open block's knobs: load() only refreshes the grid
@@ -764,8 +428,8 @@ class EditorStore {
   #scheduleStructuralReload = () => {
     if (this.#eventReload) clearTimeout(this.#eventReload);
     this.#eventReload = setTimeout(async () => {
-      await this.load();
-      if (this.selKey) await this.#loadParams();
+      await this.#grid.load();
+      if (this.#param.selKey) await this.#param.reloadParams();
     }, 250);
   };
 
@@ -773,8 +437,7 @@ class EditorStore {
    *  directly — never re-saves (which would re-broadcast and loop). */
   #applyConfig = (id: string, data: unknown) => {
     const cache = (k: string) => { try { localStorage.setItem(k, JSON.stringify(data)); } catch { /* */ } };
-    if (id === 'swipe' && data && typeof data === 'object') { this.swipeControls = data as Record<string, SwipeCtrl[]>; cache('axis.swipe.v1'); }
-    else if (id === 'layouts' && data && typeof data === 'object') { this.customLayouts = data as Record<string, TabDef[]>; cache('axis.layouts.v1'); }
+    if ((id === 'swipe' || id === 'layouts') && data && typeof data === 'object') this.#param.applyRemoteConfig(id, data);
     else if (id === 'savedFilters') cache('axs.pb.saved');
     else if (id === 'tags' || id === 'collections' || id === 'favs' || id === 'tagColors') library.applyRemoteConfig(id, data);
   };
@@ -783,92 +446,17 @@ class EditorStore {
     void history.switchTo(this.detected?.short ?? this.layout.model ?? 'dev', n);
   };
 
-  load = async () => {
-    if (!this.everLoaded) this.status = 'loading';
-    // API v2: the unified /preset/grid + /preset/blocks serve EVERY device (AM4 included).
-    // Legacy v1 fallback: the AM4 only answers its own /am4/grid.
-    const legacyAm4 = !this.isV2 && this.isAm4;
-    try {
-      const [grid, blocks] = legacyAm4
-        ? [await forgefx.am4Grid(), []]
-        : await Promise.all([forgefx.grid(), forgefx.presetBlocks().catch(() => [])]);
-      this.layout = layoutFromGrid(grid, blocks);
-      // an armed link keeps pointing at a cell that may be gone after a reload (preset switch,
-      // external edit) — disarm rather than complete a connect from a phantom source
-      if (this.linkFrom) {
-        const lf = this.linkFrom;
-        const still = [...this.layout.cells, ...this.layout.shunts].some((c) => c.row === lf.row && c.col === lf.col && c.effectId === lf.effectId);
-        if (!still) this.linkFrom = null;
-      }
-      this.sceneNames = grid.scenes ?? [];
-      this.everLoaded = true;
-      this.status = 'ready';
-      if (!legacyAm4) {
-        const layout = this.layout;
-        // The FM3 live grid returns defaults on a cold label cache. Fetch names only after the canvas
-        // is ready, and discard a response from an earlier preset reload.
-        void forgefx.sceneNames().then(({ names }) => {
-          if (this.layout === layout) this.sceneNames = names;
-        }).catch(() => {});
-      }
-      this.fetchMeters(); // background: fill every block's level meter
-      this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
-      this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
-    } catch (e) {
-      if (!this.everLoaded) this.status = 'offline';
-      // We were connected and a (re)load failed — a real device-comm error worth a debug report. Debounced
-      // + dismissible + only if upload is configured, so it never spams (see offerDebugReport).
-      else this.offerDebugReport({ kind: 'device-comm', route: legacyAm4 ? '/am4/grid' : '/preset/grid', message: (e as Error)?.message?.slice(0, 200) });
-    }
-  };
-
-
-  // ── selection ──
-  // mirror the selection on the device screen (cursor-select) so the unit follows the UI
-  selectCellOnDevice = (row: number, col: number) => {
-    if (!this.hasCursorSelect) return; // no grid cursor-select on this device; opening a slot just reads its params
-    forgefx.selectCell(this.#W(row), this.#W(col)).catch(() => {});
-  };
-
-  openCell = async (c: Cell) => {
-    this.virtual = null; // leaving any rail/virtual screen — back to a real grid block
-    this.selectCellOnDevice(c.row, c.col);
-    if (c.kind === 'shunt') {
-      // shunts have no editor, but they are selectable so Backspace can remove them
-      this.selKey = `${c.row},${c.col}`;
-      this.editorOpen = false;
-      return;
-    }
-    this.selKey = `${c.row},${c.col}`;
-    this.editorOpen = true;
-    this.editingTabs = false;
-    this.activePage = '__ideal'; // blocks always open on the Ideal tab; Advanced is one click away
-    // Devices with caps.paramsWithoutPack serve params for any placed block (AM4 slots read by
-    // pidLow from the catalog) — don't gate the editor on a gen-3 `pack` there.
-    if (!c.pack && !this.paramsWithoutPack) {
-      this.sheetState = 'nopack';
-      this.#paramsEid = null; // surface is blank now — the next real read must repaint from scratch
-      this.params = [];
-      this.enums = [];
-      return;
-    }
-    await this.#loadParams();
-  };
-  closeEditor = () => {
-    this.editorOpen = false;
-  };
-
   // Return to the Signal Grid (Build) from any rail/virtual screen.
   openBuild = () => {
-    this.virtual = null;
+    this.#param.clearVirtual();
     this.inLibrary = false;
     this.railActive = 'build';
   };
 
   // Open the full Preset Browser (its own rail screen — replaces the grid/editor view).
   openLibrary = () => {
-    this.virtual = null;
-    this.editorOpen = false;
+    this.#param.clearVirtual();
+    this.#param.closeEditor();
     this.inLibrary = true;
     this.railActive = 'library';
   };
@@ -876,206 +464,36 @@ class EditorStore {
   // Open a virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) as a rail screen. Same param
   // path as a block — "the block editor pointed at effectId N" — rendered full-view by VirtualScreen.
   openVirtual = async (eid: number, slug: string, name: string) => {
-    this.virtual = { eid, slug, name };
+    const opening = this.#param.openVirtual(eid, slug, name);
     this.inLibrary = false;
-    this.selKey = null;
-    this.editorOpen = false;
-    this.editingTabs = false;
-    this.activePage = '';
-    await this.#loadParams();
-  };
-
-  #loadParams = async () => {
-    const c = this.selected;
-    if (!c || (!c.pack && !this.paramsWithoutPack)) return; // some devices serve params without a gen-3 pack
-    // Blank the surface ONLY when nothing on screen belongs to this block. The loading state swaps the
-    // BlockEditor out, which wipes its component
-    // state — live search, open dropdowns, measured width, scroll position, active page.
-    // The background refresh paths (#refreshScene, the SSE 'changed' debounce, the preset-watch tick)
-    // re-read the block ALREADY open, so there they must update the values in place instead.
-    if (this.#paramsEid !== c.effectId) {
-      this.#paramsEid = null;
-      this.sheetState = 'loading';
-    }
-    try {
-      // API v2: the unified /preset/blocks/:addr/params serves every device (AM4 addr = pidLow).
-      // Legacy v1 fallback: the AM4 reads via its own /am4/blocks route. Same BlockParams DTO either
-      // way, so the rest of this method is model-agnostic.
-      // Fetch the monitor table alongside the params (deduped after the first block open) so the very
-      // first render already knows which paramIds are read-only monitors — otherwise they flash as
-      // editable knobs before the table lands.
-      const [r] = await Promise.all([
-        !this.isV2 && this.isAm4 ? forgefx.am4BlockParams(c.effectId) : forgefx.blockParams(c.effectId),
-        this.loadMonitorParams()
-      ]);
-      this.params = r.named.filter((p) => !['type', 'bypass'].includes(p.name.toLowerCase()));
-      this.enums = r.enums ?? [];
-      this.blockType = r.type ?? null;
-      this.blockSlug = r.slug ?? null;
-      if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
-      this.blockLayout = r.layout ?? null; // device-authentic pages drive the BlockEditor's pixel-exact canvas
-      // refresh this block's meter values from the freshly-read params (accurate fill on open)
-      if (c.effectId != null) {
-        const fallback = this.params[0];
-        const m = this.meters[c.effectId] ?? {
-          defaultId: fallback?.id ?? -1,
-          defaultName: fallback?.name ?? '',
-          typeName: '',
-          vals: {} as Record<number, MeterVal>
-        };
-        if (r.type?.name) m.typeName = r.type.name;
-        if (m) {
-          for (const p of this.params)
-            if (p.id != null && (p.id === m.defaultId || this.swipeFor(this.slugOf(c)).some((x) => x.id === p.id)))
-              m.vals[p.id] = { norm: p.norm ?? 0, value: p.value ?? 0, unit: p.unit, min: p.min, max: p.max, log: p.log };
-          this.meters = { ...this.meters, [c.effectId]: { ...m } };
-        }
-      }
-      this.#paramsEid = c.effectId ?? null;
-      this.sheetState = 'ready';
-    } catch (e) {
-      this.#paramsEid = null; // nothing trustworthy on screen — the next attempt blanks and re-reads
-      this.sheetState = 'error';
-      if (e instanceof ForgeError) console.warn(e.message);
-    }
+    await opening;
   };
 
   // ── param writes (optimistic + debounced continuous) ──
-  setParam = (p: NamedParam, v: number) => {
-    const from = p.norm ?? 0; // pre-optimistic value — the undo target (first call of a drag wins)
-    p.norm = v;
-    const c = this.selected;
-    if (!c || (!c.pack && !this.paramsWithoutPack)) return;
-    // mirror onto the grid meter so the block tile's level/HUD tracks the knob
-    if (p.id != null && c.effectId != null) {
-      const m = this.meters[c.effectId];
-      if (m && m.vals[p.id]) {
-        m.vals[p.id] = { ...m.vals[p.id], norm: v, value: paramValue({ norm: v, min: p.min, max: p.max, unit: p.unit, log: p.log }) };
-        this.meters = { ...this.meters, [c.effectId]: { ...m } };
-      }
-    }
-    if (p.id == null) return;
-    // one gesture = one undo step: rapid same-param writes coalesce (history skips itself while applying)
-    history.recordGesture({
-      kind: 'param', eid: c.effectId, paramId: p.id, continuous: true, from, to: v,
-      block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log
-    });
-    clearTimeout(this.#sendTimers[p.id]);
-    // API v2: the unified PUT {value, continuous:true} writes every device (AM4 addr = pidLow).
-    // Legacy v1 fallback: the AM4 writes via its own SET_NORM route.
-    const eid = c.effectId, pid = p.id as number;
-    const legacyAm4 = !this.isV2 && this.isAm4;
-    this.#sendTimers[pid] = setTimeout(
-      () => (legacyAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}),
-      60
-    );
-  };
-  // enum/discrete write: send the ordinal (continuous=false → device-confirmed)
-  setEnum = (e: EnumParam, value: number) => {
-    const from = e.value;
-    e.value = value; // optimistic
-    const c = this.selected;
-    if (!c || (!c.pack && !this.paramsWithoutPack)) return;
-    if (from !== value) history.record({
-      kind: 'param', eid: c.effectId, paramId: e.id, continuous: false, from, to: value,
-      block: c.display, param: e.name,
-      fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label
-    });
-    (!this.isV2 && this.isAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
-  };
-  toggleBypass = async (cell?: Cell) => {
-    const c = cell ?? this.selected;
-    if (!c?.pack) return;
-    const next = !(c.bypassed ?? false);
-    c.bypassed = next;
-    try {
-      await forgefx.setBypass(c.effectId, next);
-      history.record({ kind: 'bypass', eid: c.effectId, block: c.display, from: !next, to: next });
-      this.showToast(next ? 'Bypassed' : 'Engaged', next ? '#d6543f' : '#5fc46b');
-    } catch {
-      c.bypassed = !next;
-    }
-  };
-  setChannel = async (ch: string) => {
-    const c = this.selected;
-    if (!c?.pack || c.channel === ch) return;
-    const prev = c.channel;
-    c.channel = ch;
-    try {
-      await forgefx.setChannel(c.effectId, ch);
-      if (prev) history.record({ kind: 'channel', eid: c.effectId, block: c.display, from: prev, to: ch });
-      this.#scheduleBlockStateReload();
-    } catch {
-      c.channel = prev;
-    }
-  };
-  retype = async (value: number) => {
-    const c = this.selected;
-    if (!c?.pack) return;
-    const from = this.blockType; // capture before the device swaps the model (params reset on retype)
-    // value is the device-true model ordinal = the discrete-SET value
-    try {
-      await forgefx.setType(c.effectId, value);
-      await this.#loadParams();
-      if (from && from.value !== value) history.record({
-        kind: 'retype', eid: c.effectId, block: c.display, from: from.value, to: value,
-        fromName: from.name, toName: this.blockType?.name ?? String(value)
-      });
-      await this.load();
-      this.showToast('Type changed', '#35c9d6');
-    } catch (e) {
-      this.showToast('Type change rejected by device', '#d6543f');
-      if (e instanceof ForgeError) console.warn(e.message);
-    }
-  };
+  setParam = (p: NamedParam, v: number) => this.#param.setParam(p, v);
+  setEnum = (e: EnumParam, value: number) => this.#param.setEnum(e, value);
+  toggleBypass = (cell?: Cell) => this.#param.toggleBypass(cell);
+  setChannel = (ch: string) => this.#param.setChannel(ch);
+  retype = (value: number) => this.#param.retype(value);
 
   /** Apply the exact saved-block data previewed in the library picker. The device writes are not safely undoable. */
-  applyBlockLibrarySource = async (block: DecodedBlockFile): Promise<boolean> => {
-    const c = this.selected;
-    if (!c?.pack || block.slug.toLowerCase() !== c.pack.toLowerCase()) return false;
-    try {
-      await forgefx.applyBlockLibrarySource(c.effectId, block);
-      history.checkpoint(`${block.name} applied to ${c.display}`, false);
-      await this.#loadParams();
-      await this.load();
-      this.showToast(`${block.name} applied`, '#5fc46b');
-      return true;
-    } catch (e) {
-      const message = e instanceof ForgeError ? e.message.replace(/^POST \/preset\/blocks\/\d+\/apply → \d+:?\s*/, '') : 'Block apply rejected by device';
-      this.showToast(message || 'Block apply rejected by device', '#d6543f');
-      if (e instanceof ForgeError) console.warn(e.message);
-      return false;
-    }
-  };
+  applyBlockLibrarySource = (block: DecodedBlockFile) => this.#param.applyBlockLibrarySource(block);
 
   // ── cab IR picker ──
   /** Read a block's current cab/IR state. Routed through the store (not called on `forgefx` directly by
    *  components) so the editor surface owns it — an offline surface can override with a buffer read. */
-  cabState = (eid: number) => forgefx.cabState(eid);
+  cabState = (eid: number) => this.#param.cabState(eid);
   openCabPicker = (slot = 0) => {
     if (!this.selected?.pack) return;
     this.cabPickerSlot = Math.max(0, slot);
     this.cabPickerOpen = true;
   };
   /** Apply a set of discrete cab writes (mode / bank / IR index / dyna type) then refresh params. */
-  applyCab = async (writes: { paramId: number; value: number }[]) => {
-    const c = this.selected;
-    if (!c?.pack) return;
-    for (const w of writes) await forgefx.setParam(c.effectId, w.paramId, w.value, false).catch(() => {});
-    history.checkpoint(`${c.display} cab changed`, false); // logged, not undoable (old slot state isn't captured) — v1 limitation
-    await this.#loadParams();
-  };
+  applyCab = (writes: { paramId: number; value: number }[]) => this.#param.applyCab(writes);
 
   // ── external drop preview (Quick Build sidecar → grid) ──
-  // Dumb setter: the writer (QuickBuild) computes validity from the layout. Coalesced so a steady
-  // hover over one cell doesn't churn $state on every pointermove.
-  setExternalDrop = (row: number, col: number, valid: boolean) => {
-    const cur = this.externalDrop;
-    if (!cur || cur.row !== row || cur.col !== col || cur.valid !== valid) this.externalDrop = { row, col, valid };
-  };
-  clearExternalDrop = () => {
-    if (this.externalDrop) this.externalDrop = null;
-  };
+  setExternalDrop = (row: number, col: number, valid: boolean) => this.#grid.setExternalDrop(row, col, valid);
+  clearExternalDrop = () => this.#grid.clearExternalDrop();
 
   // ── palette openers ──
   openPaletteAt = (row: number, col: number) => {
@@ -1090,240 +508,20 @@ class EditorStore {
   };
 
   // ── grid editing ──
-  // optimistic: show the cell immediately, reconcile from the device in the background
-  place = async (row: number, col: number, blockId: number, label?: string) => {
-    const display = label ?? '…';
-    // Dropping onto an existing SHUNT replaces it in place, moving its cables onto the new block —
-    // no manual shunt removal first (routes through replaceShunt for one undoable step).
-    const existing = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
-    if (existing?.kind === 'shunt') {
-      await this.replaceShunt(existing, { blockId, display });
-      return;
-    }
-    const cell: Cell = {
-      row,
-      col,
-      kind: 'block',
-      effectId: blockId,
-      display,
-      pack: packFor(display),
-      color: statusColor(display),
-      fromRows: []
-    };
-    this.layout = { ...this.layout, cells: [...this.layout.cells.filter((c) => !(c.row === row && c.col === col)), cell] };
-    try {
-      await forgefx.placeCell(this.#W(row), this.#W(col), blockId);
-      history.record({ kind: 'place', row, col, blockId, display });
-      this.load(); // background reconcile (real name/effectId)
-    } catch {
-      this.load();
-    }
-  };
-  removeAt = async (row: number, col: number) => {
-    // capture the doomed cell + its wiring BEFORE the optimistic filter, so undo can restore both
-    const gone = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
-    const inRows = gone?.fromRows.slice() ?? [];
-    const outRows = [...this.layout.cells, ...this.layout.shunts].filter((c) => c.col === col + 1 && c.fromRows.includes(row)).map((c) => c.row);
-    this.layout = {
-      ...this.layout,
-      cells: this.layout.cells.filter((c) => !(c.row === row && c.col === col)),
-      shunts: this.layout.shunts.filter((c) => !(c.row === row && c.col === col))
-    };
-    try {
-      await forgefx.clearCell(this.#W(row), this.#W(col));
-      if (gone) history.record({ kind: 'remove', row, col, blockId: gone.effectId, display: gone.display, inRows, outRows });
-      this.load(); // background reconcile
-    } catch {
-      this.load();
-    }
-  };
-  removeSelected = async () => {
-    const c = this.selected;
-    if (!c) return;
-    this.closeEditor();
-    await this.removeAt(c.row, c.col);
-    this.showToast('Block removed', '#d6543f');
-  };
-  /** Backspace: remove the hovered cell when the pointer is over one, else the selected cell. */
-  removeHoveredOrSelected = async () => {
-    if (this.virtual) return; // a virtual screen has no removable grid cell
-    const h = gridHover.cell;
-    const target =
-      (h && [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === h.row && c.col === h.col)) ??
-      this.selected;
-    if (!target || target.row < 0 || target.col < 0) return;
-    const wasSelected = this.selected && this.selected.row === target.row && this.selected.col === target.col;
-    if (wasSelected) this.closeEditor();
-    await this.removeAt(target.row, target.col);
-    this.showToast(target.kind === 'shunt' ? 'Shunt removed' : 'Block removed', target.kind === 'shunt' ? '#9a9aa3' : '#d6543f');
-  };
+  place = (row: number, col: number, blockId: number, label?: string) => this.#grid.place(row, col, blockId, label);
+  removeAt = (row: number, col: number) => this.#grid.removeAt(row, col);
+  removeSelected = () => this.#grid.removeSelected();
+  removeHoveredOrSelected = () => this.#grid.removeHoveredOrSelected();
 
-  // Move a block to any empty cell. Same-column → re-cable (preserve wires). Cross-column →
-  // plain clear+place; cables drop naturally if the path breaks (matches the device default).
-  // Optimistic: relocate the cell in the UI immediately, reconcile in the background.
-  move = async (src: Cell, row: number, col: number) => {
-    if (src.row === row && src.col === col) return;
-    // Dropping onto a SHUNT replaces it, moving the shunt's cables onto the block (see replaceShunt).
-    const dest = [...this.layout.cells, ...this.layout.shunts].find((c) => c.row === row && c.col === col);
-    if (dest?.kind === 'shunt') {
-      await this.replaceShunt(dest, { blockId: src.effectId, display: src.display, src });
-      return;
-    }
-    const sr = src.row, sc = src.col; // capture before optimistic mutation
-    const sameCol = col === sc;
-    // routing to preserve (same-column only) — read BEFORE we mutate the layout
-    const incoming = src.fromRows.slice();
-    const outgoing = [...this.layout.cells, ...this.layout.shunts]
-      .filter((c) => c.col === sc + 1 && c.fromRows.includes(sr))
-      .map((c) => c.row);
-    // optimistic relocate — also carry the routing so wires move with the block:
-    //  • the block keeps its incoming feeders on a same-col move (drops them cross-col)
-    //  • downstream cells re-point from the old row to the new one (same-col), or drop it (cross-col)
-    const relocate = (c: Cell): Cell => {
-      if (c === src) return { ...c, row, col, fromRows: sameCol ? c.fromRows : [] };
-      if (c.col === sc + 1 && c.fromRows.includes(sr)) {
-        const fr = c.fromRows.filter((r) => r !== sr);
-        if (sameCol) fr.push(row);
-        return { ...c, fromRows: fr };
-      }
-      return c;
-    };
-    this.layout = { ...this.layout, cells: this.layout.cells.map(relocate), shunts: this.layout.shunts.map(relocate) };
-    this.selKey = `${row},${col}`;
-    try {
-      // mirror the executed call sequence into history ops (undo replays the inverses in reverse)
-      const ops: import('./history.svelte').HistoryOp[] = [];
-      if (sameCol) {
-        for (const dr of outgoing) await forgefx.cable(this.#W(sr), this.#W(sc), this.#W(dr), false);
-        ops.push(...outgoing.map((dr) => ({ kind: 'cable', srcRow: sr, srcCol: sc, destRow: dr, connect: false }) as const));
-        await forgefx.clearCell(this.#W(sr), this.#W(sc));
-        // in-cables die implicitly on clear → carried on the remove op so undo restores them with the block
-        ops.push({ kind: 'remove', row: sr, col: sc, blockId: src.effectId, display: src.display, inRows: incoming, outRows: [] });
-        await forgefx.placeCell(this.#W(row), this.#W(col), src.effectId);
-        ops.push({ kind: 'place', row, col, blockId: src.effectId, display: src.display });
-        for (const fr of incoming) await forgefx.cable(this.#W(fr), this.#W(col - 1), this.#W(row), true);
-        ops.push(...incoming.map((fr) => ({ kind: 'cable', srcRow: fr, srcCol: col - 1, destRow: row, connect: true }) as const));
-        for (const dr of outgoing) await forgefx.cable(this.#W(row), this.#W(col), this.#W(dr), true);
-        ops.push(...outgoing.map((dr) => ({ kind: 'cable', srcRow: row, srcCol: col, destRow: dr, connect: true }) as const));
-      } else {
-        await forgefx.clearCell(this.#W(sr), this.#W(sc));
-        ops.push({ kind: 'remove', row: sr, col: sc, blockId: src.effectId, display: src.display, inRows: incoming, outRows: outgoing });
-        await forgefx.placeCell(this.#W(row), this.#W(col), src.effectId);
-        ops.push({ kind: 'place', row, col, blockId: src.effectId, display: src.display });
-      }
-      history.recordComposite(`Moved ${src.display} to r${row + 1}c${col + 1}`, ops);
-      this.load(); // background reconcile
-      this.showToast('Moved', '#35c9d6');
-    } catch {
-      this.load();
-    }
-  };
+  move = (src: Cell, row: number, col: number) => this.#grid.move(src, row, col);
 
-  // ── tap-to-connect link mode (shared by the SignalGrid and the GridMap) ──
-  // Arming lives here (not in a component) so it survives mobile page swipes and works across surfaces:
-  // arm on the grid, complete on the map — or vice versa. `connect()` below spans ANY later column
-  // (shunts through the gaps), so a completed link is never restricted to the adjacent column.
-  linkFrom = $state<Cell | null>(null);
-  /** Arm link mode from a cell's output; arming the same cell again cancels (tap the port twice). */
-  armLink = (c: Cell) => {
-    if (this.linkFrom && this.linkFrom.row === c.row && this.linkFrom.col === c.col) {
-      this.linkFrom = null;
-      return;
-    }
-    this.linkFrom = c;
-  };
-  cancelLink = () => {
-    this.linkFrom = null;
-  };
-  /** While armed: tap a destination cell. Any LATER column completes via connect() (blocks, shunts or
-   *  empty cells — connect lays shunts as needed); the armed cell itself cancels; same/earlier columns
-   *  keep the arm and explain, so the user can page/scroll on and pick a valid target. */
-  completeLink = async (row: number, col: number) => {
-    const src = this.linkFrom;
-    if (!src) return;
-    if (row === src.row && col === src.col) {
-      this.linkFrom = null; // tapped the armed cell again → cancel
-      return;
-    }
-    if (col <= src.col) {
-      this.showToast('Connect to a later column', '#d6543f');
-      return; // stay armed — the user can still pick a valid destination
-    }
-    this.linkFrom = null;
-    await this.connect(src, row, col);
-  };
+  armLink = (c: Cell) => this.#grid.armLink(c);
+  cancelLink = () => this.#grid.cancelLink();
+  completeLink = (row: number, col: number) => this.#grid.completeLink(row, col);
+  connect = (src: Cell, destRow: number, destCol: number) => this.#grid.connect(src, destRow, destCol);
 
-  /** Routing/shunt cell base effect id (gen-3: 1024). SHUNT_ID is the legacy fallback. */
-  get shuntBase(): number { return this.caps?.shuntBase ?? SHUNT_ID; }
-
-  // Execute ONE routing op forward against the device (mirror of history's redo direction — so a
-  // freshly-run op and its recorded undo/redo stay in lock-step). Only the structural kinds a
-  // routing plan emits are handled here.
-  #runOp = async (op: import('./history.svelte').HistoryOp) => {
-    switch (op.kind) {
-      case 'place': return void (await forgefx.placeCell(this.#W(op.row), this.#W(op.col), op.blockId));
-      case 'remove': return void (await forgefx.clearCell(this.#W(op.row), this.#W(op.col)));
-      case 'cable': return void (await forgefx.cable(this.#W(op.srcRow), this.#W(op.srcCol), this.#W(op.destRow), op.connect));
-      default: return;
-    }
-  };
-
-  // Connect src → (destRow,destCol), spanning any number of columns. Intermediate empty cells get
-  // a shunt (a routing cell — eid ≥ shuntBase) so the signal can pass through; existing blocks on
-  // the source row are CHAINED through (output→input); then we chain an adjacent-column cable for
-  // each hop. The straight run flows along src.row; the final hop bends to destRow. Plan is pure
-  // (gridRouting.planConnect) so the SignalGrid drag preview highlights the exact same path.
-  connect = async (src: Cell, destRow: number, destCol: number) => {
-    const plan = planConnect(this.layout.cells, this.layout.shunts, src, destRow, destCol, this.shuntBase);
-    if (!plan.ok) {
-      this.showToast(plan.error ?? 'Cannot connect', '#d6543f');
-      return;
-    }
-    try {
-      for (const op of plan.ops) await this.#runOp(op);
-      history.recordComposite(plan.label, plan.ops);
-      await this.load();
-      this.showToast('Connected', '#35c9d6');
-    } catch {
-      this.load();
-    }
-  };
-
-  // Replace a SHUNT with a block, preserving the shunt's cable topology (inputs/outputs move onto
-  // the block). Shared by the add-block flow (place onto a shunt) and block-move-onto-shunt. One
-  // composite step; plan is pure (gridRouting.planReplaceShunt) → same optimistic/undo path.
-  replaceShunt = async (
-    target: Cell,
-    block: { blockId: number; display: string; src?: Cell },
-  ) => {
-    const plan = planReplaceShunt(this.layout.cells, this.layout.shunts, target, {
-      blockId: block.blockId,
-      display: block.display,
-      src: block.src ? { row: block.src.row, col: block.src.col, effectId: block.src.effectId, display: block.src.display, fromRows: block.src.fromRows } : undefined
-    });
-    if (!plan.ok) {
-      this.showToast(plan.error ?? 'Cannot place here', '#d6543f');
-      return;
-    }
-    try {
-      for (const op of plan.ops) await this.#runOp(op);
-      history.recordComposite(plan.label, plan.ops);
-      await this.load();
-      this.showToast(block.src ? 'Moved' : `Placed ${block.display}`, '#35c9d6');
-    } catch {
-      this.load();
-    }
-  };
-  disconnect = async (srcRow: number, srcCol: number, destRow: number) => {
-    try {
-      await forgefx.cable(this.#W(srcRow), this.#W(srcCol), this.#W(destRow), false);
-      history.record({ kind: 'cable', srcRow, srcCol, destRow, connect: false });
-      await this.load();
-      this.showToast('Connection removed', '#9a9aa3');
-    } catch {
-      /* */
-    }
-  };
+  replaceShunt = (target: Cell, block: { blockId: number; display: string; src?: Cell }) => this.#grid.replaceShunt(target, block);
+  disconnect = (srcRow: number, srcCol: number, destRow: number) => this.#grid.disconnect(srcRow, srcCol, destRow);
 
   // ── preset picker (slot-pick mode) ──
   // Preset NAV itself (selectPreset / stepPreset / save / renames) lives in the preset-buffer slice.
@@ -1347,8 +545,78 @@ class EditorStore {
   setViewport = (w: number, h: number) => {
     this.vw = w;
     this.vh = h;
-    if (this.mobColsAuto) this.mobCols = this.fitCols(w);
+    this.#grid.applyViewportWidth(w);
   };
+
+  // ── grid-editing facade ──────────────────────────────────────────────────────────────────────
+  get status() { return this.#grid.status; }
+  get layout() { return this.#grid.layout; }
+  get everLoaded() { return this.#grid.everLoaded; }
+  get mobCols() { return this.#grid.mobCols; }
+  get mobColsAuto() { return this.#grid.mobColsAuto; }
+  get gridPage() { return this.#grid.gridPage; }
+  get pageCount() { return this.#grid.pageCount; }
+  get firstEmptyCell() { return this.#grid.firstEmptyCell; }
+  get shuntBase() { return this.#grid.shuntBase; }
+  get externalDrop() { return this.#grid.externalDrop; }
+  get linkFrom() { return this.#grid.linkFrom; }
+  fitCols = (w: number) => this.#grid.fitCols(w);
+  changeCols = (d: number) => this.#grid.changeCols(d);
+  setCols = (n: number) => this.#grid.setCols(n);
+  colsFit = () => this.#grid.colsFit();
+  changePage = (d: number) => this.#grid.changePage(d);
+  setPage = (p: number) => this.#grid.setPage(p);
+  load = () => this.#grid.load();
+
+  // ── parameter-editing facade ─────────────────────────────────────────────────────────────────
+  get selKey() { return this.#param.selKey; }
+  get selected() { return this.#param.selected; }
+  get editorOpen() { return this.#param.editorOpen; }
+  get editorH() { return this.#param.editorH; }
+  set editorH(v) { this.#param.editorH = v; }
+  get params() { return this.#param.params; }
+  get enums() { return this.#param.enums; }
+  get blockType() { return this.#param.blockType; }
+  get blockSlug() { return this.#param.blockSlug; }
+  get sheetState() { return this.#param.sheetState; }
+  get blockLayout() { return this.#param.blockLayout; }
+  get virtual() { return this.#param.virtual; }
+  set virtual(v) { this.#param.virtual = v; }
+  get activePage() { return this.#param.activePage; }
+  get customLayouts() { return this.#param.customLayouts; }
+  get editingTabs() { return this.#param.editingTabs; }
+  get swipeControls() { return this.#param.swipeControls; }
+  get meters() { return this.#param.meters; }
+  get activeCtl() { return this.#param.activeCtl; }
+  get pinnedParams() { return this.#param.pinnedParams; }
+  get monitorParams() { return this.#param.monitorParams; }
+  get familyKey() { return this.#param.familyKey; }
+  get tabs() { return this.#param.tabs; }
+  get openBlockMonitors() { return this.#param.openBlockMonitors; }
+  typeNameFor = (effectId: number) => this.#param.typeNameFor(effectId);
+  loadMonitorParams = () => this.#param.loadMonitorParams();
+  monitorsByPid = (family: string | null | undefined) => this.#param.monitorsByPid(family);
+  looperControl = (action: string, on: boolean) => this.#param.looperControl(action, on);
+  addTab = () => this.#param.addTab();
+  renameTab = (id: string, name: string) => this.#param.renameTab(id, name);
+  deleteTab = (id: string) => this.#param.deleteTab(id);
+  toggleParamInTab = (id: string, paramId: number) => this.#param.toggleParamInTab(id, paramId);
+  slugOf = (c: Cell) => this.#param.slugOf(c);
+  swipeFor = (slug: string) => this.#param.swipeFor(slug);
+  isSwipeControl = (paramId: number) => this.#param.isSwipeControl(paramId);
+  toggleSwipeControl = (p: NamedParam) => this.#param.toggleSwipeControl(p);
+  controlsFor = (cell: Cell) => this.#param.controlsFor(cell);
+  meterFor = (cell: Cell) => this.#param.meterFor(cell);
+  cycleControl = (cell: Cell, dir: number) => this.#param.cycleControl(cell, dir);
+  adjustSwipe = (cell: Cell, deltaNorm: number) => this.#param.adjustSwipe(cell, deltaNorm);
+  fetchMeters = () => this.#param.fetchMeters();
+  registerPinnedBlock = (effectId: number | undefined) => this.#param.registerPinnedBlock(effectId);
+  pinnedView = (effectId: number | undefined) => this.#param.pinnedView(effectId);
+  setPinnedParam = (effectId: number, p: NamedParam, v: number) => this.#param.setPinnedParam(effectId, p, v);
+  setPinnedEnum = (effectId: number, e: EnumParam, value: number) => this.#param.setPinnedEnum(effectId, e, value);
+  selectCellOnDevice = (row: number, col: number) => this.#param.selectCellOnDevice(row, col);
+  openCell = (c: Cell) => this.#param.openCell(c);
+  closeEditor = () => this.#param.closeEditor();
 
   // ── device-session facade ────────────────────────────────────────────────────────────────────
   // Straight delegation to `#device` (deviceSession.svelte.ts). Keeps `editor.conn`, `editor.caps`,

@@ -51,7 +51,7 @@ time on drift, not just at runtime in the field. v2 caps fields are optional
 (`?`) by design so legacy payloads degrade to `false` — never to "supported" —
 or to the legacy `isAm4` fallback branches on a v1 server.
 
-## Store pattern (`src/lib/editor/editor.svelte.ts`, ~1500 lines)
+## Store pattern (`src/lib/editor/editor.svelte.ts`, ~765 lines)
 
 `class EditorStore` exported as a singleton `export const editor`; components
 import it directly — no context or props threading.
@@ -90,13 +90,13 @@ Other stores: `preset/library.svelte.ts` (device scan, `.syx` import, Zod-valida
 persisted summaries, Orama index), `editor/history.svelte.ts` (undo/redo, IndexedDB; binds a
 narrow host interface to avoid an editor↔history import cycle).
 
-**Own module vs extend editor:** give state its own `*.svelte.ts` when it has an
-independent persistence lifecycle or must avoid an import cycle. Live device
-state flowing through poll/SSE with the shared connection/caps stays in `editor`.
+**Own module vs extend editor:** give a cohesive responsibility its own
+`*.svelte.ts` store when it has independent state/lifecycle or would otherwise
+grow the composer. Cross-slice needs go through narrow host interfaces.
 
 ### Slices — the facade pattern (M4 of the architecture refactor)
 
-`EditorStore` is being decomposed one responsibility at a time. A slice is a
+`EditorStore` is composed from responsibility-specific slices. A slice is a
 plain class in its own `*.svelte.ts`, holding its own `$state`; `EditorStore`
 owns an instance and **re-exposes every member by delegation**, so the ~44
 modules that import `editor` never change. Migrating call sites to import a
@@ -122,11 +122,19 @@ Extracted so far:
   the version store (snapshot / load-into-buffer / full device backup) and the
   local `Presets/` + `Sync/` folder with its debounced `syncBus` mirror. The
   buffer's CONTENTS — the decoded grid and the open block — are NOT in here; the
-  slice asks for them to be re-read through `PresetBufferHost.load` /
-  `reloadOpenParams`.
+   slice asks for them to be re-read through `PresetBufferHost.load` /
+   `reloadOpenParams`.
+- **`editor/gridEditing.svelte.ts`** (`GridEditingStore`) — decoded grid state,
+  load/reconciliation status, mobile density and paging, optimistic structural
+  edits, routing/shunt plans, external-drop preview and tap-to-connect state.
+- **`editor/paramEditing.svelte.ts`** (`ParamEditingStore`) — selection and the
+  open block payload, parameter writes, custom tabs, swipe controls and their
+  grid meter values, monitor-param suppression, and pinned-param hydration.
 
-Still on `EditorStore`, in planned extraction order: `gridEditing` +
-`paramEditing`.
+`EditorStore` now keeps composition-level orchestration: lifecycle wiring,
+shared scene/SSE reload debounce, shell navigation, overlays, onboarding and
+toasts. Grid and parameter editing are sibling slices despite their mutual
+needs; every crossing routes through `EditorStore` host adapters.
 
 Four rules make this work:
 
@@ -162,8 +170,7 @@ Four rules make this work:
    Decide write-ability by grepping for assignments, not by the compiler.
 
 Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
-fake host — `editor/telemetry.runes.test.ts`, `editor/deviceSession.runes.test.ts`
-and `editor/presetBuffer.runes.test.ts` are the worked examples. A rune can't be
+fake host — the five files beside the slice modules are worked examples. A rune can't be
 written in a `.test.ts`, so reactivity is pinned the way a derived reader observes
 it: reassignment identity and `$state` proxy identity, not a live `$derived`.
 

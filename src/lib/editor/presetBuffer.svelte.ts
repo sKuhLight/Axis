@@ -5,9 +5,8 @@
 // store (snapshots / restore into the buffer), and the local storage folder that mirrors it all
 // to disk (Presets/ + Sync/). Also the preset-watch tick that notices a device-side slot change.
 //
-// The CONTENTS of the buffer — the decoded grid, the open block and its params — stay on
-// `EditorStore` for now (they belong to `gridEditing` / `paramEditing`, M4d); this slice asks for
-// them to be re-read through `PresetBufferHost.load` / `reloadOpenParams`.
+// The CONTENTS of the buffer live in the sibling gridEditing / paramEditing slices; this slice asks
+// EditorStore to re-read them through `PresetBufferHost.load` / `reloadOpenParams`.
 //
 // `EditorStore` owns an instance and re-exposes every member below by delegation, so the ~44
 // modules that import `editor` keep working unchanged. Call-site migration (importing this store
@@ -40,14 +39,13 @@ export type PresetRef = { number: number; name: string };
  *  The `deviceSession` members below are deliberately NOT a direct import of that slice: slices
  *  are siblings, never a stack (`src/lib/CLAUDE.md`, Store pattern § slices, rule 2). */
 export interface PresetBufferHost {
-  /** Re-read the grid + blocks. The decoded layout is grid state, still on `EditorStore`. */
+  /** Re-read the grid + blocks through the composed grid-editing slice. */
   load: () => Promise<void>;
   /** Re-read the OPEN block's params; no-op when nothing is open. Every preset switch needs it —
    *  `load()` only refreshes the grid, so without this the open block keeps the old preset's arcs. */
   reloadOpenParams: () => Promise<void>;
   showToast: (text: string, accent?: string) => void;
-  /** Point the undo/redo history at the active device+slot (it keys off `detected`/`layout.model`,
-   *  both still on `EditorStore`). */
+  /** Point undo/redo history at the active device+slot; EditorStore composes the device and grid keys. */
   histSwitch: (n: number) => void;
   // ── device-session reads (through the host, per rule 2) ──
   readonly status: 'loading' | 'ready' | 'offline';
