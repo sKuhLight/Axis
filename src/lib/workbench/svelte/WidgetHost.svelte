@@ -66,21 +66,21 @@
       id: 'size-default',
       label: 'Default Size',
       hint: widget.size === 'default' ? 'Current' : undefined,
-      disabled: widget.locked || widget.size === 'default',
+      disabled: !$controller.editMode || widget.locked || widget.size === 'default',
       run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'default' })
     },
     {
       id: 'size-compact',
       label: 'Compact Size',
       hint: widget.size === 'compact' ? 'Current' : undefined,
-      disabled: widget.locked || widget.size === 'compact',
+      disabled: !$controller.editMode || widget.locked || widget.size === 'compact',
       run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'compact' })
     },
     {
       id: 'size-mini',
       label: 'Mini Size',
       hint: widget.size === 'mini' ? 'Current' : undefined,
-      disabled: widget.locked || widget.size === 'mini',
+      disabled: !$controller.editMode || widget.locked || widget.size === 'mini',
       run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'mini' })
     },
     ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
@@ -88,7 +88,7 @@
       label: option.label,
       separatorBefore: index === 0,
       danger: option.id === 'hidden',
-      disabled: widget.locked || widget.zone === option.id,
+      disabled: !$controller.editMode || widget.locked || widget.zone === option.id,
       run: () =>
         controller.dispatch({
           type: 'widget.move',
@@ -101,19 +101,22 @@
       id: 'save',
       label: 'Save To Library',
       separatorBefore: true,
-      disabled: widget.locked,
+      disabled: !$controller.editMode || widget.locked,
       run: saveWidgetTemplate
     },
     // The widget's "settings" surface is exactly the items above — size,
     // placement (move-to), and save. No widget type exposes per-widget custom
     // settings today, so there is nothing else to wire here. This explicit
     // danger item is the replacement for the removed inset × close button.
+    // Gated on edit mode like the rest of this menu — the registry seam below
+    // (`filterItems`, My Controls) re-enables its own kept "remove" from lock
+    // state alone, since that panel is a pin board, not layout editing.
     {
       id: 'remove',
       label: 'Remove Widget',
       separatorBefore: true,
       danger: true,
-      disabled: widget.locked || removalLocked,
+      disabled: !$controller.editMode || widget.locked || removalLocked,
       run: () => controller.dispatch({ type: 'widget.hide', widgetIds: removalIds })
     }
   ]);

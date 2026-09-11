@@ -1,4 +1,4 @@
-import { createWorkbenchRenderRegistry, type WorkbenchPanelComponent, type WorkbenchWidgetComponent } from '../workbench';
+import { createWorkbenchRenderRegistry, selectActiveLayout, type WorkbenchPanelComponent, type WorkbenchWidgetComponent } from '../workbench';
 import FallbackNavigation from '../workbench/svelte/FallbackNavigation.svelte';
 import FallbackPanel from '../workbench/svelte/FallbackPanel.svelte';
 import FallbackWidget from '../workbench/svelte/FallbackWidget.svelte';
@@ -168,10 +168,19 @@ registry.registerWidgetRemoval({
 // context menu of just removal. A named header cascades to its controls, so it
 // reads "Remove whole section"; a divider or control is a plain "Remove".
 registry.registerWidgetMenu({
-  filterItems: (widget, _doc, items) => {
+  filterItems: (widget, doc, items) => {
     if (widget.zone !== AXIS_MY_CONTROLS_ZONE) return items;
     const label = isAxisSectionHeader(widget) && axisSectionHeaderLabel(widget) ? 'Remove whole section' : 'Remove';
-    return items.filter((item) => item.id === 'remove').map((item) => ({ ...item, label }));
+    // WidgetHost's standard "remove" item now also disables when edit mode is
+    // off (layout editing is retired). My Controls is a pin board, not layout
+    // editing, so pin removal must survive that clamp — re-enable it here from
+    // lock state alone, same cascade `idsForWidgetRemoval` uses above.
+    const removalIds = widget.type === AXIS_SECTION_HEADER_TYPE ? axisMyControlsSectionRemovalIds(doc, widget.id) : [widget.id];
+    const layout = selectActiveLayout(doc);
+    const removalLocked = removalIds.some((id) => layout?.widgets[id]?.locked);
+    return items
+      .filter((item) => item.id === 'remove')
+      .map((item) => ({ ...item, label, disabled: removalLocked }));
   }
 });
 
