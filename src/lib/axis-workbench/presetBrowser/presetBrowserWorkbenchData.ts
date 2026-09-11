@@ -160,6 +160,10 @@ export function normalizeAxisPresetBrowserSourceId(sourceId: AxisPresetBrowserSo
   return sourceId;
 }
 
+export function shouldSynthesizeEmptyDeviceSlots(cacheBuilt: boolean, connectionState: string): boolean {
+  return cacheBuilt && connectionState === 'online';
+}
+
 /** Build synthesized `<EMPTY>` slot entries for every device slot `isEmpty` reports as cleared. */
 export function buildEmptyDeviceSlotEntries(
   count: number,

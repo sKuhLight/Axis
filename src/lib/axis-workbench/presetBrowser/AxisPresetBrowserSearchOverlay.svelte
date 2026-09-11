@@ -16,6 +16,7 @@
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
     preparePresetBrowserIndex,
+    shouldSynthesizeEmptyDeviceSlots,
     type AxisPbDecodedBlock,
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserIndex,
@@ -87,7 +88,7 @@
   // Mirror of the same gate in AxisPresetBrowserPartPanel: `<EMPTY>` rows only with a device connected —
   // `editor.presetCount` is a guess until one is adopted, and there is nothing to load into offline.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!library.cacheBuilt || editor.conn.state !== 'online') return [];
+    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];
     return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const activeConditions = $derived.by(() => {

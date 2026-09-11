@@ -13,6 +13,7 @@
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
     preparePresetBrowserIndex,
+    shouldSynthesizeEmptyDeviceSlots,
     type AxisPbDecodedBlock,
     type AxisPresetBrowserEntrySummary,
     type AxisPresetBrowserIndex,
@@ -150,7 +151,7 @@
   // cleared slot is a device concept — offline (even with a stale `cacheBuilt` flag from a past scan)
   // there is nothing to load into, so synthesizing hundreds of phantom rows is just noise.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!library.cacheBuilt || editor.conn.state !== 'online') return [];
+    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];
     return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const data = $derived(createAxisPresetBrowserDataView({

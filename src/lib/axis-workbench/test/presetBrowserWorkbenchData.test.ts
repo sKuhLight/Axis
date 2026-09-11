@@ -4,6 +4,7 @@ import {
   buildEmptyDeviceSlotEntries,
   normalizeAxisPresetBrowserSourceId,
   preparePresetBrowserIndex,
+  shouldSynthesizeEmptyDeviceSlots,
   type AxisPresetBrowserLibEntryLike
 } from '../presetBrowser/presetBrowserWorkbenchData';
 
@@ -297,6 +298,12 @@ describe('Preset Browser Workbench data view', () => {
       empty: true,
       summary: { number: 0, name: '<EMPTY>', scenes: [], blocks: [], amps: [], models: {}, crc: null }
     });
+  });
+
+  it('synthesizes empty slots only for a built cache while the device is online', () => {
+    expect(shouldSynthesizeEmptyDeviceSlots(true, 'offline')).toBe(false);
+    expect(shouldSynthesizeEmptyDeviceSlots(true, 'online')).toBe(true);
+    expect(shouldSynthesizeEmptyDeviceSlots(false, 'online')).toBe(false);
   });
 
   it('injects empty slots only into the device view (not "all", never into data.entries)', () => {
