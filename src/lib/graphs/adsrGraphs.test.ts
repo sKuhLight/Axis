@@ -27,6 +27,38 @@ describe('deriveAdsrGraphs', () => {
     });
   });
 
+  it('returns nothing without a layout', () => {
+    expect(deriveAdsrGraphs({ layout: null, params: [] })).toEqual([]);
+  });
+
+  it('ignores pages without numbered ADSR controls', () => {
+    const layout: DeviceLayout = { family: 'CONTROLLERS', pages: [{ name: 'Other', rows: [{ section: 'parameters', controls: [control(null, null, 'graph', 'graph_adsr')] }] }] };
+    expect(deriveAdsrGraphs({ layout, params: [] })).toEqual([]);
+  });
+
+  it('ignores unrelated graph widgets', () => {
+    const layout: DeviceLayout = { family: 'CONTROLLERS', pages: [{ name: 'ADSR', rows: [{ section: 'parameters', controls: [control('CONTROLLERS_ADSR1ATTACK', 1), control(null, null, 'graph', 'graph_lfo')] }] }] };
+    expect(deriveAdsrGraphs({ layout, params: [param(1)] })).toEqual([]);
+  });
+
+  it('leaves controls absent when their values are not live', () => {
+    const layout: DeviceLayout = { family: 'CONTROLLERS', pages: [{ name: 'ADSR', rows: [{ section: 'parameters', controls: [control('CONTROLLERS_ADSR1ATTACK', 1), control('CONTROLLERS_ADSR1DECAY', 2), control(null, null, 'graph', 'graph_adsr')] }] }] };
+    expect(deriveAdsrGraphs({ layout, params: [param(1)] })[0]).toMatchObject({ attack: { id: 1 }, decay: undefined });
+  });
+
+  it('preserves page indices across multiple ADSR pages', () => {
+    const page = (number: number) => ({ name: `ADSR ${number}`, rows: [{ section: 'parameters' as const, controls: [control(`CONTROLLERS_ADSR${number}ATTACK`, number), control(null, null, 'graph', 'graph_adsr')] }] });
+    expect(deriveAdsrGraphs({ layout: { family: 'CONTROLLERS', pages: [page(1), page(2)] }, params: [param(1), param(2)] }).map((graph) => [graph.key, graph.page, graph.title])).toEqual([['adsr1', 0, 'ADSR 1'], ['adsr2', 1, 'ADSR 2']]);
+  });
+
+  it('binds a graph whose controls are split across rows', () => {
+    const layout: DeviceLayout = { family: 'CONTROLLERS', pages: [{ name: 'ADSR', rows: [
+      { section: 'parameters', controls: [control('CONTROLLERS_ADSR1ATTACK', 1)] },
+      { section: 'parameters', controls: [control('CONTROLLERS_ADSR1RELEASE', 2), control(null, null, 'graph', 'graph_adsr')] }
+    ] }] };
+    expect(deriveAdsrGraphs({ layout, params: [param(1), param(2)] })[0]).toMatchObject({ attack: { id: 1 }, release: { id: 2 } });
+  });
+
   it('recognizes the legacy ADSR graph widget', () => {
     const layout: DeviceLayout = {
       family: 'CONTROLLERS',

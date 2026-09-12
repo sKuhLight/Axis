@@ -5,6 +5,7 @@ import {
 } from './compressorGraphs';
 import type { BlockParams, DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 import compFixture from '$lib/api/fixtures/blockParams/comp.json';
+import kneeCurves from '../../../docs/handoff/compressor-graph/knee_curves.json';
 
 const control = (paramName: string | null, paramId: number | null, widget: LayoutControl['widget'] = 'knob', rawWidget = '', render?: LayoutControl['render']): LayoutControl => ({
   label: paramName ?? 'Graph', paramName, paramId, widget, rawWidget, ...(render ? { render } : {})
@@ -92,6 +93,32 @@ describe('ratio-style transfer curve', () => {
       prev = y;
     }
   });
+
+  it('stays finite, monotonic, and approaches every served ratio slope', () => {
+    for (const ratio of [1, 1.5, 2, 4, 8, 20]) for (const kneeOption of [0, 1, 2, 3, 4]) {
+      const transfer = ratioTransfer({ threshold: -30, ratio, knee: kneeAt(kneeOption) });
+      const values = Array.from({ length: 201 }, (_, index) => ratioCurveY(GRAPH_MIN_DB + index / 2, transfer));
+      expect(values.every(Number.isFinite)).toBe(true);
+      for (let index = 1; index < values.length; index++) expect(values[index]).toBeGreaterThanOrEqual(values[index - 1]);
+      expect(ratioCurveY(-150, transfer) - ratioCurveY(-151, transfer)).toBeGreaterThan(0.97);
+      expect(Math.abs(ratioCurveY(100, transfer) - ratioCurveY(99, transfer) - 1 / ratio)).toBeLessThan(0.02);
+    }
+  });
+
+  it('maps every Knee Type and uses safe variant defaults', () => {
+    for (const [option, sharpness] of [0.72, 0.36, 0.18, 0.09, 0.045].entries()) {
+      expect(kneeSharpness(kneeAt(option))).toBeCloseTo(sharpness);
+    }
+    expect(kneeSharpness(null, 'Analog')).toBeCloseTo(0.111);
+    expect(kneeSharpness(null, 'JFET1')).toBeCloseTo(0.72);
+    expect(kneeSharpness(null, 'Unknown')).toBeCloseTo(0.115);
+  });
+
+  it('ignores Auto Makeup, Mix, and input Gain until they are modeled', () => {
+    const base = { threshold: -20, ratio: 4, level: 2 };
+    expect(ratioTransfer({ ...base, auto: true, mix: 25, inputGain: 12 } as Parameters<typeof ratioTransfer>[0])).toEqual(ratioTransfer(base));
+    expect((sustainTransfer as (...args: unknown[]) => unknown)(6, 0, true, 25, 12)).toEqual(sustainTransfer(6, 0));
+  });
 });
 
 describe('parity with the FM3 editor (Threshold/Ratio)', () => {
@@ -132,6 +159,15 @@ describe('parity with the FM3 editor (Threshold/Ratio)', () => {
       expect(worst).toBeLessThan(2 * PX);
     });
   }
+
+  it('records preset 018 while Auto Makeup remains deliberately unmodeled', () => {
+    const transfer = ratioTransfer({ threshold: -37, ratio: 4, level: -3, knee: null, variant: 'JFET1' });
+    const errors = kneeCurves['018'].pts.map(([x, y]) => {
+      const drawn = (ratioCurveY(GRAPH_MIN_DB + x * SPAN, transfer) - GRAPH_MIN_DB) / SPAN;
+      return Math.abs(drawn - y);
+    });
+    expect(Math.max(...errors)).toBeGreaterThan(20 * PX);
+  });
 
   it('needs the measured window and Level — the old -60..+20 window without Level is wildly off', () => {
     const capture = CAPTURES[1];

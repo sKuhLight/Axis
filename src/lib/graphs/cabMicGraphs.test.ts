@@ -83,6 +83,10 @@ describe('deriveCabMicGraphs', () => {
     expect(one.position.id).toBe(93);
   });
 
+  it('is empty when no required live params exist', () => {
+    expect(deriveCabMicGraphs({ layout: dynaLayout, params: [], enums: [] })).toEqual([]);
+  });
+
   it('is empty for a block with no layout at all', () => {
     expect(deriveCabMicGraphs({ layout: null, params: dynaParams, enums: dynaEnums })).toEqual([]);
   });

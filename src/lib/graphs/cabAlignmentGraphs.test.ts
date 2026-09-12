@@ -23,6 +23,28 @@ describe('deriveCabAlignmentGraphs', () => {
     expect(graph).toMatchObject({ key: 'cab-align1', page: 0, slot: 0, delay1: { id: 16 }, delay2: { id: 17 }, zoom: { id: 40 } });
   });
 
+  it('returns nothing without a layout', () => {
+    expect(deriveCabAlignmentGraphs({ layout: null, params: [], enums: [] })).toEqual([]);
+  });
+
+  it('keeps a degenerate graph when delay values are not live', () => {
+    const layout: DeviceLayout = { family: 'CABINET', pages: [{ name: 'Align', rows: [{ section: 'parameters', controls: [control('CABINET_DELAY1', 16), control(null, null, 'graph', 'graph_cab_mm')] }] }] };
+    expect(deriveCabAlignmentGraphs({ layout, params: [], enums: [] })[0]).toMatchObject({ delay1: undefined, delay2: undefined, zoom: undefined });
+  });
+
+  it('binds controls split across page rows', () => {
+    const layout: DeviceLayout = { family: 'CABINET', pages: [{ name: 'Align', rows: [
+      { section: 'parameters', controls: [control('CABINET_DELAY1', 16), control(null, null, 'graph', 'graph_cab_mm')] },
+      { section: 'parameters', controls: [control('CABINET_DELAY2', 17), control('CABINET_ZOOM', 40, 'toggle')] }
+    ] }] };
+    expect(deriveCabAlignmentGraphs({ layout, params: [param(16, 'One'), param(17, 'Two')], enums: [zoom] })[0]).toMatchObject({ delay1: { id: 16 }, delay2: { id: 17 }, zoom: { id: 40 } });
+  });
+
+  it('produces one graph for each authored page', () => {
+    const page = (name: string) => ({ name, rows: [{ section: 'parameters' as const, controls: [control(null, null, 'graph', 'graph_cab_mm')] }] });
+    expect(deriveCabAlignmentGraphs({ layout: { family: 'CABINET', pages: [page('One'), page('Two')] }, params: [], enums: [] }).map((graph) => [graph.key, graph.page])).toEqual([['cab-align1', 0], ['cab-align2', 1]]);
+  });
+
   // Real-device regression: the cab Align page's current-firmware row carries BOTH `graph_cab_mm` and
   // `graph_cabZoom_mm` at the same positionExact — firmware-gated alternates of ONE graph, not two. Binding
   // both produced two identical "Cab Alignment" cards on the page.
@@ -40,6 +62,11 @@ describe('deriveCabAlignmentGraphs', () => {
     const graphs = deriveCabAlignmentGraphs({ layout, params: [param(16, 'Delay 1'), param(17, 'Delay 2')], enums: [zoom] });
     expect(graphs).toHaveLength(1);
     expect(graphs[0]).toMatchObject({ key: 'cab-align1', page: 0, slot: 0 });
+  });
+
+  it('does not bind the second delay into a missing first delay', () => {
+    const layout: DeviceLayout = { family: 'CABINET', pages: [{ name: 'Align', rows: [{ section: 'parameters', controls: [control('CABINET_DELAY1', 16), control('CABINET_DELAY2', 17), control(null, null, 'graph', 'graph_cab_mm')] }] }] };
+    expect(deriveCabAlignmentGraphs({ layout, params: [param(17, 'Two')], enums: [] })[0]).toMatchObject({ delay1: undefined, delay2: { id: 17 } });
   });
 
   it('does not treat unrelated graph widgets as cabinet alignment graphs', () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import captures from '../../../docs/handoff/modulation-graph-shapes/measurements/fm3-lfo-folded.json';
 import { deriveModulationGraphs, modulationRate, modulationValue } from './modulationGraphs';
 import type { DeviceLayout, EnumParam, LayoutControl, NamedParam } from '$lib/api/types';
 
@@ -242,7 +243,10 @@ describe('modulationValue', () => {
     expect(1 - shape).toBeGreaterThan(shape);
   });
 
-  it('makes Astable curved, distinct from Triangle, and responsive to Shape', () => {
+  it('makes Astable curved, half-cycle symmetric, distinct from Triangle, and responsive to Shape', () => {
+    for (const phase of [0, 0.1, 0.25, 0.49]) {
+      expect(modulationValue('ASTABLE', phase, { shape: 0.242 })).toBeCloseTo(-modulationValue('ASTABLE', phase + 0.5, { shape: 0.242 }));
+    }
     expect(modulationValue('ASTABLE', 0.125, { shape: 0.242 })).not.toBeCloseTo(modulationValue('TRIANGLE', 0.125));
     expect(modulationValue('ASTABLE', 0.125, { shape: 0.1 })).not.toBeCloseTo(modulationValue('ASTABLE', 0.125, { shape: 0.9 }));
     expect(modulationValue('ASTABLE', 0, { shape: 0.242 })).toBeCloseTo(1);
@@ -252,11 +256,136 @@ describe('modulationValue', () => {
   });
 });
 
+describe('modulationValue hardware parity', () => {
+  const thresholds: Record<keyof typeof captures, number> = {
+    EXP_b242: 0.09,
+    EXP_b500: 0.095,
+    LOG_b242: 0.095,
+    LOG_b500: 0.097,
+    SAW_DOWN_b242: 0.176,
+    SAW_DOWN_b500: 0.194,
+    SAW_UP_b242: 0.229,
+    SINE_b242: 0.031,
+    SINE_b500: 0.022,
+    TRAPEZOID_b242: 0.06,
+    TRAPEZOID_b500: 0.043,
+    TRIANGLE_b242: 0.061,
+    TRIANGLE_b500: 0.052
+  };
+  const circularRms = (hw: number[], model: (phase: number) => number) => Math.min(...hw.map((_, shift) => {
+    const squaredError = hw.reduce((sum, value, index) => sum + (hw[(index + shift) % hw.length] - model(index / hw.length)) ** 2, 0);
+    return Math.sqrt(squaredError / hw.length);
+  }));
+  const oldValue = (type: string, phase: number, shape: number) => {
+    const ramp = (value: number, curvature: number) => Math.abs(curvature) < 0.000001
+      ? value
+      : Math.expm1(curvature * value) / Math.expm1(curvature);
+    const triangle = phase < shape ? -1 + 2 * phase / shape : 1 - 2 * (phase - shape) / (1 - shape);
+    if (type === 'sine') return Math.sin(phase * 2 * Math.PI);
+    if (type === 'triangle') return triangle;
+    if (type === 'saw up') return 2 * ramp(phase, 3.09) - 1;
+    if (type === 'saw down') return -(2 * ramp(phase, 3.09) - 1);
+    if (type === 'log') return 2 * Math.log10(1 + 9 * ((triangle + 1) / 2)) - 1;
+    if (type === 'exp') {
+      const mirrored = phase < 1 - shape ? -1 + 2 * phase / (1 - shape) : 1 - 2 * (phase - (1 - shape)) / shape;
+      return 2 * (10 ** ((mirrored + 1) / 2) - 1) / 9 - 1;
+    }
+    return Math.max(-1, Math.min(1, triangle * 2));
+  };
+  const score = (name: keyof typeof captures) => {
+    const capture = captures[name];
+    return circularRms(capture.hw, (phase) => modulationValue(capture.type.toLowerCase(), phase, { shape: capture.shape }));
+  };
+
+  for (const name of Object.keys(captures) as (keyof typeof captures)[]) {
+    it(`${name} stays within its measured hardware residual`, () => {
+      // Saw thresholds preserve the unresolved plateau residual documented in the measurement README.
+      expect(score(name)).toBeLessThan(thresholds[name]);
+    });
+  }
+
+  for (const name of ['SINE_b242', 'LOG_b500', 'SAW_UP_b242'] as const) {
+    it(`${name} rejects the superseded waveform model`, () => {
+      const capture = captures[name];
+      const oldRms = circularRms(capture.hw, (phase) => oldValue(capture.type.toLowerCase(), phase, capture.shape));
+      expect(oldRms).toBeGreaterThan(score(name) + 0.05);
+    });
+  }
+
+  it('keeps mean RMS across every capture below the measured headline bound', () => {
+    const names = Object.keys(captures) as (keyof typeof captures)[];
+    expect(names.reduce((sum, name) => sum + score(name), 0) / names.length).toBeLessThan(0.1);
+  });
+});
+
+describe('modulationValue aliases and invariants', () => {
+  const types = ['sine', 'triangle', 'square', 'pulse', 'saw up', 'saw down', 'ramp up', 'ramp down', 'log', 'exp', 'trapezoid', 'random', 'noise', 'astable'];
+
+  it('makes square and pulse exact aliases with a duty transition and no Shape effect', () => {
+    for (const shape of [0.1, 0.9]) {
+      expect(modulationValue('square', 0.299, { duty: 0.3, shape })).toBe(1);
+      expect(modulationValue('pulse', 0.3, { duty: 0.3, shape })).toBe(-1);
+    }
+    for (let index = 0; index < 100; index++) {
+      const phase = index / 100;
+      expect(modulationValue('square', phase, { duty: 0.37 })).toBe(modulationValue('pulse', phase, { duty: 0.37 }));
+      expect([-1, 1]).toContain(modulationValue('square', phase, { duty: 0.37 }));
+    }
+  });
+
+  it('keeps ramp names exact aliases of their saw directions', () => {
+    for (const shape of [0.242, 0.5]) for (let index = 0; index < 200; index++) {
+      const phase = index / 200;
+      expect(modulationValue('ramp up', phase, { shape })).toBe(modulationValue('saw up', phase, { shape }));
+      expect(modulationValue('ramp down', phase, { shape })).toBe(modulationValue('saw down', phase, { shape }));
+    }
+  });
+
+  it('keeps every waveform finite, bounded, and periodic across parameter extremes', () => {
+    for (const type of types) for (const shape of [0.1, 0.242, 0.5, 0.9, 0.01, 0.99]) for (const duty of [0.05, 0.5, 0.95]) {
+      for (const phase of [0, 0.137, 0.5, 0.999]) {
+        const value = modulationValue(type, phase, { shape, duty, randomSeed: 2, randomSteps: 7 });
+        expect(Number.isFinite(value)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(-1);
+        expect(value).toBeLessThanOrEqual(1);
+        expect(modulationValue(type, phase + 1, { shape, duty, randomSeed: 2, randomSteps: 7 })).toBeCloseTo(value, 12);
+        expect(modulationValue(type, phase - 1, { shape, duty, randomSeed: 2, randomSteps: 7 })).toBeCloseTo(value, 12);
+      }
+    }
+  });
+
+  it('joins continuous waveforms at the cycle boundary', () => {
+    for (const type of ['sine', 'triangle', 'log', 'exp', 'trapezoid', 'astable']) {
+      expect(modulationValue(type, 0, { shape: 0.242 })).toBeCloseTo(modulationValue(type, 1, { shape: 0.242 }), 12);
+    }
+  });
+});
+
 describe('modulationValue random', () => {
   it('holds one value a cycle when the graph says so, and two by default', () => {
     const at = (t: number, randomSteps?: number) => modulationValue('random', t, { randomSteps });
     expect(at(0.1)).not.toBe(at(0.6));
     expect(at(0.1, 1)).toBe(at(0.6, 1));
+  });
+
+  it('is deterministic, seeded, bounded, and shared by noise', () => {
+    const options = { randomSteps: 5, randomSeed: 3 };
+    for (let index = 0; index < 100; index++) {
+      const phase = index / 100;
+      const value = modulationValue('random', phase, options);
+      expect(value).toBe(modulationValue('random', phase, options));
+      expect(value).toBe(modulationValue('noise', phase, options));
+      expect(value).toBeGreaterThanOrEqual(-1);
+      expect(value).toBeLessThanOrEqual(1);
+    }
+    expect(modulationValue('random', 0.1, options)).not.toBe(modulationValue('random', 0.1, { ...options, randomSeed: 4 }));
+  });
+
+  it('uses the rounded number of plateaus and clamps it to one', () => {
+    const values = (steps: number) => new Set(Array.from({ length: 100 }, (_, index) => modulationValue('random', index / 100, { randomSteps: steps })));
+    expect(values(4.4).size).toBe(4);
+    expect(values(4.6).size).toBe(5);
+    expect(values(0).size).toBe(1);
   });
 });
 
@@ -269,6 +398,13 @@ describe('modulationRate', () => {
     expect(modulationRate(1, '1/4', 120)).toBeCloseTo(2);
     expect(modulationRate(1, '1/4 DOT', 120)).toBeCloseTo(4 / 3);
     expect(modulationRate(1, '1/4 TRIP', 120)).toBeCloseTo(3);
+    expect(modulationRate(1, '1/4 DOT TRIP', 120)).toBeCloseTo(2);
+  });
+
+  it('falls back to free rate for disabled, invalid, or nonpositive tempo', () => {
+    for (const label of ['NONE', 'OFF', 'not a division']) expect(modulationRate(3.5, label, 120)).toBe(3.5);
+    expect(modulationRate(3.5, '1/4', 0)).toBe(3.5);
+    expect(modulationRate(3.5, '1/4', -120)).toBe(3.5);
   });
 });
 
@@ -285,7 +421,7 @@ describe('LFO Duty Cycle', () => {
   };
 
   it('leaves every waveform alone at 50%', () => {
-    for (const type of ['sine', 'triangle', 'exp', 'log', 'trapezoid']) {
+    for (const type of ['sine', 'triangle', 'exp', 'log', 'trapezoid', 'saw up', 'saw down', 'astable']) {
       for (const phase of [0, 0.13, 0.37, 0.5, 0.74, 0.91]) {
         expect(modulationValue(type, phase, { duty: 0.5, shape: 0.37 }))
           .toBeCloseTo(modulationValue(type, phase, { shape: 0.37 }), 10);
