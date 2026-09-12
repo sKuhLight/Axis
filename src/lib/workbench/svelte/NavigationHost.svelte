@@ -98,7 +98,6 @@
         id: 'mode',
         label: mode === 'bottom' ? 'Use Side Navigation' : 'Use Bottom Navigation',
         separatorBefore: true,
-        disabled: !$controller.editMode,
         run: () => controller.dispatch({ type: 'navigation.mode', mode: mode === 'bottom' ? 'side' : 'bottom' })
       },
       {
