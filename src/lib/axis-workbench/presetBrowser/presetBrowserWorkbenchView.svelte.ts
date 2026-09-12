@@ -8,18 +8,12 @@ import { bindAxisRuntimeHost } from '../runtimeBinding';
 import { isSaveDirty } from '../widgets/saveDirtyState';
 import { loadActionWarning } from './presetBrowserWorkbenchLoadWarning';
 import {
-  createAxisPresetBrowserDataView,
-  buildEmptyDeviceSlotEntries,
-  shouldSynthesizeEmptyDeviceSlots,
   type AxisPresetBrowserEntrySummary,
   type AxisPresetBrowserLibEntryLike
 } from './presetBrowserWorkbenchData';
 import { presenceViews as presenceViewDefs } from './presetBrowserWorkbenchPresence';
 import {
   loadSavedFilters,
-  persistSavedFilters,
-  addSavedFilter,
-  removeSavedFilter,
   type AxisPbSavedFilter
 } from './presetBrowserWorkbenchSavedFilters';
 import type { AxisPresetBrowserPart } from './types';
@@ -32,9 +26,11 @@ import {
   axisPresetBrowserWorkbenchRuntime,
   type AxisPresetBrowserRuntimeSnapshot
 } from './presetBrowserWorkbenchRuntime';
-import { createAxisPresetBrowserWorkbenchHost } from './presetBrowserWorkbenchHost';
-import { resolvePresetLoadAction } from './presetBrowserWorkbenchLoadAction';
-import { applyRowCap } from './presetBrowserWorkbenchLayout';
+import {
+  createAxisPresetBrowserViewModelHost,
+  createAxisPresetBrowserWorkbenchHost
+} from './presetBrowserWorkbenchHost';
+import { AxisPresetBrowserViewModel } from './presetBrowserWorkbenchViewModel';
 import {
   incrementTagCount,
   loadTagCounts,
@@ -122,7 +118,8 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     void snapshot.queryText;
     return axisPresetBrowserWorkbenchController.freeText;
   });
-  const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
+  const viewModelHost = createAxisPresetBrowserViewModelHost();
+  const baseEntries = $derived(viewModelHost.entries as AxisPresetBrowserLibEntryLike[]);
   const presenceViews = presenceViewDefs();
   const presetIndex = createPresetBrowserIndex(
     () => baseEntries,
@@ -132,56 +129,33 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     library.paramsOf
   );
   const index = $derived(presetIndex.current);
-  // Cleared/empty device slots render as muted `<EMPTY>` rows in the device view. Only meaningful with a
-  // device actually connected: `editor.presetCount` is a 512-slot guess until a device is adopted, and a
-  // cleared slot is a device concept — offline (even with a stale `cacheBuilt` flag from a past scan)
-  // there is nothing to load into, so synthesizing hundreds of phantom rows is just noise.
-  const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];
-    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
+  const viewModel = new AxisPresetBrowserViewModel({
+    controller: axisPresetBrowserWorkbenchController,
+    runtime: axisPresetBrowserWorkbenchRuntime,
+    host: viewModelHost,
+    presenceViews,
+    prepared: () => index.match,
+    deviceSlots: () => index.deviceSlots
   });
-  const data = $derived(createAxisPresetBrowserDataView({
-    entries: baseEntries,
-    // When a library view is active, filter over the full base set; otherwise reuse the library's
-    // pre-filtered list.
-    filteredEntries: snapshot.presenceView === 'all' ? library.filtered : baseEntries,
-    emptySlots: emptyDeviceSlots,
-    sourceId: snapshot.sourceId,
-    selectedEntryId: snapshot.entryId,
-    tagsOf: library.tagsOf,
-    // Reads presetRecency.map inside this $derived, so a load re-sorts the list live.
-    lastLoadedAt: presetRecency.at,
-    conditions: activeConditions,
-    simpleQuery: freeText,
-    realNameFor: deviceRealNames.realNameFor,
-    prepared: index.match,
-    sort: snapshot.sort,
-    sortDir: snapshot.sortDir,
-    presenceView: snapshot.presenceView,
-    presenceViews
-  }));
+  const data = $derived.by(() => {
+    void baseEntries;
+    void activeConditions;
+    void freeText;
+    return viewModel.data(snapshot);
+  });
 
   // Saved filters — shared list (localStorage["axs.pb.saved"] + config mirror), reused from the monolith.
   let savedFilters = $state<AxisPbSavedFilter[]>(loadSavedFilters());
   let saveName = $state('');
   function commitSaveFilter() {
-    const name = saveName.trim();
-    if (!name) {
-      axisPresetBrowserWorkbenchController.setSaving(false);
-      saveName = '';
-      return;
-    }
-    savedFilters = addSavedFilter(savedFilters, name, axisPresetBrowserWorkbenchController.currentQueryText());
-    persistSavedFilters(savedFilters);
-    axisPresetBrowserWorkbenchController.setSaving(false);
+    savedFilters = viewModel.saveFilter(savedFilters, saveName);
     saveName = '';
   }
   function deleteSavedFilter(id: string) {
-    savedFilters = removeSavedFilter(savedFilters, id);
-    persistSavedFilters(savedFilters);
+    savedFilters = viewModel.deleteSavedFilter(savedFilters, id);
   }
   function applySavedFilter(filter: AxisPbSavedFilter) {
-    axisPresetBrowserWorkbenchController.applyQueryText(filter.query);
+    viewModel.applySavedFilter(filter);
   }
   // Frequent tags — local-only usage counts (localStorage["axs.pb.frequentTags"]), padded with the
   // user's real tag vocabulary so the row is never a canned/irrelevant palette (see
@@ -196,7 +170,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     persistTagCounts(tagCounts);
   }
   // 14-row soft cap + "Show all" expander (§4.1).
-  const rowCap = $derived(applyRowCap(data.visibleEntries, snapshot.showAllRows));
+  const rowCap = $derived(viewModel.rowCap(snapshot));
   const activeTags = $derived(
     new Set(activeConditions.filter((c) => c.kind === 'tag').map((c) => c.val.toLowerCase()))
   );
@@ -535,15 +509,11 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
 
   // Plain click: select only. Populates the detail pane + sets the range anchor, no device I/O.
   function selectEntry(entry: AxisPresetBrowserEntrySummary) {
-    axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    viewModel.select(entry);
   }
 
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
-    axisPresetBrowserWorkbenchController.selectEntry(entry.id);
-    const action = resolvePresetLoadAction(entry);
-    if (action.kind === 'openConverter') openConverter(entry.id);
-    else if (action.kind === 'loadEmptySlot') void editor.selectPreset(action.number, { recency: false });
-    else void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
+    viewModel.load(entry);
   }
 
   // Re-open a SAVED conversion (source 'converted') back in the converter, rehydrated from its stored doc.
@@ -576,7 +546,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   let renamingId = $state<string | null>(null);
   let renameValue = $state('');
   function canRename(entry: AxisPresetBrowserEntrySummary): boolean {
-    return editor.canRenamePresets && entry.sourceId === 'device' && !entry.empty && (entry.number ?? -1) >= 0;
+    return viewModel.canRename(entry);
   }
   function beginRename(entry: AxisPresetBrowserEntrySummary) {
     if (!canRename(entry)) return;
@@ -587,8 +557,8 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     const next = renameValue.trim();
     const id = renamingId;
     renamingId = null;
-    if (!id || id !== entry.id || !next || next === entry.name || entry.number == null) return;
-    void editor.renameStoredPreset(entry.number, next);
+    if (!id || id !== entry.id) return;
+    viewModel.rename(entry, next);
   }
   function cancelRename() {
     renamingId = null;
@@ -598,11 +568,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   // Re-picking the active column flips its direction; picking a different one hands the direction back
   // to `setSort`, which resets to that field's natural default (A-Z ascending, CPU/recent descending).
   function toggleSort(key: AxisPresetBrowserSort) {
-    if (snapshot.sort === key) {
-      axisPresetBrowserWorkbenchController.setSortDir(snapshot.sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      axisPresetBrowserWorkbenchController.setSort(key);
-    }
+    viewModel.toggleSort(key, snapshot);
   }
   const sortArrow = (key: AxisPresetBrowserSort) =>
     snapshot.sort === key ? (snapshot.sortDir === 'asc' ? ' ↑' : ' ↓') : '';
