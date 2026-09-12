@@ -143,7 +143,10 @@ async function bootWithLayout(page: Page): Promise<void> {
   });
   await page.route('**/api/events', (route) => route.abort());
 
-  await bootCleanWorkbench(page);
+  // This spec provides its own `/healthz` mock (above, reporting the device online) —
+  // opt out of bootCleanWorkbench's default offline-forcing intercept, which would
+  // otherwise win (Playwright resolves routes last-registered-first).
+  await bootCleanWorkbench(page, { interceptHealthz: false });
   // Confirms the mocked grid/block routes took effect: the Block Editor's own embedded map
   // (GridMap.svelte, always mounted with the Block Editor — no selection or expansion needed).
   await expect(page.locator('.map')).toBeVisible();
