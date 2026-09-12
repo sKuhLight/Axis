@@ -11,7 +11,7 @@ props: accent (color), density ("comfortable"|"compact"), advancedDefault (boole
 ships Simple-first and remembers the user's choice from the first time they click the mode toggle
 (`presetBrowserWorkbenchSearchMode.ts`, localStorage key `axs.pb.searchMode`) — the typed query
 language is opt-in rather than the surface a first-time user has to meet. The design source's `true`
-default is therefore not something to implement later. The monolith (`src/lib/PresetBrowser.svelte`)
+default is therefore not something to implement later. The monolith (`src/lib/preset/PresetBrowser.svelte`)
 intentionally stays Advanced-first and per-session, an accepted exception to the preset-browser
 mirror rule in `src/lib/CLAUDE.md`.
 
@@ -311,7 +311,7 @@ Theme tokens identical to doc 04 (`--bg #0c0c0e … --accent #35c9d6`, Hanken Gr
 
 ## 9. Delta checklist vs current production
 
-Compared against: `src/lib/axis-workbench/panels/preset-browser/AxisPresetBrowserPartPanel.svelte`, `src/lib/axis-workbench/presetBrowser/*` (controller/runtime/data/types), `src/lib/PresetBrowser.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
+Compared against: `src/lib/axis-workbench/panels/preset-browser/AxisPresetBrowserPartPanel.svelte`, `src/lib/axis-workbench/presetBrowser/*` (controller/runtime/data/types), `src/lib/preset/PresetBrowser.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
 
 Production shared state today: controller snapshot `{sourceId, entryId, focusedBlockEffectId, activePart, detailOpen}` + runtime `{loadingEntryId, auditioningEntryId, hydratingEntryId, error, details, lastLoaded*}`. Design shares far more (all of §1) — the checklist below calls out which keys need homes.
 

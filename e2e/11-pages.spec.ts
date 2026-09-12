@@ -89,17 +89,22 @@ test.describe('Pages: every seed page activates cleanly', () => {
 });
 
 test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
-  // The top-bar preset widget (top.left, every page) used to always open the Preset Browser,
-  // which made it a dead end once already there. It now toggles: Grid → Preset Browser, and
-  // Preset Browser (or any other page) → Grid.
-  test('clicking the preset widget navigates to Preset Browser, then back to Grid', async ({ page }) => {
+  // The top-bar preset widget (top.left, every page) picks its destination from the active page
+  // (presetWidgetTarget.ts). On the Grid it opens the slim preset-search overlay in place — rather
+  // than navigating to the full Preset Browser page and tearing down the Grid panel; from any other
+  // page it navigates back to Grid.
+  test('on Grid the preset widget opens the preset-search overlay, and Escape closes it', async ({ page }) => {
     await bootCleanWorkbench(page); // lands on Grid
 
-    await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
+    const overlay = page.locator('[role="dialog"]').filter({ hasText: 'Find a preset' });
 
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
+    await expect(overlay).toHaveCount(1);
+    // Still on Grid — the overlay opens in place, no page swap.
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+
+    await page.keyboard.press('Escape');
+    await expect(overlay).toHaveCount(0);
   });
 
   test('clicking the preset widget from a non-Grid, non-PB page goes to Grid', async ({ page }) => {

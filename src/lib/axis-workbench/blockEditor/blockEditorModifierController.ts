@@ -5,7 +5,7 @@ import { parseAxisBlockEditorPart, type AxisBlockEditorPart, type AxisModifierTa
 // plus the modifier-ownership rule: while a `be-part="modifier"` panel is mounted, an editor's ∿
 // badge targets the DOCKED panel instead of opening the in-editor flyout.
 //
-// No window buses — the ControlSurface / BlockEditor overlay flyout and the docked panel both talk
+// No window buses — the BlockEditor overlay flyout and the docked panel both talk
 // to this singleton. Anyone editing shared modifier state (or asking whether a docked panel exists)
 // goes through here.
 

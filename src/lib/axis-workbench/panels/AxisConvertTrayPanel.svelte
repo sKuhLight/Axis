@@ -6,16 +6,16 @@
   // click-to-locate (focus the block + open its cell) + RESOLVED ✓ once cleared. Sets the offline surface
   // into context so a focus hop can drive the offline editor.
   import { setContext } from 'svelte';
-  import { EDITOR_SURFACE_KEY } from '../../editorSurface';
-  import { convertEditor } from '../../convertEditor.svelte';
+  import { EDITOR_SURFACE_KEY } from '$lib/editor/editorSurface';
+  import { convertEditor } from '$lib/convert/convertEditor.svelte';
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 
   import type { PanelInstance } from '../../workbench';
-  import type { Cell } from '../../grid';
-  import { convert } from '../../convert.svelte';
-  import { convertScratch } from '../../convertScratch.svelte';
-  import { reportGroups, sevToken } from '../../convertConflicts';
-  import { familyLabel, type Severity } from '../../convertReport';
+  import type { Cell } from '$lib/device/grid';
+  import { convert } from '$lib/convert/convert.svelte';
+  import { convertScratch } from '$lib/convert/convertScratch.svelte';
+  import { reportGroups, sevToken } from '$lib/convert/convertConflicts';
+  import { familyLabel, type Severity } from '$lib/convert/convertReport';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();
 

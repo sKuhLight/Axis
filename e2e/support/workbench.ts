@@ -57,8 +57,19 @@ const FIRST_RUN_SUPPRESS: Record<string, string> = {
  *
  * We also seed the first-run popup-suppression flags so no modal scrim covers
  * the chrome under test. Navigate, clean, reload, wait for the shell root.
+ *
+ * `interceptHealthz` (default true) forces the connection heartbeat offline: this dev
+ * environment's live FM3 answers `/healthz` for real, which flips `editor.conn.state`
+ * to 'online' and makes preset-browser specs synthesize real `<EMPTY>` device-slot rows
+ * ahead of a seeded library cache (see `shouldSynthesizeEmptyDeviceSlots`) — a
+ * spec-environment leak, not something chrome-only specs are meant to exercise. Playwright
+ * routes resolve LAST-registered-first, so this route — added here, inside the helper —
+ * would always win over a route a caller registers before calling `bootCleanWorkbench`.
+ * Specs that need a real `/healthz` mock (e.g. `17-device-layout.spec.ts`) must pass
+ * `interceptHealthz: false` and provide their own `/healthz` handler instead.
  */
-export async function bootCleanWorkbench(page: Page): Promise<void> {
+export async function bootCleanWorkbench(page: Page, options: { interceptHealthz?: boolean } = {}): Promise<void> {
+  const { interceptHealthz = true } = options;
   // Force the backend config doc to look absent so the app seeds its default
   // layout locally instead of restoring the shared dev-session doc.
   await page.route('**/store/config/workbench', (route) =>
@@ -69,6 +80,9 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
   await page.route('**/device/cache', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: true }) }),
   );
+  if (interceptHealthz) {
+    await page.route('**/healthz', (route) => route.abort());
+  }
 
   await page.goto('/');
   await page.evaluate(
@@ -99,8 +113,17 @@ export async function bootCleanWorkbench(page: Page): Promise<void> {
  */
 export async function collapseRail(page: Page): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  // Move the pointer away from the rail (top bar centre) so hover-intent drops.
-  await page.mouse.move(720, 20);
+  // The rail collapses on `pointerleave` (railLeave) or, if the pointer isn't over
+  // it, on `focusout`. After a viewport/profile swap the previously-focused nav
+  // entry can be unmounted with `railExpanded` still true and no event left to
+  // reset it — a bare `mouse.move` away then fires no `pointerleave` because the
+  // pointer was never tracked as over the rail. Hover the rail first so the move
+  // away is a genuine enter→leave pair that always collapses it.
+  const rail = page.locator('.aw-rail');
+  if (await rail.count()) {
+    await rail.hover();
+    await page.mouse.move(720, 20); // top bar centre — clear of the rail
+  }
   await expect(page.locator('.aw-rail.aw-rail-expanded')).toHaveCount(0);
 }
 

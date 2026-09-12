@@ -1,6 +1,6 @@
-import { forgefx } from '../forgefx';
-import { isWebBuild } from '../buildMode';
-import { notifyMutation } from '../syncBus';
+import { forgefx } from '$lib/api/forgefx';
+import { isWebBuild } from '$lib/platform/buildMode';
+import { notifyMutation } from '$lib/editor/syncBus';
 import { createWorkbenchController, migrateWorkbenchDocument, type WorkbenchDocument } from '../workbench';
 import { isAxisLayoutEditingEnabled } from './featureGate';
 import { enqueueToast } from '../workbench/svelte/toasts';

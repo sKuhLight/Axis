@@ -3,20 +3,20 @@
   // Every convert panel sets the offline editor surface into its OWN context (context does not cross
   // PanelHost subtrees), so the embedded SignalGrid reads the converted scratch buffer, not the device.
   import { setContext } from 'svelte';
-  import { EDITOR_SURFACE_KEY } from '../../editorSurface';
-  import { convertEditor } from '../../convertEditor.svelte';
+  import { EDITOR_SURFACE_KEY } from '$lib/editor/editorSurface';
+  import { convertEditor } from '$lib/convert/convertEditor.svelte';
   setContext(EDITOR_SURFACE_KEY, convertEditor);
 
-  import SignalGrid from '../../SignalGrid.svelte';
+  import SignalGrid from '$lib/editor/SignalGrid.svelte';
   import type { PanelInstance } from '../../workbench';
-  import { convert } from '../../convert.svelte';
-  import { convertScratch } from '../../convertScratch.svelte';
-  import { validateSlot, scratchToPreset } from '../../convertScratch';
-  import { deviceName, deviceIdFromModel } from '../../convertReport';
-  import { editor } from '../../editor.svelte';
-  import { library } from '../../library.svelte';
-  import { forgefx } from '../../forgefx';
-  import { entrySyxBytes, bytesToBase64 } from '../../presetConvertSource';
+  import { convert } from '$lib/convert/convert.svelte';
+  import { convertScratch } from '$lib/convert/convertScratch.svelte';
+  import { validateSlot, scratchToPreset } from '$lib/convert/convertScratch';
+  import { deviceName, deviceIdFromModel } from '$lib/convert/convertReport';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { library } from '$lib/preset/library.svelte';
+  import { forgefx } from '$lib/api/forgefx';
+  import { entrySyxBytes, bytesToBase64 } from '$lib/preset/presetConvertSource';
   import {
     canExportTarget,
     exportTargetName,
@@ -25,9 +25,9 @@
     exportToast,
     exportFidelityToast,
     exportErrorToast
-  } from '../../convertExport';
+  } from '$lib/convert/convertExport';
   import { AXIS_DEFAULT_GRID_VIEW } from '../gridView';
-  import { cellDecorationFor, type CellDecoration } from '../../convertDecorations';
+  import { cellDecorationFor, type CellDecoration } from '$lib/convert/convertDecorations';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();
 

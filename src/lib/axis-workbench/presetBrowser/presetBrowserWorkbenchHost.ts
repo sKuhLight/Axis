@@ -1,7 +1,7 @@
-import { editor } from '../../editor.svelte';
-import { forgefx } from '../../forgefx';
-import { library } from '../../library.svelte';
-import { presetRecency } from '../../presetRecency.svelte';
+import { editor } from '$lib/editor/editor.svelte';
+import { forgefx } from '$lib/api/forgefx';
+import { library } from '$lib/preset/library.svelte';
+import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import type { AxisPresetBrowserRuntimeHost } from './presetBrowserWorkbenchRuntime';
 
 export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntimeHost {

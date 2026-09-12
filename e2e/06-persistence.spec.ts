@@ -11,6 +11,14 @@ test.describe('Persistence', () => {
     await clickNav(page, 'scenes');
     await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
 
+    // Wait for the ~150ms-debounced cache write to actually land before reloading —
+    // otherwise this races the debounce (the pagehide flush covers it on Chromium
+    // but not reliably on Firefox's `page.reload()`).
+    await page.waitForFunction(
+      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.scenes"'),
+      WORKBENCH_DOC_KEY
+    );
+
     // Reload WITHOUT clearing storage — the layout must persist.
     await page.reload();
     await page.waitForSelector('.aw-root');

@@ -1,45 +1,44 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { editor } from '$lib/editor.svelte';
-  import { history } from '$lib/history.svelte';
-  import { surfInit } from '$lib/surfaceStore.svelte';
-  import HistoryPanel from '$lib/HistoryPanel.svelte';
-  import ToolRail from '$lib/ToolRail.svelte';
-  import TopBar from '$lib/TopBar.svelte';
-  import SignalGrid from '$lib/SignalGrid.svelte';
-  import BlockEditor from '$lib/BlockEditor.svelte';
-  import VirtualScreen from '$lib/VirtualScreen.svelte';
-  import PresetBrowser from '$lib/PresetBrowser.svelte';
-  import FcEditor from '$lib/FcEditor.svelte';
-  import CommandPalette from '$lib/CommandPalette.svelte';
-  import CabPicker from '$lib/CabPicker.svelte';
-  import DeviceTools from '$lib/DeviceTools.svelte';
-  import ConvertDialog from '$lib/ConvertDialog.svelte';
-  import ConvertScratchView from '$lib/ConvertScratchView.svelte';
-  import { convert } from '$lib/convert.svelte';
-  import { convertScratch } from '$lib/convertScratch.svelte';
-  import PresetPicker from '$lib/PresetPicker.svelte';
-  import SaveDialog from '$lib/SaveDialog.svelte';
-  import TunerOverlay from '$lib/TunerOverlay.svelte';
-  import CachePrompt from '$lib/CachePrompt.svelte';
-  import ColorLabelsPrompt from '$lib/ColorLabelsPrompt.svelte';
-  import DeviceDefsPrompt from '$lib/DeviceDefsPrompt.svelte';
-  import AxisPanel from '$lib/AxisPanel.svelte';
-  import ThemePicker from '$lib/ThemePicker.svelte';
-  import Notices from '$lib/Notices.svelte';
-  import StatusBar from '$lib/StatusBar.svelte';
-  import Tour from '$lib/Tour.svelte';
-  import Toast from '$lib/Toast.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { history } from '$lib/editor/history.svelte';
+  import HistoryPanel from '$lib/editor/HistoryPanel.svelte';
+  import ToolRail from '$lib/shell/ToolRail.svelte';
+  import TopBar from '$lib/shell/TopBar.svelte';
+  import SignalGrid from '$lib/editor/SignalGrid.svelte';
+  import BlockEditor from '$lib/editor/BlockEditor.svelte';
+  import VirtualScreen from '$lib/device/VirtualScreen.svelte';
+  import PresetBrowser from '$lib/preset/PresetBrowser.svelte';
+  import FcEditor from '$lib/device/FcEditor.svelte';
+  import CommandPalette from '$lib/shell/CommandPalette.svelte';
+  import CabPicker from '$lib/device/CabPicker.svelte';
+  import DeviceTools from '$lib/device/DeviceTools.svelte';
+  import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
+  import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
+  import PresetPicker from '$lib/preset/PresetPicker.svelte';
+  import SaveDialog from '$lib/preset/SaveDialog.svelte';
+  import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
+  import CachePrompt from '$lib/ui/CachePrompt.svelte';
+  import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
+  import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
+  import AxisPanel from '$lib/ancillary/AxisPanel.svelte';
+  import ThemePicker from '$lib/platform/ThemePicker.svelte';
+  import Notices from '$lib/ancillary/Notices.svelte';
+  import StatusBar from '$lib/shell/StatusBar.svelte';
+  import Tour from '$lib/ancillary/Tour.svelte';
+  import Toast from '$lib/ui/Toast.svelte';
   import AxisWorkbenchShell from '$lib/axis-workbench/AxisWorkbenchShell.svelte';
   import AxisPresetBrowserSearchOverlay from '$lib/axis-workbench/presetBrowser/AxisPresetBrowserSearchOverlay.svelte';
-  import DirectGate from '$lib/DirectGate.svelte';
-  import MobileGate from '$lib/MobileGate.svelte';
-  import { directBoot } from '$lib/direct.svelte';
-  import { mobileBoot } from '$lib/mobile.svelte';
-  import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
+  import DirectGate from '$lib/platform/DirectGate.svelte';
+  import MobileGate from '$lib/platform/MobileGate.svelte';
+  import { directBoot } from '$lib/platform/direct.svelte';
+  import { mobileBoot } from '$lib/platform/mobile.svelte';
+  import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/platform/direct/ota';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
-  import { pollIntervalsFor } from '$lib/pollIntervals';
-  import { colorLabels } from '$lib/colorLabels.svelte';
+  import { pollIntervalsFor } from '$lib/editor/pollIntervals';
+  import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
+  import { overlays } from '$lib/overlay/overlays.svelte';
+  import '$lib/overlay/overlayRegistrations';
 
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
   // live. In the desktop build (directBoot.active=false) it starts immediately.
@@ -48,7 +47,6 @@
   function startApp() {
     if (started) return;
     started = true;
-    void surfInit(); // load control-surface layouts from the config store (host: cache is already seeded)
     editor.init();
     editor.poll();
     void colorLabels.refresh(); // FM3-Edit preset-color import (replicated-purring-bachman); one-time-ever check, silent no-op if absent
@@ -119,17 +117,16 @@
         editor.presetSearchOpen = true;
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
-        if (editor.tuner.active) editor.toggleTuner();
-        else if (history.panelOpen) history.panelOpen = false;
-        else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
-        else if (editor.paletteOpen) editor.paletteOpen = false;
-        else if (editor.quickBuildOpen) editor.quickBuildOpen = false;
-        else if (convertScratch.open) convertScratch.close();
-        else if (convert.open) convert.close();
-        else if (editor.presetOpen) editor.presetOpen = false;
-        else if (editor.presetSearchOpen) editor.presetSearchOpen = false;
-        else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
-        else if (editor.editorOpen) editor.closeEditor();
+        // The registry is the *fallback* owner of Escape, not its first responder: whatever is
+        // innermost gets first refusal. A sub-popover (query autocomplete, tag menu), an inline
+        // rename input, or a focus-trapped menu/drawer claims the key itself — by stopping
+        // propagation before it reaches this bubble-phase listener, or by calling
+        // preventDefault. Listening in the capture phase would take that first look away from
+        // them and close an unrelated overlay instead of the thing the user was looking at.
+        if (e.defaultPrevented) return;
+        // Priority order (and the tuner/link-arm/block-editor special cases) is data in
+        // src/lib/overlay/overlays.svelte.ts — closes exactly the top overlay per press.
+        if (overlays.escape()) e.preventDefault();
       }
     };
     window.addEventListener('resize', onResize);
@@ -187,7 +184,7 @@
   <ColorLabelsPrompt />
   <DeviceDefsPrompt />
   <AxisPanel />
-  {#if editor.themeOpen}<ThemePicker onclose={() => (editor.themeOpen = false)} />{/if}
+  <ThemePicker />
   <Notices />
   <Tour />
   <Toast />

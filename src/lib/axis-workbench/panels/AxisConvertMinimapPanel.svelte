@@ -6,16 +6,16 @@
   // source block is a pointer-drag handle: drag it onto a cell of the CONVERTED TARGET grid (the main
   // SignalGrid, tagged `data-screen="Signal Grid"`) to place/move its converted equivalent there. The
   // auto-conversion of the target is unchanged; this panel is a reference + drag source only.
-  import { convert } from '../../convert.svelte';
-  import { convertEditor } from '../../convertEditor.svelte';
-  import { convertScratch } from '../../convertScratch.svelte';
-  import { gridLayoutFromConverterPreset, presetEffectKeyMap } from '../../convertGridAdapter';
-  import { EMPTY_LAYOUT, titleCase } from '../../convertScratchAdapter';
-  import { sourceOutcomeFor } from '../../convertDecorations';
-  import { sevToken } from '../../convertConflicts';
-  import { catFor } from '../../catalog';
-  import { baseName } from '../../editor.svelte';
-  import type { Cell } from '../../grid';
+  import { convert } from '$lib/convert/convert.svelte';
+  import { convertEditor } from '$lib/convert/convertEditor.svelte';
+  import { convertScratch } from '$lib/convert/convertScratch.svelte';
+  import { gridLayoutFromConverterPreset, presetEffectKeyMap } from '$lib/convert/convertGridAdapter';
+  import { EMPTY_LAYOUT, titleCase } from '$lib/convert/convertScratchAdapter';
+  import { sourceOutcomeFor } from '$lib/convert/convertDecorations';
+  import { sevToken } from '$lib/convert/convertConflicts';
+  import { catFor } from '$lib/device/catalog';
+  import { baseName } from '$lib/editor/editor.svelte';
+  import type { Cell } from '$lib/device/grid';
   import type { PanelInstance } from '../../workbench';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();

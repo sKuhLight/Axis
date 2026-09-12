@@ -1,6 +1,5 @@
 export * from './bindings';
 export * from './core';
-export * from './packages';
 export * from './svelte/actions';
 export * from './svelte/controller.svelte';
 export * from './svelte/context';

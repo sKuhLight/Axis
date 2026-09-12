@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import './widgets/widgets.css';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
   import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLayoutDrawer.svelte';
   import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
@@ -13,7 +14,7 @@
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
   import { seedAxisProfiles } from './axisWorkbenchLayoutActions';
-  import { editor } from '../editor.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
   import {
     createAxisMobileBlockFlowMemory,
     decideAxisMobileBlockFlow,

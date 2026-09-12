@@ -72,7 +72,7 @@ export function createAxisSectionHeaderWidget(label: string): WidgetInstance {
  * module-private value rather than `widget.state` (ES module bindings are
  * read-only to importers, hence the getter/setter pair rather than a bare
  * export): `AxisMyControlsPanel.svelte` sets it right after dispatching the
- * new widget, `AxisWorkbenchWidget.svelte` takes (reads and clears) it the
+ * new widget, `AxisSectionHeaderWidget.svelte` takes (reads and clears) it the
  * moment that widget mounts.
  */
 let pendingSectionEditId: string | null = null;

@@ -1,8 +1,8 @@
 import type { WorkbenchParameterSource } from '../workbench';
-import type { EnumParam, NamedParam } from '../types';
+import type { EnumParam, NamedParam } from '$lib/api/types';
 import { AXIS_PARAM_CONTROL_BINDING } from './axisWorkbenchBindings';
-import { catFor } from '../catalog';
-import { baseName } from '../blocks';
+import { catFor } from '$lib/device/catalog';
+import { baseName } from '$lib/device/blocks';
 
 export interface AxisParameterSourceBase {
   effectId: number;
@@ -126,7 +126,7 @@ export function axisParameterSourceFromEditorParamId(
 }
 
 export async function axisParameterSourcesFromCurrentEditor(): Promise<WorkbenchParameterSource[]> {
-  const { editor } = await import('../editor.svelte');
+  const { editor } = await import('$lib/editor/editor.svelte');
   return axisParameterSourcesFromEditorView({
     selected: editor.selected,
     params: editor.params,

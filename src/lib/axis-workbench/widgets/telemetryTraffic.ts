@@ -4,7 +4,7 @@
 // keeps the previous snapshot locally and derives instantaneous rates from the delta over the wall-clock
 // gap between two snapshots. Kept pure + unit-tested; the widget only holds the "previous snapshot" state.
 
-import type { TrafficSnapshot } from '../../types';
+import type { TrafficSnapshot } from '$lib/api/types';
 
 export interface TrafficRates {
   /** TX/RX messages per second. */

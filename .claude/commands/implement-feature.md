@@ -34,7 +34,8 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 4 — UI-surface decision (see src/lib/CLAUDE.md)
 
-- Editor-flag modal → reaches both shells automatically.
+- Overlay-registry modal (`ui/Dialog.svelte` + `overlays.isOpen(id)`) → reaches
+  both shells automatically.
 - Feature inside an embedded editor (SignalGrid / BlockEditor / FcEditor /
   VirtualScreen / ModifierEditorCore) → both shells automatically.
 - TopBar / ToolRail chrome → monolith only; plan the mirrored workbench
@@ -44,11 +45,17 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 ## Step 5 — Implementation conventions checklist
 
 - [ ] Svelte 5 runes only — never `writable()`.
-- [ ] State lives in the editor singleton (`src/lib/editor.svelte.ts`) unless it has
+- [ ] State lives in the editor singleton (`src/lib/editor/`) unless it has
       independent persistence or an import-cycle risk — then its own `*.svelte.ts`.
+      The singleton is being split into slices: device connection / caps / ports /
+      scene / tempo → `deviceSession.svelte.ts`; SSE, meters, diagnostics →
+      `telemetry.svelte.ts`; preset nav / renames / save / versions / local folder →
+      `presetBuffer.svelte.ts`; the rest (grid + param editing) is still
+      `editor.svelte.ts`. A slice member needs a facade entry on `EditorStore` —
+      see `src/lib/CLAUDE.md`.
 - [ ] Actions: optimistic update → `await forgefx.*` → revert on catch.
 - [ ] Device-dependent behavior is capability-gated via a DeviceCaps getter
-      (`get hasX()`) — never model-name checks.
+      (`get hasX()` in `editor/deviceSession.svelte.ts`) — never model-name checks.
 - [ ] Any new persisted slice gets Zod validation.
 - [ ] Never add unguarded reads to the poll loop.
 - [ ] SSE/binary features handle all three TransportModes (local / remote / direct).
@@ -67,8 +74,6 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 8 — Close out
 
-- On the layout-rework branch: add an entry to
-  `docs/axis_layout_rework_progress_log.md`.
 - Plane: completion comment (what changed, files touched, verification status),
   then set the item Done.
 - Commit only when the user asks.

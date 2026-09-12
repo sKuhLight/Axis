@@ -1,4 +1,4 @@
-import type { HistoryEntry } from '../../history.svelte';
+import type { HistoryEntry } from '$lib/editor/history.svelte';
 
 /**
  * Save-chip dirty derivation (02-widgets.md — Save chip shows green "Saved" when

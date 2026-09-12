@@ -1,5 +1,5 @@
-import { editor } from '../../editor.svelte';
-import { forgefx } from '../../forgefx';
+import { editor } from '$lib/editor/editor.svelte';
+import { forgefx } from '$lib/api/forgefx';
 import type { AxisFcRuntimeHost } from './fcWorkbenchRuntime';
 
 export function createAxisFcWorkbenchHost(): AxisFcRuntimeHost {

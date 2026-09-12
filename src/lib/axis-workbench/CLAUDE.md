@@ -50,9 +50,9 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
-  the Axis theme and ribbon extras. `featureGate.ts` holds all three build gates:
-  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`), `VITE_AXIS_LAYOUT_EDIT`
-  and `VITE_AXIS_CONTROL_ARRANGE` (both **off** unless `'1'`).
+  the Axis theme and ribbon extras. `featureGate.ts` holds both build gates:
+  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`) and `VITE_AXIS_LAYOUT_EDIT`
+  (**off** unless `'1'`).
 - **Layout editing is off by default.** `axisWorkbenchStore.svelte.ts` passes
   `layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)` to
   `createWorkbenchController` — the ONE construction site. `workbench/` must keep
@@ -96,10 +96,17 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   — `WidgetHost`'s "Remove Widget" defers to it, defaulting to just the widget itself
   when no provider is registered). A **blank divider** is not a section — it cascades
   nothing, same as removing an ordinary control.
-- `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
-  widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one
-  `activate()` click dispatcher. `widgets/widgetEstWidths.ts` holds
-  `AXIS_WIDGET_EST_WIDTHS` and `AXIS_WIDGET_KEEP_TYPES`.
+- `widgets/` — one component per widget type (`AxisLogoWidget.svelte`,
+  `AxisPresetWidget.svelte`, …), each registered directly against its own type in
+  `axisWorkbenchRegistry.ts` — no switch. Each widget owns its own scoped `<style>`;
+  `widgets/widgets.css` (imported once from `AxisWorkbenchShell.svelte`) holds only the
+  handful of primitives genuinely shared by several widgets (`.axis-widget` base chrome
+  and size variants, `.mono`/`.token`/`.strong`, the `.chip-row`/`.num-chip`/`.pill-chip`
+  family). Small logic genuinely shared by a few widgets gets its own module
+  (`widgetControls.ts`, `fcWidgetSnapshot.svelte.ts` for the three top-bar FC widgets) —
+  don't reach for the shared stylesheet or a shared module for something only one widget
+  uses. `widgets/widgetEstWidths.ts` holds `AXIS_WIDGET_EST_WIDTHS` and
+  `AXIS_WIDGET_KEEP_TYPES`.
 - `axisWorkbenchDefaults.ts` — default document, `createAxisWorkbenchPanels()`,
   `ensureAxisGridControlWidgets`, panelLibrary/widgetLibrary entries.
 - `axisWorkbenchLayoutPresets.ts` — six data-only presets (`default`, `stage`, `studio`,
@@ -111,8 +118,7 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   `axisNavigationActiveState.ts` computes nav tinting.
 - Runtime adapters: `blockEditor/`, `fc/`, `presetBrowser/` — each has `types.ts` (parts
   array + `panelType(part)` helper) and a controller; `fc/` and `presetBrowser/` add
-  runtime/host/data modules. `axisWorkbenchRuntimeAdapters.ts` declares the adapter
-  manifests. See "Runtime adapters" below.
+  runtime/host/data modules. See "Runtime adapters" below.
 
 ## Registration flow
 
@@ -124,8 +130,11 @@ bypasses the manifest.
 ## Recipe: add a widget
 
 1. `axisWorkbenchRegistryManifest.ts`: append `'axis.X'` to `AXIS_WORKBENCH_WIDGET_TYPES`.
-2. `widgets/AxisWorkbenchWidget.svelte`: add an `{:else if kind === 'X'}` render branch,
-   plus an `activate()` case if the widget is interactive. Design tokens only — no hex.
+2. New file `widgets/AxisXWidget.svelte` (mirror an existing one, e.g.
+   `AxisTempoWidget.svelte`), destructuring only the props it needs from
+   `AxisWorkbenchWidgetProps` (`widgetProps.ts`). Design tokens only — no hex. Wire it
+   into `AXIS_WIDGET_COMPONENTS` in `axisWorkbenchRegistry.ts` — a
+   `Record<string, WorkbenchWidgetComponent>` literal, one entry per type, no switch.
 3. `widgets/widgetEstWidths.ts`: add `AXIS_WIDGET_EST_WIDTHS['axis.X']` (and add to
    `AXIS_WIDGET_KEEP_TYPES` if the widget must survive overflow trimming). A missing
    estWidth entry silently breaks widget-fit math.
@@ -142,27 +151,36 @@ bypasses the manifest.
 1. `panels/AxisXPanel.svelte` with `let { panel }: { panel: PanelInstance } = $props()`;
    use `getWorkbenchContext()` for controller/registry; read params from `panel.state`.
 2. Manifest: add `'axis.x'` to `AXIS_WORKBENCH_BASE_PANEL_TYPES` (or a new subsystem
-   `types.ts` with a parts array for multi-part panels).
-3. `axisWorkbenchRegistry.ts`: import the component and map it in the registerPanel loop.
+   `types.ts` with a parts array for multi-part panels). Multi-part panels get one
+   component per part (mirror `panels/fc/` / `panels/preset-browser/`) with shared
+   reactive setup factored into a `<subsystem>/<x>PartView.svelte.ts` factory — never a
+   single component switching on a `part` prop; that just re-inverts the registry M5
+   undid. Share markup/CSS across 2+ parts via a small subcomponent under
+   `panels/<subsystem>/parts/`, not a switch.
+3. `axisWorkbenchRegistry.ts`: import the component and map it directly to its type in a
+   `Record<string, WorkbenchPanelComponent>` (no ternary/switch chain).
 4. `axisWorkbenchDefaults.ts`: `createAxisWorkbenchPanels()` entry with `singletonKey`
    (plus `locked` / `closable` as appropriate) and an optional panelLibrary entry.
 5. Navigation (optional): nav id in the manifest; nav entry/order in defaults AND in every
    preset's `buildNavigation`; register a `createAxisNavigationPanelAction` in
    `axisWorkbenchRegistry.ts`; add an `axisNavigationActiveState.ts` tint if applicable.
 6. Preset docks: add to `buildDock()` in the presets if the panel is docked by default.
-7. Runtime-hosting panels: build the types/controller/runtime/host/data quintet and
-   declare it in `axisWorkbenchRuntimeAdapters.ts` (see next section).
+7. Runtime-hosting panels: build the types/controller/runtime/host/data quintet
+   (see next section).
 8. Tests: pure modules unit-tested; e2e for dock/navigation behavior.
 
 ## Runtime adapters
 
-Scaffold `<x>/types.ts` + `<x>Controller.ts` + `<x>Runtime.ts` + `<x>Host.ts` +
-`<x>Data.ts` following the `fc/` template. The host factory (e.g.
-`createAxisFcWorkbenchHost()`) is the **single file allowed to import app modules**
-(editor/device runtime); controllers, runtimes, and data modules stay pure and
-unit-tested. Register the adapter in `axisWorkbenchRuntimeAdapters.ts`. Panels mount via
-`bindAxisRuntimeHost({ runtime, host, onSnapshot, start })` from `runtimeBinding.ts`;
-`runtimeHostStack.ts` is a LIFO stack so multiple panels can bind concurrently.
+An adapter is a filesystem convention, not a registry entry: create the directory
+`<x>/` under `axis-workbench/` holding the quintet `<x>/types.ts` +
+`<x>Controller.ts` + `<x>Runtime.ts` + `<x>Host.ts` + `<x>Data.ts`, following the
+`fc/` template. The host factory (e.g. `createAxisFcWorkbenchHost()`) is the
+**single file allowed to import app modules** (editor/device runtime); controllers,
+runtimes, and data modules stay pure and unit-tested. The panel is wired the normal
+way in `axisWorkbenchRegistry.ts` (its part types come from `<x>/types.ts`); it then
+mounts via `bindAxisRuntimeHost({ runtime, host, onSnapshot, start })` from
+`runtimeBinding.ts`. `runtimeHostStack.ts` is a LIFO stack so multiple panels can
+bind concurrently.
 
 ## Testing convention
 
@@ -202,6 +220,9 @@ normalization step needs an idempotence check in its unit test.
 - `../../editor.svelte` — the central coupling (about a dozen importing files).
 - `../../forgefx` — device runtime hosts + store persistence.
 - `../../history.svelte`, `../../types`.
+- `$lib/overlay/overlays.svelte` — modal open-state + Escape priority
+  (`axisWorkbenchRegistry.ts` reads/writes the theme + Axis-hub overlays here;
+  `AxisPresetBrowserSearchOverlay.svelte` renders through `$lib/ui/Dialog.svelte`).
 - Directly embedded app components: `SignalGrid`, `BlockEditor`, `FcEditor`,
   `VirtualScreen`, `ModifierEditorCore`, `library.svelte`.
 
@@ -216,6 +237,4 @@ factories and embedded app components are exactly what stays behind.
   as checklists.
 - Review: run the `workbench-reviewer` agent over the diff before committing framework
   changes.
-- Framework changes on the layout-rework branch must be logged in
-  `docs/axis_layout_rework_progress_log.md` and tracked in Plane (see root `CLAUDE.md`,
-  Task tracking section).
+- Framework changes are tracked in Plane (see root `CLAUDE.md`, Task tracking section).

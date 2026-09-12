@@ -70,14 +70,13 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    // Layout editing and control arranging are OFF by default in the product
-    // (featureGate.ts). The code still exists, so e2e keeps exercising it —
-    // 02-edit-mode, 03-dock and 13-customize-drawer all drive the Customize
-    // control via e2e/support/workbench.ts `enterEditMode`.
+    // Layout editing is OFF by default in the product (featureGate.ts). The code
+    // still exists, so e2e keeps exercising it — 02-edit-mode, 03-dock and
+    // 13-customize-drawer all drive the Customize control via
+    // e2e/support/workbench.ts `enterEditMode`.
     env: {
       VITE_AXIS_WORKBENCH: '1',
-      VITE_AXIS_LAYOUT_EDIT: '1',
-      VITE_AXIS_CONTROL_ARRANGE: '1'
+      VITE_AXIS_LAYOUT_EDIT: '1'
     },
   },
 });

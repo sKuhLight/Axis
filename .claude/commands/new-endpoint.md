@@ -19,29 +19,39 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 2 — The 4-step add (in this order)
 
-### 2a. Types — `src/lib/types.ts`
+### 2a. Types — `src/lib/api/types.ts`
 
 - Hand-mirror the request/response shape from the ForgeFX endpoint.
 - Mind the hand-mirrored contract: drift typechecks green but fails at runtime —
   copy the shape exactly from the server source, not from memory.
 - Make new v2 capability fields optional so legacy servers degrade gracefully.
 
-### 2b. Client method — `src/lib/forgefx.ts`
+### 2b. Client method — `src/lib/api/forgefx.ts`
 
 - Add ONE method to the `forgefx` object using `req<T>`.
 - Naming: reads = noun names; writes = verb-prefixed.
 - Use the correct HTTP method and body.
 - Override the 12s AbortSignal timeout for long-running operations.
 
-### 2c. Store wiring — `src/lib/editor.svelte.ts`
+### 2c. Store wiring — `src/lib/editor/`
 
 - Add a store action/getter: optimistic update → `await forgefx.*` → revert on catch.
 - Reuse existing debounce/reload plumbing (e.g. `#eventReload`) rather than
   introducing new timers.
+- Pick the file by responsibility: the editor store is being split into slices.
+  Device connection / caps / ports / scene / tempo → `deviceSession.svelte.ts`;
+  preset nav / save / versions / local folder → `presetBuffer.svelte.ts`;
+  SSE, meters, diagnostics → `telemetry.svelte.ts`; everything else is still
+  `editor.svelte.ts`. A slice needs a matching facade entry on `EditorStore` and
+  a `*.runes.test.ts` — see `src/lib/CLAUDE.md` (Store pattern § Slices).
 
 ### 2d. Capability gate (if device-dependent)
 
-- Add a DeviceCaps field and a `get hasX()` getter; gate the UI on it.
+- Add a DeviceCaps field and a `get hasX()` getter **in
+  `editor/deviceSession.svelte.ts`**, next to the other gates; gate the UI on it.
+- Make the caps field optional so a legacy payload degrades to `false`, never to
+  "supported", and add the `isAm4` fallback branch only if v1 servers need it.
+- Add the getter to the `EditorStore` facade so `editor.hasX` keeps working.
 - Never branch on model names.
 
 ## Step 3 — Transport check
@@ -65,7 +75,6 @@ Tracker: Plane — see root `CLAUDE.md`, Task tracking section.
 
 ## Step 6 — Close out
 
-- On the layout-rework branch: entry in `docs/axis_layout_rework_progress_log.md`.
 - Plane: completion comment (what changed, files touched, verification status),
   then set the item Done.
 - Commit only when the user asks.

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { editor } from '../../editor.svelte';
-  import { history } from '../../history.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { history } from '$lib/editor/history.svelte';
 
   const rows = $derived(history.entries.map((e, i) => ({ e, i })).reverse().slice(0, 80));
   const time = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour12: false });

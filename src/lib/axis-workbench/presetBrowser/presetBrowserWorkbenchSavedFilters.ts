@@ -7,7 +7,7 @@
 //
 // The classification/matching bits (active-filter highlight via parsed-query equality) are pure and unit
 // tested; localStorage/forgefx I/O is isolated behind small helpers so the pure logic stays testable.
-import { forgefx } from '../../forgefx';
+import { forgefx } from '$lib/api/forgefx';
 import { condsEqual, parseQuery, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import { AXIS_PB_SEED_SAVED_FILTERS } from './presetBrowserWorkbenchQuery';
 

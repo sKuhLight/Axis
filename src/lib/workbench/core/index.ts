@@ -9,7 +9,6 @@ export * from './migrations';
 export * from './parameterSources';
 export * from './profiles';
 export * from './reducer';
-export * from './registry';
 export * from './schema';
 export * from './selectors';
 export * from './widgetFit';

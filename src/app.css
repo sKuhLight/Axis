@@ -26,6 +26,7 @@
 
   /* ── fixed semantic colors (not theme-driven) ── */
   --amber: #f5a623; /* knob pointer / secondary highlight */
+  --amberink: #f5c878; /* readable text on an amber-tinted surface (Save dialog, active-preset badges) */
   --blue: #4f6bed;
   --danger: #d6543f; /* bypass / destructive */
   --ok: #33c46b; /* connected / success */
@@ -66,11 +67,20 @@
   --d-font-sm: 11px; /* meta + mono labels */
   --d-font-lg: 15px; /* band title */
   --d-widget-h: 38px; /* workbench toolbar widget chip (compact/mini fit ladder derives from this) */
-  --d-tile-max: 132px; /* ControlSurface board cell cap (mirrored in JS via density.ts) */
   --axis-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --axis-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --axis-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --axis-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+
+  /* ── overlay layer ── shared by the dialog shell (src/lib/ui/Dialog.svelte). Every modal
+     dialog renders on one stacking layer (they are mutually exclusive in practice); the
+     first-run prompts sit a step above, toasts above those. Backdrop values are shared so
+     every dialog dims the page identically. */
+  --z-modal: 340;
+  --z-prompt: 400;
+  --z-toast: 500;
+  --overlay-scrim: rgba(6, 6, 8, 0.64);
+  --overlay-blur: 3px;
 
   /* ── backwards-compat aliases (older components still reference these; they now follow the theme) ── */
   --bg-rail: var(--bg2);

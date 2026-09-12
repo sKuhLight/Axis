@@ -1,5 +1,5 @@
 import type { BindingRef, JsonObject, WorkbenchBindingRegistry } from '../workbench';
-import type { EnumParam, NamedParam } from '../types';
+import type { EnumParam, NamedParam } from '$lib/api/types';
 
 export const AXIS_PARAM_CONTROL_BINDING = 'axis.paramControl';
 
@@ -31,7 +31,7 @@ export interface AxisWorkbenchBindingOptions {
 }
 
 async function defaultEditorView(): Promise<AxisWorkbenchBindingEditorView | null> {
-  const module = await import('../editor.svelte');
+  const module = await import('$lib/editor/editor.svelte');
   return module.editor;
 }
 

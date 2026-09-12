@@ -7,16 +7,17 @@
  * `NavigationHost` via `pageNavigationEntryActive` — the entry is active while its
  * bound page is the layout's `activePageId`. So this app-side provider only needs to
  * cover the remaining ACTION entries — Theme and Axis — whose open-state lives
- * on the editor store. Passed in via {@link AxisNavigationActiveSnapshot} so the
- * resolver stays pure (no Svelte, no `editor` import) and directly unit-testable.
+ * in the overlay registry (src/lib/overlay/overlays.svelte.ts). Passed in via
+ * {@link AxisNavigationActiveSnapshot} so the resolver stays pure (no Svelte, no
+ * registry import) and directly unit-testable.
  *
  * Any entry not covered here resolves to inactive (untinted) — the page entries are
  * never routed to this provider, and everything else is genuinely inactive.
  */
 export interface AxisNavigationActiveSnapshot {
-  /** editor.themeOpen — the Appearance/Theme modal is open. */
+  /** overlays.isOpen('theme') — the Appearance/Theme modal is open. */
   themeOpen: boolean;
-  /** editor.axisOpen — the Axis hub modal is open. */
+  /** overlays.isOpen('axisHub') — the Axis hub modal is open. */
   accountOpen: boolean;
 }
 

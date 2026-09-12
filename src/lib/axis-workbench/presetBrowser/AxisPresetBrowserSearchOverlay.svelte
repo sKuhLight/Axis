@@ -7,18 +7,16 @@
   // it shares those singletons rather than a separate instance, which is safe because this overlay
   // only opens from Grid, where no Preset Browser page/panel is concurrently mounted to collide with.
   import { onMount, tick } from 'svelte';
-  import { editor } from '../../editor.svelte';
-  import { library, type LibEntry } from '../../library.svelte';
-  import { presetRecency } from '../../presetRecency.svelte';
-  import { deviceRealNames } from '../../deviceRealNames.svelte';
+  import { editor } from '$lib/editor/editor.svelte';
+  import { library, type LibEntry } from '$lib/preset/library.svelte';
+  import { presetRecency } from '$lib/preset/presetRecency.svelte';
+  import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
   import { bindAxisRuntimeHost } from '../runtimeBinding';
   import {
     createAxisPresetBrowserDataView,
     buildEmptyDeviceSlotEntries,
-    preparePresetBrowserIndex,
-    type AxisPbDecodedBlock,
+    shouldSynthesizeEmptyDeviceSlots,
     type AxisPresetBrowserEntrySummary,
-    type AxisPresetBrowserIndex,
     type AxisPresetBrowserLibEntryLike
   } from './presetBrowserWorkbenchData';
   import { presenceViews as presenceViewDefs } from './presetBrowserWorkbenchPresence';
@@ -31,8 +29,10 @@
   import { resolvePresetLoadAction } from './presetBrowserWorkbenchLoadAction';
   import { axisPbRowBlockChips } from './presetBrowserWorkbenchRowChips';
   import { matchingChainChips } from './presetBrowserWorkbenchChainMatch';
-  import { openConvertedInConverter } from '../../presetConvertSource';
+  import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
+  import Dialog from '$lib/ui/Dialog.svelte';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
+  import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
   // so open (and every keystroke) only pays for the rows actually on screen instead of all ~512.
@@ -87,19 +87,18 @@
   });
 
   const baseEntries = $derived(library.entries as AxisPresetBrowserLibEntryLike[]);
-  // Search index (per-entry matchable shape + haystack, plus the present device-slot set) built eagerly
-  // on mount / whenever the library or tags change — NOT lazily on open or per keystroke. `$state.raw`
-  // keeps the Map/Set contents unproxied so matching reads stay cheap.
-  let index = $state.raw<AxisPresetBrowserIndex>({ match: new Map(), deviceSlots: new Set() });
-  // Reads the `$state.raw` #paramsCache (reassigned by hydrateParams) inside the effect, so deep param
-  // matching wires in once params load. Mirror of the same index build in AxisPresetBrowserPartPanel.
-  const paramsForIndex = (e: AxisPresetBrowserLibEntryLike): AxisPbDecodedBlock[] | null =>
-    (library.paramsOf(e as unknown as Parameters<typeof library.paramsOf>[0]) as AxisPbDecodedBlock[] | null) ?? null;
-  $effect(() => {
-    index = preparePresetBrowserIndex(baseEntries, library.tagsOf, deviceRealNames.realNameFor, presetRecency.at, paramsForIndex);
-  });
+  const presetIndex = createPresetBrowserIndex(
+    () => baseEntries,
+    library.tagsOf,
+    deviceRealNames.realNameFor,
+    presetRecency.at,
+    library.paramsOf
+  );
+  const index = $derived(presetIndex.current);
+  // Mirror of the docked panel gate: `<EMPTY>` rows only with a device connected —
+  // `editor.presetCount` is a guess until one is adopted, and there is nothing to load into offline.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!library.cacheBuilt) return [];
+    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];
     return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const activeConditions = $derived.by(() => {
@@ -175,9 +174,8 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (rows[cursor]) loadEntry(rows[cursor]);
-    } else if (e.key === 'Escape') {
-      close();
     }
+    // Escape is handled by the dialog shell.
   }
 
   function loadMore() {
@@ -202,9 +200,17 @@
   const pad = (n: number) => String(n).padStart(3, '0');
 </script>
 
-{#if editor.presetSearchOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={close}>
-    <div class="card" class:sheet={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+<Dialog
+  overlay="presetSearch"
+  open={editor.presetSearchOpen}
+  onClose={close}
+  width="720px"
+  maxHeight="84vh"
+  align="top"
+  mobileFull={editor.isMobile}
+  class="preset-search-dlg"
+>
+  <div class="wrap">
       <div class="head">
         <div class="title-row">
           <span class="title">Find a preset</span>
@@ -271,46 +277,16 @@
       <div class="foot mono">
         <span>↑↓ Navigate</span><span>⏎ Load selected</span><span>Esc Close</span>
       </div>
-    </div>
   </div>
-{/if}
+</Dialog>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    z-index: 200;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .bg.mob {
-    align-items: stretch;
-    padding: 0;
-  }
-  .card {
-    width: 720px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+  /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`. */
+  .wrap {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  .card.sheet {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border-radius: 0;
-    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
   .head {
     padding: 16px 18px 13px;

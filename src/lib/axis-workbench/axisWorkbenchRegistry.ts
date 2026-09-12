@@ -1,4 +1,4 @@
-import { createWorkbenchRenderRegistry, selectActiveLayout } from '../workbench';
+import { createWorkbenchRenderRegistry, selectActiveLayout, type WorkbenchPanelComponent, type WorkbenchWidgetComponent } from '../workbench';
 import FallbackNavigation from '../workbench/svelte/FallbackNavigation.svelte';
 import FallbackPanel from '../workbench/svelte/FallbackPanel.svelte';
 import FallbackWidget from '../workbench/svelte/FallbackWidget.svelte';
@@ -17,17 +17,48 @@ import AxisPresetBrowserPanel from './panels/AxisPresetBrowserPanel.svelte';
 import AxisSignalGridPanel from './panels/AxisSignalGridPanel.svelte';
 import AxisVirtualScreenPanel from './panels/AxisVirtualScreenPanel.svelte';
 import AxisBlockEditorModifierPanel from './panels/block-editor/AxisBlockEditorModifierPanel.svelte';
-import AxisFcPartPanel from './panels/fc/AxisFcPartPanel.svelte';
-import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowserPartPanel.svelte';
+import AxisFcBoardPanel from './panels/fc/AxisFcBoardPanel.svelte';
+import AxisFcHoldPanel from './panels/fc/AxisFcHoldPanel.svelte';
+import AxisFcInspectorPanel from './panels/fc/AxisFcInspectorPanel.svelte';
+import AxisFcLayoutsPanel from './panels/fc/AxisFcLayoutsPanel.svelte';
+import AxisFcLedPanel from './panels/fc/AxisFcLedPanel.svelte';
+import AxisFcTapPanel from './panels/fc/AxisFcTapPanel.svelte';
+import AxisPresetBrowserDetailPanel from './panels/preset-browser/AxisPresetBrowserDetailPanel.svelte';
+import AxisPresetBrowserFullPanel from './panels/preset-browser/AxisPresetBrowserFullPanel.svelte';
+import AxisPresetBrowserListPanel from './panels/preset-browser/AxisPresetBrowserListPanel.svelte';
+import AxisPresetBrowserSourcesPanel from './panels/preset-browser/AxisPresetBrowserSourcesPanel.svelte';
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
-import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
+import AxisAccountWidget from './widgets/AxisAccountWidget.svelte';
+import AxisBlockSizeWidget from './widgets/AxisBlockSizeWidget.svelte';
+import AxisConnectionWidget from './widgets/AxisConnectionWidget.svelte';
+import AxisCpuWidget from './widgets/AxisCpuWidget.svelte';
+import AxisFcDeviceWidget from './widgets/AxisFcDeviceWidget.svelte';
+import AxisFcLayoutsWidget from './widgets/AxisFcLayoutsWidget.svelte';
+import AxisFcSwitchViewWidget from './widgets/AxisFcSwitchViewWidget.svelte';
+import AxisGridMapWidget from './widgets/AxisGridMapWidget.svelte';
+import AxisGridModeWidget from './widgets/AxisGridModeWidget.svelte';
+import AxisHintWidget from './widgets/AxisHintWidget.svelte';
+import AxisHistoryWidget from './widgets/AxisHistoryWidget.svelte';
+import AxisLegalWidget from './widgets/AxisLegalWidget.svelte';
+import AxisLogoWidget from './widgets/AxisLogoWidget.svelte';
+import AxisMeterToggleWidget from './widgets/AxisMeterToggleWidget.svelte';
+import AxisParamControlWidget from './widgets/AxisParamControlWidget.svelte';
+import AxisPresetWidget from './widgets/AxisPresetWidget.svelte';
+import AxisSaveWidget from './widgets/AxisSaveWidget.svelte';
+import AxisScenesWidget from './widgets/AxisScenesWidget.svelte';
+import AxisSearchWidget from './widgets/AxisSearchWidget.svelte';
+import AxisSectionHeaderWidget from './widgets/AxisSectionHeaderWidget.svelte';
+import AxisTelemetryWidget from './widgets/AxisTelemetryWidget.svelte';
+import AxisTempoWidget from './widgets/AxisTempoWidget.svelte';
+import AxisTunerWidget from './widgets/AxisTunerWidget.svelte';
+import AxisUndoRedoWidget from './widgets/AxisUndoRedoWidget.svelte';
 import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
 import { createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
 import { AXIS_SECTION_HEADER_TYPE, axisMyControlsSectionRemovalIds, axisSectionHeaderLabel, isAxisSectionHeader } from './myControlsSections';
 import { AXIS_MY_CONTROLS_ZONE } from './myControlsPanel';
-import { editor } from '../editor.svelte';
+import { overlays } from '$lib/overlay/overlays.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
   AXIS_WORKBENCH_BASE_PANEL_TYPES,
@@ -39,49 +70,86 @@ import {
 } from './axisWorkbenchRegistryManifest';
 
 async function axisEditor() {
-  return (await import('../editor.svelte')).editor;
+  return (await import('$lib/editor/editor.svelte')).editor;
 }
 
 const registry = createWorkbenchRenderRegistry(FallbackPanel, FallbackWidget, FallbackNavigation);
 
-AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) => {
-  const component =
-    type === 'axis.signalGrid' ? AxisSignalGridPanel :
-    type === 'axis.blockEditor' ? AxisBlockEditorPanel :
-    type === 'axis.presetBrowser' ? AxisPresetBrowserPanel :
-    type === 'axis.fc' ? AxisFcPanel :
-    type === 'axis.history' ? AxisHistoryDockPanel :
-    type === 'axis.customPanel' ? AxisCustomPanel :
-    type === 'axis.myControls' ? AxisMyControlsPanel :
-    type === 'axis.virtualScreen' ? AxisVirtualScreenPanel :
-    type === 'axis.placeholder' ? AxisPlaceholderPanel :
-    type === 'axis.convertGrid' ? AxisConvertGridPanel :
-    type === 'axis.convertBlockEditor' ? AxisConvertBlockEditorPanel :
-    type === 'axis.convertMinimap' ? AxisConvertMinimapPanel :
-    type === 'axis.convertTray' ? AxisConvertTrayPanel :
-    AxisDockActionPanel;
-  registry.registerPanel({ type, component });
-});
+const AXIS_BASE_PANEL_COMPONENTS: Record<string, WorkbenchPanelComponent> = {
+  'axis.signalGrid': AxisSignalGridPanel,
+  'axis.blockEditor': AxisBlockEditorPanel,
+  'axis.presetBrowser': AxisPresetBrowserPanel,
+  'axis.fc': AxisFcPanel,
+  'axis.history': AxisHistoryDockPanel,
+  'axis.customPanel': AxisCustomPanel,
+  'axis.myControls': AxisMyControlsPanel,
+  'axis.virtualScreen': AxisVirtualScreenPanel,
+  'axis.placeholder': AxisPlaceholderPanel,
+  'axis.convertGrid': AxisConvertGridPanel,
+  'axis.convertBlockEditor': AxisConvertBlockEditorPanel,
+  'axis.convertMinimap': AxisConvertMinimapPanel,
+  'axis.convertTray': AxisConvertTrayPanel
+};
+AXIS_WORKBENCH_BASE_PANEL_TYPES.forEach((type) =>
+  registry.registerPanel({ type, component: AXIS_BASE_PANEL_COMPONENTS[type] ?? AxisDockActionPanel })
+);
 
+const AXIS_PRESET_BROWSER_PANEL_COMPONENTS: Record<string, typeof AxisPresetBrowserPanel> = {
+  // Re-registers the same dispatcher the base-panel-types loop above already wired for
+  // 'axis.presetBrowser' (a no-op overwrite) — kept for parity with that loop rather than
+  // collapsed away, since the manifest genuinely lists this type as one of the preset-browser
+  // panel types too.
+  'axis.presetBrowser': AxisPresetBrowserPanel,
+  'axis.presetBrowser.sources': AxisPresetBrowserSourcesPanel,
+  'axis.presetBrowser.list': AxisPresetBrowserListPanel,
+  'axis.presetBrowser.detail': AxisPresetBrowserDetailPanel
+};
 AXIS_WORKBENCH_PRESET_BROWSER_PANEL_TYPES.forEach((type) =>
-  registry.registerPanel({
-    type,
-    component: type === 'axis.presetBrowser' ? AxisPresetBrowserPanel : AxisPresetBrowserPartPanel
-  })
+  registry.registerPanel({ type, component: AXIS_PRESET_BROWSER_PANEL_COMPONENTS[type] })
 );
 
-AXIS_WORKBENCH_FC_PANEL_TYPES.forEach((type) =>
-  registry.registerPanel({
-    type,
-    component: type === 'axis.fc' ? AxisFcPanel : AxisFcPartPanel
-  })
-);
+const AXIS_FC_PANEL_COMPONENTS: Record<string, WorkbenchPanelComponent> = {
+  'axis.fc': AxisFcPanel,
+  'axis.fc.board': AxisFcBoardPanel,
+  'axis.fc.inspector': AxisFcInspectorPanel,
+  'axis.fc.layouts': AxisFcLayoutsPanel,
+  'axis.fc.led': AxisFcLedPanel,
+  'axis.fc.tap': AxisFcTapPanel,
+  'axis.fc.hold': AxisFcHoldPanel
+};
+AXIS_WORKBENCH_FC_PANEL_TYPES.forEach((type) => registry.registerPanel({ type, component: AXIS_FC_PANEL_COMPONENTS[type] }));
 
 // 'axis.blockEditor' itself is a base panel type (registered above) — register only the parts.
 AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES.filter((type) => type !== 'axis.blockEditor').forEach((type) =>
   registry.registerPanel({ type, component: AxisBlockEditorModifierPanel })
 );
-AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, component: AxisWorkbenchWidget }));
+const AXIS_WIDGET_COMPONENTS: Record<string, WorkbenchWidgetComponent> = {
+  'axis.logo': AxisLogoWidget,
+  'axis.preset': AxisPresetWidget,
+  'axis.scenes': AxisScenesWidget,
+  'axis.tuner': AxisTunerWidget,
+  'axis.tempo': AxisTempoWidget,
+  'axis.cpu': AxisCpuWidget,
+  'axis.meterToggle': AxisMeterToggleWidget,
+  'axis.save': AxisSaveWidget,
+  'axis.search': AxisSearchWidget,
+  'axis.history': AxisHistoryWidget,
+  'axis.gridMap': AxisGridMapWidget,
+  'axis.undoRedo': AxisUndoRedoWidget,
+  'axis.connection': AxisConnectionWidget,
+  'axis.account': AxisAccountWidget,
+  'axis.gridMode': AxisGridModeWidget,
+  'axis.blockSize': AxisBlockSizeWidget,
+  'axis.fcDevice': AxisFcDeviceWidget,
+  'axis.fcLayouts': AxisFcLayoutsWidget,
+  'axis.fcSwitchView': AxisFcSwitchViewWidget,
+  'axis.paramControl': AxisParamControlWidget,
+  'axis.sectionHeader': AxisSectionHeaderWidget,
+  'axis.hint': AxisHintWidget,
+  'axis.legal': AxisLegalWidget,
+  'axis.telemetry': AxisTelemetryWidget
+};
+AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, component: AXIS_WIDGET_COMPONENTS[type] }));
 
 // Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table
 // + keep-set. The generic layer stays widget-type agnostic.
@@ -124,7 +192,7 @@ registry.registerWidgetMenu({
 // are tracked and the tint stays live.
 registry.registerNavigationState({
   isActive: (entryId) =>
-    isAxisNavigationEntryActive({ themeOpen: editor.themeOpen, accountOpen: editor.axisOpen }, entryId)
+    isAxisNavigationEntryActive({ themeOpen: overlays.isOpen('theme'), accountOpen: overlays.isOpen('axisHub') }, entryId)
 });
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
@@ -157,10 +225,22 @@ registry.registerAction({
   }
 });
 registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('about') });
-registry.registerAction({ id: 'axis.openTheme', run: async () => { (await axisEditor()).themeOpen = true; } });
+registry.registerAction({ id: 'axis.openTheme', run: async () => { overlays.open('theme'); } });
 // Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
 // Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels
-// until their editors are ported.
+// until their editors are ported. Copy lives here as data, not inline in the registration call.
+const AXIS_SCENES_PLACEHOLDER_COPY = {
+  glyph: '◪',
+  heading: 'Scenes',
+  description: 'Scene snapshots, per-scene bypass and level rides dock here in a later phase.',
+  meta: 'Meanwhile · switch scenes from the Scenes widget in the top bar'
+};
+const AXIS_LIVE_PLACEHOLDER_COPY = {
+  glyph: '⏺',
+  heading: 'Live',
+  description: 'The performance / setlist view docks here in a later phase.',
+  meta: 'Meanwhile · use the Footswitches editor for live control'
+};
 registry.registerAction(
   createAxisNavigationPanelAction({
     actionId: 'axis.openSetup',
@@ -188,12 +268,7 @@ registry.registerAction(
     panelType: 'axis.placeholder',
     title: 'Scenes',
     region: 'main',
-    state: {
-      glyph: '◪',
-      heading: 'Scenes',
-      description: 'Scene snapshots, per-scene bypass and level rides dock here in a later phase.',
-      meta: 'Meanwhile · switch scenes from the Scenes widget in the top bar'
-    }
+    state: AXIS_SCENES_PLACEHOLDER_COPY
   })
 );
 registry.registerAction(
@@ -203,12 +278,7 @@ registry.registerAction(
     panelType: 'axis.placeholder',
     title: 'Live',
     region: 'main',
-    state: {
-      glyph: '⏺',
-      heading: 'Live',
-      description: 'The performance / setlist view docks here in a later phase.',
-      meta: 'Meanwhile · use the Footswitches editor for live control'
-    }
+    state: AXIS_LIVE_PLACEHOLDER_COPY
   })
 );
 registry.registerAction(createAxisPinSelectedParametersAction());
