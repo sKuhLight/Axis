@@ -68,6 +68,15 @@ const FIRST_RUN_SUPPRESS: Record<string, string> = {
  * Specs that need a real `/healthz` mock (e.g. `17-device-layout.spec.ts`) must pass
  * `interceptHealthz: false` and provide their own `/healthz` handler instead.
  */
+export async function bootVisualWorkbench(page: Page, viewport = { width: 1440, height: 900 }): Promise<void> {
+  await page.setViewportSize(viewport);
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await bootCleanWorkbench(page);
+  await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.locator('.aw-root')).toBeVisible();
+}
+
 export async function bootCleanWorkbench(page: Page, options: { interceptHealthz?: boolean } = {}): Promise<void> {
   const { interceptHealthz = true } = options;
   // Force the backend config doc to look absent so the app seeds its default

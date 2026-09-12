@@ -37,6 +37,14 @@ const svelteRuneModules = (): Plugin => ({
 //           scoped to this project so they can't change how the node suite builds or resolves.
 export default defineConfig({
   test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/lib/**/*.ts'],
+      exclude: ['src/lib/fixtures/**', '**/*.test.ts', '**/*.spec.ts', 'e2e/**', '**/*.svelte'],
+      thresholds: { statements: 70, branches: 83, functions: 65, lines: 70 }
+    },
     projects: [
       {
         resolve: { alias: { $lib: lib } },

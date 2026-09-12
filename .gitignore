@@ -25,9 +25,10 @@ design/screenshots/
 # Local Workbench visual smoke screenshots
 .workbench-smoke/
 
-# Playwright artifacts
+# Playwright and coverage artifacts
 /test-results
 /playwright-report
+/coverage
 
 # Claude Code local config (private: Plane MCP, personal settings)
 .mcp.json

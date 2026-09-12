@@ -34,7 +34,10 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
   timeout: 30_000,
-  expect: { timeout: 8_000 },
+  expect: {
+    timeout: 8_000,
+    toHaveScreenshot: { animations: 'disabled', maxDiffPixelRatio: 0.002 },
+  },
 
   use: {
     baseURL: BASE_URL,
