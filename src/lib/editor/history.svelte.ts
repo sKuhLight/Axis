@@ -158,8 +158,11 @@ class HistoryStore {
     }
     this.endGesture();
     const entry: HistoryEntry = { id: uid(), t: Date.now(), label: labelFor(op), ops: [op], undoable: true };
-    this.#push(entry, /*persist*/ false); // panel updates live; persisted when the gesture closes
-    this.#gesture = { key: gkey, entry, timer: setTimeout(() => this.endGesture(), GESTURE_MS) };
+    // Hold the LIVE entry `#push` returns, never the local `entry` — see `#push`. The coalescing
+    // branch above writes through it, so the panel updates live and the final `to` is what gets
+    // replayed and persisted; persisted when the gesture closes.
+    const live = this.#push(entry, /*persist*/ false);
+    this.#gesture = { key: gkey, entry: live, timer: setTimeout(() => this.endGesture(), GESTURE_MS) };
   };
   /** Close any open param gesture now (no-op drags are dropped). */
   endGesture = () => {
@@ -176,12 +179,17 @@ class HistoryStore {
     this.#schedulePersist();
   };
 
-  #push = (entry: HistoryEntry, persist = true) => {
+  /** Append an entry and return the LIVE one — `entries` is `$state`, so what lands in the array is a
+   *  deep proxy of `entry`, not `entry` itself. Anything that keeps hold of an entry past this call
+   *  (only `recordGesture`, for coalescing) must keep the returned proxy: mutating the raw object is
+   *  invisible to `entries` readers, and `entries.indexOf(rawEntry)` is always -1. */
+  #push = (entry: HistoryEntry, persist = true): HistoryEntry => {
     if (this.cursor < this.entries.length) this.entries.splice(this.cursor); // truncate the redo tail
     this.entries.push(entry);
     if (this.entries.length > MAX_ENTRIES) this.entries.splice(0, this.entries.length - MAX_ENTRIES);
     this.cursor = this.entries.length;
     if (persist) this.#schedulePersist();
+    return this.entries[this.entries.length - 1];
   };
 
   undo = async (): Promise<boolean> => {
