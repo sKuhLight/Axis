@@ -6,8 +6,8 @@
  * controllers / scenes / live / setup) resolve their active tint GENERICALLY in
  * `NavigationHost` via `pageNavigationEntryActive` — the entry is active while its
  * bound page is the layout's `activePageId`. So this app-side provider only needs to
- * cover the remaining ACTION entries — Theme and Axis — whose open-state lives
- * in the overlay registry (src/lib/overlay/overlays.svelte.ts). Passed in via
+ * cover the remaining ACTION entry — Axis — whose open-state lives in the overlay
+ * registry (src/lib/overlay/overlays.svelte.ts). Passed in via
  * {@link AxisNavigationActiveSnapshot} so the resolver stays pure (no Svelte, no
  * registry import) and directly unit-testable.
  *
@@ -15,8 +15,6 @@
  * never routed to this provider, and everything else is genuinely inactive.
  */
 export interface AxisNavigationActiveSnapshot {
-  /** overlays.isOpen('theme') — the Appearance/Theme modal is open. */
-  themeOpen: boolean;
   /** overlays.isOpen('axisHub') — the Axis hub modal is open. */
   accountOpen: boolean;
 }
@@ -27,8 +25,6 @@ export interface AxisNavigationActiveSnapshot {
  */
 export function isAxisNavigationEntryActive(snapshot: AxisNavigationActiveSnapshot, entryId: string): boolean {
   switch (entryId) {
-    case 'theme':
-      return snapshot.themeOpen;
     case 'account':
       return snapshot.accountOpen;
     default:

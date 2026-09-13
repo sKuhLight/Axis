@@ -71,17 +71,15 @@ describe('ROUND 15 — default document seed pages', () => {
     }
   });
 
-  it('binds the seven nav entries to their pages and keeps Theme/Account as actions', () => {
+  it('binds the seven nav entries to their pages and keeps Axis as an action', () => {
     const entries = layout.navigation.entries;
     expect(entries.grid.pageId).toBe(AXIS_PAGE_GRID);
     expect(entries.grid.target).toBeUndefined();
     expect(entries.library.pageId).toBe(AXIS_PAGE_PRESET_BROWSER);
     expect(entries.fc.pageId).toBe(AXIS_PAGE_FC);
     expect(entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
-    // Theme + Axis stay ACTION entries (no page binding).
-    expect(entries.theme.pageId).toBeUndefined();
-    expect(entries.theme.label).toBe('Theme');
-    expect(entries.theme.target?.command).toBe('axis.openTheme');
+    // Axis stays an ACTION entry (no page binding); Theme was folded into the Axis hub.
+    expect(entries.theme).toBeUndefined();
     expect(entries.account.pageId).toBeUndefined();
     expect(entries.account.label).toBe('Axis');
     expect(entries.account.target?.command).toBe('axis.openAccount');
@@ -96,14 +94,11 @@ describe('ROUND 15 — default document seed pages', () => {
     expect(doc.metadata?.[AXIS_SEED_PAGES_MARKER]).toBe('v1');
   });
 
-  it('repairs stale action labels ("Settings" → Theme, "Axis Cloud" → Axis) without changing commands', () => {
-    layout.navigation.entries.theme.label = 'Settings';
+  it('repairs the stale Axis action label ("Axis Cloud" → Axis) without changing the command', () => {
     layout.navigation.entries.account.label = 'Axis Cloud';
     ensureAxisSeedPages(doc);
-    expect(layout.navigation.entries.theme.label).toBe('Theme');
     expect(layout.navigation.entries.account.label).toBe('Axis');
     expect(layout.navigation.entries.account.target?.command).toBe('axis.openAccount');
-    expect(layout.navigation.entries.theme.target?.command).toBe('axis.openTheme');
   });
 });
 

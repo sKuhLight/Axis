@@ -223,7 +223,8 @@ normalization step needs an idempotence check in its unit test.
 - `../../forgefx` — device runtime hosts + store persistence.
 - `../../history.svelte`, `../../types`.
 - `$lib/overlay/overlays.svelte` — modal open-state + Escape priority
-  (`axisWorkbenchRegistry.ts` reads/writes the theme + Axis-hub overlays here;
+  (`axisWorkbenchRegistry.ts` reads/writes the Axis-hub overlay here; the Theme/appearance
+  controls live inside the Axis hub's Theme tab, so there is no separate theme nav entry;
   `AxisPresetBrowserSearchOverlay.svelte` renders through `$lib/ui/Dialog.svelte`).
 - Directly embedded app components: `SignalGrid`, `BlockEditor`, `FcEditor`,
   `VirtualScreen`, `ModifierEditorCore`, `library.svelte`.

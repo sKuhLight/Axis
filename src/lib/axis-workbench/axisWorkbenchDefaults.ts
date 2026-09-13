@@ -303,6 +303,26 @@ export function pruneAxisRetiredWidgetTypes(doc: WorkbenchDocument): WorkbenchDo
   return doc;
 }
 
+/**
+ * Navigation entries retired from the Axis shell. The Theme entry was folded into the
+ * Axis hub's Theme tab, so the standalone rail entry and its `axis.openTheme` action are
+ * gone. A persisted document minted earlier still carries the entry, which would render
+ * through the navigation fallback and dispatch an unregistered command — strip it (and
+ * its `order` slot) on load. Idempotent.
+ */
+const AXIS_RETIRED_NAVIGATION_ENTRY_IDS = ['theme'] as const;
+
+export function pruneAxisRetiredNavigationEntries(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.navigation) continue;
+    for (const id of AXIS_RETIRED_NAVIGATION_ENTRY_IDS) {
+      if (layout.navigation.entries?.[id]) delete layout.navigation.entries[id];
+      layout.navigation.order = (layout.navigation.order ?? []).filter((entryId) => entryId !== id);
+    }
+  }
+  return doc;
+}
+
 export function ensureAxisGridControlWidgets(doc: WorkbenchDocument): WorkbenchDocument {
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object') continue;

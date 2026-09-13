@@ -292,9 +292,10 @@ const actionNavEntry = (
 
 /**
  * The Axis seed navigation: the seven page-bound entries (each activates its page)
- * plus the two ACTION entries — Theme (opens the appearance modal) and Axis
- * (account modal, pinned to the rail footer). Page entries carry NO `target`; their
- * `pageId` binding drives `page.activate` in the generic `NavigationHost`.
+ * plus the Axis ACTION entry (the account modal, pinned to the rail footer). Page
+ * entries carry NO `target`; their `pageId` binding drives `page.activate` in the
+ * generic `NavigationHost`. Theme/appearance lives inside the Axis hub as a tab, so
+ * it has no separate nav entry.
  */
 export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout {
   return {
@@ -307,13 +308,12 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
       scenes: pageNavEntry('scenes', NAV_LABELS.scenes, AXIS_PAGE_SCENES),
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
       setup: pageNavEntry('setup', NAV_LABELS.setup, AXIS_PAGE_SETUP),
-      theme: actionNavEntry('theme', 'Theme', 'axis.openTheme'),
       account: actionNavEntry('account', 'Axis', 'axis.openAccount', {
         locked: true,
         fixedSlot: 'rail.footer'
       })
     },
-    order: ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'theme', 'account']
+    order: ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'account']
   };
 }
 
@@ -408,12 +408,10 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
   return doc;
 }
 
-/** The two ACTION entries have been renamed since they shipped — "Theme" was briefly "Settings",
- *  and "Axis" was "Axis Cloud" before the cloud was removed. Renaming the seed only fixes NEW
- *  documents, so repair the persisted label on load, keyed on the stable command (never the entry
- *  id or the label itself, which is what went stale). */
+/** The Axis ACTION entry has been renamed since it shipped — it was "Axis Cloud" before the cloud
+ *  was removed. Renaming the seed only fixes NEW documents, so repair the persisted label on load,
+ *  keyed on the stable command (never the entry id or the label itself, which is what went stale). */
 const ACTION_NAV_LABELS: Record<string, string> = {
-  'axis.openTheme': 'Theme',
   'axis.openAccount': 'Axis'
 };
 

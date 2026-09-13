@@ -184,7 +184,7 @@ class EditorStore {
   // long-standing `editor.xOpen` call sites (and the EditorSurface contract) working unchanged.
   get axisOpen() { return overlays.isOpen('axisHub'); }
   set axisOpen(v: boolean) { if (v) overlays.open('axisHub'); else overlays.close('axisHub'); }
-  axisTab = $state<'storage' | 'privacy' | 'about' | 'device' | 'performance'>('about');
+  axisTab = $state<'storage' | 'privacy' | 'about' | 'device' | 'performance' | 'theme'>('about');
   get themeOpen() { return overlays.isOpen('theme'); } // Appearance / theme picker modal
   set themeOpen(v: boolean) { if (v) overlays.open('theme'); else overlays.close('theme'); }
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
@@ -355,7 +355,7 @@ class EditorStore {
   endTour = () => { this.tourActive = false; try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* */ } };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'about') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
+  openAxis = (tab: 'storage' | 'privacy' | 'about' | 'device' | 'performance' | 'theme' = 'about') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };

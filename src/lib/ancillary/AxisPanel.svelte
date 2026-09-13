@@ -22,6 +22,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import DialogBody from '$lib/ui/DialogBody.svelte';
+  import AppearanceSettings from '$lib/platform/AppearanceSettings.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
@@ -127,6 +128,7 @@
         {#if loc.available}
           <button class="tb" class:on={editorOverlays.axisTab === 'storage'} onclick={() => (editorOverlays.axisTab = 'storage')}>Storage</button>
         {/if}
+        <button class="tb" class:on={editorOverlays.axisTab === 'theme'} onclick={() => (editorOverlays.axisTab = 'theme')}>Theme</button>
         <button class="tb" class:on={editorOverlays.axisTab === 'device'} onclick={() => editorOverlays.openAxis('device')}>Connection</button>
         {#if deviceSession.hasTelemetryControl}
           <button class="tb" class:on={editorOverlays.axisTab === 'performance'} onclick={() => (editorOverlays.axisTab = 'performance')}>Performance</button>
@@ -216,6 +218,17 @@
                    oninput={(e) => setBlockLibraryPath((e.currentTarget as HTMLInputElement).value)}
                    onchange={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
           </label>
+        </div>
+
+      {:else if editorOverlays.axisTab === 'theme'}
+        <!-- Theme & appearance: presets, accent, mode, UI scale, density, fonts (shared with the
+             standalone monolith picker via AppearanceSettings). -->
+        <div class="pad">
+          <div class="head">
+            <div class="logo sm">◐</div>
+            <div><div class="h1">Theme</div><div class="sub">Presets, accent, mode, scale &amp; fonts — saved on this device</div></div>
+          </div>
+          <AppearanceSettings />
         </div>
 
       {:else if editorOverlays.axisTab === 'performance' && deviceSession.hasTelemetryControl}
@@ -378,7 +391,7 @@
   .x:hover { color: var(--text); border-color: var(--border3); }
 
   .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; }
-  .tb { flex: 1; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tb { flex: 1; min-width: 0; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tb:hover { color: var(--text2); }
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
 

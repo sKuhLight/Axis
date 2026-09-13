@@ -76,7 +76,6 @@ describe('Axis Workbench integration contracts', () => {
       'scenes',
       'live',
       'setup',
-      'theme',
       'account'
     ]);
 
@@ -84,6 +83,6 @@ describe('Axis Workbench integration contracts', () => {
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openGrid');
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openFc');
     expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openControllers');
-    expect(AXIS_WORKBENCH_ACTION_IDS).toContain('axis.openTheme');
+    expect(AXIS_WORKBENCH_ACTION_IDS).not.toContain('axis.openTheme');
   });
 });

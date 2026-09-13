@@ -65,7 +65,6 @@ export const AXIS_WORKBENCH_NAVIGATION_IDS = [
   'scenes',
   'live',
   'setup',
-  'theme',
   'account'
 ] as const;
 
@@ -78,6 +77,5 @@ export const AXIS_WORKBENCH_ACTION_IDS = [
   'axis.openScenes',
   'axis.openLive',
   'axis.openSetup',
-  'axis.openTheme',
   AXIS_PIN_SELECTED_PARAMETERS_ACTION
 ] as const;
