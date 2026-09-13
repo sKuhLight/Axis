@@ -78,6 +78,13 @@
   const directPicker = isDirect() && directBoot.support.folder;
   const hasPicker = directPicker || !!(globalThis as { axisDesktop?: { pickFolder?: unknown } }).axisDesktop?.pickFolder;
   let manualPath = $state(''); // web fallback: no native dialog → type the absolute path
+  // Seed the manual path field with the configured folder so it shows the CURRENT path rather
+  // than staying blank behind the placeholder. Reads loc.* only — never manualPath — so typing
+  // in the field is never clobbered; picking a folder re-seeds it.
+  $effect(() => {
+    if (editorOverlays.axisTab !== 'storage') return;
+    if (loc.configured && loc.root) manualPath = loc.root;
+  });
   async function chooseFolder() {
     if (directPicker) {
       const name = await directBoot.pickFolder();
@@ -91,11 +98,16 @@
   }
   // ── Storage tab (block library: the folder of saved .blk files the block picker reads) ──
   // `cfg.blockLibraryPath` holds ONLY an explicit override — an empty value keeps tracking the
-  // connected unit's Fractal Edit folder, which is shown as the placeholder.
+  // connected unit's Fractal Edit folder. The field displays the EFFECTIVE path (override, else
+  // that default) as real text, not just a placeholder; `blkPathDraft` holds the in-progress edit
+  // (null = show the effective path), so clearing the field doesn't instantly refill it.
   const detectedUnit = $derived(deviceSession.detected?.connected ? deviceSession.detected.name : null);
   const blockLibraryDefault = $derived(defaultBlockLibraryPath(detectedUnit));
   const setBlockLibraryPath = (path: string) => appSettings.setBlockLibraryPath(path);
   const preloadBlockLibrary = (path: string) => blockLibrary.preloadWhenIdle(path.trim() || blockLibraryDefault || '');
+  let blkPathDraft = $state<string | null>(null);
+  const blkPathValue = $derived(blkPathDraft ?? (appSettings.cfg.blockLibraryPath || blockLibraryDefault || ''));
+  const onBlkPathInput = (v: string) => { blkPathDraft = v; setBlockLibraryPath(v); };
 
   function restoreFromFolder() {
     if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void presetBuffer.localRestore();
@@ -213,9 +225,9 @@
           <p class="muted">Where Axis looks for saved <strong>.blk</strong> blocks — the Library tab in the block picker reads from here. Defaults to the connected unit's Fractal Edit blocks folder.</p>
           <label class="fld" for="blk-path"><span class="flbl">FOLDER</span>
             <input id="blk-path" class="in sm" type="text"
-                   placeholder={blockLibraryDefault ?? 'Connect an FM3, FM9, or Axe-Fx III to set a default'}
-                   value={appSettings.cfg.blockLibraryPath}
-                   oninput={(e) => setBlockLibraryPath((e.currentTarget as HTMLInputElement).value)}
+                   placeholder="Connect an FM3, FM9, or Axe-Fx III to set a default"
+                   value={blkPathValue}
+                   oninput={(e) => onBlkPathInput((e.currentTarget as HTMLInputElement).value)}
                    onchange={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
           </label>
         </div>
