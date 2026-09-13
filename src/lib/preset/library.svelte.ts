@@ -154,8 +154,10 @@ class LibraryStore {
     this.folders = load<string[]>(LS.folders, []);
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
-      idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
-      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = b; });
+      // Merge, don't replace: anything written to either cache before IndexedDB resolves (e.g. an
+      // import mid-flight) must survive — in-memory is newer, so it wins over the persisted copy.
+      idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = { ...p, ...this.#paramsCache }; });
+      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = { ...b, ...this.#fileBytes }; });
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();

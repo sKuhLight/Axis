@@ -427,3 +427,48 @@ describe('tag colors registry round-trip (persist → load → applyRemoteConfig
     expect(JSON.parse(localStorage.getItem('axs.lib.tagColors')!)).toEqual({ RoundTripLive: 4 });
   });
 });
+
+// Startup race: the constructor kicks off `idb.get(IDB_PARAMS)` / `idb.get(IDB_FILEBYTES)` and REPLACES
+// the whole cache when they resolve. If an import/hydrate writes to either cache first, a naive `then`
+// callback silently discards that write. Needs its own fresh module instance (the shared `library`
+// singleton above already resolved its constructor reads before any test runs), so this drives idb
+// timing directly and imports a NEW instance per vitest's resetModules + dynamic import pattern (see
+// presetRecency.runes.test.ts for the same technique).
+describe('constructor merges IndexedDB caches instead of replacing them (startup race)', () => {
+  it('an in-memory write that lands before the slow IDB read resolves survives the merge, and persisted entries are still folded in', async () => {
+    const paramsGate = deferred<Record<string, DecodedBlock[]> | undefined>();
+    const bytesGate = deferred<Record<string, number[]> | undefined>();
+    vi.doMock('$lib/platform/idb', () => ({
+      idb: {
+        available: () => true,
+        get: (key: string) => (key === 'lib.params' ? paramsGate.promise : key === 'lib.fileBytes' ? bytesGate.promise : Promise.resolve(undefined)),
+        set: async () => undefined
+      }
+    }));
+    vi.resetModules();
+    const { library: freshLibrary } = await import('./library.svelte');
+
+    // fileBytes: importFiles writes in place while the IDB read is still pending.
+    decodePresetFile.mockResolvedValue(summary(0, 'RaceImport'));
+    await freshLibrary.importFiles([new File([new Uint8Array([7, 7])], 'race.syx')], 'race');
+
+    // paramsCache: hydrateParams reassigns while the IDB read is still pending.
+    const entry = deviceEntry();
+    freshLibrary.entries = [entry];
+    presetParams.mockResolvedValue({ blocks: [block('amp', 'Gain')] });
+    await freshLibrary.hydrateParams(entry.id);
+
+    // Now the slow IndexedDB reads land, each carrying an entry the in-memory writes above don't have.
+    bytesGate.resolve({ 'file:old/stale.syx': [1, 1] });
+    paramsGate.resolve({ 'dev:9999': [block('reverb', 'Decay')] });
+    await vi.waitFor(() => expect(freshLibrary.fileBytes('file:old/stale.syx')).not.toBeNull());
+
+    // In-memory writes made before the read resolved must survive — the bug discarded them.
+    expect(freshLibrary.fileBytes('file:race/race.syx')).toEqual(new Uint8Array([7, 7]));
+    expect(freshLibrary.paramsOf(entry)).toEqual([block('amp', 'Gain')]);
+    // Persisted entries the in-memory side never touched are still merged in, not dropped.
+    expect(freshLibrary.fileBytes('file:old/stale.syx')).toEqual(new Uint8Array([1, 1]));
+
+    vi.doUnmock('$lib/platform/idb');
+  });
+});
