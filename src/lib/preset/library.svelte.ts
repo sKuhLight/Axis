@@ -394,6 +394,9 @@ class LibraryStore {
         const folder = (list[0].webkitRelativePath?.split('/')[0]) || 'Folder';
         resolve(await this.importFiles(list, folder));
       };
+      // Browsers fire `cancel`, not `change`, when the picker is dismissed — without this the promise
+      // never settles and the caller's await hangs forever. Harmless if `onchange` also resolves.
+      input.addEventListener('cancel', () => resolve(null));
       input.click();
     });
   }
