@@ -46,23 +46,25 @@
           <strong>This overwrites whatever is in that location.</strong>
         </p>
       {/if}
-      <label class="field">
-        <span class="lbl mono">SAVE TO</span>
-        <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
-        {#if deviceSession.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
-      </label>
-      <p class="hint">
-        {#if overwritingCurrent}
-          Overwrites the current preset <b>{pad(target)}</b>{deviceSession.preset?.name ? ` · ${deviceSession.preset.name}` : ''}.
-        {:else}
-          Writes to preset <b>{pad(target)}</b> (not the one loaded — verify it's a slot you can overwrite).
-        {/if}
-      </p>
-      <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
-      <div class="actions">
-        <Button variant="secondary" size="md" class="sd-cancel" onclick={() => (presetBuffer.saveOpen = false)}>Cancel</Button>
-        <Button variant="amber" size="md" onclick={() => presetBuffer.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</Button>
-      </div>
+      <form class="frm" onsubmit={(e) => { e.preventDefault(); presetBuffer.save(target); }}>
+        <label class="field">
+          <span class="lbl mono">SAVE TO</span>
+          <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
+          {#if deviceSession.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
+        </label>
+        <p class="hint">
+          {#if overwritingCurrent}
+            Overwrites the current preset <b>{pad(target)}</b>{deviceSession.preset?.name ? ` · ${deviceSession.preset.name}` : ''}.
+          {:else}
+            Writes to preset <b>{pad(target)}</b> (not the one loaded — verify it's a slot you can overwrite).
+          {/if}
+        </p>
+        <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
+        <div class="actions">
+          <Button variant="secondary" size="md" class="sd-cancel" onclick={() => (presetBuffer.saveOpen = false)}>Cancel</Button>
+          <Button variant="amber" size="md" type="submit">{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</Button>
+        </div>
+      </form>
   </div>
 </Dialog>
 
@@ -70,6 +72,8 @@
   /* card frame comes from Dialog; this is the layout-only remainder of the old `.card`.
      The mobile bottom-sheet's safe-area padding is added by Dialog on the card itself. */
   .wrap { padding: 20px; }
+  /* Form exists so Enter submits Save; strip the UA margin. */
+  .frm { margin: 0; }
   .head {
     display: flex;
     align-items: center;

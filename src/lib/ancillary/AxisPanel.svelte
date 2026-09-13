@@ -174,13 +174,15 @@
               {#if loc.configured}<button class="link dim" onclick={() => presetBuffer.setLocalRoot(null)}>Clear</button>{/if}
             </div>
           {:else}
-            <label class="fld" for="loc-path"><span class="flbl">ABSOLUTE PATH</span>
-              <input id="loc-path" class="in sm" type="text" placeholder="/home/you/Axis" bind:value={manualPath} />
-            </label>
-            <div class="drow">
-              <button class="sync-now" onclick={() => manualPath.trim() && presetBuffer.setLocalRoot(manualPath.trim())}>Set folder</button>
-              {#if loc.configured}<button class="link dim" onclick={() => presetBuffer.setLocalRoot(null)}>Clear</button>{/if}
-            </div>
+            <form class="frm" onsubmit={(e) => { e.preventDefault(); const p = manualPath.trim(); if (p) void presetBuffer.setLocalRoot(p); }}>
+              <label class="fld" for="loc-path"><span class="flbl">ABSOLUTE PATH</span>
+                <input id="loc-path" class="in sm" type="text" placeholder="/home/you/Axis" bind:value={manualPath} />
+              </label>
+              <div class="drow">
+                <button type="submit" class="sync-now">Set folder</button>
+                {#if loc.configured}<button type="button" class="link dim" onclick={() => presetBuffer.setLocalRoot(null)}>Clear</button>{/if}
+              </div>
+            </form>
           {/if}
 
           {#if loc.configured}
@@ -223,13 +225,15 @@
 
           <div class="sec mt">BLOCK LIBRARY</div>
           <p class="muted">Where Axis looks for saved <strong>.blk</strong> blocks — the Library tab in the block picker reads from here. Defaults to the connected unit's Fractal Edit blocks folder.</p>
-          <label class="fld" for="blk-path"><span class="flbl">FOLDER</span>
-            <input id="blk-path" class="in sm" type="text"
-                   placeholder="Connect an FM3, FM9, or Axe-Fx III to set a default"
-                   value={blkPathValue}
-                   oninput={(e) => onBlkPathInput((e.currentTarget as HTMLInputElement).value)}
-                   onchange={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
-          </label>
+          <form class="frm" onsubmit={(e) => { e.preventDefault(); preloadBlockLibrary(blkPathValue); }}>
+            <label class="fld" for="blk-path"><span class="flbl">FOLDER</span>
+              <input id="blk-path" class="in sm" type="text"
+                     placeholder="Connect an FM3, FM9, or Axe-Fx III to set a default"
+                     value={blkPathValue}
+                     oninput={(e) => onBlkPathInput((e.currentTarget as HTMLInputElement).value)}
+                     onblur={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
+            </label>
+          </form>
         </div>
 
       {:else if editorOverlays.axisTab === 'theme'}
@@ -291,11 +295,13 @@
 
           <div class="sec mt">SEND A DEBUG REPORT</div>
           <p class="muted">Hit a bug? Send a one-off report so we can fix it. This is a separate, explicit action — it works even with diagnostics off.</p>
-          {@render contactField('diag-contact')}
-          {#if showDetail}{@render disclosure()}{:else}<button class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
-          <button class="cta" disabled={!t.uploadEnabled || t.sending} onclick={sendReport}>
-            {t.sending ? 'Sending…' : 'Send debug report'}
-          </button>
+          <form class="frm" onsubmit={(e) => { e.preventDefault(); if (t.uploadEnabled && !t.sending) void sendReport(); }}>
+            {@render contactField('diag-contact')}
+            {#if showDetail}{@render disclosure()}{:else}<button type="button" class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
+            <button type="submit" class="cta" disabled={!t.uploadEnabled || t.sending}>
+              {t.sending ? 'Sending…' : 'Send debug report'}
+            </button>
+          </form>
           {#if !t.uploadEnabled}<p class="note dim">Report upload isn't configured in this build.</p>{/if}
 
           <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
@@ -477,6 +483,9 @@
   .sel { width: 100%; height: 42px; padding: 0 12px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 13.5px; outline: none; cursor: pointer; }
   .sel:focus { border-color: var(--accent); }
   .fld { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+  /* Forms exist so Enter submits the field's primary action; strip the UA margin so they
+     don't disturb the existing label/button spacing. */
+  .frm { margin: 0; }
   .flbl { font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; }
   .statline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--textdim); }
   .badge { font: 700 8px/1 'JetBrains Mono', monospace; letter-spacing: 0.06em; border-radius: 4px; padding: 3px 5px; color: var(--accentink); }

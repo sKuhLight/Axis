@@ -59,19 +59,21 @@
       <div class="pad">
         <div class="head"><div class="logo warn">⚠</div><div><div class="h1">Something went wrong</div><div class="sub">{[p.route, p.status].filter(Boolean).join(' · ') || p.kind}</div></div></div>
         <p class="muted">Axis hit an error{p.route ? ` talking to your device (${p.route}${p.status ? ` · ${p.status}` : ''})` : ''}. You can send a debug report so we can fix it.</p>
-        <label class="cfield" for="rp-contact">
-          <span class="clbl">CONTACT <span class="opt">optional</span></span>
-          <input id="rp-contact" class="in" type="text" maxlength="100" placeholder="Fractal forum / Reddit / email — so we can follow up"
-                 value={editorProfile.contact} oninput={(e) => editorProfile.setContact((e.currentTarget as HTMLInputElement).value)} />
-        </label>
-        {#if showDetail}
-          <ul class="incl2">
-            <li><span class="ok">included</span> diagnostic log, recent events, the error, device/OS/app versions, an anonymous ID, and the contact above (if any)</li>
-            <li><span class="no">never</span> your presets, preset names, email, or file contents</li>
-          </ul>
-        {:else}<button class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
-        <button class="cta" disabled={!t.uploadEnabled || t.sending} onclick={() => sendNow(p)}>{t.sending ? 'Sending…' : 'Upload report'}</button>
-        <button class="link dim center" onclick={telemetry.dismissReportPrompt}>Not now</button>
+        <form class="frm" onsubmit={(e) => { e.preventDefault(); if (t.uploadEnabled && !t.sending) void sendNow(p); }}>
+          <label class="cfield" for="rp-contact">
+            <span class="clbl">CONTACT <span class="opt">optional</span></span>
+            <input id="rp-contact" class="in" type="text" maxlength="100" placeholder="Fractal forum / Reddit / email — so we can follow up"
+                   value={editorProfile.contact} oninput={(e) => editorProfile.setContact((e.currentTarget as HTMLInputElement).value)} />
+          </label>
+          {#if showDetail}
+            <ul class="incl2">
+              <li><span class="ok">included</span> diagnostic log, recent events, the error, device/OS/app versions, an anonymous ID, and the contact above (if any)</li>
+              <li><span class="no">never</span> your presets, preset names, email, or file contents</li>
+            </ul>
+          {:else}<button type="button" class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
+          <button type="submit" class="cta" disabled={!t.uploadEnabled || t.sending}>{t.sending ? 'Sending…' : 'Upload report'}</button>
+        </form>
+        <button type="button" class="link dim center" onclick={telemetry.dismissReportPrompt}>Not now</button>
       </div>
     </DialogBody>
 </Dialog>
@@ -91,6 +93,8 @@
   .ok { color: var(--accent); font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
   .no { color: var(--danger); font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
   .cfield { display: flex; flex-direction: column; gap: 7px; margin: 4px 0 12px; }
+  /* Forms exist so Enter submits the primary action; strip the UA margin. */
+  .frm { margin: 0; }
   .clbl { font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textfaint); letter-spacing: 0.1em; }
   .opt { color: var(--textmuted); margin-left: 4px; }
   .in { width: 100%; height: 44px; padding: 0 14px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 11px; color: var(--text); font-size: 13px; outline: none; }
