@@ -150,8 +150,15 @@ export class TelemetryStore {
     return this.#host.status === 'ready' && this.#host.hasLiveMonitors && !this.#host.slowLink;
   }
   #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
+  // Whether the loop is logically running. Kept separate from #liveMeterTimer: tick() clears the
+  // timer handle at the top of every iteration and only re-sets it after the awaited device read
+  // returns, so the handle alone is null for the WHOLE duration of every in-flight read — a guard on
+  // it would let a second start() stack a concurrent loop mid-read, and would make stop() during a
+  // read a no-op. This flag isn't cleared across the await, so it guards both.
+  #liveMetersRunning = false;
   startLiveMeters = () => {
-    if (this.#liveMeterTimer) return; // already running
+    if (this.#liveMetersRunning) return; // already running
+    this.#liveMetersRunning = true;
     const tick = async () => {
       this.#liveMeterTimer = null;
       const eid = this.#host.selectedEffectId;
@@ -159,6 +166,7 @@ export class TelemetryStore {
       if (ok) {
         try {
           const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
+          if (!this.#liveMetersRunning) return; // stopped mid-read — don't resurrect liveMeters after stop cleared it
           const next = { ...this.liveMeters };
           next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
           this.liveMeters = next;
@@ -170,12 +178,14 @@ export class TelemetryStore {
           try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
         }
       }
+      if (!this.#liveMetersRunning) return; // stopped mid-tick — do not re-arm
       // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
       this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
     };
     tick();
   };
   stopLiveMeters = () => {
+    this.#liveMetersRunning = false;
     if (this.#liveMeterTimer) clearTimeout(this.#liveMeterTimer);
     this.#liveMeterTimer = null;
     this.liveMeters = {};

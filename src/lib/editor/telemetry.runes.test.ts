@@ -393,11 +393,6 @@ describe('live meters', () => {
     expect(looper).toHaveBeenCalledWith(106);
   });
 
-  // KNOWN GAP (pre-dates the extraction — identical on `main`, recorded not fixed here): the
-  // `if (this.#liveMeterTimer) return` guard only holds once a tick has RESCHEDULED. `tick()` nulls
-  // the handle as its first statement and runs synchronously from `startLiveMeters()`, so a second
-  // start while a read is in flight does stack a second loop. `load()` is the only caller, so two
-  // overlapping loads double the meter cadence until one loop is stopped.
   it('a second start is a no-op once the loop is idle between ticks', async () => {
     const { t } = fresh({ blockSlug: null });
     t.startLiveMeters();
@@ -408,13 +403,44 @@ describe('live meters', () => {
     expect(monitorsLive).toHaveBeenCalledTimes(1);
   });
 
-  it('starting again mid-read stacks a second loop — the known gap above', async () => {
+  // Regression: `startLiveMeters` used to guard on the timer handle, which `tick()` nulls out as its
+  // first statement — for the whole duration of the in-flight read the handle was null, so the guard
+  // didn't hold and a second start stacked a concurrent loop. It now guards on `#liveMetersRunning`,
+  // which is set before the first tick and isn't touched by the await.
+  it('a second start while a read is in flight does not issue an extra read', async () => {
     const { t } = fresh({ blockSlug: null });
+    let release: (rows: { effectId: number; norm: number; db: number }[]) => void = () => {};
+    monitorsLive.mockReturnValueOnce(new Promise((r) => { release = r; }));
     t.startLiveMeters();
-    t.startLiveMeters(); // still inside the first tick's await → not guarded
+    t.startLiveMeters(); // still inside the first tick's await — guarded by #liveMetersRunning, not the timer handle
+    release([]);
     await flush();
     t.stopLiveMeters();
-    expect(monitorsLive).toHaveBeenCalledTimes(2);
+    expect(monitorsLive).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression: for the same reason, `stopLiveMeters()` during an in-flight read used to be a no-op
+  // (`clearTimeout(null)`) and the tick re-armed itself right after, so the loop never actually
+  // stopped. It must also not let that in-flight read's result land in `liveMeters` after stop
+  // already cleared it.
+  it('stopping while a read is in flight halts the loop and never repopulates liveMeters', async () => {
+    vi.useFakeTimers();
+    try {
+      const { t } = fresh({ selectedEffectId: 106, blockSlug: null });
+      let release: (rows: { effectId: number; norm: number; db: number }[]) => void = () => {};
+      monitorsLive.mockReturnValueOnce(new Promise((r) => { release = r; }));
+      t.startLiveMeters();
+      t.stopLiveMeters(); // clears liveMeters + the running flag while the read is still pending
+      release([{ effectId: 106, norm: 0.5, db: -6 }]);
+      await vi.advanceTimersByTimeAsync(0); // let the pending read resolve
+      expect(t.liveMeters).toEqual({}); // the stale result must not land after stop
+
+      monitorsLive.mockClear();
+      await vi.advanceTimersByTimeAsync(3000); // past both the 250ms and 2000ms re-arm intervals
+      expect(monitorsLive).not.toHaveBeenCalled(); // the loop actually stopped, not just skipped one write
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
