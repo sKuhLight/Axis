@@ -45,7 +45,8 @@ export type OverlayId =
  * (tuner → history → cabPicker → palette → quickBuild → convertScratch → convert →
  * presetPicker → presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`,
  * `save`, `axisHub`, `theme`) were never part of that chain; they sit lowest so an open
- * chain overlay always wins, but remain non-dismissible by Escape.
+ * chain overlay always wins. Of these, `deviceTools`, `save` and `theme` remain
+ * non-dismissible by Escape; `axisHub` closes on Escape like a normal dialog.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
   consentPrompt: -20,
@@ -67,7 +68,7 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   theme: 230
 };
 
-const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'axisHub', 'theme', 'consentPrompt']);
+const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'theme', 'consentPrompt']);
 const ESCAPE_BLOCKING = new Set<OverlayId>(['consentPrompt']);
 
 const OVERLAY_IDS = Object.keys(ESCAPE_ORDER) as OverlayId[];

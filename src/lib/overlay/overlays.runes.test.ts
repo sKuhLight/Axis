@@ -144,12 +144,18 @@ describe('escape() priority', () => {
   });
 
   it('preserves the historically non-Escape-dismissible owned dialogs', () => {
-    for (const id of ['deviceTools', 'save', 'axisHub', 'theme'] as const) {
+    for (const id of ['deviceTools', 'save', 'theme'] as const) {
       overlays.open(id);
       expect(overlays.escape()).toBe(false);
       expect(overlays.isOpen(id)).toBe(true);
       overlays.close(id);
     }
+  });
+
+  it('closes the Axis hub on Escape like a normal dialog', () => {
+    overlays.open('axisHub');
+    expect(overlays.escape()).toBe(true);
+    expect(overlays.isOpen('axisHub')).toBe(false);
   });
 
   it('puts prompts in the Escape stack and lets consent block everything behind it', () => {
