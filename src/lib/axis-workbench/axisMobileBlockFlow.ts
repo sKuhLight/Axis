@@ -24,11 +24,13 @@ import { AXIS_MOBILE_BLOCK_EXPAND_RATIO } from './axisMobileBlockFlowConstants';
  * ── Why grid-map forcing needs a widget move (not just widget.state) ──────────────
  * `AxisSignalGridPanel` derives the grid view from the *visible* gridMode widget via
  * `axisGridViewFromWidgets`, which ignores a `hidden` widget (returns the auto+M
- * default). The mobile preset hides the gridMode widget, so a bare
- * `widget.state {mode:'map'}` on it would have no visible effect. To force map through
- * commands only (no grid-file edits), the flow moves the gridMode widget out of the
- * `hidden` zone into the gridbar while it forces map, and moves it back to `hidden`
- * on restore. Both go through reducer commands (`widget.move` + `widget.state`).
+ * default). If the gridMode widget is ever hidden on the active layout (e.g. an older
+ * persisted document, or a custom layout edit), a bare `widget.state {mode:'map'}` on
+ * it would have no visible effect. To force map through commands only (no grid-file
+ * edits), the flow moves the gridMode widget out of the `hidden` zone into the gridbar
+ * while it forces map, and moves it back to `hidden` on restore — both go through
+ * reducer commands (`widget.move` + `widget.state`). On the current default layout the
+ * widget already sits in the gridbar, so this is a no-op there.
  */
 
 /** The dock region the phone-profile block editor lives in (mobile preset editorMode:'drawer'). */

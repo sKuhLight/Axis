@@ -46,7 +46,7 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   `registerNavigationState`.
 - `axisWorkbenchStore.svelte.ts` — singleton controller + persistence (localStorage key
   `axs.workbench.doc`, 150 ms debounce; ForgeFX store `putDoc`, 1500 ms) and the normalization
-  chain (migrate → ensureGridControls → pruneRetiredRail → ensureMobileBottomNav).
+  chain (migrate → ensureGridControls → pruneRetiredRail).
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
@@ -109,9 +109,11 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   `AXIS_WIDGET_KEEP_TYPES`.
 - `axisWorkbenchDefaults.ts` — default document, `createAxisWorkbenchPanels()`,
   `ensureAxisGridControlWidgets`, panelLibrary/widgetLibrary entries.
-- `axisWorkbenchLayoutPresets.ts` — six data-only presets (`default`, `stage`, `studio`,
-  `compact` layout-tab kinds + `tablet`, `mobile` profile seeds): `PRESET_SPECS` with
-  `WIDGET_TYPE` / `WIDGET_INSTANCE_ID` maps, `buildDock()`, `buildNavigation()`.
+- `axisWorkbenchLayoutPresets.ts` — a single data-only `default` preset, used to seed every
+  profile (desktop/tablet/mobile) so all screen widths render identically: `PRESET_SPECS`
+  with `WIDGET_TYPE` / `WIDGET_INSTANCE_ID` maps, `buildDock()`, `buildNavigation()`. The
+  Stage/Studio/Compact LAYOUT tabs and the distinct tablet/mobile preset specs were
+  retired on `feature-deletion`.
 - `axisWorkbenchLayoutActions.ts` — `seedAxisProfiles`, `AXIS_MOBILE_PROFILE_ID`.
 - `axisWorkbenchNavigationActions.ts` — `createAxisNavigationPanelAction({ actionId,
   panelId, panelType, title, region, state? })`, an add-or-focus helper;
@@ -142,8 +144,8 @@ bypasses the manifest.
    resolver in `axisWorkbenchBindings.ts`.
 5. Non-trivial pure logic goes in a new `widgets/<x>.ts` with `test/<x>.test.ts`.
 6. Placement: seed in `axisWorkbenchDefaults.ts` and/or add a widgetLibrary entry; update
-   `axisWorkbenchLayoutPresets.ts` (`WIDGET_TYPE` + `WIDGET_INSTANCE_ID` maps + per-preset
-   widget lists) — keep ALL six presets consistent.
+   `axisWorkbenchLayoutPresets.ts` (`WIDGET_TYPE` + `WIDGET_INSTANCE_ID` maps + the default
+   preset's widget list).
 7. Visible chrome? Add an e2e assertion (mirror `e2e/05-widgets.spec.ts`).
 
 ## Recipe: add a panel

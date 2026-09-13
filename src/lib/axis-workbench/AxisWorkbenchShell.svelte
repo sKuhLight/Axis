@@ -3,7 +3,6 @@
   import './widgets/widgets.css';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
   import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLayoutDrawer.svelte';
-  import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
   import AxisProfileSwitcher from './AxisProfileSwitcher.svelte';
   import {
     axisWorkbenchController,
@@ -21,8 +20,8 @@
     type AxisMobileBlockFlowMemory
   } from './axisMobileBlockFlow';
 
-  // Ensure the tablet/mobile profiles exist (seeded from their presets) so the
-  // profile switcher always has a layout to show. Idempotent.
+  // Ensure the tablet/mobile profiles exist (seeded from the shared default
+  // preset) so the profile switcher always has a layout to show. Idempotent.
   seedAxisProfiles(axisWorkbenchController);
 
   // Bridge the Axis-side rolling backups into the generic Layouts drawer's
@@ -72,7 +71,6 @@
 
 {#snippet ribbonExtras()}
   <AxisProfileSwitcher />
-  <AxisLayoutPresetPicker />
 {/snippet}
 
 <WorkbenchHost

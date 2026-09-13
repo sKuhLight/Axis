@@ -2,21 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   reduceWorkbenchDocument,
   repairWorkbenchDocument,
-  selectActiveLayout,
   validateWorkbenchDocument,
   type WorkbenchLayout
 } from '../../workbench/core';
 import { createWorkbenchController } from '../../workbench';
 import {
   AXIS_LAYOUT_PRESET_KINDS,
-  AXIS_LAYOUT_TAB_KINDS,
   createAxisLayoutPreset,
   type AxisLayoutPresetKind
 } from '../axisWorkbenchLayoutPresets';
 import {
   AXIS_MOBILE_PROFILE_ID,
   AXIS_TABLET_PROFILE_ID,
-  applyAxisLayoutPreset,
   copyAxisLayoutToProfile,
   seedAxisProfiles
 } from '../axisWorkbenchLayoutActions';
@@ -38,9 +35,8 @@ function docWithPreset(kind: AxisLayoutPresetKind) {
 }
 
 describe('Axis layout presets', () => {
-  it('exposes the six design preset kinds', () => {
-    expect(AXIS_LAYOUT_PRESET_KINDS).toEqual(['default', 'stage', 'studio', 'compact', 'tablet', 'mobile']);
-    expect(AXIS_LAYOUT_TAB_KINDS).toEqual(['default', 'stage', 'studio', 'compact']);
+  it('exposes a single default preset kind', () => {
+    expect(AXIS_LAYOUT_PRESET_KINDS).toEqual(['default']);
   });
 
   for (const kind of AXIS_LAYOUT_PRESET_KINDS) {
@@ -126,60 +122,6 @@ describe('Axis layout presets', () => {
     );
   });
 
-  it('stage/tablet/mobile use page preset mode and drop the docked preset browser', () => {
-    for (const kind of ['stage', 'tablet', 'mobile'] as const) {
-      const layout = createAxisLayoutPreset(kind, { layoutId: `axis.layout.${kind}` });
-      expect(layout.settings?.presetMode).toBe('page');
-      const docked = Object.values(layout.pages[layout.activePageId].dock.root)
-        .flatMap((node) => (node && node.kind === 'tabs' ? node.panelIds : []));
-      expect(docked).not.toContain('axis.presetBrowser');
-    }
-  });
-
-  it('studio docks the block editor to the right region', () => {
-    const layout = createAxisLayoutPreset('studio', { layoutId: 'axis.layout.studio' });
-    const right = layout.pages[layout.activePageId].dock.root.right;
-    expect(right?.kind).toBe('tabs');
-    expect(right && right.kind === 'tabs' ? right.panelIds : []).toContain('axis.blockEditor');
-  });
-
-  it('keeps preset search out of the studio top bar', () => {
-    const layout = createAxisLayoutPreset('studio', { layoutId: 'axis.layout.studio' });
-    expect(layout.widgets['axis.widget.search']).toBeUndefined();
-  });
-});
-
-describe('applyAxisLayoutPreset', () => {
-  it('replaces the active profile layout and preserves rightW', () => {
-    const controller = createWorkbenchController(createAxisWorkbenchDefaultDocument());
-    // Give the active layout a known rightW.
-    const activeLayoutId = controller.activeProfile!.layoutId;
-    controller.document.layouts[activeLayoutId].settings = { rightW: 512 };
-
-    const result = applyAxisLayoutPreset(controller, 'studio');
-    expect(result.success).toBe(true);
-    const layout = selectActiveLayout(controller.document);
-    expect(layout?.id).toBe(result.layoutId);
-    // studio's default rightW is 400, but the active 512 is preserved.
-    expect(layout?.settings?.rightW).toBe(512);
-    expect(layout?.settings?.presetKind).toBe('studio');
-  });
-
-  it('produces a valid document after applying every layout tab', () => {
-    for (const kind of AXIS_LAYOUT_TAB_KINDS) {
-      const controller = createWorkbenchController(createAxisWorkbenchDefaultDocument());
-      const result = applyAxisLayoutPreset(controller, kind);
-      expect(result.success, `apply ${kind}`).toBe(true);
-      expect(validateWorkbenchDocument(controller.document).valid, `valid after ${kind}`).toBe(true);
-    }
-  });
-
-  it('mints a fresh layout id that never collides with existing layouts', () => {
-    const controller = createWorkbenchController(createAxisWorkbenchDefaultDocument());
-    const before = new Set(Object.keys(controller.document.layouts));
-    const result = applyAxisLayoutPreset(controller, 'compact');
-    expect(before.has(result.layoutId!)).toBe(false);
-  });
 });
 
 describe('seedAxisProfiles', () => {
@@ -223,7 +165,7 @@ describe('copyAxisLayoutToProfile', () => {
 describe('preset reducer round-trip', () => {
   it('layout.save + profile.setLayout accept a preset without error', () => {
     let doc = createAxisWorkbenchDefaultDocument();
-    const layout = createAxisLayoutPreset('stage', { layoutId: 'axis.layout.roundtrip' });
+    const layout = createAxisLayoutPreset('default', { layoutId: 'axis.layout.roundtrip' });
     const saved = reduceWorkbenchDocument(doc, { type: 'layout.save', layout });
     expect(saved.success).toBe(true);
     doc = saved.next;

@@ -18,7 +18,6 @@ import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
-import { AXIS_MOBILE_PROFILE_ID } from './axisWorkbenchLayoutActions';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
 export { AXIS_WORKBENCH_CACHE_KEY };
@@ -56,7 +55,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // Normalization chain (must stay idempotent — runs on every load over
   // already-normalized docs):
   //   migrate → ensureSeedPages (ROUND 15 Pages migration) → ensureGridControls →
-  //   pruneRetiredRail → pruneTopBarSearch → pruneAddBlock → ensureMobileBottomNav.
+  //   pruneRetiredRail → pruneTopBarSearch → pruneAddBlock.
   // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
   // becomes the Grid page and the six other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
@@ -66,40 +65,16 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // ensureAxisMyControlsPanel self-heals the single pin destination onto every layout's Grid page,
   // tabbed next to History. Same ordering reason, same idempotence requirement.
   return ensureAxisMeterWidgetLibrary(
-    ensureAxisMobileBottomNav(
-      pruneAxisRetiredWidgetTypes(
-        pruneAxisTopBarSearchWidgets(
-          pruneAxisRetiredRailWidgets(
-            ensureAxisGridControlWidgets(
-              ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
-            )
+    pruneAxisRetiredWidgetTypes(
+      pruneAxisTopBarSearchWidgets(
+        pruneAxisRetiredRailWidgets(
+          ensureAxisGridControlWidgets(
+            ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
           )
         )
       )
     )
   );
-}
-
-/**
- * One-shot migration (V14d): the mobile profile's default navigation is the
- * persistent bottom bar — the hamburger + bottom-sheet drawer pattern is a
- * side-mode affordance and the wrong default on phones. Freshly seeded mobile
- * profiles get `navMode: 'bottom'` from the preset; this flips a persisted
- * pre-V14d mobile profile from 'side' to 'bottom' exactly once, marked in the
- * doc metadata so a user who deliberately switches back to side navigation on
- * mobile is never overridden again.
- */
-const AXIS_MOBILE_BOTTOM_NAV_MARKER = 'axisMobileBottomNav';
-
-export function ensureAxisMobileBottomNav(doc: WorkbenchDocument): WorkbenchDocument {
-  if (doc.metadata?.[AXIS_MOBILE_BOTTOM_NAV_MARKER]) return doc;
-  const mobileProfile = doc.profiles?.[AXIS_MOBILE_PROFILE_ID];
-  const layout = mobileProfile ? doc.layouts?.[mobileProfile.layoutId] : undefined;
-  if (layout?.navigation && layout.navigation.mode === 'side') {
-    layout.navigation.mode = 'bottom';
-  }
-  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_MOBILE_BOTTOM_NAV_MARKER]: 'v1' };
-  return doc;
 }
 
 function cacheLoad(): WorkbenchDocument {

@@ -17,14 +17,15 @@ test.describe('Edit-mode profile preview', () => {
 
     await enterEditMode(page);
     // Profile switcher lives in the edit ribbon (Auto · Desktop · Tablet · Mobile).
-    await page.getByRole('button', { name: 'Mobile', exact: true }).click();
+    const profileSwitcher = page.locator('.axis-profile-tabs');
+    await profileSwitcher.getByRole('button', { name: 'Mobile', exact: true }).click();
 
     // The preview backdrop appears and the root becomes a phone-sized frame.
     await expect(page.locator('.aw-viewport.aw-preview')).toHaveCount(1);
     await expect.poll(async () => (await page.locator('.aw-root').boundingBox())!.width).toBeLessThan(500);
 
     // Auto clears the pin → full-size editing surface again.
-    await page.getByRole('button', { name: 'Auto', exact: true }).click();
+    await profileSwitcher.getByRole('button', { name: 'Auto', exact: true }).click();
     await expect(page.locator('.aw-viewport.aw-preview')).toHaveCount(0);
     await expect.poll(async () => (await page.locator('.aw-root').boundingBox())!.width).toBeGreaterThan(1000);
   });
@@ -32,7 +33,7 @@ test.describe('Edit-mode profile preview', () => {
   test('Tablet preview is a mid-size canvas and Done restores full size', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: 'Tablet', exact: true }).click();
+    await page.locator('.axis-profile-tabs').getByRole('button', { name: 'Tablet', exact: true }).click();
 
     await expect(page.locator('.aw-viewport.aw-preview')).toHaveCount(1);
     await expect

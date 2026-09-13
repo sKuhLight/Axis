@@ -365,7 +365,7 @@ function layoutAlreadySeeded(layout: WorkbenchLayout): boolean {
 
 /**
  * Migrate a persisted (pre-Pages) Axis document to the Pages model. Idempotent via a
- * doc-metadata marker (like `ensureAxisMobileBottomNav`). For every layout:
+ * doc-metadata marker. For every layout:
  *
  *  - the existing (active or first) page's dock becomes the **Grid** page — minus any
  *    panels that own a dedicated page (Preset Browser / FC / Setup / Controllers /

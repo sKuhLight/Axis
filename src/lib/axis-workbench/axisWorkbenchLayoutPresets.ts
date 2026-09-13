@@ -15,14 +15,13 @@ import { buildAxisSeedPages, createAxisSeedNavigation } from './axisWorkbenchPag
 import { axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel';
 
 /**
- * Axis layout presets — the production port of the design shell's `preset(kind)`
- * (`docs/workbench-dc-parity/01-shell.md` §3). Six kinds:
+ * Axis layout preset — the production port of the design shell's `preset(kind)`
+ * (`docs/workbench-dc-parity/01-shell.md` §3). A single `default` kind: every
+ * profile (desktop/tablet/mobile) is seeded from it, so all screen widths render
+ * the same layout. The Stage/Studio/Compact LAYOUT tabs and the per-profile
+ * tablet/mobile variants have been retired — see `feature-deletion`.
  *
- *   - `default` / `stage` / `studio` / `compact` — user-selectable LAYOUT tabs
- *     in the edit ribbon (applied to the *active* profile, preserving `rightW`).
- *   - `tablet` / `mobile` — seed the tablet / mobile profiles' initial layouts.
- *
- * Each preset composes the *existing* Axis panel roster (`createAxisWorkbenchPanels`)
+ * The preset composes the *existing* Axis panel roster (`createAxisWorkbenchPanels`)
  * and widget/navigation types (see `axisWorkbenchRegistryManifest.ts`) — presets
  * never introduce new panel/widget types, so validation + the render registry
  * cover them automatically. Node ids are minted through `createWorkbenchId` so a
@@ -39,23 +38,11 @@ import { axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel
  *   - Density: design `expanded→default`, `compact→compact`, `mini→mini`.
  */
 
-export const AXIS_LAYOUT_PRESET_KINDS = ['default', 'stage', 'studio', 'compact', 'tablet', 'mobile'] as const;
+export const AXIS_LAYOUT_PRESET_KINDS = ['default'] as const;
 export type AxisLayoutPresetKind = (typeof AXIS_LAYOUT_PRESET_KINDS)[number];
 
-/** LAYOUT-tab presets (applied to the active profile from the edit ribbon). */
-export const AXIS_LAYOUT_TAB_KINDS = ['default', 'stage', 'studio', 'compact'] as const;
-export type AxisLayoutTabKind = (typeof AXIS_LAYOUT_TAB_KINDS)[number];
-
-/** PROFILE-seed presets (one per non-desktop profile). */
-export const AXIS_PROFILE_SEED_KINDS = ['tablet', 'mobile'] as const;
-
 const PRESET_LABELS: Record<AxisLayoutPresetKind, string> = {
-  default: 'Default',
-  stage: 'Stage',
-  studio: 'Studio',
-  compact: 'Compact',
-  tablet: 'Tablet',
-  mobile: 'Mobile'
+  default: 'Default'
 };
 
 export const axisLayoutPresetLabel = (kind: AxisLayoutPresetKind): string => PRESET_LABELS[kind] ?? PRESET_LABELS.default;
@@ -121,8 +108,9 @@ const W = (zone: string, order: number, density: Density = 'expanded', group: st
 });
 
 /**
- * The six preset specs, quoted verbatim (kind → keys) from `01-shell.md` §3.
- * Widget keys are the design ids; zones/densities are translated below.
+ * The one preset spec, quoted verbatim (keys) from `01-shell.md` §3. Widget keys
+ * are the design ids; zones/densities are translated below. Used for every
+ * profile (desktop/tablet/mobile) so all screen widths render identically.
  */
 const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
   default: {
@@ -140,119 +128,13 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       save: W('tr', 5),
       gridmode: W('gridbar', 0),
       blocksize: W('gridbar', 1),
-      // Telemetry monitor (META-17) — capability-gated in the widget; only the default preset seeds it
-      // (design keeps the other five presets minimal).
+      // Telemetry monitor (META-17) — capability-gated in the widget.
       telemetry: W('gridbar', 2),
       history: W('rail', 0, 'compact'),
       account: W('rail', 1, 'compact'),
       search: W('hidden', 0),
       map: W('hidden', 0),
       undo: W('hidden', 0)
-    }
-  },
-  stage: {
-    navMode: 'bottom',
-    contentMode: 'pages',
-    presetMode: 'page',
-    editorMode: 'floating',
-    rightW: 340,
-    widgets: {
-      preset: W('tl', 0),
-      tuner: W('tl', 1),
-      scenes: W('tc', 0),
-      tempo: W('tr', 0),
-      save: W('tr', 1),
-      cpu: W('hidden', 0),
-      search: W('hidden', 0),
-      history: W('hidden', 0),
-      map: W('hidden', 0),
-      undo: W('hidden', 0),
-      account: W('hidden', 0)
-    }
-  },
-  studio: {
-    navMode: 'side',
-    contentMode: 'fixed',
-    presetMode: 'flyout',
-    editorMode: 'right',
-    rightW: 400,
-    widgets: {
-      preset: W('tl', 0),
-      scenes: W('tl', 1),
-      cpu: W('tr', 2),
-      save: W('tr', 3),
-      gridmode: W('gridbar', 0),
-      blocksize: W('gridbar', 1),
-      tuner: W('right', 0),
-      tempo: W('right', 1),
-      map: W('right', 2),
-      history: W('rail', 0, 'compact'),
-      account: W('rail', 1, 'compact'),
-      undo: W('hidden', 0)
-    }
-  },
-  compact: {
-    navMode: 'side',
-    contentMode: 'fixed',
-    presetMode: 'flyout',
-    editorMode: 'drawer',
-    rightW: 320,
-    widgets: {
-      preset: W('tl', 0, 'compact'),
-      scenes: W('tl', 1, 'compact'),
-      save: W('tr', 1, 'compact'),
-      tuner: W('hidden', 0),
-      tempo: W('hidden', 0),
-      cpu: W('hidden', 0),
-      search: W('hidden', 0),
-      history: W('hidden', 0),
-      map: W('hidden', 0),
-      undo: W('hidden', 0),
-      account: W('rail', 0, 'compact')
-    }
-  },
-  tablet: {
-    navMode: 'bottom',
-    contentMode: 'pages',
-    presetMode: 'page',
-    editorMode: 'drawer',
-    rightW: 320,
-    widgets: {
-      preset: W('tl', 0),
-      scenes: W('tc', 0),
-      tuner: W('tr', 0),
-      save: W('tr', 1),
-      tempo: W('hidden', 0),
-      cpu: W('hidden', 0),
-      search: W('hidden', 0),
-      history: W('hidden', 0),
-      map: W('hidden', 0),
-      undo: W('hidden', 0),
-      account: W('hidden', 0)
-    }
-  },
-  mobile: {
-    // V14d: phones get the persistent bottom nav bar by default — the hamburger
-    // + drawer is a side-mode affordance and the wrong default at phone width.
-    navMode: 'bottom',
-    contentMode: 'pages',
-    presetMode: 'page',
-    editorMode: 'drawer',
-    rightW: 300,
-    widgets: {
-      preset: W('tl', 0, 'compact'),
-      save: W('tr', 0, 'mini'),
-      scenes: W('bottom', 0, 'compact'),
-      tuner: W('hidden', 0),
-      tempo: W('hidden', 0),
-      cpu: W('hidden', 0),
-      search: W('hidden', 0),
-      history: W('hidden', 0),
-      map: W('hidden', 0),
-      undo: W('hidden', 0),
-      account: W('hidden', 0),
-      gridmode: W('hidden', 0),
-      blocksize: W('hidden', 0)
     }
   }
 };
@@ -399,8 +281,8 @@ export interface CreateAxisLayoutPresetOptions {
 /**
  * Build a complete `WorkbenchLayout` for one preset kind. The layout composes
  * the shared panel roster + preset widget/dock/nav layout. Design flags
- * (`navMode`/`contentMode`/`presetMode`/`editorMode`/`rightW`/`activePreset`)
- * are stored in `layout.settings`.
+ * (`navMode`/`contentMode`/`presetMode`/`editorMode`/`rightW`) are stored in
+ * `layout.settings`.
  */
 export function createAxisLayoutPreset(
   kind: AxisLayoutPresetKind,
@@ -430,7 +312,6 @@ export function createAxisLayoutPreset(
     zones: createAxisPresetZones(),
     settings: {
       presetKind: kind,
-      activePreset: AXIS_LAYOUT_TAB_KINDS.includes(kind as AxisLayoutTabKind) ? kind : 'default',
       navMode: spec.navMode,
       contentMode: spec.contentMode,
       presetMode: spec.presetMode,

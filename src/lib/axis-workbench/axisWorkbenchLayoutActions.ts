@@ -1,14 +1,8 @@
-import { createWorkbenchId, type WorkbenchCommandResult, type WorkbenchDocument, type WorkbenchProfile } from '../workbench/core';
+import { createWorkbenchId, type WorkbenchCommandResult, type WorkbenchProfile } from '../workbench/core';
 import { enqueueToast, type WorkbenchController } from '../workbench';
-import {
-  AXIS_PROFILE_SEED_KINDS,
-  axisLayoutPresetLabel,
-  createAxisLayoutPreset,
-  type AxisLayoutPresetKind,
-  type AxisLayoutTabKind
-} from './axisWorkbenchLayoutPresets';
+import { createAxisLayoutPreset } from './axisWorkbenchLayoutPresets';
 
-/** Profile ids seeded from the tablet / mobile presets. */
+/** Profile ids seeded from the (shared) default layout preset. */
 export const AXIS_TABLET_PROFILE_ID = 'axis.profile.tablet';
 export const AXIS_MOBILE_PROFILE_ID = 'axis.profile.mobile';
 /** The default desktop profile id (created by `createAxisWorkbenchDefaultDocument`). */
@@ -94,22 +88,10 @@ export function setAxisProfileOverride(
   controller.setProfileOverride(profileId, width);
 }
 
-const SEED_PROFILE_ID: Record<(typeof AXIS_PROFILE_SEED_KINDS)[number], string> = {
-  tablet: AXIS_TABLET_PROFILE_ID,
-  mobile: AXIS_MOBILE_PROFILE_ID
-};
-
-const SEED_PROFILE_BREAKPOINT: Record<(typeof AXIS_PROFILE_SEED_KINDS)[number], WorkbenchProfile['breakpoint']> = {
-  tablet: 'tablet',
-  mobile: 'phone'
-};
-
-function activeRightW(doc: WorkbenchDocument): number | undefined {
-  const profile = doc.profiles[doc.activeProfileId];
-  const layout = profile ? doc.layouts[profile.layoutId] : undefined;
-  const rightW = layout?.settings?.rightW;
-  return typeof rightW === 'number' ? rightW : undefined;
-}
+const SEED_PROFILES: { profileId: (typeof AXIS_PROFILE_IDS)[number]; breakpoint: WorkbenchProfile['breakpoint'] }[] = [
+  { profileId: AXIS_TABLET_PROFILE_ID, breakpoint: 'tablet' },
+  { profileId: AXIS_MOBILE_PROFILE_ID, breakpoint: 'phone' }
+];
 
 export interface ApplyAxisLayoutPresetResult {
   success: boolean;
@@ -118,62 +100,26 @@ export interface ApplyAxisLayoutPresetResult {
 }
 
 /**
- * Apply a LAYOUT-tab preset (default/stage/studio/compact) to the *active*
- * profile — the design's `onPreset(id)`: replace the active profile's layout with
- * `preset(id)` while **preserving the current `rightW`**, then set it active.
- *
- * The preset layout is minted with a fresh `layout-*` id (via `createWorkbenchId`,
- * never a hand-picked constant that could collide), saved into the document, and
- * pointed to by the active profile. The previous layout is left in place unless it
- * was itself a generated preset layout no other profile references (kept simple:
- * we do not garbage-collect here; `repairWorkbenchDocument` tolerates orphans).
- */
-export function applyAxisLayoutPreset(
-  controller: WorkbenchController,
-  kind: AxisLayoutTabKind
-): ApplyAxisLayoutPresetResult {
-  const doc = controller.document;
-  const activeProfileId = doc.activeProfileId;
-  if (!doc.profiles[activeProfileId]) {
-    return { success: false, error: { code: 'missing-profile', message: `Active profile ${activeProfileId} does not exist.` } };
-  }
-  const layout = createAxisLayoutPreset(kind, {
-    layoutId: createWorkbenchId('layout'),
-    rightW: activeRightW(doc)
-  });
-
-  const batch = controller.dispatchMany([
-    { type: 'layout.save', layout },
-    { type: 'profile.setLayout', profileId: activeProfileId, layoutId: layout.id }
-  ]);
-  if (!batch.success) return { success: false, error: batch.error };
-  // Transient confirmation (design shows `Applied "<Kind>" layout`). Fired from
-  // the action layer so every caller (AxisLayoutPresetPicker, future PROFILE
-  // switcher) gets it for free — no per-call-site enqueue needed.
-  enqueueToast({ text: `Applied "${axisLayoutPresetLabel(kind)}" layout` });
-  return { success: true, layoutId: layout.id };
-}
-
-/**
- * Ensure the tablet and mobile profiles exist, each seeded from its preset layout.
- * Idempotent: profiles/layouts already present are left untouched. Used once at
- * boot so the PROFILE tabs (desktop/tablet/mobile) always have a layout to show;
- * each profile then keeps its own independent layout object.
+ * Ensure the tablet and mobile profiles exist, each seeded from the same default
+ * layout preset as desktop — every screen width renders identically. Idempotent:
+ * profiles/layouts already present are left untouched. Used once at boot so the
+ * PROFILE tabs (desktop/tablet/mobile) always have a layout to show; each profile
+ * then keeps its own independent layout object.
  */
 export function seedAxisProfiles(controller: WorkbenchController): void {
-  for (const kind of AXIS_PROFILE_SEED_KINDS) {
-    const profileId = SEED_PROFILE_ID[kind];
+  for (const { profileId, breakpoint } of SEED_PROFILES) {
     if (controller.document.profiles[profileId]) continue;
 
-    const layout = createAxisLayoutPreset(kind, {
+    const label = AXIS_PROFILE_LABELS[profileId];
+    const layout = createAxisLayoutPreset('default', {
       layoutId: createWorkbenchId('layout'),
-      label: `Axis ${axisLayoutPresetLabel(kind)}`
+      label: `Axis ${label}`
     });
     const profile: WorkbenchProfile = {
       id: profileId,
-      label: axisLayoutPresetLabel(kind),
+      label,
       layoutId: layout.id,
-      breakpoint: SEED_PROFILE_BREAKPOINT[kind]
+      breakpoint
     };
     controller.dispatchMany([
       { type: 'layout.save', layout },
@@ -210,6 +156,3 @@ export function copyAxisLayoutToProfile(
   enqueueToast({ text: `Copied layout to ${target.label}` });
   return { success: true, layoutId: clone.id };
 }
-
-export { axisLayoutPresetLabel };
-export type { AxisLayoutPresetKind };

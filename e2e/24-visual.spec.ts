@@ -27,7 +27,7 @@ test.describe('visual baselines', () => {
 
   test('mobile workbench', async ({ page }) => {
     await bootVisualWorkbench(page, { width: 390, height: 780 });
-    await expect(page.locator('.aw-root.aw-nav-bottom')).toBeVisible();
+    await expect(page.locator('.aw-mobile-menu')).toBeVisible();
     await expect(page).toHaveScreenshot('workbench-mobile.png');
   });
 });
