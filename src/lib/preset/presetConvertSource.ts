@@ -8,7 +8,7 @@
 // snapshot-then-download.
 
 import { forgefx } from '$lib/api/forgefx';
-import { editor } from '$lib/editor/editor.svelte';
+import { deviceSession, editorNotifications } from '$lib/editor/editorClients.svelte';
 import { library, type LibEntry } from './library.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';
@@ -17,7 +17,7 @@ import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
 
 /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly; v1 snapshots then downloads. */
 async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
-  if (editor.isV2) {
+  if (deviceSession.isV2) {
     const b = await forgefx.presetBackup(n);
     return Uint8Array.from(b.bytes).buffer;
   }
@@ -58,7 +58,7 @@ export async function startCrossConvert(e: LibEntry): Promise<boolean> {
     convert.openWithSource(bytesToBase64(new Uint8Array(buf)), e.summary.name || 'preset');
     return true;
   } catch (err) {
-    editor.showToast((err as Error)?.message || 'Could not read that preset', '#d6543f');
+    editorNotifications.showToast((err as Error)?.message || 'Could not read that preset', '#d6543f');
     return false;
   }
 }

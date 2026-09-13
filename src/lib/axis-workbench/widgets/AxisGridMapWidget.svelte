@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { gridEditing } from '$lib/editor/editorClients.svelte';
   import { axisGridMapDots } from '../gridView';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size, dispatch }: AxisWorkbenchWidgetProps = $props();
   const expanded = $derived(size === 'default');
-  const mapDots = $derived(axisGridMapDots([...editor.layout.cells, ...editor.layout.shunts], editor.layout.rows || 4, editor.layout.cols || 12));
+  const mapDots = $derived(axisGridMapDots([...gridEditing.layout.cells, ...gridEditing.layout.shunts], gridEditing.layout.rows || 4, gridEditing.layout.cols || 12));
 </script>
 
 <button class="axis-widget map" data-size={size} type="button" title="Grid map · show the Block Editor navigator" onclick={() => dispatch({ type: 'panel.activate', panelId: 'axis.blockEditor' })}>

@@ -1,18 +1,26 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import {
+    deviceSession,
+    editorNavigation,
+    editorOverlays,
+    editorUpdates,
+    editorViewport,
+    presetBuffer,
+    telemetry
+  } from '$lib/editor/editorClients.svelte';
 
   // ── inline scene rename (active scene) ──
   let editingScene = $state(false);
   let draftName = $state('');
   const startRename = () => {
-    draftName = editor.sceneNames[editor.scene - 1]?.trim() ?? '';
+    draftName = deviceSession.sceneNames[deviceSession.scene - 1]?.trim() ?? '';
     editingScene = true;
   };
   const commitName = () => {
     if (!editingScene) return; // Escape already cancelled
     editingScene = false;
     const v = draftName.trim();
-    if (v !== (editor.sceneNames[editor.scene - 1]?.trim() ?? '')) editor.renameScene(editor.scene, v);
+    if (v !== (deviceSession.sceneNames[deviceSession.scene - 1]?.trim() ?? '')) deviceSession.renameScene(deviceSession.scene, v);
   };
   const onNameKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); // blur → commit
@@ -24,52 +32,52 @@
   let editingPreset = $state(false);
   let draftPreset = $state('');
   const startRenamePreset = () => {
-    draftPreset = editor.preset?.name ?? '';
+    draftPreset = deviceSession.preset?.name ?? '';
     editingPreset = true;
   };
   const commitPreset = () => {
     if (!editingPreset) return;
     editingPreset = false;
     const v = draftPreset.trim();
-    if (v && v !== (editor.preset?.name ?? '')) editor.renamePreset(v);
+    if (v && v !== (deviceSession.preset?.name ?? '')) presetBuffer.renamePreset(v);
   };
   const onPresetKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
     else if (e.key === 'Escape') editingPreset = false;
   };
 
-  const pnum = $derived(editor.preset && editor.preset.number >= 0 ? String(editor.preset.number).padStart(3, '0') : '—');
-  const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? '—' : 'offline'));
+  const pnum = $derived(deviceSession.preset && deviceSession.preset.number >= 0 ? String(deviceSession.preset.number).padStart(3, '0') : '—');
+  const pname = $derived(deviceSession.preset?.name || (deviceSession.conn.state === 'online' ? '—' : 'offline'));
 
   // link latency readout (fallback when no live CPU is available, e.g. AM4)
-  const ms = $derived(editor.linkMs);
+  const ms = $derived(telemetry.linkMs);
   const linkColor = $derived(ms == null ? '#56565e' : ms < 40 ? '#33c46b' : ms < 120 ? '#f5a623' : '#d6543f');
   const linkPct = $derived(ms == null ? 0 : Math.max(10, Math.min(100, 100 - ms / 2)));
 
   // live CPU% (decoded from the device meters frame) + audio level meters
-  const cpu = $derived(editor.cpu);
+  const cpu = $derived(telemetry.cpu);
   const cpuColor = $derived(cpu == null ? '#56565e' : cpu >= 80 ? '#d6543f' : cpu >= 62 ? '#f5a623' : '#33c46b');
   const pk = (x: number) => Math.max(0, Math.min(100, Math.round(x * 100)));
   // global output level: the FM3's Preset Leveling meters (fn 0x19, Output 1 & 2 × L/R), pushed over SSE
   // in real dB (−40…0), server-smoothed. Shows the main output (Output 1 L/R); Output 2 appears only when
   // it's actually carrying signal (above the −40 floor). Costs no per-block serial reads.
   const dbFill = (db: number) => Math.max(0, Math.min(100, Math.round(((db + 40) / 40) * 100))); // −40..0 → 0..100%
-  const io = $derived(editor.levels);
+  const io = $derived(telemetry.levels);
   const out2Active = $derived(!!io && (io.out2L > -39.5 || io.out2R > -39.5));
   const lvlColor = (db: number) => (db >= -1 ? '#d6543f' : db >= -6 ? '#f5a623' : '#33c46b');
 </script>
 
-<header class="topbar" class:mob={editor.isMobile}>
+<header class="topbar" class:mob={editorViewport.isMobile}>
   <!-- left region (scrolls if cramped) -->
   <div class="left scroll">
-    {#if editor.isMobile}
-      <button class="burger" aria-label="Menu" onclick={() => (editor.drawerOpen = true)}>
+    {#if editorViewport.isMobile}
+      <button class="burger" aria-label="Menu" onclick={() => (editorNavigation.drawerOpen = true)}>
         <span></span><span></span><span></span>
       </button>
     {/if}
 
     <div class="preset">
-      <button class="pbtn l" title="Previous preset" onclick={() => editor.stepPreset(-1)}>‹</button>
+      <button class="pbtn l" title="Previous preset" onclick={() => presetBuffer.stepPreset(-1)}>‹</button>
       {#if editingPreset}
         <div class="pset editing">
           <span class="mono tag">PRE</span>
@@ -77,35 +85,35 @@
           <input class="pname-in mono" bind:value={draftPreset} maxlength="32" placeholder="Preset name" use:focusSel onkeydown={onPresetKey} onblur={commitPreset} />
         </div>
       {:else}
-        <button class="pset" onclick={() => (editor.presetOpen = true)}>
+        <button class="pset" onclick={() => (editorOverlays.presetOpen = true)}>
           <span class="mono tag">PRE</span>
           <span class="mono num">{pnum}</span>
           <span class="pname">{pname}</span>
           <span class="caret">▾</span>
         </button>
       {/if}
-      {#if editor.canRenamePresets && editor.preset && !editingPreset}
+      {#if deviceSession.canRenamePresets && deviceSession.preset && !editingPreset}
         <button class="prename" title="Rename preset" aria-label="Rename preset" onclick={startRenamePreset}>✎</button>
       {/if}
-      <button class="pbtn r" title="Next preset" onclick={() => editor.stepPreset(1)}>›</button>
+      <button class="pbtn r" title="Next preset" onclick={() => presetBuffer.stepPreset(1)}>›</button>
     </div>
 
-    {#if !editor.isMobile && editor.sceneCount > 0}
+    {#if !editorViewport.isMobile && deviceSession.sceneCount > 0}
       <div class="scenes">
         <span class="mono scn-lbl">SCN</span>
         <div class="scn-group">
-          {#each Array(editor.sceneCount) as _, i}
+          {#each Array(deviceSession.sceneCount) as _, i}
             {@const s = i + 1}
-            <button class="scn" class:on={editor.scene === s} title={editor.sceneName(s)} onclick={() => editor.selectScene(s)}>{s}</button>
+            <button class="scn" class:on={deviceSession.scene === s} title={deviceSession.sceneName(s)} onclick={() => deviceSession.selectScene(s)}>{s}</button>
           {/each}
         </div>
-        {#if editor.canRenameScenes}
+        {#if deviceSession.canRenameScenes}
           {#if editingScene}
             <input
               class="scn-name-in mono"
               bind:value={draftName}
               maxlength="32"
-              placeholder="Scene {editor.scene} name"
+              placeholder="Scene {deviceSession.scene} name"
               use:focusSel
               onkeydown={onNameKey}
               onblur={commitName}
@@ -113,10 +121,10 @@
           {:else}
             <button
               class="scn-name"
-              class:empty={!editor.sceneNames[editor.scene - 1]?.trim()}
-              title="Rename scene {editor.scene}"
+              class:empty={!deviceSession.sceneNames[deviceSession.scene - 1]?.trim()}
+              title="Rename scene {deviceSession.scene}"
               onclick={startRename}
-            >{editor.sceneNames[editor.scene - 1]?.trim() || 'name…'}</button>
+            >{deviceSession.sceneNames[deviceSession.scene - 1]?.trim() || 'name…'}</button>
           {/if}
         {/if}
       </div>
@@ -124,62 +132,62 @@
   </div>
 
   <!-- center: new-version notification (desktop) -->
-  {#if !editor.isMobile && editor.autoUpdate.state !== 'idle'}
+  {#if !editorViewport.isMobile && editorUpdates.autoUpdate.state !== 'idle'}
     <div class="update">
       <span class="up-dot"></span>
-      {#if editor.autoUpdate.state === 'available'}
-        <span class="up-txt">Update <b>v{editor.autoUpdate.version}</b> available</span>
-        <button class="up-go" onclick={() => editor.downloadUpdate()}>Download &amp; install</button>
-      {:else if editor.autoUpdate.state === 'downloading'}
-        <span class="up-txt">Downloading update… <b>{editor.autoUpdate.percent ?? 0}%</b></span>
-      {:else if editor.autoUpdate.state === 'downloaded'}
-        <span class="up-txt">Update <b>v{editor.autoUpdate.version}</b> ready</span>
-        <button class="up-go" onclick={() => editor.installUpdate()}>Restart &amp; install</button>
+      {#if editorUpdates.autoUpdate.state === 'available'}
+        <span class="up-txt">Update <b>v{editorUpdates.autoUpdate.version}</b> available</span>
+        <button class="up-go" onclick={() => editorUpdates.downloadUpdate()}>Download &amp; install</button>
+      {:else if editorUpdates.autoUpdate.state === 'downloading'}
+        <span class="up-txt">Downloading update… <b>{editorUpdates.autoUpdate.percent ?? 0}%</b></span>
+      {:else if editorUpdates.autoUpdate.state === 'downloaded'}
+        <span class="up-txt">Update <b>v{editorUpdates.autoUpdate.version}</b> ready</span>
+        <button class="up-go" onclick={() => editorUpdates.installUpdate()}>Restart &amp; install</button>
       {/if}
     </div>
-  {:else if !editor.isMobile && editor.update}
+  {:else if !editorViewport.isMobile && editorUpdates.update}
     <div class="update">
       <span class="up-dot"></span>
-      <span class="up-txt">New version <b>v{editor.update.version}</b> available</span>
-      <a class="up-go" href={editor.update.url} target="_blank" rel="noopener noreferrer">Update ↗</a>
-      <button class="up-x" aria-label="Dismiss" onclick={() => editor.dismissUpdate()}>✕</button>
+      <span class="up-txt">New version <b>v{editorUpdates.update.version}</b> available</span>
+      <a class="up-go" href={editorUpdates.update.url} target="_blank" rel="noopener noreferrer">Update ↗</a>
+      <button class="up-x" aria-label="Dismiss" onclick={() => editorUpdates.dismissUpdate()}>✕</button>
     </div>
   {/if}
 
   <!-- right region (always visible) -->
   <div class="right">
-    <button class="addblk" class:icon={editor.isMobile} title="Add block" onclick={() => { editor.paletteMode = 'place'; editor.paletteOpen = true; }}>
+    <button class="addblk" class:icon={editorViewport.isMobile} title="Add block" onclick={() => { editorOverlays.paletteMode = 'place'; editorOverlays.paletteOpen = true; }}>
       <svg width="16" height="16" viewBox="0 0 16 16">
         <circle cx="7" cy="7" r="5" fill="none" stroke="var(--accent)" stroke-width="1.6" />
         <path d="M10.6 10.6 L14 14" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" />
       </svg>
-      {#if !editor.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
+      {#if !editorViewport.isMobile}Add block<span class="mono kbd">⌘K</span>{/if}
     </button>
 
-    {#if !editor.isMobile && (editor.hasTuner || editor.hasTempo || editor.conn.state === 'online')}
+    {#if !editorViewport.isMobile && (deviceSession.hasTuner || deviceSession.hasTempo || deviceSession.conn.state === 'online')}
       <div class="status">
-        {#if editor.hasTuner}
-          <button class="st" class:on={editor.tuner.active} title="Tuner (T)" onclick={() => editor.toggleTuner()}>
-            <span class="note">♪</span><span class="mono st-lbl">{editor.tuner.active ? editor.tuner.note ?? '…' : 'TUNE'}</span>
+        {#if deviceSession.hasTuner}
+          <button class="st" class:on={telemetry.tuner.active} title="Tuner (T)" onclick={() => telemetry.toggleTuner()}>
+            <span class="note">♪</span><span class="mono st-lbl">{telemetry.tuner.active ? telemetry.tuner.note ?? '…' : 'TUNE'}</span>
           </button>
         {/if}
-        {#if editor.hasTempo}
+        {#if deviceSession.hasTempo}
           <div class="st tempo" title="Tempo — type to set, TAP to tap">
             <input
               class="mono bpm"
               type="number"
               min="20"
               max="250"
-              value={editor.bpm}
-              onchange={(e) => editor.setBpm(Number((e.currentTarget as HTMLInputElement).value))}
+              value={deviceSession.bpm}
+              onchange={(e) => deviceSession.setBpm(Number((e.currentTarget as HTMLInputElement).value))}
             />
-            <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => editor.tapTempo()}>TAP</button>
+            <button class="taplbl mono st-lbl" title="Tap tempo" onclick={() => deviceSession.tapTempo()}>TAP</button>
           </div>
         {/if}
         <div class="st cpu link" title="Device link round-trip latency">
           <span class="mono st-lbl">LINK</span>
           <div class="bar"><div class="fill" style="width:{linkPct}%; background:{linkColor}"></div></div>
-          <span class="mono cpu-t" style="color:{linkColor}">{editor.linkMs != null ? editor.linkMs + 'ms' : '—'}</span>
+          <span class="mono cpu-t" style="color:{linkColor}">{telemetry.linkMs != null ? telemetry.linkMs + 'ms' : '—'}</span>
         </div>
         {#if cpu != null}
           <div class="st cpu load" title="Live CPU load (decoded from the device meters frame)">
@@ -202,18 +210,18 @@
             <span class="mono cpu-t" style="color:{lvlColor(pkDb)}">{pkDb <= -39.5 ? '−40' : (pkDb > 0 ? '+' : '') + pkDb.toFixed(0)}dB</span>
           </div>
         {/if}
-        {#if editor.canMeterBlocks}
+        {#if telemetry.canMeterBlocks}
           <button
             class="st mtr-tgl mono"
-            class:on={editor.meteringOn}
+            class:on={telemetry.meteringOn}
             title="Per-block audio meters — polls the OPEN block's level once per ~0.5s. Off by default; the global output meter above is always live."
-            onclick={() => (editor.meteringOn = !editor.meteringOn)}
-          >▊ METER {editor.meteringOn ? 'ON' : 'OFF'}</button>
+            onclick={() => (telemetry.meteringOn = !telemetry.meteringOn)}
+          >▊ METER {telemetry.meteringOn ? 'ON' : 'OFF'}</button>
         {/if}
       </div>
     {/if}
 
-    <button class="save" title="Store the edit buffer to a preset" onclick={() => editor.openSave()}>
+    <button class="save" title="Store the edit buffer to a preset" onclick={() => presetBuffer.openSave()}>
       <span class="save-dot"></span>Save
     </button>
   </div>

@@ -16,7 +16,7 @@
   import type { BlockTypeOption } from '$lib/api/types';
   import { convert } from '$lib/convert/convert.svelte';
   import { convertScratch } from '$lib/convert/convertScratch.svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorNotifications } from '$lib/editor/editorClients.svelte';
   import { deviceName, familyLabel } from '$lib/convert/convertReport';
   import { blockParamViews, paramKeptCounts, familyCat, type ParamStatus } from '$lib/convert/convertConflicts';
 
@@ -70,12 +70,12 @@
   function pickType(o: BlockTypeOption) {
     if (!block) return;
     convertScratch.setType(block.key, { typeName: o.name, typeValue: o.value });
-    editor.showToast(`${famLabel} set to “${o.name}” · conflict resolved`, '#33c46b');
+    editorNotifications.showToast(`${famLabel} set to “${o.name}” · conflict resolved`, '#33c46b');
   }
   function verify() {
     if (!block) return;
     convertScratch.acceptType(block.key);
-    editor.showToast('Substitution verified', '#33c46b');
+    editorNotifications.showToast('Substitution verified', '#33c46b');
   }
 
   const displayName = $derived(block ? block.typeName || 'Set type…' : '');

@@ -3,16 +3,16 @@
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
   import { DENSITIES } from '$lib/device/density';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorOverlays, editorViewport } from '$lib/editor/editorClients.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
 
-  const onclose = () => (editor.themeOpen = false);
+  const onclose = () => (editorOverlays.themeOpen = false);
   const cfg = $derived(theme.cfg);
-  const mob = $derived(editor.isMobile);
+  const mob = $derived(editorViewport.isMobile);
   const densityLabel = (d: string) => d.charAt(0).toUpperCase() + d.slice(1);
 </script>
 
-<Dialog overlay="theme" open={editor.themeOpen} onClose={onclose} size="sm" maxHeight="88vh" sheet={mob} labelledBy="theme-dlg-title" class="theme-dlg">
+<Dialog overlay="theme" open={editorOverlays.themeOpen} onClose={onclose} size="sm" maxHeight="88vh" sheet={mob} labelledBy="theme-dlg-title" class="theme-dlg">
   <div class="card scroll" class:mob>
     <div class="head" id="theme-dlg-title">
       <div><div class="h1">Appearance</div><div class="sub">Theme, accent, scale &amp; density — saved on this device</div></div>

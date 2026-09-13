@@ -12,7 +12,12 @@
  */
 
 import { overlays } from './overlays.svelte';
-import { editor } from '$lib/editor/editor.svelte';
+import {
+  editorOverlays,
+  gridEditing,
+  paramEditing,
+  telemetry
+} from '$lib/editor/editorClients.svelte';
 import { history } from '$lib/editor/history.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';
@@ -25,9 +30,9 @@ export function registerOverlays(): void {
 
   // Device-synced tuner state — closing it also tells the device to stop.
   overlays.register('tuner', {
-    isOpen: () => editor.tuner.active,
+    isOpen: () => telemetry.tuner.active,
     close: () => {
-      if (editor.tuner.active) void editor.toggleTuner();
+      if (telemetry.tuner.active) void telemetry.toggleTuner();
     }
   });
 
@@ -50,29 +55,29 @@ export function registerOverlays(): void {
 
   // Tap-to-connect: Escape disarms the pending source before anything else closes.
   overlays.register('linkArm', {
-    isOpen: () => editor.linkFrom !== null,
-    close: () => editor.cancelLink()
+    isOpen: () => gridEditing.linkFrom !== null,
+    close: () => gridEditing.cancelLink()
   });
 
   // Monolith block-editor drawer (a view flag, like `editor.inLibrary`) — lowest priority.
   overlays.register('blockEditor', {
-    isOpen: () => editor.editorOpen,
-    close: () => editor.closeEditor()
+    isOpen: () => paramEditing.editorOpen,
+    close: () => paramEditing.closeEditor()
   });
 
   overlays.register('consentPrompt', {
-    isOpen: () => editor.consentPromptOpen,
+    isOpen: () => telemetry.consentPromptOpen,
     close: () => {},
     escDismiss: false,
     escBlock: true
   });
   overlays.register('reportPrompt', {
-    isOpen: () => editor.reportPrompt !== null,
-    close: () => editor.dismissReportPrompt()
+    isOpen: () => telemetry.reportPrompt !== null,
+    close: () => telemetry.dismissReportPrompt()
   });
 
   overlays.onClose('presetPicker', () => {
-    editor.presetPick = null;
+    editorOverlays.presetPick = null;
   });
 }
 

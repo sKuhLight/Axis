@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, telemetry } from '$lib/editor/editorClients.svelte';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
   import type { TelemetryMode, TrafficSnapshot } from '$lib/api/types';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
@@ -8,7 +8,7 @@
   const notMini = $derived(size !== 'mini');
   const expanded = $derived(size === 'default');
 
-  const hasTelemetry = $derived(editor.hasTelemetryControl);
+  const hasTelemetry = $derived(deviceSession.hasTelemetryControl);
   const POLL_MODE_KEYS: { key: TelemetryMode; short: string; label: string }[] = [
     { key: 'performance', short: 'P', label: 'Performance' },
     { key: 'balanced', short: 'B', label: 'Balanced' },
@@ -19,9 +19,9 @@
   let prevTraffic: TrafficSnapshot | null = null;
   let prevTrafficAt = 0;
   let trafficRates = $state<TrafficRates | null>(null);
-  const trafficLoops = $derived(editor.traffic?.loops ?? []);
+  const trafficLoops = $derived(telemetry.traffic?.loops ?? []);
   $effect(() => {
-    const snap = editor.traffic; // track the latest snapshot
+    const snap = telemetry.traffic; // track the latest snapshot
     if (!snap) return;
     const now = Date.now();
     const rates = computeTrafficRates(prevTraffic, prevTrafficAt, snap, now);
@@ -32,17 +32,17 @@
 </script>
 
 {#if hasTelemetry}
-  <div class="axis-widget axis-telemetry" data-size={size} data-mode={editor.pollingMode} title="Device polling mode & live traffic">
+  <div class="axis-widget axis-telemetry" data-size={size} data-mode={telemetry.pollingMode} title="Device polling mode & live traffic">
     {#if expanded}<span class="mono token">POLL</span>{/if}
     <div class="tmode-row" role="group" aria-label="Polling mode">
       {#each POLL_MODE_KEYS as m}
         <button
           class="tmode"
-          class:on={editor.pollingMode === m.key}
+          class:on={telemetry.pollingMode === m.key}
           type="button"
-          aria-pressed={editor.pollingMode === m.key}
+          aria-pressed={telemetry.pollingMode === m.key}
           title={`Polling: ${m.label}`}
-          onclick={() => editor.setPollingMode(m.key)}
+          onclick={() => telemetry.setPollingMode(m.key)}
         >{m.short}</button>
       {/each}
     </div>

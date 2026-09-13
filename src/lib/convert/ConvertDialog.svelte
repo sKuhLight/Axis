@@ -4,7 +4,7 @@
   // report. Mounted unconditionally in +page.svelte; gated on `convert.open`. The block-focus hook is
   // wired here to the live editor (best-effort family match) and passed to ConvertReport as a prop — the
   // P4b seam that the fake-grid phase re-points.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { convert } from './convert.svelte';
   import { convertScratch } from './convertScratch.svelte';
   import ConvertReport from './ConvertReport.svelte';
@@ -35,7 +35,7 @@
     }
   });
 
-  const connectedId = $derived(deviceIdFromModel(editor.detected?.modelId));
+  const connectedId = $derived(deviceIdFromModel(deviceSession.detected?.modelId));
   const canConvert = $derived(!!target && !convert.running && (!useFile || !!fileB64));
 
   function close() {
@@ -172,7 +172,7 @@
               <input type="radio" name="src" checked={!useFile} onchange={() => (useFile = false)} />
               <span>
                 <b>Current preset</b>
-                <span class="sub">{editor.preset?.name ? `“${editor.preset.name}” on the connected device` : 'The connected device’s edit buffer'}</span>
+                <span class="sub">{deviceSession.preset?.name ? `“${deviceSession.preset.name}” on the connected device` : 'The connected device’s edit buffer'}</span>
               </span>
             </label>
             <label class="opt" class:sel={useFile}>

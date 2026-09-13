@@ -126,10 +126,6 @@ export function axisParameterSourceFromEditorParamId(
 }
 
 export async function axisParameterSourcesFromCurrentEditor(): Promise<WorkbenchParameterSource[]> {
-  const { editor } = await import('$lib/editor/editor.svelte');
-  return axisParameterSourcesFromEditorView({
-    selected: editor.selected,
-    params: editor.params,
-    enums: editor.enums
-  });
+  const { paramEditing } = await import('$lib/editor/editorClients.svelte');
+  return axisParameterSourcesFromEditorView(paramEditing);
 }

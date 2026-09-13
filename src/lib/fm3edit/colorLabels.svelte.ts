@@ -12,7 +12,7 @@
 // `skipIds` doc comment).
 import { forgefx } from '$lib/api/forgefx';
 import { library } from '$lib/preset/library.svelte';
-import { editor } from '$lib/editor/editor.svelte';
+import { editorNotifications } from '$lib/editor/editorClients.svelte';
 import type { ColorLabelGroup } from '$lib/api/types';
 
 const OFFERED_KEY = 'axs.colorLabels.offered'; // FM3 tag name -> preset ids already offered that tag
@@ -102,7 +102,7 @@ class ColorLabelsStore {
       nextOffered[name] = [...cur];
     }
     if (offeredChanged) { this.#offered = nextOffered; persistOffered(this.#offered); }
-    if (tagged > 0) editor.showToast(`Imported ${tagged} preset color${tagged === 1 ? '' : 's'} from FM3-Edit`);
+    if (tagged > 0) editorNotifications.showToast(`Imported ${tagged} preset color${tagged === 1 ? '' : 's'} from FM3-Edit`);
   }
 }
 

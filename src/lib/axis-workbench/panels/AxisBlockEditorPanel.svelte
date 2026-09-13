@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { paramEditing } from '$lib/editor/editorClients.svelte';
   import BlockEditor from '$lib/editor/BlockEditor.svelte';
   import { getWorkbenchContext } from '../../workbench/svelte/context';
 
@@ -10,13 +10,13 @@
   // (keeps the block selected so quick actions stay reachable), which flips the flow's
   // blockOpen signal false and triggers the restore. Hidden on tablet/desktop.
   const isPhone = $derived($controller.activeProfile?.breakpoint === 'phone');
-  const minimize = () => editor.closeEditor();
+  const minimize = () => paramEditing.closeEditor();
 </script>
 
 <div class="axis-pane-fill">
   <!-- Always mounted: BlockEditor carries the GRID MAP navigator, which has to stay reachable
        with nothing selected (it's how you select). It renders its own empty state below the map. -->
-  {#if isPhone && editor.editorOpen && editor.selected}
+  {#if isPhone && paramEditing.editorOpen && paramEditing.selected}
     <div class="axis-be-minbar">
       <button
         type="button"

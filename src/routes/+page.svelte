@@ -1,6 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import {
+    deviceSession,
+    editorLifecycle,
+    editorNavigation,
+    editorOnboarding,
+    editorOverlays,
+    editorViewport,
+    gridEditing,
+    paramEditing,
+    presetBuffer,
+    telemetry
+  } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
   import HistoryPanel from '$lib/editor/HistoryPanel.svelte';
   import ToolRail from '$lib/shell/ToolRail.svelte';
@@ -47,8 +58,8 @@
   function startApp() {
     if (started) return;
     started = true;
-    editor.init();
-    editor.poll();
+    editorLifecycle.init();
+    deviceSession.poll();
     void colorLabels.refresh(); // FM3-Edit preset-color import (replicated-purring-bachman); one-time-ever check, silent no-op if absent
   }
   // Poll/preset-watch loops. The interval depends on the active telemetry polling mode (META-17/AXIS-40):
@@ -57,9 +68,9 @@
   // (this $effect re-runs on editor.pollingMode / started) — clearing + re-creating the two setIntervals.
   $effect(() => {
     if (!started) return;
-    const { pollMs, watchMs } = pollIntervalsFor(editor.pollingMode);
-    const tp = setInterval(() => editor.poll(), pollMs);
-    const tw = setInterval(() => editor.watchPreset(), watchMs);
+    const { pollMs, watchMs } = pollIntervalsFor(telemetry.pollingMode);
+    const tp = setInterval(() => deviceSession.poll(), pollMs);
+    const tw = setInterval(() => presetBuffer.watchPreset(), watchMs);
     return () => { clearInterval(tp); clearInterval(tw); };
   });
   // Web build: start the app the moment the in-page runtime (direct)
@@ -68,7 +79,7 @@
   $effect(() => { if (mobileBoot.active && mobileBoot.phase === 'ready') startApp(); });
 
   onMount(() => {
-    editor.setViewport(window.innerWidth, window.innerHeight);
+    editorViewport.setViewport(window.innerWidth, window.innerHeight);
     if (mobileBoot.active) {
       // Confirm the running web bundle so Capgo doesn't roll it back, then check for an OTA update.
       // MobileGate drives connect; startApp() fires when ready.
@@ -76,7 +87,7 @@
     } else if (directBoot.active) { /* DirectGate drives connect; startApp() fires when ready */ }
     else startApp();
 
-    const onResize = () => editor.setViewport(window.innerWidth, window.innerHeight);
+    const onResize = () => editorViewport.setViewport(window.innerWidth, window.innerHeight);
     const onKey = (e: KeyboardEvent) => {
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
@@ -90,33 +101,33 @@
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T')) {
         // Bare `t` toggles the tuner. Deliberately NOT ⌘T — Chrome/Safari reserve that for "new tab"
         // and a page can't preventDefault it, so it would only ever work in the desktop build.
-        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
-        if (!editor.hasTuner) return; // same capability gate as the TopBar chip
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (!deviceSession.hasTuner) return; // same capability gate as the TopBar chip
         e.preventDefault();
-        editor.toggleTuner();
+        telemetry.toggleTuner();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
         // toggleBypass is a no-op unless a real block is selected.
         e.preventDefault();
-        void editor.toggleBypass();
+        void paramEditing.toggleBypass();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Backspace') {
         // removeHoveredOrSelected is a no-op unless a cell is hovered or selected.
         e.preventDefault();
-        void editor.removeHoveredOrSelected();
+        void gridEditing.removeHoveredOrSelected();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
         // Bare `q` toggles the Quick Build block sidecar (drag blocks onto the grid).
-        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
-        editor.quickBuildOpen = !editor.quickBuildOpen;
+        editorOverlays.quickBuildOpen = !editorOverlays.quickBuildOpen;
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '/') {
-        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         window.dispatchEvent(new Event('axis:focus-control-search'));
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'p' || e.key === 'P')) {
-        if (editor.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
-        editor.presetSearchOpen = true;
+        editorOverlays.presetSearchOpen = true;
       } else if (e.key === 'Escape') {
-        if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns Escape while the tour is up
         // The registry is the *fallback* owner of Escape, not its first responder: whatever is
         // innermost gets first refusal. A sub-popover (query autocomplete, tag menu), an inline
         // rename input, or a focus-trapped menu/drawer claims the key itself — by stopping
@@ -141,7 +152,7 @@
   // Desktop: push the edit-buffer dirty flag to the Electron main process, which shows the native
   // "Unsaved changes" dialog on window close (crcValid = device CRC matches the stored preset).
   $effect(() => {
-    (window as unknown as { axisDesktop?: { setDirty?: (d: boolean) => void } }).axisDesktop?.setDirty?.(!editor.layout.crcValid);
+    (window as unknown as { axisDesktop?: { setDirty?: (d: boolean) => void } }).axisDesktop?.setDirty?.(!gridEditing.layout.crcValid);
   });
 </script>
 
@@ -157,11 +168,11 @@
     <ToolRail />
     <div class="main">
       <TopBar />
-      {#if editor.inLibrary}
+      {#if editorNavigation.inLibrary}
         <PresetBrowser />
-      {:else if editor.virtual?.slug === 'fc'}
+      {:else if paramEditing.virtual?.slug === 'fc'}
         <FcEditor />
-      {:else if editor.virtual}
+      {:else if paramEditing.virtual}
         <VirtualScreen />
       {:else}
         <SignalGrid />

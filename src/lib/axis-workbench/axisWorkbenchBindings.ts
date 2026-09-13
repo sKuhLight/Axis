@@ -31,8 +31,8 @@ export interface AxisWorkbenchBindingOptions {
 }
 
 async function defaultEditorView(): Promise<AxisWorkbenchBindingEditorView | null> {
-  const module = await import('$lib/editor/editor.svelte');
-  return module.editor;
+  const module = await import('$lib/editor/editorClients.svelte');
+  return module.paramEditing;
 }
 
 function readString(target: JsonObject, key: string): string | undefined {

@@ -3,7 +3,7 @@
 // the (targetEffectId, targetParam) pairs; refreshed on block/preset change and after a bind.
 
 import { forgefx } from '$lib/api/forgefx';
-import { editor } from './editor.svelte';
+import { deviceSession } from './editorClients.svelte';
 import { boundTargetKeys, modifierTargetKey, type ModSlotBinding } from './modifierBindings';
 import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
 import { lfoSourceFromName, type LfoModifierVisualization, type ModifierMapping } from '$lib/graphs/lfoModifier';
@@ -31,7 +31,7 @@ class ModifierBindingsStore {
   }
 
   async refresh(): Promise<void> {
-    if (!editor.isV2 || !editor.caps?.modifiers?.bind) {
+    if (!deviceSession.isV2 || !deviceSession.caps?.modifiers?.bind) {
       this.#generation++;
       this.#bound = new Set();
       this.#visualizations = new Map();

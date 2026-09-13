@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, gridEditing, paramEditing } from '$lib/editor/editorClients.svelte';
   import { fmtControlValue } from '$lib/ui/format';
   import { isPanelWidgetZone } from '../../workbench';
   import { resolveParamWidgetState } from './paramWidgetState';
@@ -42,27 +42,27 @@
   // block, else the hydrated pinned copy (T20 bug #4 — a pinned control must read
   // and write live regardless of what, if anything, is selected). Registering the
   // block below drives that on-demand hydration.
-  const paramView = $derived(paramEffectId != null ? editor.pinnedView(paramEffectId) : { named: [], enums: [] });
+  const paramView = $derived(paramEffectId != null ? paramEditing.pinnedView(paramEffectId) : { named: [], enums: [] });
   const paramNamed = $derived(paramId != null ? paramView.named.find((param) => param.id === paramId) : undefined);
   const paramEnum = $derived(paramId != null ? paramView.enums.find((param) => param.id === paramId) : undefined);
   // Keep the bound block hydrated for as long as this pinned control is mounted.
   $effect(() => {
     if (paramEffectId == null) return;
-    return editor.registerPinnedBlock(paramEffectId);
+    return paramEditing.registerPinnedBlock(paramEffectId);
   });
   const paramPreview = $derived(readNumber(widget.state?.previewValue));
   const paramNorm = $derived(paramNamed?.norm ?? (paramPreview != null ? Math.max(0, Math.min(1, paramPreview / 100)) : undefined));
   // effectIds present in the current preset grid — undefined until a preset is loaded
   // so we never falsely flag a bound block as "missing" during a cold boot.
   const paramPresetIds = $derived(
-    editor.preset ? new Set([...editor.layout.cells, ...editor.layout.shunts].map((cell) => cell.effectId)) : undefined
+    deviceSession.preset ? new Set([...gridEditing.layout.cells, ...gridEditing.layout.shunts].map((cell) => cell.effectId)) : undefined
   );
   // Explicit binding state: live (block open, read/write), readonly (block exists
   // but isn't open — click to open), missing (block not in this preset).
   const paramState = $derived(
     resolveParamWidgetState({
       boundEffectId: paramEffectId,
-      openEffectId: editor.selected?.effectId,
+      openEffectId: paramEditing.selected?.effectId,
       presetEffectIds: paramPresetIds,
       hasLiveData: !!paramNamed || !!paramEnum
     })
@@ -72,7 +72,7 @@
   const paramMissing = $derived(paramState === 'missing');
   // Which grid cell the binding points at (used to open it when read-only).
   const paramCell = $derived(
-    paramEffectId == null ? undefined : [...editor.layout.cells, ...editor.layout.shunts].find((cell) => cell.effectId === paramEffectId)
+    paramEffectId == null ? undefined : [...gridEditing.layout.cells, ...gridEditing.layout.shunts].find((cell) => cell.effectId === paramEffectId)
   );
   const paramTip = $derived.by(() => {
     const head = `${paramBlock} · ${paramLabel}`;
@@ -90,7 +90,7 @@
   function nudgeParam(delta: number) {
     if (editMode || paramEffectId == null) return;
     if (paramNamed) {
-      editor.setPinnedParam(paramEffectId, paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
+      paramEditing.setPinnedParam(paramEffectId, paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
       return;
     }
     if (paramEnum) {
@@ -99,7 +99,7 @@
       const index = paramEnum.options.findIndex((option) => option.value === paramEnum.value);
       const nextIndex = (((index + Math.sign(delta)) % count) + count) % count;
       const next = paramEnum.options[nextIndex];
-      if (next) editor.setPinnedEnum(paramEffectId, paramEnum, next.value);
+      if (next) paramEditing.setPinnedEnum(paramEffectId, paramEnum, next.value);
     }
   }
 
@@ -116,7 +116,7 @@
     const eid = paramEffectId;
     const named = paramNamed;
     const onMove = (move: PointerEvent) => {
-      editor.setPinnedParam(eid, named, clamp01(startNorm + (startY - move.clientY) / 180));
+      paramEditing.setPinnedParam(eid, named, clamp01(startNorm + (startY - move.clientY) / 180));
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
@@ -167,7 +167,7 @@
 
   function openParamBlock() {
     if (editMode || !paramCell) return;
-    void editor.openCell(paramCell);
+    void paramEditing.openCell(paramCell);
   }
 
   function paramClick() {

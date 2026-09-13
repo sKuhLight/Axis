@@ -5,14 +5,14 @@
   // effectDefinitions_*.cache anywhere on the card · read the definitions off the device (live SSE
   // progress) · locate an editor folder (Chromium). Dismissible per device+firmware. Clones the
   // CachePrompt bottom-sheet UX. All ordering/gating lives in deviceDefs.ts (pure, tested).
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
   import PromptToast from '$lib/ui/PromptToast.svelte';
   import PromptRow from '$lib/ui/PromptRow.svelte';
   import PromptProgressRow from '$lib/ui/PromptProgressRow.svelte';
   import Button from '$lib/ui/Button.svelte';
 
-  const online = $derived(editor.conn.state === 'online');
+  const online = $derived(deviceSession.conn.state === 'online');
   const building = $derived(deviceDefs.building);
   const busy = $derived(deviceDefs.importing);
   const actions = $derived(deviceDefs.actions);

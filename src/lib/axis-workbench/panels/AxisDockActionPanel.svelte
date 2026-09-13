@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorOverlays } from '$lib/editor/editorClients.svelte';
   import type { PanelInstance } from '../../workbench';
 
   let { panel }: { panel: PanelInstance } = $props();
 
   function open() {
-    if (panel.type === 'axis.account') editor.openAxis('about');
-    else if (panel.type === 'axis.deviceTools') editor.deviceToolsOpen = true;
+    if (panel.type === 'axis.account') editorOverlays.openAxis('about');
+    else if (panel.type === 'axis.deviceTools') editorOverlays.deviceToolsOpen = true;
   }
 </script>
 

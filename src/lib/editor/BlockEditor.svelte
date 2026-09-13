@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { baseName } from './editor.svelte';
+  import { baseName } from '$lib/device/blocks';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from '$lib/device/catalog';
   import { appSettings } from '$lib/platform/appSettings.svelte';

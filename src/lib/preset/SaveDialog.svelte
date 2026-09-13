@@ -1,26 +1,27 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, presetBuffer } from '$lib/editor/editorClients.svelte';
+  import { editorViewport } from '$lib/editor/editorClients.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import Button from '$lib/ui/Button.svelte';
 
   let target = $state(0);
   $effect(() => {
-    if (editor.saveOpen) target = editor.saveTarget;
+    if (presetBuffer.saveOpen) target = presetBuffer.saveTarget;
   });
-  const maxSlot = $derived(Math.max(0, editor.presetCount - 1));
+  const maxSlot = $derived(Math.max(0, deviceSession.presetCount - 1));
   // Bank-letter devices (caps presets.addressing === 'bankLetter') address locations as A01..Z04.
   const bankCode = (n: number) => `${String.fromCharCode(65 + Math.floor(n / 4))}${String((n % 4) + 1).padStart(2, '0')}`;
-  const pad = $derived((n: number) => (editor.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
-  const overwritingCurrent = $derived(editor.preset?.number === target);
-  const mob = $derived(editor.isMobile);
+  const pad = $derived((n: number) => (deviceSession.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
+  const overwritingCurrent = $derived(deviceSession.preset?.number === target);
+  const mob = $derived(editorViewport.isMobile);
   // Buffer loaded from a local Presets/ file → offer writing the edits back to that file too.
-  const src = $derived(editor.bufferSource);
+  const src = $derived(presetBuffer.bufferSource);
 </script>
 
 <Dialog
   overlay="save"
-  open={editor.saveOpen}
-  onClose={() => (editor.saveOpen = false)}
+  open={presetBuffer.saveOpen}
+  onClose={() => (presetBuffer.saveOpen = false)}
   size="sm"
   accent="amber"
   sheet={mob}
@@ -37,7 +38,7 @@
           This preset was loaded from your local folder. Save the edits back to
           <b class="mono">{src.path}</b> on disk — or store them to a device slot below.
         </p>
-        <Button size="md" class="disk" onclick={() => editor.saveLocalFile()}>💾 Save to disk — Presets/{src.path}</Button>
+        <Button size="md" class="disk" onclick={() => presetBuffer.saveLocalFile()}>💾 Save to disk — Presets/{src.path}</Button>
         <div class="or"><span>or store to a device slot</span></div>
       {:else}
         <p class="body">
@@ -48,19 +49,19 @@
       <label class="field">
         <span class="lbl mono">SAVE TO</span>
         <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
-        {#if editor.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
+        {#if deviceSession.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
       </label>
       <p class="hint">
         {#if overwritingCurrent}
-          Overwrites the current preset <b>{pad(target)}</b>{editor.preset?.name ? ` · ${editor.preset.name}` : ''}.
+          Overwrites the current preset <b>{pad(target)}</b>{deviceSession.preset?.name ? ` · ${deviceSession.preset.name}` : ''}.
         {:else}
           Writes to preset <b>{pad(target)}</b> (not the one loaded — verify it's a slot you can overwrite).
         {/if}
       </p>
       <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
       <div class="actions">
-        <Button variant="secondary" size="md" class="sd-cancel" onclick={() => (editor.saveOpen = false)}>Cancel</Button>
-        <Button variant="amber" size="md" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</Button>
+        <Button variant="secondary" size="md" class="sd-cancel" onclick={() => (presetBuffer.saveOpen = false)}>Cancel</Button>
+        <Button variant="amber" size="md" onclick={() => presetBuffer.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</Button>
       </div>
   </div>
 </Dialog>

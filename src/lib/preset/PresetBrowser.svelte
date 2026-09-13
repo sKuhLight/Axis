@@ -6,7 +6,15 @@
   // design prototype (design/Preset Browser.dc.html), bound to the `library` store + `editor`.
   import { tick } from 'svelte';
   import { create, insertMultiple, search } from '@orama/orama';
-  import { editor } from '$lib/editor/editor.svelte';
+  import {
+    deviceSession,
+    editorNavigation,
+    editorNotifications,
+    editorOverlays,
+    editorViewport,
+    gridEditing,
+    presetBuffer
+  } from '$lib/editor/editorClients.svelte';
   import { library } from './library.svelte';
   import { presetRecency } from './presetRecency.svelte';
   import { forgefx, ForgeError } from '$lib/api/forgefx';
@@ -310,7 +318,7 @@
   type SyncView = 'all' | 'device' | 'local' | 'converted';
   // "On your FM3" — named after the detected unit; "Local presets" only appears when a local
   // storage folder is configured.
-  const devName = $derived(editor.detected?.connected ? editor.detected.short : (editor.conn.device ?? 'device'));
+  const devName = $derived(deviceSession.detected?.connected ? deviceSession.detected.short : (deviceSession.conn.device ?? 'device'));
   const SYNC_VIEWS = $derived.by((): { id: SyncView; label: string; icon: IconName }[] => [
     { id: 'all', label: 'All presets', icon: 'list' },
     { id: 'device', label: `On your ${devName}`, icon: 'device' },
@@ -360,7 +368,7 @@
   /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly (caps backupDump); the v1
    *  fallback snapshots into the version store, then downloads that version's bytes. */
   async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
-    if (editor.isV2) {
+    if (deviceSession.isV2) {
       const b = await forgefx.presetBackup(n);
       return Uint8Array.from(b.bytes).buffer;
     }
@@ -382,21 +390,21 @@
       a.download = `${(e.summary.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(a.href);
-    } catch { editor.showToast('Export failed', '#d6543f'); }
+    } catch { editorNotifications.showToast('Export failed', '#d6543f'); }
   }
   /** Write an entry's .syx into the local Presets/ folder (the app-managed library on disk). */
   async function saveToLocalFolder(e: LibEntry, overwrite = false): Promise<void> {
     try {
       const buf = await entryBytes(e);
       const r = await forgefx.saveLocalPreset(e.summary.name || 'preset', [...new Uint8Array(buf)], { overwrite });
-      editor.showToast(`Saved to Presets/${r.path}`, '#33c46b');
+      editorNotifications.showToast(`Saved to Presets/${r.path}`, '#33c46b');
       void library.refreshLocal();
     } catch (err) {
       if (err instanceof ForgeError && err.status === 409 && !overwrite) {
         if (confirm(`"${e.summary.name}" already exists in the folder — overwrite?`)) return saveToLocalFolder(e, true);
         return;
       }
-      editor.showToast('Save to folder failed', '#d6543f');
+      editorNotifications.showToast('Save to folder failed', '#d6543f');
     }
   }
 
@@ -404,23 +412,23 @@
    *  buffer — the device plays it WITHOUT switching slots or saving anything. File entries
    *  already audition via their own load paths. */
   async function auditionEntry(e: LibEntry) {
-    if (e.summary.number < 0) { editor.showToast('No device slot to audition from', '#f5a623'); return; }
-    editor.openBuild();
+    if (e.summary.number < 0) { editorNotifications.showToast('No device slot to audition from', '#f5a623'); return; }
+    editorNavigation.openBuild();
     try {
       const buf = await deviceEntryBytes(e.summary.number);
       await forgefx.loadBytes(buf);
-      editor.noteBufferReplaced(`Auditioned ${e.summary.name}`); // history barrier — undo can't cross a buffer swap
-      await editor.load();
-      editor.showToast(`Auditioning ${e.summary.name} — Save to keep it on a slot`, '#f5a623');
-    } catch { editor.showToast('Audition failed', '#d6543f'); }
+      presetBuffer.noteBufferReplaced(`Auditioned ${e.summary.name}`); // history barrier — undo can't cross a buffer swap
+      await gridEditing.load();
+      editorNotifications.showToast(`Auditioning ${e.summary.name} — Save to keep it on a slot`, '#f5a623');
+    } catch { editorNotifications.showToast('Audition failed', '#d6543f'); }
   }
 
   // ── local folders (browse + live-load .syx presets from disk) ──
   let folderFilter = $state<string | null>(null);
   async function addFolder() {
     const r = await library.importFolder();
-    if (r) editor.showToast(`Imported ${r.ok} preset${r.ok === 1 ? '' : 's'}${r.failed ? ` · ${r.failed} skipped` : ''}`, r.ok ? '#33c46b' : '#f5a623');
-    else editor.showToast('No .syx files found in that folder', '#f5a623');
+    if (r) editorNotifications.showToast(`Imported ${r.ok} preset${r.ok === 1 ? '' : 's'}${r.failed ? ` · ${r.failed} skipped` : ''}`, r.ok ? '#33c46b' : '#f5a623');
+    else editorNotifications.showToast('No .syx files found in that folder', '#f5a623');
   }
 
   // ── context menu (desktop right-click · mobile long-press) ──
@@ -430,7 +438,7 @@
   function commitRename() {
     const b = renameBox;
     renameBox = null;
-    if (b && b.value.trim() && b.value.trim() !== b.entry.summary.name) editor.renameStoredPreset(b.entry.summary.number, b.value.trim());
+    if (b && b.value.trim() && b.value.trim() !== b.entry.summary.name) presetBuffer.renameStoredPreset(b.entry.summary.number, b.value.trim());
   }
   function onRenameKey(ev: KeyboardEvent) {
     if (ev.key === 'Enter') commitRename();
@@ -477,9 +485,9 @@
     if (act === 'saveLocal') return void saveToLocalFolder(e);
     if (act === 'crossConvert') return void startCrossConvert(e);
     if (act === 'openConverter') { if (e.converted) void openConvertedInConverter(e.converted); return; }
-    if (act === 'delete' && e.source === 'converted') { void library.removeConverted(e.id); editor.showToast('Deleted', '#33c46b'); return; }
-    if (act === 'delete' && e.source === 'file') { library.removeFile(e.id); editor.showToast('Removed from library', '#33c46b'); return; }
-    if (SOON.has(act)) editor.showToast('Coming soon', '#9b8cf0');
+    if (act === 'delete' && e.source === 'converted') { void library.removeConverted(e.id); editorNotifications.showToast('Deleted', '#33c46b'); return; }
+    if (act === 'delete' && e.source === 'file') { library.removeFile(e.id); editorNotifications.showToast('Removed from library', '#33c46b'); return; }
+    if (SOON.has(act)) editorNotifications.showToast('Coming soon', '#9b8cf0');
   }
   type CtxItem = { id: string; icon: IconName; label: string; danger?: boolean };
   function ctxItems(e: LibEntry): (CtxItem | 'div')[] {
@@ -544,12 +552,12 @@
       a.download = `${(v.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(a.href);
-    } catch { editor.showToast('Download failed', '#d6543f'); }
+    } catch { editorNotifications.showToast('Download failed', '#d6543f'); }
   }
   async function restoreVersionAt(v: VersionInfo) {
     if (!confirm(`Restore this version to slot ${v.location}? This overwrites what's on the device there.`)) return;
-    try { await forgefx.restoreVersion(v.id); editor.showToast(`Restored to slot ${v.location}`, '#33c46b'); reloadVersions(v.location); library.refreshSlot(v.location); }
-    catch (e) { editor.showToast((e as Error).message || 'Restore failed', '#d6543f'); }
+    try { await forgefx.restoreVersion(v.id); editorNotifications.showToast(`Restored to slot ${v.location}`, '#33c46b'); reloadVersions(v.location); library.refreshSlot(v.location); }
+    catch (e) { editorNotifications.showToast((e as Error).message || 'Restore failed', '#d6543f'); }
   }
   function pickBlock(eid: number) { focusEid = focusEid === eid ? null : eid; }
 
@@ -843,35 +851,35 @@
     // Imported file/folder preset: load its raw .syx straight into the edit buffer (no slot needed).
     if (e.source === 'file') {
       const bytes = library.fileBytes(e.id);
-      if (!bytes) { editor.showToast('File bytes unavailable — re-import the folder', '#f5a623'); return; }
-      editor.openBuild();
+      if (!bytes) { editorNotifications.showToast('File bytes unavailable — re-import the folder', '#f5a623'); return; }
+      editorNavigation.openBuild();
       try {
         await forgefx.loadBytes(bytes);
         presetRecency.record(e.id);
-        editor.noteBufferReplaced(`Loaded ${e.summary.name}`);
-        await editor.load();
-        editor.showToast(`Loaded ${e.summary.name}`, '#f5a623');
-      } catch { editor.showToast('Load failed', '#d6543f'); }
+        presetBuffer.noteBufferReplaced(`Loaded ${e.summary.name}`);
+        await gridEditing.load();
+        editorNotifications.showToast(`Loaded ${e.summary.name}`, '#f5a623');
+      } catch { editorNotifications.showToast('Load failed', '#d6543f'); }
       return;
     }
     // Local-folder preset: fetch its .syx from the engine and load it live — no slot needed, no import.
     if (e.source === 'local') {
-      editor.openBuild();
+      editorNavigation.openBuild();
       try {
         const path = library.localPath(e.id);
         const buf = await forgefx.localPresetFile(path);
         await forgefx.loadBytes(buf);
         presetRecency.record(e.id);
-        editor.noteBufferReplaced(`Loaded ${e.summary.name} from local folder`);
-        editor.bufferSource = { path, name: e.summary.name }; // Save can write edits back to this file
-        await editor.load();
-        editor.showToast(`Loaded ${e.summary.name} — Save writes to disk or a slot`, '#f5a623');
-      } catch { editor.showToast('Load failed', '#d6543f'); }
+        presetBuffer.noteBufferReplaced(`Loaded ${e.summary.name} from local folder`);
+        presetBuffer.bufferSource = { path, name: e.summary.name }; // Save can write edits back to this file
+        await gridEditing.load();
+        editorNotifications.showToast(`Loaded ${e.summary.name} — Save writes to disk or a slot`, '#f5a623');
+      } catch { editorNotifications.showToast('Load failed', '#d6543f'); }
       return;
     }
-    if (e.summary.number < 0) { editor.showToast('Open it on the device to load', '#f5a623'); return; }
-    editor.openBuild();
-    await editor.selectPreset(e.summary.number); // unified — routes to the legacy AM4 codec path itself on v1
+    if (e.summary.number < 0) { editorNotifications.showToast('Open it on the device to load', '#f5a623'); return; }
+    editorNavigation.openBuild();
+    await presetBuffer.selectPreset(e.summary.number); // unified — routes to the legacy AM4 codec path itself on v1
   }
 
   // ===================== helpers =====================
@@ -917,7 +925,7 @@
 
 <svelte:window onclick={() => { if (picker) picker = null; if (ctx) ctx = null; }} ondragend={() => (dragOver = false)} />
 
-<div class="pb" class:mob={editor.isMobile} class:sideopen={sideOpen}>
+<div class="pb" class:mob={editorViewport.isMobile} class:sideopen={sideOpen}>
   <!-- HEADER -->
   <div class="hdr">
     <div class="title">
@@ -925,18 +933,18 @@
       <span class="t2">{activeConds.length || simpleText ? `${results.length} of ${library.entries.length}` : `${library.entries.length} presets`}{library.paramsReady ? '' : ' · params not fully loaded'}</span>
     </div>
     <div class="spacer"></div>
-    {#if editor.isMobile}
+    {#if editorViewport.isMobile}
       <button class="ghost ic-btn" onclick={() => (sideOpen = true)} title="Library, folders & saved searches"><Icon name="list" size={14} /> Filters</button>
     {/if}
-    <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title={editor.scanNamesOnly ? 'Scan the stored-preset locations (names) into the local library' : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}>
+    <button class="ghost" onclick={() => library.buildCache()} disabled={library.scanning} title={deviceSession.scanNamesOnly ? 'Scan the stored-preset locations (names) into the local library' : 'Index every preset on the device — names, blocks, models and all params — into the local cache (one pass, persisted)'}>
       {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : library.cacheBuilt ? '↻ Rebuild cache' : '⤓ Build cache'}
     </button>
     <button class="ghost ic-btn" onclick={() => convert.openBlank()} title="Convert a preset to another Fractal device — pick a target device, then Choose a .syx file"><Icon name="convert" size={14} /> Convert Preset…</button>
     <button class="ghost ic-btn" onclick={addFolder} title="Browse a local folder of .syx presets — load any of them live into the edit buffer"><Icon name="folder" size={14} /> Folder</button>
     {#if library.localEnabled}
-      <button class="ghost ic-btn" onclick={() => library.refreshLocal(true).then(() => editor.showToast(`Local library refreshed${library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped` : ''}`, '#33c46b'))} title="Re-scan the Axis Presets/ folder on disk"><Icon name="refresh" size={14} /> Local</button>
-    {:else if editor.local.available}
-      <button class="ghost ic-btn" onclick={() => editor.openAxis('storage')} title="Set up a local storage folder — browse your .syx library straight from disk"><Icon name="folder" size={14} /> Local…</button>
+      <button class="ghost ic-btn" onclick={() => library.refreshLocal(true).then(() => editorNotifications.showToast(`Local library refreshed${library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped` : ''}`, '#33c46b'))} title="Re-scan the Axis Presets/ folder on disk"><Icon name="refresh" size={14} /> Local</button>
+    {:else if presetBuffer.local.available}
+      <button class="ghost ic-btn" onclick={() => editorOverlays.openAxis('storage')} title="Set up a local storage folder — browse your .syx library straight from disk"><Icon name="folder" size={14} /> Local…</button>
     {/if}
     <div class="sort">
       <span class="lbl">SORT</span>
@@ -1006,12 +1014,12 @@
 
   <!-- BODY -->
   <div class="body">
-    {#if editor.isMobile && sideOpen}
+    {#if editorViewport.isMobile && sideOpen}
       <div class="side-scrim" role="presentation" onclick={() => (sideOpen = false)}></div>
     {/if}
     <!-- SAVED SIDEBAR -->
     <div class="side">
-      {#if editor.isMobile}
+      {#if editorViewport.isMobile}
         <div class="side-h side-close"><span class="lbl">LIBRARY & FILTERS</span><button class="folder-x" onclick={() => (sideOpen = false)} title="Close">×</button></div>
       {/if}
       <div class="side-h"><span class="lbl">LIBRARY</span></div>
@@ -1101,7 +1109,7 @@
         <div class="empty">
           <svg width="44" height="44" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#34343c" stroke-width="1.3" /><path d="M10.6 10.6 L14 14" stroke="#34343c" stroke-width="1.3" stroke-linecap="round" /></svg>
           <span class="e1">{library.entries.length ? 'No presets match this filter' : 'Library is empty'}</span>
-          <span class="e2">{library.entries.length ? 'Loosen a parameter range or remove a condition.' : editor.scanNamesOnly ? 'Scan the stored-preset locations to list them here (names only — deep param filtering needs full preset dumps).' : 'Scan the connected device or import .syx files to populate the library.'}</span>
+          <span class="e2">{library.entries.length ? 'Loosen a parameter range or remove a condition.' : deviceSession.scanNamesOnly ? 'Scan the stored-preset locations to list them here (names only — deep param filtering needs full preset dumps).' : 'Scan the connected device or import .syx files to populate the library.'}</span>
           {#if !library.entries.length}
             <button class="load" style="width:auto; padding:0 18px; background:var(--accent,#35c9d6); color:#06181a;" onclick={() => library.buildCache()} disabled={library.scanning}>
               {library.scanning ? `Building cache ${library.scanDone}/${library.scanTotal}…` : '⤓ Build cache'}
@@ -1132,7 +1140,7 @@
       {#if selected}
         {@const hits = matchedKeys(selected)}
         {@const cpu = estCpu(selected)}
-        {#if editor.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
+        {#if editorViewport.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
         <div class="d-head">
           <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : selected.source === 'converted' ? 'CONV' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span>{#if selected.source === 'converted' && selected.provenance}<span class="conv-prov" title={`Converted from ${selected.provenance}`}>{selected.provenance}</span>{/if}</div>
           <div class="d-tags">{#each library.tagsOf(selected.id) as tg}<span class="tg" style:--c={library.colorOf(tg)}>{tg}</span>{/each}</div>
@@ -1152,7 +1160,7 @@
           <div class="d-sec">
             <div class="vh-head">
               <span class="lbl">VERSION HISTORY</span>
-              <button class="vh-snap" onclick={() => editor.backupPreset(selected!.summary.number).then(() => reloadVersions(selected!.summary.number))}>＋ Snapshot</button>
+              <button class="vh-snap" onclick={() => presetBuffer.backupPreset(selected!.summary.number).then(() => reloadVersions(selected!.summary.number))}>＋ Snapshot</button>
             </div>
             {#if versions.length}
               <div class="vh-list">
@@ -1164,7 +1172,7 @@
                       <div class="vh-row1"><span class="vh-when">{fmtTime(v.capturedAt)}</span>{#if vb.onDevice}<span class="vh-bd" style="color:#33c46b;background:#33c46b22">On device</span>{/if}</div>
                       <span class="vh-meta">{v.source} · {(v.stored / 1024).toFixed(1)}KB</span>
                     </div>
-                    <button class="vh-btn" title="Load into the edit buffer (doesn't touch a slot)" onclick={() => editor.loadVersion(v.id)}>Load</button>
+                    <button class="vh-btn" title="Load into the edit buffer (doesn't touch a slot)" onclick={() => presetBuffer.loadVersion(v.id)}>Load</button>
                     {#if !vb.onDevice}<button class="vh-btn" title="Restore this version to its device slot (overwrites the slot)" onclick={() => restoreVersionAt(v)}>Restore</button>{/if}
                     <button class="vh-btn dl" onclick={() => downloadVersion(v)} title="Download .syx">↓</button>
                   </div>
@@ -1384,7 +1392,7 @@
   .d-back { display: none; }
   .d-head { padding: 20px 20px 16px; border-bottom: 1px solid var(--surface); }
 
-  /* ── mobile (driven by editor.isMobile, consistent with the rest of the app) ── */
+  /* ── mobile (driven by editorViewport.isMobile, consistent with the rest of the app) ── */
   /* header wraps instead of scrolling; the secondary library/filters sidebar is hidden; the detail
      column becomes a full-screen overlay shown only when a preset is selected. */
   .pb.mob .hdr { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }

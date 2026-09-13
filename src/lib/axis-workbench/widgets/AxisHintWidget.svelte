@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorHints, paramEditing } from '$lib/editor/editorClients.svelte';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size }: AxisWorkbenchWidgetProps = $props();
-  const hintText = $derived(editor.hint ?? (editor.selected ? editor.selected.display : editor.conn.state === 'online' ? 'Ready' : editor.conn.state === 'offline' ? 'Device offline' : 'Connecting…'));
+  const hintText = $derived(editorHints.hint ?? (paramEditing.selected ? paramEditing.selected.display : deviceSession.conn.state === 'online' ? 'Ready' : deviceSession.conn.state === 'offline' ? 'Device offline' : 'Connecting…'));
 </script>
 
 <div class="axis-widget hint" data-size={size} title={hintText}>

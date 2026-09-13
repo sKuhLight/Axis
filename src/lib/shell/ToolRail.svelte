@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import {
+    deviceSession,
+    editorNavigation,
+    editorNotifications,
+    editorOverlays,
+    editorViewport,
+    telemetry
+  } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
 
   const RAIL = [
@@ -23,13 +30,13 @@
   const VIRTUAL_SLUG: Record<string, string> = { settings: 'global', controllers: 'controllers', fc: 'fc' };
   /** The virtual effect backing a rail item — the device's own caps entry when available. */
   const virtualFor = (id: string): { eid: number; slug: string; name: string } | undefined =>
-    editor.caps?.virtualEffects?.find((v) => v.slug === VIRTUAL_SLUG[id]) ?? VIRTUAL[id];
+    deviceSession.caps?.virtualEffects?.find((v) => v.slug === VIRTUAL_SLUG[id]) ?? VIRTUAL[id];
 
   // Rail filtering is capability-driven on API v2 (virtual tools from caps.virtualEffects, FC from
   // caps.fc.model, routing-flavored screens from caps.gridRouting); legacy v1 keeps the isAm4 branch.
   const railItems = $derived.by(() => {
-    const caps = editor.caps;
-    if (editor.isV2 && caps) {
+    const caps = deviceSession.caps;
+    if (deviceSession.isV2 && caps) {
       const ve = new Set((caps.virtualEffects ?? []).map((v) => v.slug));
       return RAIL.filter((r) =>
         r.id === 'build' || r.id === 'library' ? true
@@ -38,35 +45,35 @@
         : r.id === 'fc' ? !!caps.fc?.model || ve.has('fc')
         : !!caps.gridRouting); // scenes / perform / sets (coming-soon) ride the grid-routing family
     }
-    return editor.isAm4 ? RAIL.filter((r) => r.id === 'build' || r.id === 'library') : RAIL;
+    return deviceSession.isAm4 ? RAIL.filter((r) => r.id === 'build' || r.id === 'library') : RAIL;
   });
   // Device Tools shows whenever the device has ANY tool capability (legacy v1: AM4 only).
   const showTools = $derived(
-    editor.isV2 && editor.caps
-      ? !!(editor.caps.backupDump || editor.caps.restoreDump || editor.caps.firmwareValidate || editor.caps.modifiers?.model)
-      : editor.isAm4
+    deviceSession.isV2 && deviceSession.caps
+      ? !!(deviceSession.caps.backupDump || deviceSession.caps.restoreDump || deviceSession.caps.firmwareValidate || deviceSession.caps.modifiers?.model)
+      : deviceSession.isAm4
   );
 
-  const closeDrawer = () => (editor.drawerOpen = false);
+  const closeDrawer = () => (editorNavigation.drawerOpen = false);
 
   function pick(id: string, label: string) {
     closeDrawer(); // mobile: dismiss the drawer on any nav pick
     if (id === 'build') {
-      editor.openBuild();
+      editorNavigation.openBuild();
       return;
     }
     if (id === 'library') {
-      editor.openLibrary();
+      editorNavigation.openLibrary();
       return;
     }
     const v = virtualFor(id);
     if (v) {
-      editor.railActive = id;
-      editor.openVirtual(v.eid, v.slug, v.name);
+      editorNavigation.railActive = id;
+      editorNavigation.openVirtual(v.eid, v.slug, v.name);
       return;
     }
     // not-yet-built screens stay un-highlighted and just announce WIP
-    editor.showToast(label + ' — coming soon', '#35c9d6');
+    editorNotifications.showToast(label + ' — coming soon', '#35c9d6');
   }
 
   // USB-MIDI units (Axe-Fx III / FM9) expose In + Out as separate ports — pick one and pair the
@@ -76,29 +83,29 @@
   type Port = { transport: 'serial' | 'midi'; id: string; dir?: 'input' | 'output' };
   function pickConn(p: Port) {
     if (p.transport !== 'midi') {
-      editor.pickPort({ transport: 'serial', id: p.id });
+      deviceSession.pickPort({ transport: 'serial', id: p.id });
       return;
     }
-    const opp = editor.ports.filter((o) => o.transport === 'midi' && o.dir !== p.dir);
+    const opp = deviceSession.ports.filter((o) => o.transport === 'midi' && o.dir !== p.dir);
     const mate = opp.find((o) => stem(o.id) === stem(p.id)) ?? opp[0];
     const inId = p.dir === 'input' ? p.id : (mate?.id ?? p.id); // ForgeFX receives here (device's "Out")
     const outId = p.dir === 'output' ? p.id : (mate?.id ?? p.id); // ForgeFX sends here (device's "In")
-    editor.pickPort({ transport: 'midi', id: p.id, inId, outId });
+    deviceSession.pickPort({ transport: 'midi', id: p.id, inId, outId });
   }
   const rowSel = (p: Port) => {
-    const c = editor.portChosen;
+    const c = deviceSession.portChosen;
     return !!c && c.transport === p.transport && (c.id === p.id || c.inId === p.id || c.outId === p.id);
   };
 
   const dot = $derived(
-    editor.conn.state === 'online' ? 'var(--ok)' : editor.conn.state === 'offline' ? 'var(--danger)' : 'var(--amber)'
+    deviceSession.conn.state === 'online' ? 'var(--ok)' : deviceSession.conn.state === 'offline' ? 'var(--danger)' : 'var(--amber)'
   );
   const connText = $derived(
-    editor.conn.state === 'online' ? `Connected${editor.conn.fw ? ` · FW ${editor.conn.fw}` : ''}` : editor.conn.state === 'offline' ? 'Offline' : 'Connecting…'
+    deviceSession.conn.state === 'online' ? `Connected${deviceSession.conn.fw ? ` · FW ${deviceSession.conn.fw}` : ''}` : deviceSession.conn.state === 'offline' ? 'Offline' : 'Connecting…'
   );
 </script>
 
-{#if !editor.isMobile}
+{#if !editorViewport.isMobile}
   <!-- ── desktop tool rail ── -->
   <nav class="rail">
     <div class="logo" aria-label="Axis">
@@ -110,14 +117,14 @@
       </svg>
     </div>
     {#each railItems as r}
-      <button class="item" data-tour={r.id} class:active={editor.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
+      <button class="item" data-tour={r.id} class:active={editorNavigation.railActive === r.id} title={r.label} onclick={() => pick(r.id, r.label)}>
         <span class="ic">{r.icon}</span>
         <span class="sh">{r.short}</span>
       </button>
     {/each}
     <div class="spacer"></div>
     {#if showTools}
-      <button class="item" class:active={editor.deviceToolsOpen} title="Device Tools — preset backup/restore, .syx decode, firmware validate, modifiers" onclick={() => (editor.deviceToolsOpen = true)}>
+      <button class="item" class:active={editorOverlays.deviceToolsOpen} title="Device Tools — preset backup/restore, .syx decode, firmware validate, modifiers" onclick={() => (editorOverlays.deviceToolsOpen = true)}>
         <span class="ic">⛃</span>
         <span class="sh">Tools</span>
       </button>
@@ -126,20 +133,20 @@
       <span class="ic">↶</span>
       <span class="sh">History</span>
     </button>
-    <button class="item" class:active={editor.themeOpen} title="Appearance — theme, accent, scale & density" onclick={() => (editor.themeOpen = true)}>
+    <button class="item" class:active={editorOverlays.themeOpen} title="Appearance — theme, accent, scale & density" onclick={() => (editorOverlays.themeOpen = true)}>
       <span class="ic">◐</span>
       <span class="sh">Theme</span>
     </button>
-    <button class="item acct" data-tour="axis" class:active={editor.axisOpen} title="Axis — storage, privacy & about" onclick={() => editor.openAxis('about')}>
+    <button class="item acct" data-tour="axis" class:active={editorOverlays.axisOpen} title="Axis — storage, privacy & about" onclick={() => editorOverlays.openAxis('about')}>
       <span class="ic">◈</span>
       <span class="sh">Axis</span>
     </button>
-    <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => editor.openPorts()}>
+    <button class="conn" data-tour="conn" title="Connection — click to pick the port" onclick={() => deviceSession.openPorts()}>
       <span class="led" style="background:{dot}; box-shadow:0 0 8px {dot}"></span>
-      <span class="mono fw">{editor.conn.fw ? `FW${editor.conn.fw}` : editor.conn.state === 'offline' ? 'OFF' : '···'}</span>
+      <span class="mono fw">{deviceSession.conn.fw ? `FW${deviceSession.conn.fw}` : deviceSession.conn.state === 'offline' ? 'OFF' : '···'}</span>
     </button>
   </nav>
-{:else if editor.drawerOpen}
+{:else if editorNavigation.drawerOpen}
   <!-- ── mobile nav drawer (replaces the rail) ── -->
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
   <div class="scrim" onclick={closeDrawer} role="presentation"></div>
@@ -160,33 +167,33 @@
     <div class="d-body scroll">
       <div class="d-nav">
         {#each railItems as r}
-          <button class="d-item" class:active={editor.railActive === r.id} onclick={() => pick(r.id, r.label)}>
+          <button class="d-item" class:active={editorNavigation.railActive === r.id} onclick={() => pick(r.id, r.label)}>
             <span class="d-ic">{r.icon}</span><span class="d-lbl">{r.label}</span>
           </button>
         {/each}
       </div>
 
-      {#if editor.sceneCount > 0}
+      {#if deviceSession.sceneCount > 0}
         <div class="d-sec">SCENE</div>
         <div class="d-scenes">
-          {#each Array(editor.sceneCount) as _, i}
+          {#each Array(deviceSession.sceneCount) as _, i}
             {@const s = i + 1}
-            <button class="d-scn" class:on={editor.scene === s} onclick={() => editor.selectScene(s)}>{s}</button>
+            <button class="d-scn" class:on={deviceSession.scene === s} onclick={() => deviceSession.selectScene(s)}>{s}</button>
           {/each}
         </div>
       {/if}
 
-      {#if editor.hasTuner || editor.hasTempo}
+      {#if deviceSession.hasTuner || deviceSession.hasTempo}
         <div class="d-sec">STATUS</div>
         <div class="d-status">
-          {#if editor.hasTuner}
-            <button class="d-stat" class:on={editor.tuner.active} onclick={() => { editor.toggleTuner(); closeDrawer(); }}>
-              <span class="d-stat-ic">♪</span><span>Tuner</span><span class="d-stat-v mono">{editor.tuner.active ? (editor.tuner.note ?? '…') : ''}</span>
+          {#if deviceSession.hasTuner}
+            <button class="d-stat" class:on={telemetry.tuner.active} onclick={() => { telemetry.toggleTuner(); closeDrawer(); }}>
+              <span class="d-stat-ic">♪</span><span>Tuner</span><span class="d-stat-v mono">{telemetry.tuner.active ? (telemetry.tuner.note ?? '…') : ''}</span>
             </button>
           {/if}
-          {#if editor.hasTempo}
-            <button class="d-stat" onclick={() => editor.tapTempo()}>
-              <span class="d-stat-ic">◷</span><span>Tap tempo</span><span class="d-stat-v mono">{editor.bpm} BPM</span>
+          {#if deviceSession.hasTempo}
+            <button class="d-stat" onclick={() => deviceSession.tapTempo()}>
+              <span class="d-stat-ic">◷</span><span>Tap tempo</span><span class="d-stat-v mono">{deviceSession.bpm} BPM</span>
             </button>
           {/if}
         </div>
@@ -195,27 +202,27 @@
 
     <div class="d-foot">
       <button class="d-foot-b" onclick={() => { closeDrawer(); history.panelOpen = true; }}><span class="d-ic">↶</span>History</button>
-      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.themeOpen = true; }}><span class="d-ic">◐</span>Theme</button>
-      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openAxis('about'); }}>
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editorOverlays.themeOpen = true; }}><span class="d-ic">◐</span>Theme</button>
+      <button class="d-foot-b" onclick={() => { closeDrawer(); editorOverlays.openAxis('about'); }}>
         <span class="d-ic">◈</span>Axis
       </button>
-      <button class="d-foot-b" onclick={() => { closeDrawer(); editor.openPorts(); }}><span class="d-led" style="background:{dot}"></span>Connection</button>
+      <button class="d-foot-b" onclick={() => { closeDrawer(); deviceSession.openPorts(); }}><span class="d-led" style="background:{dot}"></span>Connection</button>
     </div>
   </aside>
 {/if}
 
-{#if editor.portsOpen}
+{#if deviceSession.portsOpen}
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-  <div class="ppbg" onclick={() => (editor.portsOpen = false)}></div>
+  <div class="ppbg" onclick={() => (deviceSession.portsOpen = false)}></div>
   <div class="pp">
     <div class="pp-h">
       <span>Connection</span>
-      <button class="pp-x" aria-label="Close" onclick={() => (editor.portsOpen = false)}>✕</button>
+      <button class="pp-x" aria-label="Close" onclick={() => (deviceSession.portsOpen = false)}>✕</button>
     </div>
     <div class="pp-note">Auto-detect picks a Fractal device. Override here if it grabs the wrong port — or for a USB-MIDI unit (Axe-Fx III).</div>
-    <button class="pp-auto" class:on={!editor.portOverride} onclick={() => editor.pickPort(null)}>✦ Auto-detect</button>
+    <button class="pp-auto" class:on={!deviceSession.portOverride} onclick={() => deviceSession.pickPort(null)}>✦ Auto-detect</button>
     <div class="pp-list">
-      {#each editor.ports as p (p.transport + ':' + (p.dir ?? '') + ':' + p.id)}
+      {#each deviceSession.ports as p (p.transport + ':' + (p.dir ?? '') + ':' + p.id)}
         {@const sel = rowSel(p)}
         <button class="pp-row" class:on={sel} class:fr={p.fractal} onclick={() => pickConn(p)}>
           <span class="pp-kind" class:midi={p.transport === 'midi'}>{p.transport === 'midi' ? (p.dir === 'output' ? 'M·OUT' : 'M·IN') : 'SER'}</span>
@@ -224,9 +231,9 @@
           {#if sel}<span class="pp-dot">●</span>{/if}
         </button>
       {/each}
-      {#if editor.ports.length === 0}<div class="pp-empty">No ports found — connect the unit.</div>{/if}
+      {#if deviceSession.ports.length === 0}<div class="pp-empty">No ports found — connect the unit.</div>{/if}
     </div>
-    <button class="pp-adv" onclick={() => { editor.portsOpen = false; editor.openAxis('device'); }}>Advanced — force device profile &amp; MIDI in/out →</button>
+    <button class="pp-adv" onclick={() => { deviceSession.portsOpen = false; editorOverlays.openAxis('device'); }}>Advanced — force device profile &amp; MIDI in/out →</button>
   </div>
 {/if}
 

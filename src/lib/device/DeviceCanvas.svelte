@@ -13,7 +13,7 @@
   //     (`graphKind`) — both tables live in `deviceWidgets.ts`, next to the sizes;
   //   • how a control binds to a live parameter, by the device-true `paramId` the layout carries.
   import { getEditorSurface } from '$lib/editor/editorSurface';
-  import { editor as liveEditor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { modifierBindings } from '$lib/editor/modifierBindings.svelte';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
   import { widgetView, graphKind, graphSlotsForPage, dropdownFieldHeight } from './deviceWidgets';
@@ -390,8 +390,8 @@
   // changes — the badge set is device-global and cached, so this only costs one read per change.
   $effect(() => {
     void editor.selected?.effectId;
-    void liveEditor.preset?.number;
-    void liveEditor.caps?.modifiers?.bind;
+    void deviceSession.preset?.number;
+    void deviceSession.caps?.modifiers?.bind;
     modifierBindings.refresh();
   });
 </script>
@@ -452,7 +452,7 @@
           size={knobSize}
           modded={hasMod}
           visualization={p ? visualization : null}
-          bpm={liveEditor.bpm}
+          bpm={deviceSession.bpm}
           formatValue={p ? (norm) => fmtControlValue({ ...p, norm }, 1) : null}
           onModifier={() => openMod(c)}
           freeMotion={!!e}

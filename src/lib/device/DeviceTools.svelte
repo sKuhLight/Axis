@@ -3,7 +3,7 @@
   // restore (caps.restoreDump), offline .syx decode (works for both device families), firmware
   // validation (caps.firmwareValidate) and a read-only modifier-model view (caps.modifiers.model).
   // Legacy v1 fallback: an AM4 on a pre-v2 server keeps the old /am4/* routes behind the same UI.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorOverlays } from '$lib/editor/editorClients.svelte';
   import { forgefx } from '$lib/api/forgefx';
   import Dialog from '$lib/ui/Dialog.svelte';
   import type { SyxDecodeResult } from '$lib/api/types';
@@ -27,19 +27,19 @@
   let modOpen = $state(false);
   let storeLoc = $state(0);
 
-  const caps = $derived(editor.caps);
-  const legacyAm4 = $derived(!editor.isV2 && editor.isAm4); // v1 fallback path (old /am4/* routes)
+  const caps = $derived(deviceSession.caps);
+  const legacyAm4 = $derived(!deviceSession.isV2 && deviceSession.isAm4); // v1 fallback path (old /am4/* routes)
   const canBackup = $derived(legacyAm4 || !!caps?.backupDump);
   const canRestore = $derived(legacyAm4 || !!caps?.restoreDump);
   const canFirmware = $derived(legacyAm4 || !!caps?.firmwareValidate);
   const canModView = $derived(legacyAm4 || !!caps?.modifiers?.model);
   const modBindable = $derived(!legacyAm4 && !!caps?.modifiers?.bind);
   // bank-letter store convenience (Save-to-slot with A01..Z04 codes) — AM4-family addressing only
-  const canStoreSlot = $derived(legacyAm4 || (editor.bankLetterAddressing && !!caps?.supportsSave));
+  const canStoreSlot = $derived(legacyAm4 || (deviceSession.bankLetterAddressing && !!caps?.supportsSave));
   const locCount = $derived(caps?.presets?.count ?? 104);
   const bankCode = (i: number) => `${String.fromCharCode(65 + Math.floor(i / 4))}${String((i % 4) + 1).padStart(2, '0')}`;
 
-  function close() { editor.deviceToolsOpen = false; }
+  function close() { editorOverlays.deviceToolsOpen = false; }
   function say(text: string, ok = true) { msg = text; msgAccent = ok ? '#8fbf7f' : '#ff6b6b'; }
 
   async function fileBytes(f: File): Promise<number[]> {
@@ -59,7 +59,7 @@
       const loc = backupLoc === '' ? undefined : Number(backupLoc);
       const r = legacyAm4 ? await forgefx.am4BackupPreset(loc) : await forgefx.presetBackup(loc);
       const label = r.code ?? (r.location != null ? String(r.location) : 'active');
-      download(`${editor.conn.device ?? 'preset'}-${label}-${(r.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`, r.bytes);
+      download(`${deviceSession.conn.device ?? 'preset'}-${label}-${(r.name || 'preset').replace(/[^\w-]+/g, '_')}.syx`, r.bytes);
       // ADDITIVE (opt-in): surface the decoded CRC-validity flag + scene names when the server returns them.
       const crc = r.crcValid === undefined ? '' : r.crcValid ? ' · CRC ✓' : ' · CRC ✗';
       const scn = r.sceneNames?.length ? ` · scenes: ${r.sceneNames.join(', ')}` : '';
@@ -138,11 +138,11 @@
   }
 </script>
 
-<Dialog overlay="deviceTools" open={editor.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
+<Dialog overlay="deviceTools" open={editorOverlays.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
   <div class="dt">
       <header id="device-tools-title">
         <h2>Device Tools</h2>
-        <span class="sub mono">{editor.conn.device ?? 'no device'}</span>
+        <span class="sub mono">{deviceSession.conn.device ?? 'no device'}</span>
         <span class="spacer"></span>
         <button class="x" aria-label="Close" onclick={close}>✕</button>
       </header>

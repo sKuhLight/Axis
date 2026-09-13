@@ -2,7 +2,7 @@
   // Preset history panel — the changelog of the active preset with undo/redo. Entries above the
   // cursor (undone) render dimmed and can be redone; markers (saves) and barriers (buffer loads)
   // are separators. "⟲ here" reverts to just before that entry (sequential undo, stops on failure).
-  import { editor } from './editor.svelte';
+  import { deviceSession, gridEditing } from './editorClients.svelte';
   import { history } from './history.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
 
@@ -16,14 +16,14 @@
   <div class="hp">
     <header>
       <h2>History</h2>
-      <span class="sub mono">{editor.preset ? `${String(editor.preset.number).padStart(3, '0')} · ${editor.preset.name || '(unnamed)'}` : 'no preset'}</span>
+      <span class="sub mono">{deviceSession.preset ? `${String(deviceSession.preset.number).padStart(3, '0')} · ${deviceSession.preset.name || '(unnamed)'}` : 'no preset'}</span>
       <span class="spacer"></span>
       <button class="act" onclick={() => history.undo()} disabled={!history.canUndo} title="Ctrl+Z">↶ Undo</button>
       <button class="act" onclick={() => history.redo()} disabled={!history.canRedo} title="Ctrl+Shift+Z">↷ Redo</button>
       <button class="x" aria-label="Close" onclick={close}>✕</button>
     </header>
 
-    {#if !editor.layout.crcValid}
+    {#if !gridEditing.layout.crcValid}
       <div class="dirty">Edit buffer differs from the stored preset — Save to keep your changes.</div>
     {/if}
 

@@ -1,4 +1,10 @@
-import { editor } from '$lib/editor/editor.svelte';
+import {
+  deviceSession,
+  editorNavigation,
+  editorNotifications,
+  gridEditing,
+  presetBuffer
+} from '$lib/editor/editorClients.svelte';
 import { forgefx } from '$lib/api/forgefx';
 import { library } from '$lib/preset/library.svelte';
 import { presetRecency } from '$lib/preset/presetRecency.svelte';
@@ -16,9 +22,9 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     loadBytes: async (bytes) => {
       await forgefx.loadBytes(bytes);
     },
-    loadDeviceSlot: editor.selectPreset,
+    loadDeviceSlot: presetBuffer.selectPreset,
     deviceEntryBytes: async (presetNumber) => {
-      if (editor.isV2) {
+      if (deviceSession.isV2) {
         const backup = await forgefx.presetBackup(presetNumber);
         return Uint8Array.from(backup.bytes).buffer;
       }
@@ -26,17 +32,17 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
       return (await forgefx.versionSyx(version.id)).arrayBuffer();
     },
     localPresetFile: forgefx.localPresetFile,
-    openBuild: editor.openBuild,
-    reloadEditor: editor.load,
-    noteBufferReplaced: editor.noteBufferReplaced,
+    openBuild: editorNavigation.openBuild,
+    reloadEditor: gridEditing.load,
+    noteBufferReplaced: presetBuffer.noteBufferReplaced,
     setBufferSource: (source) => {
-      editor.bufferSource = source;
+      presetBuffer.bufferSource = source;
     },
     hydrateParams: (entryId) => library.hydrateParams(entryId),
     paramsOf: (entry) => library.paramsOf(entry as Parameters<typeof library.paramsOf>[0]),
     presetGrid: forgefx.presetGrid,
     versions: (presetNumber) => forgefx.versions(presetNumber).then((result) => result.versions),
-    notify: editor.showToast,
+    notify: editorNotifications.showToast,
     recordLoad: presetRecency.record
   };
 }
@@ -46,14 +52,14 @@ export function createAxisPresetBrowserViewModelHost(): AxisPresetBrowserViewMod
     get entries() { return library.entries; },
     get filteredEntries() { return library.filtered; },
     get cacheBuilt() { return library.cacheBuilt; },
-    get connectionState() { return editor.conn.state; },
-    get presetCount() { return editor.presetCount; },
-    get canRenamePresets() { return editor.canRenamePresets; },
+    get connectionState() { return deviceSession.conn.state; },
+    get presetCount() { return deviceSession.presetCount; },
+    get canRenamePresets() { return deviceSession.canRenamePresets; },
     tagsOf: library.tagsOf,
     lastLoadedAt: presetRecency.at,
     realNameFor: deviceRealNames.realNameFor,
-    selectPreset: editor.selectPreset,
-    renameStoredPreset: editor.renameStoredPreset,
+    selectPreset: presetBuffer.selectPreset,
+    renameStoredPreset: presetBuffer.renameStoredPreset,
     persistSavedFilters,
     openConverted: (entryId) => {
       const entry = library.entries.find((candidate) => candidate.id === entryId);

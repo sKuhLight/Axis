@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { presetBuffer } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
   import { isSaveDirty } from './saveDirtyState';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
@@ -8,7 +8,7 @@
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
 </script>
 
-<button class="axis-widget save" class:dirty={saveDirty} data-size={size} type="button" onclick={() => editor.openSave()} title={saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}>
+<button class="axis-widget save" class:dirty={saveDirty} data-size={size} type="button" onclick={() => presetBuffer.openSave()} title={saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}>
   <span class="save-dot"></span>
   {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
 </button>

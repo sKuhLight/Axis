@@ -2,13 +2,13 @@
   // Persistent bottom bar. Left: the hover-hint for the block/parameter under the cursor (falls back to
   // the current selection / connection state) — scrolls like a news ticker when it overflows. Right:
   // Ko-fi support link · copyright · imprint.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorHints, paramEditing } from '$lib/editor/editorClients.svelte';
   import { LEGAL, openExternal } from '$lib/ancillary/legal';
   import { KOFI_URL, COPYRIGHT } from '$lib/ancillary/support';
 
   const left = $derived(
-    editor.hint ??
-      (editor.selected ? editor.selected.display : editor.conn.state === 'online' ? 'Ready' : editor.conn.state === 'offline' ? 'Device offline' : 'Connecting…')
+    editorHints.hint ??
+      (paramEditing.selected ? paramEditing.selected.display : deviceSession.conn.state === 'online' ? 'Ready' : deviceSession.conn.state === 'offline' ? 'Device offline' : 'Connecting…')
   );
 
   // ── ticker: scroll the text horizontally when it's wider than its slot ──

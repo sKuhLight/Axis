@@ -4,7 +4,7 @@
   // path — the same VirtualScreen the old shell mounts — so Setup/Controllers are
   // reachable in the Workbench instead of dead-ending (T09).
   import { untrack } from 'svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorNavigation, paramEditing } from '$lib/editor/editorClients.svelte';
   import VirtualScreen from '$lib/device/VirtualScreen.svelte';
   import type { PanelInstance } from '../../workbench';
 
@@ -18,11 +18,11 @@
   const FALLBACK_EID: Record<string, number> = { global: 1, controllers: 2, mod: 3 };
 
   function ensureOpen() {
-    const cap = editor.caps?.virtualEffects?.find((effect) => effect.slug === slug);
+    const cap = deviceSession.caps?.virtualEffects?.find((effect) => effect.slug === slug);
     const eid = cap?.eid ?? FALLBACK_EID[slug] ?? 1;
     const name = cap?.name ?? fallbackName;
-    if (editor.virtual?.slug === slug) return;
-    void editor.openVirtual(eid, slug, name);
+    if (paramEditing.virtual?.slug === slug) return;
+    void editorNavigation.openVirtual(eid, slug, name);
   }
 
   $effect(() => {
@@ -39,11 +39,11 @@
     // were still selected. Only clear if we're still the one holding it — a newer
     // panel (e.g. Setup opening right after Controllers) may have already taken over.
     return () => {
-      if (untrack(() => editor.virtual?.slug) === s) editor.virtual = null;
+      if (untrack(() => paramEditing.virtual?.slug) === s) paramEditing.virtual = null;
     };
   });
 
-  const showing = $derived(editor.virtual?.slug === slug);
+  const showing = $derived(paramEditing.virtual?.slug === slug);
 </script>
 
 <div class="vwrap">

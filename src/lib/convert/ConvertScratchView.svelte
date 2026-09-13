@@ -7,7 +7,7 @@
   // the connected unit matches the target). All logic is the pure convertScratch.ts core via the store.
   import { convert } from './convert.svelte';
   import { convertScratch } from './convertScratch.svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { deviceName, deviceIdFromModel, formatEvent, eventSeverity, type Severity } from './convertReport';
   import { conflictsForBlock, blockBadgeSeverity, type ScratchBlock } from './convertScratch';
   import { catFor, shade } from '$lib/device/catalog';
@@ -75,14 +75,14 @@
   }
 
   // ── connected-device / apply gating ──
-  const connectedId = $derived(deviceIdFromModel(editor.detected?.modelId));
+  const connectedId = $derived(deviceIdFromModel(deviceSession.detected?.modelId));
   // apply is offered only when the connected unit's family equals the target AND the server advertises
   // the placement + type + param write endpoints (caps-driven — hidden otherwise).
   const canApply = $derived(
     !!s &&
       connectedId === s.targetDevice &&
-      !!editor.caps?.gridRouting &&
-      !!editor.detected?.connected
+      !!deviceSession.caps?.gridRouting &&
+      !!deviceSession.detected?.connected
   );
 
   // ── commit dialog ──

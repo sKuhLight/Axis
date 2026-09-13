@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { editor } from './editor.svelte';
+  import { telemetry } from './editorClients.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
 
   // Standard 6-string reference (low→high). Highlight the one matching the detected note letter.
   const STRINGS = ['E', 'A', 'D', 'G', 'B', 'E'];
 
-  const cents = $derived(editor.tuner.cents ?? 0);
-  const note = $derived(editor.tuner.note);
-  const octave = $derived(editor.tuner.octave);
-  const freq = $derived(editor.tuner.freq);
+  const cents = $derived(telemetry.tuner.cents ?? 0);
+  const note = $derived(telemetry.tuner.note);
+  const octave = $derived(telemetry.tuner.octave);
+  const freq = $derived(telemetry.tuner.freq);
   const inTune = $derived(note != null && Math.abs(cents) <= 5);
   // needle: -50..+50 cents → 0..100% across the meter
   const needlePct = $derived(Math.max(0, Math.min(100, 50 + cents)));
   const noteLetter = $derived(note ? note[0] : null);
 </script>
 
-<Dialog overlay="tuner" open={editor.tuner.active} onClose={() => editor.toggleTuner()} width="440px" class="tuner-dlg">
+<Dialog overlay="tuner" open={telemetry.tuner.active} onClose={() => telemetry.toggleTuner()} width="440px" class="tuner-dlg">
   <div class="body" data-screen="Tuner">
     <header>
       <span class="ttl mono">TUNER</span>
-      <button class="close" aria-label="Close" onclick={() => editor.toggleTuner()}>✕</button>
+      <button class="close" aria-label="Close" onclick={() => telemetry.toggleTuner()}>✕</button>
     </header>
 
     <div class="note" class:lit={note != null} class:tuned={inTune}>

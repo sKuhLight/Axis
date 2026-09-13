@@ -53,8 +53,9 @@ or to the legacy `isAm4` fallback branches on a v1 server.
 
 ## Store pattern (`src/lib/editor/editor.svelte.ts`, ~765 lines)
 
-`class EditorStore` exported as a singleton `export const editor`; components
-import it directly — no context or props threading.
+`class EditorStore` is instantiated as the internal composition root. Production clients import
+responsibility-specific stores or narrow typed views from `editor/editorClients.svelte.ts`; only the
+editor-surface fallback and facade tests import the compatibility singleton directly.
 
 - State: `$state` class fields grouped by `// ── section ──` banners. Derived
   state: `get` accessors. The dominant idiom is the capability gate:
@@ -94,14 +95,14 @@ narrow host interface to avoid an editor↔history import cycle).
 `*.svelte.ts` store when it has independent state/lifecycle or would otherwise
 grow the composer. Cross-slice needs go through narrow host interfaces.
 
-### Slices — the facade pattern (M4 of the architecture refactor)
+### Slices and focused clients
 
 `EditorStore` is composed from responsibility-specific slices. A slice is a
 plain class in its own `*.svelte.ts`, holding its own `$state`; `EditorStore`
-owns an instance and **re-exposes every member by delegation**, so the ~60
-modules that import `editor` never change. Migrating call sites to import a
-slice directly is a separate, later change — never in the same commit as an
-extraction.
+owns an instance and still re-exposes members by delegation as an internal
+compatibility surface. Production call sites import the owning slice or a
+narrow typed composition view from `editorClients.svelte.ts`, never the
+226-member `editor` facade. `editorClients.test.ts` enforces this boundary.
 
 Extracted so far:
 
@@ -155,11 +156,10 @@ Four rules make this work:
    reference it directly would just rebuild the god object one dependency at a
    time, and would fix an initialization order between slices that later
    extractions then have to respect.
-3. **The facade is the compatibility layer.** A block of straight delegating
-   getters/setters at the bottom of `EditorStore`. State that call sites used to
-   write (e.g. `editor.meteringOn`) keeps a `set` — dropping one silently breaks
-   assignment. When a slice grows a member, ADD to the facade; do not re-add
-   state to `EditorStore`.
+3. **The facade is internal compatibility plumbing.** A block of straight delegating
+   getters/setters at the bottom of `EditorStore`. New production clients must import the
+   owning slice or a narrow `editorClients.svelte.ts` view. State still required by the
+   editor-surface fallback keeps its setter; do not re-add slice state to `EditorStore`.
 4. **`_editorSatisfiesSurface` must still typecheck.** If it doesn't, the facade
    is incomplete — fix the facade, never weaken the guard or `EditorSurface`.
    Know its ONE blind spot: TypeScript ignores write-ability in assignability, so
@@ -181,8 +181,9 @@ One `.svelte` per feature, filed under its domain folder in `src/lib/`: `ui/`
 surface), `device/`, `preset/`, `fm3edit/`, `shell/` (frozen legacy-monolith
 chrome), `ancillary/` (settings hub, onboarding, notices). Cross-folder imports
 use the `$lib/<folder>/x` alias; same-folder imports are relative (`./sibling`).
-Direct singleton import (`const cents = $derived(editor.tuner.cents ?? 0)`);
-actions inline (`onclick={() => editor.toggleTuner()}`). Theming: use tokens from
+Import only the focused dependency a component uses (for example,
+`telemetry` for tuner state/actions or `editorOverlays` for modal state); actions stay inline.
+Theming: use tokens from
 `src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`, `--amber`,
 `--danger`, `--font-mono`) — the monolith is not hex-linted (only
 `workbench/svelte/` is), but prefer tokens anyway.

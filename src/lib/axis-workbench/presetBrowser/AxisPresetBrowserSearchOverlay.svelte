@@ -7,7 +7,7 @@
   // it shares those singletons rather than a separate instance, which is safe because this overlay
   // only opens from Grid, where no Preset Browser page/panel is concurrently mounted to collide with.
   import { onMount, tick } from 'svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorOverlays, editorViewport, presetBuffer } from '$lib/editor/editorClients.svelte';
   import { library, type LibEntry } from '$lib/preset/library.svelte';
   import { presetRecency } from '$lib/preset/presetRecency.svelte';
   import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
@@ -69,7 +69,7 @@
   let savedQuery: string | null = null;
   let wasSearchOpen = false;
   $effect(() => {
-    const open = editor.presetSearchOpen;
+    const open = editorOverlays.presetSearchOpen;
     if (open && !wasSearchOpen) {
       // Fresh search every time the overlay opens, same as PresetPicker's open effect.
       savedQuery = axisPresetBrowserWorkbenchController.snapshot.queryText;
@@ -98,8 +98,8 @@
   // Mirror of the docked panel gate: `<EMPTY>` rows only with a device connected —
   // `editor.presetCount` is a guess until one is adopted, and there is nothing to load into offline.
   const emptyDeviceSlots = $derived.by<AxisPresetBrowserLibEntryLike[]>(() => {
-    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, editor.conn.state)) return [];
-    return buildEmptyDeviceSlotEntries(editor.presetCount, (n) => !index.deviceSlots.has(n));
+    if (!shouldSynthesizeEmptyDeviceSlots(library.cacheBuilt, deviceSession.conn.state)) return [];
+    return buildEmptyDeviceSlotEntries(deviceSession.presetCount, (n) => !index.deviceSlots.has(n));
   });
   const activeConditions = $derived.by(() => {
     void snapshot; // re-derive on any snapshot change
@@ -138,12 +138,12 @@
 
   // Keep the highlighted row in view as the cursor moves past the visible scroll window.
   $effect(() => {
-    if (!editor.presetSearchOpen) return;
+    if (!editorOverlays.presetSearchOpen) return;
     listEl?.querySelectorAll<HTMLElement>('.rowwrap')[cursor]?.scrollIntoView({ block: 'nearest' });
   });
 
   function close() {
-    editor.presetSearchOpen = false;
+    editorOverlays.presetSearchOpen = false;
   }
 
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
@@ -155,7 +155,7 @@
       const raw = baseEntries.find((e) => e.id === entry.id) as unknown as LibEntry | undefined;
       if (raw?.converted) void openConvertedInConverter(raw.converted);
     } else if (action.kind === 'loadEmptySlot') {
-      void editor.selectPreset(action.number, { recency: false });
+      void presetBuffer.selectPreset(action.number, { recency: false });
     } else {
       void axisPresetBrowserWorkbenchRuntime.loadEntry(entry.id);
     }
@@ -189,7 +189,7 @@
   // If the first batch doesn't fill the viewport (a very tall window), there is no scrollbar to drive
   // `loadMore` — grow the list until it overflows or everything is rendered.
   $effect(() => {
-    if (!editor.presetSearchOpen) return;
+    if (!editorOverlays.presetSearchOpen) return;
     const el = listEl;
     if (!el) return;
     if (visibleCount >= data.visibleEntries.length) return;
@@ -202,12 +202,12 @@
 
 <Dialog
   overlay="presetSearch"
-  open={editor.presetSearchOpen}
+  open={editorOverlays.presetSearchOpen}
   onClose={close}
   width="720px"
   maxHeight="84vh"
   align="top"
-  mobileFull={editor.isMobile}
+  mobileFull={editorViewport.isMobile}
   class="preset-search-dlg"
 >
   <div class="wrap">

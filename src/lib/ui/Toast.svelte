@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorNotifications } from '$lib/editor/editorClients.svelte';
 </script>
 
-{#if editor.toast}
-  {#key editor.toast.text + editor.toast.accent}
+{#if editorNotifications.toast}
+  {#key editorNotifications.toast.text + editorNotifications.toast.accent}
     <div class="toast">
-      <span class="dot" style="background:{editor.toast.accent}; box-shadow:0 0 8px {editor.toast.accent}"></span>
-      <span class="txt">{editor.toast.text}</span>
+      <span class="dot" style="background:{editorNotifications.toast.accent}; box-shadow:0 0 8px {editorNotifications.toast.accent}"></span>
+      <span class="txt">{editorNotifications.toast.text}</span>
     </div>
   {/key}
 {/if}

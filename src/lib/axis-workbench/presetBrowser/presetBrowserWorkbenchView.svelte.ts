@@ -1,6 +1,6 @@
 import { onMount, tick } from 'svelte';
 import { library, type LibEntry } from '$lib/preset/library.svelte';
-import { editor } from '$lib/editor/editor.svelte';
+import { deviceSession } from '$lib/editor/editorClients.svelte';
 import { history } from '$lib/editor/history.svelte';
 import { startCrossConvert, openConvertedInConverter } from '$lib/preset/presetConvertSource';
 import { convert } from '$lib/convert/convert.svelte';
@@ -586,7 +586,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     {
       id: 'rescan',
       label: library.scanning ? `Scanning ${library.scanDone}/${library.scanTotal}…` : 'Re-scan device',
-      hint: editor.scanNamesOnly ? 'Names only' : 'Full index',
+      hint: deviceSession.scanNamesOnly ? 'Names only' : 'Full index',
       disabled: library.scanning,
       run: () => void library.buildCache()
     },
@@ -623,7 +623,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
         converted: entry.converted,
         empty: entry.empty
       },
-      { canRename: editor.canRenamePresets }
+      { canRename: deviceSession.canRenamePresets }
     );
     menuItems = toWorkbenchMenuItems(actions, dispatchMenuAction);
     menuPos = pos;

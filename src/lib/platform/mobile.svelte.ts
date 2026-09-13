@@ -7,7 +7,7 @@
 // Bluetooth sheet).
 import type { Conn, Transport, Store, DeviceEvent } from 'forgefx-server/runtime';
 import { isMobileBuild } from './buildMode';
-import { editor } from '$lib/editor/editor.svelte';
+import { telemetry } from '$lib/editor/editorClients.svelte';
 import { assembleRuntime, type RuntimeSupport } from './direct/runtime';
 import { AxisMidi, NativeMidiTransport, type AxisMidiEndpoint } from './direct/nativeMidi';
 
@@ -107,7 +107,7 @@ class MobileBoot {
       support: SUPPORT,
       profileKey: PROFILE_KEY,
       getFolder: () => null, // no File System Access on mobile — IndexedDB library/history only
-      onEvent: (e: DeviceEvent) => editor.applyDeviceEvent(e)
+      onEvent: (e: DeviceEvent) => telemetry.applyDeviceEvent(e)
     });
     this.#store = store;
     this.#sha256 = sha256Hex;

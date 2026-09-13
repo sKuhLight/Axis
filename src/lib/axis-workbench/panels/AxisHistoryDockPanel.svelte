@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
 
   const rows = $derived(history.entries.map((e, i) => ({ e, i })).reverse().slice(0, 80));
@@ -10,7 +10,7 @@
   <header>
     <div>
       <h2>History</h2>
-      <p>{editor.preset ? `${String(editor.preset.number).padStart(3, '0')} · ${editor.preset.name || '(unnamed)'}` : 'No preset'}</p>
+      <p>{deviceSession.preset ? `${String(deviceSession.preset.number).padStart(3, '0')} · ${deviceSession.preset.name || '(unnamed)'}` : 'No preset'}</p>
     </div>
     <button onclick={() => history.undo()} disabled={!history.canUndo}>Undo</button>
     <button onclick={() => history.redo()} disabled={!history.canRedo}>Redo</button>

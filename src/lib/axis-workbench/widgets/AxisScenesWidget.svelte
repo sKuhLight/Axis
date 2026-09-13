@@ -1,29 +1,29 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size, editMode = false }: AxisWorkbenchWidgetProps = $props();
   const mini = $derived(size === 'mini');
   const expanded = $derived(size === 'default');
   const notMini = $derived(size !== 'mini');
-  const sceneCount = $derived(Math.max(1, editor.sceneCount || 8));
-  const activeScene = $derived(Math.max(1, Math.min(sceneCount, editor.scene || 1)));
-  const sceneLabel = $derived(sceneNameDisplay(editor.sceneNames, activeScene));
+  const sceneCount = $derived(Math.max(1, deviceSession.sceneCount || 8));
+  const activeScene = $derived(Math.max(1, Math.min(sceneCount, deviceSession.scene || 1)));
+  const sceneLabel = $derived(sceneNameDisplay(deviceSession.sceneNames, activeScene));
   let editingScene = $state(false);
   let draftScene = $state('');
   let renameTarget = $state(1);
   const focusSel = (element: HTMLInputElement) => { element.focus(); element.select(); };
   function startRename() {
-    if (editMode || !editor.canRenameScenes) return;
+    if (editMode || !deviceSession.canRenameScenes) return;
     renameTarget = activeScene;
-    draftScene = storedSceneName(editor.sceneNames, renameTarget);
+    draftScene = storedSceneName(deviceSession.sceneNames, renameTarget);
     editingScene = true;
   }
   function commitName() {
     if (!editingScene) return;
     editingScene = false;
     const next = draftScene.trim();
-    if (next !== storedSceneName(editor.sceneNames, renameTarget)) void editor.renameScene(renameTarget, next);
+    if (next !== storedSceneName(deviceSession.sceneNames, renameTarget)) void deviceSession.renameScene(renameTarget, next);
   }
   function keydown(event: KeyboardEvent) {
     if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
@@ -34,10 +34,10 @@
 <div class="axis-widget chips scenes" data-size={size}>
   {#if expanded}<span class="mono token">SCN</span>{/if}
   <div class="chip-row">
-    {#each Array(sceneCount) as _, i}{@const scene = i + 1}{#if !mini || activeScene === scene}<button class="num-chip" class:on={activeScene === scene} type="button" title={editor.sceneName(scene)} onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : scene)}>{scene}</button>{/if}{/each}
+    {#each Array(sceneCount) as _, i}{@const scene = i + 1}{#if !mini || activeScene === scene}<button class="num-chip" class:on={activeScene === scene} type="button" title={deviceSession.sceneName(scene)} onclick={() => deviceSession.selectScene(mini ? (activeScene % sceneCount) + 1 : scene)}>{scene}</button>{/if}{/each}
   </div>
   {#if notMini}
-    {#if editor.canRenameScenes}
+    {#if deviceSession.canRenameScenes}
       {#if editingScene}<input class="scene-name-in mono" bind:value={draftScene} maxlength={SCENE_NAME_MAX} placeholder="Scene {activeScene} name" use:focusSel onkeydown={keydown} onblur={commitName} />
       {:else}<button class="scene-name" class:empty={sceneLabel.empty} type="button" title="Rename scene {activeScene}" onclick={startRename}>{sceneLabel.text}</button>{/if}
     {:else if !sceneLabel.empty}<span class="scene-name readonly">{sceneLabel.text}</span>{/if}

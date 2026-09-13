@@ -2,7 +2,7 @@
   // Full-view rail screen for a virtual effect (Setup / Controllers / Modifier / FC). It's the same
   // device-canvas editor as a block, pointed at effectId 1/2/3/199 — device-authentic editor pages
   // come from the served layout, reads/writes go through the normal param path.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { paramEditing } from '$lib/editor/editorClients.svelte';
   import DeviceCanvas from './DeviceCanvas.svelte';
   import { deriveModulationGraphs } from '$lib/graphs/modulationGraphs';
   import { deriveAdsrGraphs } from '$lib/graphs/adsrGraphs';
@@ -14,32 +14,32 @@
     mod: '#a06bed',
     fc: '#f5a623'
   };
-  const accent = $derived(ACCENT[editor.virtual?.slug ?? ''] ?? '#35c9d6');
-  // Virtual Controllers uses the same served layout and live params as a block editor.
+  const accent = $derived(ACCENT[paramEditing.virtual?.slug ?? ''] ?? '#35c9d6');
+  // Virtual Controllers uses the same served layout and live params as a block paramEditing.
   const modulationGraphs = $derived.by(() => {
-    for (const option of editor.enums) void option.value;
-    return deriveModulationGraphs({ layout: editor.blockLayout, params: editor.params, enums: editor.enums });
+    for (const option of paramEditing.enums) void option.value;
+    return deriveModulationGraphs({ layout: paramEditing.blockLayout, params: paramEditing.params, enums: paramEditing.enums });
   });
-  const adsrGraphs = $derived(deriveAdsrGraphs({ layout: editor.blockLayout, params: editor.params }));
+  const adsrGraphs = $derived(deriveAdsrGraphs({ layout: paramEditing.blockLayout, params: paramEditing.params }));
 </script>
 
-{#if editor.virtual}
+{#if paramEditing.virtual}
   <section class="vscreen" style="--c:{accent}">
     <header class="vhead">
       <span class="dot" style="background:{accent}"></span>
-      <h2>{editor.virtual.name}</h2>
-      <span class="sub mono">effect {editor.virtual.eid}</span>
+      <h2>{paramEditing.virtual.name}</h2>
+      <span class="sub mono">effect {paramEditing.virtual.eid}</span>
     </header>
 
-    {#if editor.sheetState === 'loading'}
-      <div class="msg"><p>Reading {editor.virtual.name}…</p></div>
-    {:else if editor.sheetState === 'error'}
-      <div class="msg"><p>Couldn't read {editor.virtual.name}. Check the connection.</p></div>
-    {:else if editor.sheetState === 'nopack' || (editor.params.length === 0 && editor.enums.length === 0)}
-      <div class="msg"><p>No parameters available for {editor.virtual.name}.</p></div>
+    {#if paramEditing.sheetState === 'loading'}
+      <div class="msg"><p>Reading {paramEditing.virtual.name}…</p></div>
+    {:else if paramEditing.sheetState === 'error'}
+      <div class="msg"><p>Couldn't read {paramEditing.virtual.name}. Check the connection.</p></div>
+    {:else if paramEditing.sheetState === 'nopack' || (paramEditing.params.length === 0 && paramEditing.enums.length === 0)}
+      <div class="msg"><p>No parameters available for {paramEditing.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <DeviceCanvas slug={editor.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} />
+        <DeviceCanvas slug={paramEditing.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} />
       </div>
     {/if}
   </section>

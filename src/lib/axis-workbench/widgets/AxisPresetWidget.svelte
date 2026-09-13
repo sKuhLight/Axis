@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorOverlays, presetBuffer } from '$lib/editor/editorClients.svelte';
   import { getOptionalWorkbenchContext } from '../../workbench';
   import { createAxisHoldRepeat } from './widgetControls';
   import { resolvePresetWidgetTarget } from './presetWidgetTarget';
@@ -8,9 +8,9 @@
   let { size, dispatch }: AxisWorkbenchWidgetProps = $props();
   const mini = $derived(size === 'mini');
   const expanded = $derived(size === 'default');
-  const pnumRaw = $derived(editor.preset && editor.preset.number >= 0 ? editor.preset.number : -1);
+  const pnumRaw = $derived(deviceSession.preset && deviceSession.preset.number >= 0 ? deviceSession.preset.number : -1);
   const pnum = $derived(pnumRaw >= 0 ? String(pnumRaw).padStart(3, '0') : '---');
-  const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? 'DEBUG' : 'offline'));
+  const pname = $derived(deviceSession.preset?.name || (deviceSession.conn.state === 'online' ? 'DEBUG' : 'offline'));
   const workbench = getOptionalWorkbenchContext()?.controller ?? null;
   let activePageId = $state<string | undefined>(workbench?.activePage?.id);
   $effect(() => {
@@ -21,13 +21,13 @@
 
   function step(delta: number) {
     if (pnumRaw < 0) {
-      editor.presetOpen = true;
+      editorOverlays.presetOpen = true;
       return;
     }
-    void editor.selectPreset(Math.max(0, pnumRaw + delta));
+    void presetBuffer.selectPreset(Math.max(0, pnumRaw + delta));
   }
   function open() {
-    if (presetTarget.type === 'openPresetSearch') editor.presetSearchOpen = true;
+    if (presetTarget.type === 'openPresetSearch') editorOverlays.presetSearchOpen = true;
     else dispatch({ type: 'page.activate', pageId: presetTarget.pageId });
   }
   const previous = createAxisHoldRepeat(() => step(-1));

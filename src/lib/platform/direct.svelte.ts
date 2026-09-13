@@ -9,7 +9,7 @@
 // bundle never carries it (Vite splits it into a chunk loaded on first connect).
 import type { Conn, Transport, Store } from 'forgefx-server/runtime';
 import { isWebBuild } from './buildMode';
-import { editor } from '$lib/editor/editor.svelte';
+import { telemetry } from '$lib/editor/editorClients.svelte';
 import { WebMidiTransport, pairFractalPorts } from './direct/webmidi';
 import { WebSerialTransport, requestFractalSerialPort } from './direct/webserial';
 import { pickLocalFolder, restoreLocalFolder } from './direct/fsaFolder';
@@ -129,7 +129,7 @@ class DirectBoot {
       support: this.support,
       profileKey: PROFILE_KEY,
       getFolder: () => this.#folder,
-      onEvent: (e) => editor.applyDeviceEvent(e)
+      onEvent: (e) => telemetry.applyDeviceEvent(e)
     });
     this.#store = store;
     this.#sha256 = sha256Hex;

@@ -2,11 +2,11 @@
   // First-run guided tour: a self-contained spotlight overlay + coach-mark bubble. Anchors to real UI via
   // data-tour="<key>" attributes, positions the bubble next to the anchor, and is advanced by its own
   // buttons (fully modal, so device state can't change mid-tour). No external deps or assets.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorOnboarding } from '$lib/editor/editorClients.svelte';
 
   type Place = 'right' | 'below' | 'above' | 'center';
   type Step = { anchor?: string; title: string; body: string; place?: Place };
-  // NOTE: keep this length in sync with TOUR_LAST in editor.svelte.ts (9 steps → last index 8).
+  // NOTE: keep this length in sync with TOUR_LAST in editorOnboarding.svelte.ts (9 steps → last index 8).
   const STEPS: Step[] = [
     { title: 'Welcome to Axis', body: 'A fast, offline-first editor for your Fractal device. This quick tour points out the essentials — you can skip any time and replay it later from Axis → About.', place: 'center' },
     { anchor: 'build', title: 'Your signal grid', body: "Build is home base — the routing grid where your amp, cab, and effects live. You're looking at it now.", place: 'right' },
@@ -19,8 +19,8 @@
     { title: "You're set", body: "That's the tour. Everything's offline-first and your presets stay on your machine. Replay this any time from Axis → About.", place: 'center' }
   ];
 
-  const step = $derived(STEPS[editor.tourStep] ?? STEPS[0]);
-  const last = $derived(editor.tourStep >= STEPS.length - 1);
+  const step = $derived(STEPS[editorOnboarding.tourStep] ?? STEPS[0]);
+  const last = $derived(editorOnboarding.tourStep >= STEPS.length - 1);
   let rect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
   let vw = $state(1280);
   let vh = $state(800);
@@ -39,8 +39,8 @@
 
   // Re-measure whenever the step changes and while the tour is open (resize / scroll / layout settle).
   $effect(() => {
-    if (!editor.tourActive) return;
-    void editor.tourStep; // track
+    if (!editorOnboarding.tourActive) return;
+    void editorOnboarding.tourStep; // track
     measure();
     const raf = requestAnimationFrame(measure); // catch elements that animate in
     const onMove = () => measure();
@@ -49,9 +49,9 @@
     const ro = new ResizeObserver(onMove);
     ro.observe(document.body);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); editor.endTour(); }
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); editor.tourNext(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); editor.tourPrev(); }
+      if (e.key === 'Escape') { e.preventDefault(); editorOnboarding.endTour(); }
+      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); editorOnboarding.tourNext(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); editorOnboarding.tourPrev(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => {
@@ -84,7 +84,7 @@
   });
 </script>
 
-{#if editor.tourActive}
+{#if editorOnboarding.tourActive}
   <div class="tour" role="dialog" aria-modal="true" aria-label="Axis tour">
     <!-- spotlight: full-screen dim with a rounded punch-out over the anchor (SVG mask) -->
     <svg class="dim" width={vw} height={vh} viewBox="0 0 {vw} {vh}">
@@ -106,11 +106,11 @@
       <div class="h1">{step.title}</div>
       <div class="body">{step.body}</div>
       <div class="foot">
-        <button class="skip" onclick={() => editor.endTour()}>Skip</button>
-        <span class="count">{editor.tourStep + 1} / {STEPS.length}</span>
+        <button class="skip" onclick={() => editorOnboarding.endTour()}>Skip</button>
+        <span class="count">{editorOnboarding.tourStep + 1} / {STEPS.length}</span>
         <span class="sp"></span>
-        {#if editor.tourStep > 0}<button class="back" onclick={() => editor.tourPrev()}>Back</button>{/if}
-        <button class="next" onclick={() => editor.tourNext()}>{last ? 'Done' : 'Next'}</button>
+        {#if editorOnboarding.tourStep > 0}<button class="back" onclick={() => editorOnboarding.tourPrev()}>Back</button>{/if}
+        <button class="next" onclick={() => editorOnboarding.tourNext()}>{last ? 'Done' : 'Next'}</button>
       </div>
     </div>
   </div>

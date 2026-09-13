@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorOverlays } from '$lib/editor/editorClients.svelte';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size }: AxisWorkbenchWidgetProps = $props();
 </script>
 
-<button class="axis-widget square account" data-size={size} type="button" onclick={() => editor.openAxis('about')} title="Axis — storage, privacy &amp; about">
+<button class="axis-widget square account" data-size={size} type="button" onclick={() => editorOverlays.openAxis('about')} title="Axis — storage, privacy &amp; about">
   <span>AX</span>
 </button>
 

@@ -14,7 +14,7 @@
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
   import { seedAxisProfiles } from './axisWorkbenchLayoutActions';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { paramEditing } from '$lib/editor/editorClients.svelte';
   import {
     createAxisMobileBlockFlowMemory,
     decideAxisMobileBlockFlow,
@@ -49,7 +49,7 @@
 
   const profileIsPhone = $derived($axisWorkbenchController.activeProfile?.breakpoint === 'phone');
   // A block is "open" for flow purposes when its editor is open on a real selection.
-  const blockOpen = $derived(!!editor.editorOpen && !!editor.selected);
+  const blockOpen = $derived(!!paramEditing.editorOpen && !!paramEditing.selected);
 
   $effect(() => {
     // Track the reactive inputs so the effect re-runs on any relevant change.

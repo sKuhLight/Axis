@@ -69,8 +69,8 @@ import {
   AXIS_WORKBENCH_WIDGET_TYPES
 } from './axisWorkbenchRegistryManifest';
 
-async function axisEditor() {
-  return (await import('$lib/editor/editor.svelte')).editor;
+async function axisEditorClients() {
+  return import('$lib/editor/editorClients.svelte');
 }
 
 const registry = createWorkbenchRenderRegistry(FallbackPanel, FallbackWidget, FallbackNavigation);
@@ -199,7 +199,7 @@ AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
   registry.registerNavigation({ id, component: AxisWorkbenchNavigationEntry })
 );
 
-registry.registerAction({ id: 'axis.openGrid', run: async () => (await axisEditor()).openBuild() });
+registry.registerAction({ id: 'axis.openGrid', run: async () => (await axisEditorClients()).editorNavigation.openBuild() });
 // Preset Browser nav entry docks-or-focuses the workbench Preset Browser panel
 // (V13d), the same add-or-focus semantics as Setup/Scenes/Controllers — so a
 // closed PB panel can be reopened from the rail instead of only via a layout
@@ -219,12 +219,12 @@ registry.registerAction(
 registry.registerAction({
   id: 'axis.openFc',
   run: async () => {
-    const editor = await axisEditor();
-    const fc = editor.caps?.virtualEffects?.find((effect) => effect.slug === 'fc') ?? { eid: 199, slug: 'fc', name: 'Footswitches' };
-    editor.openVirtual(fc.eid, fc.slug, fc.name);
+    const { deviceSession, editorNavigation } = await axisEditorClients();
+    const fc = deviceSession.caps?.virtualEffects?.find((effect) => effect.slug === 'fc') ?? { eid: 199, slug: 'fc', name: 'Footswitches' };
+    editorNavigation.openVirtual(fc.eid, fc.slug, fc.name);
   }
 });
-registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditor()).openAxis('about') });
+registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditorClients()).editorOverlays.openAxis('about') });
 registry.registerAction({ id: 'axis.openTheme', run: async () => { overlays.open('theme'); } });
 // Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
 // Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels

@@ -13,7 +13,7 @@
   import { convertScratch } from '$lib/convert/convertScratch.svelte';
   import { validateSlot, scratchToPreset } from '$lib/convert/convertScratch';
   import { deviceName, deviceIdFromModel } from '$lib/convert/convertReport';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorNotifications, editorOverlays } from '$lib/editor/editorClients.svelte';
   import { library } from '$lib/preset/library.svelte';
   import { forgefx } from '$lib/api/forgefx';
   import { entrySyxBytes, bytesToBase64 } from '$lib/preset/presetConvertSource';
@@ -95,8 +95,8 @@
   let saveSlot = $state('');
   const targetCount = $derived.by(() => {
     const tgt = convert.lastRequest?.targetDevice;
-    const connected = deviceIdFromModel(editor.detected?.modelId);
-    return tgt && tgt === connected ? editor.presetCount : undefined;
+    const connected = deviceIdFromModel(deviceSession.detected?.modelId);
+    return tgt && tgt === connected ? deviceSession.presetCount : undefined;
   });
   const slotCheck = $derived(validateSlot(saveSlot, targetCount));
 
@@ -106,7 +106,7 @@
   const slotPad = $derived(saveSlot === '' ? '' : String(Number(saveSlot)).padStart(3, '0'));
   const slotName = $derived(saveSlot === '' ? '' : library.nameOfSlot(Number(saveSlot)));
   function pickSlot() {
-    editor.openSlotPicker((slot) => {
+    editorOverlays.openSlotPicker((slot) => {
       saveSlot = String(slot);
     });
   }
@@ -123,7 +123,7 @@
   async function confirmSave() {
     if (!slotCheck.ok) return;
     const r = await convertScratch.saveToLibrary({ name: saveName.trim() || undefined, slot: slotCheck.slot });
-    editor.showToast(r.ok ? 'Saved to library' : r.error || 'Could not save to the library.', r.ok ? '#33c46b' : '#d6543f');
+    editorNotifications.showToast(r.ok ? 'Saved to library' : r.error || 'Could not save to the library.', r.ok ? '#33c46b' : '#d6543f');
     if (r.ok) {
       saveOpen = false;
       void library.loadConverted(); // surface it in the preset library immediately
@@ -132,7 +132,7 @@
   async function applyToDevice() {
     await convertScratch.applyToDevice();
     const summary = convertScratch.apply.summary;
-    if (summary) editor.showToast(summary, convertScratch.apply.failed ? '#f5a623' : '#33c46b');
+    if (summary) editorNotifications.showToast(summary, convertScratch.apply.failed ? '#f5a623' : '#33c46b');
   }
 
   // ── .syx export (gen-3 targets: FM3 / FM9 / Axe-Fx III) ──────────────────────────────────────────
@@ -147,7 +147,7 @@
   // (server dumps its current preset). A re-opened saved doc carries neither, so export is unavailable.
   const canExportTargetGen3 = $derived(canExportTarget(targetDeviceId));
   const targetName = $derived(exportTargetName(targetDeviceId));
-  const connectedIsTarget = $derived(!!targetDeviceId && deviceIdFromModel(editor.detected?.modelId) === targetDeviceId);
+  const connectedIsTarget = $derived(!!targetDeviceId && deviceIdFromModel(deviceSession.detected?.modelId) === targetDeviceId);
   const sourceAvailable = $derived(!!convert.lastSource || convert.lastRequest?.hasSource === false);
   const targetLibEntries = $derived(library.entries.filter((e) => isModelForTarget(e.summary.model, targetDeviceId)));
 
@@ -239,24 +239,24 @@
       });
       // Defensive: the server refuses a non-ok authored preset with 422 (→ catch), but never download one.
       if (!res.validation?.ok) {
-        editor.showToast(exportErrorToast(422), '#d6543f');
+        editorNotifications.showToast(exportErrorToast(422), '#d6543f');
         return;
       }
       downloadSyx(res.syx, res.name || saveName);
       const fidelityWarning = exportFidelityToast(res.fidelity);
       if (fidelityWarning) {
         // Amber warning: some converted families have no template on the target device yet.
-        editor.showToast(`${fidelityWarning} — load-test on a real ${targetName}`, '#e0a233');
+        editorNotifications.showToast(`${fidelityWarning} — load-test on a real ${targetName}`, '#e0a233');
       } else {
         // Every block synthesized. File-level valid only — the target must still accept it on a hardware load.
-        editor.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real ${targetName}`, '#33c46b');
+        editorNotifications.showToast(`${exportToast(res.fidelity.landedBlocks, 0)} — load-test on a real ${targetName}`, '#33c46b');
       }
       saveOpen = false;
     } catch (e) {
       // A refusal (400 corrupt base / 422 authored-invalid) throws a ForgeError with a numeric status — no
       // file was returned, so nothing downloads. Show a clear "pick a different base" toast.
       const status = (e as { status?: number })?.status;
-      editor.showToast(exportErrorToast(status, (e as Error)?.message), '#d6543f');
+      editorNotifications.showToast(exportErrorToast(status, (e as Error)?.message), '#d6543f');
     } finally {
       exporting = false;
     }

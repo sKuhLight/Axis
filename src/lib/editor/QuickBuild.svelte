@@ -1,9 +1,9 @@
 <script lang="ts">
   // Quick Build sidecar (q → right slide-in) — all placeable blocks, dragged onto the live signal grid.
   // Persistent (no scrim) so multiple drag-drops can be chained; Esc / ✕ closes it. Drop hits the live
-  // grid (`data-screen="Signal Grid"`) and routes through `editor.place`, which handles empty cells and
+  // grid (`data-screen="Signal Grid"`) and routes through `gridEditing.place`, which handles empty cells and
   // shunt replacement. Mirrors AxisConvertMinimapPanel's pointer-drag + elementFromPoint hit-testing.
-  import { editor } from './editor.svelte';
+  import { editorNotifications, editorOverlays, gridEditing } from './editorClients.svelte';
   import { forgefx } from '$lib/api/forgefx';
   import { catFor, shade } from '$lib/device/catalog';
   import { categoryOf } from '$lib/device/blocks';
@@ -24,7 +24,7 @@
   const catOf = (f: BlockSummary) => categoryOf(packOf(f) ?? '');
 
   // effect ids already on the grid — placed instances are greyed out + non-draggable (no re-placing)
-  const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
+  const placedEids = $derived(new Set(gridEditing.layout.cells.map((c) => c.effectId)));
   const isPlaced = (f: BlockSummary) => placedEids.has(f.page);
 
   const categories = $derived.by(() => {
@@ -39,7 +39,7 @@
   });
 
   $effect(() => {
-    if (!editor.quickBuildOpen) return;
+    if (!editorOverlays.quickBuildOpen) return;
     query = '';
     cat = 'all';
     if (fetched) return;
@@ -78,27 +78,27 @@
     if (!ghost || !dragging) return;
     ghost = { ...ghost, x: e.clientX, y: e.clientY };
     const t = targetCellUnder(e);
-    if (t) editor.setExternalDrop(t.row, t.col, quickBuildDropValid(editor.layout.cells, editor.layout.shunts, t.row, t.col));
-    else editor.clearExternalDrop();
+    if (t) gridEditing.setExternalDrop(t.row, t.col, quickBuildDropValid(gridEditing.layout.cells, gridEditing.layout.shunts, t.row, t.col));
+    else gridEditing.clearExternalDrop();
   }
   function endDrag(e: PointerEvent) {
     const f = dragging;
     ghost = null;
     dragging = null;
-    editor.clearExternalDrop();
+    gridEditing.clearExternalDrop();
     if (!f) return;
     const t = targetCellUnder(e);
     if (!t) return;
-    if (!quickBuildDropValid(editor.layout.cells, editor.layout.shunts, t.row, t.col)) {
-      editor.showToast('Cell occupied', '#d6543f');
+    if (!quickBuildDropValid(gridEditing.layout.cells, gridEditing.layout.shunts, t.row, t.col)) {
+      editorNotifications.showToast('Cell occupied', '#d6543f');
       return;
     }
-    void editor.place(t.row, t.col, f.page, f.name);
-    editor.showToast(`Placed ${f.name}`, '#35c9d6');
+    void gridEditing.place(t.row, t.col, f.page, f.name);
+    editorNotifications.showToast(`Placed ${f.name}`, '#35c9d6');
   }
 
   function close() {
-    editor.quickBuildOpen = false;
+    editorOverlays.quickBuildOpen = false;
   }
 
   // Close on a pointerdown anywhere outside the sheet. Deliberately NOT a scrim: the sheet must stay
@@ -106,20 +106,20 @@
   // starts with a pointerdown INSIDE the sheet (and stopPropagation's it), so this never fires mid-drag.
   let rootEl = $state<HTMLDivElement | null>(null);
   function onOutsideDown(e: PointerEvent) {
-    if (!editor.quickBuildOpen || !rootEl) return;
-    if (!rootEl.contains(e.target as Node)) editor.quickBuildOpen = false;
+    if (!editorOverlays.quickBuildOpen || !rootEl) return;
+    if (!rootEl.contains(e.target as Node)) editorOverlays.quickBuildOpen = false;
   }
 
   // Esc / ✕ can close the sidecar mid-drag (pointer capture is released, so `endDrag` never fires) —
   // clear any lingering drop preview so the grid doesn't keep a stuck ＋/✕.
   $effect(() => {
-    if (!editor.quickBuildOpen) editor.clearExternalDrop();
+    if (!editorOverlays.quickBuildOpen) gridEditing.clearExternalDrop();
   });
 </script>
 
 <svelte:window onpointerdown={onOutsideDown} />
 
-{#if editor.quickBuildOpen}
+{#if editorOverlays.quickBuildOpen}
   <div class="qb" role="dialog" aria-label="Quick Build" bind:this={rootEl}>
     <div class="head">
       <div class="titlewrap">

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession, editorOverlays, editorViewport, presetBuffer } from '$lib/editor/editorClients.svelte';
   import { library } from './library.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import FavoriteStar from '$lib/ui/FavoriteStar.svelte';
@@ -39,7 +39,7 @@
 
   let filter = $state<'all' | 'fav' | 'recent'>('all');
   $effect(() => {
-    if (!editor.presetOpen) return;
+    if (!editorOverlays.presetOpen) return;
     query = '';
     filter = 'all';
     loadStore();
@@ -52,14 +52,14 @@
     return /^\d+$/.test(q) ? Number(q) : null;
   });
   function nameOf(n: number): string {
-    if (editor.preset?.number === n && editor.preset.name) return editor.preset.name;
+    if (deviceSession.preset?.number === n && deviceSession.preset.name) return deviceSession.preset.name;
     if (library.slotIsEmpty(n)) return ''; // scanned + cleared on the device — don't fall back to stale recents
     return library.nameOfSlot(n) || recents.find((r) => r.n === n)?.name || '';
   }
   // full slot list, filtered by number or known name
   const rows = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    const all = Array.from({ length: editor.presetCount }, (_, n) => ({ n, name: nameOf(n) }));
+    const all = Array.from({ length: deviceSession.presetCount }, (_, n) => ({ n, name: nameOf(n) }));
     if (!q) return all;
     return all.filter((r) => r.name.toLowerCase().includes(q) || pad(r.n).includes(q) || String(r.n).includes(q));
   });
@@ -75,21 +75,21 @@
   // Pick-a-slot mode: when the editor set a pick callback, the picker RETURNS the chosen slot (number +
   // name) to it and closes, instead of loading the preset onto the device. Used by the cross-device
   // converter save dialog to reuse this real device-preset list as a slot chooser.
-  const pickMode = $derived(!!editor.presetPick);
+  const pickMode = $derived(!!editorOverlays.presetPick);
   function close() {
-    editor.presetOpen = false;
-    editor.presetPick = null;
+    editorOverlays.presetOpen = false;
+    editorOverlays.presetPick = null;
   }
   async function go(n: number, name = '') {
-    const pick = editor.presetPick;
+    const pick = editorOverlays.presetPick;
     if (pick) {
-      editor.presetOpen = false;
-      editor.presetPick = null;
+      editorOverlays.presetOpen = false;
+      editorOverlays.presetPick = null;
       pick(n, name || nameOf(n));
       return;
     }
-    await editor.selectPreset(n);
-    pushRecent(n, name || editor.preset?.name || '');
+    await presetBuffer.selectPreset(n);
+    pushRecent(n, name || deviceSession.preset?.name || '');
   }
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter') {
@@ -102,20 +102,20 @@
 
 <Dialog
   overlay="presetPicker"
-  open={editor.presetOpen}
+  open={editorOverlays.presetOpen}
   onClose={close}
   width="680px"
   maxHeight="84vh"
   align="top"
-  mobileFull={editor.isMobile}
+  mobileFull={editorViewport.isMobile}
   class="preset-picker-dlg"
 >
   <div class="wrap">
       <div class="head">
         <div class="title-row">
           <span class="title">{pickMode ? 'Choose a slot' : 'Presets'}</span>
-          {#if editor.preset && editor.preset.number >= 0}
-            <span class="cur mono">PRE {pad(editor.preset.number)}</span>
+          {#if deviceSession.preset && deviceSession.preset.number >= 0}
+            <span class="cur mono">PRE {pad(deviceSession.preset.number)}</span>
           {/if}
           <span class="spacer"></span>
           <button class="close" aria-label="Close" onclick={close}>✕</button>
@@ -132,11 +132,11 @@
       </div>
 
       {#snippet presetRow(r: Recent)}
-        <div class="rowwrap" class:active={editor.preset?.number === r.n}>
+        <div class="rowwrap" class:active={deviceSession.preset?.number === r.n}>
           <button class="row" onclick={() => go(r.n, r.name)}>
             <span class="num mono">{pad(r.n)}</span>
             <span class="rtext"><span class="rname">{r.name || `Preset ${r.n}`}</span></span>
-            {#if editor.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
+            {#if deviceSession.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
           </button>
           <FavoriteStar on={isFav(r.n)} onclick={() => toggleFav(r.n, r.name)} />
         </div>
@@ -147,7 +147,7 @@
           <div class="section mono">RECENT</div>
           <div class="chiprow scroll">
             {#each recents as r (r.n)}
-              <button class="chip" class:active={editor.preset?.number === r.n} onclick={() => go(r.n, r.name)}>
+              <button class="chip" class:active={deviceSession.preset?.number === r.n} onclick={() => go(r.n, r.name)}>
                 <span class="cnum mono">{pad(r.n)}</span><span class="cname">{r.name || `Preset ${r.n}`}</span>
               </button>
             {/each}

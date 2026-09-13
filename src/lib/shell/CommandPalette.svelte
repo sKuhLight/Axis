@@ -1,6 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { editor, baseName } from '$lib/editor/editor.svelte';
+  import { baseName } from '$lib/device/blocks';
+  import {
+    deviceSession,
+    editorNotifications,
+    editorOverlays,
+    editorViewport,
+    gridEditing,
+    paramEditing
+  } from '$lib/editor/editorClients.svelte';
   import { appSettings } from '$lib/platform/appSettings.svelte';
   import { defaultBlockLibraryPath } from '$lib/editor/blockLibraryPath';
   import { blockLibrary } from '$lib/editor/blockLibrary.svelte';
@@ -33,11 +41,11 @@
   // thumbtack: keep the palette open after a retype pick so you can audition several models
   let pinned = $state(false);
   // effect ids already on the grid — placed instances are greyed out + non-pickable (no point re-placing)
-  const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
+  const placedEids = $derived(new Set(gridEditing.layout.cells.map((c) => c.effectId)));
   const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
 
-  const retype = $derived(editor.paletteMode === 'retype');
-  const target = $derived(editor.placeTarget ?? editor.firstEmptyCell);
+  const retype = $derived(editorOverlays.paletteMode === 'retype');
+  const target = $derived(editorOverlays.placeTarget ?? gridEditing.firstEmptyCell);
   let cat = $state('all');
   const categories = $derived.by(() => {
     const seen = new Set<string>();
@@ -76,8 +84,8 @@
   }
 
   // per-family TYPE recents + favorites (retype mode), keyed by block slug
-  const blockSlug = $derived(retype ? (editor.selected?.pack?.toLowerCase() ?? '') : '');
-  const libraryPath = $derived(appSettings.cfg.blockLibraryPath || defaultBlockLibraryPath(editor.detected?.connected ? editor.detected.name : null) || '');
+  const blockSlug = $derived(retype ? (paramEditing.selected?.pack?.toLowerCase() ?? '') : '');
+  const libraryPath = $derived(appSettings.cfg.blockLibraryPath || defaultBlockLibraryPath(deviceSession.detected?.connected ? deviceSession.detected.name : null) || '');
   const libraryEntries = $derived.by(() => {
     const queryText = query.trim().toLowerCase();
     return blockLibrary.candidates.filter((candidate) =>
@@ -134,7 +142,7 @@
 
   // load catalog when opened
   $effect(() => {
-    if (!editor.paletteOpen) return;
+    if (!editorOverlays.paletteOpen) return;
     if (!wasOpen) {
       wasOpen = true;
       paletteTab = 'types';
@@ -149,10 +157,10 @@
     loadBlockStore();
     setTimeout(() => inputEl?.focus(), 0);
     if (retype) {
-      // untrack the selected cell — a retype reloads the grid, so `editor.selected` changes
+      // untrack the selected cell — a retype reloads the grid, so `paramEditing.selected` changes
       // identity on every pick and would re-run this effect (resetting the query + flashing
       // "Loading…"). The block family (pack) never changes on retype, so fetch by untracked pack.
-      const pack = untrack(() => editor.selected?.pack);
+      const pack = untrack(() => paramEditing.selected?.pack);
       if (!pack) return;
       loadTypeStore(pack.toLowerCase());
       loading = true;
@@ -172,7 +180,7 @@
   });
 
   $effect(() => {
-    if (!editor.paletteOpen) {
+    if (!editorOverlays.paletteOpen) {
       wasOpen = false;
       return;
     }
@@ -241,25 +249,25 @@
   function pick(r: Row | undefined) {
     if (!r) return;
     if (isPlaced(r)) {
-      editor.showToast(`${r.name} is already on the grid`, '#d6543f');
+      editorNotifications.showToast(`${r.name} is already on the grid`, '#d6543f');
       return;
     }
     if (retype) {
-      editor.retype(r.value);
+      paramEditing.retype(r.value);
       pushTypeRecent(r.value);
-      editor.showToast('Type changed', '#35c9d6');
+      editorNotifications.showToast('Type changed', '#35c9d6');
     } else {
       const t = target;
       if (!t) {
-        editor.showToast('Grid is full', '#d6543f');
+        editorNotifications.showToast('Grid is full', '#d6543f');
       } else {
-        editor.place(t.row, t.col, r.page, r.name);
+        gridEditing.place(t.row, t.col, r.page, r.name);
         pushBlockRecent(r.sub);
-        editor.showToast(`Placed ${r.name}`, '#35c9d6');
+        editorNotifications.showToast(`Placed ${r.name}`, '#35c9d6');
       }
     }
-    editor.placeTarget = null;
-    if (!(retype && pinned)) editor.paletteOpen = false;
+    editorOverlays.placeTarget = null;
+    if (!(retype && pinned)) editorOverlays.paletteOpen = false;
   }
 
   async function previewLibrarySource(candidate: BlockLibraryCandidate) {
@@ -284,8 +292,8 @@
   async function applyPreview() {
     if (!preview || !previewCompatible || applying) return;
     applying = true;
-    editor.paletteOpen = false;
-    await editor.applyBlockLibrarySource(preview);
+    editorOverlays.paletteOpen = false;
+    await paramEditing.applyBlockLibrarySource(preview);
     applying = false;
   }
 
@@ -305,22 +313,22 @@
 
   function chipFor(r: { sub: string; kind: string }) {
     if (r.kind === 'Block') return catFor(null, r.sub);
-    const c = editor.selected;
+    const c = paramEditing.selected;
     return catFor(c?.pack ?? null, baseName(c?.display ?? ''));
   }
 </script>
 
 <Dialog
   overlay="palette"
-  open={editor.paletteOpen}
-  onClose={() => (editor.paletteOpen = false)}
+  open={editorOverlays.paletteOpen}
+  onClose={() => (editorOverlays.paletteOpen = false)}
   width="760px"
   maxHeight="84vh"
   align="top"
-  sheet={editor.isMobile}
+  sheet={editorViewport.isMobile}
   class="cmd-palette-dlg"
 >
-  <div class="wrap" class:sheet={editor.isMobile}>
+  <div class="wrap" class:sheet={editorViewport.isMobile}>
       {#if retype}
         <div class="tabs" role="tablist" aria-label="Block change options">
           <button class:on={paletteTab === 'types'} role="tab" aria-selected={paletteTab === 'types'} onclick={() => (paletteTab = 'types')}>Types</button>

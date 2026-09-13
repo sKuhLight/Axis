@@ -36,6 +36,12 @@ const TOUR_LAST = 8;
 const TOUR_ENABLED: boolean = false;
 const loadTourDone = (): boolean => { try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return false; } };
 
+export let deviceSession: DeviceSessionStore;
+export let presetBuffer: PresetBufferStore;
+export let gridEditing: GridEditingStore;
+export let paramEditing: ParamEditingStore;
+export let telemetry: TelemetryStore;
+
 class EditorStore {
   // ── device-session slice (M4b) ──
   // Connection state + heartbeat poll, negotiated API version + capability gates, the port/profile
@@ -56,7 +62,7 @@ class EditorStore {
       reapplyPollingMode: () => e.#telemetry.reapplyPollingMode()
     };
   };
-  #device = new DeviceSessionStore(this.#deviceSessionHost());
+  #device = deviceSession = new DeviceSessionStore(this.#deviceSessionHost());
 
   // ── preset-buffer slice (M4c) ──
   // Which preset is in the edit buffer and where it can be put: slot nav, the buffer/stored renames,
@@ -88,7 +94,7 @@ class EditorStore {
       poll: () => e.poll()
     };
   };
-  #preset = new PresetBufferStore(this.#presetBufferHost());
+  #preset = presetBuffer = new PresetBufferStore(this.#presetBufferHost());
 
   // ── grid-editing slice (M4d) ──
   #gridEditingHost = (): GridEditingHost => {
@@ -107,7 +113,7 @@ class EditorStore {
       offerLoadFailure: (route, message) => e.offerDebugReport({ kind: 'device-comm', route, message })
     };
   };
-  #grid = new GridEditingStore(this.#gridEditingHost());
+  #grid = gridEditing = new GridEditingStore(this.#gridEditingHost());
 
   // ── parameter-editing slice (M4d) ──
   #paramEditingHost = (): ParamEditingHost => {
@@ -126,7 +132,7 @@ class EditorStore {
       clearLooperWave: () => { e.looperWave = null; }
     };
   };
-  #param = new ParamEditingStore(this.#paramEditingHost());
+  #param = paramEditing = new ParamEditingStore(this.#paramEditingHost());
 
   // ── shell view state ──
   inLibrary = $state(false);
@@ -164,7 +170,7 @@ class EditorStore {
       scheduleStructuralReload: () => e.#scheduleStructuralReload()
     };
   };
-  #telemetry = new TelemetryStore(this.#telemetryHost());
+  #telemetry = telemetry = new TelemetryStore(this.#telemetryHost());
   vw = $state(1280);
   vh = $state(800);
 

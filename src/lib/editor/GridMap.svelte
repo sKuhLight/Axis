@@ -6,7 +6,7 @@
   // shunts through the gaps, so the destination is never restricted to the adjacent column.
   // Arm state is editor.linkFrom (shared with the SignalGrid: arm here, complete there — or vice versa).
   import { onMount } from 'svelte';
-  import { baseName } from './editor.svelte';
+  import { baseName } from '$lib/device/blocks';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
   import { catFor } from '$lib/device/catalog';

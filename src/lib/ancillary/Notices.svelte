@@ -3,24 +3,24 @@
   //  • first-run telemetry consent (accept/decline) — shown once if the build ships live diagnostics
   //  • one-time "support development on Ko-fi" nudge
   //  • the major-error "upload a debug report" prompt (with an optional contact field)
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorOnboarding, editorProfile, telemetry } from '$lib/editor/editorClients.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import DialogBody from '$lib/ui/DialogBody.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL } from './support';
 
-  const t = $derived(editor.telemetry);
+  const t = $derived(telemetry.telemetry);
   let showDetail = $state(false);
 
   async function sendNow(trigger?: { kind: string; route?: string; status?: number; message?: string }) {
-    await editor.uploadDebugReport(trigger);
-    editor.dismissReportPrompt();
+    await telemetry.uploadDebugReport(trigger);
+    telemetry.dismissReportPrompt();
   }
 </script>
 
 <!-- ── first-run telemetry consent ── -->
-<Dialog overlay="consentPrompt" open={editor.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
+<Dialog overlay="consentPrompt" open={telemetry.consentPromptOpen} onClose={() => {}} dismissible={false} width="440px" maxHeight="86vh" align="top" class="notice-dlg">
     <DialogBody>
       <div class="pad">
         <div class="head"><div class="logo">🛡</div><div><div class="h1">Help improve Axis?</div><div class="sub">Anonymous diagnostics — your choice</div></div></div>
@@ -30,8 +30,8 @@
           <div><span class="no">never</span> your presets, email, files, or anything identifying you</div>
         </div>
         <div class="row2">
-          <button class="cta ghost" onclick={() => editor.decideTelemetry(false)}>No thanks</button>
-          <button class="cta" onclick={() => editor.decideTelemetry(true)}>Enable diagnostics</button>
+          <button class="cta ghost" onclick={() => telemetry.decideTelemetry(false)}>No thanks</button>
+          <button class="cta" onclick={() => telemetry.decideTelemetry(true)}>Enable diagnostics</button>
         </div>
         <p class="legal">You can change this any time in <strong>Axis → Privacy</strong>. See our <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>.</p>
       </div>
@@ -39,22 +39,22 @@
 </Dialog>
 
 <!-- ── one-time Ko-fi nudge ── -->
-{#if editor.kofiNoticeOpen}
+{#if editorOnboarding.kofiNoticeOpen}
   <div class="toast">
     <span class="ki">☕</span>
     <div class="tbody">
       <div class="tt">Enjoying Axis?</div>
       <div class="td">It's free &amp; open-source. You can support development on Ko-fi.</div>
     </div>
-    <button class="tgo" onclick={() => { openExternal(KOFI_URL); editor.dismissKofiNotice(); }}>Support</button>
-    <button class="tx" aria-label="Dismiss" onclick={editor.dismissKofiNotice}><Icon name="close" size={12} /></button>
+    <button class="tgo" onclick={() => { openExternal(KOFI_URL); editorOnboarding.dismissKofiNotice(); }}>Support</button>
+    <button class="tx" aria-label="Dismiss" onclick={editorOnboarding.dismissKofiNotice}><Icon name="close" size={12} /></button>
   </div>
 {/if}
 
 <!-- ── major-error → upload report ── -->
-{#if editor.reportPrompt}
-  {@const p = editor.reportPrompt}
-  <Dialog overlay="reportPrompt" open={true} onClose={editor.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
+{#if telemetry.reportPrompt}
+  {@const p = telemetry.reportPrompt}
+  <Dialog overlay="reportPrompt" open={true} onClose={telemetry.dismissReportPrompt} width="400px" maxHeight="86vh" align="top" class="notice-dlg">
     <DialogBody class="sm">
       <div class="pad">
         <div class="head"><div class="logo warn">⚠</div><div><div class="h1">Something went wrong</div><div class="sub">{[p.route, p.status].filter(Boolean).join(' · ') || p.kind}</div></div></div>
@@ -62,7 +62,7 @@
         <label class="cfield" for="rp-contact">
           <span class="clbl">CONTACT <span class="opt">optional</span></span>
           <input id="rp-contact" class="in" type="text" maxlength="100" placeholder="Fractal forum / Reddit / email — so we can follow up"
-                 value={editor.contact} oninput={(e) => editor.setContact((e.currentTarget as HTMLInputElement).value)} />
+                 value={editorProfile.contact} oninput={(e) => editorProfile.setContact((e.currentTarget as HTMLInputElement).value)} />
         </label>
         {#if showDetail}
           <ul class="incl2">
@@ -71,7 +71,7 @@
           </ul>
         {:else}<button class="link" onclick={() => (showDetail = true)}>View what's sent</button>{/if}
         <button class="cta" disabled={!t.uploadEnabled || t.sending} onclick={() => sendNow(p)}>{t.sending ? 'Sending…' : 'Upload report'}</button>
-        <button class="link dim center" onclick={editor.dismissReportPrompt}>Not now</button>
+        <button class="link dim center" onclick={telemetry.dismissReportPrompt}>Not now</button>
       </div>
     </DialogBody>
 </Dialog>

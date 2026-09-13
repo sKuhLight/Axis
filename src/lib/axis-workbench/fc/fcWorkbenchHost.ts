@@ -1,4 +1,4 @@
-import { editor } from '$lib/editor/editor.svelte';
+import { editorNotifications } from '$lib/editor/editorClients.svelte';
 import { forgefx } from '$lib/api/forgefx';
 import type { AxisFcRuntimeHost } from './fcWorkbenchRuntime';
 
@@ -9,6 +9,6 @@ export function createAxisFcWorkbenchHost(): AxisFcRuntimeHost {
     setParam: async (effectId, paramId, value, refresh) => {
       await forgefx.setParam(effectId, paramId, value, refresh);
     },
-    notifyError: (message) => editor.showToast(message, '#ff6b6b')
+    notifyError: (message) => editorNotifications.showToast(message, '#ff6b6b')
   };
 }

@@ -2,7 +2,16 @@
   // The single "Axis" hub — one rail button opens this. Tabs: Storage (local folder + backups),
   // Connection, Performance, Privacy (diagnostics consent + send debug report), About
   // (version · support · legal).
-  import { editor } from '$lib/editor/editor.svelte';
+  import {
+    deviceSession,
+    editorNotifications,
+    editorOnboarding,
+    editorOverlays,
+    editorProfile,
+    editorViewport,
+    presetBuffer,
+    telemetry
+  } from '$lib/editor/editorClients.svelte';
   import { appSettings } from '$lib/platform/appSettings.svelte';
   import { blockLibrary } from '$lib/editor/blockLibrary.svelte';
   import { defaultBlockLibraryPath } from '$lib/editor/blockLibraryPath';
@@ -16,9 +25,9 @@
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
-  const mob = $derived(editor.isMobile);
+  const mob = $derived(editorViewport.isMobile);
 
-  const t = $derived(editor.telemetry);
+  const t = $derived(telemetry.telemetry);
 
   let showDetail = $state(false); // Privacy: "View what's sent" disclosure
 
@@ -30,37 +39,37 @@
     { key: 'balanced', label: 'Balanced', desc: 'The default — responsive with moderate background traffic.' },
     { key: 'reduced', label: 'Reduced (Live)', desc: 'Minimal background traffic for stage use — on AM4, successive front-panel edits reflect only on save / scene / channel change.' }
   ];
-  const pm = $derived(editor.pollingMode);
+  const pm = $derived(telemetry.pollingMode);
 
   // ── Connection & Device tab ──
   const PROFILES: { key: import('$lib/api/types').ProfileKey; label: string }[] = [
     { key: 'auto', label: 'Auto-detect' }, { key: 'fm3', label: 'FM3' }, { key: 'fm9', label: 'FM9' }, { key: 'axe3', label: 'Axe-Fx III' }, { key: 'axe2', label: 'Axe-Fx II' }, { key: 'vp4', label: 'VP4' }, { key: 'am4', label: 'AM4' }, { key: 'gen1', label: 'Axe-Fx Std/Ultra' }
   ];
-  const serialPorts = $derived(editor.ports.filter((p) => p.transport === 'serial'));
-  const midiIns = $derived(editor.ports.filter((p) => p.transport === 'midi' && p.dir === 'input'));
-  const midiOuts = $derived(editor.ports.filter((p) => p.transport === 'midi' && p.dir === 'output'));
+  const serialPorts = $derived(deviceSession.ports.filter((p) => p.transport === 'serial'));
+  const midiIns = $derived(deviceSession.ports.filter((p) => p.transport === 'midi' && p.dir === 'input'));
+  const midiOuts = $derived(deviceSession.ports.filter((p) => p.transport === 'midi' && p.dir === 'output'));
   let mode = $state<'serial' | 'midi'>('serial');
   let inSel = $state('');
   let outSel = $state('');
   let serSel = $state('');
   // sync the local selectors from the engine's chosen connection whenever the tab is shown
   $effect(() => {
-    if (editor.axisTab !== 'device') return;
-    const cc = editor.portChosen;
+    if (editorOverlays.axisTab !== 'device') return;
+    const cc = deviceSession.portChosen;
     mode = cc?.transport === 'midi' ? 'midi' : 'serial';
     inSel = cc?.inId ?? (cc?.transport === 'midi' ? cc.id : '') ?? '';
     outSel = cc?.outId ?? '';
     serSel = cc?.transport === 'serial' ? cc.id : '';
   });
-  const applyMidi = () => { if (inSel && outSel) editor.pickPort({ transport: 'midi', id: inSel, inId: inSel, outId: outSel }); };
-  const detName = $derived(editor.detected?.connected ? `${editor.detected.name}` : 'No device detected');
+  const applyMidi = () => { if (inSel && outSel) deviceSession.pickPort({ transport: 'midi', id: inSel, inId: inSel, outId: outSel }); };
+  const detName = $derived(deviceSession.detected?.connected ? `${deviceSession.detected.name}` : 'No device detected');
 
-  const close = () => (editor.axisOpen = false);
-  const soon = (what: string) => editor.showToast(`${what} — coming soon`, '#9b8cf0');
-  async function sendReport() { await editor.uploadDebugReport({ kind: 'manual' }); }
+  const close = () => (editorOverlays.axisOpen = false);
+  const soon = (what: string) => editorNotifications.showToast(`${what} — coming soon`, '#9b8cf0');
+  async function sendReport() { await telemetry.uploadDebugReport({ kind: 'manual' }); }
 
   // ── Storage tab (local folder: Presets/ library + Sync/ version mirror) ──
-  const loc = $derived(editor.local);
+  const loc = $derived(presetBuffer.local);
   const locAgo = $derived(loc.lastSync ? `${Math.round((Date.now() - loc.lastSync) / 1000)}s ago` : '');
   const localCount = $derived(library.entries.filter((e) => e.source === 'local').length);
   // Browser Direct: the "path" is a File System Access directory handle — the browser picker replaces
@@ -71,24 +80,24 @@
   async function chooseFolder() {
     if (directPicker) {
       const name = await directBoot.pickFolder();
-      if (name) await editor.setLocalRoot(name);
+      if (name) await presetBuffer.setLocalRoot(name);
       return;
     }
     const pick = (globalThis as { axisDesktop?: { pickFolder?: () => Promise<string | null> } }).axisDesktop?.pickFolder;
     if (!pick) return;
     const p = await pick();
-    if (p) await editor.setLocalRoot(p);
+    if (p) await presetBuffer.setLocalRoot(p);
   }
   // ── Storage tab (block library: the folder of saved .blk files the block picker reads) ──
   // `cfg.blockLibraryPath` holds ONLY an explicit override — an empty value keeps tracking the
   // connected unit's Fractal Edit folder, which is shown as the placeholder.
-  const detectedUnit = $derived(editor.detected?.connected ? editor.detected.name : null);
+  const detectedUnit = $derived(deviceSession.detected?.connected ? deviceSession.detected.name : null);
   const blockLibraryDefault = $derived(defaultBlockLibraryPath(detectedUnit));
   const setBlockLibraryPath = (path: string) => appSettings.setBlockLibraryPath(path);
   const preloadBlockLibrary = (path: string) => blockLibrary.preloadWhenIdle(path.trim() || blockLibraryDefault || '');
 
   function restoreFromFolder() {
-    if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void editor.localRestore();
+    if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void presetBuffer.localRestore();
   }
 </script>
 
@@ -106,27 +115,27 @@
   <label class="cfield" for={id}>
     <span class="clbl">CONTACT <span class="opt">optional</span></span>
     <input {id} class="in sm" type="text" maxlength="100" placeholder="Fractal forum / Reddit / email — so we can follow up"
-           value={editor.contact} oninput={(e) => editor.setContact((e.currentTarget as HTMLInputElement).value)} />
+           value={editorProfile.contact} oninput={(e) => editorProfile.setContact((e.currentTarget as HTMLInputElement).value)} />
   </label>
 {/snippet}
 
-<Dialog overlay="axisHub" open={editor.axisOpen} onClose={close} width="440px" maxHeight="86vh" align="top" sheet={mob} class="axis-hub-dlg">
+<Dialog overlay="axisHub" open={editorOverlays.axisOpen} onClose={close} width="440px" maxHeight="86vh" align="top" sheet={mob} class="axis-hub-dlg">
     <DialogBody class={mob ? 'mob' : ''}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar">
         {#if loc.available}
-          <button class="tb" class:on={editor.axisTab === 'storage'} onclick={() => (editor.axisTab = 'storage')}>Storage</button>
+          <button class="tb" class:on={editorOverlays.axisTab === 'storage'} onclick={() => (editorOverlays.axisTab = 'storage')}>Storage</button>
         {/if}
-        <button class="tb" class:on={editor.axisTab === 'device'} onclick={() => editor.openAxis('device')}>Connection</button>
-        {#if editor.hasTelemetryControl}
-          <button class="tb" class:on={editor.axisTab === 'performance'} onclick={() => (editor.axisTab = 'performance')}>Performance</button>
+        <button class="tb" class:on={editorOverlays.axisTab === 'device'} onclick={() => editorOverlays.openAxis('device')}>Connection</button>
+        {#if deviceSession.hasTelemetryControl}
+          <button class="tb" class:on={editorOverlays.axisTab === 'performance'} onclick={() => (editorOverlays.axisTab = 'performance')}>Performance</button>
         {/if}
-        <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
-        <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
+        <button class="tb" class:on={editorOverlays.axisTab === 'privacy'} onclick={() => (editorOverlays.axisTab = 'privacy')}>Privacy</button>
+        <button class="tb" class:on={editorOverlays.axisTab === 'about'} onclick={() => (editorOverlays.axisTab = 'about')}>About</button>
       </div>
 
-      {#if editor.axisTab === 'storage'}
+      {#if editorOverlays.axisTab === 'storage'}
         <!-- Local storage folder: Presets/ (library on disk) + Sync/ (plain-syx version mirror) -->
         <div class="pad">
           <div class="head">
@@ -148,22 +157,22 @@
           {#if hasPicker}
             <div class="drow">
               <button class="sync-now" onclick={chooseFolder}>{loc.configured ? 'Change folder…' : 'Choose folder…'}</button>
-              {#if loc.configured}<button class="link dim" onclick={() => editor.setLocalRoot(null)}>Clear</button>{/if}
+              {#if loc.configured}<button class="link dim" onclick={() => presetBuffer.setLocalRoot(null)}>Clear</button>{/if}
             </div>
           {:else}
             <label class="fld" for="loc-path"><span class="flbl">ABSOLUTE PATH</span>
               <input id="loc-path" class="in sm" type="text" placeholder="/home/you/Axis" bind:value={manualPath} />
             </label>
             <div class="drow">
-              <button class="sync-now" onclick={() => manualPath.trim() && editor.setLocalRoot(manualPath.trim())}>Set folder</button>
-              {#if loc.configured}<button class="link dim" onclick={() => editor.setLocalRoot(null)}>Clear</button>{/if}
+              <button class="sync-now" onclick={() => manualPath.trim() && presetBuffer.setLocalRoot(manualPath.trim())}>Set folder</button>
+              {#if loc.configured}<button class="link dim" onclick={() => presetBuffer.setLocalRoot(null)}>Clear</button>{/if}
             </div>
           {/if}
 
           {#if loc.configured}
             <div class="sec mt">PRESET LIBRARY</div>
             <p class="muted">{localCount} preset{localCount === 1 ? '' : 's'} indexed from Presets/{library.localSkipped ? ` · ${library.localSkipped} non-preset .syx skipped (IRs/firmware)` : ''}. They show up in the Preset Browser under “Local”.</p>
-            <button class="sync-now" disabled={!loc.exists} onclick={() => library.refreshLocal(true).then(() => editor.showToast('Local library refreshed', '#33c46b'))}><Icon name="refresh" size={15} /> Re-scan Presets/</button>
+            <button class="sync-now" disabled={!loc.exists} onclick={() => library.refreshLocal(true).then(() => editorNotifications.showToast('Local library refreshed', '#33c46b'))}><Icon name="refresh" size={15} /> Re-scan Presets/</button>
 
             <div class="sec mt">LOCAL SYNC</div>
             <div class="sync-card">
@@ -177,11 +186,11 @@
               {#if loc.syncing}
                 <div class="bar"><div class="fill"></div></div>
               {:else}
-                <button class="sync-now" disabled={!loc.exists} onclick={() => editor.localSync()}><Icon name="refresh" size={15} /> Sync to folder now</button>
+                <button class="sync-now" disabled={!loc.exists} onclick={() => presetBuffer.localSync()}><Icon name="refresh" size={15} /> Sync to folder now</button>
               {/if}
               {#if loc.note}<p class="note">{loc.note}</p>{/if}
             </div>
-            <button class="item auto" onclick={() => editor.setLocalAutoSync(!loc.autoSync)}>
+            <button class="item auto" onclick={() => presetBuffer.setLocalAutoSync(!loc.autoSync)}>
               <span class="chk" class:on={loc.autoSync}>{#if loc.autoSync}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
               <span class="item-body">
                 <span class="item-label">Auto-sync to folder</span>
@@ -191,7 +200,7 @@
 
             <div class="sec mt">FULL DEVICE BACKUP</div>
             <p class="muted">Snapshot every preset on the device into this PC's version store, then mirror it to Sync/ when a folder is set. Takes a few minutes on a full unit.</p>
-            <button class="sync-now" disabled={loc.syncing} onclick={() => editor.fullDeviceBackup()}><Icon name="device" size={15} /> Back up every preset</button>
+            <button class="sync-now" disabled={loc.syncing} onclick={() => presetBuffer.fullDeviceBackup()}><Icon name="device" size={15} /> Back up every preset</button>
 
             <div class="sec mt">RESTORE</div>
             <p class="muted">On a fresh machine (or after data loss), re-import every version from the folder's Sync/ back into Axis. Verified against the index; never overwrites existing versions.</p>
@@ -209,7 +218,7 @@
           </label>
         </div>
 
-      {:else if editor.axisTab === 'performance' && editor.hasTelemetryControl}
+      {:else if editorOverlays.axisTab === 'performance' && deviceSession.hasTelemetryControl}
         <!-- Device polling mode (META-17): how aggressively Axis reads the device in the background. -->
         <div class="pad">
           <div class="head">
@@ -221,7 +230,7 @@
           <p class="muted">Faster modes reflect front-panel and footswitch changes sooner, at the cost of more traffic on the device link. Slower modes keep a stage rig quiet.</p>
           <div class="modes tri">
             {#each POLL_MODES as m}
-              <button class="mbtn" class:on={pm === m.key} onclick={() => editor.setPollingMode(m.key)}>{m.label}</button>
+              <button class="mbtn" class:on={pm === m.key} onclick={() => telemetry.setPollingMode(m.key)}>{m.label}</button>
             {/each}
           </div>
 
@@ -235,7 +244,7 @@
           </div>
         </div>
 
-      {:else if editor.axisTab === 'privacy'}
+      {:else if editorOverlays.axisTab === 'privacy'}
         <div class="pad">
           <div class="head">
             <div class="logo sm">🛡</div>
@@ -244,7 +253,7 @@
 
           <div class="sec">ANONYMOUS DIAGNOSTICS</div>
           {#if t.enabled}
-            <button class="item box" onclick={() => editor.setTelemetryConsent(!t.consent)}>
+            <button class="item box" onclick={() => telemetry.setTelemetryConsent(!t.consent)}>
               <span class="chk" class:on={t.consent}>{#if t.consent}<Icon name="check" size={13} stroke={2.4} />{/if}</span>
               <span class="item-body">
                 <span class="item-label">Send error &amp; performance data</span>
@@ -267,7 +276,7 @@
           <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
         </div>
 
-      {:else if editor.axisTab === 'device'}
+      {:else if editorOverlays.axisTab === 'device'}
         <!-- Connection & Device -->
         <div class="pad">
           <div class="head">
@@ -277,18 +286,18 @@
 
           <div class="sec">DEVICE PROFILE</div>
           <p class="muted">Axis auto-detects your unit. Override this if you're reaching an FM3 over a MIDI→USB adapter (auto-detect can't identify it), or to force a specific model.</p>
-          <select class="sel" value={editor.profileOverride ?? 'auto'} onchange={(e) => editor.pickProfile((e.currentTarget as HTMLSelectElement).value as import('$lib/api/types').ProfileKey)}>
+          <select class="sel" value={deviceSession.profileOverride ?? 'auto'} onchange={(e) => deviceSession.pickProfile((e.currentTarget as HTMLSelectElement).value as import('$lib/api/types').ProfileKey)}>
             {#each PROFILES as p}<option value={p.key}>{p.label}</option>{/each}
           </select>
           <p class="statline">
-            {#if editor.profileOverride}<span class="badge warn">FORCED</span> {editor.profileOverride.toUpperCase()}
+            {#if deviceSession.profileOverride}<span class="badge warn">FORCED</span> {deviceSession.profileOverride.toUpperCase()}
             {:else}<span class="badge ok">AUTO</span> {detName}{/if}
           </p>
 
           <div class="sec mt">DEFINITIONS</div>
           <p class="statline" title={deviceDefs.activeSource.detail}>
             <span class="badge" class:ok={deviceDefs.activeSource.origin !== 'bundled'}>{deviceDefs.activeSource.origin === 'bundled' ? 'BUNDLED' : 'PROFILE'}</span>
-            {deviceDefs.activeSource.label}{#if editor.conn.fw} · fw {editor.conn.fw}{/if}
+            {deviceDefs.activeSource.label}{#if deviceSession.conn.fw} · fw {deviceSession.conn.fw}{/if}
           </p>
           {#if deviceDefs.canRebuild}
             <p class="muted">After a firmware update, discard the definitions and read them from the device again.</p>
@@ -303,7 +312,7 @@
 
           {#if mode === 'serial'}
             <label class="fld" for="ser-port"><span class="flbl">SERIAL PORT</span>
-              <select id="ser-port" class="sel" value={serSel} onchange={(e) => { serSel = (e.currentTarget as HTMLSelectElement).value; if (serSel) editor.pickPort({ transport: 'serial', id: serSel }); }}>
+              <select id="ser-port" class="sel" value={serSel} onchange={(e) => { serSel = (e.currentTarget as HTMLSelectElement).value; if (serSel) deviceSession.pickPort({ transport: 'serial', id: serSel }); }}>
                 <option value="">Auto-detect</option>
                 {#each serialPorts as p}<option value={p.id}>{p.label}{p.fractal ? ' ★' : ''}</option>{/each}
               </select>
@@ -325,16 +334,16 @@
           {/if}
 
           <p class="statline">
-            {#if editor.portOverride}<span class="badge warn">MANUAL</span> {editor.portChosen?.transport === 'midi' ? 'MIDI' : 'Serial'}
-            {:else}<span class="badge ok">AUTO</span> {editor.portChosen ? (editor.portChosen.transport === 'midi' ? 'MIDI (auto)' : 'Serial (auto)') : 'searching…'}{/if}
+            {#if deviceSession.portOverride}<span class="badge warn">MANUAL</span> {deviceSession.portChosen?.transport === 'midi' ? 'MIDI' : 'Serial'}
+            {:else}<span class="badge ok">AUTO</span> {deviceSession.portChosen ? (deviceSession.portChosen.transport === 'midi' ? 'MIDI (auto)' : 'Serial (auto)') : 'searching…'}{/if}
           </p>
 
-          {#if editor.slowLink}
+          {#if deviceSession.slowLink}
             <p class="slownote"><span class="badge warn">SLOW LINK</span> 5-pin MIDI (~31 kbaud). Live meters &amp; CPU are paused and background polling is throttled to keep editing responsive — automatically. Switch to USB for the full-speed experience.</p>
           {/if}
 
-          {#if editor.profileOverride || editor.portOverride}
-            <button class="signout" onclick={() => { editor.pickProfile('auto'); editor.pickPort(null); }}>Reset to auto-detect</button>
+          {#if deviceSession.profileOverride || deviceSession.portOverride}
+            <button class="signout" onclick={() => { deviceSession.pickProfile('auto'); deviceSession.pickPort(null); }}>Reset to auto-detect</button>
           {/if}
         </div>
 
@@ -348,7 +357,7 @@
           <p class="muted">Axis is a free, open-source editor for Fractal devices. If it's useful to you, you can support ongoing development on Ko-fi — entirely optional, and it keeps the project going.</p>
           <button class="kofi" onclick={() => openExternal(KOFI_URL)}>☕ Support development on Ko-fi</button>
           <div class="links">
-            <button class="link" onclick={() => { close(); editor.startTour(); }}>Replay app tour</button>
+            <button class="link" onclick={() => { close(); editorOnboarding.startTour(); }}>Replay app tour</button>
             <span class="dotsep"></span>
             <button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button>
             <span class="dotsep"></span>

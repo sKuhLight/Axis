@@ -12,7 +12,7 @@
   // confirmed. Controls whose metadata is absent from the model (colors, custom labels, function
   // lists) are hidden rather than gated on the device.
   import { onMount } from 'svelte';
-  import { editor } from '$lib/editor/editor.svelte';
+  import { editorNotifications, editorViewport } from '$lib/editor/editorClients.svelte';
   import { forgefx } from '$lib/api/forgefx';
   import type { FcModel } from '$lib/api/types';
 
@@ -67,7 +67,7 @@
       labelText = lb;
       present = pr;
     } catch (e) {
-      editor.showToast('FC read failed: ' + (e as Error).message, '#ff6b6b');
+      editorNotifications.showToast('FC read failed: ' + (e as Error).message, '#ff6b6b');
     } finally {
       reading = false;
     }
@@ -83,7 +83,7 @@
 
   const switches = $derived(model?.switches ?? 3);
   // on mobile the fixed N-column board gets cramped; wrap into readable min-width tiles instead
-  const boardCols = $derived(editor.isMobile || switches > 6 ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
+  const boardCols = $derived(editorViewport.isMobile || switches > 6 ? 'repeat(auto-fill, minmax(150px, 1fr))' : `repeat(${switches}, 1fr)`);
   // Mode selection is model-SHAPE-driven: geometry = the model decomposes configs into
   // layout × switch-slot (FM3 additionally pages by view; FM9 has no views).
   const hasGeometry = $derived(!!(model && model.layouts && model.configsPerLayout && model.switches));
@@ -110,7 +110,7 @@
     try {
       await forgefx.setParam(model.effectId, pidOf(field, cfg, index), value, false);
     } catch (e) {
-      editor.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
+      editorNotifications.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
     }
   }
   // Custom-label display-mode ordinal (capture-confirmed = 2). A switch only renders custom text when
@@ -154,7 +154,7 @@
     try {
       await forgefx.setParam(model.effectId, pidOf(side + 'Params', config, i), value, false);
     } catch (e) {
-      editor.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
+      editorNotifications.showToast('Write failed: ' + (e as Error).message, '#ff6b6b');
     }
   }
   // changing category also resets the function to 0 (matches the editor)

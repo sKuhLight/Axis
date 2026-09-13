@@ -9,13 +9,13 @@
   // Channel / PC Reset / Update Rate / Attack / Release / Damping / Auto Engage / Off Value are rendered
   // but only written when the model exposes their pid (flagged "pending decode" otherwise).
   import { forgefx } from '$lib/api/forgefx';
-  import { editor } from './editor.svelte';
+  import { deviceSession, editorViewport } from './editorClients.svelte';
   import { dampedModifierSource, lfoModifierSourceValue, lfoSourceFromName, mapModifierResponse, type ModifierMapping } from '$lib/graphs/lfoModifier';
   import { modifierBindings } from './modifierBindings.svelte';
   import type { ModModel } from '$lib/api/types';
   import { onDestroy, onMount } from 'svelte';
 
-  const mob = $derived(editor.isMobile);
+  const mob = $derived(editorViewport.isMobile);
 
   let {
     variant = 'flyout',
@@ -322,7 +322,7 @@
   const tickResponse = (now: number) => {
     frame = 0;
     if (visualization && !reducedMotion) {
-      const source = lfoModifierSourceValue(visualization, now / 1000, editor.bpm);
+      const source = lfoModifierSourceValue(visualization, now / 1000, deviceSession.bpm);
       if (source == null) {
         marker = null;
         smoothedSource = null;

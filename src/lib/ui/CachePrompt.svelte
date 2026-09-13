@@ -2,7 +2,7 @@
   // One-time offer to build the local library cache (names · blocks · models · params for every preset),
   // shown when connected and no cache exists yet. Powers the quick picker names, Preset Browser search,
   // and param queries — like the OG editor's index. Dismissable per session.
-  import { editor } from '$lib/editor/editor.svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { library } from '$lib/preset/library.svelte';
   import PromptToast from './PromptToast.svelte';
   import PromptRow from './PromptRow.svelte';
@@ -10,7 +10,7 @@
   import Button from './Button.svelte';
 
   let dismissed = $state(false);
-  const show = $derived(!dismissed && !library.cacheBuilt && !library.scanning && editor.conn.state === 'online');
+  const show = $derived(!dismissed && !library.cacheBuilt && !library.scanning && deviceSession.conn.state === 'online');
 </script>
 
 {#if library.scanning}
