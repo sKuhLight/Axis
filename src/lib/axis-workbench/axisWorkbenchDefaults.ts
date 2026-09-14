@@ -149,7 +149,10 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
     'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
     'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) }),
-    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.right', 6, { state: widgetState(95) }),
+    // Save sits directly after the Scenes widget (top.left order 2 here) rather
+    // than in the far-right status cluster, so the amber "edited" pill and the
+    // action it offers are next to the scene name.
+    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 2, { state: widgetState(95) }),
     'axis.widget.search': widget('axis.widget.search', 'axis.search', 'hidden', 0),
     // V13c: the rail no longer carries a History widget (History is reachable as a
     // dock panel) nor the "AX" account avatar (the 'account' nav entry / Axis hub
@@ -356,6 +359,56 @@ export function ensureAxisMeterWidgetLibrary(doc: WorkbenchDocument): WorkbenchD
     doc.widgetLibrary['axis.library.widget.meter'] = widgetTemplate('axis.library.widget.meter', 'Meter', [
       widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 0, { state: widgetState(40) })
     ]);
+  }
+  return doc;
+}
+
+/**
+ * Relocate the canonical Save widget to sit immediately after the Scenes widget,
+ * so the amber "edited" pill — and the action it offers — land next to the scene
+ * name they belong to. Scenes does not always live in `top.left` (a tablet layout
+ * can park it in `top.center`), so the target zone is wherever Scenes is inside
+ * the top bar, and Save is slotted directly after it. When a layout carries no
+ * top-bar Scenes widget, Save falls back to the end of `top.left` (beside the
+ * preset name).
+ *
+ * Deliberately narrow: only the canonical `axis.widget.save` instance is moved,
+ * and only while it already sits in a top-bar zone — a Save parked in a custom
+ * panel, the floating layer, `hidden`, or the bottom bar is left untouched.
+ * Idempotent — once positioned it is a no-op, so the normalization chain can run
+ * on every load.
+ */
+export function ensureAxisSaveWidgetPlacement(doc: WorkbenchDocument): WorkbenchDocument {
+  const inTopBar = (zone: unknown): zone is string => typeof zone === 'string' && zone.startsWith('top.');
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
+    const save = layout.widgets['axis.widget.save'];
+    if (!save || save.type !== 'axis.save') continue;
+    // Respect an explicit placement outside the top bar (hidden/custom/floating).
+    if (!inTopBar(save.zone)) continue;
+
+    // Preferred: immediately after Scenes, in whatever top-bar zone Scenes uses.
+    const scenes = Object.values(layout.widgets).find((instance) => instance?.type === 'axis.scenes' && inTopBar(instance.zone));
+    if (scenes) {
+      if (save.zone === scenes.zone && save.order === scenes.order + 1) continue;
+      // Open a slot directly after Scenes without displacing Scenes itself.
+      for (const instance of Object.values(layout.widgets)) {
+        if (instance && instance !== save && instance.zone === scenes.zone && instance.order >= scenes.order + 1) {
+          instance.order += 1;
+        }
+      }
+      save.zone = scenes.zone;
+      save.order = scenes.order + 1;
+      continue;
+    }
+
+    // No top-bar Scenes widget: fall back to the end of top.left.
+    if (save.zone === 'top.left') continue;
+    const topLeftMax = Object.values(layout.widgets)
+      .filter((instance) => instance?.zone === 'top.left')
+      .reduce((max, instance) => Math.max(max, instance.order ?? 0), -1);
+    save.zone = 'top.left';
+    save.order = topLeftMax + 1;
   }
   return doc;
 }

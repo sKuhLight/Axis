@@ -125,7 +125,8 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
       tuner: W('tr', 2, 'expanded', 'status'),
       tempo: W('tr', 3, 'expanded', 'status'),
       cpu: W('tr', 4, 'expanded', 'status'),
-      save: W('tr', 5),
+      // Save sits directly after the Scenes widget, not in the far-right cluster.
+      save: W('tl', 2),
       gridmode: W('gridbar', 0),
       blocksize: W('gridbar', 1),
       // Telemetry monitor (META-17) — capability-gated in the widget.

@@ -8,34 +8,53 @@
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
 </script>
 
-<button class="axis-widget save" class:dirty={saveDirty} data-size={size} type="button" onclick={() => presetBuffer.save()} title={saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}>
+<!-- Save lives beside the preset/scene names (top.left), not in the far-right
+     status cluster. Clean = quiet green "Saved"; dirty = a FILLED amber pill so
+     an unsaved preset reads at a glance. -->
+<button
+  class="axis-widget save"
+  class:dirty={saveDirty}
+  data-size={size}
+  data-dirty={saveDirty ? 'true' : 'false'}
+  type="button"
+  onclick={() => presetBuffer.save()}
+  title={saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}
+>
   <span class="save-dot"></span>
-  {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
+  {#if expanded}<span class="save-label">{saveDirty ? 'EDITED · Save' : '✓ Saved'}</span>{/if}
 </button>
 
 <style>
+  .save {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ok);
+  }
   .save-dot {
     width: 8px;
     height: 8px;
     flex: none;
     border-radius: 50%;
-    box-shadow: 0 0 8px currentColor;
-    color: var(--amber);
-    background: var(--amber);
+    background: currentColor;
+    box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 55%, transparent);
   }
-  /* Clean = green "Saved" (green dot + ink); dirty = amber "Save" (02-widgets.md). */
-  .save {
-    color: var(--ok, #33c46b);
-  }
-  .save .save-dot {
-    color: var(--ok, #33c46b);
-    background: var(--ok, #33c46b);
-  }
+  /* Dirty: a filled amber pill with dark ink — the loud counterpart to the quiet
+     green clean state. */
   .save.dirty {
-    color: var(--amber, #f5a623);
+    border-color: var(--amber);
+    background: var(--amber);
+    color: var(--bg);
   }
   .save.dirty .save-dot {
-    color: var(--amber, #f5a623);
-    background: var(--amber, #f5a623);
+    background: var(--bg);
+    box-shadow: none;
+  }
+  .save.dirty:hover {
+    border-color: var(--amber);
+    background: color-mix(in srgb, var(--amber) 88%, white);
+    color: var(--bg);
+  }
+  .save-label {
+    font-weight: 800;
   }
 </style>

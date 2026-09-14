@@ -15,7 +15,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
@@ -55,7 +55,8 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // Normalization chain (must stay idempotent — runs on every load over
   // already-normalized docs):
   //   migrate → ensureSeedPages (ROUND 15 Pages migration) → ensureGridControls →
-  //   pruneRetiredRail → pruneRetiredNav → pruneTopBarSearch → pruneAddBlock.
+  //   pruneRetiredRail → pruneRetiredNav → pruneTopBarSearch → pruneAddBlock →
+  //   ensureSavePlacement.
   // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
   // becomes the Grid page and the six other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
@@ -64,13 +65,17 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
   // ensureAxisMyControlsPanel self-heals the single pin destination onto every layout's Grid page,
   // tabbed next to History. Same ordering reason, same idempotence requirement.
-  return ensureAxisMeterWidgetLibrary(
-    pruneAxisRetiredWidgetTypes(
-      pruneAxisTopBarSearchWidgets(
-        pruneAxisRetiredRailWidgets(
-          pruneAxisRetiredNavigationEntries(
-            ensureAxisGridControlWidgets(
-              ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+  // ensureAxisSaveWidgetPlacement moves the canonical Save widget beside the preset/
+  // scene names for docs minted while it still lived in the far-right status cluster.
+  return ensureAxisSaveWidgetPlacement(
+    ensureAxisMeterWidgetLibrary(
+      pruneAxisRetiredWidgetTypes(
+        pruneAxisTopBarSearchWidgets(
+          pruneAxisRetiredRailWidgets(
+            pruneAxisRetiredNavigationEntries(
+              ensureAxisGridControlWidgets(
+                ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+              )
             )
           )
         )
