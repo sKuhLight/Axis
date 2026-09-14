@@ -2,7 +2,8 @@
   import { tick } from 'svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { effectiveZoom } from '$lib/workbench/svelte/contextMenu';
-  import { SCENE_NAME_MAX, sceneNameDisplay, storedSceneName } from './sceneNameState';
+  import { nameRename } from './nameRename.svelte';
+  import { SCENE_NAME_MAX, sceneNameDisplay } from './sceneNameState';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
 
   let { size, editMode = false }: AxisWorkbenchWidgetProps = $props();
@@ -19,10 +20,18 @@
   let triggerEl = $state<HTMLButtonElement | null>(null);
   let menuEl = $state<HTMLDivElement | null>(null);
   let scrimEl = $state<HTMLButtonElement | null>(null);
-  let editingScene = $state(false);
-  let draftScene = $state('');
-  let renameTarget = $state(1);
-  const focusSel = (element: HTMLInputElement) => { element.focus(); element.select(); };
+  let inputEl = $state<HTMLInputElement | null>(null);
+  // The shared session opens the scene field only when the device can rename scenes. Focus stays on
+  // the preset name (the rename entry point); the scene field takes focus only if the preset can't be
+  // edited, so the session never opens with nothing focused.
+  const editing = $derived(nameRename.active && nameRename.canEditScene);
+  $effect(() => {
+    if (!editing || nameRename.canEditPreset) return;
+    void tick().then(() => {
+      inputEl?.focus();
+      inputEl?.select();
+    });
+  });
 
   const zoomNow = () => (scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1);
   function place() {
@@ -65,32 +74,26 @@
     };
   }
   function startRename() {
-    if (editMode || !deviceSession.canRenameScenes) return;
+    if (editMode || !nameRename.canEditAny) return;
     open = false;
-    renameTarget = activeScene;
-    draftScene = storedSceneName(deviceSession.sceneNames, renameTarget);
-    editingScene = true;
-  }
-  function commitName() {
-    if (!editingScene) return;
-    editingScene = false;
-    const next = draftScene.trim();
-    if (next !== storedSceneName(deviceSession.sceneNames, renameTarget)) void deviceSession.renameScene(renameTarget, next);
+    nameRename.begin();
   }
   function inputKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
-    else if (event.key === 'Escape') editingScene = false;
+    if (event.key === 'Enter') nameRename.commit();
+    else if (event.key === 'Escape') nameRename.cancel();
   }
   function windowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && open) open = false;
+    if (event.key !== 'Escape') return;
+    if (nameRename.active) nameRename.cancel();
+    if (open) open = false;
   }
 </script>
 
 <svelte:window onkeydown={windowKeydown} />
 
 <div class="axis-widget scenes" data-size={size}>
-  {#if editingScene}
-    <input class="scene-name-in" bind:value={draftScene} maxlength={SCENE_NAME_MAX} placeholder="Scene {activeScene} name" use:focusSel onkeydown={inputKeydown} onblur={commitName} />
+  {#if editing}
+    <input bind:this={inputEl} class="scene-name-in" bind:value={nameRename.sceneDraft} maxlength={SCENE_NAME_MAX} placeholder="Scene {activeScene} name" onkeydown={inputKeydown} />
   {:else}
     <button class="scene-trigger" class:open class:empty={sceneLabel.empty} type="button" aria-haspopup="listbox" aria-expanded={open} bind:this={triggerEl} onclick={toggle}>
       {#if !mini}<span class="mono token">SCN</span>{/if}
@@ -98,8 +101,8 @@
       <span class="scene-name">{sceneLabel.text}</span>
       <span class="scene-caret">⌄</span>
     </button>
-    {#if !mini && deviceSession.canRenameScenes}
-      <button class="scene-rename" type="button" title="Rename scene {activeScene}" aria-label="Rename scene {activeScene}" onclick={startRename}>✎</button>
+    {#if !mini && nameRename.canEditAny}
+      <button class="scene-rename" type="button" title="Rename preset &amp; scene" aria-label="Rename preset and scene" onclick={startRename}>✎</button>
     {/if}
   {/if}
 </div>

@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { deviceSession, editorOverlays, presetBuffer } from '$lib/editor/editorClients.svelte';
   import { getOptionalWorkbenchContext } from '../../workbench';
   import { createAxisHoldRepeat } from './widgetControls';
+  import { nameRename } from './nameRename.svelte';
   import { resolvePresetWidgetTarget } from './presetWidgetTarget';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
 
@@ -17,6 +19,24 @@
     return workbench.subscribe((controller) => (activePageId = controller.activePage?.id));
   });
   const presetTarget = $derived(resolvePresetWidgetTarget(activePageId));
+
+  // Inline rename is driven by the same shared session as the scene name (the Grid scene pencil
+  // opens both). Preset rename edits the working buffer; the Save widget persists it.
+  const editing = $derived(nameRename.active && nameRename.canEditPreset);
+  let inputEl = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    // Preset name takes focus so the user can type immediately; the scene field focuses only when
+    // the preset isn't editable (see the scenes widget's inverse guard).
+    if (!editing || !nameRename.canEditPreset) return;
+    void tick().then(() => {
+      inputEl?.focus();
+      inputEl?.select();
+    });
+  });
+  function inputKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') nameRename.commit();
+    else if (event.key === 'Escape') nameRename.cancel();
+  }
 
   function step(delta: number) {
     if (pnumRaw < 0) {
@@ -40,9 +60,15 @@
     <span class="mono preset-num">{pnum}</span>
     {#if !mini}<button class="preset-arrow" type="button" title="Next preset (hold to scan)" aria-label="Next preset" onclick={() => step(1)} onpointerdown={(event) => next.start(event)} onpointerup={next.stop} onpointerleave={next.stop}>›</button>{/if}
   </div>
-  <button class="preset-main" type="button" title={presetTarget.title} onclick={open}>
-    <span class="preset-name">{pname}</span>
-  </button>
+  {#if editing}
+    <span class="preset-main editing">
+      <input bind:this={inputEl} class="preset-name-in mono" bind:value={nameRename.presetDraft} maxlength="32" placeholder="Preset name" onkeydown={inputKeydown} />
+    </span>
+  {:else}
+    <button class="preset-main" type="button" title={presetTarget.title} onclick={open}>
+      <span class="preset-name">{pname}</span>
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -108,6 +134,22 @@
     font-size: 15px;
     font-weight: 700;
     white-space: nowrap;
+  }
+  .preset-main.editing {
+    padding: 0 4px;
+    cursor: text;
+  }
+  .preset-name-in {
+    width: 22ch;
+    height: 100%;
+    padding: 0 10px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 700;
+    outline: none;
   }
   [data-size='compact'] .preset-arrow {
     width: 32px;
