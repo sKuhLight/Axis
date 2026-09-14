@@ -225,7 +225,6 @@
 <div
   class="axis-widget param axtipwrap"
   class:param-tile={paramTile}
-  class:writable={paramLive && (!!paramNamed || !!paramEnum)}
   class:readonly={paramReadonly}
   class:missing={paramMissing}
   data-size={size}
@@ -304,41 +303,25 @@
     position: relative;
     /* let the hover tooltip (.axtip, positioned below) escape the chip/tile */
     overflow: visible;
-    /* The root is a div now (to host real Dropdown/Toggle children). The old
-       button root had its UA border reset; replicate it so a chip stays
-       borderless and only `.param-tile` / state classes draw a border. */
+    /* The root is a div now (to host real Dropdown/Toggle children). Pinned
+       controls are chrome-less — no border and no fill; the block tint lives on
+       the ring/values, so the param reads as a control, not a card. */
     border: 0;
-  }
-  .param.writable {
-    border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-  }
-  .param.writable:hover {
-    border-color: var(--accent);
+    background: transparent;
   }
   /* read-only preview: block is in the preset but its live values aren't hydrated
      yet (a brief flash) or hydration is disabled on a slow link — dimmed, lock
-     badge, click opens the block. A SOLID border (never dashed) so a resting
-     control is never mistaken for a drag/drop slot (T20 bug #3). */
-  .param.readonly {
-    border-style: solid;
-    border-color: var(--aw-border-2, var(--border2));
-  }
+     badge, click opens the block. */
   .param.readonly .param-ring svg:first-child,
   .param.readonly .strong {
     opacity: 0.55;
-  }
-  .param.readonly:hover {
-    border-color: var(--aw-border-3, var(--border3));
   }
   .param.readonly:hover .param-ring svg:first-child,
   .param.readonly:hover .strong {
     opacity: 0.78;
   }
-  /* missing: bound block not in this preset — inert, warning badge. SOLID border
-     (never dashed) so it reads as "unavailable", not as an empty drag slot. */
+  /* missing: bound block not in this preset — inert, warning badge. */
   .param.missing {
-    border-style: solid;
-    border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
     cursor: default;
   }
   .param.missing .param-ring svg:first-child,
@@ -421,9 +404,7 @@
     width: 100%;
     gap: 4px;
     padding: 10px 8px;
-    border: 1px solid color-mix(in srgb, var(--param-color) 30%, var(--border));
     border-radius: 12px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--param-color) 8%, var(--bg2)), var(--bg2));
     text-align: center;
     touch-action: none;
   }
@@ -431,9 +412,6 @@
     min-height: 76px;
     min-width: 72px;
     padding: 9px 8px;
-  }
-  .param.param-tile:hover {
-    border-color: color-mix(in srgb, var(--param-color) 62%, var(--border));
   }
   /* The value can be a long enum name ("GAIN ENHANCER"), not just a number, so it
      is clamped exactly like the parameter name below — an unclamped value pushes
@@ -449,13 +427,5 @@
     font-size: 10px;
     letter-spacing: 0.06em;
     color: color-mix(in srgb, var(--param-color) 55%, var(--text2));
-  }
-  .param.param-tile.readonly {
-    border-style: solid;
-  }
-  .param.param-tile.missing {
-    border-style: solid;
-    border-color: color-mix(in srgb, var(--amber, #f5a623) 30%, var(--border));
-    background: var(--bg2);
   }
 </style>

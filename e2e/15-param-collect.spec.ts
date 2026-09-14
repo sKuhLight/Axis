@@ -101,13 +101,14 @@ test.describe('Pinned control tiles', () => {
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(1);
 
     // Leaving customize must return the control to a clean resting state: the tile
-    // is still there, but there is NO drag surface and its border is SOLID (never
-    // the dashed drag/drop-slot look), regardless of what block is selected.
+    // is still there, but there is NO drag surface and no card border (in
+    // particular, never the dashed drag/drop-slot look), regardless of what block
+    // is selected.
     await exitEditMode(page);
     const tile = panel.locator('.axis-widget.param').first();
     await expect(tile).toBeVisible();
     await expect(panel.locator('.aw-widget-drag-surface')).toHaveCount(0);
-    expect(await tile.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe('solid');
+    expect(await tile.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe('none');
   });
 
   test('the customize dashed outline wraps the full tile at every size', async ({ page }) => {
