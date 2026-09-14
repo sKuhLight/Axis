@@ -83,6 +83,8 @@ import {
   type WorkbenchMenuPosition
 } from '../../workbench/svelte/contextMenu';
 import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
+import { getOptionalWorkbenchContext } from '../../workbench';
+import { AXIS_PAGE_GRID } from '../axisWorkbenchPages';
 
 // Comfortably under a native dblclick interval, but enough that a fast double-click's loadEntry
 // sets loadingEntryId before this fires — the busy check below then skips hydration instead of
@@ -100,6 +102,9 @@ const ROW_DETAIL_HYDRATE_DELAY_MS = 220;
 // This mirrors the pre-M5 AxisPresetBrowserPartPanel.svelte behaviour exactly — it is a factoring-out,
 // not a redesign. Following the same rune-in-a-plain-function idiom as presetBrowserWorkbenchIndex.svelte.ts.
 export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
+  // Captured during component init (this factory runs at each panel's top level) so a deliberate load
+  // can return to the Grid page. Null outside the workbench (the monolith never mounts these panels).
+  const workbenchController = getOptionalWorkbenchContext()?.controller ?? null;
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
   let runtimeSnapshot = $state<AxisPresetBrowserRuntimeSnapshot>(axisPresetBrowserWorkbenchRuntime.snapshot);
   let lastDetailEntryId: string | null = null;
@@ -513,7 +518,11 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   }
 
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
-    viewModel.load(entry);
+    const action = viewModel.load(entry);
+    // Loading a preset is the deliberate commit gesture, so mirror the monolith (openBuild): return to
+    // the Signal Grid to see the result. Converted entries re-open in the converter page instead and
+    // must keep that surface, so they don't navigate.
+    if (action.kind !== 'openConverter') workbenchController?.activatePage(AXIS_PAGE_GRID);
   }
 
   // Re-open a SAVED conversion (source 'converted') back in the converter, rehydrated from its stored doc.

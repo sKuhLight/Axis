@@ -16,7 +16,7 @@ import type { AxisPresetBrowserWorkbenchRuntime } from './presetBrowserWorkbench
 import type { AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceViewDef } from './presetBrowserWorkbenchPresence';
 import { applyRowCap, type AxisPbRowCap } from './presetBrowserWorkbenchLayout';
-import { resolvePresetLoadAction } from './presetBrowserWorkbenchLoadAction';
+import { resolvePresetLoadAction, type AxisPresetLoadAction } from './presetBrowserWorkbenchLoadAction';
 import {
   addSavedFilter,
   removeSavedFilter,
@@ -159,11 +159,12 @@ export class AxisPresetBrowserViewModel {
     return true;
   }
 
-  load(entry: AxisPresetBrowserEntrySummary): void {
+  load(entry: AxisPresetBrowserEntrySummary): AxisPresetLoadAction {
     this.#controller.selectEntry(entry.id);
     const action = resolvePresetLoadAction(entry);
     if (action.kind === 'openConverter') this.#host.openConverted(entry.id);
     else if (action.kind === 'loadEmptySlot') void this.#host.selectPreset(action.number, { recency: false });
     else void this.#runtime.loadEntry(entry.id);
+    return action;
   }
 }

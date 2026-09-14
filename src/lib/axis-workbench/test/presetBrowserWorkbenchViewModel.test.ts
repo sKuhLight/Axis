@@ -117,18 +117,24 @@ describe('Preset Browser view model orchestration', () => {
   });
 
   it('routes rename/load actions and persists saved-filter changes through the host', () => {
-    const { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset } = setup();
+    const { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, openConverted } = setup();
     expect(model.rename(summary(), '  New Lead  ')).toBe(true);
     expect(renameStoredPreset).toHaveBeenCalledWith(1, 'New Lead');
     expect(model.rename(summary({ empty: true }), 'Nope')).toBe(false);
 
-    model.load(summary({ id: 'dev:19', number: 19, name: '<EMPTY>', empty: true }));
+    expect(model.load(summary({ id: 'dev:19', number: 19, name: '<EMPTY>', empty: true })))
+      .toEqual({ kind: 'loadEmptySlot', number: 19 });
     expect(selectPreset).toHaveBeenCalledWith(19, { recency: false });
     expect(controller.snapshot.entryId).toBe('dev:19');
 
     const loadEntry = vi.spyOn(runtime, 'loadEntry').mockResolvedValue(true);
-    model.load(summary());
+    expect(model.load(summary())).toEqual({ kind: 'runtimeLoad' });
     expect(loadEntry).toHaveBeenCalledWith('dev:1');
+
+    // A saved conversion re-opens in the converter — the returned action tells the caller NOT to
+    // navigate to the Grid (the converter page owns that surface).
+    expect(model.load(summary({ id: 'conv:1', converted: true }))).toEqual({ kind: 'openConverter' });
+    expect(openConverted).toHaveBeenCalledWith('conv:1');
 
     controller.setQuery('clean `tag:Lead`');
     const saved = model.saveFilter([], '  Leads  ');
