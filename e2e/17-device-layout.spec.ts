@@ -190,14 +190,15 @@ test.describe('Block Editor grid map', () => {
   });
 });
 
-// A pinned control must reproduce the device-authored kind it was collected
-// from — a dropdown stays a dropdown, a toggle a toggle — instead of the generic
-// ring knob the pin used to flatten every control into.
+// A pinned control must reproduce the control the Block Editor draws — a knob
+// stays a knob, a dropdown a dropdown, a toggle a toggle — instead of the generic
+// ring the pin used to flatten every control into.
 test.describe('Pinned control kinds', () => {
-  test('a pinned dropdown and toggle render as real controls, not knobs', async ({ page }) => {
+  test('pinned controls render the same bodies as the Block Editor', async ({ page }) => {
     await bootWithLayout(page);
-    // Drive block 200: Mode (id 4, dropdown) and Bright (id 9, toggle), both enums.
+    // Drive block 200: Gain (id 0, knob), Mode (id 4, dropdown), Bright (id 9, toggle).
     await seedPinnedControls(page, [
+      { effectId: 200, paramId: 0, block: 'Drive 1', label: 'Gain', color: '#d6543f', view: 'knob' },
       { effectId: 200, paramId: 4, block: 'Drive 1', label: 'Mode', color: '#d6543f', view: 'dropdown' },
       { effectId: 200, paramId: 9, block: 'Drive 1', label: 'Bright', color: '#d6543f', view: 'toggle' }
     ]);
@@ -206,14 +207,18 @@ test.describe('Pinned control kinds', () => {
     await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
 
     const panel = page.locator('.custom-panel').first();
+    const knob = panel.locator('.axis-widget.param[data-param-view="knob"]');
     const dropdown = panel.locator('.axis-widget.param[data-param-view="dropdown"]');
     const toggle = panel.locator('.axis-widget.param[data-param-view="toggle"]');
+    await expect(knob).toHaveCount(1);
     await expect(dropdown).toHaveCount(1);
     await expect(toggle).toHaveCount(1);
 
+    // The Block Editor primitives, not the fallback ring.
+    await expect(knob.locator('.knob')).toHaveCount(1);
     await expect(dropdown.locator('.dd-wrap')).toHaveCount(1);
     await expect(toggle.locator('.switch')).toHaveCount(1);
-    // Neither fell back to the generic ring.
+    await expect(knob.locator('.param-ring')).toHaveCount(0);
     await expect(dropdown.locator('.param-ring')).toHaveCount(0);
     await expect(toggle.locator('.param-ring')).toHaveCount(0);
   });

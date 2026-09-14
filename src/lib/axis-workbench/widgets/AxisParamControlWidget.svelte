@@ -1,6 +1,8 @@
 <script lang="ts">
   import { deviceSession, gridEditing, paramEditing } from '$lib/editor/editorClients.svelte';
-  import { fmtControlValue } from '$lib/ui/format';
+  import { fmtControlValue, normFromValue, paramValue } from '$lib/ui/format';
+  import { enumKnobLabel, enumKnobNorm, enumKnobValueAt } from '$lib/ui/enumKnob';
+  import Knob from '$lib/ui/Knob.svelte';
   import Dropdown from '$lib/ui/Dropdown.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
   import { isPanelWidgetZone } from '../../workbench';
@@ -27,17 +29,14 @@
   const paramBlock = $derived(readString(paramTarget.block) ?? readString(widget.state?.block) ?? 'Block');
   const paramLabel = $derived(readString(paramTarget.param) ?? readString(paramTarget.label) ?? readString(widget.state?.label) ?? 'Parameter');
   const paramColor = $derived(readString(widget.state?.color) ?? readString(paramTarget.color) ?? 'var(--accent)');
-  // Display mode: pinned params default to the Block-Editor square control-tile
-  // look when they live in a custom panel (touch-friendly, name-labelled), and
-  // to the compact horizontal chip in bars/rails (where a tall tile won't fit).
-  // `state.display` ('tile' | 'ring') overrides the per-context default. `mini`
-  // always collapses to the chip so an auto-fit bar stays a single row.
+  // Display mode: pinned params default to the square control-tile look when they
+  // live in a custom panel (touch-friendly, name-labelled), and to the compact
+  // horizontal chip in bars/rails (where a tall tile won't fit). `state.display`
+  // ('tile' | 'ring') overrides the per-context default. `mini` always collapses
+  // to the chip so an auto-fit bar stays a single row.
   const paramDisplayPref = $derived(readString(widget.state?.display));
   const paramInPanel = $derived(isPanelWidgetZone(widget.zone));
   const paramTile = $derived(!mini && (paramDisplayPref === 'tile' || (paramDisplayPref !== 'ring' && paramInPanel)));
-  // Tile rings are sized so the whole card stays close to square in an ~88px
-  // grid track; a 42px ring made every pinned control a tall column.
-  const paramRingPx = $derived(paramTile ? (compact ? 30 : 34) : 24);
   const paramEffectId = $derived(readNumber(paramTarget.effectId) ?? readNumber(paramTarget.eid));
   const paramId = $derived(readNumber(paramTarget.paramId) ?? readNumber(paramTarget.pid));
   // Live param/enum data for the bound block: its own arrays when it's the open
@@ -74,8 +73,9 @@
   const paramMissing = $derived(paramState === 'missing');
   // The device control's authored kind, carried into the pin from the canvas
   // (`state.view`). Only a LIVE enum becomes an interactive dropdown/toggle; a
-  // locked or missing binding stays the non-interactive ring + badge. A named
-  // param (and any unknown view) keeps the ring — faders stay rings by design.
+  // locked or missing binding stays the non-interactive ring + badge. Anything
+  // else with live data renders the SAME control the Block Editor draws: a Knob
+  // (named params, and enums the device authored as knobs).
   const paramViewPref = $derived(readString(widget.state?.view));
   const paramDropdown = $derived(
     paramViewPref === 'dropdown' && paramLive && paramEffectId != null && !!paramEnum && paramEnum.options.length > 0
@@ -83,92 +83,92 @@
   const paramSwitch = $derived(
     paramViewPref === 'toggle' && paramLive && paramEffectId != null && !!paramEnum && paramEnum.options.length > 0
   );
-  // A dropdown/toggle owns its own interaction; the ring contributes drag/wheel/click.
-  const paramInteractive = $derived(!paramDropdown && !paramSwitch);
-  const paramRenderKind = $derived(paramDropdown ? 'dropdown' : paramSwitch ? 'toggle' : 'ring');
+  const paramKnob = $derived(!paramDropdown && !paramSwitch && (!!paramNamed || !!paramEnum));
+  const paramRenderKind = $derived(paramDropdown ? 'dropdown' : paramSwitch ? 'toggle' : paramKnob ? 'knob' : 'ring');
+  // Match the Block Editor's dial size. It sizes a knob from the device's own
+  // control box (`85 x 112` device px for a full knob) via
+  // `max(20, min(w - 8, h - 46))` → ~66px, so a pinned knob is the SAME dial the
+  // canvas draws, not a shrunk-down tile ring. Chip mode uses a smaller dial.
+  const paramKnobSize = $derived(paramTile ? (compact ? 52 : 64) : 30);
+  const paramKnobValue = $derived(paramNamed ? (paramNamed.norm ?? 0) : paramEnum ? enumKnobNorm(paramEnum) : 0);
   // Which grid cell the binding points at (used to open it when read-only).
   const paramCell = $derived(
     paramEffectId == null ? undefined : [...gridEditing.layout.cells, ...gridEditing.layout.shunts].find((cell) => cell.effectId === paramEffectId)
   );
+  const paramValueText = $derived.by(() => {
+    if (paramNamed) return fmtControlValue(paramNamed);
+    if (paramEnum) return enumKnobLabel(paramEnum);
+    return paramPreview == null ? '--' : String(Math.round(paramPreview));
+  });
   const paramTip = $derived.by(() => {
     const head = `${paramBlock} · ${paramLabel}`;
     if (paramLive) {
-      if (paramNamed) return `${head} · drag or wheel to edit`;
       if (paramDropdown) return `${head} · choose from list`;
       if (paramSwitch) return `${head} · toggle on/off`;
-      return paramEnum ? `${head} · click to cycle` : head;
+      if (paramNamed) return `${head} · drag, or click the value to type`;
+      return `${head} · drag to edit`;
     }
     if (paramReadonly) return paramCell ? `${head} · read-only · click to open block` : head;
     return `${head} · block not in this preset`;
   });
-  const paramValueText = $derived.by(() => {
-    if (paramNamed) return fmtControlValue(paramNamed);
-    if (paramEnum) return paramEnum.options.find((option) => option.value === paramEnum.value)?.label ?? String(paramEnum.value);
-    return paramPreview == null ? '--' : String(Math.round(paramPreview));
-  });
   const paramDash = $derived(`${Math.max(0, Math.min(56.5, (paramNorm ?? 0.5) * 56.5)).toFixed(1)} 150`);
 
-  function nudgeParam(delta: number) {
+  // ── inline value editing (named params) ──
+  // Mirrors the Block Editor: clicking the readout chip types a value in the same
+  // spot while the dial stays put.
+  let editOpen = $state(false);
+  let editText = $state('');
+  const paramPlainValue = $derived.by(() => {
+    const p = paramNamed;
+    if (!p) return '';
+    const v = p.min != null && p.max != null ? paramValue(p) : (p.value ?? 0);
+    return Number.isFinite(v) ? parseFloat(v.toFixed(3)).toString() : '';
+  });
+  function beginParamEdit() {
+    if (editMode || !paramLive || !paramNamed) return;
+    editText = paramPlainValue;
+    editOpen = true;
+  }
+  function commitParamEdit() {
+    if (!editOpen) return;
+    const p = paramNamed;
+    const v = parseFloat(editText);
+    if (p && paramEffectId != null && Number.isFinite(v)) paramEditing.setPinnedParam(paramEffectId, p, clamp01(normFromValue(v, p)));
+    editOpen = false;
+  }
+  function cancelParamEdit() {
+    editOpen = false;
+  }
+  // A different binding (or a different param on the same block) must close any
+  // in-progress edit so a stale value is never committed to the new target.
+  $effect(() => {
+    void paramEffectId;
+    void paramId;
+    editOpen = false;
+  });
+
+  // Knob input: a named param writes a normalized value; an enum knob maps the
+  // dial position back to the nearest option, exactly like the Block Editor.
+  function setParamFromKnob(value: number) {
     if (editMode || paramEffectId == null) return;
     if (paramNamed) {
-      paramEditing.setPinnedParam(paramEffectId, paramNamed, clamp01((paramNamed.norm ?? 0) + delta));
+      paramEditing.setPinnedParam(paramEffectId, paramNamed, clamp01(value));
       return;
     }
     if (paramEnum) {
-      const count = paramEnum.options.length;
-      if (!count) return;
-      const index = paramEnum.options.findIndex((option) => option.value === paramEnum.value);
-      const nextIndex = (((index + Math.sign(delta)) % count) + count) % count;
-      const next = paramEnum.options[nextIndex];
-      if (next) paramEditing.setPinnedEnum(paramEffectId, paramEnum, next.value);
+      const next = enumKnobValueAt(paramEnum, value);
+      if (next != null && next !== paramEnum.value) paramEditing.setPinnedEnum(paramEffectId, paramEnum, next);
     }
   }
 
-  // Hide the hover tooltip the instant the control is acted on (drag or wheel);
-  // it stays out of the way until the next pointerleave clears the flag.
+  function setEnumValue(value: number) {
+    if (paramEffectId == null || !paramEnum) return;
+    paramEditing.setPinnedEnum(paramEffectId, paramEnum, value);
+  }
+
+  // Tooltip state. Hide it the instant the control is acted on; it returns on the
+  // next pointerenter/focus.
   let paramInteracting = $state(false);
-
-  function paramPointerDown(event: PointerEvent) {
-    if (editMode || !paramNamed || paramEffectId == null || event.button !== 0) return;
-    event.preventDefault();
-    paramInteracting = true;
-    const startY = event.clientY;
-    const startNorm = paramNamed.norm ?? 0;
-    const eid = paramEffectId;
-    const named = paramNamed;
-    const onMove = (move: PointerEvent) => {
-      paramEditing.setPinnedParam(eid, named, clamp01(startNorm + (startY - move.clientY) / 180));
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-      paramInteracting = false;
-    };
-    // pointercancel (e.g. a touch scroll takeover) fires no pointerup — without this the listeners
-    // above stay live and every stray pointermove keeps writing values to the connected device.
-    // Tear down and stop writing; do NOT send a final setPinnedParam.
-    const onCancel = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onCancel);
-      paramInteracting = false;
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onCancel);
-  }
-
-  function paramWheel(event: WheelEvent) {
-    if (editMode || !paramNamed) return;
-    event.preventDefault();
-    paramInteracting = true;
-    nudgeParam(event.deltaY < 0 ? -0.015 : 0.015);
-  }
-
-  // Fixed-position tooltip: a purely-CSS `:hover` `.axtip` sat inside the panel's
-  // `overflow: hidden` body, so the leftmost control's tooltip was clipped/hidden
-  // behind the dock on its left. Position it against the viewport and clamp it on-screen.
   let paramEl = $state<HTMLElement | null>(null);
   let paramTipEl = $state<HTMLElement | null>(null);
   let paramTipHover = $state(false);
@@ -190,38 +190,12 @@
     if (editMode || !paramCell) return;
     void paramEditing.openCell(paramCell);
   }
-
-  function paramClick() {
-    if (editMode) return;
-    // read-only: a click opens the bound block so the widget becomes live
-    if (paramReadonly) {
-      openParamBlock();
-      return;
-    }
-    if (paramLive && paramEnum) nudgeParam(1);
-  }
-
-  // role="button" on a div doesn't synthesize a click on Enter/Space the way a
-  // real <button> does — keep keyboard parity with the old button root.
-  function paramKeydown(event: KeyboardEvent) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    paramClick();
-  }
-
-  // Enum writes for the interactive dropdown/toggle primitives — they own the
-  // change, we forward it to the same pinned-enum writer the ring used.
-  function setEnumValue(value: number) {
-    if (paramEffectId == null || !paramEnum) return;
-    paramEditing.setPinnedEnum(paramEffectId, paramEnum, value);
-  }
 </script>
 
-<!-- A div root, not a button: a pinned dropdown/toggle renders the real
-     Dropdown/Toggle primitives, and nesting their buttons inside a <button>
-     would be invalid. The ring mode keeps button SEMANTICS via role + keyboard
-     handling; the interactive primitives own their own. -->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex (role="button" is set whenever tabindex is 0) -->
+<!-- A plain container, not a button: the control bodies (Knob / Dropdown /
+     Toggle) are the same components the Block Editor draws, and they own their
+     own interaction. The container only carries the layout, the tooltip and the
+     read-only/missing fallback ring (shown only when there is no live data). -->
 <div
   class="axis-widget param axtipwrap"
   class:param-tile={paramTile}
@@ -231,24 +205,19 @@
   data-param-mode={paramTile ? 'tile' : 'chip'}
   data-param-state={paramState}
   data-param-view={paramRenderKind}
-  role={paramInteractive ? 'button' : undefined}
-  tabindex={paramInteractive ? 0 : undefined}
-  aria-label={paramInteractive ? paramTip : undefined}
-  aria-disabled={!editMode && paramMissing ? 'true' : undefined}
   style:--param-color={paramColor}
+  role="group"
   bind:this={paramEl}
-  onpointerdown={paramInteractive ? paramPointerDown : undefined}
-  onwheel={paramInteractive ? paramWheel : undefined}
-  onclick={paramInteractive ? paramClick : undefined}
-  onkeydown={paramInteractive ? paramKeydown : undefined}
+  onpointerdown={() => (paramInteracting = true)}
+  onpointerup={() => (paramInteracting = false)}
   onpointerenter={() => (paramTipHover = true)}
   onpointerleave={() => {
     paramTipHover = false;
     paramInteracting = false;
   }}
   onpointercancel={() => (paramInteracting = false)}
-  onfocus={() => (paramTipFocus = true)}
-  onblur={() => (paramTipFocus = false)}
+  onfocusin={() => (paramTipFocus = true)}
+  onfocusout={() => (paramTipFocus = false)}
 >
   <!-- tooltip: which block this control belongs to + how to act -->
   <span
@@ -264,37 +233,54 @@
       value={paramEnum?.value ?? 0}
       options={paramEnum?.options ?? []}
       accent={paramColor}
-      hideLabel
-      fixedWidth={paramTile ? (compact ? 68 : 76) : 96}
-      fieldHeight={paramTile ? 30 : 26}
+      fixedWidth={paramTile ? 112 : 132}
+      fieldHeight={paramTile ? 34 : 28}
       onChange={setEnumValue}
     />
-    {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
   {:else if paramSwitch}
     <Toggle dense label={paramLabel} value={paramEnum?.value ?? 0} options={paramEnum?.options ?? []} onChange={setEnumValue} />
+  {:else if paramKnob}
+    <Knob
+      value={paramKnobValue}
+      label={paramLabel}
+      valueText={paramValueText}
+      color={paramColor}
+      size={paramKnobSize}
+      bpm={deviceSession.bpm}
+      formatValue={paramNamed ? (norm) => fmtControlValue({ ...paramNamed, norm }, 1) : null}
+      onInput={setParamFromKnob}
+      onEdit={beginParamEdit}
+      editing={editOpen}
+      {editText}
+      onEditInput={(v) => (editText = v)}
+      onEditCommit={commitParamEdit}
+      onEditCancel={cancelParamEdit}
+    />
   {:else}
-    <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramRingPx}px`} style:height={`${paramRingPx}px`}>
-      <svg width={paramRingPx} height={paramRingPx} viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
-        <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
-      </svg>
-      {#if paramReadonly}
-        <!-- lock affordance: this binding is a read-only preview until its block is opened -->
-        <svg class="param-badge lock" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-          <rect x="2.5" y="5" width="7" height="5.2" rx="1" fill="currentColor"></rect>
-          <path d="M4 5 V3.6 a2 2 0 0 1 4 0 V5" fill="none" stroke="currentColor" stroke-width="1.2"></path>
+    <button class="param-fallback" type="button" aria-label={paramTip} disabled={paramMissing} onclick={openParamBlock}>
+      <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramKnobSize}px`} style:height={`${paramKnobSize}px`}>
+        <svg width={paramKnobSize} height={paramKnobSize} viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
+          <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
         </svg>
-      {:else if paramMissing}
-        <!-- missing: the bound block isn't in the current preset -->
-        <svg class="param-badge warn" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M6 1.5 L11 10.5 H1 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path>
-          <path d="M6 5 V7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path>
-          <circle cx="6" cy="9" r="0.7" fill="currentColor"></circle>
-        </svg>
-      {/if}
-    </span>
-    <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
-    {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
+        {#if paramReadonly}
+          <!-- lock affordance: this binding is a read-only preview until its block is opened -->
+          <svg class="param-badge lock" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+            <rect x="2.5" y="5" width="7" height="5.2" rx="1" fill="currentColor"></rect>
+            <path d="M4 5 V3.6 a2 2 0 0 1 4 0 V5" fill="none" stroke="currentColor" stroke-width="1.2"></path>
+          </svg>
+        {:else if paramMissing}
+          <!-- missing: the bound block isn't in the current preset -->
+          <svg class="param-badge warn" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M6 1.5 L11 10.5 H1 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path>
+            <path d="M6 5 V7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path>
+            <circle cx="6" cy="9" r="0.7" fill="currentColor"></circle>
+          </svg>
+        {/if}
+      </span>
+      <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
+      {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
+    </button>
   {/if}
 </div>
 
@@ -303,9 +289,8 @@
     position: relative;
     /* let the hover tooltip (.axtip, positioned below) escape the chip/tile */
     overflow: visible;
-    /* The root is a div now (to host real Dropdown/Toggle children). Pinned
-       controls are chrome-less — no border and no fill; the block tint lives on
-       the ring/values, so the param reads as a control, not a card. */
+    /* Pinned controls are chrome-less — the control body (Knob/Dropdown/Toggle)
+       carries the look, so the container draws no border and no fill. */
     border: 0;
     background: transparent;
   }
@@ -328,6 +313,23 @@
   .param.missing .strong,
   .param.missing .token {
     opacity: 0.4;
+  }
+  /* The read-only/missing fallback body — a borderless button so a click can open
+     the block. Live controls never use it; Knob/Dropdown/Toggle do. */
+  .param-fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .param-fallback:disabled {
+    cursor: default;
   }
   .param-badge {
     position: absolute;
@@ -390,14 +392,12 @@
   .axtip.show {
     opacity: 1;
   }
-  /* Block-Editor square control-tile look: touch-friendly, always shows the
-     parameter name, tinted by the source block's category accent (--param-color). */
+  /* Square control-tile layout: the control body is centred, name supplied by the
+     body itself (Knob caption / Dropdown label / Toggle caption). */
   .param.param-tile {
     flex-direction: column;
     justify-content: center;
     height: auto;
-    /* Kept just under the 88px grid track so a tile reads as a square card rather
-       than a tall column. */
     min-height: 84px;
     min-width: 0;
     max-width: 100%;
@@ -413,9 +413,8 @@
     min-width: 72px;
     padding: 9px 8px;
   }
-  /* The value can be a long enum name ("GAIN ENHANCER"), not just a number, so it
-     is clamped exactly like the parameter name below — an unclamped value pushes
-     the tile past its grid track and makes one card wider than its neighbours. */
+  /* The fallback ring is the only body with its own value/name text; the value can
+     be a long enum name, so clamp it exactly like the name below. */
   .param.param-tile .param-val {
     font-size: 13px;
     max-width: 100%;
