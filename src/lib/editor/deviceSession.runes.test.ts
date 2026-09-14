@@ -548,12 +548,16 @@ describe('connection picker', () => {
   it('picking a port closes the popover, reconnects, re-detects and re-asserts the polling mode', async () => {
     const { host, d } = fresh();
     d.portsOpen = true;
+    d.preset = { number: 56, name: 'Old device' };
+    d.lastPreset = 56;
     await d.pickPort({ transport: 'midi', id: 'b' } as never);
     expect(d.portsOpen).toBe(false);
     expect(selectPort).toHaveBeenCalledWith({ transport: 'midi', id: 'b' }, undefined);
     expect(selectPort.mock.calls[0][1]).toBeUndefined(); // no model sent → a forced profile survives a port change
     expect(health).toHaveBeenCalled(); // poll() ran → connection state refreshed
     expect(d.detected).toMatchObject({ short: 'fm3' });
+    expect(d.preset).toBeNull();
+    expect(d.lastPreset).toBeNull();
     expect(host.load).toHaveBeenCalledTimes(1);
     expect(host.reapplyPollingMode).toHaveBeenCalledTimes(1);
     expect(host.showToast).toHaveBeenCalledWith('Connection changed', '#35c9d6');
@@ -570,12 +574,16 @@ describe('connection picker', () => {
   it('forcing a profile keeps any manual PORT override', async () => {
     const { host, d } = fresh();
     d.portOverride = { transport: 'midi', id: 'b' } as never;
+    d.preset = { number: 56, name: 'Old profile' };
+    d.lastPreset = 56;
     listPorts.mockResolvedValue({ ports: [], chosen: null, override: null, profileOverride: 'fm3' });
     await d.pickProfile('fm3' as never);
     // The manual port override is passed back, NOT the resolved auto connection — otherwise forcing
     // a profile would pin whatever port auto-detect happened to land on.
     expect(selectPort).toHaveBeenCalledWith({ transport: 'midi', id: 'b' }, 'fm3');
     expect(d.profileOverride).toBe('fm3');
+    expect(d.preset).toBeNull();
+    expect(d.lastPreset).toBeNull();
     expect(host.reapplyPollingMode).toHaveBeenCalledTimes(1);
     expect(host.showToast).toHaveBeenCalledWith('Device profile forced: FM3', '#35c9d6');
   });

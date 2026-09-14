@@ -103,7 +103,7 @@ describe('Preset Browser Workbench runtime', () => {
       'note:Loaded Lead from local folder',
       'buffer:Folder/Lead.syx',
       'reload',
-      'notify:Loaded Lead - Save writes to disk or a slot'
+      'notify:Loaded Lead - Save stores it to the current preset slot'
     ]);
     expect(runtime.snapshot.lastLoadedEntryId).toBe('local:Folder/Lead.syx');
   });

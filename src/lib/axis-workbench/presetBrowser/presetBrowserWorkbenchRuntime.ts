@@ -109,7 +109,7 @@ export class AxisPresetBrowserWorkbenchRuntime {
         host.noteBufferReplaced?.(`Loaded ${entry.summary.name ?? 'preset'} from local folder`);
         host.setBufferSource?.({ path, name: entry.summary.name ?? 'preset' });
         await host.reloadEditor?.();
-        host.notify?.(`Loaded ${entry.summary.name ?? 'preset'} - Save writes to disk or a slot`, '#f5a623');
+        host.notify?.(`Loaded ${entry.summary.name ?? 'preset'} - Save stores it to the current preset slot`, '#f5a623');
       } else {
         const number = entry.summary.number ?? -1;
         if (number < 0 || !host.loadDeviceSlot) throw new Error('Open it on the device to load.');

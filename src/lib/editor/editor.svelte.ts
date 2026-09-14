@@ -727,9 +727,8 @@ class EditorStore {
 
   // ── preset-buffer facade ─────────────────────────────────────────────────────────────────────
   // Straight delegation to `#preset` (presetBuffer.svelte.ts). Keeps `editor.selectPreset()`,
-  // `editor.save()`, `editor.local`, `editor.bufferSource` and friends reading and writing exactly
-  // as they did before the extraction. ADD to this facade when the slice grows a member; never
-  // re-add state to `EditorStore`.
+  // `editor.save()`, `editor.local`, `editor.bufferSource` and friends available to compatibility
+  // call sites. ADD to this facade when the slice grows a member; never re-add state to `EditorStore`.
   backupPreset = (n: number) => this.#preset.backupPreset(n);
   loadVersion = (id: string) => this.#preset.loadVersion(id);
   scheduleAutoSync = () => this.#preset.scheduleAutoSync();
@@ -740,26 +739,19 @@ class EditorStore {
   setLocalAutoSync = (on: boolean) => this.#preset.setLocalAutoSync(on);
   fullDeviceBackup = () => this.#preset.fullDeviceBackup();
   noteBufferReplaced = (label: string) => this.#preset.noteBufferReplaced(label);
-  saveLocalFile = () => this.#preset.saveLocalFile();
   watchPreset = () => this.#preset.watchPreset();
   renamePreset = (name: string) => this.#preset.renamePreset(name);
   renameStoredPreset = (slot: number, name: string) => this.#preset.renameStoredPreset(slot, name);
   selectPreset = (n: number, opts?: { recency?: boolean }) => this.#preset.selectPreset(n, opts);
   stepPreset = (dir: number) => this.#preset.stepPreset(dir);
   loadAm4Preset = (location: number, opts?: { recency?: boolean }) => this.#preset.loadAm4Preset(location, opts);
-  openSave = () => this.#preset.openSave();
-  save = (n: number) => this.#preset.save(n);
+  save = () => this.#preset.save();
   // Writable: the preset browser + the workbench preset host assign `bufferSource` when they load a
-  // local file onto the device, SaveDialog closes itself with `editor.saveOpen = false`, and the
-  // save dialog binds `saveTarget`. Dropping a `set` here breaks assignment at RUNTIME and nothing
-  // catches it — `_editorSatisfiesSurface` cannot, because TypeScript ignores write-ability in
-  // assignability (see `src/lib/CLAUDE.md`, Store pattern § slices, rule 4).
+  // local file onto the device. Dropping a `set` here breaks assignment at RUNTIME and nothing catches
+  // it because TypeScript ignores write-ability in assignability (see `src/lib/CLAUDE.md`, Store
+  // pattern § slices, rule 4).
   get bufferSource() { return this.#preset.bufferSource; }
   set bufferSource(v) { this.#preset.bufferSource = v; }
-  get saveOpen() { return this.#preset.saveOpen; }
-  set saveOpen(v) { this.#preset.saveOpen = v; }
-  get saveTarget() { return this.#preset.saveTarget; }
-  set saveTarget(v) { this.#preset.saveTarget = v; }
 }
 
 export const editor = new EditorStore();

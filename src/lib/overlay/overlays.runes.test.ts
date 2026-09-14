@@ -32,10 +32,10 @@ describe('registry-owned overlays', () => {
     expect(overlays.anyOpen).toBe(false);
     overlays.open('cabPicker');
     expect(overlays.anyOpen).toBe(true);
-    overlays.open('save');
+    overlays.open('theme');
     overlays.close('cabPicker');
-    expect(overlays.anyOpen).toBe(true); // save still open
-    overlays.close('save');
+    expect(overlays.anyOpen).toBe(true);
+    overlays.close('theme');
     expect(overlays.anyOpen).toBe(false);
   });
 
@@ -144,7 +144,7 @@ describe('escape() priority', () => {
   });
 
   it('preserves the historically non-Escape-dismissible owned dialogs', () => {
-    for (const id of ['deviceTools', 'save', 'theme'] as const) {
+    for (const id of ['deviceTools', 'theme'] as const) {
       overlays.open(id);
       expect(overlays.escape()).toBe(false);
       expect(overlays.isOpen(id)).toBe(true);

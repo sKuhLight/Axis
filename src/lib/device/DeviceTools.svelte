@@ -25,7 +25,6 @@
   let fw = $state<string>('');
   let modModel = $state<ModView | null>(null);
   let modOpen = $state(false);
-  let storeLoc = $state(0);
 
   const caps = $derived(deviceSession.caps);
   const legacyAm4 = $derived(!deviceSession.isV2 && deviceSession.isAm4); // v1 fallback path (old /am4/* routes)
@@ -34,8 +33,6 @@
   const canFirmware = $derived(legacyAm4 || !!caps?.firmwareValidate);
   const canModView = $derived(legacyAm4 || !!caps?.modifiers?.model);
   const modBindable = $derived(!legacyAm4 && !!caps?.modifiers?.bind);
-  // bank-letter store convenience (Save-to-slot with A01..Z04 codes) — AM4-family addressing only
-  const canStoreSlot = $derived(legacyAm4 || (deviceSession.bankLetterAddressing && !!caps?.supportsSave));
   const locCount = $derived(caps?.presets?.count ?? 104);
   const bankCode = (i: number) => `${String.fromCharCode(65 + Math.floor(i / 4))}${String((i % 4) + 1).padStart(2, '0')}`;
 
@@ -127,15 +124,6 @@
     const o = f as { symbol?: string; pid?: number };
     return o.symbol ?? (o.pid != null ? `pid ${o.pid}` : '');
   };
-
-  async function storeToSlot() {
-    busy = true;
-    try {
-      const r = legacyAm4 ? await forgefx.am4StorePreset(storeLoc) : await forgefx.store(storeLoc);
-      say(`Saved active buffer → ${('code' in r && r.code) || bankCode(storeLoc)}`);
-    } catch (e) { say('Store failed: ' + (e as Error).message, false); }
-    finally { busy = false; }
-  }
 </script>
 
 <Dialog overlay="deviceTools" open={editorOverlays.deviceToolsOpen} onClose={close} width="min(680px, 94vw)" maxHeight="90vh" labelledBy="device-tools-title" class="device-tools-dlg">
@@ -149,7 +137,7 @@
 
       {#if msg}<div class="msg" style="--a:{msgAccent}">{msg}</div>{/if}
 
-      {#if canBackup || canRestore || canStoreSlot}
+      {#if canBackup || canRestore}
         <section>
           <h3>Preset backup / restore</h3>
           {#if canBackup}
@@ -167,16 +155,6 @@
             <div class="line">
               <span>Restore .syx (verbatim, to its own location)</span>
               <label class="filebtn">Choose file…<input type="file" accept=".syx" onchange={restore} disabled={busy} /></label>
-            </div>
-          {/if}
-          {#if canStoreSlot}
-            <div class="line">
-              <label class="filebtn">Save active buffer → slot
-                <select bind:value={storeLoc} disabled={busy}>
-                  {#each Array(locCount) as _, i (i)}<option value={i}>{bankCode(i)}</option>{/each}
-                </select>
-              </label>
-              <button onclick={storeToSlot} disabled={busy}>Store</button>
             </div>
           {/if}
         </section>

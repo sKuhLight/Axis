@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
    * Shared pill action button — the `.go`/`.later`/`.cta`/dialog-footer `.btn` shape repeated
-   * across the bottom-toast prompts and the small save dialogs. Per-instance differences are
-   * props, not forks:
-   *   - `variant` — `primary` (accent fill), `secondary` (bordered, dim text), `amber` (the
-   *     Save dialog's destructive-but-not-danger accent)
+   * across the bottom-toast prompts and small dialogs. Per-instance differences are props, not
+   * forks:
+   *   - `variant` — `primary` (accent fill), `secondary` (bordered, dim text), `amber` (a
+   *     destructive-but-not-danger accent)
    *   - `size` — `sm` (34px, `--d-ctl-h-sm`), `md` (40px), `lg` (44px, `--d-ctl-h`)
    *   - `height` — raw override for a legacy one-off value that predates this component and
    *     isn't worth changing pixel-for-pixel (e.g. DeviceDefsPrompt's 30px Cancel)

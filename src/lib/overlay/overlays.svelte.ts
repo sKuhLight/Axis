@@ -33,7 +33,6 @@ export type OverlayId =
   | 'linkArm'
   | 'blockEditor'
   | 'deviceTools'
-  | 'save'
   | 'axisHub'
   | 'theme'
   | 'consentPrompt'
@@ -44,9 +43,9 @@ export type OverlayId =
  * `onKey` `else if` chain in `src/routes/+page.svelte`
  * (tuner → history → cabPicker → palette → quickBuild → convertScratch → convert →
  * presetPicker → presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`,
- * `save`, `axisHub`, `theme`) were never part of that chain; they sit lowest so an open
- * chain overlay always wins. Of these, `deviceTools`, `save` and `theme` remain
- * non-dismissible by Escape; `axisHub` closes on Escape like a normal dialog.
+ * `axisHub`, `theme`) were never part of that chain; they sit lowest so an open chain overlay
+ * always wins. Of these, `deviceTools` and `theme` remain non-dismissible by Escape;
+ * `axisHub` closes on Escape like a normal dialog.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
   consentPrompt: -20,
@@ -63,12 +62,11 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   linkArm: 90,
   blockEditor: 100,
   deviceTools: 200,
-  save: 210,
   axisHub: 220,
   theme: 230
 };
 
-const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'save', 'theme', 'consentPrompt']);
+const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'theme', 'consentPrompt']);
 const ESCAPE_BLOCKING = new Set<OverlayId>(['consentPrompt']);
 
 const OVERLAY_IDS = Object.keys(ESCAPE_ORDER) as OverlayId[];

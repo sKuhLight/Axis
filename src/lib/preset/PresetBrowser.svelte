@@ -871,9 +871,9 @@
         await forgefx.loadBytes(buf);
         presetRecency.record(e.id);
         presetBuffer.noteBufferReplaced(`Loaded ${e.summary.name} from local folder`);
-        presetBuffer.bufferSource = { path, name: e.summary.name }; // Save can write edits back to this file
+        presetBuffer.bufferSource = { path, name: e.summary.name };
         await gridEditing.load();
-        editorNotifications.showToast(`Loaded ${e.summary.name} — Save writes to disk or a slot`, '#f5a623');
+        editorNotifications.showToast(`Loaded ${e.summary.name} — Save stores it to the current preset slot`, '#f5a623');
       } catch { editorNotifications.showToast('Load failed', '#d6543f'); }
       return;
     }

@@ -193,29 +193,14 @@ export class PresetBufferStore {
   };
 
   // ── edit-buffer identity (which local file, if any, the buffer came from) ──
-  /** When the edit buffer was loaded from a local Presets/ file, this remembers which one — so Save
-   *  can offer writing the edits back to that file (save-to-disk) instead of a device slot. */
+  /** When the edit buffer was loaded from a local Presets/ file, this remembers its origin until
+   *  another buffer replaces it. */
   bufferSource = $state<{ path: string; name: string } | null>(null);
   /** The edit buffer was wholesale replaced (audition / snapshot / file load) — undo can't cross this,
    *  and any local-file link is stale (the local load path re-sets it right after). */
   noteBufferReplaced = (label: string) => {
     this.bufferSource = null;
     history.checkpoint(label, /*barrier*/ true);
-  };
-  /** Save the CURRENT edit buffer back to the local file it was loaded from — no device slot touched. */
-  saveLocalFile = async () => {
-    const src = this.bufferSource;
-    if (!src) return;
-    try {
-      const b = await forgefx.presetBackup(); // dump the active edit buffer (caps backupDump)
-      const r = await forgefx.saveLocalPreset(src.name, b.bytes, { path: src.path, overwrite: true });
-      this.saveOpen = false;
-      history.checkpoint(`Saved to Presets/${r.path}`, false); // marker — undo continues past it, like a slot save
-      this.#host.showToast(`Saved to Presets/${r.path}`, '#33c46b');
-      void library.refreshLocal();
-    } catch (e) {
-      this.#host.showToast('Save to disk failed: ' + (e as Error).message, '#d6543f');
-    }
   };
 
   // ── preset watch (device-side slot changes) ──
@@ -238,6 +223,8 @@ export class PresetBufferStore {
       // failure doesn't masquerade as a preset change (= reload flicker).
       if (n >= 0 && n !== this.#host.lastPreset) {
         this.#host.setLastPreset(n);
+        const preset = this.#host.preset;
+        if (preset) this.#host.setPreset({ ...preset, number: n });
         this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
         this.#host.histSwitch(n); // device-side preset change → swap the history context
         await this.#host.load();
@@ -325,6 +312,8 @@ export class PresetBufferStore {
     try {
       await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
       this.#host.setLastPreset(n);
+      const preset = this.#host.preset;
+      if (preset) this.#host.setPreset({ ...preset, number: n });
       if (opts?.recency !== false) presetRecency.record(`dev:${n}`);
       this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
       this.#host.histSwitch(n);
@@ -347,6 +336,9 @@ export class PresetBufferStore {
   loadAm4Preset = async (location: number, opts?: { recency?: boolean }) => {
     try {
       await forgefx.am4SwitchPreset(location);
+      this.#host.setLastPreset(location);
+      const preset = this.#host.preset;
+      if (preset) this.#host.setPreset({ ...preset, number: location });
       if (opts?.recency !== false) presetRecency.record(`dev:${location}`);
       overlays.close('presetPicker');
       await this.#host.load();
@@ -356,20 +348,17 @@ export class PresetBufferStore {
     }
   };
 
-  // ── save (DESTRUCTIVE: overwrites a preset slot) ──
-  get saveOpen() { return overlays.isOpen('save'); }
-  set saveOpen(v: boolean) { if (v) overlays.open('save'); else overlays.close('save'); }
-  saveTarget = $state<number>(0);
-  openSave = () => {
-    this.saveTarget = this.#host.preset?.number ?? this.#host.lastPreset ?? 0;
-    this.saveOpen = true;
-  };
-  save = async (n: number) => {
+  // ── save current edit buffer ──
+  save = async () => {
+    const n = this.#host.preset?.number ?? this.#host.lastPreset;
+    if (n == null || n < 0) {
+      this.#host.showToast('No preset slot is loaded', '#d6543f');
+      return;
+    }
     try {
       // API v2: the unified /preset/store saves every device (AM4 number = stored location; the
       // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
       const r = this.#host.legacyAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
-      this.saveOpen = false;
       if (r.ok) {
         history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : n}`, false); // marker — undo continues past it
         this.#host.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');

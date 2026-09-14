@@ -17,7 +17,7 @@
    *   - `align` — `'top'` anchors the card near the top of the viewport (search palettes)
    *   - `sheet` — mobile bottom-sheet presentation (pass `editor.isMobile`)
    *   - `mobileFull` — mobile full-screen presentation (pass `editor.isMobile`)
-   *   - `accent` — `'amber'` for destructive dialogs (Save)
+   *   - `accent` — `'amber'` for destructive dialogs
    *   - `title` — render the standard header row; omit it to supply your own header markup
    */
   import type { Snippet } from 'svelte';

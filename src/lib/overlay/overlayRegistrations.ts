@@ -7,8 +7,8 @@
  *
  * Only the overlays whose state genuinely lives elsewhere need an entry here. The former
  * `editor.xOpen` booleans (palette, cabPicker, quickBuild, presetPicker, presetSearch,
- * deviceTools, save, axisHub, theme) are owned by the registry directly — `editor` now
- * exposes thin accessors delegating to `overlays.open/close/isOpen`.
+ * deviceTools, axisHub, theme) are owned by the registry directly. `editor` exposes thin
+ * accessors delegating to `overlays.open/close/isOpen` where compatibility call sites need them.
  */
 
 import { overlays } from './overlays.svelte';

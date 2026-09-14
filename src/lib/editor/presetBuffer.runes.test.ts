@@ -3,8 +3,8 @@
 // runtime `$state` is inert, so the propagation assertions below would pass vacuously.
 //
 // What this pins, all of it load-bearing before the extraction and unchanged by it:
-//   1. The DESTRUCTIVE save path: which route each device generation stores through, the dialog
-//      closing before the toast, the undo marker, and the library reconcile gated on deep scan.
+//   1. The current-slot save path: which route each device generation stores through, the undo
+//      marker, and the library reconcile gated on deep scan.
 //   2. The sync-bus hook `editor.init()` registers — a config/version mutation anywhere in the app
 //      still lands in the debounced local Sync/ mirror, and still skips when it should.
 //   3. Preset nav order: recency, buffer-source invalidation, history context switch, picker close,
@@ -40,8 +40,6 @@ const setLocalRootReq = vi.fn(async (_r: string | null) => ({ configured: true, 
 const localSyncReq = vi.fn(async () => ({ written: 3 }));
 const localRestoreReq = vi.fn(async () => ({ imported: 2 }));
 const backupDevice = vi.fn(async () => ({ count: 384 }));
-const presetBackup = vi.fn(async () => ({ bytes: 'AAAA' }));
-const saveLocalPreset = vi.fn(async (_n: string, _b: string, _o: unknown) => ({ path: 'Crunch.syx' }));
 const currentPreset = vi.fn(async () => ({ number: 12, name: 'Roundtrip' }));
 const setPresetName = vi.fn(async (_n: string) => ({ ok: true }));
 const store = vi.fn(async (_n: number) => ({ ok: true }) as { ok: boolean; code?: string });
@@ -63,8 +61,6 @@ vi.mock('$lib/api/forgefx', () => ({
     localSync: () => localSyncReq(),
     localRestore: () => localRestoreReq(),
     backupDevice: () => backupDevice(),
-    presetBackup: () => presetBackup(),
-    saveLocalPreset: (n: string, b: string, o: unknown) => saveLocalPreset(n, b, o),
     currentPreset: () => currentPreset(),
     setPresetName: (n: string) => setPresetName(n),
     store: (n: number) => store(n),
@@ -152,29 +148,53 @@ beforeEach(() => {
   store.mockResolvedValue({ ok: true });
   selectPresetReq.mockResolvedValue({ ok: true }); // a rejection staged by one test must not leak
 
-  overlays.close('save');
   overlays.close('presetPicker');
   onMutation(() => {}); // drop any hook a previous test registered
 });
 
-// ── save (destructive) ──────────────────────────────────────────────────────────────────────────
+// ── save ────────────────────────────────────────────────────────────────────────────────────────
 describe('save', () => {
-  it('stores through the unified route, closes the dialog and drops an undo marker', async () => {
+  it('stores the edit buffer to the current preset and drops an undo marker', async () => {
     const { p } = fresh();
-    p.saveOpen = true;
-    await p.save(7);
-    expect(store).toHaveBeenCalledWith(7);
+    await p.save();
+    expect(store).toHaveBeenCalledWith(12);
     expect(am4StorePreset).not.toHaveBeenCalled();
-    expect(p.saveOpen).toBe(false);
-    expect(checkpoint).toHaveBeenCalledWith('Saved to preset 7', false); // marker, not a barrier
+    expect(checkpoint).toHaveBeenCalledWith('Saved to preset 12', false);
     expect(host.poll).toHaveBeenCalled();
-    expect(refreshSlot).toHaveBeenCalledWith(7); // deep-scan device → reconcile the slot summary
+    expect(refreshSlot).toHaveBeenCalledWith(12);
+  });
+
+  it('always uses the live preset number instead of the last known slot', async () => {
+    const { p } = fresh();
+    host.preset = { number: 56, name: 'Current' };
+    host.lastPreset = 40;
+    await p.save();
+    expect(store).toHaveBeenCalledWith(56);
+  });
+
+  it('falls back to the last known slot when the live preset reference is unavailable', async () => {
+    const { p } = fresh();
+    host.preset = null;
+    host.lastPreset = 40;
+    await p.save();
+    expect(store).toHaveBeenCalledWith(40);
+  });
+
+  it('refuses to save when no preset slot is known', async () => {
+    const { p } = fresh();
+    host.preset = null;
+    host.lastPreset = null;
+    await p.save();
+    expect(store).not.toHaveBeenCalled();
+    expect(am4StorePreset).not.toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('No preset slot is loaded', '#d6543f');
   });
 
   it('uses the AM4 codec route on a legacy v1 server and reports the bank-letter code', async () => {
     const { p } = fresh();
     host.legacyAm4 = true;
-    await p.save(3);
+    host.preset = { number: 3, name: 'Current' };
+    await p.save();
     expect(am4StorePreset).toHaveBeenCalledWith(3);
     expect(store).not.toHaveBeenCalled();
     expect(host.showToast).toHaveBeenCalledWith('Saved to preset 1A', '#f5a623');
@@ -183,15 +203,14 @@ describe('save', () => {
   it('skips the library reconcile on a name-scan device', async () => {
     const { p } = fresh();
     host.canDeepScan = false;
-    await p.save(7);
+    await p.save();
     expect(refreshSlot).not.toHaveBeenCalled();
   });
 
   it('reports a device rejection without recording an undo marker', async () => {
     const { p } = fresh();
     store.mockResolvedValue({ ok: false });
-    await p.save(7);
-    expect(p.saveOpen).toBe(false); // the dialog still closes — the write was attempted
+    await p.save();
     expect(checkpoint).not.toHaveBeenCalled();
     expect(host.showToast).toHaveBeenCalledWith('Save rejected by device', '#d6543f');
   });
@@ -199,38 +218,10 @@ describe('save', () => {
   it('reports a transport failure', async () => {
     const { p } = fresh();
     store.mockRejectedValue(new Error('timeout'));
-    await p.save(7);
+    await p.save();
     expect(host.showToast).toHaveBeenCalledWith('Save failed', '#d6543f');
   });
 
-  it('openSave targets the live preset, falling back to the last known slot', () => {
-    const { p } = fresh();
-    p.openSave();
-    expect(p.saveTarget).toBe(12);
-    expect(p.saveOpen).toBe(true);
-    host.preset = null;
-    host.lastPreset = 40;
-    p.openSave();
-    expect(p.saveTarget).toBe(40);
-  });
-
-  it('saveLocalFile writes back to the file the buffer came from — no device slot touched', async () => {
-    const { p } = fresh();
-    p.bufferSource = { path: '/music/Presets/Crunch.syx', name: 'Crunch' };
-    p.saveOpen = true;
-    await p.saveLocalFile();
-    expect(saveLocalPreset).toHaveBeenCalledWith('Crunch', 'AAAA', { path: '/music/Presets/Crunch.syx', overwrite: true });
-    expect(store).not.toHaveBeenCalled();
-    expect(p.saveOpen).toBe(false);
-    expect(checkpoint).toHaveBeenCalledWith('Saved to Presets/Crunch.syx', false);
-    expect(refreshLocal).toHaveBeenCalled();
-  });
-
-  it('saveLocalFile is a no-op when the buffer has no file behind it', async () => {
-    const { p } = fresh();
-    await p.saveLocalFile();
-    expect(presetBackup).not.toHaveBeenCalled();
-  });
 });
 
 // ── the sync-bus hook registered by editor.init() ───────────────────────────────────────────────
@@ -422,6 +413,24 @@ describe('preset nav', () => {
     expect(host.reloadOpenParams).toHaveBeenCalled();
   });
 
+  it('saves to a newly selected slot even when the previous live reference is stale', async () => {
+    const { p } = fresh();
+    vi.mocked(host.poll).mockRejectedValue(new Error('link down'));
+    await p.selectPreset(30);
+    await p.save();
+    expect(store).toHaveBeenCalledWith(30);
+  });
+
+  it('remembers a selected legacy AM4 location for the next save', async () => {
+    const { p } = fresh();
+    host.legacyAm4 = true;
+    host.preset = null;
+    host.lastPreset = null;
+    await p.selectPreset(30);
+    await p.save();
+    expect(am4StorePreset).toHaveBeenCalledWith(30);
+  });
+
   it('stepPreset walks from the live preset and never goes below zero', async () => {
     const { p } = fresh();
     await p.stepPreset(1);
@@ -527,6 +536,7 @@ describe('watchPreset', () => {
     currentPreset.mockResolvedValue({ number: 40, name: 'Lead' });
     await p.watchPreset();
     expect(host.lastPreset).toBe(40);
+    expect(host.preset).toEqual({ number: 40, name: 'Roundtrip' });
     expect(p.bufferSource).toBe(null);
     expect(host.histSwitch).toHaveBeenCalledWith(40);
     expect(host.load).toHaveBeenCalled();
@@ -635,12 +645,4 @@ describe('reactivity', () => {
     expect(p.bufferSource).toBe(null);
   });
 
-  it('saveOpen reads through to the overlay registry, not a local boolean', () => {
-    const { p } = fresh();
-    expect(p.saveOpen).toBe(false);
-    overlays.open('save');
-    expect(p.saveOpen).toBe(true);
-    p.saveOpen = false;
-    expect(overlays.isOpen('save')).toBe(false);
-  });
 });

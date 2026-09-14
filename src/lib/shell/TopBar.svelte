@@ -221,7 +221,7 @@
       </div>
     {/if}
 
-    <button class="save" title="Store the edit buffer to a preset" onclick={() => presetBuffer.openSave()}>
+    <button class="save" title="Save edits to the current preset" onclick={() => presetBuffer.save()}>
       <span class="save-dot"></span>Save
     </button>
   </div>

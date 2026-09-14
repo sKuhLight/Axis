@@ -27,7 +27,6 @@
   import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
   import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
   import PresetPicker from '$lib/preset/PresetPicker.svelte';
-  import SaveDialog from '$lib/preset/SaveDialog.svelte';
   import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
   import CachePrompt from '$lib/ui/CachePrompt.svelte';
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
@@ -189,7 +188,6 @@
   <HistoryPanel />
   <PresetPicker />
   {#if workbenchEnabled}<AxisPresetBrowserSearchOverlay />{/if}
-  <SaveDialog />
   <TunerOverlay />
   <CachePrompt />
   <ColorLabelsPrompt />

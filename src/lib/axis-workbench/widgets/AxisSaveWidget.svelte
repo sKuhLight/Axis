@@ -8,7 +8,7 @@
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
 </script>
 
-<button class="axis-widget save" class:dirty={saveDirty} data-size={size} type="button" onclick={() => presetBuffer.openSave()} title={saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}>
+<button class="axis-widget save" class:dirty={saveDirty} data-size={size} type="button" onclick={() => presetBuffer.save()} title={saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}>
   <span class="save-dot"></span>
   {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
 </button>

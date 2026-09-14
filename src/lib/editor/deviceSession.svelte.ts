@@ -285,6 +285,8 @@ export class DeviceSessionStore {
     try {
       await forgefx.selectPort(conn);
       this.conn = { state: 'connecting' };
+      this.preset = null;
+      this.lastPreset = null;
       await this.poll();
       const d = await forgefx.detect().catch(() => null);
       if (d) this.detected = d;
@@ -304,6 +306,8 @@ export class DeviceSessionStore {
       await forgefx.selectPort(this.portOverride, model);
       this.profileOverride = model === 'auto' ? null : model;
       this.conn = { state: 'connecting' };
+      this.preset = null;
+      this.lastPreset = null;
       await this.poll();
       const d = await forgefx.detect().catch(() => null);
       if (d) this.detected = d;
