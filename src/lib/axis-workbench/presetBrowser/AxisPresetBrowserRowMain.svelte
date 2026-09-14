@@ -76,7 +76,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
-    font: 700 13px/1.15 var(--font-ui);
+    font: 700 14.5px/1.15 var(--font-ui);
   }
   :global(.row-name.dim) {
     color: var(--textdim);
