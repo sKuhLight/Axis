@@ -408,14 +408,14 @@
     }
   }
 
-  /** Audition a DEVICE preset (Axe-Change style): pull its raw dump and load it into the edit
-   *  buffer — the device plays it WITHOUT switching slots or saving anything. File entries
-   *  already audition via their own load paths. */
+  /** Audition a preset that is NOT on the device (Axe-Change style): pull its raw .syx from disk
+   *  (imported file / local folder) and load it into the edit buffer — the device plays it WITHOUT
+   *  switching slots or saving anything. Device slots don't need this: they navigate with
+   *  "Switch to Preset". */
   async function auditionEntry(e: LibEntry) {
-    if (e.summary.number < 0) { editorNotifications.showToast('No device slot to audition from', '#f5a623'); return; }
     editorNavigation.openBuild();
     try {
-      const buf = await deviceEntryBytes(e.summary.number);
+      const buf = await entryBytes(e);
       await forgefx.loadBytes(buf);
       presetBuffer.noteBufferReplaced(`Auditioned ${e.summary.name}`); // history barrier — undo can't cross a buffer swap
       presetBuffer.noteAudition(e.summary.name);
@@ -501,14 +501,14 @@
         { id: 'delete', icon: 'trash', label: 'Delete', danger: true }
       ];
     }
+    const onDevice = e.source === 'device';
     return [
-      { id: 'load', icon: 'load', label: 'Load preset' },
-      ...(e.source === 'device' && e.summary.number >= 0
-        ? [
-            // edit-buffer load, no slot switch/save — the Axe-Change-style try-out
-            { id: 'audition', icon: 'load', label: 'Audition (edit buffer)' } as CtxItem,
-            { id: 'rename', icon: 'rename', label: 'Rename & save…' } as CtxItem
-          ]
+      // Already on the device → navigate to it; otherwise (imported file / local folder) → try it out.
+      ...(onDevice
+        ? [{ id: 'load', icon: 'load', label: 'Switch to Preset' } as CtxItem]
+        : [{ id: 'audition', icon: 'load', label: 'Audition' } as CtxItem]),
+      ...(onDevice && e.summary.number >= 0
+        ? [{ id: 'rename', icon: 'rename', label: 'Rename & save…' } as CtxItem]
         : []),
       { id: 'duplicate', icon: 'duplicate', label: 'Duplicate' } as CtxItem,
       'div',
@@ -1151,9 +1151,12 @@
             <div class="st"><span class="sk">BLOCKS</span><span class="sv2">{selected.summary.blocks.length}</span></div>
             <div class="st"><span class="sk" title="Estimated DSP load — not the device reading">~CPU</span><span class="sv2" style:color={cpuColor(cpu)}>{cpu}%</span></div>
           </div>
-          <button class="load" onclick={() => loadPreset(selected!)}>↓ Load preset</button>
-          {#if selected.source === 'device' && selected.summary.number >= 0}
+          {#if selected.source === 'device'}
+            <button class="load" onclick={() => loadPreset(selected!)}>↓ Switch to Preset</button>
+          {:else if selected.source === 'file' || selected.source === 'local'}
             <button class="load audition" onclick={() => auditionEntry(selected!)} title="Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style">▶ Audition</button>
+          {:else}
+            <button class="load" onclick={() => loadPreset(selected!)}>↓ Load preset</button>
           {/if}
           <button class="load convert" onclick={() => startCrossConvert(selected!)} title="Port this preset to another Fractal device — best-effort, with a full diff report">⇄ Convert…</button>
         </div>

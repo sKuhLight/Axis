@@ -13,7 +13,9 @@ describe('loadActionWarning', () => {
   });
 
   it('explains the plain behaviour when clean', () => {
-    expect(loadActionWarning(false, 'load').tooltip).toBe('Load this preset into the edit buffer');
+    expect(loadActionWarning(false, 'load').tooltip).toBe(
+      'Switch the device to this preset (the edit buffer is replaced)'
+    );
     expect(loadActionWarning(false, 'audition').tooltip).toContain('without switching slots');
     expect(loadActionWarning(false, 'load').tooltip).not.toContain('⚠');
     expect(loadActionWarning(false, 'audition').tooltip).not.toContain('⚠');

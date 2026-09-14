@@ -182,7 +182,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   const isOwner = $derived(snapshot.owner === part);
   const selectedDetail = $derived(snapshot.entryId ? runtimeSnapshot.details[snapshot.entryId] : null);
 
-  // Load preset / Audition both replace the edit buffer, so both discard unsaved edits to the
+  // Switch to Preset / Audition both replace the edit buffer, so both discard unsaved edits to the
   // current preset. Same derivation as the Save widget chip, so the two can never disagree.
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
   const loadWarning = $derived(loadActionWarning(saveDirty, 'load'));
@@ -537,6 +537,8 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
 
   function auditionEntry(entry: AxisPresetBrowserEntrySummary) {
     axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    // Like loadEntry, auditioning is a deliberate commit gesture — surface the Signal Grid result.
+    workbenchController?.activatePage(AXIS_PAGE_GRID);
     void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
   }
 
@@ -616,7 +618,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   // ── §4.4 row context menu (right-click / long-press) ────────────────────────────────────────
   // The generic workbench ContextMenu, rendered by the overlay OWNER instance only (§1 rank rule) so a
   // split sources|list|detail layout never double-renders the menu. Actions carry real backing:
-  // Load/Audition (runtime), Favorite (library.toggleFav) and Rename (editor.renameStoredPreset).
+  // Switch/Audition (runtime), Favorite (library.toggleFav) and Rename (editor.renameStoredPreset).
   let menuOpen = $state(false);
   let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
   let menuItems = $state<WorkbenchMenuItem[]>([]);
@@ -652,7 +654,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
         loadEntry(entry);
         return;
       case 'audition':
-        void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
+        auditionEntry(entry);
         return;
       case 'favorite':
         library.toggleFav(entry.id);

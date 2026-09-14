@@ -4,8 +4,8 @@
 // design's menu actions THAT HAVE REAL BACKING in the workbench today.
 //
 // Deliberately scoped to backed actions (task rule "no fantasy items"):
-//   - load        → runtime.loadEntry            (all entries)
-//   - audition    → runtime.auditionEntry        (device slots only)
+//   - load        → runtime.loadEntry            (device slots — switch the device to the stored preset)
+//   - audition    → runtime.auditionEntry        (entries NOT on the device: imported files + local folder)
 //   - favorite    → library.toggleFav            (toggles; label flips on entry.fav)
 //   - rename      → editor.renameStoredPreset    (device slots, gated on canRenamePresets)
 //   - tags        → library.addTag/removeTag     (any entry)
@@ -26,12 +26,13 @@ export type AxisPbMenuActionId =
 // The subset of an entry the menu builder needs (keeps it decoupled from the full summary type).
 export interface AxisPbMenuEntry {
   id: string;
-  /** Is this a real device slot (source 'device' with a slot number ≥ 0)? Gates audition + rename. */
+  /** Is this a real device slot (source 'device' with a slot number ≥ 0)? Device rows get
+   *  "Switch to Preset" + rename; non-device rows get "Audition". */
   deviceSlot: boolean;
   fav: boolean;
   /** A saved cross-device conversion (source 'converted') — gets its own reduced menu. */
   converted?: boolean;
-  /** A cleared/empty device slot — gets only a "Load preset" action. */
+  /** A cleared/empty device slot — gets only a "Switch to Preset" action. */
   empty?: boolean;
 }
 
@@ -51,9 +52,9 @@ export interface AxisPbMenuAction {
 // Build the ordered action list (pre-render form) for one row's context menu (§4.4 single-row menu).
 export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuCaps): AxisPbMenuAction[] {
   // Cleared/empty slots are not real entries: every other action (audition/rename/tags/favorite/
-  // crossConvert) would no-op or ghost-tag a non-entry, so they collapse to a single Load action.
+  // crossConvert) would no-op or ghost-tag a non-entry, so they collapse to a single switch action.
   if (entry.empty) {
-    return [{ id: 'load', label: 'Load preset', hint: '↵' }];
+    return [{ id: 'load', label: 'Switch to Preset', hint: '↵' }];
   }
   // Saved cross-device conversions are NOT device slots — they get their own reduced menu: re-open in the
   // converter, favorite, delete. (A true ".syx export" action is wired in the codec-authoring task — it
@@ -66,10 +67,14 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
       { id: 'deleteConverted', label: 'Delete', danger: true, separatorBefore: true }
     ];
   }
-  const actions: AxisPbMenuAction[] = [{ id: 'load', label: 'Load preset', hint: '↵' }];
+  const actions: AxisPbMenuAction[] = [];
   if (entry.deviceSlot) {
-    actions.push({ id: 'audition', label: 'Audition (edit buffer)' });
+    // Already on the device: the primary action navigates to the stored preset.
+    actions.push({ id: 'load', label: 'Switch to Preset', hint: '↵' });
     if (caps.canRename) actions.push({ id: 'rename', label: 'Rename & save…' });
+  } else {
+    // Not on the device (imported file / local folder): trial-load into the edit buffer.
+    actions.push({ id: 'audition', label: 'Audition', hint: '↵' });
   }
   // Cross-device converter (M4): available for every entry — the flow reads the row's .syx and opens the
   // convert dialog seeded with it. Not gated on caps (the converter is best-effort + offline).

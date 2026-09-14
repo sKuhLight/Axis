@@ -97,19 +97,19 @@ export class AxisPresetBrowserWorkbenchRuntime {
 
     try {
       if (entry.source === 'file') {
-        const bytes = host.fileBytes?.(entry.id);
-        if (!bytes || !host.loadBytes) throw new Error('File bytes unavailable. Re-import the preset.');
+        if (!host.loadBytes) throw new Error('File bytes unavailable. Re-import the preset.');
+        const bytes = await this.#entryBytes(entry, host);
         await host.loadBytes(bytes);
         host.noteBufferReplaced?.(`Loaded ${entry.summary.name ?? 'preset'}`);
         await host.reloadEditor?.();
         host.notify?.(`Loaded ${entry.summary.name ?? 'preset'}`, '#f5a623');
       } else if (entry.source === 'local') {
+        if (!host.loadBytes) throw new Error('Local preset file unavailable.');
+        const bytes = await this.#entryBytes(entry, host);
         const path = host.localPath?.(entry.id);
-        if (!path || !host.localPresetFile || !host.loadBytes) throw new Error('Local preset file unavailable.');
-        const bytes = await host.localPresetFile(path);
         await host.loadBytes(bytes);
         host.noteBufferReplaced?.(`Loaded ${entry.summary.name ?? 'preset'} from local folder`);
-        host.setBufferSource?.({ path, name: entry.summary.name ?? 'preset' });
+        if (path) host.setBufferSource?.({ path, name: entry.summary.name ?? 'preset' });
         await host.reloadEditor?.();
         host.notify?.(`Loaded ${entry.summary.name ?? 'preset'} - Save stores it to the current preset slot`, '#f5a623');
       } else {
@@ -138,18 +138,16 @@ export class AxisPresetBrowserWorkbenchRuntime {
   async auditionEntry(entryId: string): Promise<boolean> {
     const entry = this.#entry(entryId);
     if (!entry) return false;
-    const number = entry.summary.number ?? -1;
     const host = this.#hosts.current;
-    if (number < 0 || !host?.deviceEntryBytes || !host.loadBytes) {
-      this.#set({ error: 'No device slot to audition from.' });
-      host?.notify?.('No device slot to audition from', '#f5a623');
+    if (!host?.loadBytes) {
+      this.#set({ error: 'No runtime host to audition from.' });
       return false;
     }
 
     this.#set({ auditioningEntryId: entryId, error: null });
     host.openBuild?.();
     try {
-      const bytes = await host.deviceEntryBytes(number);
+      const bytes = await this.#entryBytes(entry, host);
       await host.loadBytes(bytes);
       host.noteBufferReplaced?.(`Auditioned ${entry.summary.name ?? 'preset'}`);
       host.markAudition?.(entry.summary.name ?? 'preset');
@@ -163,6 +161,27 @@ export class AxisPresetBrowserWorkbenchRuntime {
       this.#set({ auditioningEntryId: null, error });
       return false;
     }
+  }
+
+  /** Raw .syx bytes for an entry that lives as a file (`file:` / `local:`) or as a device slot.
+   *  Shared by the file/local load path and the source-agnostic audition path so the two can't drift. */
+  async #entryBytes(
+    entry: AxisPresetBrowserLibEntryLike,
+    host: AxisPresetBrowserRuntimeHost
+  ): Promise<Uint8Array | ArrayBuffer> {
+    if (entry.source === 'file') {
+      const bytes = host.fileBytes?.(entry.id);
+      if (!bytes) throw new Error('File bytes unavailable. Re-import the preset.');
+      return bytes;
+    }
+    if (entry.source === 'local') {
+      const path = host.localPath?.(entry.id);
+      if (!path || !host.localPresetFile) throw new Error('Local preset file unavailable.');
+      return host.localPresetFile(path);
+    }
+    const number = entry.summary.number ?? -1;
+    if (number < 0 || !host.deviceEntryBytes) throw new Error('No device slot to audition from.');
+    return host.deviceEntryBytes(number);
   }
 
   loadDetail(entryId: string): Promise<AxisPresetBrowserDetailState | null> {

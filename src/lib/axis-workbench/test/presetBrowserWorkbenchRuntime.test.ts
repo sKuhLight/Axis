@@ -130,6 +130,40 @@ describe('Preset Browser Workbench runtime', () => {
     expect(runtime.snapshot.lastAuditionedEntryId).toBe('dev:10');
   });
 
+  it('auditions file and local entries through their own byte sources', async () => {
+    const runtime = new AxisPresetBrowserWorkbenchRuntime();
+    const calls: string[] = [];
+    runtime.bindHost({
+      findEntry: (entryId) => entries.find((entry) => entry.id === entryId) ?? null,
+      openBuild: () => calls.push('openBuild'),
+      fileBytes: () => new Uint8Array([1, 2]),
+      localPath: (entryId) => entryId.slice('local:'.length),
+      localPresetFile: async (path) => { calls.push(`localFile:${path}`); return new Uint8Array([3, 4, 5]).buffer; },
+      loadBytes: async (bytes) => { calls.push(`load:${bytes.byteLength}`); },
+      noteBufferReplaced: (label) => { calls.push(label); },
+      markAudition: (name) => { calls.push(`audition:${name}`); },
+      reloadEditor: async () => { calls.push('reload'); }
+    });
+
+    await runtime.auditionEntry('file:pad');
+    await runtime.auditionEntry('local:Folder/Lead.syx');
+
+    expect(calls).toEqual([
+      'openBuild',
+      'load:2',
+      'Auditioned Pad',
+      'audition:Pad',
+      'reload',
+      'openBuild',
+      'localFile:Folder/Lead.syx',
+      'load:3',
+      'Auditioned Lead',
+      'audition:Lead',
+      'reload'
+    ]);
+    expect(runtime.snapshot.lastAuditionedEntryId).toBe('local:Folder/Lead.syx');
+  });
+
   it('hydrates detail state with params, grid, and versions', async () => {
     const runtime = new AxisPresetBrowserWorkbenchRuntime();
     runtime.bindHost({

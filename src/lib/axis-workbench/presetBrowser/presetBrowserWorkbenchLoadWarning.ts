@@ -1,7 +1,7 @@
 /**
  * Detail-pane load-action warning copy.
  *
- * "Load preset" and "Audition" both replace the edit buffer, so both silently discard unsaved
+ * "Switch to Preset" and "Audition" both replace the edit buffer, so both silently discard unsaved
  * edits to the current preset. When the preset is dirty (same signal as the Save widget chip —
  * see `../widgets/saveDirtyState`), the two buttons turn amber with a ⚠ and explain themselves
  * on hover. Keeping the copy here keeps it out of the markup and assertable.
@@ -17,8 +17,9 @@ export interface AxisPbLoadWarning {
 }
 
 const CLEAN_TOOLTIP: Record<AxisPbLoadAction, string> = {
-  load: 'Load this preset into the edit buffer',
-  // Wording carried over from the legacy browser so the two paths describe Audition identically.
+  // "Switch to Preset" navigates the device to a stored slot — the edit buffer is replaced.
+  load: 'Switch the device to this preset (the edit buffer is replaced)',
+  // Non-device entries (imported files / local folder) are tried out in the edit buffer.
   audition:
     'Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style'
 };

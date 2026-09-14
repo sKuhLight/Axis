@@ -15,22 +15,23 @@ function entry(over: Partial<AxisPbMenuEntry> = {}): AxisPbMenuEntry {
 }
 
 describe('context menu building (§4.4)', () => {
-  it('device slot → Load + Audition + Rename + Convert + Favorite + Tags', () => {
+  it('device slot → Switch to Preset + Rename + Convert + Favorite + Tags (no audition)', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: true });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'rename', 'crossConvert', 'favorite', 'tags']);
-    expect(actions[0].label).toBe('Load preset');
+    expect(actions.map((a) => a.id)).toEqual(['load', 'rename', 'crossConvert', 'favorite', 'tags']);
+    expect(actions[0].label).toBe('Switch to Preset');
     expect(actions.find((a) => a.id === 'favorite')?.label).toBe('Add to favorites');
     expect(actions.find((a) => a.id === 'tags')?.label).toBe('Tags…');
   });
 
   it('omits Rename when the device cannot rename', () => {
     const actions = buildAxisPbMenuActions(entry(), { canRename: false });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'audition', 'crossConvert', 'favorite', 'tags']);
+    expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite', 'tags']);
   });
 
-  it('non-device rows (files) get Load + Convert + Favorite + Tags (no audition/rename)', () => {
+  it('non-device rows (files) get Audition + Convert + Favorite + Tags (no load/rename)', () => {
     const actions = buildAxisPbMenuActions(entry({ deviceSlot: false }), { canRename: true });
-    expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite', 'tags']);
+    expect(actions.map((a) => a.id)).toEqual(['audition', 'crossConvert', 'favorite', 'tags']);
+    expect(actions[0].label).toBe('Audition');
   });
 
   it('flips the favorite label for favourited rows', () => {
@@ -49,13 +50,13 @@ describe('context menu building (§4.4)', () => {
     expect(actions.find((a) => a.id === 'deleteConverted')?.danger).toBe(true);
   });
 
-  it('empty slots collapse to a single Load action (no audition/rename/tags/favorite/convert)', () => {
+  it('empty slots collapse to a single Switch action (no audition/rename/tags/favorite/convert)', () => {
     const actions = buildAxisPbMenuActions(
       entry({ id: 'dev:2', deviceSlot: true, empty: true }),
       { canRename: true }
     );
     expect(actions.map((a) => a.id)).toEqual(['load']);
-    expect(actions[0].label).toBe('Load preset');
+    expect(actions[0].label).toBe('Switch to Preset');
   });
 
   it('adapts to WorkbenchMenuItems whose run dispatches the action id', () => {

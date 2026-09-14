@@ -60,19 +60,22 @@
           Delete
         </button>
       {:else}
-        <button
-          type="button"
-          class="load-action"
-          class:warn={view.loadWarning.warn}
-          data-action="load"
-          title={view.loadWarning.tooltip}
-          aria-label={view.loadWarning.warn ? `Load preset. ${view.loadWarning.tooltip}` : null}
-          onclick={() => view.loadEntry(view.data.selectedEntry!)}
-        >
-          {#if view.loadWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
-          {view.runtimeSnapshot.loadingEntryId === view.data.selectedEntry.id ? 'Loading...' : 'Load preset'}
-        </button>
-        {#if view.data.selectedEntry.sourceId === 'device' && view.data.selectedEntry.number != null && !view.data.selectedEntry.empty}
+        {#if view.data.selectedEntry.sourceId === 'device' || view.data.selectedEntry.empty}
+          <!-- Already on the device: the primary action navigates to the stored slot. -->
+          <button
+            type="button"
+            class="load-action"
+            class:warn={view.loadWarning.warn}
+            data-action="load"
+            title={view.loadWarning.tooltip}
+            aria-label={view.loadWarning.warn ? `Switch to preset. ${view.loadWarning.tooltip}` : null}
+            onclick={() => view.loadEntry(view.data.selectedEntry!)}
+          >
+            {#if view.loadWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
+            {view.runtimeSnapshot.loadingEntryId === view.data.selectedEntry.id ? 'Switching...' : 'Switch to Preset'}
+          </button>
+        {:else}
+          <!-- Not on the device (imported file / local folder): trial-load into the edit buffer. -->
           <button
             type="button"
             class="load-action"
