@@ -111,9 +111,12 @@
   });
   const data = $derived(createAxisPresetBrowserDataView({
     entries: baseEntries,
-    filteredEntries: snapshot.presenceView === 'all' ? library.filtered : baseEntries,
+    // This quick search is a DEVICE preset switcher: scope results to the connected unit's stored
+    // presets (its empty slots included) no matter what source/presence the SHARED controller was
+    // left on by the docked Preset Browser. Query/sort/selection still flow through the controller.
+    filteredEntries: library.filtered,
     emptySlots: emptyDeviceSlots,
-    sourceId: snapshot.sourceId,
+    sourceId: 'device',
     selectedEntryId: snapshot.entryId,
     tagsOf: library.tagsOf,
     lastLoadedAt: presetRecency.at,
@@ -123,7 +126,7 @@
     prepared: index.match,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
-    presenceView: snapshot.presenceView,
+    presenceView: 'all',
     presenceViews: presenceViewDefs()
   }));
   const rows = $derived(data.visibleEntries.slice(0, visibleCount));
