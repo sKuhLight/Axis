@@ -340,6 +340,8 @@ export class PresetBufferStore {
       const preset = this.#host.preset;
       if (preset) this.#host.setPreset({ ...preset, number: location });
       if (opts?.recency !== false) presetRecency.record(`dev:${location}`);
+      this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+      this.#host.histSwitch(location); // swap the history context, like the unified selectPreset path
       overlays.close('presetPicker');
       await this.#host.load();
       await this.#host.reloadOpenParams();

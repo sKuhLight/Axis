@@ -7,8 +7,10 @@
 //
 // Grain: ONE GESTURE = ONE STEP — rapid writes to the same param (a knob drag) coalesce into one
 // entry holding start→end; structural ops are always their own step. History persists per
-// device+slot in IndexedDB (`axs.hist.v1:*`) and survives restarts, cursor included (redo too).
-// Buffer loads (audition/snapshot) insert a BARRIER — the changelog is kept, undo stops there.
+// device+slot in IndexedDB (`axs.hist.v1:*`) so the changelog survives restarts. Loading a preset
+// (or any buffer replacement — audition/snapshot) inserts a BARRIER at the load point: the
+// changelog is kept, undo can't cross the load, and a stale unsaved edit can't read as "edited"
+// on the freshly-loaded buffer.
 import { forgefx } from '$lib/api/forgefx';
 import { idb } from '$lib/platform/idb';
 import { fmtNumber } from '$lib/ui/format';
@@ -119,6 +121,12 @@ class HistoryStore {
     if (doc?.v === 1 && Array.isArray(doc.entries)) {
       this.entries = doc.entries;
       this.cursor = Math.max(0, Math.min(doc.cursor ?? doc.entries.length, doc.entries.length));
+    }
+    // Loading a preset REPLACES the edit buffer, so edits the stored changelog still holds for
+    // this slot are no longer IN the buffer. Barrier them: otherwise a stale unsaved edit reads
+    // as "edited" on the freshly-loaded preset (or gets undone onto it). The changelog is kept.
+    if (this.entries.length && !this.entries[this.entries.length - 1].barrier) {
+      this.#push({ id: uid(), t: Date.now(), label: `Loaded preset ${preset}`, ops: [], undoable: false, barrier: true });
     }
   };
 

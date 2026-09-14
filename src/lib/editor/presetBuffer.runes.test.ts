@@ -406,9 +406,12 @@ describe('preset nav', () => {
   it('falls back to the AM4 codec route on a legacy v1 server', async () => {
     const { p } = fresh();
     host.legacyAm4 = true;
+    p.bufferSource = { path: '/music/Presets/Crunch.syx', name: 'Crunch' };
     await p.selectPreset(30);
     expect(am4SwitchPreset).toHaveBeenCalledWith(30);
     expect(selectPresetReq).not.toHaveBeenCalled();
+    expect(p.bufferSource).toBe(null);
+    expect(host.histSwitch).toHaveBeenCalledWith(30); // legacy path must swap the history context too
     expect(host.load).toHaveBeenCalled();
     expect(host.reloadOpenParams).toHaveBeenCalled();
   });
