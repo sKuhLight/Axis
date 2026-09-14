@@ -6,8 +6,8 @@
   // value arc). The current position is a short radial tick in the ring colour,
   // sitting in the moat between the face disc and the ring — deliberately NOT
   // amber, so it reads as "this knob's value" rather than "this knob is modulated"
-  // (that is the MOD badge's job). Vertical drag sets the value; a clean tap (no
-  // drag) requests inline editing.
+  // (that is the MOD badge's job). Vertical drag sets the value; clicking the value
+  // readout chip above the dial requests inline editing.
   let {
     value = 0, // normalized 0..1
     label = '',
@@ -22,7 +22,12 @@
     bpm = 120,
     formatValue = null,
     onInput = (_v: number) => {},
-    onEdit = () => {}
+    onEdit = () => {},
+    editing = false,
+    editText = '',
+    onEditInput = (_v: string) => {},
+    onEditCommit = () => {},
+    onEditCancel = () => {}
   }: {
     value?: number;
     label?: string;
@@ -39,6 +44,12 @@
     formatValue?: ((value: number) => string) | null;
     onInput?: (v: number) => void;
     onEdit?: () => void;
+    /** Inline-edit state. When true the value chip becomes a text input IN PLACE; the dial stays. */
+    editing?: boolean;
+    editText?: string;
+    onEditInput?: (v: string) => void;
+    onEditCommit?: () => void;
+    onEditCancel?: () => void;
   } = $props();
 
   const TRACK = 113.1; // 270° of r=24
@@ -102,7 +113,10 @@
     if (!dragging) return;
     dragging = false;
     (e.target as Element).releasePointerCapture?.(e.pointerId);
-    if (!moved) onEdit();
+  }
+  function selectAll(node: HTMLInputElement) {
+    node.focus();
+    node.select();
   }
 
   const tick = (now: number) => {
@@ -151,7 +165,30 @@
 </script>
 
 <div class="knob" style="width:{size + 8}px">
-  <div class="val mono">{shownValueText}</div>
+  {#if editing}
+    <input
+      class="val val-input mono"
+      use:selectAll
+      value={editText}
+      oninput={(e) => onEditInput(e.currentTarget.value)}
+      onkeydown={(e) => {
+        if (e.key === 'Enter') onEditCommit();
+        else if (e.key === 'Escape') onEditCancel();
+      }}
+      onblur={onEditCommit}
+      aria-label="{label} value"
+    />
+  {:else}
+    <div
+      class="val mono"
+      role="button"
+      tabindex="0"
+      aria-label="{label} value — click to type"
+      title="Click to type a value"
+      onclick={onEdit}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); } }}
+    >{shownValueText}</div>
+  {/if}
   <div
     class="box"
     class:disabled
@@ -208,7 +245,21 @@
     background: var(--input); box-shadow: inset 0 1px 2px color-mix(in srgb, #000 55%, transparent);
     font: 500 10px/1.4 var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums;
     text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    pointer-events: none;
+    cursor: pointer;
+  }
+  .val:focus-visible { outline: 2px solid var(--c, var(--accent)); outline-offset: 1px; }
+  /* The edit input replaces the readout chip in the SAME slot. Width tracks the dial column (never
+     the input's own 20-char intrinsic size), and the edge is an OUTLINE, not a border/box-shadow:
+     outlines take no space (so the dial never shifts) and paint ABOVE the selection highlight, so
+     the input's edges stay visible even with the text selected. */
+  .val-input {
+    width: 100%;
+    min-width: 0;
+    max-width: 76px;
+    border: 0;
+    box-sizing: content-box;
+    outline: 1px solid var(--c, var(--accent));
+    outline-offset: -1px;
   }
   /* The caption reserves exactly one line of the flex column: a wrapped second line paints BELOW it
      (overflow: visible) instead of growing the column and shoving the dial up off its row. It is

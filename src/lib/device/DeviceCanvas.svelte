@@ -258,10 +258,6 @@
   function cancelEdit() {
     editing = null;
   }
-  function focusAndSelect(node: HTMLInputElement) {
-    node.focus();
-    node.select();
-  }
   $effect(() => {
     void editor.selected?.effectId;
     void pageIndex;
@@ -429,42 +425,26 @@
            reclaimed from the old MOD pill, which used to overhang the column by 4px and now sits
            inside the dial. -->
       {@const knobSize = Math.max(20, Math.min(dp(pc.w) - 8, dp(pc.h) - 46))}
-      {#if p && editing === p}
-        <div class="knob-edit" style="width:{knobSize + 8}px">
-          {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
-          <div class="knob-edit-box" style="height:{knobSize}px">
-            <input
-              class="vinput"
-              use:focusAndSelect
-              value={editText}
-              oninput={(e) => (editText = e.currentTarget.value)}
-              onkeydown={(e) => {
-                if (e.key === 'Enter') commitEdit();
-                else if (e.key === 'Escape') cancelEdit();
-              }}
-              onblur={commitEdit}
-              aria-label="{c.label} value"
-            />
-          </div>
-          <div class="vinput-lbl">{c.label}</div>
-        </div>
-      {:else}
-        <Knob
-          value={p ? (p.norm ?? 0) : enumKnobNorm(e!)}
-          label={c.label}
-          valueText={p ? valText(p) : enumKnobLabel(e!)}
-          color={accent}
-          size={knobSize}
-          modded={hasMod}
-          visualization={p ? visualization : null}
-          bpm={deviceSession.bpm}
-          formatValue={p ? (norm) => fmtControlValue({ ...p, norm }, 1) : null}
-          onModifier={() => openMod(c)}
-          freeMotion={!!e}
-          onInput={(v) => p ? setNorm(p, v) : setEnumNorm(e!, v)}
-          onEdit={() => { if (p) beginEdit(p); }}
-        />
-      {/if}
+      <Knob
+        value={p ? (p.norm ?? 0) : enumKnobNorm(e!)}
+        label={c.label}
+        valueText={p ? valText(p) : enumKnobLabel(e!)}
+        color={accent}
+        size={knobSize}
+        modded={hasMod}
+        visualization={p ? visualization : null}
+        bpm={deviceSession.bpm}
+        formatValue={p ? (norm) => fmtControlValue({ ...p, norm }, 1) : null}
+        onModifier={() => openMod(c)}
+        freeMotion={!!e}
+        onInput={(v) => p ? setNorm(p, v) : setEnumNorm(e!, v)}
+        onEdit={() => { if (p) beginEdit(p); }}
+        editing={!!p && editing === p}
+        {editText}
+        onEditInput={(v) => (editText = v)}
+        onEditCommit={commitEdit}
+        onEditCancel={cancelEdit}
+      />
       {:else if view === 'fader' && p}
         <div class="fader">
           {#if hasMod}<button class="mod-pill" type="button" aria-label="Edit modifier for {c.label}" onclick={() => openMod(c)}>MOD</button>{/if}
@@ -706,41 +686,6 @@
   .cell.dim { opacity: 0.22; }
   .cell.hit { outline: 1px solid var(--c); outline-offset: 1px; border-radius: 4px; }
   .cell.modded { overflow: visible; }
-  .vinput {
-    width: calc(100% - 6px);
-    min-width: 0;
-    padding: 2px 6px;
-    border: 1px solid var(--c);
-    border-radius: 6px;
-    background: var(--surface2);
-    color: var(--text);
-    font: 700 12px/1 var(--font-mono);
-    text-align: center;
-    outline: none;
-  }
-  .knob-edit {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-  .knob-edit-box {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-  }
-  .vinput-lbl {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--textdim);
-    text-align: center;
-    max-width: 76px;
-    line-height: 1.1;
-    white-space: pre-line;
-    height: 1.1em;
-  }
   .mod-pill {
     position: absolute;
     top: -4px;
