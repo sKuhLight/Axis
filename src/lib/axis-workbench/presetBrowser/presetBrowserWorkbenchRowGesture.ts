@@ -23,10 +23,10 @@ export function axisPbRowClickIntent(mod: AxisPbRowGestureModifiers): AxisPbRowI
   return 'select';
 }
 
-// Double click always loads, INCLUDING on renameable device slots. It used to branch to the inline
-// rename there, which meant the one gesture that should commit a preset did something else entirely
-// on exactly the rows you most often want to load. Rename is reachable from the row context menu.
-// `canRename` is taken as an argument precisely so that branch stays pinned as removed.
-export function axisPbRowDoubleClickIntent(_caps: { canRename: boolean }): AxisPbRowIntent {
-  return 'load';
+// Double click loads ONLY a device preset (source 'device' with a slot number ≥ 0). Presets that
+// live on disk (imported file / local folder) are never loaded by a double-click — Audition is the
+// deliberate gesture for those, so a stray double-click on a disk preset can't replace the edit
+// buffer. Non-device rows fall back to a plain select.
+export function axisPbRowDoubleClickIntent(target: { deviceSlot: boolean }): AxisPbRowIntent {
+  return target.deviceSlot ? 'load' : 'select';
 }

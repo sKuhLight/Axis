@@ -18,3 +18,11 @@ export function resolvePresetLoadAction(
   if (entry.empty) return { kind: 'loadEmptySlot', number: entry.number ?? 0 };
   return { kind: 'runtimeLoad' };
 }
+
+/** Is this entry a stored preset on the device (source 'device' with a real slot number)? The one
+ *  kind of row a double-click loads — disk presets (imported file / local folder) use Audition. */
+export function isDevicePreset(
+  entry: Pick<AxisPresetBrowserEntrySummary, 'sourceId' | 'number'>
+): boolean {
+  return entry.sourceId === 'device' && (entry.number ?? -1) >= 0;
+}

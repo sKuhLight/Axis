@@ -30,12 +30,13 @@ describe('preset row gestures', () => {
     expect(axisPbRowClickIntent({ ctrlKey: true, shiftKey: true })).toBe('mark');
   });
 
-  it('a double click loads', () => {
-    expect(axisPbRowDoubleClickIntent({ canRename: false })).toBe('load');
+  it('a double click on a device preset loads', () => {
+    expect(axisPbRowDoubleClickIntent({ deviceSlot: true })).toBe('load');
   });
 
-  // Used to open the inline rename instead of loading. Rename moved to the context menu.
-  it('a double click on a renameable device slot loads rather than renaming', () => {
-    expect(axisPbRowDoubleClickIntent({ canRename: true })).toBe('load');
+  // Disk presets (imported file / local folder) are loaded only by the explicit Audition gesture —
+  // a stray double-click must never replace the edit buffer.
+  it('a double click on a non-device row does not load', () => {
+    expect(axisPbRowDoubleClickIntent({ deviceSlot: false })).toBe('select');
   });
 });

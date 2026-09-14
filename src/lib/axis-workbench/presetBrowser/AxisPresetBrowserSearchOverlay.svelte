@@ -26,7 +26,7 @@
   } from './presetBrowserWorkbenchController';
   import { axisPresetBrowserWorkbenchRuntime } from './presetBrowserWorkbenchRuntime';
   import { createAxisPresetBrowserWorkbenchHost } from './presetBrowserWorkbenchHost';
-  import { resolvePresetLoadAction } from './presetBrowserWorkbenchLoadAction';
+  import { resolvePresetLoadAction, isDevicePreset } from './presetBrowserWorkbenchLoadAction';
   import { axisPbRowBlockChips } from './presetBrowserWorkbenchRowChips';
   import { matchingChainChips } from './presetBrowserWorkbenchChainMatch';
   import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
@@ -173,7 +173,8 @@
       highlightIndex = Math.max(cursor - 1, 0);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (rows[cursor]) loadEntry(rows[cursor]);
+      // Enter only loads a stored device preset — disk presets need the explicit Audition gesture.
+      if (rows[cursor] && isDevicePreset(rows[cursor])) loadEntry(rows[cursor]);
     }
     // Escape is handled by the dialog shell.
   }
@@ -253,7 +254,7 @@
             tabindex="0"
             onclick={() => loadEntry(entry)}
             onmouseenter={() => (highlightIndex = i)}
-            onkeydown={(e) => { if (e.key === 'Enter') loadEntry(entry); }}
+            onkeydown={(e) => { if (e.key === 'Enter' && isDevicePreset(entry)) loadEntry(entry); }}
           >
             <span class="num mono">{entry.number == null ? entry.sourceLabel : pad(entry.number)}</span>
             <span class="rtext">

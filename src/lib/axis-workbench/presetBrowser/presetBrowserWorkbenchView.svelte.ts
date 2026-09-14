@@ -7,6 +7,7 @@ import { convert } from '$lib/convert/convert.svelte';
 import { bindAxisRuntimeHost } from '../runtimeBinding';
 import { isSaveDirty } from '../widgets/saveDirtyState';
 import { loadActionWarning } from './presetBrowserWorkbenchLoadWarning';
+import { isDevicePreset } from './presetBrowserWorkbenchLoadAction';
 import {
   type AxisPresetBrowserEntrySummary,
   type AxisPresetBrowserLibEntryLike
@@ -629,7 +630,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     const actions = buildAxisPbMenuActions(
       {
         id: entry.id,
-        deviceSlot: entry.sourceId === 'device' && (entry.number ?? -1) >= 0,
+        deviceSlot: isDevicePreset(entry),
         fav: entry.fav,
         converted: entry.converted,
         empty: entry.empty

@@ -2,6 +2,7 @@
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import { axisPbRowAnatomy } from '../../../presetBrowser/presetBrowserWorkbenchRowChips';
   import { axisPbRowDoubleClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
+  import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
   import AxisPresetBrowserRowMain from '../../../presetBrowser/AxisPresetBrowserRowMain.svelte';
   import { longPress } from '../../../longPress';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
@@ -48,10 +49,10 @@
         aria-selected={view.snapshot.entryId === entry.id}
         tabindex="0"
         onclick={(e) => view.onRowClick(entry, e)}
-        ondblclick={() => axisPbRowDoubleClickIntent({ canRename: view.canRename(entry) }) === 'load' && view.loadEntry(entry)}
+        ondblclick={() => axisPbRowDoubleClickIntent({ deviceSlot: isDevicePreset(entry) }) === 'load' && view.loadEntry(entry)}
         oncontextmenu={(e) => view.onRowContext(e, entry)}
         onkeydown={(e) => {
-          if (e.key === 'Enter') view.loadEntry(entry);
+          if (e.key === 'Enter' && isDevicePreset(entry)) view.loadEntry(entry);
         }}
         use:longPress={{ onLongPress: (d) => view.rowLongPress(entry, d) }}
       >
