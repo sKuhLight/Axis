@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html,body{ margin:0; min-height:100%; background:#08080a; color:#f4f4f6; font-family:'Hanken Grotesk',system-ui,sans-serif; }
+  *{ box-sizing:border-box; }
+  button{ font:inherit; }
+  button:focus-visible{ outline:2px solid #35c9d6; outline-offset:2px; }
+  ::selection{ background:#f5a623; color:#160e02; }
+</style>
+</helmet>
+
+<main style="min-height:100vh; padding:42px 26px 80px; background:radial-gradient(circle at 50% -20%,#202027 0,transparent 42%),#08080a;">
+  <div style="max-width:1228px; margin:0 auto; display:flex; flex-direction:column; gap:30px;">
+    <header style="display:flex; align-items:end; justify-content:space-between; gap:24px; padding-bottom:22px; border-bottom:1px solid #29292f;">
+      <div>
+        <div style="margin-bottom:9px; font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.18em; color:#f5a623;">AXIS · CONTENT-SIZED PRESET</div>
+        <h1 style="margin:0; font:800 30px/1.08 'Hanken Grotesk',sans-serif; letter-spacing:-.02em; color:#fff;">Move the arrows out of the name field</h1>
+        <p style="max-width:800px; margin:10px 0 0; color:#9a9aa3; font:500 14px/1.55 'Hanken Grotesk',sans-serif;">The preset name now sizes to its content. Paging lives in a separate fixed control, so a short or long name cannot move the arrows. The scene dropdown follows immediately after the name.</p>
+      </div>
+      <div style="padding:8px 11px; border:1px solid #4c3818; border-radius:8px; background:#1d1508; color:#f5a623; font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:.08em;">FIXED ARROWS</div>
+    </header>
+
+    <sc-for list="{{ options }}" as="o" hint-placeholder-count="3">
+      <section style="display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:flex-end; gap:14px;">
+          <div style="width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:{{ o.badgeBg }}; border:1px solid {{ o.badgeBorder }}; color:{{ o.badgeColor }}; font:800 12px/1 'JetBrains Mono',monospace;">{{ o.letter }}</div>
+          <div style="min-width:0; flex:1;">
+            <div style="font:750 16px/1.2 'Hanken Grotesk',sans-serif; color:#f4f4f6;">{{ o.title }}</div>
+            <div style="margin-top:4px; color:#777780; font:500 12px/1.4 'Hanken Grotesk',sans-serif;">{{ o.description }}</div>
+          </div>
+          <div style="color:{{ o.recommendColor }}; font:700 9px/1 'JetBrains Mono',monospace; letter-spacing:.13em;">{{ o.recommend }}</div>
+        </div>
+
+        <div style="position:relative; height:{{ o.canvasHeight }}; padding:12px; border:1px solid #24242a; border-radius:15px; background:#0d0d10; box-shadow:0 18px 50px rgba(0,0,0,.25);">
+          <div data-header-row="{{ o.id }}" style="height:48px; display:flex; align-items:center; gap:6px;">
+            <sc-if value="{{ o.arrowsFirst }}" hint-placeholder-val="true">
+              <div data-fixed-pager="{{ o.id }}" style="width:116px; height:48px; flex:none; display:grid; grid-template-columns:38px 40px 38px; align-items:stretch; border:1px solid #2a2a30; border-radius:12px; background:#09090b;">
+                <button type="button" aria-label="Previous preset" data-option="{{ o.id }}" data-delta="-1" onClick="{{ pagePreset }}" style="display:flex; align-items:center; justify-content:center; border:0; border-right:1px solid #222228; border-radius:11px 0 0 11px; background:#111114; color:#aaaab2; cursor:pointer; font-size:20px;">‹</button>
+                <span style="display:flex; align-items:center; justify-content:center; color:#f5a623; font:800 13px/1 'JetBrains Mono',monospace;">{{ o.presetNum }}</span>
+                <button type="button" aria-label="Next preset" data-option="{{ o.id }}" data-delta="1" onClick="{{ pagePreset }}" style="display:flex; align-items:center; justify-content:center; border:0; border-left:1px solid #222228; border-radius:0 11px 11px 0; background:#111114; color:#aaaab2; cursor:pointer; font-size:20px;">›</button>
+              </div>
+            </sc-if>
+
+            <button type="button" data-preset-name="{{ o.id }}" style="height:48px; flex:none; display:flex; align-items:center; gap:9px; padding:0 13px; border:1px solid #2a2a30; border-radius:12px; background:#09090b; color:#f4f4f6; cursor:pointer; text-align:left;">
+              <sc-if value="{{ o.showPresetIdentity }}" hint-placeholder-val="true">
+                <span style="font:700 8px/1 'JetBrains Mono',monospace; letter-spacing:.12em; color:#65656e;">PRE</span>
+                <span style="color:#f5a623; font:800 13px/1 'JetBrains Mono',monospace;">{{ o.presetNum }}</span>
+                <span style="width:1px; height:19px; background:#29292f;"></span>
+              </sc-if>
+              <span data-full-name="preset" style="white-space:nowrap; font:750 15px/1 'Hanken Grotesk',sans-serif;">{{ o.presetName }}</span>
+            </button>
+
+            <sc-if value="{{ o.arrowsAfterName }}" hint-placeholder-val="false">
+              <div data-fixed-pager="{{ o.id }}" style="width:82px; height:48px; flex:none; display:grid; grid-template-columns:41px 41px; align-items:stretch; border:1px solid #2a2a30; border-radius:12px; background:#09090b;">
+                <button type="button" aria-label="Previous preset" data-option="{{ o.id }}" data-delta="-1" onClick="{{ pagePreset }}" style="display:flex; align-items:center; justify-content:center; border:0; border-right:1px solid #222228; border-radius:11px 0 0 11px; background:#111114; color:#aaaab2; cursor:pointer; font-size:20px;">‹</button>
+                <button type="button" aria-label="Next preset" data-option="{{ o.id }}" data-delta="1" onClick="{{ pagePreset }}" style="display:flex; align-items:center; justify-content:center; border:0; border-radius:0 11px 11px 0; background:#111114; color:#aaaab2; cursor:pointer; font-size:20px;">›</button>
+              </div>
+            </sc-if>
+
+            <div style="position:relative; height:48px; flex:none;">
+              <button type="button" aria-haspopup="listbox" aria-expanded="{{ o.open }}" data-option="{{ o.id }}" onClick="{{ toggleScene }}" style="height:48px; display:grid; grid-template-columns:44px 28px auto 20px; align-items:center; gap:7px; padding:0 10px; border:1px solid {{ o.sceneBorder }}; border-radius:12px; background:{{ o.sceneBackground }}; color:#f4f4f6; cursor:pointer; text-align:left; box-shadow:{{ o.sceneShadow }};">
+                <span style="font:700 8px/1 'JetBrains Mono',monospace; letter-spacing:.12em; color:#65656e;">SCN</span>
+                <span style="display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px; background:#f5a623; color:#1b1102; font:800 11px/1 'JetBrains Mono',monospace;">{{ o.activeScene }}</span>
+                <span data-full-name="active-scene" style="white-space:nowrap; font:700 14px/1 'Hanken Grotesk',sans-serif;">{{ o.activeName }}</span>
+                <span style="justify-self:end; color:#777780; font-size:13px; transform:rotate({{ o.chevronRotation }});">⌄</span>
+              </button>
+
+              <sc-if value="{{ o.open }}" hint-placeholder-val="true">
+                <div role="listbox" aria-label="Scenes" style="position:absolute; top:54px; left:0; z-index:10; width:430px; padding:6px; border:1px solid #34343c; border-radius:12px; background:#101013; box-shadow:0 18px 48px rgba(0,0,0,.62);">
+                  <sc-for list="{{ o.scenes }}" as="s" hint-placeholder-count="8">
+                    <button type="button" role="option" aria-selected="{{ s.on }}" data-option="{{ o.id }}" data-scene="{{ s.number }}" onClick="{{ selectScene }}" style="width:100%; height:34px; display:grid; grid-template-columns:29px minmax(0,1fr) 18px; align-items:center; gap:8px; padding:0 9px; border:0; border-radius:8px; background:{{ s.background }}; color:{{ s.nameColor }}; cursor:pointer; text-align:left;">
+                      <span style="display:flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:{{ s.numberBackground }}; color:{{ s.numberColor }}; font:800 10px/1 'JetBrains Mono',monospace;">{{ s.number }}</span>
+                      <span data-full-name="scene-option" style="white-space:nowrap; font:650 12px/1 'Hanken Grotesk',sans-serif;">{{ s.name }}</span>
+                      <span style="color:#f5a623; font-size:12px; visibility:{{ s.checkVisibility }};">✓</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:0 2px; color:#686871; font:600 9px/1.4 'JetBrains Mono',monospace; letter-spacing:.06em;">
+            <span style="color:{{ o.badgeColor }};">WHY</span>
+            <span>{{ o.note }}</span>
+          </div>
+        </div>
+      </section>
+    </sc-for>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:1280}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = {
+      presets: { a:54, b:54, c:54 },
+      scenes: { a:4, b:4, c:4 },
+      open: { a:true, b:true, c:true }
+    };
+    this.names = [
+      "Crystal Clean Wide Stereo Intro",
+      "Tight Rhythm Left Double Tracked",
+      "Open Chorus with Quarter Delay",
+      "Bright Lead Plus Long Hall Rever",
+      "Low Gain Verse With Parallel Com",
+      "Ambient Swell with Shimmer Trail",
+      "Dry Solo Boost Midrange Focused",
+      "Finale Wide Delays and Big Rever"
+    ];
+    this.presetNames = [
+      "USA MK IV Lead with Stereo Delay",
+      "Crystal Clean Wide Stereo Preset",
+      "Scene Machine Parallel Wet Paths",
+      "Brit Rhythm Double Tracked Guitar",
+      "Ambient Swells and Shimmer Trails",
+      "Kitchen Sink All Purpose Rig Setu"
+    ];
+  }
+  update(patch){
+    Object.assign(this.state,patch);
+    try{ this.forceUpdate(); }catch(e){}
+  }
+  pagePreset=(event)=>{
+    const id=event.currentTarget.dataset.option;
+    const delta=Number(event.currentTarget.dataset.delta)||0;
+    const presets=Object.assign({},this.state.presets);
+    presets[id]=Math.max(0,Math.min(999,(presets[id]||0)+delta));
+    this.update({presets});
+  };
+  toggleScene=(event)=>{
+    const id=event.currentTarget.dataset.option;
+    const open=Object.assign({},this.state.open,{[id]:!this.state.open[id]});
+    this.update({open});
+  };
+  selectScene=(event)=>{
+    const id=event.currentTarget.dataset.option;
+    const number=Number(event.currentTarget.dataset.scene)||1;
+    const scenes=Object.assign({},this.state.scenes,{[id]:number});
+    const open=Object.assign({},this.state.open,{[id]:false});
+    this.update({scenes,open});
+  };
+  renderVals(){
+    const specs = [
+      {
+        id:"a",letter:"A",title:"Pager first, content-sized name",
+        description:"The arrows and preset number form a permanent 116px transport. The name uses exactly the width it needs.",
+        recommend:"RECOMMENDED",recommendColor:"#f5a623",badgeBg:"#241908",badgeBorder:"#594018",badgeColor:"#f5a623",
+        arrowsFirst:true,arrowsAfterName:false,showPresetIdentity:false,
+        note:"Arrow positions never depend on the name. The name and scene controls sit close together with no reserved blank lane."
+      },
+      {
+        id:"b",letter:"B",title:"Fixed pager + conventional preset identity",
+        description:"The permanent pager comes first; a separate PRE number and content-sized name preserve the familiar reading order.",
+        recommend:"FAMILIAR",recommendColor:"#8fe3ea",badgeBg:"#0d2022",badgeBorder:"#245157",badgeColor:"#35c9d6",
+        arrowsFirst:true,arrowsAfterName:false,showPresetIdentity:true,
+        note:"The pager never moves. The separate identity card is slightly more verbose, but gives PRE, number, and name one clear group."
+      },
+      {
+        id:"c",letter:"C",title:"Transport rail + identity cards",
+        description:"A fixed pager leads two content-sized identity controls, treating preset navigation as transport chrome.",
+        recommend:"CLEANEST",recommendColor:"#b5a8ff",badgeBg:"#171326",badgeBorder:"#403664",badgeColor:"#9b8cf0",
+        arrowsFirst:true,arrowsAfterName:false,showPresetIdentity:true,
+        note:"Strongest separation of action from information. It repeats the preset number, but makes the interaction model unmistakable."
+      }
+    ];
+    const options = specs.map(spec=>{
+      const presetNum=this.state.presets[spec.id]||0;
+      const active=this.state.scenes[spec.id]||1;
+      const open=!!this.state.open[spec.id];
+      const presetName=this.presetNames[presetNum%this.presetNames.length];
+      const activeName=this.names[active-1]||"";
+      const scenes=this.names.map((name,index)=>{
+        const number=index+1;
+        const on=number===active;
+        return {
+          number,name,on,
+          background:on?"#211707":"transparent",
+          nameColor:on?"#f8cf86":"#c9c9cf",
+          numberBackground:on?"#f5a623":"#1d1d22",
+          numberColor:on?"#1b1102":"#777780",
+          checkVisibility:on?"visible":"hidden"
+        };
+      });
+      return Object.assign({},spec,{
+        presetNum:String(presetNum).padStart(3,"0"),presetName,activeScene:active,activeName,scenes,open,
+        canvasHeight:open?"368px":"92px",sceneBorder:open?"#6a4a15":"#2a2a30",sceneBackground:open?"#151108":"#09090b",sceneShadow:open?"0 0 0 1px rgba(245,166,35,.08)":"none",chevronRotation:open?"180deg":"0deg"
+      });
+    });
+    return { options, pagePreset:this.pagePreset, toggleScene:this.toggleScene, selectScene:this.selectScene };
+  }
+}
+</script>
+</body>
+</html>

@@ -15,16 +15,8 @@ import type { WidgetInstance } from '../../workbench/core';
  *   fcdevice→axis.fcDevice, fclayouts→axis.fcLayouts, fcswitch→axis.fcSwitchView.
  */
 export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
-  'axis.preset': 420,
-  // Holds the scene chips AND the active scene's inline name. Deliberately NOT
-  // raised for the name: the top zones fit jointly (WorkbenchHost `fitGroup`,
-  // gap 12), and at a 1440 viewport the group budget measures 1338px against a
-  // need(1) of 1330 — eight pixels of headroom. Any increase here drops the
-  // WHOLE top bar to `compact` and takes the preset name down with it. The name
-  // is capped at 120px/96px by `.scene-name`, and the bar carries ~470px of real
-  // slack at compact, so it truncates rather than overflowing. Do not "fix" this
-  // by bumping the number — re-measure first.
-  'axis.scenes': 240,
+  'axis.preset': 390,
+  'axis.scenes': 390,
   'axis.tuner': 78,
   'axis.tempo': 82,
   'axis.cpu': 124,

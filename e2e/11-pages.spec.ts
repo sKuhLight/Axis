@@ -115,4 +115,28 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
   });
+
+  test('preset paging targets stay fixed and the scene dropdown exposes every scene', async ({ page }) => {
+    await bootCleanWorkbench(page);
+
+    const preset = page.locator('[data-widget="axis.widget.preset"]');
+    const previous = preset.getByRole('button', { name: 'Previous preset' });
+    const next = preset.getByRole('button', { name: 'Next preset' });
+    const previousBox = await previous.boundingBox();
+    const nextBox = await next.boundingBox();
+
+    await next.click();
+    await expect(previous).toHaveAttribute('aria-label', 'Previous preset');
+    expect(await previous.boundingBox()).toEqual(previousBox);
+    expect(await next.boundingBox()).toEqual(nextBox);
+    await page.keyboard.press('Escape');
+
+    const scenes = page.locator('[data-widget="axis.widget.scenes"]');
+    await scenes.getByRole('button', { name: /SCN/ }).click();
+    const menu = page.getByRole('listbox', { name: 'Scenes' });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('option')).toHaveCount(8);
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+  });
 });
