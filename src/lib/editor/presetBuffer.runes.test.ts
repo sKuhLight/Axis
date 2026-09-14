@@ -616,6 +616,44 @@ describe('watchPreset', () => {
   });
 });
 
+// ── audition state (drives the Save chip's AUDITIONING · Save) ──────────────────────────────────
+describe('audition state', () => {
+  it('marks the buffer as auditioning', () => {
+    const { p } = fresh();
+    p.noteAudition('Crunch');
+    expect(p.auditioned).toEqual({ name: 'Crunch' });
+  });
+
+  it('a wholesale buffer replacement ends the audition', async () => {
+    const { p } = fresh();
+    p.noteAudition('Crunch');
+    await p.loadVersion('v1');
+    expect(p.auditioned).toBe(null);
+  });
+
+  it('a slot change ends the audition', async () => {
+    const { p } = fresh();
+    p.noteAudition('Crunch');
+    await p.selectPreset(30);
+    expect(p.auditioned).toBe(null);
+  });
+
+  it('a successful save commits the audition and clears it', async () => {
+    const { p } = fresh();
+    p.noteAudition('Crunch');
+    await p.save();
+    expect(p.auditioned).toBe(null);
+  });
+
+  it('a failed save keeps the audition — it is still not on a slot', async () => {
+    const { p } = fresh();
+    store.mockResolvedValue({ ok: false });
+    p.noteAudition('Crunch');
+    await p.save();
+    expect(p.auditioned).toEqual({ name: 'Crunch' });
+  });
+});
+
 // ── reactivity (the reason this file runs in the `runes` project) ───────────────────────────────
 // `.test.ts` can't host a rune, so — as in `library.runes.test.ts` — reactivity is pinned the way a
 // derived reader actually observes it: every write REASSIGNS the object rather than mutating it in
@@ -646,6 +684,14 @@ describe('reactivity', () => {
     expect(p.bufferSource?.name).toBe('Crunch');
     await p.loadVersion('v1'); // a wholesale buffer swap clears it again
     expect(p.bufferSource).toBe(null);
+  });
+
+  it('auditioned reassigns so derived readers see it', () => {
+    const { p } = fresh();
+    const before = p.auditioned;
+    p.noteAudition('Crunch');
+    expect(p.auditioned).not.toBe(before);
+    expect(p.auditioned?.name).toBe('Crunch');
   });
 
 });

@@ -418,6 +418,7 @@
       const buf = await deviceEntryBytes(e.summary.number);
       await forgefx.loadBytes(buf);
       presetBuffer.noteBufferReplaced(`Auditioned ${e.summary.name}`); // history barrier — undo can't cross a buffer swap
+      presetBuffer.noteAudition(e.summary.name);
       await gridEditing.load();
       editorNotifications.showToast(`Auditioning ${e.summary.name} — Save to keep it on a slot`, '#f5a623');
     } catch { editorNotifications.showToast('Audition failed', '#d6543f'); }

@@ -196,10 +196,19 @@ export class PresetBufferStore {
   /** When the edit buffer was loaded from a local Presets/ file, this remembers its origin until
    *  another buffer replaces it. */
   bufferSource = $state<{ path: string; name: string } | null>(null);
+  /** The edit buffer currently holds an auditioned device preset that hasn't been saved to a slot.
+   *  Drives the Save chip's "AUDITIONING · Save" state. Cleared on Save, on any slot change, and on
+   *  any wholesale buffer replacement. */
+  auditioned = $state<{ name: string } | null>(null);
+  /** Mark the edit buffer as an in-progress audition (Preset Browser "Audition"). */
+  noteAudition = (name: string) => {
+    this.auditioned = { name };
+  };
   /** The edit buffer was wholesale replaced (audition / snapshot / file load) — undo can't cross this,
    *  and any local-file link is stale (the local load path re-sets it right after). */
   noteBufferReplaced = (label: string) => {
     this.bufferSource = null;
+    this.auditioned = null; // a wholesale replacement ends any audition (re-marked right after an audition load)
     history.checkpoint(label, /*barrier*/ true);
   };
 
@@ -226,6 +235,7 @@ export class PresetBufferStore {
         const preset = this.#host.preset;
         if (preset) this.#host.setPreset({ ...preset, number: n });
         this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+        this.auditioned = null; // a slot change ends any audition
         this.#host.histSwitch(n); // device-side preset change → swap the history context
         await this.#host.load();
         await this.#host.reloadOpenParams();
@@ -316,6 +326,7 @@ export class PresetBufferStore {
       if (preset) this.#host.setPreset({ ...preset, number: n });
       if (opts?.recency !== false) presetRecency.record(`dev:${n}`);
       this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+      this.auditioned = null; // a slot change ends any audition
       this.#host.histSwitch(n);
       overlays.close('presetPicker');
       await this.#host.poll();
@@ -341,6 +352,7 @@ export class PresetBufferStore {
       if (preset) this.#host.setPreset({ ...preset, number: location });
       if (opts?.recency !== false) presetRecency.record(`dev:${location}`);
       this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
+      this.auditioned = null; // a slot change ends any audition
       this.#host.histSwitch(location); // swap the history context, like the unified selectPreset path
       overlays.close('presetPicker');
       await this.#host.load();
@@ -362,6 +374,7 @@ export class PresetBufferStore {
       // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
       const r = this.#host.legacyAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
       if (r.ok) {
+        this.auditioned = null; // the audition is now committed to the slot
         history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : n}`, false); // marker — undo continues past it
         this.#host.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');
         await this.#host.poll();

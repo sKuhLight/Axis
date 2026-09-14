@@ -35,6 +35,7 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     openBuild: editorNavigation.openBuild,
     reloadEditor: gridEditing.load,
     noteBufferReplaced: presetBuffer.noteBufferReplaced,
+    markAudition: (name) => presetBuffer.noteAudition(name),
     setBufferSource: (source) => {
       presetBuffer.bufferSource = source;
     },

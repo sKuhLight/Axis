@@ -5,23 +5,29 @@
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size }: AxisWorkbenchWidgetProps = $props();
   const expanded = $derived(size === 'default');
+  const auditioning = $derived(presetBuffer.auditioned !== null);
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
+  // An audition is also "not saved to a slot", so it shares the loud amber pill with a dirty
+  // edit — only the label distinguishes them ("AUDITIONING · Save" vs "EDITED · Save").
+  const hot = $derived(saveDirty || auditioning);
 </script>
 
 <!-- Save lives beside the preset/scene names (top.left), not in the far-right
      status cluster. Clean = quiet green "Saved"; dirty = a FILLED amber pill so
-     an unsaved preset reads at a glance. -->
+     an unsaved preset reads at a glance; auditioning = the same amber pill reading
+     "AUDITIONING · Save". -->
 <button
   class="axis-widget save"
-  class:dirty={saveDirty}
+  class:dirty={hot}
   data-size={size}
-  data-dirty={saveDirty ? 'true' : 'false'}
+  data-dirty={hot ? 'true' : 'false'}
+  data-auditioning={auditioning ? 'true' : 'false'}
   type="button"
   onclick={() => presetBuffer.save()}
-  title={saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}
+  title={auditioning ? 'Auditioning — Save to keep it on a slot' : saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}
 >
   <span class="save-dot"></span>
-  {#if expanded}<span class="save-label">{saveDirty ? 'EDITED · Save' : '✓ Saved'}</span>{/if}
+  {#if expanded}<span class="save-label">{auditioning ? 'AUDITIONING · Save' : saveDirty ? 'EDITED · Save' : '✓ Saved'}</span>{/if}
 </button>
 
 <style>

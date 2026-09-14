@@ -28,6 +28,8 @@ export interface AxisPresetBrowserRuntimeHost {
   openBuild?: () => void;
   reloadEditor?: () => Promise<void>;
   noteBufferReplaced?: (label: string) => void;
+  /** Mark the edit buffer as an in-progress audition (drives the Save chip's AUDITIONING state). */
+  markAudition?: (name: string) => void;
   setBufferSource?: (source: { path: string; name: string } | null) => void;
   hydrateParams?: (entryId: string) => Promise<void>;
   paramsOf?: (entry: AxisPresetBrowserLibEntryLike) => AxisPresetBrowserBlockSummary[] | null;
@@ -150,6 +152,7 @@ export class AxisPresetBrowserWorkbenchRuntime {
       const bytes = await host.deviceEntryBytes(number);
       await host.loadBytes(bytes);
       host.noteBufferReplaced?.(`Auditioned ${entry.summary.name ?? 'preset'}`);
+      host.markAudition?.(entry.summary.name ?? 'preset');
       await host.reloadEditor?.();
       host.notify?.(`Auditioning ${entry.summary.name ?? 'preset'} - Save to keep it on a slot`, '#f5a623');
       this.#set({ auditioningEntryId: null, lastAuditionedEntryId: entryId });

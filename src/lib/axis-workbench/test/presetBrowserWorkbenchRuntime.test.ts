@@ -120,12 +120,13 @@ describe('Preset Browser Workbench runtime', () => {
       },
       loadBytes: async (bytes) => { calls.push(`load:${bytes.byteLength}`); },
       noteBufferReplaced: (label) => { calls.push(label); },
+      markAudition: (name) => { calls.push(`audition:${name}`); },
       reloadEditor: async () => { calls.push('reload'); }
     });
 
     await runtime.auditionEntry('dev:10');
 
-    expect(calls).toEqual(['openBuild', 'dump:10', 'load:4', 'Auditioned Crunch', 'reload']);
+    expect(calls).toEqual(['openBuild', 'dump:10', 'load:4', 'Auditioned Crunch', 'audition:Crunch', 'reload']);
     expect(runtime.snapshot.lastAuditionedEntryId).toBe('dev:10');
   });
 

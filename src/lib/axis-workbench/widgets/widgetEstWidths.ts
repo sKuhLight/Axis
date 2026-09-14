@@ -20,9 +20,10 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   'axis.tuner': 78,
   'axis.tempo': 82,
   'axis.cpu': 124,
-  // The Save widget widens into a filled amber "EDITED · Save" pill while dirty,
-  // so its estimate tracks the wider state (it is a keep-type and never sheds).
-  'axis.save': 122,
+  // The Save widget widens into a filled amber pill while hot — "AUDITIONING · Save"
+  // (audition) is the widest state, so its estimate tracks that (it is a keep-type
+  // and never sheds).
+  'axis.save': 160,
   'axis.search': 168,
   'axis.history': 44,
   'axis.gridMap': 98,
