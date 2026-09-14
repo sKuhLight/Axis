@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { bootCleanWorkbench } from './support/workbench';
+import { bootCleanWorkbench, regionTabs, seedPinnedControls } from './support/workbench';
 
 // The Block Editor's embedded Grid Map (GridMap.svelte): starts collapsed on a clean boot, and a
 // selected top-row block keeps its mini-map outline clear of the scroll edge. Driven against a fully
@@ -187,5 +187,34 @@ test.describe('Block Editor grid map', () => {
 
     // The outline extends 2px past the selected cell's scaled box.
     expect(bounds?.topInset).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// A pinned control must reproduce the device-authored kind it was collected
+// from — a dropdown stays a dropdown, a toggle a toggle — instead of the generic
+// ring knob the pin used to flatten every control into.
+test.describe('Pinned control kinds', () => {
+  test('a pinned dropdown and toggle render as real controls, not knobs', async ({ page }) => {
+    await bootWithLayout(page);
+    // Drive block 200: Mode (id 4, dropdown) and Bright (id 9, toggle), both enums.
+    await seedPinnedControls(page, [
+      { effectId: 200, paramId: 4, block: 'Drive 1', label: 'Mode', color: '#d6543f', view: 'dropdown' },
+      { effectId: 200, paramId: 9, block: 'Drive 1', label: 'Bright', color: '#d6543f', view: 'toggle' }
+    ]);
+    // Make the bound block the open one so its params/enums hydrate live.
+    await selectDriveBlock(page);
+    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+
+    const panel = page.locator('.custom-panel').first();
+    const dropdown = panel.locator('.axis-widget.param[data-param-view="dropdown"]');
+    const toggle = panel.locator('.axis-widget.param[data-param-view="toggle"]');
+    await expect(dropdown).toHaveCount(1);
+    await expect(toggle).toHaveCount(1);
+
+    await expect(dropdown.locator('.dd-wrap')).toHaveCount(1);
+    await expect(toggle.locator('.switch')).toHaveCount(1);
+    // Neither fell back to the generic ring.
+    await expect(dropdown.locator('.param-ring')).toHaveCount(0);
+    await expect(toggle.locator('.param-ring')).toHaveCount(0);
   });
 });

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { deviceSession, gridEditing, paramEditing } from '$lib/editor/editorClients.svelte';
   import { fmtControlValue } from '$lib/ui/format';
+  import Dropdown from '$lib/ui/Dropdown.svelte';
+  import Toggle from '$lib/ui/Toggle.svelte';
   import { isPanelWidgetZone } from '../../workbench';
   import { resolveParamWidgetState } from './paramWidgetState';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
@@ -70,13 +72,32 @@
   const paramLive = $derived(paramState === 'live');
   const paramReadonly = $derived(paramState === 'readonly');
   const paramMissing = $derived(paramState === 'missing');
+  // The device control's authored kind, carried into the pin from the canvas
+  // (`state.view`). Only a LIVE enum becomes an interactive dropdown/toggle; a
+  // locked or missing binding stays the non-interactive ring + badge. A named
+  // param (and any unknown view) keeps the ring — faders stay rings by design.
+  const paramViewPref = $derived(readString(widget.state?.view));
+  const paramDropdown = $derived(
+    paramViewPref === 'dropdown' && paramLive && paramEffectId != null && !!paramEnum && paramEnum.options.length > 0
+  );
+  const paramSwitch = $derived(
+    paramViewPref === 'toggle' && paramLive && paramEffectId != null && !!paramEnum && paramEnum.options.length > 0
+  );
+  // A dropdown/toggle owns its own interaction; the ring contributes drag/wheel/click.
+  const paramInteractive = $derived(!paramDropdown && !paramSwitch);
+  const paramRenderKind = $derived(paramDropdown ? 'dropdown' : paramSwitch ? 'toggle' : 'ring');
   // Which grid cell the binding points at (used to open it when read-only).
   const paramCell = $derived(
     paramEffectId == null ? undefined : [...gridEditing.layout.cells, ...gridEditing.layout.shunts].find((cell) => cell.effectId === paramEffectId)
   );
   const paramTip = $derived.by(() => {
     const head = `${paramBlock} · ${paramLabel}`;
-    if (paramLive) return paramNamed ? `${head} · drag or wheel to edit` : paramEnum ? `${head} · click to cycle` : head;
+    if (paramLive) {
+      if (paramNamed) return `${head} · drag or wheel to edit`;
+      if (paramDropdown) return `${head} · choose from list`;
+      if (paramSwitch) return `${head} · toggle on/off`;
+      return paramEnum ? `${head} · click to cycle` : head;
+    }
     if (paramReadonly) return paramCell ? `${head} · read-only · click to open block` : head;
     return `${head} · block not in this preset`;
   });
@@ -179,9 +200,29 @@
     }
     if (paramLive && paramEnum) nudgeParam(1);
   }
+
+  // role="button" on a div doesn't synthesize a click on Enter/Space the way a
+  // real <button> does — keep keyboard parity with the old button root.
+  function paramKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    paramClick();
+  }
+
+  // Enum writes for the interactive dropdown/toggle primitives — they own the
+  // change, we forward it to the same pinned-enum writer the ring used.
+  function setEnumValue(value: number) {
+    if (paramEffectId == null || !paramEnum) return;
+    paramEditing.setPinnedEnum(paramEffectId, paramEnum, value);
+  }
 </script>
 
-<button
+<!-- A div root, not a button: a pinned dropdown/toggle renders the real
+     Dropdown/Toggle primitives, and nesting their buttons inside a <button>
+     would be invalid. The ring mode keeps button SEMANTICS via role + keyboard
+     handling; the interactive primitives own their own. -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (role="button" is set whenever tabindex is 0) -->
+<div
   class="axis-widget param axtipwrap"
   class:param-tile={paramTile}
   class:writable={paramLive && (!!paramNamed || !!paramEnum)}
@@ -190,14 +231,17 @@
   data-size={size}
   data-param-mode={paramTile ? 'tile' : 'chip'}
   data-param-state={paramState}
-  type="button"
-  disabled={!editMode && paramMissing}
-  aria-label={paramTip}
+  data-param-view={paramRenderKind}
+  role={paramInteractive ? 'button' : undefined}
+  tabindex={paramInteractive ? 0 : undefined}
+  aria-label={paramInteractive ? paramTip : undefined}
+  aria-disabled={!editMode && paramMissing ? 'true' : undefined}
   style:--param-color={paramColor}
   bind:this={paramEl}
-  onpointerdown={paramPointerDown}
-  onwheel={paramWheel}
-  onclick={paramClick}
+  onpointerdown={paramInteractive ? paramPointerDown : undefined}
+  onwheel={paramInteractive ? paramWheel : undefined}
+  onclick={paramInteractive ? paramClick : undefined}
+  onkeydown={paramInteractive ? paramKeydown : undefined}
   onpointerenter={() => (paramTipHover = true)}
   onpointerleave={() => {
     paramTipHover = false;
@@ -215,35 +259,55 @@
     style:left={paramTipPos ? `${paramTipPos.left}px` : undefined}
     style:top={paramTipPos ? `${paramTipPos.top}px` : undefined}
   >{paramTip}</span>
-  <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramRingPx}px`} style:height={`${paramRingPx}px`}>
-    <svg width={paramRingPx} height={paramRingPx} viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
-      <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
-    </svg>
-    {#if paramReadonly}
-      <!-- lock affordance: this binding is a read-only preview until its block is opened -->
-      <svg class="param-badge lock" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-        <rect x="2.5" y="5" width="7" height="5.2" rx="1" fill="currentColor"></rect>
-        <path d="M4 5 V3.6 a2 2 0 0 1 4 0 V5" fill="none" stroke="currentColor" stroke-width="1.2"></path>
+  {#if paramDropdown}
+    <Dropdown
+      label={paramLabel}
+      value={paramEnum?.value ?? 0}
+      options={paramEnum?.options ?? []}
+      accent={paramColor}
+      hideLabel
+      fixedWidth={paramTile ? (compact ? 68 : 76) : 96}
+      fieldHeight={paramTile ? 30 : 26}
+      onChange={setEnumValue}
+    />
+    {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
+  {:else if paramSwitch}
+    <Toggle dense label={paramLabel} value={paramEnum?.value ?? 0} options={paramEnum?.options ?? []} onChange={setEnumValue} />
+  {:else}
+    <span class="param-ring" style:--param-dash={paramDash} style:width={`${paramRingPx}px`} style:height={`${paramRingPx}px`}>
+      <svg width={paramRingPx} height={paramRingPx} viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="12" class="param-track" transform="rotate(135 16 16)"></circle>
+        <circle cx="16" cy="16" r="12" class="param-value" transform="rotate(135 16 16)"></circle>
       </svg>
-    {:else if paramMissing}
-      <!-- missing: the bound block isn't in the current preset -->
-      <svg class="param-badge warn" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-        <path d="M6 1.5 L11 10.5 H1 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path>
-        <path d="M6 5 V7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path>
-        <circle cx="6" cy="9" r="0.7" fill="currentColor"></circle>
-      </svg>
-    {/if}
-  </span>
-  <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
-  {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
-</button>
+      {#if paramReadonly}
+        <!-- lock affordance: this binding is a read-only preview until its block is opened -->
+        <svg class="param-badge lock" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+          <rect x="2.5" y="5" width="7" height="5.2" rx="1" fill="currentColor"></rect>
+          <path d="M4 5 V3.6 a2 2 0 0 1 4 0 V5" fill="none" stroke="currentColor" stroke-width="1.2"></path>
+        </svg>
+      {:else if paramMissing}
+        <!-- missing: the bound block isn't in the current preset -->
+        <svg class="param-badge warn" width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M6 1.5 L11 10.5 H1 Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path>
+          <path d="M6 5 V7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path>
+          <circle cx="6" cy="9" r="0.7" fill="currentColor"></circle>
+        </svg>
+      {/if}
+    </span>
+    <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
+    {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
+  {/if}
+</div>
 
 <style>
   .param {
     position: relative;
     /* let the hover tooltip (.axtip, positioned below) escape the chip/tile */
     overflow: visible;
+    /* The root is a div now (to host real Dropdown/Toggle children). The old
+       button root had its UA border reset; replicate it so a chip stays
+       borderless and only `.param-tile` / state classes draw a border. */
+    border: 0;
   }
   .param.writable {
     border-color: color-mix(in srgb, var(--accent) 32%, var(--border));

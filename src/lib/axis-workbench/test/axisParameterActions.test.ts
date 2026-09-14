@@ -93,6 +93,26 @@ describe('Axis parameter Workbench actions', () => {
     expect(widgets[0]?.state?.label).toBe('Level');
   });
 
+  it('carries the caller-supplied control view into the pinned widget state', async () => {
+    const controller = newController();
+    const action = createAxisPinSelectedParametersAction(() => [source('1', 'Gain')]);
+
+    await action.run({ controller, source: 'menu', args: { paramId: 1, view: 'dropdown' } });
+
+    const widgets = selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE);
+    expect(widgets[0]?.state?.view).toBe('dropdown');
+  });
+
+  it('ignores an unknown control view so only renderable kinds are persisted', async () => {
+    const controller = newController();
+    const action = createAxisPinSelectedParametersAction(() => [source('1', 'Gain')]);
+
+    await action.run({ controller, source: 'menu', args: { paramId: 1, view: 'graph' } });
+
+    const widgets = selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE);
+    expect(widgets[0]?.state?.view).toBeUndefined();
+  });
+
   it('pins multiple parameter sources in requested paramId order', async () => {
     const controller = newController();
     const action = createAxisPinSelectedParametersAction(() => [source('1', 'Gain'), source('2', 'Level'), source('3', 'Bass')]);

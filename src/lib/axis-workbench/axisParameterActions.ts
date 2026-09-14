@@ -20,6 +20,18 @@ export const AXIS_PIN_SELECTED_PARAMETERS_ACTION = 'axis.pinSelectedParameters';
 
 export type AxisParameterSourceProvider = () => WorkbenchParameterSource[] | Promise<WorkbenchParameterSource[]>;
 
+/**
+ * Control views a pin may reproduce. A pinned control keeps its device-authored
+ * kind (a dropdown stays a dropdown, a toggle a toggle) instead of collapsing to
+ * a generic knob; `knob`/`fader` are listed so their pins stay explicit, and the
+ * widget renders anything else as the fallback ring.
+ */
+const AXIS_PINNABLE_VIEWS = new Set(['knob', 'fader', 'dropdown', 'toggle']);
+
+function pinnableView(value: unknown): string | null {
+  return typeof value === 'string' && AXIS_PINNABLE_VIEWS.has(value) ? value : null;
+}
+
 function numericParamId(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -85,7 +97,12 @@ export function createAxisPinSelectedParametersAction(
       const allSources = await getSources();
       const filteredSources = filterSourcesByParamIds(allSources, paramIdsFromArgs(args));
       const limit = typeof args?.limit === 'number' && Number.isFinite(args.limit) ? Math.max(1, Math.floor(args.limit)) : undefined;
-      const sources = limit ? filteredSources.slice(0, limit) : filteredSources;
+      const selected = limit ? filteredSources.slice(0, limit) : filteredSources;
+      // The caller that owns the layout control (the device canvas menu) is the
+      // only one that knows how the device DRAWS this param; carry that view into
+      // the persisted widget state so a pinned dropdown/toggle isn't a knob.
+      const view = pinnableView(args?.view);
+      const sources = view ? selected.map((source) => ({ ...source, state: { ...source.state, view } })) : selected;
       if (!sources.length) return;
 
       const setup = ensurePanelCommands(controller);

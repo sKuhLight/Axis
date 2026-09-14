@@ -335,14 +335,19 @@
     menuPos = menuPositionFromPointer(e);
   }
 
-  function pinControl(c: LayoutControl, sectionId: string | null) {
+  function pinControl(pc: PlacedControl, sectionId: string | null) {
     if (!wb) return;
+    const c = pc.control;
     const paramId = paramFor(c)?.id ?? c.paramId;
     if (paramId == null) return;
+    // The pinned widget renders the control's REAL kind (dropdown/toggle), not a
+    // generic knob — carry the canvas-resolved view alongside the paramId, since
+    // the source provider only knows paramIds and would otherwise flatten it.
+    const view = viewOf(pc);
     wb.registry.runAction(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: wb.controller,
       source: 'menu',
-      args: sectionId ? { paramId, sectionId } : { paramId }
+      args: sectionId ? { paramId, sectionId, view } : { paramId, view }
     });
   }
 
@@ -353,7 +358,7 @@
     const items: WorkbenchMenuItem[] = [];
     const pinId = paramFor(c)?.id ?? c.paramId;
     if (wb && pinId != null) {
-      items.push(...buildAxisPinMenuItems(wb.controller.document, (sectionId) => pinControl(c, sectionId)));
+      items.push(...buildAxisPinMenuItems(wb.controller.document, (sectionId) => pinControl(pc, sectionId)));
     }
     const view = viewOf(pc);
     const p = named(c);

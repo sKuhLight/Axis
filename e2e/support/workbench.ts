@@ -176,6 +176,8 @@ export interface PinnedParamSpec {
   block: string;
   label: string;
   color: string;
+  /** The device control kind the pin carries (`state.view`) — e.g. a pinned enum renders as a dropdown/toggle. */
+  view?: 'knob' | 'fader' | 'dropdown' | 'toggle';
 }
 
 /** A section marker in My Controls. A blank label renders as a bare divider. */
@@ -233,7 +235,7 @@ export async function seedMyControls(page: Page, items: MyControlsSpec[]): Promi
               label: spec.label
             }
           },
-          state: { label: spec.label, sourceId: id, block: spec.block, color: spec.color }
+          state: { label: spec.label, sourceId: id, block: spec.block, color: spec.color, ...(spec.view ? { view: spec.view } : {}) }
         };
       });
       window.localStorage.setItem(key, JSON.stringify(doc));
