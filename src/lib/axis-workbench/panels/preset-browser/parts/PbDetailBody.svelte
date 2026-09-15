@@ -40,7 +40,7 @@
           {#each view.data.selectedEntry.scenes as scene, index}
             <div title={scene.trim() || `Scene ${index + 1}`}>
               <span>{index + 1}</span>
-              <strong>{scene.trim() || '…'}</strong>
+              <strong>{scene.trim()}</strong>
             </div>
           {/each}
         </div>
