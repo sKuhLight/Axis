@@ -34,13 +34,16 @@
     {/if}
 
     {#if view.data.selectedEntry.scenes.length}
-      <div class="scene-table" aria-label="Scene names">
-        {#each view.data.selectedEntry.scenes as scene, index}
-          <div title={scene.trim() || `Scene ${index + 1}`}>
-            <span>{index + 1}</span>
-            <strong>{scene.trim() || '…'}</strong>
-          </div>
-        {/each}
+      <div class="scene-field">
+        <span class="d-section-lbl">Scenes</span>
+        <div class="scene-table" aria-label="Scene names">
+          {#each view.data.selectedEntry.scenes as scene, index}
+            <div title={scene.trim() || `Scene ${index + 1}`}>
+              <span>{index + 1}</span>
+              <strong>{scene.trim() || '…'}</strong>
+            </div>
+          {/each}
+        </div>
       </div>
     {/if}
 
@@ -104,7 +107,7 @@
          list from this control. -->
     {#if blockNodes.length}
       <div class="block-filter">
-        <span class="d-blocks-lbl">Blocks</span>
+        <span class="d-section-lbl">Blocks</span>
         <div class="block-strip" class:filtered={view.snapshot.focusedBlockEffectId != null}>
           {#each blockNodes as node (node.key)}
             <button
@@ -356,11 +359,12 @@
   }
   /* The label belongs to the strip, so they share a tight wrapper rather than sitting as two
      separate children of .axis-preset-detail's 14px grid gap. */
-  .block-filter {
+  .block-filter,
+  .scene-field {
     display: grid;
     gap: 6px;
   }
-  .d-blocks-lbl {
+  .d-section-lbl {
     color: var(--textdim);
     font: 800 10px/1 var(--font-mono);
     letter-spacing: 0.12em;
