@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import { axisPbRowAnatomy } from '../../../presetBrowser/presetBrowserWorkbenchRowChips';
   import { axisPbRowDoubleClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
@@ -8,6 +9,14 @@
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
+  let listEl = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (!view.scrollToCurrentRequest) return;
+    void tick().then(() => {
+      listEl?.querySelector<HTMLElement>('.preset-row.active')?.scrollIntoView({ block: 'center' });
+    });
+  });
 </script>
 
 {#if view.data.visibleEntries.length}
@@ -36,7 +45,7 @@
       <button type="button" class="col-sort" class:on={view.snapshot.sort === 'cpu'} aria-label={view.sortLabel('cpu', 'estimated CPU')} onclick={() => view.toggleSort('cpu')}>CPU{view.sortArrow('cpu')}</button>
     </span>
   </div>
-  <div class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
+  <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
     {#each view.rowCap.rows as entry}
       {@const anatomy = axisPbRowAnatomy(entry)}
       <div

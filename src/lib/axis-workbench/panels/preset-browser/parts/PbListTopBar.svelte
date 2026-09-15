@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { library } from '$lib/preset/library.svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
@@ -58,6 +59,12 @@
   </div>
   <div class="query-tools">
     <button type="button" class="add-filter" onclick={view.onAddFilter}><span class="plus">+</span> Add filter</button>
+    <button
+      type="button"
+      class="scroll-current"
+      disabled={!view.data.entries.some((entry) => entry.sourceId === 'device' && entry.number === deviceSession.preset?.number)}
+      onclick={view.scrollToCurrent}
+    >Scroll to current</button>
     <!-- §2.2/§3.3 Save search → opens the inline name input in the sources sidebar. -->
     <button
       type="button"
@@ -371,12 +378,17 @@
     font-size: 11px;
     text-transform: none;
   }
-  .save-filter {
+  .save-filter,
+  .scroll-current {
     height: 30px;
     padding: 0 11px;
     border-radius: 999px;
     text-transform: none;
     font: 700 11px/1 var(--font-mono);
+  }
+  .scroll-current:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
   .save-filter.on {
     border-color: var(--accent);

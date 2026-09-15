@@ -239,6 +239,24 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
+  scrollToCurrent(entryId: string): void {
+    this.#snapshot = {
+      ...this.#snapshot,
+      sourceId: 'device',
+      presenceView: 'all',
+      queryText: '',
+      sort: 'num',
+      sortDir: 'asc',
+      showAllRows: true,
+      entryId,
+      anchorId: entryId,
+      focusedBlockEffectId: null,
+      detailOpen: true
+    };
+    this.#emit();
+    void this.#host?.selectEntry?.(entryId);
+  }
+
   toggleMark(entryId: string): void {
     const marked = { ...this.#snapshot.marked };
     if (marked[entryId]) delete marked[entryId];

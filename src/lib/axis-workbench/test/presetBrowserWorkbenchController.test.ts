@@ -94,6 +94,27 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     expect(c.snapshot.sortDir).toBe('asc');
   });
 
+  it('resets the list to device slot order when scrolling to current', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    c.openSource('file');
+    c.setPresenceView('device');
+    c.setQuery('lead `tag:Live`');
+    c.setSort('recent');
+
+    c.scrollToCurrent('dev:128');
+
+    expect(c.snapshot).toMatchObject({
+      sourceId: 'device',
+      presenceView: 'all',
+      queryText: '',
+      sort: 'num',
+      sortDir: 'asc',
+      showAllRows: true,
+      entryId: 'dev:128',
+      anchorId: 'dev:128'
+    });
+  });
+
   it('elects the lowest-rank registered part as overlay owner', () => {
     const c = new AxisPresetBrowserWorkbenchController();
     const unSources = c.registerPart('sources');

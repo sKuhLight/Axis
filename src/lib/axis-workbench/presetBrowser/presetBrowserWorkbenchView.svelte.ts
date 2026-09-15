@@ -108,6 +108,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   const workbenchController = getOptionalWorkbenchContext()?.controller ?? null;
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
   let runtimeSnapshot = $state<AxisPresetBrowserRuntimeSnapshot>(axisPresetBrowserWorkbenchRuntime.snapshot);
+  let scrollToCurrentRequest = $state(0);
   let lastDetailEntryId: string | null = null;
   let detailHydrateTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -518,6 +519,15 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     viewModel.select(entry);
   }
 
+  function scrollToCurrent() {
+    const number = deviceSession.preset?.number;
+    if (number == null || number < 0) return;
+    const entry = data.entries.find((candidate) => candidate.sourceId === 'device' && candidate.number === number);
+    if (!entry) return;
+    axisPresetBrowserWorkbenchController.scrollToCurrent(entry.id);
+    scrollToCurrentRequest += 1;
+  }
+
   function loadEntry(entry: AxisPresetBrowserEntrySummary) {
     const action = viewModel.load(entry);
     // Loading a preset is the deliberate commit gesture, so mirror the monolith (openBuild): return to
@@ -749,6 +759,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     get tagRow() { return tagRow; },
     recordTagUsage,
     get rowCap() { return rowCap; },
+    get scrollToCurrentRequest() { return scrollToCurrentRequest; },
     get activeTags() { return activeTags; },
     get isOwner() { return isOwner; },
     get selectedDetail() { return selectedDetail; },
@@ -801,6 +812,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     onRowClick,
     selectSource,
     selectEntry,
+    scrollToCurrent,
     loadEntry,
     openConverter,
     deleteConverted,
