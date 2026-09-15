@@ -11,6 +11,25 @@ export interface AxisPbRowCap<T> {
   hiddenCount: number;
 }
 
+export interface AxisPbPresetReveal {
+  highlightIndex: number;
+  visibleCount: number;
+}
+
+export function axisPbPresetReveal(
+  totalRows: number,
+  currentIndex: number,
+  initialRows: number
+): AxisPbPresetReveal {
+  if (totalRows <= 0 || currentIndex < 0) return { highlightIndex: 0, visibleCount: initialRows };
+  const highlightIndex = Math.min(currentIndex, totalRows - 1);
+  const trailingRows = Math.floor(initialRows / 2);
+  return {
+    highlightIndex,
+    visibleCount: Math.min(totalRows, Math.max(initialRows, highlightIndex + trailingRows + 1))
+  };
+}
+
 // Apply the soft cap. When `showAll` is false and there are more than the cap, only the first
 // AXIS_PB_SOFT_ROW_CAP rows are returned; `capped` flags that an expander should render.
 export function applyRowCap<T>(list: T[], showAll: boolean): AxisPbRowCap<T> {

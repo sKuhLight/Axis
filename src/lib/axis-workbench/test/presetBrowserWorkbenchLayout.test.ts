@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AXIS_PB_SOFT_ROW_CAP,
   applyRowCap,
+  axisPbPresetReveal,
   axisPbRank,
   electAxisPbOwner
 } from '../presetBrowser/presetBrowserWorkbenchLayout';
@@ -29,6 +30,20 @@ describe('Preset Browser soft row cap (§4.1)', () => {
     expect(cap.capped).toBe(false);
     expect(cap.rows).toHaveLength(40);
     expect(cap.hiddenCount).toBe(0);
+  });
+});
+
+describe('Grid preset search reveal', () => {
+  it('highlights the current preset and renders enough rows to center it', () => {
+    expect(axisPbPresetReveal(512, 128, 20)).toEqual({ highlightIndex: 128, visibleCount: 139 });
+  });
+
+  it('keeps the initial batch for a current preset near the start', () => {
+    expect(axisPbPresetReveal(512, 4, 20)).toEqual({ highlightIndex: 4, visibleCount: 20 });
+  });
+
+  it('falls back to the first row when there is no current preset', () => {
+    expect(axisPbPresetReveal(512, -1, 20)).toEqual({ highlightIndex: 0, visibleCount: 20 });
   });
 });
 

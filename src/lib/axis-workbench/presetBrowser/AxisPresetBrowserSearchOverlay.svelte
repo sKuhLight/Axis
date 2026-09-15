@@ -33,6 +33,7 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
   import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
+  import { axisPbPresetReveal } from './presetBrowserWorkbenchLayout';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
   // so open (and every keystroke) only pays for the rows actually on screen instead of all ~512.
@@ -74,9 +75,16 @@
       // Fresh search every time the overlay opens, same as PresetPicker's open effect.
       savedQuery = axisPresetBrowserWorkbenchController.snapshot.queryText;
       axisPresetBrowserWorkbenchController.setQuery('');
-      highlightIndex = 0;
-      visibleCount = INITIAL_ROWS;
-      void tick().then(() => inputEl?.focus());
+      const currentIndex = data.visibleEntries.findIndex(
+        (entry) => entry.number === deviceSession.preset?.number
+      );
+      const reveal = axisPbPresetReveal(data.visibleEntries.length, currentIndex, INITIAL_ROWS);
+      highlightIndex = reveal.highlightIndex;
+      visibleCount = reveal.visibleCount;
+      void tick().then(() => {
+        inputEl?.focus();
+        listEl?.querySelectorAll<HTMLElement>('.rowwrap')[highlightIndex]?.scrollIntoView({ block: 'center' });
+      });
     } else if (!open && wasSearchOpen) {
       // Covers every dismissal path (Escape, backdrop click, close button, loadEntry) since they all
       // funnel through close() flipping this flag.
