@@ -2,15 +2,16 @@
  * Detail-pane load-action warning copy.
  *
  * "Switch to Preset" and "Audition" both replace the edit buffer, so both silently discard unsaved
- * edits to the current preset. When the preset is dirty (same signal as the Save widget chip —
- * see `../widgets/saveDirtyState`), the two buttons turn amber with a ⚠ and explain themselves
- * on hover. Keeping the copy here keeps it out of the markup and assertable.
+ * edits to the current preset. The button is amber-outlined as the primary call to action; only when
+ * the preset is dirty (same signal as the Save widget chip — see `../widgets/saveDirtyState`) does it
+ * fill amber with a ⚠ and explain itself on hover. Keeping the copy here keeps it out of the markup
+ * and assertable.
  */
 
 export type AxisPbLoadAction = 'load' | 'audition';
 
 export interface AxisPbLoadWarning {
-  /** True when the action would discard unsaved edits — drives the amber tint and the ⚠. */
+  /** True when the action would discard unsaved edits — drives the filled amber tint and the ⚠. */
   warn: boolean;
   /** Button `title` (and, when warning, `aria-label`): what the action does, or what it costs. */
   tooltip: string;

@@ -62,7 +62,7 @@
           <!-- Already on the device: the primary action navigates to the stored slot. -->
           <button
             type="button"
-            class="load-action"
+            class="load-action primary"
             class:warn={view.loadWarning.warn}
             data-action="load"
             title={view.loadWarning.tooltip}
@@ -76,7 +76,7 @@
           <!-- Not on the device (imported file / local folder): trial-load into the edit buffer. -->
           <button
             type="button"
-            class="load-action"
+            class="load-action primary"
             class:warn={view.auditionWarning.warn}
             data-action="audition"
             title={view.auditionWarning.tooltip}
@@ -331,15 +331,29 @@
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
-  /* Load preset and Audition both replace the edit buffer. When the current preset has unsaved
-     edits, both turn amber with a ⚠ — the same dirty language as the Save widget chip. */
-  .load-action.warn {
+  /* The primary call to action — Switch to Preset on a device slot, Audition for a
+     computer file — is amber-outlined so it reads before the secondary Refresh/Convert
+     buttons beside it, without shouting. */
+  .load-action.primary {
+    background: transparent;
     color: var(--amber);
-    border-color: color-mix(in srgb, var(--amber) 40%, var(--border));
+    border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  }
+  .load-action.primary:hover {
+    background: color-mix(in srgb, var(--amber) 8%, transparent);
+    border-color: color-mix(in srgb, var(--amber) 78%, transparent);
+  }
+  /* Load preset and Audition both replace the edit buffer. When the current preset has
+     unsaved edits the CTA would destroy them, so only then does it fill: amber with the
+     ⚠ glyph. Outline = safe, filled = destructive. */
+  .load-action.warn {
+    border-color: var(--amber);
+    background: var(--amber);
+    color: var(--bg2);
   }
   .load-action.warn:hover {
-    border-color: color-mix(in srgb, var(--amber) 60%, var(--border));
-    background: color-mix(in srgb, var(--amber) 6%, var(--bg2));
+    border-color: var(--amber);
+    background: color-mix(in srgb, var(--amber) 88%, white);
   }
   .warn-glyph {
     margin-right: 5px;
