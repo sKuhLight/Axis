@@ -130,7 +130,9 @@
     background: var(--c);
   }
   .chain-lbl {
-    color: var(--c);
+    /* Results-list only: colour lives in the dot alone, so family identity reads from the dot and the
+       row stops shouting. Other surfaces (detail strip, tags, monolith) keep the vivid category colour. */
+    color: var(--textdim);
     font: 700 10px/1.2 var(--font-mono);
     white-space: nowrap;
   }
