@@ -14,7 +14,7 @@
     setAxisPendingSectionEditId
   } from '../myControlsSections';
 
-  // My Controls — the single pin destination. It renders the same widget grid as
+  // Pinned Controls — the single pin destination. It renders the same widget grid as
   // AxisCustomPanel but owns two things that panel does not: the section toolbar,
   // and a resting empty state that names the only way to fill the panel.
   let { panel }: { panel: PanelInstance } = $props();
@@ -40,7 +40,7 @@
   }
 </script>
 
-<section class="custom-panel" role="group" aria-label={panel.title ?? 'My Controls'}>
+<section class="custom-panel" role="group" aria-label={panel.title ?? 'Pinned Controls'}>
   <WidgetZone
     {zone}
     variant="grid"
@@ -53,7 +53,7 @@
   {#if !widgets.length && !$controller.editMode}
     <!-- WidgetZone hides an empty zone entirely unless layout editing is on, so
          the panel owns its own resting empty state — otherwise a fresh user opens
-         My Controls to a blank rectangle with no clue how to fill it. -->
+         Pinned Controls to a blank rectangle with no clue how to fill it. -->
     <p class="empty">{AXIS_MY_CONTROLS_EMPTY_LABEL}</p>
   {/if}
   <div class="section-tools">

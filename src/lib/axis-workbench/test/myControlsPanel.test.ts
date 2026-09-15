@@ -5,6 +5,7 @@ import { AXIS_PAGE_GRID, buildAxisSeedPages } from '../axisWorkbenchPages';
 import { axisMyControlsWidgetCount } from '../myControlsSections';
 import {
   axisMyControlsPanel,
+  axisMyControlsZone,
   ensureAxisMyControlsPanel,
   hasAxisMyControlsPanel,
   AXIS_MY_CONTROLS_PANEL_ID,
@@ -39,7 +40,7 @@ const gridRight = (doc: ReturnType<typeof docWithRight>) => {
   return node?.kind === 'tabs' ? node : undefined;
 };
 
-describe('My Controls panel', () => {
+describe('Pinned Controls panel', () => {
   it('ships docked immediately left of History on the default Grid page', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     expect(hasAxisMyControlsPanel(doc)).toBe(true);
@@ -84,14 +85,21 @@ describe('ensureAxisMyControlsPanel', () => {
     expect(gridRight(doc)?.panelIds).toEqual(['axis.presetBrowser', AXIS_MY_CONTROLS_PANEL_ID]);
   });
 
-  it('re-applies the grid geometry onto a panel persisted with an older one', () => {
+  it('re-applies the title and grid geometry onto a panel persisted with older fixtures', () => {
     const doc = docWithRight(tabs(['axis.history']));
     const layout = selectActiveLayout(doc)!;
-    layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = { ...axisMyControlsPanel(), state: { grid: { columns: 2 } } };
+    layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = {
+      ...axisMyControlsPanel(),
+      title: 'My Controls',
+      state: { grid: { columns: 2 } }
+    };
+    layout.zones[AXIS_MY_CONTROLS_ZONE] = { ...axisMyControlsZone(), label: 'My Controls' };
 
     ensureAxisMyControlsPanel(doc);
 
+    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID].title).toBe('Pinned Controls');
     expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID].state).toEqual(axisMyControlsPanel().state);
+    expect(layout.zones[AXIS_MY_CONTROLS_ZONE].label).toBe('Pinned Controls');
   });
 
   it('restores the zone and panel instance a persisted document lost', () => {

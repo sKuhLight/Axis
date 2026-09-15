@@ -8,7 +8,7 @@ import {
   seedPinnedControls
 } from './support/workbench';
 
-// Pinned parameter controls collect into ONE panel — My Controls, the single pin
+// Pinned parameter controls collect into ONE panel — Pinned Controls, the single pin
 // destination — and render as recognizable, block-coloured, named tiles that
 // arrange with the shared widget machinery.
 //
@@ -20,24 +20,24 @@ const GAIN = { effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: 
 const LEVEL = { effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' };
 const MASTER = { effectId: 100, paramId: 1, block: 'Amp 1', label: 'Master', color: '#d98a2b' };
 
-test.describe('My Controls — the single pin destination', () => {
+test.describe('Pinned Controls — the single pin destination', () => {
   test('ships as a tab beside History and cannot be closed', async ({ page }) => {
     await bootCleanWorkbench(page);
 
     const rightTabs = regionTabs(page, 'right');
     await expect(rightTabs.filter({ hasText: 'History' })).toHaveCount(1);
-    await expect(rightTabs.filter({ hasText: 'My Controls' })).toHaveCount(1);
+    await expect(rightTabs.filter({ hasText: 'Pinned Controls' })).toHaveCount(1);
 
-    await rightTabs.filter({ hasText: 'My Controls' }).click();
+    await rightTabs.filter({ hasText: 'Pinned Controls' }).click();
     await expect(page.locator('.custom-panel')).toBeVisible();
     // Empty state points at the only way to fill it.
-    await expect(page.getByText(/Pin to My Controls/i).first()).toBeVisible();
+    await expect(page.getByText(/Pin to Pinned Controls/i).first()).toBeVisible();
   });
 
   test('collects controls from different blocks as named, block-coloured tiles — no tab per param', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN, LEVEL]);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
 
     const panel = page.locator('.custom-panel').first();
     const tiles = panel.locator('.axis-widget.param');
@@ -65,12 +65,12 @@ test.describe('My Controls — the single pin destination', () => {
   test('pinned controls survive a reload', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN]);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     await expect(page.locator('.custom-panel .axis-widget.param')).toHaveCount(1);
 
     await page.reload();
     await page.waitForSelector('.aw-root');
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     await expect(page.locator('.custom-panel .axis-widget.param')).toHaveCount(1);
     await expect(page.locator('.custom-panel').getByText('Gain', { exact: true })).toBeVisible();
   });
@@ -80,7 +80,7 @@ test.describe('Pinned control tiles', () => {
   test('arrange with the shared widget drag machinery', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN, MASTER]);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     await enterEditMode(page);
 
     const panel = page.locator('.custom-panel').first();
@@ -93,7 +93,7 @@ test.describe('Pinned control tiles', () => {
   test('a resting pinned control shows no drag affordance and no dashed slot look', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN]);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     await enterEditMode(page);
 
     const panel = page.locator('.custom-panel').first();
@@ -114,7 +114,7 @@ test.describe('Pinned control tiles', () => {
   test('the customize dashed outline wraps the full tile at every size', async ({ page }) => {
     await bootCleanWorkbench(page);
     await seedPinnedControls(page, [GAIN, LEVEL]);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     await enterEditMode(page);
 
     const panel = page.locator('.custom-panel').first();
@@ -150,9 +150,9 @@ test.describe('Pinned control tiles', () => {
 // marker widget in the same zone, so the controls after it merely read as
 // belonging to it. One widget type covers both affordances: labelled it is a
 // titled rule, unlabelled a bare divider.
-test.describe('My Controls sections', () => {
+test.describe('Pinned Controls sections', () => {
   async function openMyControls(page: import('@playwright/test').Page) {
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
     return page.locator('.custom-panel').first();
   }
 
@@ -223,7 +223,7 @@ test.describe('My Controls sections', () => {
     await panel.locator('.axis-widget.section-header').click({ button: 'right' });
     // A named section's removal item reads "Remove whole section" (it cascades
     // to the controls under it), not the generic "Remove Widget" — see
-    // axisWorkbenchRegistry.ts's registerWidgetMenu for My Controls.
+    // axisWorkbenchRegistry.ts's registerWidgetMenu for Pinned Controls.
     await page.getByRole('menuitem', { name: 'Remove whole section' }).click();
 
     await expect(panel.locator('.axis-widget.section-header')).toHaveCount(0);
@@ -236,7 +236,7 @@ test.describe('My Controls sections', () => {
     const panel = await openMyControls(page);
 
     await panel.locator('.axis-widget.section-header').click({ button: 'right' });
-    // A divider (or any plain control) in My Controls gets the plain "Remove"
+    // A divider (or any plain control) in Pinned Controls gets the plain "Remove"
     // label — only a NAMED section header reads "Remove whole section".
     await page.getByRole('menuitem', { name: 'Remove', exact: true }).click();
 

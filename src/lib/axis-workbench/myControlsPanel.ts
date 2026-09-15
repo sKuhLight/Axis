@@ -33,15 +33,15 @@ import { AXIS_PAGE_GRID } from './axisWorkbenchPages';
  */
 export const AXIS_MY_CONTROLS_PANEL_ID = 'axis.myControls';
 export const AXIS_MY_CONTROLS_PANEL_TYPE = 'axis.myControls';
-export const AXIS_MY_CONTROLS_TITLE = 'My Controls';
-/** The History panel — My Controls docks immediately to its left. */
+export const AXIS_MY_CONTROLS_TITLE = 'Pinned Controls';
+/** The History panel — Pinned Controls docks immediately to its left. */
 const AXIS_HISTORY_PANEL_ID = 'axis.history';
 
 /** Widget zone the pinned controls live in. */
 export const AXIS_MY_CONTROLS_ZONE = panelWidgetZoneId(AXIS_MY_CONTROLS_PANEL_ID);
 
 /** Empty-state copy — the only way to fill the panel is the pin menu. */
-export const AXIS_MY_CONTROLS_EMPTY_LABEL = 'Right-click a control → Pin to My Controls';
+export const AXIS_MY_CONTROLS_EMPTY_LABEL = 'Right-click a control → Pin to Pinned Controls';
 
 /**
  * The panel instance. `locked` + `closable: false` because it is a fixture of the
@@ -100,12 +100,17 @@ export function ensureAxisMyControlsPanel(doc: WorkbenchDocument): WorkbenchDocu
 
     const existing = layout.panels[AXIS_MY_CONTROLS_PANEL_ID];
     if (!existing) layout.panels[AXIS_MY_CONTROLS_PANEL_ID] = axisMyControlsPanel();
-    // The grid geometry is a fixture of the panel, not user data — nothing in the
-    // UI edits it — so it is re-applied rather than preserved. Without this a
-    // document persisted before a geometry change keeps the old columns forever,
+    // The title and grid geometry are fixtures of the panel, not user data — nothing in the
+    // UI edits them — so they are re-applied rather than preserved. Without this a
+    // document persisted before a fixture change keeps the old values forever,
     // exactly the way a seed-only change never reaches an existing layout.
-    else existing.state = axisMyControlsPanel().state;
-    if (!layout.zones[AXIS_MY_CONTROLS_ZONE]) layout.zones[AXIS_MY_CONTROLS_ZONE] = axisMyControlsZone();
+    else {
+      existing.title = AXIS_MY_CONTROLS_TITLE;
+      existing.state = axisMyControlsPanel().state;
+    }
+    const existingZone = layout.zones[AXIS_MY_CONTROLS_ZONE];
+    if (!existingZone) layout.zones[AXIS_MY_CONTROLS_ZONE] = axisMyControlsZone();
+    else existingZone.label = AXIS_MY_CONTROLS_TITLE;
 
     const page = layout.pages[AXIS_PAGE_GRID];
     if (!page?.dock?.root) continue;

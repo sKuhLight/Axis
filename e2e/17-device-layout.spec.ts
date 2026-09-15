@@ -204,7 +204,7 @@ test.describe('Pinned control kinds', () => {
     ]);
     // Make the bound block the open one so its params/enums hydrate live.
     await selectDriveBlock(page);
-    await regionTabs(page, 'right').filter({ hasText: 'My Controls' }).click();
+    await regionTabs(page, 'right').filter({ hasText: 'Pinned Controls' }).click();
 
     const panel = page.locator('.custom-panel').first();
     const knob = panel.locator('.axis-widget.param[data-param-view="knob"]');

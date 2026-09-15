@@ -29,8 +29,8 @@ function newController() {
 }
 
 describe('axis pin target', () => {
-  it('is always My Controls, with a zero count before anything is pinned', () => {
-    expect(axisPinTarget(newController().document)).toEqual({ label: 'Pin to My Controls', widgetCount: 0 });
+  it('is always Pinned Controls, with a zero count before anything is pinned', () => {
+    expect(axisPinTarget(newController().document)).toEqual({ label: 'Pin to Pinned Controls', widgetCount: 0 });
   });
 
   it('reports how many controls are pinned', async () => {
@@ -54,7 +54,7 @@ describe('axis pin menu items', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0].id).toBe('pin.myControls');
-    expect(items[0].label).toBe('Pin to My Controls');
+    expect(items[0].label).toBe('Pin to Pinned Controls');
     expect(items[0].hint).toBe('1');
 
     items[0].run();
@@ -77,7 +77,7 @@ describe('axis pin menu items', () => {
     const picks: (string | null)[] = [];
     const items = buildAxisPinMenuItems(controller.document, (sectionId) => picks.push(sectionId));
 
-    expect(items.map((item) => item.label)).toEqual(['Pin to My Controls (end)', 'Amp']);
+    expect(items.map((item) => item.label)).toEqual(['Pin to Pinned Controls (end)', 'Amp']);
     expect(items[1].hint).toBe('1');
     expect(items[1].separatorBefore).toBe(true);
 

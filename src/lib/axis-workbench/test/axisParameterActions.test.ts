@@ -37,7 +37,7 @@ const pinnedParamIds = (controller: ReturnType<typeof newController>) =>
   selectVisibleWidgetsByZone(controller.document, AXIS_MY_CONTROLS_ZONE).map((w) => w.binding?.target.paramId);
 
 describe('Axis parameter Workbench actions', () => {
-  it('pins selected parameter sources into My Controls through reducer commands', async () => {
+  it('pins selected parameter sources into Pinned Controls through reducer commands', async () => {
     const controller = newController();
     const action = createAxisPinSelectedParametersAction(() => [source('1', 'Gain'), source('2', 'Level')]);
 
@@ -45,7 +45,7 @@ describe('Axis parameter Workbench actions', () => {
     await action.run({ controller, source: 'menu' });
 
     const layout = selectActiveLayout(controller.document)!;
-    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID]?.title).toBe('My Controls');
+    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID]?.title).toBe('Pinned Controls');
     expect(layout.zones[AXIS_MY_CONTROLS_ZONE]).toBeDefined();
     expect(Object.values(layout.widgets).map((w) => w.type)).toEqual(['axis.paramControl', 'axis.paramControl']);
     expect(pinnedParamIds(controller)).toEqual([1, 2]);
@@ -70,7 +70,7 @@ describe('Axis parameter Workbench actions', () => {
 
     const layout = selectActiveLayout(controller.document)!;
     expect(Object.keys(layout.panels)).toEqual([AXIS_MY_CONTROLS_PANEL_ID]);
-    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID].title).toBe('My Controls');
+    expect(layout.panels[AXIS_MY_CONTROLS_PANEL_ID].title).toBe('Pinned Controls');
   });
 
   it('honours the source limit', async () => {
@@ -122,7 +122,7 @@ describe('Axis parameter Workbench actions', () => {
     expect(pinnedParamIds(controller)).toEqual([3, 1]);
   });
 
-  it('activates the My Controls tab so the pin is visible', async () => {
+  it('activates the Pinned Controls tab so the pin is visible', async () => {
     const controller = newController();
     await createAxisPinSelectedParametersAction(() => [source('1', 'Gain')]).run({ controller, source: 'menu' });
 
