@@ -167,6 +167,10 @@
   }
   .rename-in {
     width: 100%;
+    /* The row's head is a flex line (name + tags); let the rename field take the name's slot and
+       shrink beside any tag pills instead of forcing them off the row. */
+    flex: 1 1 auto;
+    min-width: 0;
     box-sizing: border-box;
     height: 26px;
     border: 1px solid var(--accent);

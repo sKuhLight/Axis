@@ -1,10 +1,12 @@
 <script lang="ts">
-  // The "main" content of a preset row — name, conversion provenance, tag pills, mini signal-chain
-  // strip — factored out of AxisPresetBrowserPartPanel.svelte so it and AxisPresetBrowserSearchOverlay
-  // (the slim Grid-page overlay) render this identically instead of maintaining two copies of the
-  // markup/CSS. The name itself stays overridable via a snippet: the docked panel swaps in its inline
-  // rename input there, the overlay just takes the default `<strong>` render. Tag-pill context menu
-  // (rename/recolor a tag) stays panel-only via the optional callback — the overlay has no tag editor.
+  // The "main" content of a preset row — a head line (name + conversion provenance + tag pills) over a
+  // mini signal-chain strip — factored out of AxisPresetBrowserPartPanel.svelte so it and
+  // AxisPresetBrowserSearchOverlay (the slim Grid-page overlay) render this identically instead of
+  // maintaining two copies of the markup/CSS. The head line mirrors the monolith's PresetBrowser row
+  // (§4.3): tags sit NEXT TO the name, not stacked under it. The name itself stays overridable via a
+  // snippet: the docked panel swaps in its inline rename input there, the overlay just takes the
+  // default `<strong>` render. Tag-pill context menu (rename/recolor a tag) stays panel-only via the
+  // optional callback — the overlay has no tag editor.
   import type { Snippet } from 'svelte';
   import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
   import { axisPbRowBlockChips, type AxisPbRowBlockChip } from './presetBrowserWorkbenchRowChips';
@@ -31,30 +33,32 @@
   const chips = $derived(chainChips ?? axisPbRowBlockChips(entry));
 </script>
 
-{#if name}
-  {@render name()}
-{:else}
-  <strong class="row-name" class:dim={entry.empty}>{entry.name}</strong>
-{/if}
-{#if entry.converted && entry.provenance}
-  <span class="conv-prov" title={`Converted from ${entry.provenance}`}>{entry.provenance}</span>
-{/if}
-{#if tagPills.length}
-  <span class="tag-pills">
-    {#each tagPills as tag}
-      <em
-        class="tag-pill"
-        data-tag={tag}
-        style:--tag-col={library.colorOf(tag)}
-        oncontextmenu={(e) => onTagContextMenu?.(e, tag)}
-      >{tag}</em>
-    {/each}
-  </span>
-{/if}
+<span class="row-head">
+  {#if name}
+    {@render name()}
+  {:else}
+    <strong class="row-name" class:dim={entry.empty}>{entry.name}</strong>
+  {/if}
+  {#if entry.converted && entry.provenance}
+    <span class="conv-prov" title={`Converted from ${entry.provenance}`}>{entry.provenance}</span>
+  {/if}
+  {#if tagPills.length}
+    <span class="tag-pills">
+      {#each tagPills as tag}
+        <em
+          class="tag-pill"
+          data-tag={tag}
+          style:--tag-col={library.colorOf(tag)}
+          oncontextmenu={(e) => onTagContextMenu?.(e, tag)}
+        >{tag}</em>
+      {/each}
+    </span>
+  {/if}
+</span>
 {#if chips.length && !entry.empty}
   <!-- Signal-chain quick view: a strip of coloured block nodes, deliberately NOT pill-shaped so it
-       never reads as tags (the tag pills sit directly above it). Nodes carry no connecting arrows —
-       routing is not strictly linear. -->
+       never reads as tags (the tag pills sit up on the head line, beside the name). Nodes carry no
+       connecting arrows — routing is not strictly linear. -->
   <span class="chain-strip" title="Signal chain">
     {#each chips as chip}
       <em class="chain-node" style:--c={chip.color} title={chip.title}>
@@ -66,6 +70,15 @@
 {/if}
 
 <style>
+  /* Head line: name, provenance badge and tag pills share ONE row, so the tags read as belonging to
+     the preset rather than as a second stacked block (parity with the monolith's `.row-top`). The name
+     takes the shrink (min-width:0 + ellipsis below); badges and pills hold their intrinsic width. */
+  .row-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
   /* :global — the docked panel's `name` snippet renders its own `<strong class="row-name">` (for the
      non-renaming case) from ITS template, so the element carries the panel's own Svelte scope hash,
      not this component's. Global is what makes the shared class actually reach it. */
@@ -82,7 +95,7 @@
     font-weight: 600;
   }
   .conv-prov {
-    align-self: flex-start;
+    flex: none;
     padding: 2px 7px;
     border: 1px solid color-mix(in srgb, var(--amber, #f5a623) 45%, transparent);
     border-radius: 5px;
@@ -92,6 +105,7 @@
     white-space: nowrap;
   }
   .tag-pills {
+    flex: none;
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
