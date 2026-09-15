@@ -71,6 +71,7 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.visibleEntries[0]).toMatchObject({
       sourceLabel: 'Imported files',
       model: 'USA Clean',
+      scenes: ['Main'],
       sceneCount: 1,
       blockCount: 2,
       tags: ['wide', 'delay']

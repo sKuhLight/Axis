@@ -3,7 +3,6 @@
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import { axisPresetBrowserWorkbenchRuntime } from '../../../presetBrowser/presetBrowserWorkbenchRuntime';
   import { detailBlockNodes, nextBlockFocus } from '../../../presetBrowser/presetBrowserWorkbenchDetailBlockChips';
-  import { detailStatusItems } from '../../../presetBrowser/presetBrowserWorkbenchDetailStatus';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
@@ -14,37 +13,33 @@
   <article class="axis-preset-detail">
     <div class="detail-title">
       <span>{view.data.selectedEntry.number == null ? view.data.selectedEntry.sourceLabel : `Preset ${String(view.data.selectedEntry.number).padStart(3, '0')}`}</span>
-      <h3>{view.data.selectedEntry.name}</h3>
+      <div class="detail-name-row">
+        <h3>{view.data.selectedEntry.name}</h3>
+        {#if view.data.selectedEntry.tags.length}
+          <div class="tag-row">
+            {#each view.data.selectedEntry.tags as tag}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <span style:--tag-col={library.colorOf(tag)} oncontextmenu={(e) => view.openTagMenu(e, tag)}>{tag}</span>
+            {/each}
+          </div>
+        {/if}
+      </div>
       {#if view.data.selectedEntry.model}<p>{view.data.selectedEntry.model}</p>{/if}
     </div>
 
-    <div class="detail-status">
-      {#each detailStatusItems(view.selectedDetail) as item}
-        <span
-          class:on={item.loaded}
-          data-status={item.key}
-          data-loaded={item.loaded}
-          title={item.title}
-          aria-label={item.title}
-        >
-          <i class="dot"></i>{item.label}
-        </span>
-      {/each}
-    </div>
+    {#if view.data.selectedEntry.converted && view.data.selectedEntry.provenance}
+      <dl>
+        <div><dt>Converted</dt><dd>{view.data.selectedEntry.provenance}</dd></div>
+      </dl>
+    {/if}
 
-    <dl>
-      <div><dt>Source</dt><dd>{view.data.selectedEntry.sourceLabel}</dd></div>
-      {#if view.data.selectedEntry.converted && view.data.selectedEntry.provenance}<div><dt>Converted</dt><dd>{view.data.selectedEntry.provenance}</dd></div>{/if}
-      <div><dt>Scenes</dt><dd>{view.data.selectedEntry.sceneCount}</dd></div>
-      <div><dt>Blocks</dt><dd>{view.data.selectedEntry.blockCount}</dd></div>
-      {#if view.data.selectedEntry.folder}<div><dt>Folder</dt><dd>{view.data.selectedEntry.folder}</dd></div>{/if}
-    </dl>
-
-    {#if view.data.selectedEntry.tags.length}
-      <div class="tag-row">
-        {#each view.data.selectedEntry.tags as tag}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span style:--tag-col={library.colorOf(tag)} oncontextmenu={(e) => view.openTagMenu(e, tag)}>{tag}</span>
+    {#if view.data.selectedEntry.scenes.length}
+      <div class="scene-table" aria-label="Scene names">
+        {#each view.data.selectedEntry.scenes as scene, index}
+          <div title={scene.trim() || `Scene ${index + 1}`}>
+            <span>{index + 1}</span>
+            <strong>{scene.trim() || '…'}</strong>
+          </div>
         {/each}
       </div>
     {/if}
@@ -230,7 +225,15 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
+  .detail-name-row {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
   .detail-title h3 {
+    min-width: 0;
     margin: 0;
     color: var(--text);
     font-size: 18px;
@@ -240,33 +243,6 @@
     margin: 0;
     color: var(--textdim);
     font-size: 12px;
-  }
-  /* Passive status readout, not a control — deliberately not styled like the segmented
-     tab/gate controls elsewhere in this app. Dots inherit currentColor from the pending/on
-     state instead of the accent-bordered pill look, so it doesn't read as an active tab strip. */
-  .detail-status {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .detail-status span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--textfaint);
-    font: 800 10px/1 var(--font-mono);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .detail-status span.on {
-    color: var(--ok);
-  }
-  .detail-status .dot {
-    width: 7px;
-    height: 7px;
-    flex: none;
-    border-radius: 50%;
-    background: currentColor;
   }
   dl {
     margin: 0;
@@ -293,6 +269,7 @@
     text-align: right;
   }
   .tag-row {
+    min-width: 0;
     display: flex;
     flex-wrap: wrap;
     gap: 5px;
@@ -303,6 +280,41 @@
     padding: 4px 7px;
     color: var(--tag-col);
     font-size: 10px;
+  }
+  .scene-table {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .scene-table div {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .scene-table div:nth-child(odd) {
+    border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .scene-table div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+  .scene-table span {
+    flex: none;
+    color: var(--textfaint);
+    font: 700 9px/1 var(--font-mono);
+  }
+  .scene-table strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text2);
+    font: 600 11px/1.2 var(--font-ui);
   }
   .detail-actions {
     display: grid;

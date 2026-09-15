@@ -61,6 +61,7 @@ function summary(overrides: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPr
     number: 1,
     name: 'Lead End',
     model: '',
+    scenes: [],
     sceneCount: 0,
     blockCount: 1,
     fav: false,

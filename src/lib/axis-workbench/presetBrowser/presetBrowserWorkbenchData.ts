@@ -36,6 +36,7 @@ export interface AxisPresetBrowserEntrySummary {
   number: number | null;
   name: string;
   model: string;
+  scenes: string[];
   sceneCount: number;
   blockCount: number;
   fav: boolean;
@@ -222,6 +223,7 @@ export function preparePresetBrowserIndex(
       blocks: norm.blocks.map((b) => ({ ...b })),
       models: Object.fromEntries(Object.entries(norm.models).map(([k, v]) => [k, [...v]])),
       amps: [...norm.amps],
+      scenes: [...norm.scenes],
       tags: [...norm.tags]
     };
     const m = matchEntryFromSummary(summary, paramsOf?.(entry));
@@ -379,6 +381,7 @@ function normalizeEntry(
     number,
     name: entry.summary.name?.trim() || 'Untitled Preset',
     model: firstModel,
+    scenes: entry.summary.scenes ?? [],
     sceneCount: entry.summary.scenes?.length ?? 0,
     blockCount: blocks.length,
     fav: entry.fav === true,

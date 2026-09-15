@@ -245,6 +245,7 @@ describe('matchEntryFromSummary (regression: decoded models must survive summary
     number: 2,
     name: '5153 Lead',
     model: 'FM3', // the device model string — must never leak into the amp model list
+    scenes: [],
     sceneCount: 0,
     blockCount: 1,
     fav: false,

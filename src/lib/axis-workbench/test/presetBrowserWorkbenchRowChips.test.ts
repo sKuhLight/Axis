@@ -18,6 +18,7 @@ function entry(over: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBro
     number: 1,
     name: 'Studio Clean',
     model: 'FM3',
+    scenes: ['Scene 1', 'Scene 2'],
     sceneCount: 2,
     blockCount: 0,
     fav: false,
