@@ -145,8 +145,8 @@ const SOURCE_ORDER: AxisPresetBrowserSourceId[] = ['all', 'device', 'local', 'fi
 export function axisPresetBrowserSourceLabel(sourceId: AxisPresetBrowserSourceId): string {
   if (sourceId === 'all') return 'All Presets';
   if (sourceId === 'device') return 'Device';
-  if (sourceId === 'local') return 'Local';
-  if (sourceId === 'file') return 'Files';
+  if (sourceId === 'local') return 'Axis folder';
+  if (sourceId === 'file') return 'Imported files';
   if (sourceId === 'converted') return 'Converted';
   return sourceId.replace(/[-_.]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }

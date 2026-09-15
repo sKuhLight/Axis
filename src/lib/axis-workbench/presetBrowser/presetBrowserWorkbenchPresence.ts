@@ -6,7 +6,7 @@
 //
 // This module only classifies a row against a view, keeping the rules unit-testable without the store.
 
-export type AxisPbPresenceView = 'all' | 'device';
+export type AxisPbPresenceView = 'all' | 'device' | 'computer';
 
 export interface AxisPbPresenceViewDef {
   id: AxisPbPresenceView;
@@ -20,7 +20,8 @@ export interface AxisPbPresenceViewDef {
 // is templated with the detected unit name at render time when available (monolith: "On your FM3").
 export const AXIS_PB_PRESENCE_VIEWS: AxisPbPresenceViewDef[] = [
   { id: 'all', label: 'All presets', glyph: '≣', color: 'var(--textdim)' },
-  { id: 'device', label: 'On this device', glyph: '▣', color: 'var(--textdim)' }
+  { id: 'device', label: 'On this device', glyph: '▣', color: 'var(--textdim)' },
+  { id: 'computer', label: 'On this computer', glyph: '⌂', color: 'var(--textdim)' }
 ];
 
 export function isAxisPbPresenceView(value: unknown): value is AxisPbPresenceView {
@@ -35,7 +36,8 @@ export interface AxisPbPresenceRow {
 // Predicate mirroring the monolith `inView`.
 export function entryInPresenceView(row: AxisPbPresenceRow, view: AxisPbPresenceView): boolean {
   if (view === 'all') return true;
-  return view === 'device' ? row.source === 'device' : false;
+  if (view === 'device') return row.source === 'device';
+  return row.source !== 'device';
 }
 
 /** Which views to render — kept as a function so the panel has one call site to grow from. */

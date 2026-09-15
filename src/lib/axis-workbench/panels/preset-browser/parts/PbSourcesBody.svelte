@@ -7,42 +7,6 @@
   let { view }: { view: AxisPresetBrowserPartView } = $props();
 </script>
 
-<div class="axis-source-total">
-  <strong>{view.data.entries.length}</strong>
-  <span>indexed presets</span>
-</div>
-
-<!-- §3 LIBRARY: library views with live counts. Selecting one filters the list exactly like the
-     monolith's equivalent (All presets / On this device). -->
-<header class="section-head"><span>Library</span></header>
-<div class="axis-part-list views-list">
-  {#each view.data.presenceViews as pview}
-    <button
-      type="button"
-      class="view-row"
-      class:active={view.data.activePresenceView === pview.id}
-      onclick={() => axisPresetBrowserWorkbenchController.setPresenceView(pview.id)}
-    >
-      <span class="view-glyph" style:color={pview.color} aria-hidden="true">{pview.glyph}</span>
-      <strong>{pview.label}</strong>
-      <em>{pview.count}</em>
-    </button>
-  {/each}
-</div>
-
-<header class="section-head"><span>Sources</span></header>
-<div class="axis-part-list">
-  {#each view.data.sources as source}
-    <button type="button" class:active={view.data.activeSourceId === source.id} onclick={() => view.selectSource(source.id)}>
-      <span class="source-main">
-        <strong>{source.label}</strong>
-        <i style:width={`${view.data.entries.length ? Math.max(4, (source.count / view.data.entries.length) * 100) : 0}%`}></i>
-      </span>
-      <em>{source.count}</em>
-    </button>
-  {/each}
-</div>
-
 <!-- §3.3 SAVED SEARCHES: name + query subtitle + active highlight (parsed-query equality) + delete ×.
      Applying one loads its query via applyQueryText. Persisted to the shared axs.pb.saved store. -->
 <header class="section-head saved-head">
@@ -103,27 +67,6 @@
 </div>
 
 <style>
-  .axis-source-total {
-    min-height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
-    border-radius: 8px;
-    padding: 0 11px;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
-  }
-  .axis-source-total strong {
-    color: var(--text);
-    font: 900 18px/1 var(--font-mono);
-  }
-  .axis-source-total span {
-    color: var(--textdim);
-    font: 800 10px/1 var(--font-mono);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
   button {
     height: 34px;
     border: 1px solid var(--border);
@@ -135,47 +78,6 @@
     text-transform: capitalize;
     font: 700 12px/1 var(--font-ui);
   }
-  .axis-part-list button {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 0 10px;
-  }
-  .source-main {
-    min-width: 0;
-    display: grid;
-    gap: 6px;
-    flex: 1;
-  }
-  .source-main strong {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text2);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-  }
-  .source-main i {
-    height: 3px;
-    max-width: 100%;
-    border-radius: 999px;
-    background: var(--accent);
-  }
-  .axis-part-list em {
-    color: var(--textdim);
-    font-style: normal;
-    font-size: 11px;
-  }
-  button.active {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .axis-part-list {
-    display: grid;
-    gap: 8px;
-  }
-
   /* section head + quick tags (§3) */
   .section-head {
     margin-top: 4px;
@@ -191,36 +93,6 @@
     font: 800 10px/1 var(--font-mono);
   }
 
-  /* §3 presence views (LIBRARY list) */
-  .views-list button.view-row {
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 9px;
-    padding: 0 10px;
-    text-transform: none;
-  }
-  .view-glyph {
-    display: grid;
-    place-items: center;
-    font-size: 13px;
-  }
-  .view-row strong {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text2);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: 700 12.5px/1 var(--font-ui);
-  }
-  .view-row.active {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
-    color: var(--accent);
-  }
-  .view-row.active strong {
-    color: var(--accent);
-  }
   /* §3.3 saved filters */
   .save-in input {
     width: 100%;

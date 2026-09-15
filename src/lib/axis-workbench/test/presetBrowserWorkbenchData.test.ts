@@ -69,7 +69,7 @@ describe('Preset Browser Workbench data view', () => {
     ]);
     expect(view.visibleEntries.map((entry) => entry.id)).toEqual(['file:ambient']);
     expect(view.visibleEntries[0]).toMatchObject({
-      sourceLabel: 'Files',
+      sourceLabel: 'Imported files',
       model: 'USA Clean',
       sceneCount: 1,
       blockCount: 2,

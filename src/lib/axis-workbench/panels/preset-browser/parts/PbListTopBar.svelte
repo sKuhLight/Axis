@@ -5,6 +5,26 @@
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
+
+  const activeScope = $derived(
+    view.data.activePresenceView === 'computer' || ['local', 'file', 'converted'].includes(view.data.activeSourceId)
+      ? 'computer'
+      : view.data.activeSourceId === 'device' || view.data.activePresenceView === 'device'
+        ? 'device'
+        : 'all'
+  );
+  const computerSources = $derived(view.data.sources.filter((source) => ['local', 'file', 'converted'].includes(source.id)));
+  const scopeCounts = $derived(Object.fromEntries(view.data.presenceViews.map((scope) => [scope.id, scope.count])));
+
+  function selectScope(scope: 'all' | 'device' | 'computer') {
+    view.selectSource(scope === 'device' ? 'device' : 'all');
+    axisPresetBrowserWorkbenchController.setPresenceView(scope === 'computer' ? 'computer' : 'all');
+  }
+
+  function selectComputerSource(sourceId: string) {
+    axisPresetBrowserWorkbenchController.setPresenceView('computer');
+    view.selectSource(sourceId);
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -15,6 +35,22 @@
   ondragleave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) view.dragOver = false; }}
   ondrop={view.onFiltersDrop}
 >
+  <div class="scope-bar">
+    <span class="scope-label">Search in</span>
+    <div class="scope-tabs" role="tablist" aria-label="Preset location">
+      <button type="button" role="tab" aria-selected={activeScope === 'all'} class:active={activeScope === 'all'} onclick={() => selectScope('all')}><strong>All</strong><span>{scopeCounts.all ?? 0}</span></button>
+      <button type="button" role="tab" aria-selected={activeScope === 'device'} class:active={activeScope === 'device'} onclick={() => selectScope('device')}><strong>Device</strong><span>{scopeCounts.device ?? 0}/{deviceSession.presetCount}</span></button>
+      <button type="button" role="tab" aria-selected={activeScope === 'computer'} class:active={activeScope === 'computer'} onclick={() => selectScope('computer')}><strong>Computer</strong><span>{scopeCounts.computer ?? 0}</span></button>
+    </div>
+    <div class="computer-tray" class:open={activeScope === 'computer'} aria-hidden={activeScope !== 'computer'}>
+      <div class="computer-options">
+        <button type="button" class:active={view.data.activeSourceId === 'all'} onclick={() => selectScope('computer')}>All computer</button>
+        {#each computerSources as source}
+          <button type="button" class:active={view.data.activeSourceId === source.id} onclick={() => selectComputerSource(source.id)}>{source.label}<span>{source.count}</span></button>
+        {/each}
+      </div>
+    </div>
+  </div>
   <div class="query-input" class:focus={view.acOpen}>
     <span class="magnifier" aria-hidden="true">⌕</span>
     <!-- One field, always: fuzzy free text, except `` `...` `` spans parse as structured filters
@@ -129,6 +165,95 @@
   .query-bar {
     display: grid;
     gap: 8px;
+  }
+  .scope-bar {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .scope-label {
+    flex: none;
+    color: var(--textdim);
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .scope-tabs {
+    flex: none;
+    display: flex;
+    gap: 6px;
+  }
+  .scope-tabs button,
+  .computer-options button {
+    height: 42px;
+    border-color: var(--border2);
+    border-radius: 10px;
+    background: var(--bg2);
+    color: var(--textdim);
+    text-align: left;
+    text-transform: none;
+    font-size: 12px;
+  }
+  .scope-tabs button {
+    min-width: 112px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 0 12px;
+  }
+  .scope-tabs button strong {
+    font-weight: 800;
+  }
+  .scope-tabs button span {
+    color: var(--textfaint);
+    font: 700 9px/1 var(--font-mono);
+  }
+  .scope-tabs button.active,
+  .computer-options button.active {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border2));
+    background: color-mix(in srgb, var(--accent) 9%, var(--bg2));
+    color: var(--accent);
+  }
+  .scope-tabs button.active span {
+    color: var(--accent);
+    opacity: 0.72;
+  }
+  .computer-tray {
+    min-width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: max-width 180ms ease, opacity 140ms ease, transform 180ms ease;
+  }
+  .computer-tray.open {
+    max-width: 500px;
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .computer-options {
+    display: flex;
+    gap: 3px;
+    width: max-content;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bg2);
+  }
+  .computer-options button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 9px;
+    white-space: nowrap;
+  }
+  .computer-options span {
+    color: var(--textfaint);
+    font: 700 9px/1 var(--font-mono);
   }
   .query-input {
     position: relative;

@@ -28,19 +28,28 @@ describe('library view classification (§3)', () => {
     expect(entryInPresenceView(row('converted'), 'device')).toBe(false);
   });
 
+  it("'computer' matches every non-device source", () => {
+    expect(entryInPresenceView(row('device'), 'computer')).toBe(false);
+    expect(entryInPresenceView(row('file'), 'computer')).toBe(true);
+    expect(entryInPresenceView(row('local'), 'computer')).toBe(true);
+    expect(entryInPresenceView(row('converted'), 'computer')).toBe(true);
+  });
+
   it('counts rows per view', () => {
     const rows = [row('device'), row('device'), row('file'), row('local')];
     expect(presenceViewCount(rows, 'all')).toBe(4);
     expect(presenceViewCount(rows, 'device')).toBe(2);
+    expect(presenceViewCount(rows, 'computer')).toBe(2);
   });
 
-  it('exposes exactly the two non-cloud views', () => {
-    expect(presenceViews().map((v) => v.id)).toEqual(['all', 'device']);
-    expect(AXIS_PB_PRESENCE_VIEWS.map((v) => v.id)).toEqual(['all', 'device']);
+  it('exposes the three storage scopes', () => {
+    expect(presenceViews().map((v) => v.id)).toEqual(['all', 'device', 'computer']);
+    expect(AXIS_PB_PRESENCE_VIEWS.map((v) => v.id)).toEqual(['all', 'device', 'computer']);
   });
 
   it('validates view ids', () => {
     expect(isAxisPbPresenceView('device')).toBe(true);
+    expect(isAxisPbPresenceView('computer')).toBe(true);
     expect(isAxisPbPresenceView('all')).toBe(true);
     // Retired cloud views must no longer validate — a persisted snapshot carrying one falls back.
     expect(isAxisPbPresenceView('cloudOnly')).toBe(false);
@@ -60,6 +69,9 @@ describe('Preset Browser data view — library filtering (§3)', () => {
     const device = createAxisPresetBrowserDataView({ entries, sourceId: 'all', presenceView: 'device' });
     expect(device.visibleEntries.map((e) => e.id)).toEqual(['dev:1', 'dev:2']);
 
+    const computer = createAxisPresetBrowserDataView({ entries, sourceId: 'all', presenceView: 'computer' });
+    expect(computer.visibleEntries.map((e) => e.id)).toEqual(['file:9']);
+
     // 'all' keeps every entry; the data view owns the ordering (slot number, so the
     // imported entry at -1 leads), which this test deliberately does not pin.
     const all = createAxisPresetBrowserDataView({ entries, sourceId: 'all', presenceView: 'all' });
@@ -71,5 +83,6 @@ describe('Preset Browser data view — library filtering (§3)', () => {
     const counts = Object.fromEntries(view.presenceViews.map((v) => [v.id, v.count]));
     expect(counts.all).toBe(3);
     expect(counts.device).toBe(2);
+    expect(counts.computer).toBe(1);
   });
 });
