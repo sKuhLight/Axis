@@ -104,9 +104,6 @@
           </AxisPresetBrowserRowMain>
         </span>
         <span class="preset-meta">
-          <span class="meta-top">
-            <i class="scenes">{anatomy.sceneCount} scn</i>
-          </span>
           <span class="cpu-meter" title="Estimated DSP load from block makeup — not the device's live CPU">
             <i class="cpu-l">~CPU</i>
             <i class="cpu-bar"><b style:width={`${anatomy.cpu.pct}%`} style:background={anatomy.cpu.color}></b></i>
@@ -203,17 +200,8 @@
     align-items: flex-end;
     gap: 5px;
   }
-  .meta-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
   .preset-meta i {
     font-style: normal;
-  }
-  .scenes {
-    color: var(--textdim);
-    font: 600 9.5px/1 var(--font-mono);
   }
   .cpu-meter {
     display: flex;
