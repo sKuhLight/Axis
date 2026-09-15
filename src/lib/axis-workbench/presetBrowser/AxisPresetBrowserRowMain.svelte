@@ -52,15 +52,14 @@
   </span>
 {/if}
 {#if chips.length && !entry.empty}
-  <!-- Signal-chain quick view: a flowing node → node → node strip, deliberately NOT pill-shaped so it
-       never reads as tags (the tag pills sit directly above it). -->
+  <!-- Signal-chain quick view: a strip of coloured block nodes, deliberately NOT pill-shaped so it
+       never reads as tags (the tag pills sit directly above it). Nodes carry no connecting arrows —
+       routing is not strictly linear. -->
   <span class="chain-strip" title="Signal chain">
-    {#each chips as chip, ci}
-      {#if ci > 0}<i class="chain-arrow" aria-hidden="true">›</i>{/if}
+    {#each chips as chip}
       <em class="chain-node" style:--c={chip.color} title={chip.title}>
         <i class="chain-dot"></i>
-        <b class="chain-cat">{chip.cat}</b>
-        {#if chip.type}<span class="chain-type">{chip.type}</span>{/if}
+        <b class="chain-lbl">{chip.instance}</b>
       </em>
     {/each}
   </span>
@@ -111,13 +110,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 1px 3px;
+    gap: 2px 8px;
     min-width: 0;
-  }
-  .chain-arrow {
-    color: color-mix(in srgb, var(--textdim) 65%, transparent);
-    font: 600 11px/1 var(--font-ui);
-    font-style: normal;
   }
   .chain-node {
     display: inline-flex;
@@ -135,17 +129,9 @@
     border-radius: 50%;
     background: var(--c);
   }
-  .chain-cat {
+  .chain-lbl {
     color: var(--c);
     font: 700 10px/1.2 var(--font-mono);
     white-space: nowrap;
-  }
-  .chain-type {
-    max-width: 130px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--textdim);
-    font: 500 10px/1.2 var(--font-mono);
   }
 </style>

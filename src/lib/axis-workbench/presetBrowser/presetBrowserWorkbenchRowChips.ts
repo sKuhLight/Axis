@@ -63,6 +63,9 @@ export interface AxisPbRowBlockChip {
   color: string;
   /** Category label ("Amp", "Reverb", …). */
   cat: string;
+  /** Roster label with the block's instance number ("Amp 1", "Drive 2", …) — what the row's
+   *  mini signal-chain strip shows. Falls back to the bare category when no instance is known. */
+  instance: string;
   /** Model / type name when the summary carries one, else null (chip shows just the category). */
   type: string | null;
   /** Full label for the chip: "Cat · TYPE" or "Cat". */
@@ -88,6 +91,7 @@ export function axisPbRowBlockChips(entry: AxisPresetBrowserEntrySummary): AxisP
       slug,
       color: axisPbCatColor(slug),
       cat,
+      instance,
       type,
       label: type ? `${cat} · ${type}` : cat,
       title: type ? `${instance} — ${type}` : instance

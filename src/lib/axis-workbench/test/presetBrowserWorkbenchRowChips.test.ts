@@ -48,6 +48,7 @@ describe('row block chips (§4.3)', () => {
     );
     // input + output excluded → 2 chips
     expect(chips.map((c) => c.label)).toEqual(['Amp · 5153 100W Red', 'Reverb']);
+    expect(chips.map((c) => c.instance)).toEqual(['Amp 1', 'Reverb 1']);
     expect(chips[0].color).toBe(axisPbCatColor('amp'));
     // block name that just echoes the category collapses to the bare category label.
     expect(chips[1].type).toBeNull();

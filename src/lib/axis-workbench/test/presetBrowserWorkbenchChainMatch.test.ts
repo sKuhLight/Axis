@@ -3,7 +3,7 @@ import { matchingChainChips } from '../presetBrowser/presetBrowserWorkbenchChain
 import type { AxisPbRowBlockChip } from '../presetBrowser/presetBrowserWorkbenchRowChips';
 
 function chip(over: Partial<AxisPbRowBlockChip> = {}): AxisPbRowBlockChip {
-  return { slug: 'amp', color: '#d98a2b', cat: 'Amp', type: '5153 100W Blue', label: 'Amp · 5153 100W Blue', title: 'Amp 1 — 5153 100W Blue', ...over };
+  return { slug: 'amp', color: '#d98a2b', cat: 'Amp', instance: 'Amp 1', type: '5153 100W Blue', label: 'Amp · 5153 100W Blue', title: 'Amp 1 — 5153 100W Blue', ...over };
 }
 
 describe('matchingChainChips', () => {
