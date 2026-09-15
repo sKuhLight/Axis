@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDetailBlockCards,
+  detailKind,
   detailParams,
   encodeDragPayload,
   fmtNum,
   fmtVal,
   matchParamCond,
-  matchedKeys,
-  paramDragPayload,
   parseDragPayload,
   type DetailBlock
 } from '../presetBrowser/presetBrowserWorkbenchParams';
-import type { AxisPbCond } from '../presetBrowser/presetBrowserWorkbenchQuery';
 
 const p = (over: Partial<DetailBlock['params'][number]> = {}): DetailBlock['params'][number] => ({
   paramId: 1,
@@ -32,7 +30,7 @@ const block = (over: Partial<DetailBlock> = {}): DetailBlock => ({
   ...over
 });
 
-describe('Preset Browser detail params', () => {
+describe('Preset Browser detail kinds', () => {
   it('formats numeric + enum + unit values', () => {
     expect(fmtNum(7)).toBe('7');
     expect(fmtNum(7.25)).toBe('7.3');
@@ -66,22 +64,6 @@ describe('Preset Browser detail params', () => {
     expect(matchParamCond(b, { name: 'Gain', op: '<', val: '3' })).toBe(false);
   });
 
-  it('matchedKeys highlights params matched by an active block cond', () => {
-    const blocks = [block({ params: [p({ paramId: 5, label: 'Gain', value: 8 })] })];
-    const conds: AxisPbCond[] = [{ kind: 'block', block: 'amp', params: [{ name: 'Gain', op: '>', val: '5' }] }];
-    expect(matchedKeys(blocks, conds)).toEqual(new Set(['0:5']));
-  });
-
-  it('paramDragPayload encodes enum vs numeric', () => {
-    expect(paramDragPayload('reverb', p({ label: 'Type', value: null, enumLabel: 'Large Hall' }))).toEqual({
-      slug: 'reverb',
-      label: 'Type',
-      op: '=',
-      val: 'Large Hall'
-    });
-    expect(paramDragPayload('amp', p({ label: 'Gain', value: 7.24 }))).toEqual({ slug: 'amp', label: 'Gain', op: '=', val: '7.2' });
-  });
-
   it('drag payload codec round-trips and rejects foreign data', () => {
     const encoded = encodeDragPayload({ slug: 'amp', label: 'Gain', op: '>', val: '7' });
     expect(parseDragPayload(encoded)).toEqual({ slug: 'amp', label: 'Gain', op: '>', val: '7' });
@@ -90,24 +72,67 @@ describe('Preset Browser detail params', () => {
     expect(parseDragPayload('{"foo":1}')).toBeNull();
   });
 
-  it('buildDetailBlockCards excludes IO, respects focus, and marks hits', () => {
+  it('detailKind prefers typeName, then the type param, else empty', () => {
+    expect(detailKind(block())).toBe('USA Clean');
+    expect(
+      detailKind(
+        block({
+          typeName: null,
+          params: [p({ name: 'AMP_TYPE', label: 'Type', kind: 'enum', value: null, enumLabel: 'Brit 800' })]
+        })
+      )
+    ).toBe('Brit 800');
+    expect(detailKind(block({ typeName: null, params: [p()] }))).toBe('');
+  });
+
+  it('buildDetailBlockCards excludes IO and respects focus', () => {
     const blocks = [
-      block({ slug: 'input', effectId: 1, params: [p({ value: 5 })] }),
-      block({ slug: 'amp', effectId: 100, params: [p({ paramId: 9, label: 'Gain', value: 8 })] }),
-      block({ slug: 'reverb', effectId: 200, params: [p({ paramId: 3, label: 'Mix', value: 40 })] })
+      block({ slug: 'input', effectId: 1 }),
+      block({ slug: 'amp', effectId: 100 }),
+      block({ slug: 'reverb', effectId: 200, typeName: 'Large Hall' })
     ];
-    const conds: AxisPbCond[] = [{ kind: 'block', block: 'amp', params: [{ name: 'Gain', op: '>', val: '5' }] }];
-    const all = buildDetailBlockCards(blocks, conds, null);
+    const all = buildDetailBlockCards(blocks, null);
     expect(all.map((c) => c.slug)).toEqual(['amp', 'reverb']); // input excluded
-    expect(all[0].cells[0].hit).toBe(true);
-    expect(all[0].instanceLabel).toBe('#1');
+    expect(all[0].kinds).toEqual([{ label: 'Ch A', value: 'USA Clean' }]);
+    expect(all[1].kinds).toEqual([{ label: 'Ch A', value: 'Large Hall' }]);
     // focus restricts to the amp effectId
-    const focused = buildDetailBlockCards(blocks, conds, 100);
+    const focused = buildDetailBlockCards(blocks, 100);
     expect(focused.map((c) => c.slug)).toEqual(['amp']);
   });
 
-  it('amp channel yields a Ch label', () => {
-    const cards = buildDetailBlockCards([block({ channel: 1, params: [p({ value: 5 })] })], [], null);
-    expect(cards[0].instanceLabel).toBe('Ch B');
+  it('lists a channel row for every block, even single-channel families (drive)', () => {
+    const cards = buildDetailBlockCards([block({ slug: 'drive', effectId: 10, typeName: 'T808 OD' })], null);
+    expect(cards[0].category).toBe('Drive');
+    expect(cards[0].kinds).toEqual([{ label: 'Ch A', value: 'T808 OD' }]);
+  });
+
+  it('collapses amp channels into one card with per-channel kinds', () => {
+    const blocks = [
+      block({ effectId: 100, channel: 0, typeName: 'USA Clean' }),
+      block({ effectId: 100, channel: 1, typeName: 'Brit 800' }),
+      block({ effectId: 100, channel: 3, typeName: 'Hipower' }),
+      block({ effectId: 100, channel: 2, typeName: 'PVH 6160' })
+    ];
+    const cards = buildDetailBlockCards(blocks, null);
+    expect(cards.length).toBe(1);
+    expect(cards[0].instanceLabel).toBe('#1');
+    expect(cards[0].kinds).toEqual([
+      { label: 'Ch A', value: 'USA Clean' },
+      { label: 'Ch B', value: 'Brit 800' },
+      { label: 'Ch C', value: 'PVH 6160' },
+      { label: 'Ch D', value: 'Hipower' }
+    ]);
+  });
+
+  it('keeps distinct placed instances apart', () => {
+    const cards = buildDetailBlockCards(
+      [
+        block({ slug: 'drive', effectId: 10, instance: 1, typeName: 'T808' }),
+        block({ slug: 'drive', effectId: 11, instance: 2, typeName: 'OCD' })
+      ],
+      null
+    );
+    expect(cards.map((c) => c.instanceLabel)).toEqual(['#1', '#2']);
+    expect(cards.map((c) => c.kinds[0].value)).toEqual(['T808', 'OCD']);
   });
 });

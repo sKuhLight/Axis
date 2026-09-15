@@ -124,10 +124,10 @@
       </div>
     {/if}
 
-    <!-- V13f BLOCK PARAMETERS (§"detail" step 4): every param of every non-IO block with its value.
-         Drag or double-click a block header / param cell to add it to the FILTERS row. Cells matched
-         by an active block-param condition are highlighted. Reaches the same decoded blocks as the
-         monolith via library.paramsOf; when unhydrated, "Load params" pulls them through the runtime. -->
+    <!-- V13f BLOCK LISTING (§"detail" step 4): every non-IO block with its type/kind. Drag or
+         double-click a block header to add it to the FILTERS row. A channel-blocked block (amp)
+         collapses to one card whose rows are the per-channel types. Reaches the same decoded blocks as
+         the monolith via library.paramsOf; when unhydrated, "Load params" pulls them through the runtime. -->
     <div class="d-blocks">
       {#if !view.selectedDecodedBlocks}
         <div class="d-blocks-empty">
@@ -148,31 +148,23 @@
               title="Drag or double-click to filter by this block"
             >
               <span class="fdot" style:background={card.color}></span>
-              <span class="d-blk-n">{card.category}{card.title ? ` · ${card.title}` : ''}</span>
+              <span class="d-blk-n">{card.category}</span>
               <span class="fsp"></span>
               <span class="d-blk-grip">⠿</span>
               <span class="d-blk-i">{card.instanceLabel}</span>
             </div>
-            <div class="d-blk-grid">
-              {#each card.cells as cell}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                  class="d-pr"
-                  class:hit={cell.hit}
-                  draggable="true"
-                  ondragstart={(e) => view.startDrag(e, cell.payload)}
-                  ondblclick={() => view.addPayload(cell.payload)}
-                  title="Drag or double-click to filter on this param"
-                >
-                  <span class="d-pk">{cell.key}</span>
-                  <span class="d-pv">{cell.value}</span>
+            <div class="d-blk-kinds">
+              {#each card.kinds as kind}
+                <div class="d-kind">
+                  <span class="d-kk">{kind.label}</span>
+                  <span class="d-kv">{kind.value}</span>
                 </div>
               {/each}
             </div>
           </div>
         {/each}
       {:else}
-        <div class="d-blocks-empty">No filterable block parameters in this preset.</div>
+        <div class="d-blocks-empty">No blocks in this preset.</div>
       {/if}
     </div>
     {/if}
@@ -470,40 +462,34 @@
     color: var(--textdim);
     font: 600 10px/1 var(--font-mono);
   }
-  .d-blk-grid {
-    display: flex;
-    flex-wrap: wrap;
+  .d-blk-kinds {
+    display: grid;
     gap: 1px;
     background: var(--surface2, var(--border));
   }
-  .d-pr {
-    flex: 1 1 calc(50% - 1px);
+  .d-kind {
     min-width: 0;
-    display: grid;
-    gap: 3px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     padding: 7px 9px;
     background: var(--bg2);
-    cursor: grab;
   }
-  .d-pr.hit {
-    background: color-mix(in srgb, var(--accent) 10%, var(--bg2));
-  }
-  .d-pk {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .d-kk {
+    flex: none;
+    width: 34px;
     color: var(--textdim);
     font: 500 9px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
-  .d-pv {
+  .d-kv {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text);
     font: 700 12.5px/1 var(--font-mono);
-  }
-  .d-pr.hit .d-pv {
-    color: var(--accent);
   }
   .axis-part-empty {
     flex: 1;

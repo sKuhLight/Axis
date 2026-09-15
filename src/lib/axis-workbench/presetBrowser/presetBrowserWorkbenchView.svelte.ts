@@ -406,7 +406,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     if (p) addPayload(p);
   }
 
-  // ── V13f detail block-parameter listing ─────────────────────────────────────────────────────
+  // ── V13f detail block listing ───────────────────────────────────────────────────────────────
   // Reaches the SAME decoded blocks the monolith lists (library.paramsOf). When the selected entry has no
   // params hydrated yet, the "Load params" button triggers hydration via the runtime detail loader.
   const selectedDecodedBlocks = $derived.by<DetailBlock[] | null>(() => {
@@ -419,7 +419,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   });
   const detailBlockCards = $derived(
     selectedDecodedBlocks
-      ? buildDetailBlockCards(selectedDecodedBlocks, activeConditions, snapshot.focusedBlockEffectId)
+      ? buildDetailBlockCards(selectedDecodedBlocks, snapshot.focusedBlockEffectId)
       : null
   );
 
