@@ -77,8 +77,8 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     c.setSortDir('desc');
     expect(c.snapshot.sortDir).toBe('desc');
 
-    c.setSort('cpu'); // CPU naturally sorts high-first
-    expect(c.snapshot.sort).toBe('cpu');
+    c.setSort('recent'); // RECENT naturally sorts newest-first
+    expect(c.snapshot.sort).toBe('recent');
     expect(c.snapshot.sortDir).toBe('desc');
 
     c.setSort('name'); // A-Z naturally sorts ascending

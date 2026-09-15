@@ -26,13 +26,34 @@ export function loadSavedFilters(): AxisPbSavedFilter[] {
     if (!raw) return seedSavedFilters();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return seedSavedFilters();
-    return parsed.filter(isSavedFilter);
+    const filters = parsed.filter(isSavedFilter);
+    const sanitized = stripRetiredCpuConds(filters);
+    // A filter that carried the retired `cpu<N>` term is rewritten once so it doesn't silently degrade.
+    if (JSON.stringify(sanitized) !== JSON.stringify(filters)) persistSavedFilters(sanitized);
+    return sanitized;
   } catch {
     return seedSavedFilters();
   }
 }
 
-// The 6 seed filters (§3.3) for a first-run / empty store — same set the monolith advertises via
+// The per-preset `~CPU` estimate (and its `cpu<N>` filter term) was retired — it was a block-weight
+// heuristic, not the device's CPU. Strip the term from filters persisted before the removal; a filter
+// whose query becomes empty is dropped. Pure, so it is unit tested.
+const RETIRED_CPU_TERM = /\bcpu\s*(?:>=|<=|!=|=|>|<)\s*\d+/gi;
+export function stripRetiredCpuConds(filters: AxisPbSavedFilter[]): AxisPbSavedFilter[] {
+  return filters
+    .map((f) => {
+      const query = f.query
+        .replace(RETIRED_CPU_TERM, '')
+        .replace(/\s*\+\s*/g, ' + ')
+        .replace(/^\s*\+\s*|\s*\+\s*$/g, '')
+        .trim();
+      return { ...f, query };
+    })
+    .filter((f) => f.query !== '');
+}
+
+// The seed filters (§3.3) for a first-run / empty store — same set the monolith advertises via
 // AXIS_PB_SEED_SAVED_FILTERS. Deterministic ids keyed off the seed index so re-seeding is idempotent.
 export function seedSavedFilters(): AxisPbSavedFilter[] {
   return AXIS_PB_SEED_SAVED_FILTERS.map((f, i) => ({ id: `seed-${i}`, name: f.name, query: f.query }));
@@ -79,7 +100,6 @@ export function savedFilterDotColor(filter: AxisPbSavedFilter): string {
   const block = conds.find((c) => c.kind === 'block');
   if (block) return BLOCK_COLOR[(block as Extract<AxisPbCond, { kind: 'block' }>).block] ?? 'var(--accent)';
   if (conds.some((c) => c.kind === 'tag')) return '#d65b9e';
-  if (conds.some((c) => c.kind === 'cpu')) return '#f5a623';
   if (conds.some((c) => c.kind === 'scenes')) return '#4f6bed';
   return 'var(--textfaint, var(--textdim))';
 }

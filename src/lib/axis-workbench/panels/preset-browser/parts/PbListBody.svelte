@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
-  import { axisPbRowAnatomy } from '../../../presetBrowser/presetBrowserWorkbenchRowChips';
   import { axisPbRowDoubleClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
   import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
   import AxisPresetBrowserRowMain from '../../../presetBrowser/AxisPresetBrowserRowMain.svelte';
@@ -42,12 +41,10 @@
     </span>
     <span class="col-meta">
       <button type="button" class="col-sort" class:on={view.snapshot.sort === 'recent'} aria-label={view.sortLabel('recent', 'last loaded')} onclick={() => view.toggleSort('recent')}>Recent{view.sortArrow('recent')}</button>
-      <button type="button" class="col-sort" class:on={view.snapshot.sort === 'cpu'} aria-label={view.sortLabel('cpu', 'estimated CPU')} onclick={() => view.toggleSort('cpu')}>CPU{view.sortArrow('cpu')}</button>
     </span>
   </div>
   <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
     {#each view.rowCap.rows as entry}
-      {@const anatomy = axisPbRowAnatomy(entry)}
       <div
         class="preset-row"
         class:active={view.snapshot.entryId === entry.id}
@@ -103,13 +100,6 @@
             {/snippet}
           </AxisPresetBrowserRowMain>
         </span>
-        <span class="preset-meta">
-          <span class="cpu-meter" title="Estimated DSP load from block makeup — not the device's live CPU">
-            <i class="cpu-l">~CPU</i>
-            <i class="cpu-bar"><b style:width={`${anatomy.cpu.pct}%`} style:background={anatomy.cpu.color}></b></i>
-            <i class="cpu-t" style:color={anatomy.cpu.color}>{anatomy.cpu.pct}%</i>
-          </span>
-        </span>
       </div>
     {/each}
   </div>
@@ -143,7 +133,7 @@
     display: grid;
     gap: 4px;
   }
-  /* §4.3 row: checkbox | number | main(name+tags+block chips) | meta(scenes + CPU meter). */
+  /* §4.3 row: checkbox | number | main(name+tags+block chips) | meta(empty; Recent header sits here). */
   .preset-row {
     min-height: 42px;
     display: grid;
@@ -193,41 +183,6 @@
      chain-strip dimming for `entry.empty`; this rule is the row-level opacity on everything else. */
   .preset-row.empty {
     opacity: 0.55;
-  }
-  .preset-meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 5px;
-  }
-  .preset-meta i {
-    font-style: normal;
-  }
-  .cpu-meter {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .cpu-l {
-    color: var(--textmuted, var(--textdim));
-    font: 600 8px/1 var(--font-mono);
-    letter-spacing: 0.06em;
-  }
-  .cpu-bar {
-    width: 46px;
-    height: 6px;
-    display: block;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-    background: var(--track, var(--bg));
-  }
-  .cpu-bar b {
-    display: block;
-    height: 100%;
-  }
-  .cpu-t {
-    font: 700 10px/1 var(--font-mono);
   }
   .preset-row.fav .preset-number {
     color: var(--accent);

@@ -45,11 +45,9 @@ describe('Preset Browser filters picker', () => {
     expect(labels).toContain('tag:');
     expect(labels).toContain('name:');
     expect(labels).toContain('scenes');
-    expect(labels).toContain('cpu');
   });
 
-  it('picking cpu/scenes inserts a default condition', () => {
-    expect(runPick('addfilter', {}, 'cpu').conds).toEqual([{ kind: 'cpu', op: '<', val: '60' }]);
+  it('picking scenes inserts a default condition', () => {
     expect(runPick('addfilter', {}, 'scenes').conds).toEqual([{ kind: 'scenes', op: '>', val: '4' }]);
   });
 
@@ -114,6 +112,5 @@ describe('Preset Browser filters picker', () => {
     expect(block).toMatchObject({ kind: 'block', block: 'amp', label: 'Amp' });
     expect((block as { params: unknown[] }).params).toEqual([{ name: 'Gain', op: '>', val: '7', glyph: '>' }]);
     expect(chipDescriptor({ kind: 'tag', val: 'Lead' }, colorOf)).toMatchObject({ kind: 'scalar', text: 'Tag: Lead', color: 'color:Lead' });
-    expect(chipDescriptor({ kind: 'cpu', op: '<', val: '55' }, colorOf)).toMatchObject({ kind: 'scalar', text: '~CPU < 55' });
   });
 });

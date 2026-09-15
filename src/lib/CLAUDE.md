@@ -223,7 +223,7 @@ decides how much mirroring work it costs:
 | Overlay-registry modal (`Dialog` + `overlays.isOpen(id)`) | Yes, automatically | Nothing — the shared modal layer sits below the shell `{#if}` branch |
 | Embedded editor component (`SignalGrid` / `BlockEditor` / `FcEditor` / `VirtualScreen` / `ModifierEditorCore`) | Yes, automatically | Nothing — the workbench embeds these directly |
 | Monolith chrome (`TopBar` / `ToolRail`) | No — monolith only | Build a mirrored widget/panel via `/new-widget` / `/new-panel` |
-| Preset-browser logic (`PresetBrowser.svelte` / `library.svelte.ts`) | No | MUST manually mirror into `src/lib/axis-workbench/presetBrowser/` — query grammar + row/menu logic verbatim. Deep per-parameter matching (`matchParamCond` over decoded blocks) and the weighted CPU estimate are now shared in `presetBrowserWorkbenchQuery.ts`; the workbench hosts feed `library.paramsOf` into `preparePresetBrowserIndex` so `` `AMP(GAIN>7)` `` filters identically in both shells (and excludes entries whose params aren't hydrated). |
+| Preset-browser logic (`PresetBrowser.svelte` / `library.svelte.ts`) | No | MUST manually mirror into `src/lib/axis-workbench/presetBrowser/` — query grammar + row/menu logic verbatim. Deep per-parameter matching (`matchParamCond` over decoded blocks) is now shared in `presetBrowserWorkbenchQuery.ts`; the workbench hosts feed `library.paramsOf` into `preparePresetBrowserIndex` so `` `AMP(GAIN>7)` `` filters identically in both shells (and excludes entries whose params aren't hydrated). |
 
 ## Feature gating
 

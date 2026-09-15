@@ -2,7 +2,7 @@
 //
 // Ported from src/lib/PresetBrowser.svelte (`pickerItems`, `pickerPick`, `editConds`, `addCondPayload`,
 // the chip anatomy `opGlyph`/block-head/param-pill). Pure logic: given the derived filter specs + the
-// tag list, it produces the picker item lists (addfilter → tag/name/scenes/cpu/block → param → value),
+// tag list, it produces the picker item lists (addfilter → tag/name/scenes/block → param → value),
 // and the condition-list mutations each pick applies. The Svelte panel renders the popover + chips and
 // routes edits through the controller; all the model lives here so it is unit tested.
 
@@ -63,7 +63,6 @@ export function pickerItems(ctx: AxisPbFiltersContext, kind: AxisPbPickerKind, p
     items.push({ v: 'tag', label: 'tag:', sub: 'by tag', dot: false, color: '#6e6e78' });
     items.push({ v: 'name', label: 'name:', sub: 'name contains', dot: false, color: '#6e6e78' });
     items.push({ v: 'scenes', label: 'scenes', sub: 'scene count', dot: false, color: '#6e6e78' });
-    items.push({ v: 'cpu', label: 'cpu', sub: 'est. CPU load', dot: false, color: '#6e6e78' });
     return items.filter((i) => i.label.toLowerCase().includes(f) || i.sub.includes(f));
   }
   if (kind === 'tag') {
@@ -114,7 +113,6 @@ export function applyPick(ctx: AxisPbFiltersContext, kind: AxisPbPickerKind, pct
     if (v === 'tag') return { type: 'chain', kind: 'tag', ctx: {} };
     if (v === 'name') return { type: 'edit', edit: (c) => c.push({ kind: 'name', val: '' }) };
     if (v === 'scenes') return { type: 'edit', edit: (c) => c.push({ kind: 'scenes', op: '>', val: '4' }) };
-    if (v === 'cpu') return { type: 'edit', edit: (c) => c.push({ kind: 'cpu', op: '<', val: '60' }) };
     return { type: 'edit', edit: (c) => c.push({ kind: 'block', block: v as never, params: [] }) };
   }
   if (kind === 'tag') {
@@ -188,5 +186,5 @@ export function chipDescriptor(c: AxisPbCond, colorOf: (tag: string) => string):
   if (c.kind === 'name') return { kind: 'scalar', color: '#9a9aa3', text: `Name: ${c.val}` };
   if (c.kind === 'author') return { kind: 'scalar', color: '#9a9aa3', text: `Author: ${c.val}` };
   if (c.kind === 'scenes') return { kind: 'scalar', color: '#4f6bed', text: `Scenes ${opGlyph(c.op)} ${c.val}` };
-  return { kind: 'scalar', color: '#f5a623', text: `~CPU ${opGlyph(c.op)} ${c.val}` };
+  return { kind: 'scalar', color: '#9a9aa3', text: '' }; // unreachable — every cond kind is handled above
 }

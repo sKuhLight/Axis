@@ -100,7 +100,7 @@ Row `padding:12px 20px; border-bottom:1px solid var(--border); flex-wrap:wrap`:
 - **Global sync chip** (`onSyncJump` → jumps to `view:"upload"`): text `"{n} to sync"` (amber) or `"All synced"` (green `#33c46b`); style `h 34; radius 9; 700 11px mono; color {c}; background {c}14; border 1px {c}40` + 7 px dot.
 - Theme button ◐ (34×34).
 - **DEVICE filter**: `DEVICE` micro-label + button `{dot}{label}▾` (h 34, radius 9; active device tints the border `{devColor}66`); opens the generic picker with counts per device. Devices: `Axe-Fx III #4f6bed / FM9 #2fb0c9 / FM3 #d98a2b / all #8a8a94`.
-- **SORT segment**: `#` (num) / `A-Z` (name) / `CPU` (cpu desc); chips `6px 11px radius 7 mono 700 11`; active = accent bg + `--bg` text.
+- **SORT segment**: `#` (num) / `A-Z` (name); chips `6px 11px radius 7 mono 700 11`; active = accent bg + `--bg` text.
   - `RECENT` (last-loaded desc, never-loaded last) is an Axis addition beyond the DC design, backed by `presetRecency.svelte.ts`; both shells carry it.
 - **Advanced search toggle**: pill with dot; on = accent bg/accentink; toggling **converts state**: advanced→simple parses the current text into `conditions[]` and clears the input; simple→advanced serializes `conditions` back into the input via `condsToQuery` (join `"  +  "`).
 
@@ -122,7 +122,7 @@ Terms joined by top-level `+` (paren-aware split). Term forms (`parseTerm`):
 tag:"…" | tag:…            → {kind:"tag", val}
 name:"…"                   → {kind:"name", val}
 author:"…"                 → {kind:"author", val}
-cpu OP number | scenes OP number   (OP ∈ >=,<=,!=,=,>,<)
+scenes OP number                   (OP ∈ >=,<=,!=,=,>,<)
 TOKEN                      → {kind:"block", block:id, params:[]}
 TOKEN(P OP V, P OP V, …)   → {kind:"block", block:id, params:[{name,op,val}]}
 ```
@@ -135,7 +135,7 @@ Serialization (`condToText`): block `TOK(NAME{op}{val}, …)`, values quoted whe
 
 ### 2.4 Autocomplete (advanced mode)
 
-Caret-aware context detection (`suggest(text, caret)`): finds the term under the caret; inside unclosed parens → **param** context, or **value** context after `NAME OP`; `tag:`/`author:` prefixes → those lists; else **block/token** context (blocks + snippet tokens `tag:`, `author:`, `name:`, `cpu<`, `scenes>`).
+Caret-aware context detection (`suggest(text, caret)`): finds the term under the caret; inside unclosed parens → **param** context, or **value** context after `NAME OP`; `tag:`/`author:` prefixes → those lists; else **block/token** context (blocks + snippet tokens `tag:`, `author:`, `name:`, `scenes>`).
 
 Dropdown: `top:calc(100%+6px); maxHeight:320; bg var(--surface); border var(--border2); radius 13; shadow 0 24px 60px; animation pbPop .13s`; context caption (`acCtxLabel`, e.g. `value · GAIN`, mono 9 uppercase); items = colored dot (square for blocks/tags, outline circle otherwise) + mono 13 label + right hint (param range `0–10`, "type", "On/Off", "block · Amp"…); footer hints `↑↓ move · ↵ insert · esc close`. Keyboard: ↑/↓ move, Enter/Tab insert at caret (`acceptAc` splices `item.insert` over the typed fragment and re-suggests), Esc closes; blur closes after 130 ms. Numeric value suggestions = `lo, 25%, 50%, 75%, hi` candidates. Enum lists capped at 40.
 
@@ -144,8 +144,8 @@ Dropdown: `top:calc(100%+6px); maxHeight:320; bg var(--surface); border var(--bo
 `padding:12px 20px; background:var(--bg)`, label `FILTERS`. One chip per parsed condition (chips are **derived from the live query** in advanced mode and from `conditions[]` in simple mode; edits go through `editConds` which re-serializes back into the input in advanced mode):
 
 - **Block chip**: colored head `{dot}{CatName}` (`bg {cat}26; border {cat}55; 700 12`; click = add-param picker), then one pill per param cond `NAME{op}{val} ×` (`bg var(--surface2); mono 600 11`; × removes the param), then dashed `+ param`, then a border-separated `×` to remove the whole chip.
-- **Scalar chip**: `{dot}{Label}: {val}` or `{Label} {op} {val}` (tag dot uses `TAGCOL`, cpu amber, scenes `#4f6bed`).
-- `+ Add filter` button → generic picker (`addfilter` kind: 11 blocks with color dots + `tag:` + `author:` + `cpu` + `scenes`; picking `cpu`/`scenes` inserts a default cond `cpu<60` / `scenes>4`; picking a block adds an empty block cond; `tag`/`author` chain into their own pickers).
+- **Scalar chip**: `{dot}{Label}: {val}` or `{Label} {op} {val}` (tag dot uses `TAGCOL`, scenes `#4f6bed`).
+- `+ Add filter` button → generic picker (`addfilter` kind: blocks with color dots + `tag:` + `author:` + `scenes`; picking `scenes` inserts a default cond `scenes>4`; picking a block adds an empty block cond; `tag`/`author` chain into their own pickers).
 - Empty hint: advanced `"Type a query above, or add filters →"`, simple `"Add block, parameter & tag filters →"`. Right-aligned `Clear all` when chips exist.
 - Param→value flow: `+ param` picker (names + range hints) → value picker (enum values with block-colored dots / On,Off / 5 numeric candidates; numeric default op `=`, from autocomplete `>` after num params).
 
@@ -177,7 +177,6 @@ Counts respect the device filter and deletions (`cnt(fn)=PRESETS.filter(p=>!dele
 {name:"All 5153 Rigs",     query:"AMP(TYPE=5153)"},
 {name:"Big Ambient Verbs", query:"REVERB(TYPE=Large Hall, MIX>30)"},
 {name:"High-Gain Leads",   query:"AMP(GAIN>7)  +  tag:Lead"},
-{name:"Low-CPU Live Set",  query:"cpu<55  +  tag:Live"},
 {name:"TS-Boosted Blues",  query:"DRIVE(TYPE=TS808)  +  tag:Blues"}
 ```
 
@@ -194,7 +193,7 @@ Empty state: "No saved filters yet. Build a query and hit Save filter."
 ```js
 let list=this.PRESETS.filter(p=>!S.deleted[p.n] && devOK(p) && viewPred(metaOf(p)) && this.matchPreset(p,conds,simpleQ));
 list=list.slice().sort((a,b)=> S.sort==="name"?this.effName(a.n).localeCompare(this.effName(b.n))
-                              : S.sort==="cpu"?b.cpu-a.cpu : a.n-b.n);
+                              : a.n-b.n);
 this._order=list.map(p=>p.n);
 // soft cap: mount a small page of rows first (keeps dock mounts fast); "Show all" expands
 const totalRows=list.length;
@@ -217,7 +216,7 @@ Row = swipe wrapper (mobile) + front. Front (`display:flex; gap:14; padding:13px
    - Name (700 14.5, ellipsized) — or an inline **rename input** (accent border, Enter/blur commit into shared `renames`, Esc cancel; auto-focus+select).
    - Up to 3 **tag pills** (mono 700 9.5, `color TAGCOL; bg {col}1f`).
    - **Block chips** row: one per non-IO block, `"{Cat} · {TYPE}"` (mono 600 10, `color {cat}; bg {cat}17; border {cat}33; maxWidth 160`), title = `inst — TYPE`.
-4. Right column (aligned end): device chip (`700 9 mono`, device color 1f/40 tint), **cloud chip** (glyph + short label, see §6 table), author (mono 9.5), **CPU meter** (`CPU` micro-label + 46×6 bar + colored % — thresholds `>=80 #e87b6a`, `>=62 #f5a623`, else `#33c46b`).
+4. Right column (aligned end): device chip (`700 9 mono`, device color 1f/40 tint), **cloud chip** (glyph + short label, see §6 table), author (mono 9.5).
 
 Row states: selected → `bg aT(6)` + `border-left 2px accent` + amber number; marked → `bg {accent}14` + same border-left; hover → `bg var(--bg2)` (or stronger tint when marked/selected).
 
@@ -239,7 +238,7 @@ Column (in full: `width:368; border-left; background:var(--bg2)`; as part: fills
 
 With a selection (`detail` built from `PBYN[selected]`):
 
-1. **Header** (`padding:20px 20px 16px`): amber `pad3` number + name (800 19); all tag pills; meta columns AUTHOR / SCENES / CPU (colored) / DEVICE (device color); **cloud status card** (`bg var(--bg2); radius 11`): cloud chip + status line, e.g. `"Device v6 · cloud v7 — newer version in cloud"` (all five `statusLine` variants in the code, §5.1); **Load button** — full-width amber `#f5a623` on `#1a1206`, label `Load preset` / `Load from cloud`; beside it a context-dependent accent **action button** (`Upload` / `Update` / `Download` / `Back up`); below, ghost button `⇄ Convert for another device` → converter picker (`"Convert to FM3 — fewer blocks · may trim"` hints; conversion clones the preset, trims blocks over the target's cap `FM3:6 / FM9:10 / III:99`, retargets device, bumps CPU ×1.16/×1.06/×0.9, creates a `v1` version note "Converted from {src} — {n} blocks trimmed…").
+1. **Header** (`padding:20px 20px 16px`): amber `pad3` number + name (800 19); all tag pills; meta columns AUTHOR / SCENES / DEVICE (device color); **cloud status card** (`bg var(--bg2); radius 11`): cloud chip + status line, e.g. `"Device v6 · cloud v7 — newer version in cloud"` (all five `statusLine` variants in the code, §5.1); **Load button** — full-width amber `#f5a623` on `#1a1206`, label `Load preset` / `Load from cloud`; beside it a context-dependent accent **action button** (`Upload` / `Update` / `Download` / `Back up`); below, ghost button `⇄ Convert for another device` → converter picker (`"Convert to FM3 — fewer blocks · may trim"` hints; conversion clones the preset, trims blocks over the target's cap `FM3:6 / FM9:10 / III:99`, retargets device, creates a `v1` version note "Converted from {src} — {n} blocks trimmed…").
 2. **VERSION HISTORY**: header + `"{n} versions"`; rows: status dot (accent = on device, `#9b8cf0` = in cloud, `--border2` otherwise, glow when either), version id (mono 700 11.5) + badges `On device` (accent) / `In cloud` (`#9b8cf0`) (`700 8.5 mono, {col}22 bg`), note line, meta `"{date} · {author}"`; current-device row is tinted `aT(6)` and shows `ON DEVICE` (green); every other row has a **Restore** button → confirm ("Restores v… to the device, replacing the current device version (v…). The replaced version stays in history.") → `doRevert` sets `localIdx` (and promotes `cloudOnly→both`).
 3. **SIGNAL CHAIN**: chip per block incl. In/Out (`{glyph}{Cat}` mono 10.5, category-tinted `bg {cat}18 border {cat}33`), separated by `›` arrows.
 4. **BLOCK PARAMETERS**: card per non-IO block (`border var(--surface2); radius 12; bg var(--bg2)`), header = category dot + name + instance id; body = 2-per-row param cells (`flex:1 1 calc(50% - 1px)`, separated by 1 px `--surface2` gaps): key (mono 9 faint) over value (mono 700 12.5). **Params matched by the active query are highlighted**: cell `bg aT(10)`, value in accent (`matchedKeys()` re-runs `matchParam` per block×cond).
@@ -293,7 +292,6 @@ Theme tokens identical to doc 04 (`--bg #0c0c0e … --accent #35c9d6`, Hanken Gr
 | Tag pill | mono 700 9.5, `{col}` on `{col}1f`, radius 5 |
 | Block chip (row) | mono 600 10, `{cat}` on `{cat}17`, border `{cat}33`, radius 6, maxW 160 |
 | Cloud/device chip | mono 700 9, `{col}` on `{col}1f`, border `{col}40`, radius 5 |
-| CPU meter | bar 46×6 radius 4; thresholds 80/62 → `#e87b6a`/`#f5a623`/`#33c46b` |
 | Soft cap | 14 rows + `Show all {N} presets` (h 40, radius 10) |
 | Selection header | sticky, h ~50 (`10px 18px`), buttons h 30 radius 8; Delete tint `#1f1315/#3a1f1f/#e87b6a` |
 | Context menu | fixed w 230 radius 11 shadow `0 24px 60px`; item `8px 10px` radius 8; danger `#e87b6a` |
@@ -324,12 +322,12 @@ Production shared state today: controller snapshot `{sourceId, entryId, focusedB
 
 ### P1 — behavior parity
 
-- [ ] **Row anatomy**: production list rows are 3-column (number / name+summary / counts). Spec rows add checkbox multi-select, tag pills, per-block chips (`Cat · TYPE`), device chip, cloud-sync chip, author, CPU meter, inline rename, selected = amber number + accent left border (§4.3). Port at least: checkbox+mark model (cmd/shift semantics over display order), cloud chip, CPU meter, block chips.
+- [ ] **Row anatomy**: production list rows are 3-column (number / name+summary / counts). Spec rows add checkbox multi-select, tag pills, per-block chips (`Cat · TYPE`), device chip, cloud-sync chip, author, inline rename, selected = amber number + accent left border (§4.3). Port at least: checkbox+mark model (cmd/shift semantics over display order), cloud chip, block chips.
 - [ ] **Context menus in the parts** — production part panels have no right-click menu; spec §4.4 defines single/multi menus with sync-state-dependent actions and danger styling, plus the sticky multi-select action header (Export / Back up / Remove / Delete / clear).
 - [ ] **Detail part**: production detail shows metadata + version *count* only. Spec adds: cloud status card with 5 status lines, Load/Upload/Update/Download/Back-up dual buttons, **version list with Restore + On device / In cloud badges** and confirm-dialog copy, `⇄ Convert for another device` flow with block-cap trimming hints, signal-chain chip strip, and **query-matched param highlighting** (`matchedKeys` → `aT(10)` cells) (§5). Version restore/compare is currently "pending" in production — this is the binding spec for it.
-- [ ] **Saved filters** — production persists `config/savedFilters` (good); verify the part-level UI: inline save-name input triggered by the query bar's `Save filter` button, active-filter highlight (parsed-query equality), duplicate/delete affordances, and the 6 seed filters for empty libraries (§3.3).
+- [ ] **Saved filters** — production persists `config/savedFilters` (good); verify the part-level UI: inline save-name input triggered by the query bar's `Save filter` button, active-filter highlight (parsed-query equality), duplicate/delete affordances, and the seed filters for empty libraries (§3.3).
 - [ ] **Advanced query grammar parity** — production `PresetBrowser.svelte` has the typed language + autocomplete; verify against §2.3–2.4 verbatim: paren-aware `+` split, `author:` term, numeric **range literal `a-b`**, `!=` substring negation for enums, caret-context autocomplete with insert-at-fragment, Tab-accept, and the advanced↔simple round-trip conversion on toggle.
-- [ ] **Device filter + sort** — header DEVICE picker (with per-device counts) and `# / A-Z / CPU` segment shared across parts; production list part has no such header controls.
+- [ ] **Device filter + sort** — header DEVICE picker (with per-device counts) and `# / A-Z` segment shared across parts; production list part has no such header controls.
 - [ ] **Mobile**: sources part as slide-in drawer `<1024` (production has this — verify 284 px/`-102%` transition + backdrop), full-screen detail with `‹ Results` back bar `<760`, and **swipe-to-action rows** (Load / Back up / Delete, 222 px, pointer-captured, axis-locked) which production lacks.
 - [ ] **Empty/placeholder states**: list empty (magnifier + two-line copy), detail unselected (`◧` Select a preset), saved-filters empty, autocomplete "No matches — keep typing", picker "No matches" (§4.4, §5, §2.4). Production placeholders exist but copy/styling should match.
 

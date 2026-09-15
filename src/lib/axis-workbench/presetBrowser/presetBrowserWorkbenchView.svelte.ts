@@ -588,7 +588,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
 
   // ── §4.1 column-header sorting ───────────────────────────────────────────────────────────────
   // Re-picking the active column flips its direction; picking a different one hands the direction back
-  // to `setSort`, which resets to that field's natural default (A-Z ascending, CPU/recent descending).
+  // to `setSort`, which resets to that field's natural default (A-Z ascending, RECENT descending).
   function toggleSort(key: AxisPresetBrowserSort) {
     viewModel.toggleSort(key, snapshot);
   }

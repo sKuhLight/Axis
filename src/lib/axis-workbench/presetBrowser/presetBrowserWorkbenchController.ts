@@ -3,15 +3,14 @@ import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
 import { condsToQuery, parseUnifiedQuery, serializeUnifiedQuery, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
 
-export type AxisPresetBrowserSort = 'num' | 'name' | 'cpu' | 'recent';
+export type AxisPresetBrowserSort = 'num' | 'name' | 'recent';
 export type AxisPresetBrowserSortDir = 'asc' | 'desc';
 
 // Each sort field's natural direction: switching fields resets the direction so the old
-// default ordering (A-Z ascending, CPU high-first, RECENT newest-first) is preserved.
+// default ordering (A-Z ascending, RECENT newest-first) is preserved.
 export const AXIS_PRESET_BROWSER_SORT_DEFAULTS: Record<AxisPresetBrowserSort, AxisPresetBrowserSortDir> = {
   num: 'asc',
   name: 'asc',
-  cpu: 'desc',
   recent: 'desc'
 };
 

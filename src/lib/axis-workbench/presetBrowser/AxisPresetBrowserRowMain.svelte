@@ -25,8 +25,8 @@
   } = $props();
 
   // Only derive what this row actually renders. `chainChips` is supplied by the search overlay (and
-  // already narrows/empties the chain), so avoid rebuilding the full block-chip list (and the unused CPU
-  // meter) a second time — the overlay's 500+ rows made that double walk the mount/typing cost.
+  // already narrows/empties the chain), so avoid rebuilding the full block-chip list a second time —
+  // the overlay's 500+ rows made that double walk the mount/typing cost.
   const tagPills = $derived(entry.tags.slice(0, 3));
   const chips = $derived(chainChips ?? axisPbRowBlockChips(entry));
 </script>

@@ -41,8 +41,7 @@ export interface AxisPbAcResult {
 const SNIPPETS: [string, string][] = [
   ['tag:', 'filter by tag'],
   ['name:', 'name contains'],
-  ['scenes>', 'scene count'],
-  ['cpu<', 'est. CPU load']
+  ['scenes>', 'scene count']
 ];
 
 const qv = (v: string) => (/[\s,()]/.test(v) ? `"${v}"` : v);

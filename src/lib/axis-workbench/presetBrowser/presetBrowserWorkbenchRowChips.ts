@@ -1,20 +1,16 @@
 // Row anatomy derivation for the docked preset browser list (§4.3 of
 // docs/workbench-dc-parity/06-preset-browser.md). Pure, summary-level logic — it turns an
 // AxisPresetBrowserEntrySummary into the design's full row form: per-block chips (family-coloured
-// "Cat · TYPE") and a CPU meter (estimate + colour thresholds).
+// "Cat · TYPE").
 //
 // The block family → [label, colour] map mirrors src/lib/PresetBrowser.svelte's CAT table verbatim so
-// docked rows read identically to the monolith surface. The CPU estimate reuses the query module's
-// estimateCpu (the monolith's weighted per-family DSP cost table, shared) — a complexity indicator,
-// NOT the device's live meter (which isn't stored in a preset), hence the "~" prefix everywhere.
+// docked rows read identically to the monolith surface.
 import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData';
-import { estimateCpu } from './presetBrowserWorkbenchQuery';
 
 // block family slug → [label, colour]. Verbatim from PresetBrowser.svelte CAT; unknown slugs fall back.
 // Exported as the canonical block-slug set: presetBrowserWorkbenchQuery.ts's `AXIS_PB_FILTERABLE_BLOCKS`
-// is a hand-mirrored literal of these keys (it can't import this module — this module already imports
-// `estimateCpu` from there, so the reverse import would be circular); its test round-trips every key
-// here through the parser to keep the two in step.
+// is a hand-mirrored literal of these keys; its test round-trips every key here through the parser to
+// keep the two in step.
 export const AXIS_PB_CAT: Record<string, [string, string]> = {
   input: ['Input', '#4f6bed'],
   output: ['Output', '#2fa15f'],
@@ -100,23 +96,6 @@ export function axisPbRowBlockChips(entry: AxisPresetBrowserEntrySummary): AxisP
   return chips;
 }
 
-export interface AxisPbCpuMeter {
-  /** Estimated DSP load percentage (0–99). */
-  pct: number;
-  /** Threshold colour: >=80 red, >=62 amber, else green (§4.3 / visual table). */
-  color: string;
-}
-
-export function axisPbCpuColor(pct: number): string {
-  return pct >= 80 ? '#e87b6a' : pct >= 62 ? '#f5a623' : '#33c46b';
-}
-
-// CPU meter derivation for a row (§4.3). Uses the summary-level estimate (blockCount-derived).
-export function axisPbRowCpuMeter(entry: AxisPresetBrowserEntrySummary): AxisPbCpuMeter {
-  const pct = estimateCpu(entry);
-  return { pct, color: axisPbCpuColor(pct) };
-}
-
 // Device chip colour by device family (§4.3 right column). Derived from the entry model/source; falls
 // back to the neutral tint used by the monolith device chips.
 export function axisPbDeviceColor(model: string | null | undefined): string {
@@ -129,7 +108,6 @@ export function axisPbDeviceColor(model: string | null | undefined): string {
 
 export interface AxisPbRowAnatomy {
   blockChips: AxisPbRowBlockChip[];
-  cpu: AxisPbCpuMeter;
   /** Up to 3 tag pills (§4.3). */
   tagPills: string[];
   sceneCount: number;
@@ -139,7 +117,6 @@ export interface AxisPbRowAnatomy {
 export function axisPbRowAnatomy(entry: AxisPresetBrowserEntrySummary): AxisPbRowAnatomy {
   return {
     blockChips: axisPbRowBlockChips(entry),
-    cpu: axisPbRowCpuMeter(entry),
     tagPills: entry.tags.slice(0, 3),
     sceneCount: entry.sceneCount
   };

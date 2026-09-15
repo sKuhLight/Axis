@@ -33,7 +33,7 @@ function stubStorage(): void {
 describe('Preset Browser saved filters (§3.3)', () => {
   beforeEach(() => stubStorage());
 
-  it('seeds the 6 design filters for an empty store, with stable ids', () => {
+  it('seeds the design filters for an empty store, with stable ids', () => {
     const seeds = seedSavedFilters();
     expect(seeds).toHaveLength(AXIS_PB_SEED_SAVED_FILTERS.length);
     expect(seeds.map((s) => s.name)).toEqual(AXIS_PB_SEED_SAVED_FILTERS.map((s) => s.name));
@@ -74,11 +74,24 @@ describe('Preset Browser saved filters (§3.3)', () => {
     expect(isSavedFilterActive(empty, parseQuery('tag:Lead'))).toBe(false);
   });
 
-  it('derives a dot color from the first block cond, else tag/cpu/scenes, else faint', () => {
+  it('derives a dot color from the first block cond, else tag/scenes, else faint', () => {
     expect(savedFilterDotColor({ id: '1', name: '', query: 'AMP(TYPE=5153)' })).toBe('#d6543f');
     expect(savedFilterDotColor({ id: '2', name: '', query: 'REVERB(MIX>30)' })).toBe('#2fb0c9');
     expect(savedFilterDotColor({ id: '3', name: '', query: 'tag:Lead' })).toBe('#d65b9e');
-    expect(savedFilterDotColor({ id: '4', name: '', query: 'cpu<55' })).toBe('#f5a623');
     expect(savedFilterDotColor({ id: '5', name: '', query: '' })).toMatch(/var\(/);
+  });
+
+  it('strips the retired cpu<N> term on load, dropping filters that become empty', () => {
+    persistSavedFilters([
+      { id: 'a', name: 'Low-CPU Live', query: 'cpu<55  +  tag:Live' },
+      { id: 'b', name: 'CPU only', query: 'cpu<70' },
+      { id: 'c', name: 'Clean', query: 'AMP(TYPE=5153)' }
+    ]);
+    const loaded = loadSavedFilters();
+    expect(loaded.map((f) => f.id)).toEqual(['a', 'c']);
+    expect(loaded[0].query).toBe('tag:Live');
+    expect(loaded[1].query).toBe('AMP(TYPE=5153)');
+    // the sanitized list is written back once, so later loads are stable.
+    expect(loadSavedFilters()).toEqual(loaded);
   });
 });

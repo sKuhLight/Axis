@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   axisPbCatColor,
   axisPbCatLabel,
-  axisPbCpuColor,
   axisPbDeviceColor,
   axisPbRowAnatomy,
-  axisPbRowBlockChips,
-  axisPbRowCpuMeter
+  axisPbRowBlockChips
 } from '../presetBrowser/presetBrowserWorkbenchRowChips';
 import type { AxisPresetBrowserEntrySummary } from '../presetBrowser/presetBrowserWorkbenchData';
 
@@ -78,23 +76,6 @@ describe('row block chips (§4.3)', () => {
   });
 });
 
-describe('CPU meter (§4.3)', () => {
-  it('estimates from block count and colours by threshold', () => {
-    expect(axisPbCpuColor(50)).toBe('#33c46b');
-    expect(axisPbCpuColor(70)).toBe('#f5a623');
-    expect(axisPbCpuColor(85)).toBe('#e87b6a');
-  });
-
-  it('derives a meter from an entry', () => {
-    // weighted parity with the monolith: amp 28 + cab 12 + reverb 12 + base 8 = 60
-    const meter = axisPbRowCpuMeter(
-      entry({ blockCount: 3, blocks: [{ slug: 'amp' }, { slug: 'cab' }, { slug: 'reverb' }] })
-    );
-    expect(meter.pct).toBe(60);
-    expect(meter.color).toBe('#33c46b');
-  });
-});
-
 describe('device chips (§5.1 / §6)', () => {
   it('picks a device colour by model family', () => {
     expect(axisPbDeviceColor('Axe-Fx III')).toBe('#4f6bed');
@@ -105,7 +86,7 @@ describe('device chips (§5.1 / §6)', () => {
 });
 
 describe('full row anatomy', () => {
-  it('bundles chips, meter, capped tag pills and scenes', () => {
+  it('bundles chips, capped tag pills and scenes', () => {
     const anatomy = axisPbRowAnatomy(
       entry({
         blockCount: 3,
@@ -117,6 +98,5 @@ describe('full row anatomy', () => {
     expect(anatomy.blockChips).toHaveLength(1);
     expect(anatomy.tagPills).toEqual(['Lead', 'Hi-Gain', 'Rock']); // capped at 3
     expect(anatomy.sceneCount).toBe(4);
-    expect(anatomy.cpu.pct).toBeGreaterThan(0);
   });
 });

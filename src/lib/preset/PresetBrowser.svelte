@@ -25,7 +25,7 @@
   import Icon, { type IconName } from '$lib/ui/Icon.svelte';
   import MiniGrid from '$lib/ui/MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
-  import { estimateCpu } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchQuery';
+  import { stripRetiredCpuConds } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchSavedFilters';
   import type { DecodedBlock, GridCell, PresetGrid, VersionInfo } from '$lib/api/types';
 
   const ACCENT = '#35c9d6';
@@ -49,8 +49,7 @@
     | { kind: 'block'; block: string; params: ParamCond[] }
     | { kind: 'tag'; val: string }
     | { kind: 'name'; val: string }
-    | { kind: 'scenes'; op: string; val: string }
-    | { kind: 'cpu'; op: string; val: string };
+    | { kind: 'scenes'; op: string; val: string };
 
   // ── per-entry block view: prefer hydrated params, else summary blocks (+ model names) ──
   function blocksOf(e: LibEntry): DecodedBlock[] {
@@ -152,7 +151,6 @@
     if ((m = t.match(/^tag:\s*"?([^"]*)"?$/i))) { const v = m[1].trim(); return v ? { kind: 'tag', val: v } : null; }
     if ((m = t.match(/^name:\s*"?([^"]*)"?$/i))) { const v = m[1].trim(); return v ? { kind: 'name', val: v } : null; }
     if ((m = t.match(/^scenes\s*(>=|<=|!=|=|>|<)\s*(\d+)$/i))) return { kind: 'scenes', op: m[1], val: m[2] };
-    if ((m = t.match(/^cpu\s*(>=|<=|!=|=|>|<)\s*(\d+)$/i))) return { kind: 'cpu', op: m[1], val: m[2] };
     const pi = t.indexOf('(');
     if (pi >= 0) {
       const id = tokId(t.slice(0, pi));
@@ -171,7 +169,6 @@
     if (c.kind === 'tag') return 'tag:' + qv(c.val);
     if (c.kind === 'name') return 'name:' + qv(c.val);
     if (c.kind === 'scenes') return 'scenes' + c.op + c.val;
-    if (c.kind === 'cpu') return 'cpu' + c.op + c.val;
     return '';
   }
   const condsToQuery = (conds: Cond[]) => conds.map(condToText).filter(Boolean).join('  +  ');
@@ -210,7 +207,6 @@
     if (c.kind === 'tag') return library.tagsOf(e.id).some((t) => t.toLowerCase().includes(c.val.toLowerCase()));
     if (c.kind === 'name') return e.summary.name.toLowerCase().includes(c.val.toLowerCase());
     if (c.kind === 'scenes') return cmp(e.summary.scenes.length, c.op, parseFloat(c.val));
-    if (c.kind === 'cpu') return cmp(estCpu(e), c.op, parseFloat(c.val));
     if (c.kind === 'block') {
       const bs = blocksOf(e).filter((b) => b.slug === c.block);
       if (!bs.length) return false;
@@ -244,7 +240,7 @@
 
   // ===================== state =====================
   let query = $state(''); // the one query field
-  let sort = $state<'num' | 'name' | 'cpu' | 'recent'>('num');
+  let sort = $state<'num' | 'name' | 'recent'>('num');
   let selectedId = $state<string | null>(null);
   let queryEl: HTMLInputElement | undefined = $state();
   let caret = $state(0);
@@ -358,7 +354,6 @@
     return list.sort((a, b) =>
       useOrama ? (ftRank.get(a.id) ?? 1e9) - (ftRank.get(b.id) ?? 1e9) // free-text → relevance order
       : sort === 'name' ? a.summary.name.localeCompare(b.summary.name)
-      : sort === 'cpu' ? estCpu(b) - estCpu(a)
       : sort === 'recent' ? cmpRecent(a, b)
       : a.summary.number - b.summary.number
     );
@@ -644,7 +639,7 @@
     const f = frag.toLowerCase();
     const out: AcItem[] = [];
     for (const id of filterableSlugs) { const lbl = id.toUpperCase(); if (lbl.toLowerCase().includes(f) || catLabel(id).toLowerCase().includes(f)) out.push(mk(lbl, lbl + '(', frag.length, 'block · ' + catLabel(id), catColor(id))); }
-    for (const [tok, hint] of [['tag:', 'filter by tag'], ['name:', 'name contains'], ['scenes>', 'scene count'], ['cpu<', 'est. CPU load']] as const)
+    for (const [tok, hint] of [['tag:', 'filter by tag'], ['name:', 'name contains'], ['scenes>', 'scene count']] as const)
       if (tok.toLowerCase().startsWith(f) || f === '') out.push(mk(tok, tok, frag.length, hint, '#56565e', false));
     return out;
   }
@@ -772,7 +767,6 @@
       items.push({ v: 'tag', label: 'tag:', sub: 'by tag', dot: false, color: '#6e6e78' });
       items.push({ v: 'name', label: 'name:', sub: 'name contains', dot: false, color: '#6e6e78' });
       items.push({ v: 'scenes', label: 'scenes', sub: 'scene count', dot: false, color: '#6e6e78' });
-      items.push({ v: 'cpu', label: 'cpu', sub: 'est. CPU load', dot: false, color: '#6e6e78' });
       return items.filter((i) => i.label.toLowerCase().includes(f) || i.sub.includes(f));
     }
     if (picker.kind === 'tag') return library.allTags.filter((t) => t.toLowerCase().includes(f)).map((t) => ({ v: t, label: t, sub: '', dot: true, color: '#6e6e78' }));
@@ -793,7 +787,6 @@
       if (v === 'tag') { openPickerKind('tag', {}); return; }
       if (v === 'name') { editConds((c) => c.push({ kind: 'name', val: '' })); picker = null; return; }
       if (v === 'scenes') { editConds((c) => c.push({ kind: 'scenes', op: '>', val: '4' })); picker = null; return; }
-      if (v === 'cpu') { editConds((c) => c.push({ kind: 'cpu', op: '<', val: '60' })); picker = null; return; }
       editConds((c) => c.push({ kind: 'block', block: v, params: [] })); picker = null; return;
     }
     if (kind === 'tag') { editConds((c) => { if (!c.some((x) => x.kind === 'tag' && x.val === v)) c.push({ kind: 'tag', val: v }); }); picker = null; return; }
@@ -827,7 +820,20 @@
   let saving = $state(false);
   let saveName = $state('');
   let sideOpen = $state(false); // mobile: the LIBRARY/FOLDERS/SAVED-FILTERS sidebar as a slide-in panel
-  function loadSaved(): Saved[] { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; } }
+  function loadSaved(): Saved[] {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      // Drop the retired `cpu<N>` estimate term (a filter that was only that is removed) so older
+      // filters don't silently degrade. Mirrors the workbench loader.
+      const sanitized = stripRetiredCpuConds(parsed.filter((f) => f && typeof f.query === 'string'));
+      if (JSON.stringify(sanitized) !== JSON.stringify(parsed)) {
+        try { localStorage.setItem(SAVED_KEY, JSON.stringify(sanitized)); } catch { /* */ }
+        forgefx.putDoc('config', 'savedFilters', sanitized).catch(() => {});
+      }
+      return sanitized;
+    } catch { return []; }
+  }
   function persistSaved() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch { /* */ }
     forgefx.putDoc('config', 'savedFilters', saved).catch(() => {}); // mirror to the unified store (sync-ready)
@@ -910,18 +916,12 @@
   // friendlier operator glyphs in chips (the typed language still uses >=,<=,!=)
   const opGlyph = (op: string): string => ({ '>=': '≥', '<=': '≤', '!=': '≠' })[op] ?? op;
 
-  // ── estimated CPU load ──────────────────────────────────────────────────────────────────────
-  // The device reports real CPU at runtime (an undocumented SysEx) — it is NOT stored in a preset,
-  // so we can't read it offline. This is a per-block HEURISTIC (relative DSP weight per family),
-  // shared with the workbench shell so `cpu<N>` filters identically in both. Always shown with a ~.
   // Recent first; never-loaded entries sink below every loaded one, then slot order so the large
   // never-loaded bucket stays stable. Mirrors sortEntries('recent') in presetBrowserWorkbenchData.
   function cmpRecent(a: LibEntry, b: LibEntry) {
     // `?? 0` is safe: every real stamp is a positive epoch, so never-loaded entries sort last.
     return (presetRecency.at(b.id) ?? 0) - (presetRecency.at(a.id) ?? 0) || a.summary.number - b.summary.number;
   }
-  const estCpu = (e: LibEntry): number => estimateCpu(e.summary);
-  const cpuColor = (c: number) => (c >= 80 ? '#e87b6a' : c >= 62 ? '#f5a623' : '#33c46b');
 </script>
 
 <svelte:window onclick={() => { if (picker) picker = null; if (ctx) ctx = null; }} ondragend={() => (dragOver = false)} />
@@ -950,7 +950,7 @@
     <div class="sort">
       <span class="lbl">SORT</span>
       <div class="seg">
-        {#each [['num', '#'], ['name', 'A-Z'], ['cpu', 'CPU'], ['recent', 'RECENT']] as [id, label]}
+        {#each [['num', '#'], ['name', 'A-Z'], ['recent', 'RECENT']] as [id, label]}
           <button class="segb" class:on={sort === id} onclick={() => (sort = id as typeof sort)}>{label}</button>
         {/each}
       </div>
@@ -1000,8 +1000,8 @@
           <button class="addp" onclick={(e) => onAddParam(e, ci, c.block)}>+ param</button>
         {:else}
           <span class="chip-head">
-            <span class="cdot" style:background={c.kind === 'tag' ? library.colorOf(c.val) : c.kind === 'scenes' ? '#4f6bed' : c.kind === 'cpu' ? '#f5a623' : '#9a9aa3'}></span>
-            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${opGlyph(c.op)} ${c.val}` : `~CPU ${opGlyph(c.op)} ${c.val}`}
+            <span class="cdot" style:background={c.kind === 'tag' ? library.colorOf(c.val) : c.kind === 'scenes' ? '#4f6bed' : '#9a9aa3'}></span>
+            {c.kind === 'tag' ? `Tag: ${c.val}` : c.kind === 'name' ? `Name: ${c.val}` : c.kind === 'scenes' ? `Scenes ${opGlyph(c.op)} ${c.val}` : ''}
           </span>
         {/if}
         <button class="cx" onclick={() => editConds((cc) => cc.splice(ci, 1))}>×</button>
@@ -1081,7 +1081,6 @@
     <div class="results">
       {#each results as e (e.id)}
         {@const sel = e.id === selectedId}
-        {@const cpu = estCpu(e)}
         <button class="row" class:sel onclick={() => { if (lpFired) { lpFired = false; return; } selectedId = e.id; focusEid = null; }} oncontextmenu={(ev) => onRowContext(ev, e)} onpointerdown={(ev) => rowDown(ev, e)} onpointermove={rowMove} onpointerup={rowUp} onpointercancel={rowUp}>
           <span class="num" class:sel>{e.source === 'file' ? 'FILE' : e.source === 'converted' ? 'CONV' : pad(e.summary.number)}</span>
           <div class="row-mid">
@@ -1098,11 +1097,6 @@
           </div>
           <div class="row-r">
             <span class="r-sub">{e.summary.model} · {e.summary.scenes.length} sc</span>
-            <div class="cpu" title="Estimated DSP load from block makeup — not the device's live CPU reading">
-              <span class="cpu-l">~CPU</span>
-              <div class="cpu-bar"><div class="cpu-fill" style:width={cpu + '%'} style:background={cpuColor(cpu)}></div></div>
-              <span class="cpu-t" style:color={cpuColor(cpu)}>{cpu}%</span>
-            </div>
           </div>
         </button>
       {/each}
@@ -1140,7 +1134,6 @@
     <div class="detail" class:open={!!selected}>
       {#if selected}
         {@const hits = matchedKeys(selected)}
-        {@const cpu = estCpu(selected)}
         {#if editorViewport.isMobile}<button class="d-back" onclick={() => (selectedId = null)}>‹ Presets</button>{/if}
         <div class="d-head">
           <div class="d-title"><span class="d-num">{selected.source === 'file' ? 'FILE' : selected.source === 'converted' ? 'CONV' : pad(selected.summary.number)}</span><span class="d-name">{selected.summary.name}</span>{#if selected.source === 'converted' && selected.provenance}<span class="conv-prov" title={`Converted from ${selected.provenance}`}>{selected.provenance}</span>{/if}</div>
@@ -1149,7 +1142,6 @@
             <div class="st"><span class="sk">SOURCE</span><span class="sv2">{selected.source === 'file' ? 'Imported file' : selected.summary.model}</span></div>
             <div class="st"><span class="sk">SCENES</span><span class="sv2">{selected.summary.scenes.length}</span></div>
             <div class="st"><span class="sk">BLOCKS</span><span class="sv2">{selected.summary.blocks.length}</span></div>
-            <div class="st"><span class="sk" title="Estimated DSP load — not the device reading">~CPU</span><span class="sv2" style:color={cpuColor(cpu)}>{cpu}%</span></div>
           </div>
           {#if selected.source === 'device'}
             <button class="load" onclick={() => loadPreset(selected!)}>↓ Switch to Preset</button>
@@ -1381,11 +1373,6 @@
   .bk { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font: 600 10px/1 'JetBrains Mono', monospace; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 33%, transparent); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row-r { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
   .r-sub { font: 600 9px/1 'JetBrains Mono', monospace; color: var(--textmuted); }
-  .cpu { display: flex; align-items: center; gap: 7px; }
-  .cpu-l { font: 600 8px/1 'JetBrains Mono', monospace; color: var(--textmuted); letter-spacing: 0.06em; }
-  .cpu-bar { width: 46px; height: 6px; background: var(--track); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-  .cpu-fill { height: 100%; }
-  .cpu-t { font: 700 10px/1 'JetBrains Mono', monospace; min-width: 30px; text-align: right; }
   .empty, .no-detail { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 30px; gap: 13px; text-align: center; }
   .no-detail { height: 100%; }
   .big { font-size: 30px; opacity: 0.4; }

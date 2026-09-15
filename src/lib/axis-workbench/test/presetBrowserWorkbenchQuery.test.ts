@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   condsEqual,
   condsToQuery,
-  estimateCpu,
   matchEntryFromSummary,
   matchNumeric,
   matchPreset,
@@ -24,7 +23,6 @@ const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => {
     tags: ['Clean', 'Live'],
     author: 'Cliff',
     sceneCount: 3,
-    cpu: 42,
     models: { amp: ['5153 red', 'deluxe verb'], reverb: ['large hall'] },
     blockSlugs,
     blocks: blockSlugs.map((slug) => ({ slug, params: [] })),
@@ -44,7 +42,6 @@ describe('Preset Browser query grammar', () => {
     expect(parseTerm('tag:Lead')).toEqual({ kind: 'tag', val: 'Lead' });
     expect(parseTerm('name:"Big Verb"')).toEqual({ kind: 'name', val: 'Big Verb' });
     expect(parseTerm('author:Cliff')).toEqual({ kind: 'author', val: 'Cliff' });
-    expect(parseTerm('cpu<55')).toEqual({ kind: 'cpu', op: '<', val: '55' });
     expect(parseTerm('scenes>=4')).toEqual({ kind: 'scenes', op: '>=', val: '4' });
     expect(parseTerm('AMP')).toEqual({ kind: 'block', block: 'amp', params: [] });
     expect(parseTerm('AMP(TYPE=5153, GAIN>7)')).toEqual({
@@ -92,7 +89,7 @@ describe('Preset Browser query grammar', () => {
   });
 
   it('round-trips conditions through condsToQuery serialization', () => {
-    const text = 'AMP(TYPE=5153, GAIN>7)  +  tag:Lead  +  cpu<60';
+    const text = 'AMP(TYPE=5153, GAIN>7)  +  tag:Lead  +  scenes>4';
     expect(condsToQuery(parseQuery(text))).toBe(text);
   });
 
@@ -137,13 +134,12 @@ describe('Preset Browser matching', () => {
     expect(matchNumeric(70, '=', '40-60')).toBe(false);
   });
 
-  it('matches tag / name / author / scenes / cpu conditions', () => {
+  it('matches tag / name / author / scenes conditions', () => {
     expect(matchPreset(entry(), parseQuery('tag:clean'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('name:studio'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('author:cliff'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('scenes>=3'), '')).toBe(true);
-    expect(matchPreset(entry(), parseQuery('cpu<50'), '')).toBe(true);
-    expect(matchPreset(entry(), parseQuery('cpu>50'), '')).toBe(false);
+    expect(matchPreset(entry(), parseQuery('scenes>3'), '')).toBe(false);
   });
 
   it('matches a block presence and TYPE against the summary model list, incl. != negation', () => {
@@ -223,17 +219,6 @@ describe('Preset Browser deep param matching (hydrated blocks)', () => {
     });
     expect(matchPreset(e, parseQuery('AMP(TYPE=5153)'), '')).toBe(true);
     expect(matchPreset(e, parseQuery('AMP(TYPE=marshall)'), '')).toBe(false);
-  });
-});
-
-describe('estimateCpu weighted parity with the monolith cost table', () => {
-  it('sums per-family weights + base, clamped to 20..99', () => {
-    // amp 28 + cab 12 + reverb 12 + base 8 = 60
-    expect(estimateCpu({ blocks: [{ slug: 'amp' }, { slug: 'cab' }, { slug: 'reverb' }] })).toBe(60);
-    // no blocks → base 8 clamped up to 20
-    expect(estimateCpu({ blocks: [] })).toBe(20);
-    // unknown family weighs 4 each: 25×4 + 8 = 108 clamped down to 99
-    expect(estimateCpu({ blocks: Array.from({ length: 25 }, () => ({ slug: 'wobble' })) })).toBe(99);
   });
 });
 

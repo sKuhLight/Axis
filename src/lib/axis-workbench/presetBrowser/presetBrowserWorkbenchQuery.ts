@@ -2,7 +2,7 @@ import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData
 
 // Preset Browser query language — ported from src/lib/PresetBrowser.svelte (§2.3 of
 // docs/workbench-dc-parity/06-preset-browser.md). It operates on the entry summaries the workbench
-// parts carry (name, tags, model list, block categories, scene count, CPU estimate) AND, when the
+// parts carry (name, tags, model list, block categories, scene count) AND, when the
 // host feeds decoded blocks in (library.paramsOf via preparePresetBrowserIndex), on full per-block
 // parameter conditions — `matchParamCond` is the same deep matcher the monolith uses, ported here
 // verbatim. With no hydrated params a non-TYPE condition EXCLUDES the entry (mirroring the
@@ -16,8 +16,7 @@ import type { AxisPresetBrowserEntrySummary } from './presetBrowserWorkbenchData
 // presetBrowserWorkbenchRowChips.ts (`CAT`) — that map's keys are the source of truth for every real
 // block slug in this app; every key there must appear here too, or the parser silently drops
 // conditions the autocomplete (which suggests off the library's own slugs, presetBrowserWorkbenchSpecs.ts
-// `filterableSlugs`) just offered. Not imported directly (rowChips already imports `estimateCpu` from
-// this module, so importing back would be circular) — keep this list a literal, mirrored by hand.
+// `filterableSlugs`) just offered. Keep this list a literal, mirrored by hand.
 export const AXIS_PB_FILTERABLE_BLOCKS = [
   'input',
   'output',
@@ -55,7 +54,6 @@ export const AXIS_PB_SEED_SAVED_FILTERS: { name: string; query: string }[] = [
   { name: 'All 5153 Rigs', query: 'AMP(TYPE=5153)' },
   { name: 'Big Ambient Verbs', query: 'REVERB(TYPE=Large Hall, MIX>30)' },
   { name: 'High-Gain Leads', query: 'AMP(GAIN>7)  +  tag:Lead' },
-  { name: 'Low-CPU Live Set', query: 'cpu<55  +  tag:Live' },
   { name: 'TS-Boosted Blues', query: 'DRIVE(TYPE=TS808)  +  tag:Blues' }
 ];
 
@@ -70,8 +68,7 @@ export type AxisPbCond =
   | { kind: 'tag'; val: string }
   | { kind: 'name'; val: string }
   | { kind: 'author'; val: string }
-  | { kind: 'scenes'; op: string; val: string }
-  | { kind: 'cpu'; op: string; val: string };
+  | { kind: 'scenes'; op: string; val: string };
 
 const OP = '(>=|<=|!=|=|>|<)';
 
@@ -120,7 +117,6 @@ export function parseTerm(t: string): AxisPbCond | null {
     return v ? { kind: 'author', val: v } : null;
   }
   if ((m = t.match(new RegExp(`^scenes\\s*${OP}\\s*(\\d+)$`, 'i')))) return { kind: 'scenes', op: m[1], val: m[2] };
-  if ((m = t.match(new RegExp(`^cpu\\s*${OP}\\s*(\\d+)$`, 'i')))) return { kind: 'cpu', op: m[1], val: m[2] };
 
   const pi = t.indexOf('(');
   if (pi >= 0) {
@@ -154,7 +150,6 @@ export function condToText(c: AxisPbCond): string {
   if (c.kind === 'name') return 'name:' + qv(c.val);
   if (c.kind === 'author') return 'author:' + qv(c.val);
   if (c.kind === 'scenes') return 'scenes' + c.op + c.val;
-  if (c.kind === 'cpu') return 'cpu' + c.op + c.val;
   return '';
 }
 
@@ -258,7 +253,6 @@ export interface AxisPbMatchEntry {
   tags: string[];
   author?: string | null;
   sceneCount: number;
-  cpu: number;
   models: Partial<Record<string, string[]>>;
   blockSlugs: string[];
   /** Decoded blocks when the host hydrated params (fed in by `matchEntryFromSummary`), else
@@ -303,28 +297,10 @@ export function matchEntryFromSummary(
     tags: entry.tags,
     author: null,
     sceneCount: entry.sceneCount,
-    cpu: estimateCpu(entry),
     models,
     blockSlugs: entry.blocks.map((b) => (b.slug ?? '').toLowerCase()).filter(Boolean),
     blocks
   };
-}
-
-// Per-block relative DSP weight (verbatim from the monolith's decoded CPU cost table,
-// PresetBrowser.svelte `CPU_WEIGHT`/`CPU_BASE`): amp/cab/reverb/pitch dominate, EQ/drive/utility are
-// cheap, summed over placed blocks + a fixed overhead, clamped 20..99. A complexity indicator, not
-// the device's live meter (which isn't stored in a preset), hence the "~" prefix where it renders.
-const CPU_BASE = 8;
-const CPU_WEIGHT: Record<string, number> = {
-  amp: 28, cab: 12, reverb: 12, pitch: 14, multitap: 10, megatap: 10, synth: 9, delay: 8,
-  flanger: 5, phaser: 5, chorus: 5, rotary: 5, formant: 5, tremolo: 4, filter: 4, drive: 4,
-  enhancer: 3, comp: 3, wah: 3, ringmod: 3, geq: 2, peq: 2, gate: 2, volume: 1, input: 0, output: 0
-};
-
-export function estimateCpu(entry: { blocks: { slug?: string | null }[] }): number {
-  let sum = CPU_BASE;
-  for (const b of entry.blocks) sum += CPU_WEIGHT[b.slug ?? ''] ?? 4;
-  return Math.max(20, Math.min(99, Math.round(sum)));
 }
 
 function matchBlockCond(entry: AxisPbMatchEntry, cond: Extract<AxisPbCond, { kind: 'block' }>): boolean {
@@ -356,8 +332,6 @@ export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
       return (entry.author ?? '').toLowerCase().includes(cond.val.toLowerCase());
     case 'scenes':
       return matchNumeric(entry.sceneCount, cond.op, cond.val);
-    case 'cpu':
-      return matchNumeric(entry.cpu, cond.op, cond.val);
     case 'block':
       return matchBlockCond(entry, cond);
   }
