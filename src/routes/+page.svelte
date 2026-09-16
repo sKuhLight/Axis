@@ -30,6 +30,7 @@
   import PresetPicker from '$lib/preset/PresetPicker.svelte';
   import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
   import TapTempoOverlay from '$lib/editor/TapTempoOverlay.svelte';
+  import ShortcutsOverlay from '$lib/ancillary/ShortcutsOverlay.svelte';
   import CachePrompt from '$lib/ui/CachePrompt.svelte';
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
   import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
@@ -135,6 +136,11 @@
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.presetSearchOpen = true;
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+        // Bare `?` (Shift+/ on most layouts) opens the shortcut cheat sheet; Escape closes it.
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        overlays.open('shortcuts');
       } else if (e.key === 'Escape') {
         if (editorOnboarding.tourActive) return; // Tour.svelte owns Escape while the tour is up
         // The registry is the *fallback* owner of Escape, not its first responder: whatever is
@@ -200,6 +206,7 @@
   {#if workbenchEnabled}<AxisPresetBrowserSearchOverlay />{/if}
   <TunerOverlay />
   <TapTempoOverlay />
+  <ShortcutsOverlay />
   <CachePrompt />
   <ColorLabelsPrompt />
   <DeviceDefsPrompt />
