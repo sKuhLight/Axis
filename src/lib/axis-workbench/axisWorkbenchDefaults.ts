@@ -95,6 +95,36 @@ const widgetState = (overflowPriority: number, extra: JsonObject = {}): JsonObje
   ...extra
 });
 
+/** Zone-id prefix that marks a widget as top-bar chrome. */
+const AXIS_TOP_BAR_ZONE_PREFIX = 'top.';
+
+const isAxisTopBarZone = (zone: unknown): zone is string =>
+  typeof zone === 'string' && zone.startsWith(AXIS_TOP_BAR_ZONE_PREFIX);
+
+/**
+ * The canonical TOP BAR — the single source of truth for the widgets that sit in
+ * `top.left` / `top.center` / `top.right`, with their zones, orders, densities and
+ * overflow priorities. The default document AND every profile seed (see
+ * `axisWorkbenchLayoutPresets.ts`) build the top bar from here, so the bar is
+ * identical on every screen size. A drifted copy of this list is what once made
+ * tablet/phone render a different bar than desktop; keep both call sites on this
+ * factory (pinned by `test/axisWorkbenchLayoutPresets.test.ts`).
+ */
+export function createAxisTopBarWidgets(): Record<string, WidgetInstance> {
+  return {
+    'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),
+    'axis.widget.scenes': widget('axis.widget.scenes', 'axis.scenes', 'top.left', 1, { state: widgetState(60) }),
+    // Save sits directly after the Scenes widget rather than in the far-right
+    // status cluster, so the amber "edited" pill and the action it offers are
+    // next to the scene name.
+    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 2, { state: widgetState(95) }),
+    'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
+    'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
+    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
+    'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) })
+  };
+}
+
 const tabs = (id: string, panelIds: string[], activePanelId = panelIds[0]): DockNode => ({
   kind: 'tabs',
   id,
@@ -143,16 +173,9 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   layout.activePageId = seeded.activePageId;
 
   layout.widgets = {
-    'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),
-    'axis.widget.scenes': widget('axis.widget.scenes', 'axis.scenes', 'top.left', 1, { state: widgetState(60) }),
-    'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
-    'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
-    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
-    'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) }),
-    // Save sits directly after the Scenes widget (top.left order 2 here) rather
-    // than in the far-right status cluster, so the amber "edited" pill and the
-    // action it offers are next to the scene name.
-    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 2, { state: widgetState(95) }),
+    // The top bar comes from the shared factory so it can never drift from the
+    // tablet/phone seeds or from `ensureAxisTopBarParity`'s reference.
+    ...createAxisTopBarWidgets(),
     'axis.widget.search': widget('axis.widget.search', 'axis.search', 'hidden', 0),
     // V13c: the rail no longer carries a History widget (History is reachable as a
     // dock panel) nor the "AX" account avatar (the 'account' nav entry / Axis hub
@@ -379,16 +402,15 @@ export function ensureAxisMeterWidgetLibrary(doc: WorkbenchDocument): WorkbenchD
  * on every load.
  */
 export function ensureAxisSaveWidgetPlacement(doc: WorkbenchDocument): WorkbenchDocument {
-  const inTopBar = (zone: unknown): zone is string => typeof zone === 'string' && zone.startsWith('top.');
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
     const save = layout.widgets['axis.widget.save'];
     if (!save || save.type !== 'axis.save') continue;
     // Respect an explicit placement outside the top bar (hidden/custom/floating).
-    if (!inTopBar(save.zone)) continue;
+    if (!isAxisTopBarZone(save.zone)) continue;
 
     // Preferred: immediately after Scenes, in whatever top-bar zone Scenes uses.
-    const scenes = Object.values(layout.widgets).find((instance) => instance?.type === 'axis.scenes' && inTopBar(instance.zone));
+    const scenes = Object.values(layout.widgets).find((instance) => instance?.type === 'axis.scenes' && isAxisTopBarZone(instance.zone));
     if (scenes) {
       if (save.zone === scenes.zone && save.order === scenes.order + 1) continue;
       // Open a slot directly after Scenes without displacing Scenes itself.
@@ -410,5 +432,89 @@ export function ensureAxisSaveWidgetPlacement(doc: WorkbenchDocument): Workbench
     save.zone = 'top.left';
     save.order = topLeftMax + 1;
   }
+  return doc;
+}
+
+/**
+ * doc.metadata marker: the non-desktop profile top bars have been reconciled with
+ * the desktop layout (see {@link ensureAxisTopBarParity}). One-shot, so a doc the
+ * user deliberately customised per profile afterwards is never re-clobbered.
+ */
+export const AXIS_TOP_BAR_PARITY_MARKER = 'axisTopBarParity';
+
+/** Deep copy a widget instance (binding/state are plain JSON). */
+const cloneWidgetInstance = (instance: WidgetInstance): WidgetInstance =>
+  JSON.parse(JSON.stringify(instance)) as WidgetInstance;
+
+/**
+ * Make the TOP BAR identical on every profile.
+ *
+ * Before profiles were unified, tablet and phone were seeded from their own layout
+ * specs (Scenes parked in `top.center`, a tuner/tempo/cpu `status` group, no meter),
+ * so resizing the window silently swapped the bar's widgets and arrangement. Those
+ * specs are gone, but a persisted document still carries the old per-profile layouts
+ * (`seedAxisProfiles` leaves existing profiles untouched). This reconciles them: every
+ * non-desktop profile's top-bar widgets are replaced with verbatim copies of the
+ * desktop profile's — "same bar on every screen size".
+ *
+ * Only the `top.*` zones are touched: each profile keeps its own dock (the phone
+ * profile's bottom-docked Block Editor powering the mobile block flow). Docks, pages,
+ * panels and navigation are left alone. A group the replacement emptied (the legacy
+ * `status` group) is pruned, since repair would otherwise re-attach it to the copied
+ * members. Marker-gated, so it runs once per document; the normalizer's default doc
+ * plus the shared top-bar factory keep fresh docs at parity without it.
+ */
+export function ensureAxisTopBarParity(doc: WorkbenchDocument): WorkbenchDocument {
+  if (doc.metadata?.[AXIS_TOP_BAR_PARITY_MARKER]) return doc;
+
+  const profiles = Object.values(doc.profiles ?? {});
+  // The desktop profile's layout is the reference — it is what the user sees at
+  // full width, and the bar they expect everywhere. `breakpoint` unset means desktop.
+  const reference = profiles.find((profile) => !profile.breakpoint || profile.breakpoint === 'desktop');
+  const referenceLayout = reference ? doc.layouts[reference.layoutId] : undefined;
+  if (!reference || !referenceLayout?.widgets) return doc;
+
+  const referenceTopWidgets = Object.values(referenceLayout.widgets).filter(
+    (instance) => instance && isAxisTopBarZone(instance.zone)
+  );
+  if (!referenceTopWidgets.length) return doc;
+
+  for (const profile of profiles) {
+    if (profile.id === reference.id) continue;
+    const layout = doc.layouts[profile.layoutId];
+    if (!layout || !layout.widgets) continue;
+
+    // Drop this profile's own top-bar widgets...
+    for (const [id, instance] of Object.entries(layout.widgets)) {
+      if (instance && isAxisTopBarZone(instance.zone)) delete layout.widgets[id];
+    }
+    // ...and plant the desktop bar verbatim. Assigning by canonical id also moves a
+    // widget the profile had parked in another zone (e.g. a docked tuner) back up.
+    for (const instance of referenceTopWidgets) {
+      layout.widgets[instance.id] = cloneWidgetInstance(instance);
+    }
+
+    // Prune groups the replacement emptied (the legacy `status` group's members no
+    // longer carry `groupId`, but its stale `widgetIds` would keep it alive through
+    // repair). Groups still claimed by two or more widgets are kept.
+    if (layout.widgetGroups) {
+      for (const [groupId, group] of Object.entries(layout.widgetGroups)) {
+        const members = (group.widgetIds ?? []).filter(
+          (widgetId) => layout.widgets![widgetId]?.groupId === groupId
+        );
+        if (members.length < 2) {
+          for (const widgetId of members) {
+            const widget = layout.widgets![widgetId];
+            if (widget) widget.groupId = null;
+          }
+          delete layout.widgetGroups[groupId];
+        } else if (members.length !== group.widgetIds?.length) {
+          layout.widgetGroups[groupId] = { ...group, id: groupId, widgetIds: members };
+        }
+      }
+    }
+  }
+
+  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_TOP_BAR_PARITY_MARKER]: 'v1' };
   return doc;
 }

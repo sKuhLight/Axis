@@ -10,7 +10,7 @@ import {
   type WidgetZoneLayout,
   type WorkbenchLayout
 } from '../workbench/core';
-import { createAxisWorkbenchPanels } from './axisWorkbenchDefaults';
+import { createAxisTopBarWidgets, createAxisWorkbenchPanels } from './axisWorkbenchDefaults';
 import { buildAxisSeedPages, createAxisSeedNavigation } from './axisWorkbenchPages';
 import { axisMyControlsZone, AXIS_MY_CONTROLS_PANEL_ID } from './myControlsPanel';
 
@@ -120,13 +120,11 @@ const PRESET_SPECS: Record<AxisLayoutPresetKind, AxisPresetSpec> = {
     editorMode: 'drawer',
     rightW: 340,
     widgets: {
-      preset: W('tl', 0),
-      scenes: W('tl', 1),
-      tuner: W('tr', 2, 'expanded', 'status'),
-      tempo: W('tr', 3, 'expanded', 'status'),
-      cpu: W('tr', 4, 'expanded', 'status'),
-      // Save sits directly after the Scenes widget, not in the far-right cluster.
-      save: W('tl', 2),
+      // NOTE: the top-bar widgets are NOT declared here. They come from the shared
+      // `createAxisTopBarWidgets()` factory (see `createAxisLayoutPreset`) so the bar
+      // is byte-for-byte the same on this seed, the default document, and the
+      // persisted-doc heal (`ensureAxisTopBarParity`). Declaring them here is exactly
+      // how the tablet/phone bar drifted from the desktop bar before.
       gridmode: W('gridbar', 0),
       blocksize: W('gridbar', 1),
       // Telemetry monitor (META-17) — capability-gated in the widget.
@@ -292,6 +290,9 @@ export function createAxisLayoutPreset(
   const spec = PRESET_SPECS[kind] ?? PRESET_SPECS.default;
   const rightW = options.rightW ?? spec.rightW;
   const { widgets, groups } = buildWidgets(spec);
+  // Every profile's top bar is the shared canonical one (see
+  // `createAxisTopBarWidgets`) — merged last so it always wins over any spec drift.
+  Object.assign(widgets, createAxisTopBarWidgets());
   // Pages (ROUND 15): every preset ships the full seed page set — the preset's
   // signal-grid dock becomes the Grid page, and Preset Browser / FC / Setup /
   // Controllers / Scenes / Live each get their own page. Pages are the same across

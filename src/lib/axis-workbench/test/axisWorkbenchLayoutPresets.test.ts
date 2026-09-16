@@ -5,7 +5,7 @@ import {
   validateWorkbenchDocument,
   type WorkbenchLayout
 } from '../../workbench/core';
-import { createWorkbenchController } from '../../workbench';
+import { createWorkbenchController, selectActiveLayout } from '../../workbench';
 import {
   AXIS_LAYOUT_PRESET_KINDS,
   createAxisLayoutPreset,
@@ -113,13 +113,24 @@ describe('Axis layout presets', () => {
     });
   }
 
-  it('default preset groups tuner+tempo+cpu (design group:"status")', () => {
-    const layout = createAxisLayoutPreset('default', { layoutId: 'axis.layout.status' });
-    const groups = Object.values(layout.widgetGroups);
-    expect(groups.length).toBe(1);
-    expect(groups[0].widgetIds.sort()).toEqual(
-      ['axis.widget.cpu', 'axis.widget.tempo', 'axis.widget.tuner'].sort()
-    );
+  it('seeds the same top bar as the default document, so it cannot differ by screen size', () => {
+    const topBar = (layout: WorkbenchLayout) =>
+      Object.fromEntries(
+        Object.values(layout.widgets)
+          .filter((widget) => widget.zone.startsWith('top.'))
+          .map((widget) => [
+            widget.id,
+            { type: widget.type, zone: widget.zone, size: widget.size, state: widget.state ?? null }
+          ])
+      );
+
+    const defaultLayout = selectActiveLayout(createAxisWorkbenchDefaultDocument()) as WorkbenchLayout;
+    const presetLayout = createAxisLayoutPreset('default', { layoutId: 'axis.layout.topbar' });
+
+    expect(topBar(presetLayout)).toEqual(topBar(defaultLayout));
+    // The canonical bar is ungrouped (the retired `status` group wrapped the desktop
+    // status chips in chrome the desktop bar never had).
+    expect(Object.keys(presetLayout.widgetGroups)).toHaveLength(0);
   });
 
 });

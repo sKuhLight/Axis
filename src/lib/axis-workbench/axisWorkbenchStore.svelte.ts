@@ -15,7 +15,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
@@ -56,7 +56,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // already-normalized docs):
   //   migrate → ensureSeedPages (ROUND 15 Pages migration) → ensureGridControls →
   //   pruneRetiredRail → pruneRetiredNav → pruneTopBarSearch → pruneAddBlock →
-  //   ensureSavePlacement.
+  //   ensureSavePlacement → ensureTopBarParity.
   // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
   // becomes the Grid page and the six other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
@@ -67,14 +67,19 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // tabbed next to History. Same ordering reason, same idempotence requirement.
   // ensureAxisSaveWidgetPlacement moves the canonical Save widget beside the preset/
   // scene names for docs minted while it still lived in the far-right status cluster.
-  return ensureAxisSaveWidgetPlacement(
-    ensureAxisMeterWidgetLibrary(
-      pruneAxisRetiredWidgetTypes(
-        pruneAxisTopBarSearchWidgets(
-          pruneAxisRetiredRailWidgets(
-            pruneAxisRetiredNavigationEntries(
-              ensureAxisGridControlWidgets(
-                ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+  // ensureAxisTopBarParity runs LAST and is the final word on the top bar: it copies
+  // the desktop layout's top-bar widgets onto every other profile, so a persisted doc
+  // minted with the retired per-device top bars renders one bar on every screen size.
+  return ensureAxisTopBarParity(
+    ensureAxisSaveWidgetPlacement(
+      ensureAxisMeterWidgetLibrary(
+        pruneAxisRetiredWidgetTypes(
+          pruneAxisTopBarSearchWidgets(
+            pruneAxisRetiredRailWidgets(
+              pruneAxisRetiredNavigationEntries(
+                ensureAxisGridControlWidgets(
+                  ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+                )
               )
             )
           )
