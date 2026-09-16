@@ -56,8 +56,7 @@ await mkdir(outDir, { recursive: true });
 
 const server = spawnLogged('npm', ['run', 'dev', '--', '--host', host, '--port', port], {
   env: {
-    ...process.env,
-    VITE_AXIS_WORKBENCH: '1'
+    ...process.env
   }
 });
 

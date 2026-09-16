@@ -1,8 +1,13 @@
 # ADR-0001: Claude Code setup for Axis
 
-- **Status:** Accepted
+- **Status:** Accepted (context partially superseded)
 - **Date:** 2026-07-07
 - **Owners:** maintainer
+
+> **Update:** the layout rework completed and the legacy monolith shell was removed. The
+> "feature-gated dual UI" and "monolith↔workbench mirror rule" hazards below no longer apply —
+> Axis has a single shell. The remaining hazards (node-env unit tests invisible to CI, the
+> framework/binding split, task tracking) still hold.
 
 ## Context
 

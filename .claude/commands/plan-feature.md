@@ -22,22 +22,18 @@ Produce a plan with these sections:
    If the work needs downstream changes, say so explicitly and treat them as
    prerequisites.
 
-3. UI surface. Is this monolith UI, workbench framework, or both?
-   - Monolith: the legacy UI shown by plain `npm run dev`.
-   - Workbench framework (under `src/lib/axis-workbench/`): use the scaffolding
-     commands `/new-widget`, `/new-panel`, `/new-runtime-adapter` and follow the
-     nested `src/lib/axis-workbench/CLAUDE.md` conventions.
-   - Both: the monolith↔workbench mirror rule applies — preset-browser logic in
-     `src/lib/preset/PresetBrowser.svelte` / `src/lib/preset/library.svelte.ts` must be
-     mirrored into `src/lib/axis-workbench/presetBrowser/`.
+3. UI surface. Axis has one shell (the workbench). Workbench framework code lives
+   under `src/lib/axis-workbench/`; use the scaffolding commands `/new-widget`,
+   `/new-panel`, `/new-runtime-adapter` and follow the nested
+   `src/lib/axis-workbench/CLAUDE.md` conventions.
 
 4. Affected files. List the files you expect to add or change, with a one-line
    reason each. Respect the production-feature-keep rule: existing features must
    not be removed or gated off.
 
-5. Feature-gate implications. Does this touch workbench code gated behind
-   `VITE_AXIS_WORKBENCH === '1'`? State whether the feature needs the gate, and how
-   it behaves with the gate off (plain `npm run dev` shows the monolith).
+5. Feature-gate implications. The only remaining build gate is
+   `VITE_AXIS_LAYOUT_EDIT === '1'` (workbench layout editing, off by default). State
+   whether this feature touches it.
 
 6. Test plan. Pure-module logic → a vitest test (node env, no DOM). Visible
    behavior → a Playwright e2e case (viewport ≥1366px). Note that CI runs neither

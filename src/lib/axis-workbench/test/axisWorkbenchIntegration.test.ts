@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { isAxisWorkbenchFeatureEnabled } from '../featureGate';
 import { AXIS_FC_PARTS, axisFcPanelType } from '../fc/types';
 import { AXIS_PRESET_BROWSER_PARTS, axisPresetBrowserPanelType } from '../presetBrowser/types';
 import {
@@ -12,13 +11,6 @@ import {
 } from '../axisWorkbenchRegistryManifest';
 
 describe('Axis Workbench integration contracts', () => {
-  it('workbench is the default shell; VITE_AXIS_WORKBENCH=0 is the legacy escape hatch', () => {
-    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: '1' })).toBe(true);
-    expect(isAxisWorkbenchFeatureEnabled({})).toBe(true);
-    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: 'true' })).toBe(true);
-    expect(isAxisWorkbenchFeatureEnabled({ VITE_AXIS_WORKBENCH: '0' })).toBe(false);
-  });
-
   it('declares required Axis panel, widget, navigation, and action types', () => {
     expect(AXIS_WORKBENCH_BASE_PANEL_TYPES).toEqual([
       'axis.signalGrid',

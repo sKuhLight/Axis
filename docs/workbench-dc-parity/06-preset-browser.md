@@ -1,5 +1,10 @@
 # 06 — Preset Browser parts (`design/AxisPresetBrowser.dc.html`)
 
+> **Status note.** The monolith (`src/lib/preset/PresetBrowser.svelte`) has been **removed**; the
+> workbench Preset Browser is now the only one. References below to the monolith / `PresetBrowser.svelte`
+> as a live reference implementation are historical — the workbench behavior described here is the
+> product behavior.
+
 Source of truth: `design/AxisPresetBrowser.dc.html` (1397 lines, branch `layout-rework`). One component, four mount shapes via the `part` prop:
 
 ```
@@ -11,9 +16,8 @@ props: accent (color), density ("comfortable"|"compact"), advancedDefault (boole
 ships Simple-first and remembers the user's choice from the first time they click the mode toggle
 (`presetBrowserWorkbenchSearchMode.ts`, localStorage key `axs.pb.searchMode`) — the typed query
 language is opt-in rather than the surface a first-time user has to meet. The design source's `true`
-default is therefore not something to implement later. The monolith (`src/lib/preset/PresetBrowser.svelte`)
-intentionally stays Advanced-first and per-session, an accepted exception to the preset-browser
-mirror rule in `src/lib/CLAUDE.md`.
+default is therefore not something to implement later. (Historically the monolith stayed
+Advanced-first and per-session; that exception is gone with the monolith.)
 
 Part gating (verbatim, `renderVals()` line 1133):
 
@@ -309,14 +313,14 @@ Theme tokens identical to doc 04 (`--bg #0c0c0e … --accent #35c9d6`, Hanken Gr
 
 ## 9. Delta checklist vs current production
 
-Compared against: `src/lib/axis-workbench/panels/preset-browser/AxisPresetBrowserPartPanel.svelte`, `src/lib/axis-workbench/presetBrowser/*` (controller/runtime/data/types), `src/lib/preset/PresetBrowser.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
+Compared against: `src/lib/axis-workbench/panels/preset-browser/AxisPresetBrowserPartPanel.svelte`, `src/lib/axis-workbench/presetBrowser/*` (controller/runtime/data/types), `src/lib/axis-workbench/axisWorkbenchRegistry.ts`.
 
 Production shared state today: controller snapshot `{sourceId, entryId, focusedBlockEffectId, activePart, detailOpen}` + runtime `{loadingEntryId, auditioningEntryId, hydratingEntryId, error, details, lastLoaded*}`. Design shares far more (all of §1) — the checklist below calls out which keys need homes.
 
 ### P0 — structural gaps
 
 - [ ] **Split-list cap mismatch** *(confirmed)* — `AxisPresetBrowserPartPanel.svelte` `list` part hard-caps at 120 rows (`.slice(0, 120)`) with **no expander**; the spec is a soft cap of **14** rows with a `"Show all {N} presets"` button (`showAllRows`) so dock mounts stay fast but the full library remains reachable (§4.1). Replace the silent 120-cap with the 14 + expander pattern (or virtualization) and the exact button chrome.
-- [ ] **List part is missing the top bar + query system** — design `showTop = full || list`: the header (count line, sync chip, device filter, sort segment, advanced toggle), query bar with autocomplete, and builder-chips row are part of the **list part**, not just the monolith. Production list part renders only rows; the advanced query/chips/saved-filter UI lives solely in `PresetBrowser.svelte` (full). Port §2 into the list part (backed by the shared controller so sources/detail react).
+- [ ] **List part is missing the top bar + query system** — design `showTop = full || list`: the header (count line, sync chip, device filter, sort segment, advanced toggle), query bar with autocomplete, and builder-chips row are part of the **list part**. Production list part renders only rows; the advanced query/chips/saved-filter UI lives solely in the full part. Port §2 into the list part (backed by the shared controller so sources/detail react).
 - [ ] **Sources part content mismatch** — production sources part = preset sources with proportional bars. Design sources part = **views-with-counts** (7 cloud/device views, §3) + **saved filters** (apply/duplicate/delete/save-name inline) + **quick tags**. Decide the union: at minimum add saved filters + quick tags to the part and reconcile "views" with production's source list; counts must respect the active device filter and deletions.
 - [ ] **Query/selection shared-state contract** — the parts must share `conditions/query/advanced`, `view`, `deviceFilter`, `sort`, `marked/anchorN`, `saved/saving`, `renaming/renames`, and `selected` (`entryId` exists). Extend `presetBrowserWorkbenchController` snapshot accordingly; overlay ownership (picker/ctx/confirm/toast render on the lowest-rank mounted part: list < detail < sources < full, §1) needs an explicit owner election in the controller.
 
@@ -326,7 +330,7 @@ Production shared state today: controller snapshot `{sourceId, entryId, focusedB
 - [ ] **Context menus in the parts** — production part panels have no right-click menu; spec §4.4 defines single/multi menus with sync-state-dependent actions and danger styling, plus the sticky multi-select action header (Export / Back up / Remove / Delete / clear).
 - [ ] **Detail part**: production detail shows metadata + version *count* only. Spec adds: cloud status card with 5 status lines, Load/Upload/Update/Download/Back-up dual buttons, **version list with Restore + On device / In cloud badges** and confirm-dialog copy, `⇄ Convert for another device` flow with block-cap trimming hints, signal-chain chip strip, and **query-matched param highlighting** (`matchedKeys` → `aT(10)` cells) (§5). Version restore/compare is currently "pending" in production — this is the binding spec for it.
 - [ ] **Saved filters** — production persists `config/savedFilters` (good); verify the part-level UI: inline save-name input triggered by the query bar's `Save filter` button, active-filter highlight (parsed-query equality), duplicate/delete affordances, and the seed filters for empty libraries (§3.3).
-- [ ] **Advanced query grammar parity** — production `PresetBrowser.svelte` has the typed language + autocomplete; verify against §2.3–2.4 verbatim: paren-aware `+` split, `author:` term, numeric **range literal `a-b`**, `!=` substring negation for enums, caret-context autocomplete with insert-at-fragment, Tab-accept, and the advanced↔simple round-trip conversion on toggle.
+- [ ] **Advanced query grammar parity** — the query engine has the typed language + autocomplete; verify against §2.3–2.4 verbatim: paren-aware `+` split, `author:` term, numeric **range literal `a-b`**, `!=` substring negation for enums, caret-context autocomplete with insert-at-fragment, Tab-accept, and the advanced↔simple round-trip conversion on toggle.
 - [ ] **Device filter + sort** — header DEVICE picker (with per-device counts) and `# / A-Z` segment shared across parts; production list part has no such header controls.
 - [ ] **Mobile**: sources part as slide-in drawer `<1024` (production has this — verify 284 px/`-102%` transition + backdrop), full-screen detail with `‹ Results` back bar `<760`, and **swipe-to-action rows** (Load / Back up / Delete, 222 px, pointer-captured, axis-locked) which production lacks.
 - [ ] **Empty/placeholder states**: list empty (magnifier + two-line copy), detail unselected (`◧` Select a preset), saved-filters empty, autocomplete "No matches — keep typing", picker "No matches" (§4.4, §5, §2.4). Production placeholders exist but copy/styling should match.

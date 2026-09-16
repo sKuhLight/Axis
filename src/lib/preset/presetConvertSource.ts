@@ -1,11 +1,9 @@
 // Shared "start a cross-device conversion for a library entry" flow (M4 · META-24 · AXIS-47/48).
 //
-// Both preset-browser shells (monolith PresetBrowser.svelte + the workbench part panel) surface a
-// "Convert…" entry point. This module is the ONE place that turns a LibEntry into raw .syx bytes and
-// hands them to the convert store as the pre-seeded source, so the two shells stay in lock-step (the
-// monolith↔workbench mirror rule). The byte matrix mirrors PresetBrowser.svelte's entryBytes():
-// imported file → cached bytes, local folder → disk read, device slot → v2 backup dump or v1
-// snapshot-then-download.
+// The workbench preset browser surfaces a "Convert…" entry point. This module is the ONE place that
+// turns a LibEntry into raw .syx bytes and hands them to the convert store as the pre-seeded source.
+// The byte matrix mirrors the preset browser's entryBytes(): imported file → cached bytes, local
+// folder → disk read, device slot → v2 backup dump or v1 snapshot-then-download.
 
 import { forgefx } from '$lib/api/forgefx';
 import { deviceSession, editorNotifications } from '$lib/editor/editorClients.svelte';
@@ -13,7 +11,6 @@ import { library, type LibEntry } from './library.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';
 import type { ConvertedPresetDoc } from '$lib/convert/convertScratch';
-import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
 
 /** Raw .syx bytes for a DEVICE entry: v2 dumps the slot directly; v1 snapshots then downloads. */
 async function deviceEntryBytes(n: number): Promise<ArrayBuffer> {
@@ -48,9 +45,8 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 /**
  * Read an entry's .syx and open the Convert dialog pre-seeded with it as the source. The user then
- * picks the target device and hits Convert; the review hop routes to the real SignalGrid (workbench
- * convert page) or the legacy fake grid (monolith fallback). Returns false on a read failure (a toast
- * is shown). Never throws.
+ * picks the target device and hits Convert; the review hop routes to the real SignalGrid convert
+ * page. Returns false on a read failure (a toast is shown). Never throws.
  */
 export async function startCrossConvert(e: LibEntry): Promise<boolean> {
   try {
@@ -63,23 +59,18 @@ export async function startCrossConvert(e: LibEntry): Promise<boolean> {
   }
 }
 
-/** Open the converter surface — the workbench real-grid page, or the legacy monolith fake-grid view when
- *  the workbench shell is off. Mirrors ConvertDialog.openInGrid so both entry points behave identically. */
+/** Open the converter surface — the real-grid convert page. */
 async function openConverterSurface(): Promise<void> {
-  if (isAxisWorkbenchFeatureEnabled(import.meta.env)) {
-    if (!convertScratch.seed()) return;
-    const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
-      import('$lib/axis-workbench/axisWorkbenchStore.svelte'),
-      import('$lib/axis-workbench/axisWorkbenchPages')
-    ]);
-    axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
-  } else {
-    convertScratch.openView();
-  }
+  if (!convertScratch.seed()) return;
+  const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
+    import('$lib/axis-workbench/axisWorkbenchStore.svelte'),
+    import('$lib/axis-workbench/axisWorkbenchPages')
+  ]);
+  axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
 }
 
 /** Re-open a SAVED converted preset (a `conv:` library entry) back in the converter, rehydrated straight
- *  from its stored doc — no re-conversion. Used by both preset-browser shells' "Open in converter" action. */
+ *  from its stored doc — no re-conversion. Used by the preset browser's "Open in converter" action. */
 export async function openConvertedInConverter(doc: ConvertedPresetDoc): Promise<void> {
   convert.seedFromDoc(doc);
   await openConverterSurface();

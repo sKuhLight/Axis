@@ -319,8 +319,8 @@
   // ── control context menu (right-click) ──
   // Replaces the inline ∿ badge: pinning and modifier launch both live here. Pinning routes through
   // the workbench's single pin action (My Controls); the modifier item reuses `openMod` (docked panel
-  // when one is mounted, the in-editor flyout otherwise). Outside the workbench (monolith shell) only
-  // the modifier item is offered.
+  // when one is mounted, the in-editor flyout otherwise). Outside a workbench context only the modifier
+  // item is offered.
   let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
   let menuTarget = $state<PlacedControl | null>(null);
 
@@ -705,7 +705,7 @@
   }
 
   /* Bridges the workbench ContextMenu's `--aw-*` tokens onto the app tokens so the menu stays styled
-     in the monolith shell too (inside the workbench, `.aw-root` already defines these identically). */
+     when rendered outside `.aw-root`. */
   .bctx {
     display: contents;
     --aw-surface: var(--surface);

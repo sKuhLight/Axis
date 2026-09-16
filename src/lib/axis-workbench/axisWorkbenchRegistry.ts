@@ -205,8 +205,6 @@ registry.registerAction({ id: 'axis.openGrid', run: async () => (await axisEdito
 // closed PB panel can be reopened from the rail instead of only via a layout
 // reload. The panelId matches the singleton key seeded by the defaults roster
 // (createAxisWorkbenchPanels), so re-docking never mints a colliding id.
-// The old overlay Preset Browser (editor.openLibrary) stays reachable from the
-// legacy ToolRail shell and the top-bar search widget (feature-keep).
 registry.registerAction(
   createAxisNavigationPanelAction({
     actionId: 'axis.openPresetBrowser',

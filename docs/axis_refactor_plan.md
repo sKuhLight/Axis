@@ -1,5 +1,11 @@
 # Axis architecture refactor — milestone plan
 
+> **Status:** the refactor milestones (M1–M7) landed. The legacy monolith shell has since been
+> **removed entirely** — Axis now has a single shell (the workbench). References below to the
+> monolith as a live, frozen reference implementation, to `PresetBrowser.svelte` / `TopBar.svelte` /
+> `ToolRail.svelte` / `StatusBar.svelte`, and to `VITE_AXIS_WORKBENCH` are historical. The M8 gap
+> table records features that were accepted as lost when the monolith was deleted.
+
 > On approval, move this file to `docs/axis_refactor_plan.md` so the Sonnet sessions can
 > reference it in-repo.
 
@@ -20,13 +26,10 @@ The review also found ~3,500 LOC of dead code and tests left behind by the delet
 ControlSurface feature, and a documented "mirror rule" requiring preset-browser logic to be
 hand-copied between the two shells.
 
-**Decision taken:** the legacy monolith shell stays for now. We refactor everything *except*
-the monolith first, then port the remaining workbench feature gaps, then revisit retirement.
-This ordering is deliberate — with the monolith staying, the "don't refactor what you'll
-delete" cost mostly evaporates (only ~3,000 LOC is eventually disposable and it's frozen
-either way), the monolith serves as a frozen reference implementation to diff behaviour
-against, and the later porting work gets strictly easier once the widget registry is
-un-inverted.
+**Decision taken (historical):** the legacy monolith shell stayed during the refactor. We refactored
+everything *except* the monolith first, then ported the workbench feature gaps, then retired the
+monolith. That ordering is now complete: the monolith and `VITE_AXIS_WORKBENCH` gate are gone, and
+any unported gaps were accepted as losses (see M8).
 
 **Intended outcome:** a domain-grouped app layer, a composed editor store instead of a god
 object, a real overlay layer, per-type workbench components instead of mega-switches, and
@@ -40,7 +43,7 @@ documentation that matches the code — with no behaviour change at any point.
 |---|---|---|---|
 | A | `editor.svelte.ts` is a god object | 2,110 lines, ~200 public members + 27 getters, 51 importers, ~20 responsibilities under `// ──` banners | M4 |
 | B | Overlay state is a global flag bag + hardcoded Escape chain | 20 modals mounted unconditionally in `routes/+page.svelte`; 12 boolean flags on `editor`; 40-line `else if` priority chain | M3 |
-| C | Dual-shell mirror | Preset browser = 1,570 (monolith) + 6,031 (workbench) LOC; `splitTop` documented "verbatim from monolith `splitOn`" | deferred (monolith kept) |
+| C | Dual-shell mirror | Preset browser = 1,570 (monolith) + 6,031 (workbench) LOC; `splitTop` documented "verbatim from monolith `splitOn`" | done (monolith removed) |
 | D | Registry inversion | 24 widget types → one 1,596-line component; 4 PB parts → one 2,618-line component; 7 FC parts → one 1,302-line component | M5 |
 | E | Leaky host seam | Host factories are excellent, but panels import `editor`/`library`/`history` directly; 12 files under `axis-workbench/` import `editor.svelte` | M5 (partial) |
 | F | No domain grouping | 122 production files flat in `src/lib/`; clusters visible in filenames (convert 23, device 20, graphs 21, cab 10, block 8) | M2 |
@@ -57,10 +60,9 @@ names repo-wide.
 
 ## Global rules — apply to every milestone
 
-1. **The monolith is frozen for structure, open for mechanics.**
-   `PresetBrowser.svelte`, `TopBar.svelte`, `ToolRail.svelte`, `StatusBar.svelte` may receive
-   import-path updates and facade-preserving signature changes. Extracting their logic,
-   changing their markup, or altering their behaviour is out of scope.
+1. **The monolith was frozen for structure, open for mechanics** during the refactor.
+   `PresetBrowser.svelte`, `TopBar.svelte`, `ToolRail.svelte`, `StatusBar.svelte` have since been
+   deleted along with the `VITE_AXIS_WORKBENCH` gate.
 2. **`src/lib/workbench/` keeps zero app imports.** The app may import *from* it.
 3. **Behaviour-preserving.** No feature work, no bug fixes bundled in. Find a bug → record it
    in the milestone report, do not fix it in the same PR.
@@ -176,7 +178,8 @@ Unreachable from any route entrypoint. Delete.
 
 `src/lib/axis-workbench/featureGate.ts:25`. The gate it guards no longer exists. Delete the
 function and its `describe` block in `src/lib/axis-workbench/test/featureGate.test.ts`.
-Leave `isAxisWorkbenchFeatureEnabled` and `isAxisLayoutEditingEnabled` alone.
+Leave `isAxisLayoutEditingEnabled` alone. (`isAxisWorkbenchFeatureEnabled` was later removed
+with the monolith shell.)
 
 ### 9. `src/lib/workbench/packages.ts` (152 lines) + `src/lib/workbench/test/packages.test.ts`
 
@@ -1030,28 +1033,21 @@ recorded.
 
 ---
 
-# M8 · Deferred — port the remaining workbench gaps
+# M8 · Resolved — monolith removed; gaps accepted
 
-Not part of this refactor. Recorded so it isn't lost.
+Originally recorded as deferred workbench-parity gaps. When the monolith was deleted, the
+following were **deliberately accepted as losses** rather than ported:
 
-An earlier shell-parity audit found five gaps where the workbench (default shell) trails the
-monolith. Gap 1 — deep parameter filtering silently matching everything — **has been fixed**;
-`presetBrowserWorkbenchQuery.ts` now shares `matchParamCond` and the weighted CPU estimate,
-and the hosts feed `library.paramsOf` into `preparePresetBrowserIndex`.
+| Gap | Disposition |
+|---|---|
+| Desktop auto-update UI (web/desktop updater check, download/install/dismiss) | Removed with the monolith. `editorUpdates` and the updater init were deleted. Mobile OTA (`platform/direct/ota`) is untouched. |
+| Device Tools unreachable | The panel/type still exists (`axis.deviceTools`) and is reachable through the Axis hub Dock action; there is still no nav entry. |
+| Output level meter + link latency | Removed with TopBar; no workbench widget was added. |
+| `axis.connection` dead click | **Fixed** — the widget now calls `openAxis('device')` (full serial + MIDI port picking). |
+| `axis.search` dead click | **Fixed** — the widget now sets `editorOverlays.presetSearchOpen` (the workbench search overlay). |
 
-Remaining:
-
-| Gap | Severity | Fix |
-|---|---|---|
-| Desktop auto-update UI absent | Real loss | New widget — `downloadUpdate`/`installUpdate`/`dismissUpdate` exist only in `TopBar.svelte` |
-| Device Tools unreachable | Real loss | Panel exists with a singleton key and library template, but no preset's `buildDock()` includes it and there is no nav id. Add a nav entry |
-| Output level meter + link latency absent | Minor | New widget — `editor.levels` / `editor.linkMs` render only in `TopBar.svelte` |
-| `axis.connection` dead click | Bug | Point it at `editor.openAxis('device')` (the Axis hub Connection tab already does full serial + MIDI port picking) instead of `editor.openPorts()`, whose UI is markup inside `ToolRail.svelte` |
-| `axis.search` dead click | Bug | Point it at `editor.presetSearchOpen` (overlay already mounted) instead of `editor.openLibrary()`, which only the monolith branch reads |
-
-The first two are the only real ports. Both get easier after M5 — they become new files rather
-than branches 25 and 26 of a mega-switch. Once M8 lands, the monolith retirement decision can
-be revisited.
+Gap 1 from the earlier audit (deep parameter filtering) had already been fixed in
+`presetBrowserWorkbenchQuery.ts` (shared `matchParamCond` + `preparePresetBrowserIndex`).
 
 ---
 
@@ -1062,14 +1058,12 @@ Every milestone ends with all of:
 ```bash
 npx vitest run          # node + runes projects
 npm run check           # svelte-kit sync && svelte-check
-npx playwright test     # 19 workbench-shell e2e specs
+npx playwright test     # workbench-shell e2e specs
 npm run test:workbench-visual   # M5 and any workbench/ change
 ```
 
-Plus a manual pass **in both shells** — `npm run dev` for the workbench, and
-`VITE_AXIS_WORKBENCH=0 npm run dev` for the monolith. There is no monolith e2e harness, so
-monolith behaviour is only ever verified by hand; every milestone that can reach it (M1, M2,
-M3, M4) must include that pass.
+(Historical: the plan originally ended with a second manual pass in the monolith shell via
+`VITE_AXIS_WORKBENCH=0`. That shell and flag no longer exist.)
 
 Agents before every commit: `reviewer` and `test-runner`; add `workbench-reviewer` for any
 change under `src/lib/workbench/` or `src/lib/axis-workbench/`.

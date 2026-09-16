@@ -17,14 +17,13 @@ export const editorViewport: Pick<Editor, 'isMobile' | 'vw' | 'vh' | 'setViewpor
 
 export const editorNavigation: Pick<
   Editor,
-  'inLibrary' | 'railActive' | 'drawerOpen' | 'openBuild' | 'openLibrary' | 'openVirtual'
+  'openBuild' | 'openVirtual'
 > = editor;
 
 export const editorOverlays: Pick<
   Editor,
   | 'axisOpen'
   | 'axisTab'
-  | 'themeOpen'
   | 'paletteOpen'
   | 'paletteMode'
   | 'placeTarget'
@@ -43,11 +42,6 @@ export const editorOverlays: Pick<
 > = editor;
 
 export const editorNotifications: Pick<Editor, 'toast' | 'showToast'> = editor;
-
-export const editorUpdates: Pick<
-  Editor,
-  'update' | 'autoUpdate' | 'dismissUpdate' | 'downloadUpdate' | 'installUpdate'
-> = editor;
 
 export const editorOnboarding: Pick<
   Editor,

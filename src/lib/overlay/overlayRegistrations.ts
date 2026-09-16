@@ -21,7 +21,6 @@ import {
 import { history } from '$lib/editor/history.svelte';
 import { tapTempo } from '$lib/editor/tapTempo.svelte';
 import { convert } from '$lib/convert/convert.svelte';
-import { convertScratch } from '$lib/convert/convertScratch.svelte';
 
 let registered = false;
 
@@ -45,10 +44,6 @@ export function registerOverlays(): void {
   });
 
   // The converter carries a whole flow state machine; the dialogs just reflect `.open`.
-  overlays.register('convertScratch', {
-    isOpen: () => convertScratch.open,
-    close: () => convertScratch.close()
-  });
   overlays.register('convert', {
     isOpen: () => convert.open,
     close: () => convert.close()
@@ -60,7 +55,7 @@ export function registerOverlays(): void {
     close: () => gridEditing.cancelLink()
   });
 
-  // Monolith block-editor drawer (a view flag, like `editor.inLibrary`) — lowest priority.
+  // The block-editor drawer (a view flag) — lowest priority.
   overlays.register('blockEditor', {
     isOpen: () => paramEditing.editorOpen,
     close: () => paramEditing.closeEditor()

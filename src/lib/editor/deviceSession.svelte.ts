@@ -116,7 +116,6 @@ export class DeviceSessionStore {
   bpm = $state(120);
 
   // ── connection picker (serial + MIDI ports) ──
-  portsOpen = $state(false);
   ports = $state<ConnInfo[]>([]);
   portChosen = $state<ConnPick | null>(null);
   portOverride = $state<ConnPick | null>(null);
@@ -263,10 +262,6 @@ export class DeviceSessionStore {
   };
 
   // ── connection picker ──
-  openPorts = async () => {
-    this.portsOpen = true;
-    await this.loadPorts();
-  };
   loadPorts = async () => {
     try {
       const r = await forgefx.listPorts();
@@ -281,7 +276,6 @@ export class DeviceSessionStore {
   // pick a port (or null to clear back to auto-detect); reconnect + re-detect + reload. Sends no `model`,
   // so any forced device profile is preserved across a port change.
   pickPort = async (conn: ConnPick | null) => {
-    this.portsOpen = false;
     try {
       await forgefx.selectPort(conn);
       this.conn = { state: 'connecting' };

@@ -49,9 +49,6 @@ export interface ApplyProgress {
 }
 
 class ConvertScratchStore {
-  /** Fake-grid full-screen view visibility (mounted unconditionally in +page.svelte, gated on this). */
-  open = $state(false);
-
   #s = $state<ScratchState | null>(null);
 
   /** Bumped on every fresh seed (and on discard) so the offline grid surface knows to (re)build its
@@ -92,8 +89,8 @@ class ConvertScratchStore {
 
   // ── lifecycle ──
   /** Seed the scratch buffer from the current conversion result WITHOUT opening any view. Returns true
-   *  if a buffer was seeded (the real-grid workbench convert page reads this buffer; it does NOT use the
-   *  legacy `open` flag). No-op without a result. */
+   *  if a buffer was seeded (the real-grid workbench convert page reads this buffer). No-op without a
+   *  result. */
   seed = (): boolean => {
     const res = convert.result;
     const dev = convert.lastRequest?.targetDevice;
@@ -106,22 +103,6 @@ class ConvertScratchStore {
     return true;
   };
 
-  /** Seed from the current conversion result and open the LEGACY fake-grid view (monolith fallback).
-   *  No-op without a result. */
-  openView = () => {
-    if (this.seed()) this.open = true;
-  };
-
-  /** Open the view focused on a specific block (the report's re-pointed onFocusBlock hook). */
-  focusBlock = (blockKey: string): boolean => {
-    if (!this.#s) this.openView();
-    if (!this.#s) return false;
-    if (!this.#s.blocks.some((b) => b.key === blockKey)) return false;
-    this.open = true;
-    this.focusKey = blockKey;
-    return true;
-  };
-
   /** Whether a report row's block exists in the scratch buffer (drives its clickable state). */
   hasBlock = (blockKey: string): boolean => {
     const res = convert.result;
@@ -130,17 +111,12 @@ class ConvertScratchStore {
     return !!res && !!dev && res.target.blocks.some((b) => b.key === blockKey);
   };
 
-  close = () => {
-    this.open = false;
-    this.focusKey = null;
-    this.placingKey = null;
-  };
-
   /** Drop the scratch buffer entirely (Discard). */
   discardAll = () => {
     this.#s = null;
     this.seedEpoch++;
-    this.close();
+    this.focusKey = null;
+    this.placingKey = null;
   };
 
   // ── type catalog ──

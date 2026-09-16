@@ -237,8 +237,7 @@
         </div>
 
       {:else if editorOverlays.axisTab === 'theme'}
-        <!-- Theme & appearance: presets, accent, mode, UI scale, density, fonts (shared with the
-             standalone monolith picker via AppearanceSettings). -->
+        <!-- Theme & appearance: presets, accent, mode, UI scale, density, fonts (via AppearanceSettings). -->
         <div class="pad">
           <div class="head">
             <div class="logo sm">◐</div>

@@ -2,8 +2,8 @@
   // Theme & appearance controls (the global theme engine's UI). Presets, accent, light/dark, UI scale,
   // and font choices. Fully tokenized (var(--…)) so it reflects the theme it edits.
   //
-  // This is the shared body used both by the standalone ThemePicker modal (monolith) and the Axis hub's
-  // Theme tab (workbench). It renders controls only — no Dialog, no header — so each host owns its chrome.
+  // The body rendered by the Axis hub's Theme tab. It renders controls only — no Dialog, no header — so
+  // the host owns its chrome.
   import { theme, THEME_PRESETS, ACCENT_SWATCHES, FONT_UI, FONT_MONO } from './theme.svelte';
   import { DENSITIES } from '$lib/device/density';
 

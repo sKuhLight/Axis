@@ -3,7 +3,6 @@
   import {
     deviceSession,
     editorLifecycle,
-    editorNavigation,
     editorOnboarding,
     editorOverlays,
     editorViewport,
@@ -15,18 +14,10 @@
   import { history } from '$lib/editor/history.svelte';
   import { tapTempo } from '$lib/editor/tapTempo.svelte';
   import HistoryPanel from '$lib/editor/HistoryPanel.svelte';
-  import ToolRail from '$lib/shell/ToolRail.svelte';
-  import TopBar from '$lib/shell/TopBar.svelte';
-  import SignalGrid from '$lib/editor/SignalGrid.svelte';
-  import BlockEditor from '$lib/editor/BlockEditor.svelte';
-  import VirtualScreen from '$lib/device/VirtualScreen.svelte';
-  import PresetBrowser from '$lib/preset/PresetBrowser.svelte';
-  import FcEditor from '$lib/device/FcEditor.svelte';
   import CommandPalette from '$lib/shell/CommandPalette.svelte';
   import CabPicker from '$lib/device/CabPicker.svelte';
   import DeviceTools from '$lib/device/DeviceTools.svelte';
   import ConvertDialog from '$lib/convert/ConvertDialog.svelte';
-  import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
   import PresetPicker from '$lib/preset/PresetPicker.svelte';
   import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
   import TapTempoOverlay from '$lib/editor/TapTempoOverlay.svelte';
@@ -35,9 +26,7 @@
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
   import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/ancillary/AxisPanel.svelte';
-  import ThemePicker from '$lib/platform/ThemePicker.svelte';
   import Notices from '$lib/ancillary/Notices.svelte';
-  import StatusBar from '$lib/shell/StatusBar.svelte';
   import Tour from '$lib/ancillary/Tour.svelte';
   import Toast from '$lib/ui/Toast.svelte';
   import AxisWorkbenchShell from '$lib/axis-workbench/AxisWorkbenchShell.svelte';
@@ -47,7 +36,6 @@
   import { directBoot } from '$lib/platform/direct.svelte';
   import { mobileBoot } from '$lib/platform/mobile.svelte';
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/platform/direct/ota';
-  import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
   import { pollIntervalsFor } from '$lib/editor/pollIntervals';
   import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
   import { overlays } from '$lib/overlay/overlays.svelte';
@@ -56,7 +44,6 @@
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
   // live. In the desktop build (directBoot.active=false) it starts immediately.
   let started = $state(false);
-  const workbenchEnabled = isAxisWorkbenchFeatureEnabled(import.meta.env);
   function startApp() {
     if (started) return;
     started = true;
@@ -177,33 +164,14 @@
   <DirectGate />
 {:else}
 <div class="app">
-  {#if workbenchEnabled}
-    <AxisWorkbenchShell />
-  {:else}
-    <ToolRail />
-    <div class="main">
-      <TopBar />
-      {#if editorNavigation.inLibrary}
-        <PresetBrowser />
-      {:else if paramEditing.virtual?.slug === 'fc'}
-        <FcEditor />
-      {:else if paramEditing.virtual}
-        <VirtualScreen />
-      {:else}
-        <SignalGrid />
-        <BlockEditor />
-      {/if}
-      <StatusBar />
-    </div>
-  {/if}
+  <AxisWorkbenchShell />
   <CommandPalette />
   <CabPicker />
   <DeviceTools />
   <ConvertDialog />
-  <ConvertScratchView />
   <HistoryPanel />
   <PresetPicker />
-  {#if workbenchEnabled}<AxisPresetBrowserSearchOverlay />{/if}
+  <AxisPresetBrowserSearchOverlay />
   <TunerOverlay />
   <TapTempoOverlay />
   <ShortcutsOverlay />
@@ -211,7 +179,6 @@
   <ColorLabelsPrompt />
   <DeviceDefsPrompt />
   <AxisPanel />
-  <ThemePicker />
   <Notices />
   <Tour />
   <Toast />
@@ -227,12 +194,5 @@
     background: var(--bg);
     color: var(--text);
     overflow: hidden;
-  }
-  .main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    position: relative;
   }
 </style>

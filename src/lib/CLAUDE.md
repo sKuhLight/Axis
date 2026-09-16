@@ -166,8 +166,7 @@ Four rules make this work:
    a getter-only facade member satisfies a mutable `EditorSurface` property and
    the guard stays green. Dropping a `set` therefore fails at RUNTIME
    (`Cannot set property … which has only a getter`), on a click path no test
-   covers — the 19 e2e specs are workbench-only and the monolith has no harness.
-   Decide write-ability by grepping for assignments, not by the compiler.
+   covers. Decide write-ability by grepping for assignments, not by the compiler.
 
 Slices get a `*.runes.test.ts` (see the Testing section) driving the class with a
 fake host — the five files beside the slice modules are worked examples. A rune can't be
@@ -178,15 +177,15 @@ it: reassignment identity and `$state` proxy identity, not a live `$derived`.
 
 One `.svelte` per feature, filed under its domain folder in `src/lib/`: `ui/`
 (presentation primitives, no domain knowledge), `editor/` (the live editing
-surface), `device/`, `preset/`, `fm3edit/`, `shell/` (frozen legacy-monolith
-chrome), `ancillary/` (settings hub, onboarding, notices). Cross-folder imports
+surface), `device/`, `preset/`, `fm3edit/`, `shell/` (the command palette),
+`ancillary/` (settings hub, onboarding, notices). Cross-folder imports
 use the `$lib/<folder>/x` alias; same-folder imports are relative (`./sibling`).
 Import only the focused dependency a component uses (for example,
 `telemetry` for tuner state/actions or `editorOverlays` for modal state); actions stay inline.
 Theming: use tokens from
 `src/app.css` (`--accent`, `--bg2`, `--surface`, `--text`, `--ok`, `--amber`,
-`--danger`, `--font-mono`) — the monolith is not hex-linted (only
-`workbench/svelte/` is), but prefer tokens anyway.
+`--danger`, `--font-mono`) — only `workbench/svelte/` is hex-linted, but prefer
+tokens anyway.
 
 ### Overlay / modal pattern
 
@@ -213,17 +212,19 @@ via `Dialog`, drive `open` from `overlays.isOpen(id)` (or a domain store).
 Minimal end-to-end reference: `editor/TunerOverlay.svelte` (Dialog shell +
 delegate) and `device/DeviceTools.svelte` (Dialog shell + registry-owned flag).
 
-## Dual-shell decision tree
+## Single shell
 
-Axis has two shells: the legacy monolith and the workbench. Where a feature lands
-decides how much mirroring work it costs:
+Axis has ONE shell: the workbench (`AxisWorkbenchShell`, under
+`src/lib/axis-workbench/`). The legacy monolith shell (its `TopBar` / `ToolRail` /
+`StatusBar` chrome and the flat `PresetBrowser.svelte` view) was removed. Where a
+feature lands:
 
-| Feature lives in… | Reaches both shells? | What you must do |
-|---|---|---|
-| Overlay-registry modal (`Dialog` + `overlays.isOpen(id)`) | Yes, automatically | Nothing — the shared modal layer sits below the shell `{#if}` branch |
-| Embedded editor component (`SignalGrid` / `BlockEditor` / `FcEditor` / `VirtualScreen` / `ModifierEditorCore`) | Yes, automatically | Nothing — the workbench embeds these directly |
-| Monolith chrome (`TopBar` / `ToolRail`) | No — monolith only | Build a mirrored widget/panel via `/new-widget` / `/new-panel` |
-| Preset-browser logic (`PresetBrowser.svelte` / `library.svelte.ts`) | No | MUST manually mirror into `src/lib/axis-workbench/presetBrowser/` — query grammar + row/menu logic verbatim. Deep per-parameter matching (`matchParamCond` over decoded blocks) is now shared in `presetBrowserWorkbenchQuery.ts`; the workbench hosts feed `library.paramsOf` into `preparePresetBrowserIndex` so `` `AMP(GAIN>7)` `` filters identically in both shells (and excludes entries whose params aren't hydrated). Free-text ranking matches too: the workbench idle-builds the same Orama index over `entryHaystack` (`presetBrowserWorkbenchOrama.ts` + `.svelte.ts`) and orders hits by relevance with typo tolerance, falling back to substring matching until the index is ready. |
+| Feature lives in… | What you must do |
+|---|---|
+| Overlay-registry modal (`Dialog` + `overlays.isOpen(id)`) | Nothing — mount unconditionally in `+page.svelte` below the shell |
+| Embedded editor component (`SignalGrid` / `BlockEditor` / `FcEditor` / `VirtualScreen` / `ModifierEditorCore`) | Nothing — the workbench embeds these directly |
+| Shell chrome (top bar, rail, status bar, preset browser) | Build a widget/panel via `/new-widget` / `/new-panel` |
+| Preset-browser logic | Lives in `src/lib/axis-workbench/presetBrowser/` and the shared `preset/library.svelte.ts`. Deep per-parameter matching (`matchParamCond` over decoded blocks) is shared in `presetBrowserWorkbenchQuery.ts`; the hosts feed `library.paramsOf` into `preparePresetBrowserIndex` so `` `AMP(GAIN>7)` `` filters work. Free-text ranking uses an idle-built Orama index over `entryHaystack` (`presetBrowserWorkbenchOrama.ts` + `.svelte.ts`) with typo tolerance, falling back to substring matching until the index is ready. |
 
 ## Feature gating
 
@@ -238,11 +239,10 @@ was removed — see the "Retire" commits on `feature-deletion`. `putDoc`/`getDoc
 are the ForgeFX LOCAL config store, not a cloud API, and the `/device/cache/cloud`
 endpoints are the shared device-definition profiles, which stay.
 
-Two `VITE_` gates exist today, both in `src/lib/axis-workbench/featureGate.ts`:
+One `VITE_` gate exists today, in `src/lib/axis-workbench/featureGate.ts`:
 
 | Gate | Env | Default | Off means |
 |---|---|---|---|
-| `isAxisWorkbenchFeatureEnabled` | `VITE_AXIS_WORKBENCH` | **on** (`'0'` opts out) | monolith shell |
 | `isAxisLayoutEditingEnabled` | `VITE_AXIS_LAYOUT_EDIT` | **off** (`'1'` opts in) | no workbench layout editing |
 
 `isAxisLayoutEditingEnabled` is a **retirement, not a deletion** — the code is
@@ -284,12 +284,10 @@ sidebar divider — this is a decision, not an oversight.
     editor **slice**: construct the class with a fake host, assert the gates and
     the reassignment idiom. `editor.svelte.ts` itself is still `vi.mock`'d out of
     `editorSurface.test.ts`.
-- The monolith otherwise has thin unit coverage (`direct/nativeMidi`,
-  `direct/ota`, and the telemetry slice). New features should extract pure logic
-  and add a co-located vitest — an easy win.
-- All 20 e2e specs are workbench-shell only (`VITE_AXIS_WORKBENCH=1`,
-  `bootCleanWorkbench`, viewport ≥ 1366 px). There is NO monolith-shell e2e
-  harness — monolith behavior is verified manually.
+- Some subsystems have thin unit coverage (`direct/nativeMidi`, `direct/ota`,
+  and the telemetry slice). New features should extract pure logic and add a
+  co-located vitest — an easy win.
+- All e2e specs are workbench-shell only (`bootCleanWorkbench`, viewport ≥ 1366 px).
 - CI now also runs the vitest unit suite; only Playwright e2e stays local. Green CI ≠ passing e2e.
 
 ## Pitfalls (all have bitten before)

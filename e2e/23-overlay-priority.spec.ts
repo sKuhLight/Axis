@@ -10,7 +10,7 @@ test.describe('Overlay priority', () => {
         import('/src/lib/editor/editor.svelte.ts'),
         import('/src/lib/overlay/overlays.svelte.ts')
       ]);
-      editor.themeOpen = true;
+      editor.deviceToolsOpen = true;
       editor.presetSearchOpen = true;
       overlays.open('presetPicker');
       editor.presetPick = () => {};
@@ -22,19 +22,19 @@ test.describe('Overlay priority', () => {
       return editor.presetPick === null;
     })).toBe(true);
 
-    const theme = page.locator('[data-overlay="theme"]');
+    const tools = page.locator('[data-overlay="deviceTools"]');
     const search = page.locator('[data-overlay="presetSearch"]');
-    await expect(theme).toBeVisible();
+    await expect(tools).toBeVisible();
     await expect(search).toBeVisible();
     await expect(search.locator('input')).toBeFocused();
     expect(await search.evaluate((el) => Number(getComputedStyle(el).zIndex)))
-      .toBeGreaterThan(await theme.evaluate((el) => Number(getComputedStyle(el).zIndex)));
+      .toBeGreaterThan(await tools.evaluate((el) => Number(getComputedStyle(el).zIndex)));
 
     await page.keyboard.press('Escape');
     await expect(search).toHaveCount(0);
-    await expect(theme).toBeVisible();
+    await expect(tools).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(theme).toBeVisible();
+    await expect(tools).toBeVisible();
 
     await page.evaluate(async () => {
       const { editor } = await import('/src/lib/editor/editor.svelte.ts');

@@ -26,7 +26,6 @@ export type OverlayId =
   | 'cabPicker'
   | 'palette'
   | 'quickBuild'
-  | 'convertScratch'
   | 'convert'
   | 'presetPicker'
   | 'presetSearch'
@@ -36,20 +35,19 @@ export type OverlayId =
   | 'shortcuts'
   | 'deviceTools'
   | 'axisHub'
-  | 'theme'
   | 'consentPrompt'
   | 'reportPrompt';
 
 /**
  * Escape precedence — lower closes first. Entries 0–100 mirror, in order, the historical
  * `onKey` `else if` chain in `src/routes/+page.svelte`
- * (tuner → history → cabPicker → palette → quickBuild → convertScratch → convert →
- * presetPicker → presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`,
- * `axisHub`, `theme`) were never part of that chain; they sit lowest so an open chain overlay
- * always wins. The app-added overlays — `tapTempo` (110) and `shortcuts` (120) — have no
- * historical slot; they close after every chain overlay, so Escape dismisses a real dialog
- * before them. Of these, `deviceTools` and `theme` remain non-dismissible by Escape;
- * `axisHub` closes on Escape like a normal dialog.
+ * (tuner → history → cabPicker → palette → quickBuild → convert → presetPicker →
+ * presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`, `axisHub`) were never
+ * part of that chain; they sit lowest so an open chain overlay always wins. The app-added
+ * overlays — `tapTempo` (110) and `shortcuts` (120) — have no historical slot; they close
+ * after every chain overlay, so Escape dismisses a real dialog before them. Of these,
+ * `deviceTools` remains non-dismissible by Escape; `axisHub` closes on Escape like a normal
+ * dialog.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
   consentPrompt: -20,
@@ -59,7 +57,6 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   cabPicker: 20,
   palette: 30,
   quickBuild: 40,
-  convertScratch: 50,
   convert: 60,
   presetPicker: 70,
   presetSearch: 80,
@@ -68,11 +65,10 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   tapTempo: 110,
   shortcuts: 120,
   deviceTools: 200,
-  axisHub: 220,
-  theme: 230
+  axisHub: 220
 };
 
-const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'theme', 'consentPrompt']);
+const ESCAPE_DISABLED = new Set<OverlayId>(['deviceTools', 'consentPrompt']);
 const ESCAPE_BLOCKING = new Set<OverlayId>(['consentPrompt']);
 
 const OVERLAY_IDS = Object.keys(ESCAPE_ORDER) as OverlayId[];

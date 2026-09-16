@@ -50,9 +50,8 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
-  the Axis theme and ribbon extras. `featureGate.ts` holds both build gates:
-  `VITE_AXIS_WORKBENCH` (shell choice, on unless `'0'`) and `VITE_AXIS_LAYOUT_EDIT`
-  (**off** unless `'1'`).
+  the Axis theme and ribbon extras. It is the app's only shell. `featureGate.ts` holds the
+  remaining build gate `VITE_AXIS_LAYOUT_EDIT` (**off** unless `'1'`).
 - **Layout editing is off by default.** `axisWorkbenchStore.svelte.ts` passes
   `layoutEditable: isAxisLayoutEditingEnabled(import.meta.env)` to
   `createWorkbenchController` — the ONE construction site. `workbench/` must keep
@@ -190,7 +189,7 @@ Vitest runs in the node environment — **no DOM**. `.svelte` components are nev
 unit-mounted. Extract pure logic into `.ts` modules with a co-located
 `test/<name>.test.ts` (examples: `widgetEstWidths.test.ts`, `paramWidgetState.test.ts`).
 Interaction and rendering coverage is Playwright e2e: `e2e/*.spec.ts` with
-`VITE_AXIS_WORKBENCH=1`, the `bootCleanWorkbench` helper from `e2e/support/workbench.ts`,
+`bootCleanWorkbench` from `e2e/support/workbench.ts`,
 viewport width ≥ 1366, and stable selectors/data-attributes.
 
 Rune STORES (`*.svelte.ts`) are testable despite the above: name the file

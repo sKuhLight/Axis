@@ -32,10 +32,10 @@ describe('registry-owned overlays', () => {
     expect(overlays.anyOpen).toBe(false);
     overlays.open('cabPicker');
     expect(overlays.anyOpen).toBe(true);
-    overlays.open('theme');
+    overlays.open('axisHub');
     overlays.close('cabPicker');
     expect(overlays.anyOpen).toBe(true);
-    overlays.close('theme');
+    overlays.close('axisHub');
     expect(overlays.anyOpen).toBe(false);
   });
 
@@ -92,21 +92,21 @@ describe('escape() priority', () => {
   });
 
   it('historically non-dismissible overlays yield to chain overlays without later closing', () => {
-    overlays.open('theme');
-    overlays.open('quickBuild'); // order 40, far above theme's 230
+    overlays.open('deviceTools');
+    overlays.open('quickBuild'); // order 40, far above deviceTools' 200
 
     overlays.escape();
     expect(overlays.isOpen('quickBuild')).toBe(false);
-    expect(overlays.isOpen('theme')).toBe(true);
+    expect(overlays.isOpen('deviceTools')).toBe(true);
 
     overlays.escape();
-    expect(overlays.isOpen('theme')).toBe(true);
+    expect(overlays.isOpen('deviceTools')).toBe(true);
   });
 
   it('the chain order matches the historical +page.svelte sequence', () => {
     const order: OverlayId[] = [
       'tuner', 'history', 'cabPicker', 'palette', 'quickBuild',
-      'convertScratch', 'convert', 'presetPicker', 'presetSearch', 'linkArm', 'blockEditor'
+      'convert', 'presetPicker', 'presetSearch', 'linkArm', 'blockEditor'
     ];
     // Register every chain overlay as open via a delegate, then drain with escape().
     const boxes = new Map(order.map((id) => [id, toggleable(true)] as const));
@@ -144,7 +144,7 @@ describe('escape() priority', () => {
   });
 
   it('preserves the historically non-Escape-dismissible owned dialogs', () => {
-    for (const id of ['deviceTools', 'theme'] as const) {
+    for (const id of ['deviceTools'] as const) {
       overlays.open(id);
       expect(overlays.escape()).toBe(false);
       expect(overlays.isOpen(id)).toBe(true);

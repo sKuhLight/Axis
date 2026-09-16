@@ -134,10 +134,6 @@ class EditorStore {
   };
   #param = paramEditing = new ParamEditingStore(this.#paramEditingHost());
 
-  // ── shell view state ──
-  inLibrary = $state(false);
-  railActive = $state('build');
-
   // ── telemetry slice (M4a) ──
   // SSE, tuner/CPU/levels/traffic readouts, live meters, polling mode, Faro + debug reports.
   // Owned by `TelemetryStore`; every member below is re-exposed by the facade further down so the
@@ -157,7 +153,6 @@ class EditorStore {
       get contact() { return e.contact; },
       get selectedEffectId() { return e.selected?.effectId ?? null; },
       get blockSlug() { return e.blockSlug; },
-      get inLibrary() { return e.inLibrary; },
       get onVirtualScreen() { return !!e.virtual; },
       showToast: (text, accent) => e.showToast(text, accent),
       persistProfile: () => e.#persistProfile(),
@@ -175,9 +170,6 @@ class EditorStore {
   vh = $state(800);
 
   // ── overlays ──
-  update = $state<{ version: string; url: string } | null>(null); // newer release (web fallback / non-desktop)
-  /** Desktop auto-update status (Electron). idle until the updater reports something. */
-  autoUpdate = $state<{ state: 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; percent?: number }>({ state: 'idle' });
   // ── Axis hub (single rail entry point: Storage · Connection · Privacy · About) ──
   // Modal open-state lives in the overlay registry (src/lib/overlay/overlays.svelte.ts) — the
   // single owner of "which overlay is open" and of Escape priority. These accessors keep the
@@ -185,9 +177,6 @@ class EditorStore {
   get axisOpen() { return overlays.isOpen('axisHub'); }
   set axisOpen(v: boolean) { if (v) overlays.open('axisHub'); else overlays.close('axisHub'); }
   axisTab = $state<'storage' | 'privacy' | 'about' | 'device' | 'performance' | 'theme'>('about');
-  get themeOpen() { return overlays.isOpen('theme'); } // Appearance / theme picker modal
-  set themeOpen(v: boolean) { if (v) overlays.open('theme'); else overlays.close('theme'); }
-  drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
    *  ≤100 chars; stored in the synced `config/profile` doc + a local mirror. Never used for marketing. */
   contact = $state<string>(loadContact());
@@ -250,7 +239,6 @@ class EditorStore {
     // telemetry-consent / Ko-fi first-run popups belong to the PC install (the host handles telemetry), so
     // skip them in the remote build — otherwise every browser session nags with banners it can't act on.
     if (!isWebBuild()) {
-      this.#initUpdater();
       this.#telemetry.init();
     }
     this.#preset.initSync(); // sync-bus hook → debounced local Sync/ mirror
@@ -281,51 +269,6 @@ class EditorStore {
     await this.load();
     this.#device.syncSceneTempo();
   };
-
-  // one-shot check against GitHub releases — surface a top-bar pill when a newer beta is out
-  #checkUpdate = async () => {
-    try {
-      const r = await fetch('https://api.github.com/repos/sKuhLight/Axis/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
-      if (!r.ok) return;
-      const j = await r.json();
-      const tag = String(j.tag_name ?? '');
-      const latest = tag.replace(/^v/, '').split('-')[0];
-      if (this.#isNewer(latest, __APP_VERSION__)) this.update = { version: tag.replace(/^v/, ''), url: j.html_url || 'https://github.com/sKuhLight/Axis/releases/latest' };
-    } catch {
-      /* offline / rate-limited — no notification */
-    }
-  };
-  #isNewer = (a: string, b: string): boolean => {
-    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
-    for (let i = 0; i < 3; i++) {
-      const x = pa[i] || 0, y = pb[i] || 0;
-      if (x > y) return true;
-      if (x < y) return false;
-    }
-    return false;
-  };
-  dismissUpdate = () => (this.update = null);
-
-  // ── desktop auto-update (Electron) ──
-  #initUpdater = () => {
-    const u = typeof window !== 'undefined' ? window.axisUpdate : undefined;
-    if (!u) { this.#checkUpdate(); return; } // not desktop → web pill fallback
-    u.on((e) => {
-      if (e.channel === 'available') {
-        // Linux distro packages (pacman/deb/rpm) can't be auto-installed — show the GitHub link instead of
-        // the (no-op) download/restart flow.
-        if (e.canInstall === false) this.update = { version: e.version ?? '', url: e.url ?? 'https://github.com/sKuhLight/Axis/releases/latest' };
-        else this.autoUpdate = { state: 'available', version: e.version };
-      }
-      else if (e.channel === 'progress') this.autoUpdate = { state: 'downloading', percent: e.percent };
-      else if (e.channel === 'downloaded') this.autoUpdate = { state: 'downloaded', version: e.version };
-      else if (e.channel === 'error') { this.autoUpdate = { state: 'idle' }; this.#checkUpdate(); } // fall back to the manual link
-    });
-    u.check();
-  };
-  downloadUpdate = () => window.axisUpdate?.download();
-  installUpdate = () => window.axisUpdate?.install();
-
 
   // ── first-run onboarding chain (consent → Ko-fi → tour) ──
   /** Called by the telemetry slice once the consent question is settled (answered, or never asked).
@@ -455,23 +398,12 @@ class EditorStore {
   // Return to the Signal Grid (Build) from any rail/virtual screen.
   openBuild = () => {
     this.#param.clearVirtual();
-    this.inLibrary = false;
-    this.railActive = 'build';
-  };
-
-  // Open the full Preset Browser (its own rail screen — replaces the grid/editor view).
-  openLibrary = () => {
-    this.#param.clearVirtual();
-    this.#param.closeEditor();
-    this.inLibrary = true;
-    this.railActive = 'library';
   };
 
   // Open a virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) as a rail screen. Same param
   // path as a block — "the block editor pointed at effectId N" — rendered full-view by VirtualScreen.
   openVirtual = async (eid: number, slug: string, name: string) => {
     const opening = this.#param.openVirtual(eid, slug, name);
-    this.inLibrary = false;
     await opening;
   };
 
@@ -672,14 +604,10 @@ class EditorStore {
   renameScene = (ui: number, name: string) => this.#device.renameScene(ui, name);
   setBpm = (bpm: number) => this.#device.setBpm(bpm);
   tapTempo = () => this.#device.tapTempo();
-  // The monolith's ToolRail closes the port popover by assignment, so `portsOpen` keeps its setter.
-  get portsOpen() { return this.#device.portsOpen; }
-  set portsOpen(v) { this.#device.portsOpen = v; }
   get ports() { return this.#device.ports; }
   get portChosen() { return this.#device.portChosen; }
   get portOverride() { return this.#device.portOverride; }
   get profileOverride() { return this.#device.profileOverride; }
-  openPorts = () => this.#device.openPorts();
   loadPorts = () => this.#device.loadPorts();
   pickPort = (conn: ConnPick | null) => this.#device.pickPort(conn);
   pickProfile = (model: ProfileKey) => this.#device.pickProfile(model);

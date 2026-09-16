@@ -1,6 +1,6 @@
 # Axis workbench E2E suite (Playwright) — task T26
 
-End-to-end tests for the **gated workbench shell** (`VITE_AXIS_WORKBENCH=1`).
+End-to-end tests for the **workbench shell**.
 They exercise the shell chrome only — dock interactions, widgets, navigation,
 custom panels, layout presets, keyboard, and persistence — **all of which work
 without a ForgeFX device or backend**. With no backend the grid body renders an
@@ -9,7 +9,7 @@ offline/connecting state; no test depends on device data.
 ## Running
 
 ```bash
-# Full suite (Chromium). Playwright boots its own gated dev server on :5199.
+# Full suite (Chromium). Playwright boots its own dev server on :5199.
 npm run test:e2e
 
 # Single browser / file / test
@@ -26,12 +26,12 @@ npx playwright test --ui
 ### Dev server
 
 `playwright.config.ts` has a `webServer` block that runs
-`npx vite dev --host 127.0.0.1 --port 5199` with `VITE_AXIS_WORKBENCH=1`.
+`npx vite dev --host 127.0.0.1 --port 5199`.
 `reuseExistingServer` is on (outside CI), so a hand-started server on the same
 port is reused:
 
 ```bash
-VITE_AXIS_WORKBENCH=1 npx vite dev --host 127.0.0.1 --port 5199
+npx vite dev --host 127.0.0.1 --port 5199
 ```
 
 Override the port with `PW_PORT=<n>` (config reads it for both the server and

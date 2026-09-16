@@ -1,14 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright E2E config for the gated Axis workbench shell (task T26).
+ * Playwright E2E config for the Axis workbench shell (task T26).
  *
- * The shell is gated behind `VITE_AXIS_WORKBENCH=1`. These tests exercise ONLY
- * the workbench chrome (dock, widgets, nav, custom panels, persistence) — all of
- * which work without a ForgeFX backend. With no device the grid body renders an
- * offline/connecting state; the tests never depend on device data. Expected
- * backend-connection console errors (the `/api` proxy 500s with no ForgeFX) are
- * filtered explicitly in the boot test.
+ * These tests exercise ONLY the workbench chrome (dock, widgets, nav, custom
+ * panels, persistence) — all of which work without a ForgeFX backend. With no
+ * device the grid body renders an offline/connecting state; the tests never
+ * depend on device data. Expected backend-connection console errors (the `/api`
+ * proxy 500s with no ForgeFX) are filtered explicitly in the boot test.
  *
  * Browser selection:
  *   - Default project `chromium` uses Playwright's bundled Chromium.
@@ -67,8 +66,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    // Boot the gated shell on a dedicated port. `reuseExistingServer` lets a
-    // hand-started `VITE_AXIS_WORKBENCH=1 npx vite dev --port 5199` be reused.
+    // Boot the shell on a dedicated port. `reuseExistingServer` lets a
+    // hand-started `npx vite dev --port 5199` be reused.
     command: `npx vite dev --host 127.0.0.1 --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
@@ -78,7 +77,6 @@ export default defineConfig({
     // 13-customize-drawer all drive the Customize control via
     // e2e/support/workbench.ts `enterEditMode`.
     env: {
-      VITE_AXIS_WORKBENCH: '1',
       VITE_AXIS_LAYOUT_EDIT: '1'
     },
   },

@@ -77,7 +77,6 @@ type Fake = TelemetryHost & {
   contact: string;
   selectedEffectId: number | null;
   blockSlug: string | null;
-  inLibrary: boolean;
   onVirtualScreen: boolean;
 };
 function fakeHost(over: Partial<Fake> = {}): Fake {
@@ -91,7 +90,6 @@ function fakeHost(over: Partial<Fake> = {}): Fake {
     contact: '',
     selectedEffectId: 106,
     blockSlug: 'amp',
-    inLibrary: false,
     onVirtualScreen: false,
     showToast: vi.fn(),
     persistProfile: vi.fn(),
@@ -354,17 +352,12 @@ describe('live meters', () => {
     expect(t.monitorFor(106)).toBeNull(); // stopping clears the readings
   });
 
-  it('issues no device read while metering is off, in the library, or on a virtual screen', async () => {
+  it('issues no device read while metering is off or on a virtual screen', async () => {
     const off = fresh();
     off.t.meteringOn = false;
     off.t.startLiveMeters();
     await flush();
     off.t.stopLiveMeters();
-
-    const lib = fresh({ inLibrary: true });
-    lib.t.startLiveMeters();
-    await flush();
-    lib.t.stopLiveMeters();
 
     const virt = fresh({ onVirtualScreen: true });
     virt.t.startLiveMeters();

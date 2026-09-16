@@ -107,12 +107,10 @@ The design points the **same block editor** at one of these effect ids — i.e. 
 editor pointed at effect id `1` — and renders its served layout on the device canvas, just like an
 audio block.
 
-> **Status note.** The tool rail ([`src/lib/shell/ToolRail.svelte`](../src/lib/shell/ToolRail.svelte)) currently
-> implements only the **Build** (grid) screen; the Controllers / Footswitches / Scenes / Perform /
-> Sets / Settings rail items are **stubs** that announce "coming soon." Wiring these screens to the
-> virtual-effect endpoints (effect id `1`/`2`/`3`/`199`) is in progress. See the broader
-> [ROADMAP](ROADMAP.md) for sequencing — the Setup screen is the nearest of these, since the GLOBAL
-> block is reachable through the existing param path.
+> **Status note.** The workbench rail implements the virtual-effect screens (Setup / Controllers /
+> Footswitches) by pointing the same block editor at effect id `1`/`2`/`3`/`199`. (The legacy
+> `shell/ToolRail.svelte` referenced by earlier revisions of this doc has been removed.) See the
+> broader [ROADMAP](ROADMAP.md) for sequencing.
 
 ## Multi-device
 

@@ -1,15 +1,18 @@
 # ADR-0002: App-feature tooling for Axis
 
-- **Status:** Accepted
+- **Status:** Accepted (context partially superseded)
 - **Date:** 2026-07-07
 - **Owners:** maintainer
+
+> **Update:** Axis now has a single shell; the "dual-shell UI" hazard below no longer applies.
+> Multi-surface-preset-browser mirroring is gone (the monolith was removed). The rest holds.
 
 ## Context
 
 This is an AXIS-level follow-up to ADR-0001. That first round covered the shared
 guardrails (permissions, guard hook, reviewer/test-runner agents, `/plan-feature`)
 and the workbench-framework scaffolding, but it left one large area unencoded:
-**app-feature implementation** — work in the monolith UI, changes to the central
+**app-feature implementation** — work in the app UI, changes to the central
 store, consuming new ForgeFX endpoints, and features that span the three-repo stack
 (fractal-midi → ForgeFX → Axis). Those tasks had no encoded workflow.
 
@@ -21,8 +24,6 @@ The app layer carries strong *implicit* conventions that are easy to violate:
 - **Capability gates** — features are guarded on device/connection capability
   rather than assumed available.
 - **Optimistic writes** against an async `/api` that the store polls and reconciles.
-- A **dual-shell UI** (legacy monolith vs. feature-gated workbench) where a change
-  can land in one surface and silently miss the other.
 
 Because CI runs no tests (typecheck and build only), convention errors are not
 caught in the pipeline — they reach runtime.
@@ -33,7 +34,7 @@ Add an **app-layer development guide** at `src/lib/CLAUDE.md` (committable) and 
 executing commands:
 
 - **`/implement-feature`** — a disciplined end-to-end loop: task tracking, the
-  dual-shell surface decision, the conventions checklist, tests, and verification.
+  single-shell surface decision, the conventions checklist, tests, and verification.
 - **`/new-endpoint`** — the four-step `types → client → store → gate` recipe for
   consuming a new ForgeFX endpoint.
 - **`/cross-repo-feature`** — the ordered `protocol → endpoint → UI` chain across the
@@ -45,8 +46,8 @@ than restating them.
 ## Alternatives
 
 - **Leave the conventions implicit.** Rejected: this produces recurring divergence —
-  e.g. the documented monolith/workbench preset-browser mirror trap, where a fix in
-  one surface is not carried to the other.
+  e.g. the documented preset-browser mirror trap, where a fix in one surface was not
+  carried to the other (retired when the monolith was removed).
 - **One mega-command covering every layer.** Rejected: layer-specific checklists are
   shorter and therefore more likely to actually be followed.
 

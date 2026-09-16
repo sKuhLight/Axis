@@ -2,20 +2,14 @@
   // Convert-preset dialog (P4a · META-24 · AXIS-47/48). Entry point: pick a target device + an optional
   // .syx source file (omit → convert the connected device's current preset), Convert, then read the diff
   // report. Mounted unconditionally in +page.svelte; gated on `convert.open`. The block-focus hook is
-  // wired here to the live editor (best-effort family match) and passed to ConvertReport as a prop — the
-  // P4b seam that the fake-grid phase re-points.
+  // wired here to the live editor (best-effort family match) and passed to ConvertReport as a prop.
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { convert } from './convert.svelte';
   import { convertScratch } from './convertScratch.svelte';
   import ConvertReport from './ConvertReport.svelte';
   import { CONVERTER_DEVICES, deviceName, deviceIdFromModel } from './convertReport';
-  import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
   import Dialog from '$lib/ui/Dialog.svelte';
   import type { ConverterDeviceId } from '$lib/api/types';
-
-  // Workbench shell → the review hop routes to the REAL SignalGrid convert page; the legacy monolith
-  // keeps the fake-grid view (ConvertScratchView) as its fallback (removed in M5).
-  const workbench = isAxisWorkbenchFeatureEnabled(import.meta.env);
 
   let target = $state<ConverterDeviceId | null>(null);
   let useFile = $state(false);
@@ -98,35 +92,24 @@
   }
 
   function openInGrid() {
-    if (workbench) {
-      // Seed the scratch buffer (NOT convertScratch.open — that drives the legacy view) and activate the
-      // real-grid convert page.
-      if (!convertScratch.seed()) return;
-      convert.close();
-      void activateConvertPage();
-    } else {
-      convert.close();
-      convertScratch.openView();
-    }
+    // Seed the scratch buffer and activate the real-grid convert page.
+    if (!convertScratch.seed()) return;
+    convert.close();
+    void activateConvertPage();
   }
 
   // ── block-focus seam (P4b) ──────────────────────────────────────────────────────────────────────
-  // A report row focuses its converted block. Workbench: seed + focus + open the convert page; monolith:
-  // the legacy fake-grid view. `blockAvailable` reflects whether that block exists in the conversion.
+  // A report row focuses its converted block: seed + focus + open the convert page. `blockAvailable`
+  // reflects whether that block exists in the conversion.
   function blockAvailable(blockKey: string, _family: string): boolean {
     return convertScratch.hasBlock(blockKey);
   }
   function focusBlock(blockKey: string, _family: string): boolean {
-    if (workbench) {
-      if (!convertScratch.seed() || !convertScratch.hasBlock(blockKey)) return false;
-      convertScratch.focusKey = blockKey;
-      convert.close();
-      void activateConvertPage();
-      return true;
-    }
-    const ok = convertScratch.focusBlock(blockKey);
-    if (ok) convert.close(); // reveal the legacy scratch view
-    return ok;
+    if (!convertScratch.seed() || !convertScratch.hasBlock(blockKey)) return false;
+    convertScratch.focusKey = blockKey;
+    convert.close();
+    void activateConvertPage();
+    return true;
   }
 </script>
 

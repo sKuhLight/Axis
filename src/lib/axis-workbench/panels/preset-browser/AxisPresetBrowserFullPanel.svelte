@@ -12,8 +12,7 @@
 </script>
 
 <!-- §"full": the docked panel composes the three parts (sources | list | detail) itself, backed by
-     the shared controller + real library data — it does NOT embed the legacy monolith (which stays the
-     standalone library surface, still reachable in the classic shell / via the .full sub-parts). -->
+     the shared controller + real library data. -->
 <section class="axis-pb-full" data-part="full">
   <aside class="axis-pb-col axis-pb-sources"><PbSourcesBody {view} /></aside>
   <div class="axis-pb-col axis-pb-list">

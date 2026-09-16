@@ -65,7 +65,6 @@ export interface TelemetryHost {
   // ── the open block: the live-meter loop reads exactly ONE block per tick ──
   readonly selectedEffectId: number | null;
   readonly blockSlug: string | null;
-  readonly inLibrary: boolean;
   /** True while a virtual/rail screen (Setup, Controllers, Modifier, FC) is open — not a grid block. */
   readonly onVirtualScreen: boolean;
 
@@ -162,7 +161,7 @@ export class TelemetryStore {
     const tick = async () => {
       this.#liveMeterTimer = null;
       const eid = this.#host.selectedEffectId;
-      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.#host.inLibrary && !this.#host.onVirtualScreen;
+      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.#host.onVirtualScreen;
       if (ok) {
         try {
           const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)

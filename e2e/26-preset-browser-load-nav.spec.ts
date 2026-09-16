@@ -5,7 +5,7 @@ import { bootCleanWorkbench, clickNav } from './support/workbench';
  * Preset Browser — loading returns to the Grid page.
  *
  * A load is the deliberate commit gesture, so it leaves the Preset Browser page and shows the Signal
- * Grid it just loaded (mirrors the monolith's `openBuild()`). The load itself needs a device; this spec
+ * Grid it just loaded (via `openBuild()`). The load itself needs a device; this spec
  * seeds a device-slot summary and pins only the NAVIGATION contract — the row's dblclick handler
  * activates the Grid page synchronously, before/independently of the device read.
  */

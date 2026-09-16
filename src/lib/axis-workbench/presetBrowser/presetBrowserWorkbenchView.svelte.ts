@@ -105,7 +105,7 @@ const ROW_DETAIL_HYDRATE_DELAY_MS = 220;
 // not a redesign. Following the same rune-in-a-plain-function idiom as presetBrowserWorkbenchIndex.svelte.ts.
 export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   // Captured during component init (this factory runs at each panel's top level) so a deliberate load
-  // can return to the Grid page. Null outside the workbench (the monolith never mounts these panels).
+  // can return to the Grid page. Null when mounted outside a workbench context.
   const workbenchController = getOptionalWorkbenchContext()?.controller ?? null;
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
   let runtimeSnapshot = $state<AxisPresetBrowserRuntimeSnapshot>(axisPresetBrowserWorkbenchRuntime.snapshot);

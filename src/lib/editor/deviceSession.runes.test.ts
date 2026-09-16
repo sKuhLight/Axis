@@ -538,20 +538,11 @@ describe('connection picker', () => {
     expect(d.profileOverride).toBe('fm3');
   });
 
-  it('opening the picker shows it and refreshes the list', async () => {
-    const { d } = fresh();
-    await d.openPorts();
-    expect(d.portsOpen).toBe(true);
-    expect(listPorts).toHaveBeenCalled();
-  });
-
-  it('picking a port closes the popover, reconnects, re-detects and re-asserts the polling mode', async () => {
+  it('picking a port reconnects, re-detects and re-asserts the polling mode', async () => {
     const { host, d } = fresh();
-    d.portsOpen = true;
     d.preset = { number: 56, name: 'Old device' };
     d.lastPreset = 56;
     await d.pickPort({ transport: 'midi', id: 'b' } as never);
-    expect(d.portsOpen).toBe(false);
     expect(selectPort).toHaveBeenCalledWith({ transport: 'midi', id: 'b' }, undefined);
     expect(selectPort.mock.calls[0][1]).toBeUndefined(); // no model sent → a forced profile survives a port change
     expect(health).toHaveBeenCalled(); // poll() ran → connection state refreshed
