@@ -21,7 +21,7 @@
     catch { return true; }
   };
   let collapsed = $state(loadCollapsed());
-  // Hold H for a quick name legend without permanently crowding the compact map.
+  // H toggles a name legend on the compact map — press once and it stays until pressed again.
   let showBlockTags = $state(false);
   const toggle = () => {
     collapsed = !collapsed;
@@ -34,20 +34,13 @@
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditing(event.target) || event.metaKey || event.ctrlKey || event.altKey || event.key.toLowerCase() !== 'h') return;
-      showBlockTags = true;
+      // `event.repeat` guards key auto-repeat from flapping the toggle while H is held.
+      if (event.repeat || isEditing(event.target) || event.metaKey || event.ctrlKey || event.altKey || event.key.toLowerCase() !== 'h') return;
+      showBlockTags = !showBlockTags;
     };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === 'h') showBlockTags = false;
-    };
-    const clearTags = () => { showBlockTags = false; };
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', clearTags);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', clearTags);
     };
   });
 
