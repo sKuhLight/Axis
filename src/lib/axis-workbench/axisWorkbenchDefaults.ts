@@ -66,7 +66,7 @@ export function createAxisWorkbenchPanels(): Record<string, PanelInstance> {
     // The single pin destination. No panelLibrary template: it must not be
     // instantiable a second time.
     [AXIS_MY_CONTROLS_PANEL_ID]: axisMyControlsPanel(),
-    // Pages (ROUND 15): Setup / Controllers / Scenes / Live each own a seed page,
+    // Pages (ROUND 15): Setup / Controllers / Live each own a seed page,
     // so their panel instances live in the roster (they used to be minted on demand
     // by the add-or-focus nav actions). Preset Browser / FC panels already exist above.
     ...createAxisPagePanels(),
@@ -160,7 +160,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
   // My Controls tabbed into the right dock, with the Signal Grid panel UNDOCKED (still in the roster, so it can be
   // re-added from the panel picker) — the editor already carries the GRID MAP
   // navigator, so the full signal grid is not needed for first contact. Preset
-  // Browser, FC, Setup, Controllers, Scenes, and Live each get their own seed page
+  // Browser, FC, Setup, Controllers, and Live each get their own seed page
   // (full-size panel in main); Theme + Axis stay ACTION nav entries. Pages are
   // identical across profiles (operator: "same seeds").
   const gridDock = createEmptyDockLayout();
@@ -192,8 +192,8 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.widget.legal': widget('axis.widget.legal', 'axis.legal', 'bottom', 1, { state: widgetState(90) })
   };
 
-  // Nav entries bind to the seed pages (grid/library/fc/controllers/scenes/live/
-  // setup); Theme + Axis stay ACTION entries. Triggering a page entry
+  // Nav entries bind to the seed pages (grid/library/fc/controllers/live/setup);
+  // Theme + Axis stay ACTION entries. Triggering a page entry
   // activates its page via the generic NavigationHost (`page.activate`).
   layout.navigation = createAxisSeedNavigation('side');
 

@@ -6,7 +6,6 @@ import {
   AXIS_PAGE_GRID,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_PRESET_BROWSER,
-  AXIS_PAGE_SCENES,
   AXIS_PAGE_SETUP
 } from '../axisWorkbenchPages';
 
@@ -27,7 +26,7 @@ describe('resolvePresetWidgetTarget', () => {
   });
 
   // Every other seed page navigates to the Grid, not to itself and not to the Preset Browser.
-  it.each([AXIS_PAGE_FC, AXIS_PAGE_SCENES, AXIS_PAGE_LIVE, AXIS_PAGE_SETUP, AXIS_PAGE_CONTROLLERS])(
+  it.each([AXIS_PAGE_FC, AXIS_PAGE_LIVE, AXIS_PAGE_SETUP, AXIS_PAGE_CONTROLLERS])(
     '%s → navigate to Grid',
     (pageId) => {
       expect(resolvePresetWidgetTarget(pageId)).toEqual({ type: 'navigate', pageId: AXIS_PAGE_GRID, title: 'Go to Grid' });

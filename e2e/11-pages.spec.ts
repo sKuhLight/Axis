@@ -6,14 +6,14 @@ import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench'
  *
  * Regression coverage: activating the Preset Browser page hard-froze the renderer
  * (synchronous infinite loop, no console error) — none of the earlier specs ever
- * clicked the PB/FC/Controllers/Scenes/Live/Setup nav entries, so the freeze
+ * clicked the PB/FC/Controllers/Live/Setup nav entries, so the freeze
  * shipped through a fully green suite. This spec clicks EVERY page-bound nav
  * entry, asserts the page's panel renders, and proves the main thread stays
  * responsive after each switch (a trivial page.evaluate would never return on a
  * frozen renderer, so each assertion doubles as a liveness probe).
  */
 
-/** The seven seed pages: nav entry id → expected visible content probe. */
+/** The seed pages: nav entry id → expected visible content probe. */
 const SEED_PAGES: { entry: string; pageId: string; probe: (page: import('@playwright/test').Page) => Promise<void> }[] = [
   {
     entry: 'library',
@@ -35,13 +35,6 @@ const SEED_PAGES: { entry: string; pageId: string; probe: (page: import('@playwr
     pageId: 'axis.page.controllers',
     probe: async (page) => {
       await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Controllers' })).toHaveCount(1);
-    }
-  },
-  {
-    entry: 'scenes',
-    pageId: 'axis.page.scenes',
-    probe: async (page) => {
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Scenes' })).toHaveCount(1);
     }
   },
   {
@@ -110,7 +103,7 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
   test('clicking the preset widget from a non-Grid, non-PB page goes to Grid', async ({ page }) => {
     await bootCleanWorkbench(page);
 
-    await clickNav(page, 'scenes');
+    await clickNav(page, 'live');
     await collapseRail(page); // else the expanded rail overlays the top bar widget (see collapseRail doc)
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
     await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);

@@ -1,6 +1,6 @@
 <script lang="ts">
   // Placeholder pane for navigation areas that don't yet have a real Workbench editor
-  // (Scenes / Live). Ports the design's stub-panel block (01-shell.md §2.2): centered
+  // (Live). Ports the design's stub-panel block (01-shell.md §2.2): centered
   // glyph / title / description / meta line. This exists so every nav entry opens a real
   // pane instead of a dead "coming soon" toast (design rule: no dead no-op nav entries).
   import type { PanelInstance } from '../../workbench';

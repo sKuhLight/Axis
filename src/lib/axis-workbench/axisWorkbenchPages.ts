@@ -26,8 +26,8 @@ import {
  * nav entries bind to them.
  *
  * Operator directive (2026-07-12): every nav point becomes its own freely
- * configurable layout page. Seven predefined pages ship — Grid (today's default
- * layout), Preset Browser (full-size PB), Scenes, Live, Setup, Controllers, FC —
+ * configurable layout page. Six predefined pages ship — Grid (today's default
+ * layout), Preset Browser (full-size PB), Live, Setup, Controllers, FC —
  * each renamable / deletable / reorderable. Theme + Axis stay ACTION entries
  * (no page). Pages are per device profile (desktop/tablet/phone), same seeds — but
  * the ACTIVE page is carried across a profile switch (see the reducer's
@@ -39,7 +39,6 @@ export const AXIS_PAGE_GRID = 'axis.page.grid';
 export const AXIS_PAGE_PRESET_BROWSER = 'axis.page.presetBrowser';
 export const AXIS_PAGE_FC = 'axis.page.fc';
 export const AXIS_PAGE_CONTROLLERS = 'axis.page.controllers';
-export const AXIS_PAGE_SCENES = 'axis.page.scenes';
 export const AXIS_PAGE_LIVE = 'axis.page.live';
 export const AXIS_PAGE_SETUP = 'axis.page.setup';
 
@@ -62,18 +61,16 @@ export const AXIS_SEED_PAGE_ORDER = [
   AXIS_PAGE_PRESET_BROWSER,
   AXIS_PAGE_FC,
   AXIS_PAGE_CONTROLLERS,
-  AXIS_PAGE_SCENES,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_SETUP
 ] as const;
 
-/** Navigation-entry id → bound page id for the seven page entries. */
+/** Navigation-entry id → bound page id for the six page entries. */
 export const AXIS_PAGE_NAV_BINDINGS: Record<string, string> = {
   grid: AXIS_PAGE_GRID,
   library: AXIS_PAGE_PRESET_BROWSER,
   fc: AXIS_PAGE_FC,
   controllers: AXIS_PAGE_CONTROLLERS,
-  scenes: AXIS_PAGE_SCENES,
   live: AXIS_PAGE_LIVE,
   setup: AXIS_PAGE_SETUP
 };
@@ -84,7 +81,6 @@ const NAV_LABELS: Record<string, string> = {
   library: 'Preset Browser',
   fc: 'Footswitches',
   controllers: 'Controllers',
-  scenes: 'Scenes',
   live: 'Live',
   setup: 'Setup'
 };
@@ -94,6 +90,7 @@ const NAV_LABELS: Record<string, string> = {
  * region. Grid is special (grid + block editor) and built from a passed-in dock.
  * These specs are the single source for the extra panel instances the roster must
  * carry so the pages have something to dock (and for the migration fallback).
+ * The Scenes page/panel was retired — see `pruneAxisScenesPage`.
  */
 interface AxisPagePanelSpec {
   pageId: string;
@@ -130,20 +127,6 @@ export const AXIS_SECONDARY_PAGE_SPECS: AxisPagePanelSpec[] = [
     panelTitle: 'Controllers',
     singletonKey: 'axis.controllers',
     state: { slug: 'controllers' }
-  },
-  {
-    pageId: AXIS_PAGE_SCENES,
-    label: NAV_LABELS.scenes,
-    panelId: 'axis.scenes',
-    panelType: 'axis.placeholder',
-    panelTitle: 'Scenes',
-    singletonKey: 'axis.scenes',
-    state: {
-      glyph: '◪',
-      heading: 'Scenes',
-      description: 'Scene snapshots, per-scene bypass and level rides dock here in a later phase.',
-      meta: 'Meanwhile · switch scenes from the Scenes widget in the top bar'
-    }
   },
   {
     pageId: AXIS_PAGE_LIVE,
@@ -189,7 +172,7 @@ const toPanelInstance = (spec: AxisPagePanelSpec): PanelInstance => ({
 /**
  * Panel instances the SEED pages dock that are NOT part of the historical roster
  * (`createAxisWorkbenchPanels` already defines signalGrid/blockEditor/presetBrowser/
- * fc). These four (Setup / Controllers / Scenes / Live) used to be minted on demand
+ * fc). These three (Setup / Controllers / Live) used to be minted on demand
  * by the add-or-focus nav actions; now that each is its own page they live in the
  * roster so the page has something to dock. Returns a fresh object per call.
  */
@@ -251,7 +234,7 @@ export interface BuildAxisSeedPagesOptions {
 }
 
 /**
- * Build the seven seed pages. The Grid page carries the passed-in `gridDock` (the
+ * Build the six seed pages. The Grid page carries the passed-in `gridDock` (the
  * profile's signal-grid-centric arrangement); every secondary page docks its single
  * panel full-size in `main`. Grid is the active page. Returns the `pages` map,
  * `pageOrder`, and `activePageId` ready to assign onto a `WorkbenchLayout`.
@@ -291,7 +274,7 @@ const actionNavEntry = (
 ): NavigationEntryState => ({ id, label, hidden: false, target: { command }, ...extra });
 
 /**
- * The Axis seed navigation: the seven page-bound entries (each activates its page)
+ * The Axis seed navigation: the six page-bound entries (each activates its page)
  * plus the Axis ACTION entry (the account modal, pinned to the rail footer). Page
  * entries carry NO `target`; their `pageId` binding drives `page.activate` in the
  * generic `NavigationHost`. Theme/appearance lives inside the Axis hub as a tab, so
@@ -305,7 +288,6 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
       library: pageNavEntry('library', NAV_LABELS.library, AXIS_PAGE_PRESET_BROWSER),
       fc: pageNavEntry('fc', NAV_LABELS.fc, AXIS_PAGE_FC),
       controllers: pageNavEntry('controllers', NAV_LABELS.controllers, AXIS_PAGE_CONTROLLERS),
-      scenes: pageNavEntry('scenes', NAV_LABELS.scenes, AXIS_PAGE_SCENES),
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
       setup: pageNavEntry('setup', NAV_LABELS.setup, AXIS_PAGE_SETUP),
       account: actionNavEntry('account', 'Axis', 'axis.openAccount', {
@@ -313,7 +295,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
         fixedSlot: 'rail.footer'
       })
     },
-    order: ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'account']
+    order: ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'account']
   };
 }
 
@@ -369,9 +351,9 @@ function layoutAlreadySeeded(layout: WorkbenchLayout): boolean {
  *
  *  - the existing (active or first) page's dock becomes the **Grid** page — minus any
  *    panels that own a dedicated page (Preset Browser / FC / Setup / Controllers /
- *    Scenes / Live), which are pulled out so they land cleanly on their own pages;
- *  - the other six seed pages + the full-size Preset Browser page are added;
- *  - the navigation is rebuilt with the seven page bindings (preserving the layout's
+ *    Live), which are pulled out so they land cleanly on their own pages;
+ *  - the other five seed pages + the full-size Preset Browser page are added;
+ *  - the navigation is rebuilt with the six page bindings (preserving the layout's
  *    nav `mode`), Theme + Axis staying action entries.
  *
  * A schema-v1 doc has already been wrapped into a single `main` page by the framework
@@ -405,6 +387,49 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
 
   doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_PAGES_MARKER]: 'v1' };
   ensureActionNavigationLabels(doc);
+  return doc;
+}
+
+// ── Retired pages ────────────────────────────────────────────────────────────
+
+/**
+ * Pages retired from the Axis shell. The Scenes page was removed entirely — it
+ * shipped as a placeholder whose only content pointed at the Scenes widget that
+ * already lives in the top bar. A persisted document (marker present, so
+ * `ensureAxisSeedPages` leaves it alone) still carries the page, its nav entry and
+ * its placeholder panel, so strip all three on load. Idempotent.
+ *
+ * The placeholder panel id `axis.scenes` COLLIDES with the still-supported
+ * `axis.scenes` WIDGET type, so the panel is only dropped when its type is
+ * `axis.placeholder` — never touch the widget.
+ */
+const AXIS_RETIRED_SCENES_PAGE_ID = 'axis.page.scenes';
+const AXIS_RETIRED_SCENES_NAV_ID = 'scenes';
+const AXIS_RETIRED_SCENES_PANEL_ID = 'axis.scenes';
+
+export function pruneAxisScenesPage(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object') continue;
+
+    if (layout.navigation?.entries?.[AXIS_RETIRED_SCENES_NAV_ID]) {
+      delete layout.navigation.entries[AXIS_RETIRED_SCENES_NAV_ID];
+    }
+    if (layout.navigation?.order) {
+      layout.navigation.order = layout.navigation.order.filter((id) => id !== AXIS_RETIRED_SCENES_NAV_ID);
+    }
+
+    if (layout.pages?.[AXIS_RETIRED_SCENES_PAGE_ID]) {
+      delete layout.pages[AXIS_RETIRED_SCENES_PAGE_ID];
+    }
+    if (layout.pageOrder) {
+      layout.pageOrder = layout.pageOrder.filter((id) => id !== AXIS_RETIRED_SCENES_PAGE_ID);
+    }
+    // A persisted active Scenes page would otherwise strand the shell on a missing page.
+    if (layout.activePageId === AXIS_RETIRED_SCENES_PAGE_ID) layout.activePageId = AXIS_PAGE_GRID;
+
+    const panel = layout.panels?.[AXIS_RETIRED_SCENES_PANEL_ID];
+    if (panel && panel.type === 'axis.placeholder') delete layout.panels[AXIS_RETIRED_SCENES_PANEL_ID];
+  }
   return doc;
 }
 

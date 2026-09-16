@@ -36,9 +36,6 @@
     controllers: line(
       '<circle cx="12" cy="15.6" r="5.6"/><path d="M12 15.6V11"/><path d="M4.6 8.6a8.5 8.5 0 0 1 14.8 0"/>'
     ),
-    scenes: line(
-      '<path d="m12 3.2 8.5 4.5-8.5 4.5-8.5-4.5L12 3.2Z"/><path d="m4.4 12.2 7.6 4 7.6-4"/><path d="m4.4 15.9 7.6 4 7.6-4"/>'
-    ),
     live: line('<circle cx="12" cy="12" r="8.6"/><path d="m10.1 8.5 5.6 3.5-5.6 3.5V8.5Z"/>'),
     setup: solid(
       '<path d="M3.4 7.4h2.2M12 7.4h8.6M3.4 16.6h8.6M18.8 16.6h1.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="8.4" cy="7.4" r="2.8" fill="currentColor"/><circle cx="15.6" cy="16.6" r="2.8" fill="currentColor"/>'

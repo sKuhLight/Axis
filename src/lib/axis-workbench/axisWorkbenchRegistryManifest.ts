@@ -62,7 +62,6 @@ export const AXIS_WORKBENCH_NAVIGATION_IDS = [
   'library',
   'fc',
   'controllers',
-  'scenes',
   'live',
   'setup',
   'account'
@@ -74,7 +73,6 @@ export const AXIS_WORKBENCH_ACTION_IDS = [
   'axis.openFc',
   'axis.openAccount',
   'axis.openControllers',
-  'axis.openScenes',
   'axis.openLive',
   'axis.openSetup',
   AXIS_PIN_SELECTED_PARAMETERS_ACTION

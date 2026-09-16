@@ -16,7 +16,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
-import { ensureAxisConvertPage, ensureAxisSeedPages } from './axisWorkbenchPages';
+import { ensureAxisConvertPage, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -58,9 +58,11 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   //   pruneRetiredRail → pruneRetiredNav → pruneTopBarSearch → pruneAddBlock →
   //   ensureSavePlacement → ensureTopBarParity.
   // ensureAxisSeedPages migrates a pre-Pages persisted doc: the existing dock tree
-  // becomes the Grid page and the six other seed pages + full-size Preset Browser
+  // becomes the Grid page and the five other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
   // doc-metadata marker so freshly seeded / default docs are untouched.
+  // pruneAxisScenesPage strips the retired Scenes page + its nav entry + placeholder panel from a
+  // persisted doc (marker present, so ensureAxisSeedPages left it alone); idempotent.
   // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
   // ensureAxisMyControlsPanel self-heals the single pin destination onto every layout's Grid page,
@@ -78,7 +80,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
             pruneAxisRetiredRailWidgets(
               pruneAxisRetiredNavigationEntries(
                 ensureAxisGridControlWidgets(
-                  ensureAxisMyControlsPanel(ensureAxisConvertPage(ensureAxisSeedPages(migrateWorkbenchDocument(input))))
+                  ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedPages(migrateWorkbenchDocument(input)))))
                 )
               )
             )

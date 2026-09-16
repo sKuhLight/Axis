@@ -30,19 +30,19 @@ describe('Axis navigation panel actions', () => {
   it('focuses the existing panel on a second activation instead of duplicating it', async () => {
     const controller = newController();
     const action = createAxisNavigationPanelAction({
-      actionId: 'axis.openScenes',
-      panelId: 'axis.scenes',
+      actionId: 'axis.openLive',
+      panelId: 'axis.live',
       panelType: 'axis.placeholder',
-      title: 'Scenes',
+      title: 'Live',
       region: 'main',
-      state: { heading: 'Scenes' }
+      state: { heading: 'Live' }
     });
 
     await action.run({ controller, source: 'navigation' });
     await action.run({ controller, source: 'navigation' });
 
     const layout = selectActiveLayout(controller.document)!;
-    const scenePanels = Object.values(layout.panels).filter((panel) => panel.id === 'axis.scenes');
-    expect(scenePanels).toHaveLength(1);
+    const livePanels = Object.values(layout.panels).filter((panel) => panel.id === 'axis.live');
+    expect(livePanels).toHaveLength(1);
   });
 });

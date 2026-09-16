@@ -5,44 +5,44 @@ test.describe('Persistence', () => {
   test('a rearrangement survives a reload', async ({ page }) => {
     await bootCleanWorkbench(page);
 
-    // Dock the Scenes panel — a persisted layout change NOT in the default layout
-    // (only Block Editor ships docked in main by default, so a new Scenes tab is
-    // an unambiguous signal that the rearrangement was persisted).
-    await clickNav(page, 'scenes');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
+    // Activate the Live page — a persisted layout change NOT in the default layout
+    // (Grid is active by default, so the Live page becoming active is an
+    // unambiguous signal that the page selection was persisted).
+    await clickNav(page, 'live');
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
 
     // Wait for the ~150ms-debounced cache write to actually land before reloading —
     // otherwise this races the debounce (the pagehide flush covers it on Chromium
     // but not reliably on Firefox's `page.reload()`).
     await page.waitForFunction(
-      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.scenes"'),
+      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.live"'),
       WORKBENCH_DOC_KEY
     );
 
     // Reload WITHOUT clearing storage — the layout must persist.
     await page.reload();
     await page.waitForSelector('.aw-root');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
   });
 
   test('a corrupt stored document self-heals to defaults (no blank page)', async ({ page }) => {
     await bootCleanWorkbench(page);
 
-    // Dock a non-default panel (Scenes) so we can prove the corrupt reload drops
+    // Activate a non-default page (Live) so we can prove the corrupt reload drops
     // it and returns to the canonical default layout.
-    await clickNav(page, 'scenes');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
+    await clickNav(page, 'live');
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
 
     // Cache writes are debounced ~150ms (storage hardening round 11) with a
     // pagehide flush of PENDING writes — corrupting inside the debounce window
     // would just be overwritten by that flush on reload (correct app behavior:
     // never lose an edit on close). Wait until the docked state has actually
     // landed in storage so the corruption is the final word.
-    // ROUND 15 (Pages): the Scenes panel ships in the roster from boot, so key off
-    // the ACTIVE page instead — clicking the Scenes nav entry activates the Scenes
+    // ROUND 15 (Pages): the Live panel ships in the roster from boot, so key off
+    // the ACTIVE page instead — clicking the Live nav entry activates the Live
     // page, and that activePageId is the unambiguous signal the click persisted.
     await page.waitForFunction(
-      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.scenes"'),
+      (key) => (window.localStorage.getItem(key) ?? '').includes('"activePageId":"axis.page.live"'),
       WORKBENCH_DOC_KEY
     );
     // …and then let ALL debounced writes drain: docking dispatches more than one
@@ -59,8 +59,8 @@ test.describe('Persistence', () => {
     await page.waitForSelector('.aw-root');
     await expect(page.locator('.aw-root')).toHaveCount(1);
     await expect(regionTabs(page, 'main').filter({ hasText: 'Block Editor' })).toHaveCount(1);
-    // The Scenes panel from the corrupt doc is gone — we're back to defaults
+    // The Live page from the corrupt doc is gone — we're back to defaults
     // (Block Editor in main).
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(0);
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(0);
   });
 });

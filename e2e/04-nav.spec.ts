@@ -16,13 +16,13 @@ test.describe('Navigation', () => {
     await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(1);
   });
 
-  test('Scenes docks a placeholder panel', async ({ page }) => {
+  test('Live docks a placeholder panel', async ({ page }) => {
     await bootCleanWorkbench(page);
 
-    await clickNav(page, 'scenes');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Scenes' })).toHaveCount(1);
+    await clickNav(page, 'live');
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
     // The placeholder panel body describes the future feature (no device needed).
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-tabbody')).toContainText(/Scene/i);
+    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-tabbody')).toContainText(/Live/i);
   });
 
   test('active tint follows the selected section', async ({ page }) => {
@@ -31,8 +31,8 @@ test.describe('Navigation', () => {
     await clickNav(page, 'setup');
     await expect(page.locator('[data-nav-entry="setup"][data-nav-active="true"]')).toHaveCount(1);
 
-    await clickNav(page, 'scenes');
-    await expect(page.locator('[data-nav-entry="scenes"][data-nav-active="true"]')).toHaveCount(1);
+    await clickNav(page, 'live');
+    await expect(page.locator('[data-nav-entry="live"][data-nav-active="true"]')).toHaveCount(1);
     // Setup is no longer the active section.
     await expect(page.locator('[data-nav-entry="setup"][data-nav-active="true"]')).toHaveCount(0);
   });

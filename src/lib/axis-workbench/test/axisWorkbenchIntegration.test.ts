@@ -73,7 +73,6 @@ describe('Axis Workbench integration contracts', () => {
       'library',
       'fc',
       'controllers',
-      'scenes',
       'live',
       'setup',
       'account'

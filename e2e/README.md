@@ -94,7 +94,7 @@ attributes were added**:
 3. **03-dock** — drag a panel tab between regions (manual pointer drag);
    tab switching; collapse + close from the pane header menu.
 4. **04-nav** — Setup docks a VirtualScreen panel + active tint, second click
-   focuses (no duplicate); Scenes docks a placeholder; active tint follows.
+   focuses (no duplicate); Live docks a placeholder; active tint follows.
 5. **05-widgets** — gridbar GRID chips visible, Map switches active mode;
    block-size stepper cycles M↔L.
 6. **06-persistence** — a rearrangement survives reload; a corrupt stored doc

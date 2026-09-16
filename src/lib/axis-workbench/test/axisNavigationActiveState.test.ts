@@ -12,9 +12,9 @@ describe('isAxisNavigationEntryActive (ROUND 15 — ACTION entries only)', () =>
   });
 
   it('resolves page-bound and unknown entries as inactive (they are handled generically)', () => {
-    // The seven page entries resolve their tint in NavigationHost via
+    // The page entries resolve their tint in NavigationHost via
     // pageNavigationEntryActive, so this app provider must NOT claim them.
-    for (const id of ['grid', 'library', 'fc', 'controllers', 'scenes', 'live', 'setup', 'theme', 'nonexistent']) {
+    for (const id of ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'theme', 'nonexistent']) {
       expect(isAxisNavigationEntryActive({ ...CLEAN, accountOpen: true }, id)).toBe(false);
     }
   });

@@ -162,7 +162,7 @@ export function regionTabs(page: Page, region: string) {
   return page.locator(`.aw-tabstack[data-region="${region}"] .aw-pane-tab`);
 }
 
-/** Click a navigation entry by its stable entry id (grid, setup, scenes, …). */
+/** Click a navigation entry by its stable entry id (grid, setup, live, …). */
 export async function clickNav(page: Page, entryId: string): Promise<void> {
   await page.locator(`[data-nav-entry="${entryId}"] button.axis-nav-entry`).click();
 }

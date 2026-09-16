@@ -295,7 +295,7 @@ export function createAxisLayoutPreset(
   Object.assign(widgets, createAxisTopBarWidgets());
   // Pages (ROUND 15): every preset ships the full seed page set — the preset's
   // signal-grid dock becomes the Grid page, and Preset Browser / FC / Setup /
-  // Controllers / Scenes / Live each get their own page. Pages are the same across
+  // Controllers / Live each get their own page. Pages are the same across
   // profiles (operator: "same seeds"); the preset only varies the Grid page dock,
   // widgets, and nav mode.
   const seeded = buildAxisSeedPages(buildGridPageDock({ ...spec, rightW }), {

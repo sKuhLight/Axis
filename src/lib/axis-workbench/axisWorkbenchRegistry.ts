@@ -201,7 +201,7 @@ AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
 
 registry.registerAction({ id: 'axis.openGrid', run: async () => (await axisEditorClients()).editorNavigation.openBuild() });
 // Preset Browser nav entry docks-or-focuses the workbench Preset Browser panel
-// (V13d), the same add-or-focus semantics as Setup/Scenes/Controllers — so a
+// (V13d), the same add-or-focus semantics as Setup/Controllers/Live — so a
 // closed PB panel can be reopened from the rail instead of only via a layout
 // reload. The panelId matches the singleton key seeded by the defaults roster
 // (createAxisWorkbenchPanels), so re-docking never mints a colliding id.
@@ -226,14 +226,8 @@ registry.registerAction({
 });
 registry.registerAction({ id: 'axis.openAccount', run: async () => (await axisEditorClients()).editorOverlays.openAxis('about') });
 // Nav entries open real docked panels (design rule: no dead no-op navigation, 01-shell.md §9).
-// Setup/Controllers dock the shared virtual-effect editor; Scenes/Live get placeholder panels
-// until their editors are ported. Copy lives here as data, not inline in the registration call.
-const AXIS_SCENES_PLACEHOLDER_COPY = {
-  glyph: '◪',
-  heading: 'Scenes',
-  description: 'Scene snapshots, per-scene bypass and level rides dock here in a later phase.',
-  meta: 'Meanwhile · switch scenes from the Scenes widget in the top bar'
-};
+// Setup/Controllers dock the shared virtual-effect editor; Live gets a placeholder panel
+// until its editor is ported. Copy lives here as data, not inline in the registration call.
 const AXIS_LIVE_PLACEHOLDER_COPY = {
   glyph: '⏺',
   heading: 'Live',
@@ -258,16 +252,6 @@ registry.registerAction(
     title: 'Controllers',
     region: 'main',
     state: { slug: 'controllers' }
-  })
-);
-registry.registerAction(
-  createAxisNavigationPanelAction({
-    actionId: 'axis.openScenes',
-    panelId: 'axis.scenes',
-    panelType: 'axis.placeholder',
-    title: 'Scenes',
-    region: 'main',
-    state: AXIS_SCENES_PLACEHOLDER_COPY
   })
 );
 registry.registerAction(

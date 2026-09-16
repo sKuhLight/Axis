@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createEmptyDockLayout,
   panelIdsInPageDock,
   repairWorkbenchDocument,
   validateWorkbenchDocument,
@@ -15,21 +16,20 @@ import {
   AXIS_PAGE_GRID,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_PRESET_BROWSER,
-  AXIS_PAGE_SCENES,
   AXIS_PAGE_SETUP,
   AXIS_SEED_PAGES_MARKER,
   AXIS_SEED_PAGE_ORDER,
-  ensureAxisSeedPages
+  ensureAxisSeedPages,
+  pruneAxisScenesPage
 } from '../axisWorkbenchPages';
 
-// The seven nav-bound seed pages plus the nav-less converter page (M4), which is seeded on every layout
+// The six nav-bound seed pages plus the nav-less converter page (M4), which is seeded on every layout
 // so it can be activated on demand but carries no navigation entry.
 const ALL_SEED_PAGES = [
   AXIS_PAGE_GRID,
   AXIS_PAGE_PRESET_BROWSER,
   AXIS_PAGE_FC,
   AXIS_PAGE_CONTROLLERS,
-  AXIS_PAGE_SCENES,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_SETUP,
   AXIS_PAGE_CONVERT
@@ -39,7 +39,7 @@ describe('ROUND 15 — default document seed pages', () => {
   const doc = createAxisWorkbenchDefaultDocument();
   const layout = Object.values(doc.layouts)[0];
 
-  it('seeds all seven pages with Grid active and in canonical order', () => {
+  it('seeds all seed pages with Grid active and in canonical order', () => {
     expect(Object.keys(layout.pages).sort()).toEqual([...ALL_SEED_PAGES].sort());
     expect(layout.pageOrder).toEqual([...AXIS_SEED_PAGE_ORDER]);
     expect(layout.activePageId).toBe(AXIS_PAGE_GRID);
@@ -59,7 +59,6 @@ describe('ROUND 15 — default document seed pages', () => {
       [AXIS_PAGE_PRESET_BROWSER]: 'axis.presetBrowser',
       [AXIS_PAGE_FC]: 'axis.fc',
       [AXIS_PAGE_CONTROLLERS]: 'axis.controllers',
-      [AXIS_PAGE_SCENES]: 'axis.scenes',
       [AXIS_PAGE_LIVE]: 'axis.live',
       [AXIS_PAGE_SETUP]: 'axis.setup'
     };
@@ -104,7 +103,7 @@ describe('ROUND 15 — default document seed pages', () => {
 
 describe('ROUND 15 — every preset seeds the full page set', () => {
   for (const kind of AXIS_LAYOUT_PRESET_KINDS) {
-    it(`preset "${kind}" has all seven pages, Grid active, nav bound, and validates`, () => {
+    it(`preset "${kind}" has all seed pages, Grid active, nav bound, and validates`, () => {
       const layout = createAxisLayoutPreset(kind, { layoutId: `l.${kind}` });
       expect(Object.keys(layout.pages).sort()).toEqual([...ALL_SEED_PAGES].sort());
       expect(layout.activePageId).toBe(AXIS_PAGE_GRID);
@@ -182,7 +181,7 @@ function legacyPersistedDoc(mode: 'side' | 'bottom' = 'side'): WorkbenchDocument
 }
 
 describe('ROUND 15 — ensureAxisSeedPages migration', () => {
-  it('turns the existing dock into the Grid page and adds the six other pages', () => {
+  it('turns the existing dock into the Grid page and adds the other seed pages', () => {
     const migrated = ensureAxisSeedPages(legacyPersistedDoc());
     const layout = Object.values(migrated.layouts)[0];
 
@@ -204,8 +203,8 @@ describe('ROUND 15 — ensureAxisSeedPages migration', () => {
     expect(layout.navigation.entries.grid.pageId).toBe(AXIS_PAGE_GRID);
     expect(layout.navigation.entries.grid.target).toBeUndefined();
     expect(layout.navigation.entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
-    // The four page panels that used to be minted on demand now exist.
-    for (const panelId of ['axis.setup', 'axis.controllers', 'axis.scenes', 'axis.live']) {
+    // The page panels that used to be minted on demand now exist.
+    for (const panelId of ['axis.setup', 'axis.controllers', 'axis.live']) {
       expect(layout.panels[panelId]).toBeDefined();
     }
   });
@@ -234,5 +233,64 @@ describe('ROUND 15 — ensureAxisSeedPages migration', () => {
     const before = JSON.stringify(doc.layouts);
     const after = ensureAxisSeedPages(doc);
     expect(JSON.stringify(after.layouts)).toBe(before);
+  });
+});
+
+// ── Retired Scenes page (pruneAxisScenesPage) ────────────────────────────────
+
+describe('pruneAxisScenesPage — retired Scenes page cleanup', () => {
+  const SCENES_PAGE = 'axis.page.scenes';
+
+  function withScenesPage(): WorkbenchDocument {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const layout = Object.values(doc.layouts)[0];
+    layout.pages[SCENES_PAGE] = { id: SCENES_PAGE, label: 'Scenes', dock: createEmptyDockLayout() };
+    layout.pageOrder = [...layout.pageOrder, SCENES_PAGE];
+    layout.activePageId = SCENES_PAGE;
+    layout.navigation.entries.scenes = { id: 'scenes', label: 'Scenes', hidden: false, pageId: SCENES_PAGE };
+    layout.navigation.order = [...layout.navigation.order, 'scenes'];
+    layout.panels['axis.scenes'] = {
+      id: 'axis.scenes',
+      type: 'axis.placeholder',
+      title: 'Scenes',
+      closable: true,
+      collapsible: true,
+      singletonKey: 'axis.scenes'
+    };
+    return doc;
+  }
+
+  it('strips the Scenes page, its nav entry and its placeholder panel', () => {
+    const layout = Object.values(pruneAxisScenesPage(withScenesPage()).layouts)[0];
+    expect(layout.pages[SCENES_PAGE]).toBeUndefined();
+    expect(layout.pageOrder).not.toContain(SCENES_PAGE);
+    expect(layout.navigation.entries.scenes).toBeUndefined();
+    expect(layout.navigation.order).not.toContain('scenes');
+    expect(layout.panels['axis.scenes']).toBeUndefined();
+    // The active page is repointed at Grid rather than left dangling.
+    expect(layout.activePageId).toBe(AXIS_PAGE_GRID);
+  });
+
+  it('never removes the still-supported axis.scenes widget', () => {
+    const doc = withScenesPage();
+    expect(Object.values(doc.layouts)[0].widgets['axis.widget.scenes']?.type).toBe('axis.scenes');
+    const layout = Object.values(pruneAxisScenesPage(doc).layouts)[0];
+    expect(layout.widgets['axis.widget.scenes']?.type).toBe('axis.scenes');
+  });
+
+  it('keeps a same-id panel that is not the placeholder', () => {
+    const doc = withScenesPage();
+    Object.values(doc.layouts)[0].panels['axis.scenes'] = {
+      ...Object.values(doc.layouts)[0].panels['axis.scenes'],
+      type: 'axis.customPanel'
+    };
+    const layout = Object.values(pruneAxisScenesPage(doc).layouts)[0];
+    expect(layout.panels['axis.scenes']?.type).toBe('axis.customPanel');
+  });
+
+  it('is idempotent', () => {
+    const once = pruneAxisScenesPage(withScenesPage());
+    const before = JSON.stringify(once.layouts);
+    expect(JSON.stringify(pruneAxisScenesPage(once).layouts)).toBe(before);
   });
 });
