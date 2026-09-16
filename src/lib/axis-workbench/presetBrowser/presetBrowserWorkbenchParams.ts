@@ -1,7 +1,7 @@
 // Per-block type/kind listing + drag-into-filters model for the docked Preset Browser detail pane (V13f).
 //
 // Pure logic over decoded blocks: it derives each placed block's type/variety/kind (one row per channel
-// for the amp), and encodes/parses the drag payload used to drop a block onto the FILTERS row. The old
+// for every family), and encodes/parses the drag payload used to drop a block onto the FILTERS row. The old
 // per-parameter listing was removed — the panel now shows block kinds only. The docked runtime reaches
 // the SAME decoded blocks the monolith uses (library.paramsOf via the runtime host), so this is FULL
 // param parity (the monolith keeps its own param list). `matchParamCond` lives in the query module (it
@@ -66,9 +66,9 @@ export function parseDragPayload(raw: string | null | undefined): AxisPbDragPayl
 // The detail shows a block's TYPE/KIND, not its parameters: a single type selector for most families,
 // and one row per channel for a channel-blocked family (the amp).
 
-// A type/kind row in a detail card — one per channel (A-D). Every gen-3 block is channel-capable, so
-// channels are the rule: a block whose decoded params carry only one channel (every family but the amp
-// today) renders a single Ch A row.
+// A type/kind row in a detail card — one per channel (A-D). Channels are the rule: every gen-3 block
+// decodes one entry per channel (the amp's four calibrated, every other family's from its own record
+// geometry), so a card lists a Ch row per channel; a single-channel family (Send/Return) renders one.
 export interface DetailKind {
   label: string; // "Ch A" …
   value: string; // type/model name
@@ -103,8 +103,8 @@ export function detailKind(b: DetailBlock): string {
 
 // Build the detail block listing. `focusEid` (an effectId) restricts the listing to that single block
 // when set; otherwise all non-IO blocks are shown. Blocks sharing an effectId are one placed block.
-// Channels are the rule: every card lists channel rows (A-D). The amp decodes four per-channel entries;
-// every other family decodes one, which is its channel A.
+// Channels are the rule: every card lists channel rows (A-D), grouped by effectId, so a block's
+// per-channel types (amp, drive, delay, reverb, …) collapse into one card.
 export function buildDetailBlockCards(blocks: DetailBlock[], focusEid: number | null): DetailBlockCard[] {
   const byEffect = new Map<string, DetailBlock[]>();
   const order: string[] = [];

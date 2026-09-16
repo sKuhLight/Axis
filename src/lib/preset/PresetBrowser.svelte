@@ -176,10 +176,21 @@
   // ===================== match =====================
   const cmp = (a: number, op: string, b: number) =>
     op === '>' ? a > b : op === '<' ? a < b : op === '>=' ? a >= b : op === '<=' ? a <= b : op === '!=' ? Math.abs(a - b) > 1e-9 : Math.abs(a - b) < 1e-9;
+  // The catalog symbols that carry a block's user-facing type/model. `<FAM>_TYPE` is the common case
+  // (amp/drive/reverb/…), but some families use `<FAM>_MODEL` (Delay) or `<FAM>_BASETYPE`. Mirrors the
+  // workbench query's TYPE_PARAM.
+  const TYPE_PARAM = /(_TYPE|_MODEL|_BASETYPE)$/i;
   function matchParamCond(b: DecodedBlock, pc: ParamCond): boolean {
     const isType = /^type$/i.test(pc.name);
+    // A TYPE query resolves against the block's decoded per-channel type name (the decoder emits one
+    // block per channel, each with its own type), so every family matches on ANY channel — not just
+    // families whose selector happens to be `<FAM>_TYPE`.
+    if (isType && b.typeName != null && b.typeName !== '') {
+      const sv = b.typeName.toLowerCase(), q = pc.val.toLowerCase();
+      return pc.op === '!=' ? !sv.includes(q) : sv.includes(q);
+    }
     for (const p of b.params) {
-      const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && p.name.toLowerCase().endsWith('_type'));
+      const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && TYPE_PARAM.test(p.name));
       if (!labelHit) continue;
       if (p.kind === 'enum' || p.enumLabel != null) {
         const sv = (p.enumLabel ?? '').toLowerCase(), q = pc.val.toLowerCase();

@@ -206,6 +206,51 @@ describe('Preset Browser deep param matching (hydrated blocks)', () => {
     expect(matchPreset(e, parseQuery('AMP(TYPE!=5153)'), '')).toBe(false);
   });
 
+  it('matches a TYPE from any channel, not just channel A (decoder emits one block per channel)', () => {
+    const e = entry({
+      blockSlugs: ['drive', 'drive'],
+      blocks: [
+        { slug: 'drive', typeName: 'T808 OD', params: [{ label: 'Type', name: 'FUZZ_TYPE', kind: 'enum', value: null, enumLabel: 'T808 OD' }] },
+        { slug: 'drive', typeName: 'TS808', params: [{ label: 'Type', name: 'FUZZ_TYPE', kind: 'enum', value: null, enumLabel: 'TS808' }] }
+      ],
+      models: { drive: ['T808 OD', 'TS808'] }
+    });
+    expect(matchPreset(e, parseQuery('DRIVE(TYPE=TS808)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('DRIVE(TYPE=T808)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('DRIVE(TYPE=OCD)'), '')).toBe(false);
+  });
+
+  it('matches a TYPE on a family whose model selector is <FAM>_MODEL, via the block type name (Delay)', () => {
+    const e = entry({
+      blockSlugs: ['delay'],
+      blocks: [
+        {
+          slug: 'delay',
+          typeName: 'Stereo Tape',
+          params: [
+            { label: 'DELAY_MODEL', name: 'DELAY_MODEL', kind: 'enum', value: null, enumLabel: 'Stereo Tape' },
+            { label: 'DELAY_TYPE', name: 'DELAY_TYPE', kind: 'enum', value: null, enumLabel: 'MONO' }
+          ]
+        }
+      ],
+      models: { delay: ['Stereo Tape'] }
+    });
+    expect(matchPreset(e, parseQuery('DELAY(TYPE=Stereo Tape)'), '')).toBe(true);
+    // The 8-value routing enum (DELAY_TYPE) must not be mistaken for the 27-model selector (DELAY_MODEL).
+    expect(matchPreset(e, parseQuery('DELAY(TYPE=MONO)'), '')).toBe(false);
+  });
+
+  it('falls back to <FAM>_MODEL/<FAM>_BASETYPE param names when a block carries no typeName', () => {
+    const e = entry({
+      blockSlugs: ['delay'],
+      blocks: [
+        { slug: 'delay', params: [{ label: 'DELAY_MODEL', name: 'DELAY_MODEL', kind: 'enum', value: null, enumLabel: 'Plex Delay' }] }
+      ],
+      models: { delay: ['Plex Delay'] }
+    });
+    expect(matchPreset(e, parseQuery('DELAY(TYPE=Plex)'), '')).toBe(true);
+  });
+
   it('EXCLUDES an entry with a non-TYPE condition when its params are not hydrated (the regression)', () => {
     const e = entry({ blockSlugs: ['amp'], blocks: [{ slug: 'amp', params: [] }] });
     expect(matchPreset(e, parseQuery('AMP(GAIN>7)'), '')).toBe(false);
@@ -219,6 +264,16 @@ describe('Preset Browser deep param matching (hydrated blocks)', () => {
     });
     expect(matchPreset(e, parseQuery('AMP(TYPE=5153)'), '')).toBe(true);
     expect(matchPreset(e, parseQuery('AMP(TYPE=marshall)'), '')).toBe(false);
+  });
+
+  it('matches a non-amp TYPE via the summary model list with no hydration (all channels)', () => {
+    const e = entry({
+      blockSlugs: ['delay'],
+      blocks: [{ slug: 'delay', params: [] }],
+      models: { delay: ['Stereo Tape', 'Plex Delay'] }
+    });
+    expect(matchPreset(e, parseQuery('DELAY(TYPE=Plex)'), '')).toBe(true);
+    expect(matchPreset(e, parseQuery('DELAY(TYPE=OCD)'), '')).toBe(false);
   });
 });
 

@@ -498,7 +498,8 @@ export interface DecodedBlock {
   family: string;
   slug: string;
   instance: number;
-  /** Amp only: channel index 0-3 (A-D). */
+  /** Channel index 0-3 (A-D) for every channel-capable family (the decoder emits one entry per
+   *  channel); undefined for single-channel families. */
   channel?: number;
   typeName: string | null;
   params: DecodedParam[];

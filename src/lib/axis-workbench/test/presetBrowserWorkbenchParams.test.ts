@@ -124,6 +124,20 @@ describe('Preset Browser detail kinds', () => {
     ]);
   });
 
+  it('collapses every non-amp family’s channels too, not just the amp’s', () => {
+    const blocks = [
+      block({ slug: 'delay', effectId: 300, channel: 0, typeName: 'Stereo Tape' }),
+      block({ slug: 'delay', effectId: 300, channel: 1, typeName: 'Digital Mono' }),
+      block({ slug: 'delay', effectId: 300, channel: 2, typeName: 'Plex Delay' }),
+      block({ slug: 'delay', effectId: 300, channel: 3, typeName: 'Tape Echo' })
+    ];
+    const cards = buildDetailBlockCards(blocks, null);
+    expect(cards.length).toBe(1);
+    expect(cards[0].category).toBe('Delay');
+    expect(cards[0].kinds.map((k) => k.value)).toEqual(['Stereo Tape', 'Digital Mono', 'Plex Delay', 'Tape Echo']);
+    expect(cards[0].kinds.map((k) => k.label)).toEqual(['Ch A', 'Ch B', 'Ch C', 'Ch D']);
+  });
+
   it('keeps distinct placed instances apart', () => {
     const cards = buildDetailBlockCards(
       [

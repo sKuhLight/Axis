@@ -12,6 +12,7 @@ import { parseConvertedDoc, type ConvertedPresetDoc } from '$lib/convert/convert
 import { deviceName } from '$lib/convert/convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
 import { renameTagAssignments, renameTagColorKey } from './tagRename';
+import { DECODE_VERSION, decodeCacheStale } from './libraryDecodeCache';
 import { mapFm3Color } from '$lib/fm3edit/fm3ColorMap';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
@@ -69,7 +70,7 @@ const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
  *  `#summarizeDump` skips shunts/unplaced cells. */
 const isEmptySummary = (s: PresetSummary): boolean => !(s.blocks?.length);
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', tagColors: 'axs.lib.tagColors', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', tagColors: 'axs.lib.tagColors', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders', decode: 'axs.lib.decode' };
 const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
 const IDB_FILEBYTES = 'lib.fileBytes'; // raw .syx bytes for imported file/folder presets (id → number[]) — for live load
 function load<T>(key: string, fallback: T): T {
@@ -155,9 +156,18 @@ class LibraryStore {
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
       // Merge, don't replace: anything written to either cache before IndexedDB resolves (e.g. an
-      // import mid-flight) must survive — in-memory is newer, so it wins over the persisted copy.
-      idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = { ...p, ...this.#paramsCache }; });
-      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = { ...b, ...this.#fileBytes }; });
+      // import mid-flight) must survive — in-memory is newer, so it wins over the persisted copy. A
+      // cache written by an older decoder is thrown away whole instead of restored (see DECODE_VERSION)
+      // — it holds the old block shape, and params re-hydrate on demand.
+      if (decodeCacheStale(load<unknown>(LS.decode, undefined))) {
+        void idb.del(IDB_PARAMS);
+      } else {
+        idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = { ...p, ...this.#paramsCache }; });
+      }
+      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => {
+        if (b) this.#fileBytes = { ...b, ...this.#fileBytes };
+        void this.#refreshStaleFileParams();
+      });
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();
@@ -474,6 +484,33 @@ class LibraryStore {
     const files = this.entries.filter((e) => e.source === 'file').map((e) => ({ id: e.id, folder: e.folder, summary: e.summary }));
     persist(LS.files, files);
     if (idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
+  }
+  /** Re-decode imported-file summaries when they were built by an older decoder. A file's params are
+   *  embedded in its persisted summary (device params live in the versioned IDB cache instead), so the
+   *  `LS.decode` marker is what flags them stale. Runs after the raw bytes load from IndexedDB, since
+   *  those bytes are the only way to rebuild the summary. Best-effort: a link error leaves the old
+   *  summary and the marker unset, so the refresh retries on the next launch rather than losing it. */
+  async #refreshStaleFileParams(): Promise<void> {
+    if (!decodeCacheStale(load<unknown>(LS.decode, undefined))) return;
+    let changed = false;
+    let failed = false;
+    for (const e of this.entries) {
+      if (e.source !== 'file' || !e.summary.params?.length) continue;
+      const bytes = this.#fileBytes[e.id];
+      if (!bytes) continue;
+      try {
+        const summary = await forgefx.decodePresetFile(new Uint8Array(bytes).buffer);
+        e.summary = { ...summary, name: summary.name || e.summary.name };
+        changed = true;
+      } catch {
+        failed = true; // unreadable this launch — keep the cached summary and retry next time
+      }
+    }
+    if (changed) {
+      this.entries = [...this.entries];
+      this.#persistFiles();
+    }
+    if (!failed) persist(LS.decode, DECODE_VERSION);
   }
 
   // ── converted presets (cross-device conversions saved to the `converted` store collection) ──

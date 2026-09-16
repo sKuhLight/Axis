@@ -128,9 +128,10 @@
     {/if}
 
     <!-- V13f BLOCK LISTING (§"detail" step 4): every non-IO block with its type/kind. Drag or
-         double-click a block header to add it to the FILTERS row. A channel-blocked block (amp)
-         collapses to one card whose rows are the per-channel types. Reaches the same decoded blocks as
-         the monolith via library.paramsOf; when unhydrated, "Load params" pulls them through the runtime. -->
+         double-click a block header to add it to the FILTERS row. A channel-blocked block collapses to
+         one card whose rows are the per-channel types (every family decodes all its channels). Reaches the
+         same decoded blocks as the monolith via library.paramsOf; when unhydrated, "Load params" pulls
+         them through the runtime. -->
     <div class="d-blocks">
       {#if !view.selectedDecodedBlocks}
         <div class="d-blocks-empty">

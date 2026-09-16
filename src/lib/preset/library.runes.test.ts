@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { DecodedBlock, DecodedParam, PresetSummary } from '$lib/api/types';
 import type { LibEntry } from './library.svelte';
 import { fallbackSwatch, tagSwatchCss } from './tagColors';
+import { DECODE_VERSION } from './libraryDecodeCache';
 
 // ── module mocks ────────────────────────────────────────────────────────────────────────────────
 // The store builds its singleton at import time and reaches for the network, IndexedDB and
@@ -36,7 +37,7 @@ vi.mock('$lib/api/forgefx', () => ({
 // isWebBuild() → true short-circuits the constructor's config-publish block.
 vi.mock('$lib/platform/buildMode', () => ({ isWebBuild: () => true }));
 // available() → false skips the IndexedDB restore AND every persist call.
-vi.mock('$lib/platform/idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined } }));
+vi.mock('$lib/platform/idb', () => ({ idb: { available: () => false, get: async () => undefined, set: async () => undefined, del: async () => undefined } }));
 vi.mock('$lib/device/cabIrsCache', () => ({ refreshCabIrsCache: async () => {} }));
 vi.mock('$lib/editor/syncBus', () => ({ notifyMutation: () => {} }));
 
@@ -442,9 +443,11 @@ describe('constructor merges IndexedDB caches instead of replacing them (startup
       idb: {
         available: () => true,
         get: (key: string) => (key === 'lib.params' ? paramsGate.promise : key === 'lib.fileBytes' ? bytesGate.promise : Promise.resolve(undefined)),
-        set: async () => undefined
+        set: async () => undefined,
+        del: async () => undefined
       }
     }));
+    localStorage.setItem('axs.lib.decode', String(DECODE_VERSION)); // current decoder → the cache is restored
     vi.resetModules();
     const { library: freshLibrary } = await import('./library.svelte');
 
@@ -459,6 +462,7 @@ describe('constructor merges IndexedDB caches instead of replacing them (startup
     await freshLibrary.hydrateParams(entry.id);
 
     // Now the slow IndexedDB reads land, each carrying an entry the in-memory writes above don't have.
+    const persisted: LibEntry = { id: 'dev:9999', source: 'device', summary: summary(9999, 'Persisted'), fav: false };
     bytesGate.resolve({ 'file:old/stale.syx': [1, 1] });
     paramsGate.resolve({ 'dev:9999': [block('reverb', 'Decay')] });
     await vi.waitFor(() => expect(freshLibrary.fileBytes('file:old/stale.syx')).not.toBeNull());
@@ -468,6 +472,40 @@ describe('constructor merges IndexedDB caches instead of replacing them (startup
     expect(freshLibrary.paramsOf(entry)).toEqual([block('amp', 'Gain')]);
     // Persisted entries the in-memory side never touched are still merged in, not dropped.
     expect(freshLibrary.fileBytes('file:old/stale.syx')).toEqual(new Uint8Array([1, 1]));
+    expect(freshLibrary.paramsOf(persisted)).toEqual([block('reverb', 'Decay')]);
+
+    vi.doUnmock('$lib/platform/idb');
+  });
+});
+
+// A decoder-contract change (see libraryDecodeCache) must throw the persisted device params away,
+// not restore the old block shape. Needs its own fresh module (the singleton's IDB read already
+// resolved above), and asserts the DELETE path rather than trusting the predicate alone.
+describe('an old-decoder params cache is deleted, not restored', () => {
+  it('skips the persisted params and deletes lib.params when the decode marker is stale', async () => {
+    const paramsGate = deferred<Record<string, DecodedBlock[]> | undefined>();
+    const deleted: string[] = [];
+    let paramsRead = false;
+    vi.doMock('$lib/platform/idb', () => ({
+      idb: {
+        available: () => true,
+        get: (key: string) => {
+          if (key === 'lib.params') { paramsRead = true; return paramsGate.promise; }
+          return Promise.resolve(undefined);
+        },
+        set: async () => undefined,
+        del: async (key: string) => { deleted.push(key); }
+      }
+    }));
+    localStorage.removeItem('axs.lib.decode'); // pre-versioning install → stale
+    vi.resetModules();
+    const { library: freshLibrary } = await import('./library.svelte');
+
+    const stale: LibEntry = { id: 'dev:7', source: 'device', summary: summary(7, 'Stale'), fav: false };
+    freshLibrary.entries = [stale];
+    expect(deleted).toContain('lib.params');
+    expect(paramsRead).toBe(false); // never even read the old payload
+    expect(freshLibrary.paramsOf(stale)).toBeNull();
 
     vi.doUnmock('$lib/platform/idb');
   });

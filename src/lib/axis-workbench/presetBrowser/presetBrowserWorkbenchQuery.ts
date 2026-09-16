@@ -210,8 +210,17 @@ export interface AxisPbDecodedParam {
 // Minimal structural shape of one decoded block. `DetailBlock` stays structurally assignable.
 export interface AxisPbDecodedBlock {
   slug: string;
+  /** Per-channel decoded type/model name (the decoder emits one block per channel, each with its own
+   *  type). The source of truth for a TYPE condition — see `matchParamCond`; absent on the summary-only
+   *  fallback blocks `matchEntryFromSummary` synthesizes. */
+  typeName?: string | null;
   params: AxisPbDecodedParam[];
 }
+
+// The catalog symbols that carry a block's user-facing type/model. `<FAM>_TYPE` is the common case
+// (amp/drive/reverb/…), but some families expose their model under `<FAM>_MODEL` (Delay) or
+// `<FAM>_BASETYPE` (Reverb/MultiTap/Plex). Kept in sync with `detailKind`'s TYPE_PARAM.
+const TYPE_PARAM = /(_TYPE|_MODEL|_BASETYPE)$/i;
 
 // Single param-cond match against one decoded block's param set (verbatim from monolith
 // `matchParamCond`, PresetBrowser.svelte). Deep match — needs hydrated params; a condition naming a
@@ -219,8 +228,17 @@ export interface AxisPbDecodedBlock {
 // makes a non-TYPE condition EXCLUDE an unhydrated entry rather than silently include it.
 export function matchParamCond(b: AxisPbDecodedBlock, pc: AxisPbParamCond): boolean {
   const isType = /^type$/i.test(pc.name);
+  // A TYPE query resolves against the block's decoded per-channel type name — the same string the
+  // detail pane lists — so every family (including `<FAM>_MODEL`/`_BASETYPE` selectors) matches on ANY
+  // channel. Scanning params instead missed those families and could confuse Delay's `DELAY_MODEL`
+  // (the model) with `DELAY_TYPE` (the routing enum).
+  if (isType && b.typeName != null && b.typeName !== '') {
+    const sv = b.typeName.toLowerCase();
+    const q = pc.val.toLowerCase();
+    return pc.op === '!=' ? !sv.includes(q) : sv.includes(q);
+  }
   for (const p of b.params) {
-    const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && p.name.toLowerCase().endsWith('_type'));
+    const labelHit = p.label.toLowerCase() === pc.name.toLowerCase() || (isType && TYPE_PARAM.test(p.name));
     if (!labelHit) continue;
     if (p.kind === 'enum' || p.enumLabel != null) {
       const sv = (p.enumLabel ?? '').toLowerCase();
