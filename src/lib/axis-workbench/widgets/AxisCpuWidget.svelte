@@ -4,7 +4,7 @@
   let { size }: AxisWorkbenchWidgetProps = $props();
   const expanded = $derived(size === 'default');
   const cpu = $derived(Math.max(0, Math.min(100, telemetry.cpu ?? 0)));
-  const cpuText = $derived(telemetry.cpu != null ? `${telemetry.cpu.toFixed(0)}%` : '--');
+  const cpuText = $derived(telemetry.cpu != null ? `${telemetry.cpu.toFixed(1)}%` : '--');
   const cpuColor = $derived(cpu > 75 ? 'var(--danger)' : cpu > 55 ? 'var(--amber)' : 'var(--accent)');
 </script>
 
