@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import { axisPbRowDoubleClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
   import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
@@ -29,19 +30,35 @@
   <!-- §4.1 Sorting is a property of this list, not of the search above it: each column header IS its
        sort control, and the active one carries the direction. The result count rides here too — plain
        while it just states the library size, accent only once it reports a filtered subset. -->
-  <div class="list-cols">
-    <span class="col-pad"></span>
-    <button type="button" class="col-sort num" class:on={view.snapshot.sort === 'num'} aria-label={view.sortLabel('num', 'slot number')} onclick={() => view.toggleSort('num')}>#{view.sortArrow('num')}</button>
-    <span class="col-mid">
-      <button type="button" class="col-sort" class:on={view.snapshot.sort === 'name'} aria-label={view.sortLabel('name', 'name')} onclick={() => view.toggleSort('name')}>Name{view.sortArrow('name')}</button>
-      <span class="col-count" class:filtered={view.rowCap.totalRows !== view.data.scopedTotal}>
-        {view.rowCap.totalRows === view.data.scopedTotal ? `${view.data.scopedTotal} presets` : `${view.rowCap.totalRows} of ${view.data.scopedTotal}`}
+  <div class="result-rail">
+    <div class="list-cols">
+      <span class="col-pad"></span>
+      <button type="button" class="col-sort num" class:on={view.snapshot.sort === 'num'} aria-label={view.sortLabel('num', 'slot number')} onclick={() => view.toggleSort('num')}>#{view.sortArrow('num')}</button>
+      <span class="col-mid">
+        <button type="button" class="col-sort" class:on={view.snapshot.sort === 'name'} aria-label={view.sortLabel('name', 'name')} onclick={() => view.toggleSort('name')}>Name{view.sortArrow('name')}</button>
+        <span class="col-count" class:filtered={view.rowCap.totalRows !== view.data.scopedTotal}>
+          {view.rowCap.totalRows === view.data.scopedTotal ? `${view.data.scopedTotal} presets` : `${view.rowCap.totalRows} of ${view.data.scopedTotal}`}
+        </span>
+        <span class="col-sp"></span>
       </span>
-      <span class="col-sp"></span>
-    </span>
-    <span class="col-meta">
-      <button type="button" class="col-sort" class:on={view.snapshot.sort === 'recent'} aria-label={view.sortLabel('recent', 'last loaded')} onclick={() => view.toggleSort('recent')}>Recent{view.sortArrow('recent')}</button>
-    </span>
+      <span class="col-meta">
+        <button type="button" class="col-sort" class:on={view.snapshot.sort === 'recent'} aria-label={view.sortLabel('recent', 'last loaded')} onclick={() => view.toggleSort('recent')}>Recent{view.sortArrow('recent')}</button>
+        <button
+          type="button"
+          class="scroll-current"
+          aria-label="Scroll to current preset"
+          title="Scroll to current preset"
+          disabled={!view.data.entries.some((entry) => entry.sourceId === 'device' && entry.number === deviceSession.preset?.number)}
+          onclick={view.scrollToCurrent}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="6"></circle>
+            <circle cx="12" cy="12" r="1.5"></circle>
+            <path d="M12 2v5M12 17v5M2 12h5M17 12h5"></path>
+          </svg>
+        </button>
+      </span>
+    </div>
   </div>
   <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
     {#each view.rowCap.rows as entry}
@@ -224,15 +241,22 @@
   /* selection header + expander (§4) */
   /* Mirrors .preset-row's grid (18px checkbox | 34px number | main | meta) so each header sits over the
      column it sorts. The row's 1px border + 2px accent rail are absorbed by the asymmetric padding. */
+  .result-rail {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
   .list-cols {
+    flex: 1;
+    min-width: 0;
     display: grid;
     grid-template-columns: 18px 34px minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     padding: 0 13px 0 14px;
-    min-height: 30px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 4px;
+    min-height: 40px;
   }
   .col-mid,
   .col-meta {
@@ -246,6 +270,30 @@
   }
   .col-sp {
     flex: 1;
+  }
+  .scroll-current {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--accent);
+  }
+  .scroll-current svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+  .scroll-current:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
   .list-cols .col-sort {
     height: 24px;

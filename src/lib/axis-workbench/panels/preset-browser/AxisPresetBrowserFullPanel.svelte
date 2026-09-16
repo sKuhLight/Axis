@@ -57,7 +57,7 @@
   }
   .axis-pb-list {
     flex: 1;
-    gap: 12px;
+    gap: 8px;
     padding: 14px;
     overflow: hidden;
   }
