@@ -356,4 +356,28 @@ describe('preparePresetBrowserIndex — decoded blocks feed deep param filtering
     expect(visible(index, gainCond)).toEqual([]);
     expect(visible(index, typeCond)).toEqual(['file:hot']);
   });
+
+  it('matches a non-amp TYPE on any channel, not just channel A (the decoder now emits all channels)', () => {
+    // A drive whose channel B is the TS808 while channel A is something else — the
+    // pre-fix decoder dropped every channel but the amp's, so this never matched.
+    const driveEntry: AxisPresetBrowserLibEntryLike = {
+      id: 'file:drive',
+      source: 'file',
+      summary: {
+        number: 2,
+        name: 'Boosted',
+        scenes: [],
+        blocks: [{ effectId: 118, slug: 'drive', name: 'Drive 1' }],
+        models: {}
+      }
+    };
+    const index = preparePresetBrowserIndex([driveEntry], () => [], undefined, undefined, () => [
+      { slug: 'drive', params: [{ label: 'Type', name: 'FUZZ_TYPE', value: null, enumLabel: 'T808 OD' }] },
+      { slug: 'drive', params: [{ label: 'Type', name: 'FUZZ_TYPE', value: null, enumLabel: 'TS808' }] }
+    ]);
+    const conds: Conds = [{ kind: 'block', block: 'drive', params: [{ name: 'TYPE', op: '=', val: 'TS808' }] }];
+    const shown = createAxisPresetBrowserDataView({ entries: [driveEntry], prepared: index.match, conditions: conds })
+      .visibleEntries.map((e) => e.id);
+    expect(shown).toEqual(['file:drive']);
+  });
 });
