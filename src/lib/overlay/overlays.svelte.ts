@@ -32,6 +32,7 @@ export type OverlayId =
   | 'presetSearch'
   | 'linkArm'
   | 'blockEditor'
+  | 'tapTempo'
   | 'deviceTools'
   | 'axisHub'
   | 'theme'
@@ -44,8 +45,10 @@ export type OverlayId =
  * (tuner → history → cabPicker → palette → quickBuild → convertScratch → convert →
  * presetPicker → presetSearch → linkArm → blockEditor). Entries 200+ (`deviceTools`,
  * `axisHub`, `theme`) were never part of that chain; they sit lowest so an open chain overlay
- * always wins. Of these, `deviceTools` and `theme` remain non-dismissible by Escape;
- * `axisHub` closes on Escape like a normal dialog.
+ * always wins. `tapTempo` (110) is a transient prompt with no historical slot — it closes
+ * after every chain overlay, so Escape dismisses a real dialog before it. Of these,
+ * `deviceTools` and `theme` remain non-dismissible by Escape; `axisHub` closes on Escape
+ * like a normal dialog.
  */
 const ESCAPE_ORDER: Record<OverlayId, number> = {
   consentPrompt: -20,
@@ -61,6 +64,7 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   presetSearch: 80,
   linkArm: 90,
   blockEditor: 100,
+  tapTempo: 110,
   deviceTools: 200,
   axisHub: 220,
   theme: 230

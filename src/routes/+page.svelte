@@ -13,6 +13,7 @@
     telemetry
   } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
+  import { tapTempo } from '$lib/editor/tapTempo.svelte';
   import HistoryPanel from '$lib/editor/HistoryPanel.svelte';
   import ToolRail from '$lib/shell/ToolRail.svelte';
   import TopBar from '$lib/shell/TopBar.svelte';
@@ -28,6 +29,7 @@
   import ConvertScratchView from '$lib/convert/ConvertScratchView.svelte';
   import PresetPicker from '$lib/preset/PresetPicker.svelte';
   import TunerOverlay from '$lib/editor/TunerOverlay.svelte';
+  import TapTempoOverlay from '$lib/editor/TapTempoOverlay.svelte';
   import CachePrompt from '$lib/ui/CachePrompt.svelte';
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
   import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
@@ -104,6 +106,14 @@
         if (!deviceSession.hasTuner) return; // same capability gate as the TopBar chip
         e.preventDefault();
         telemetry.toggleTuner();
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+        // Bare `b` taps tempo, the way `t` toggles the tuner. The first tap opens the "keep
+        // tapping" prompt, which re-arms on each tap and dismisses itself after a pause.
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
+        if (!deviceSession.hasTempo) return; // same capability gate as the tempo widget
+        e.preventDefault();
+        tapTempo.tap();
+        void deviceSession.tapTempo();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
         // toggleBypass is a no-op unless a real block is selected.
         e.preventDefault();
@@ -189,6 +199,7 @@
   <PresetPicker />
   {#if workbenchEnabled}<AxisPresetBrowserSearchOverlay />{/if}
   <TunerOverlay />
+  <TapTempoOverlay />
   <CachePrompt />
   <ColorLabelsPrompt />
   <DeviceDefsPrompt />

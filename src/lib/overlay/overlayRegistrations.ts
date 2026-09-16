@@ -19,6 +19,7 @@ import {
   telemetry
 } from '$lib/editor/editorClients.svelte';
 import { history } from '$lib/editor/history.svelte';
+import { tapTempo } from '$lib/editor/tapTempo.svelte';
 import { convert } from '$lib/convert/convert.svelte';
 import { convertScratch } from '$lib/convert/convertScratch.svelte';
 
@@ -74,6 +75,12 @@ export function registerOverlays(): void {
   overlays.register('reportPrompt', {
     isOpen: () => telemetry.reportPrompt !== null,
     close: () => telemetry.dismissReportPrompt()
+  });
+
+  // Transient tap-tempo prompt — its own session store owns the inactivity timer.
+  overlays.register('tapTempo', {
+    isOpen: () => tapTempo.active,
+    close: () => tapTempo.end()
   });
 
   overlays.onClose('presetPicker', () => {
