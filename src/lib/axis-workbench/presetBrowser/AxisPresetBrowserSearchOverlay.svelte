@@ -33,6 +33,7 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import AxisPresetBrowserRowMain from './AxisPresetBrowserRowMain.svelte';
   import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
+  import { createPresetBrowserOramaIndex } from './presetBrowserWorkbenchOrama.svelte';
   import { axisPbPresetReveal } from './presetBrowserWorkbenchLayout';
 
   // Render in batches: paint only the first screenful on open, then grow the list as the user scrolls,
@@ -117,6 +118,12 @@
     void snapshot;
     return axisPresetBrowserWorkbenchController.freeText;
   });
+  // Ranked, typo-tolerant free-text (Orama) — idle-built, re-searched per keystroke. Null until ready,
+  // so the data view falls back to substring matching and search works immediately on open.
+  const oramaIndex = createPresetBrowserOramaIndex(
+    () => index.match,
+    () => freeText
+  );
   const data = $derived(createAxisPresetBrowserDataView({
     entries: baseEntries,
     // This quick search is a DEVICE preset switcher: scope results to the connected unit's stored
@@ -132,6 +139,7 @@
     simpleQuery: freeText,
     realNameFor: deviceRealNames.realNameFor,
     prepared: index.match,
+    freeTextRank: oramaIndex.rank,
     sort: snapshot.sort,
     sortDir: snapshot.sortDir,
     presenceView: 'all',

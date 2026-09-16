@@ -107,6 +107,11 @@ export interface AxisPresetBrowserDataInput {
   conditions?: AxisPbCond[];
   /** Simple-mode free text applied on top of conditions. */
   simpleQuery?: string;
+  /** Ranked free-text hit set from the Orama index, id → 0-based relevance rank. When present AND
+   *  `simpleQuery` is non-empty, the list is filtered to these ids and ordered by relevance, replacing
+   *  the substring match + column sort. Null/undefined (index still building, or no term) falls back to
+   *  substring matching so search works immediately on open — the monolith's `useOrama` gate. */
+  freeTextRank?: Map<string, number> | null;
   /** Real-world device name lookup folded into free-text matching (e.g. so "hiwatt" matches a preset
    *  built on the internal "HIPOWER" model) — the live `deviceRealNames.realNameFor`. Optional so this
    *  module stays testable without it; omitted, matching stays purely on decoded model names. */
@@ -129,7 +134,7 @@ export interface AxisPresetBrowserPresenceViewSummary extends AxisPbPresenceView
   count: number;
 }
 
-import { entryHaystack, matchEntryFromSummary, matchPrepared, matchPreset, type AxisPbCond, type AxisPbDecodedBlock, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
+import { entryHaystack, matchConditions, matchEntryFromSummary, type AxisPbCond, type AxisPbDecodedBlock, type AxisPbMatchEntry, type AxisPbRealNameLookup } from './presetBrowserWorkbenchQuery';
 export type { AxisPbDecodedBlock } from './presetBrowserWorkbenchQuery';
 import {
   AXIS_PB_PRESENCE_VIEWS,
@@ -280,16 +285,29 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
 
   const conditions = input.conditions ?? [];
   const simpleQuery = (input.simpleQuery ?? '').trim();
+  const simpleTokens = simpleQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  // Ranked free-text hits (Orama) when the index is ready; null falls back to substring matching so
+  // search works immediately on open — the same `useOrama` gate the monolith uses.
+  const freeTextRank = input.freeTextRank ?? null;
+  const useRank = freeTextRank !== null && simpleTokens.length > 0;
   const queried = conditions.length || simpleQuery
     ? byPresence.filter((entry) => {
         const p = prepared?.get(entry.id);
-        if (p) return matchPrepared(p.match, p.hay, conditions, simpleQuery);
-        return matchPreset(matchEntryFromSummary(entry), conditions, simpleQuery, input.realNameFor);
+        const match = p ? p.match : matchEntryFromSummary(entry);
+        if (!matchConditions(match, conditions)) return false;
+        if (!simpleTokens.length) return true;
+        if (useRank) return freeTextRank!.has(entry.id);
+        const hay = p ? p.hay : entryHaystack(match, input.realNameFor);
+        return simpleTokens.every((token) => hay.includes(token));
       })
     : byPresence;
 
   const sortMode = input.sort ?? 'num';
-  const visibleEntries = sortEntries(queried, sortMode, input.sortDir ?? SORT_DIR_DEFAULTS[sortMode]);
+  // A ranked free-text hit set dictates its own relevance order — the column sort only orders
+  // non-searched lists (and the substring fallback, which has no relevance signal).
+  const visibleEntries = useRank
+    ? orderByRank(queried, freeTextRank!)
+    : sortEntries(queried, sortMode, input.sortDir ?? SORT_DIR_DEFAULTS[sortMode]);
   const order = visibleEntries.map((entry) => entry.id);
   const selectedEntry = [...entries, ...emptySlots].find((entry) => entry.id === input.selectedEntryId) ?? null;
 
@@ -308,6 +326,18 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
 
 function toPresenceRow(entry: AxisPresetBrowserEntrySummary): AxisPbPresenceRow {
   return { source: entry.sourceId };
+}
+
+// Orama relevance order: the rank map is id → 0-based position, so a plain ascending sort reproduces
+// the engine's ranking. Entries missing from the map sink to the bottom (the query filter already
+// ensured that can't happen, but the `Infinity` fallback keeps this total and stable regardless).
+function orderByRank(
+  entries: AxisPresetBrowserEntrySummary[],
+  rank: Map<string, number>
+): AxisPresetBrowserEntrySummary[] {
+  return entries
+    .slice()
+    .sort((a, b) => (rank.get(a.id) ?? Number.POSITIVE_INFINITY) - (rank.get(b.id) ?? Number.POSITIVE_INFINITY));
 }
 
 function sortEntries(

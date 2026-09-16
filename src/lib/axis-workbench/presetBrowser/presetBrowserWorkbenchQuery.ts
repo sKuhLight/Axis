@@ -386,9 +386,17 @@ export function matchSimple(entry: AxisPbMatchEntry, simpleQ: string, realNameFo
   return toks.every((t) => hay.includes(t));
 }
 
+// Just the structured conditions, no free text. Factored out so the Orama-ranked free-text path
+// (presetBrowserWorkbenchData.ts `freeTextRank`) can apply conditions without also running the
+// substring match the ranked hit set already decided.
+export function matchConditions(entry: AxisPbMatchEntry, conds: AxisPbCond[]): boolean {
+  for (const c of conds) if (!matchCond(entry, c)) return false;
+  return true;
+}
+
 // Full predicate over conditions + simple text.
 export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simpleQ: string, realNameFor?: AxisPbRealNameLookup): boolean {
-  for (const c of conds) if (!matchCond(entry, c)) return false;
+  if (!matchConditions(entry, conds)) return false;
   return matchSimple(entry, simpleQ, realNameFor);
 }
 
@@ -396,7 +404,7 @@ export function matchPreset(entry: AxisPbMatchEntry, conds: AxisPbCond[], simple
 // skips rebuilding the matchable shape + haystack for every entry. `match` must be the `matchEntryFromSummary`
 // output for the same entry and `hay` its `entryHaystack` string.
 export function matchPrepared(match: AxisPbMatchEntry, hay: string, conds: AxisPbCond[], simpleQ: string): boolean {
-  for (const c of conds) if (!matchCond(match, c)) return false;
+  if (!matchConditions(match, conds)) return false;
   const toks = simpleQ.toLowerCase().split(/\s+/).filter(Boolean);
   if (!toks.length) return true;
   return toks.every((t) => hay.includes(t));

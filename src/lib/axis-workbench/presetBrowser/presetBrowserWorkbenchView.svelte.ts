@@ -84,6 +84,7 @@ import {
   type WorkbenchMenuPosition
 } from '../../workbench/svelte/contextMenu';
 import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
+import { createPresetBrowserOramaIndex } from './presetBrowserWorkbenchOrama.svelte';
 import { getOptionalWorkbenchContext } from '../../workbench';
 import { AXIS_PAGE_GRID } from '../axisWorkbenchPages';
 
@@ -136,13 +137,20 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     library.paramsOf
   );
   const index = $derived(presetIndex.current);
+  // Ranked, typo-tolerant free-text (Orama) — idle-built off the prepared haystacks, re-searched per
+  // keystroke via `freeText`. `rank` is null until ready, so the data view falls back to substring.
+  const oramaIndex = createPresetBrowserOramaIndex(
+    () => index.match,
+    () => freeText
+  );
   const viewModel = new AxisPresetBrowserViewModel({
     controller: axisPresetBrowserWorkbenchController,
     runtime: axisPresetBrowserWorkbenchRuntime,
     host: viewModelHost,
     presenceViews,
     prepared: () => index.match,
-    deviceSlots: () => index.deviceSlots
+    deviceSlots: () => index.deviceSlots,
+    freeTextRank: () => oramaIndex.rank
   });
   const data = $derived.by(() => {
     void baseEntries;

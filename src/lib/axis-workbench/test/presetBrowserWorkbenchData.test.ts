@@ -324,6 +324,47 @@ describe('Preset Browser Workbench data view', () => {
     expect(view.selectedEntry).toMatchObject({ id: 'dev:2', empty: true, number: 2, name: '<EMPTY>' });
   });
 
+  it('filters and orders by the Orama rank map when free text is present', () => {
+    // Rank overrides both the substring haystack (dev:1 has no "amb" in its text) and the column sort
+    // (dev:1 would sort first by number). This is the ranked path's whole point.
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      simpleQuery: 'amb',
+      freeTextRank: new Map([
+        ['file:ambient', 0],
+        ['dev:1', 1]
+      ])
+    });
+    expect(view.visibleEntries.map((e) => e.id)).toEqual(['file:ambient', 'dev:1']);
+  });
+
+  it('ignores the rank map when there is no free text (rank only applies to a search)', () => {
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      freeTextRank: new Map([['file:ambient', 0]])
+    });
+    expect(view.visibleEntries.map((e) => e.id)).toEqual(['dev:1', 'file:ambient', 'local:edge']);
+  });
+
+  it('falls back to substring matching while the rank map is still building (null)', () => {
+    const view = createAxisPresetBrowserDataView({ entries, simpleQuery: 'amb', freeTextRank: null });
+    expect(view.visibleEntries.map((e) => e.id)).toEqual(['file:ambient']);
+  });
+
+  it('applies structured conditions even on the ranked path', () => {
+    const view = createAxisPresetBrowserDataView({
+      entries,
+      conditions: [{ kind: 'tag', val: 'wide' }],
+      tagsOf: (id) => (id === 'file:ambient' ? ['wide', 'delay'] : []),
+      simpleQuery: 'amb',
+      freeTextRank: new Map([
+        ['file:ambient', 0],
+        ['dev:1', 1]
+      ])
+    });
+    expect(view.visibleEntries.map((e) => e.id)).toEqual(['file:ambient']);
+  });
+
 });
 
 describe('preparePresetBrowserIndex — decoded blocks feed deep param filtering', () => {

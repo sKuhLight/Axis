@@ -46,6 +46,9 @@ export interface AxisPresetBrowserViewModelOptions {
   presenceViews: AxisPbPresenceViewDef[];
   prepared?: () => Map<string, AxisPbPreparedEntry>;
   deviceSlots?: () => Set<number>;
+  /** Ranked free-text hits from the Orama index (id → relevance rank), or null while unbuilt/no term.
+   *  See `AxisPresetBrowserDataInput.freeTextRank`. */
+  freeTextRank?: () => Map<string, number> | null;
 }
 
 export class AxisPresetBrowserViewModel {
@@ -55,6 +58,7 @@ export class AxisPresetBrowserViewModel {
   readonly #presenceViews: AxisPbPresenceViewDef[];
   readonly #prepared?: () => Map<string, AxisPbPreparedEntry>;
   readonly #deviceSlots?: () => Set<number>;
+  readonly #freeTextRank?: () => Map<string, number> | null;
 
   constructor(options: AxisPresetBrowserViewModelOptions) {
     this.#controller = options.controller;
@@ -63,6 +67,7 @@ export class AxisPresetBrowserViewModel {
     this.#presenceViews = options.presenceViews;
     this.#prepared = options.prepared;
     this.#deviceSlots = options.deviceSlots;
+    this.#freeTextRank = options.freeTextRank;
   }
 
   data(snapshot: AxisPresetBrowserControllerSnapshot = this.#controller.snapshot): AxisPresetBrowserDataView {
@@ -87,6 +92,7 @@ export class AxisPresetBrowserViewModel {
       simpleQuery: this.#controller.freeText,
       realNameFor: this.#host.realNameFor,
       prepared: this.#prepared?.(),
+      freeTextRank: this.#freeTextRank?.() ?? null,
       sort: snapshot.sort,
       sortDir: snapshot.sortDir,
       presenceView: snapshot.presenceView,
