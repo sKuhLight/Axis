@@ -218,6 +218,15 @@ export function cabSections(group: DetailBlock[], irs: CabIrCatalog = {}): Detai
     });
 }
 
+// Amp and Cab cards are always surfaced first, in that order, ahead of the rest of the preset's
+// blocks (which keep their signal-chain order from the grid). Rank 0 = Amp, 1 = Cab, 2 = everything.
+function pinnedBlockRank(slug: string | null | undefined): number {
+  const s = (slug ?? '').toLowerCase();
+  if (s === 'amp') return 0;
+  if (s === 'cab') return 1;
+  return 2;
+}
+
 // Build the detail block listing. `focusEid` (an effectId) restricts the listing to that single block
 // when set; otherwise all non-IO blocks are shown. Blocks sharing an effectId are one placed block.
 // Channels are the rule: every card lists channel rows (A-D), grouped by effectId, so a block's
@@ -237,8 +246,18 @@ export function buildDetailBlockCards(blocks: DetailBlock[], focusEid: number | 
     byEffect.get(key)!.push(b);
   }
 
+  // Stable hoist: Amp and Cab first (in that order), everything else keeps its grid order.
+  const orderedKeys = order
+    .map((key, index) => ({ key, index }))
+    .sort(
+      (a, b) =>
+        pinnedBlockRank(byEffect.get(a.key)?.[0]?.slug) - pinnedBlockRank(byEffect.get(b.key)?.[0]?.slug) ||
+        a.index - b.index
+    )
+    .map((x) => x.key);
+
   const cards: DetailBlockCard[] = [];
-  for (const key of order) {
+  for (const key of orderedKeys) {
     const group = byEffect.get(key)!;
     const head = group[0];
     const isCab = head.slug === 'cab';

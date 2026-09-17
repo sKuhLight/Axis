@@ -107,6 +107,37 @@ describe('Preset Browser detail kinds', () => {
     expect(cards[0].kinds).toEqual([{ label: 'Ch A', value: 'T808 OD' }]);
   });
 
+  it('orders Amp then Cab cards first, then the rest in grid order', () => {
+    const blocks = [
+      block({ slug: 'input', effectId: 1 }),
+      block({ slug: 'wah', effectId: 20, typeName: 'Clyde' }),
+      block({ slug: 'amp', effectId: 100 }),
+      block({ slug: 'cab', effectId: 40, typeName: null }),
+      block({ slug: 'delay', effectId: 300, typeName: 'Stereo Tape' }),
+      block({ slug: 'reverb', effectId: 200, typeName: 'Large Hall' })
+    ];
+    const cards = buildDetailBlockCards(blocks, null);
+    expect(cards.map((c) => c.slug)).toEqual(['amp', 'cab', 'wah', 'delay', 'reverb']);
+  });
+
+  it('keeps Amp/Cab stable relative order when several are placed', () => {
+    const blocks = [
+      block({ slug: 'amp', effectId: 100, instance: 1 }),
+      block({ slug: 'cab', effectId: 40, instance: 1, typeName: null }),
+      block({ slug: 'amp', effectId: 101, instance: 2 }),
+      block({ slug: 'cab', effectId: 41, instance: 2, typeName: null }),
+      block({ slug: 'delay', effectId: 300, typeName: 'Stereo Tape' })
+    ];
+    const cards = buildDetailBlockCards(blocks, null);
+    expect(cards.map((c) => `${c.slug}${c.instanceLabel}`)).toEqual([
+      'amp#1',
+      'amp#2',
+      'cab#1',
+      'cab#2',
+      'delay#1'
+    ]);
+  });
+
   it('collapses amp channels into one card with per-channel kinds', () => {
     const blocks = [
       block({ effectId: 100, channel: 0, typeName: 'USA Clean' }),
