@@ -16,7 +16,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
-import { ensureAxisConvertPage, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
+import { ensureAxisConvertPage, ensureAxisSeedOrder, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -61,6 +61,9 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // becomes the Grid page and the five other seed pages + full-size Preset Browser
   // page are added per profile, with the nav entries bound to pages. Guarded by a
   // doc-metadata marker so freshly seeded / default docs are untouched.
+  // ensureAxisSeedOrder then puts those seed pages (and their nav entries) into the
+  // canonical AXIS_SEED_PAGE_ORDER for a doc persisted before the order changed;
+  // marker-gated so a later user reorder is never clobbered.
   // pruneAxisScenesPage strips the retired Scenes page + its nav entry + placeholder panel from a
   // persisted doc (marker present, so ensureAxisSeedPages left it alone); idempotent.
   // ensureAxisConvertPage self-heals the (nav-less) converter page + its panels onto every layout — it
@@ -80,7 +83,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
             pruneAxisRetiredRailWidgets(
               pruneAxisRetiredNavigationEntries(
                 ensureAxisGridControlWidgets(
-                  ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedPages(migrateWorkbenchDocument(input)))))
+                  ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
                 )
               )
             )

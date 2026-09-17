@@ -55,12 +55,12 @@ export const AXIS_CONVERT_BLOCK_EDITOR_PANEL = 'axis.convertBlockEditor';
 export const AXIS_CONVERT_MINIMAP_PANEL = 'axis.convertMinimap';
 export const AXIS_CONVERT_TRAY_PANEL = 'axis.convertTray';
 
-/** Canonical seed-page order — mirrors the nav order (grid first, active by default). */
+/** Canonical seed-page order — mirrors the nav order (preset browser first; Grid stays active by default). */
 export const AXIS_SEED_PAGE_ORDER = [
-  AXIS_PAGE_GRID,
   AXIS_PAGE_PRESET_BROWSER,
-  AXIS_PAGE_FC,
+  AXIS_PAGE_GRID,
   AXIS_PAGE_CONTROLLERS,
+  AXIS_PAGE_FC,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_SETUP
 ] as const;
@@ -295,7 +295,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
         fixedSlot: 'rail.footer'
       })
     },
-    order: ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'account']
+    order: ['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'account']
   };
 }
 
@@ -387,6 +387,52 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
 
   doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_PAGES_MARKER]: 'v1' };
   ensureActionNavigationLabels(doc);
+  return doc;
+}
+
+// ── Seed order reconciliation ────────────────────────────────────────────────
+
+/**
+ * doc.metadata marker: the seed pages / page-bound nav entries have been put into
+ * their canonical order (see {@link ensureAxisSeedOrder}). One-shot, so a user who
+ * deliberately reorders pages after this ships is never clobbered on the next load.
+ */
+export const AXIS_SEED_ORDER_MARKER = 'axisSeedOrder';
+
+/** Stable reorder: ranked (known) ids first in rank order; everything else keeps its relative position. */
+function moveRankedToFront<T>(ids: T[], rankOf: (id: T) => number | undefined): T[] {
+  const ranked = ids.filter((id) => rankOf(id) !== undefined).sort((a, b) => rankOf(a)! - rankOf(b)!);
+  const rest = ids.filter((id) => rankOf(id) === undefined);
+  return [...ranked, ...rest];
+}
+
+/**
+ * Put the six seed pages — and the nav entries bound to them — into
+ * {@link AXIS_SEED_PAGE_ORDER}. The Preset Browser moved to the top of the rail, so a
+ * document persisted before that change still carries the old order; this repairs it
+ * once (marker-gated). Only the known seed page ids are moved among themselves — every
+ * other page / nav entry keeps its relative position (the nav-less Convert page trails).
+ * Idempotent via the marker.
+ */
+export function ensureAxisSeedOrder(doc: WorkbenchDocument): WorkbenchDocument {
+  if (doc.metadata?.[AXIS_SEED_ORDER_MARKER]) return doc;
+
+  const pageRank = new Map<string, number>(AXIS_SEED_PAGE_ORDER.map((id, index) => [id, index]));
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object') continue;
+    if (Array.isArray(layout.pageOrder)) {
+      layout.pageOrder = moveRankedToFront(layout.pageOrder, (id) => pageRank.get(id));
+    }
+    if (Array.isArray(layout.navigation?.order)) {
+      const order = layout.navigation.order;
+      layout.navigation.order = moveRankedToFront(order, (id) => {
+        const pageId = layout.navigation.entries?.[id]?.pageId;
+        return pageId ? pageRank.get(pageId) : undefined;
+      });
+    }
+  }
+
+  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_ORDER_MARKER]: 'v1' };
   return doc;
 }
 

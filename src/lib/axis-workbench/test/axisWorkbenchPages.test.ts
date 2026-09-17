@@ -19,6 +19,8 @@ import {
   AXIS_PAGE_SETUP,
   AXIS_SEED_PAGES_MARKER,
   AXIS_SEED_PAGE_ORDER,
+  AXIS_SEED_ORDER_MARKER,
+  ensureAxisSeedOrder,
   ensureAxisSeedPages,
   pruneAxisScenesPage
 } from '../axisWorkbenchPages';
@@ -233,6 +235,47 @@ describe('ROUND 15 — ensureAxisSeedPages migration', () => {
     const before = JSON.stringify(doc.layouts);
     const after = ensureAxisSeedPages(doc);
     expect(JSON.stringify(after.layouts)).toBe(before);
+  });
+});
+
+// ── Seed order reconciliation (ensureAxisSeedOrder) ──────────────────────────
+
+describe('ensureAxisSeedOrder — persisted old order', () => {
+  function withLegacyOrder(): WorkbenchDocument {
+    const doc = createAxisWorkbenchDefaultDocument();
+    doc.metadata = { ...(doc.metadata ?? {}) };
+    delete doc.metadata[AXIS_SEED_ORDER_MARKER];
+    const layout = Object.values(doc.layouts)[0];
+    // The pre-change order: Grid first, FC before Controllers, Convert trailing.
+    layout.pageOrder = [
+      AXIS_PAGE_GRID,
+      AXIS_PAGE_PRESET_BROWSER,
+      AXIS_PAGE_FC,
+      AXIS_PAGE_CONTROLLERS,
+      AXIS_PAGE_LIVE,
+      AXIS_PAGE_SETUP,
+      AXIS_PAGE_CONVERT
+    ];
+    layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'account'];
+    return doc;
+  }
+
+  it('reorders pageOrder and the page-bound nav entries to the canonical order', () => {
+    const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
+    expect(layout.pageOrder).toEqual([...AXIS_SEED_PAGE_ORDER, AXIS_PAGE_CONVERT]);
+    expect(layout.navigation.order).toEqual(['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'account']);
+  });
+
+  it('keeps non-seed entries (the Axis action) trailing', () => {
+    const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
+    expect(layout.navigation.order.at(-1)).toBe('account');
+  });
+
+  it('sets the marker and is idempotent', () => {
+    const once = ensureAxisSeedOrder(withLegacyOrder());
+    expect(once.metadata?.[AXIS_SEED_ORDER_MARKER]).toBe('v1');
+    const before = JSON.stringify(once.layouts);
+    expect(JSON.stringify(ensureAxisSeedOrder(once).layouts)).toBe(before);
   });
 });
 
