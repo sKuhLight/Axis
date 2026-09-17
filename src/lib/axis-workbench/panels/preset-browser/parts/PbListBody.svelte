@@ -14,6 +14,7 @@
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
   let listEl = $state<HTMLDivElement | null>(null);
+  let scrollEl = $state<HTMLDivElement | null>(null);
   let sentinelEl = $state<HTMLDivElement | null>(null);
 
   // §4.1 Lazy scroll batching — mount the first screenful, append the next batch as the sentinel
@@ -24,8 +25,10 @@
   const rows = $derived(view.data.visibleEntries.slice(0, visibleCount));
   const remaining = $derived(total - rows.length);
 
-  // A new result set (query/sort/source change) starts back at the first batch. Created BEFORE the
-  // reveal effect below so an explicit scrollToCurrent resets first, then re-expands to the preset.
+  // A new result set (query/sort/source change) starts back at the first batch AND at the top of the
+  // list, so changing the search query never leaves you scrolled into stale mid-list results. Created
+  // BEFORE the reveal effect below so an explicit scrollToCurrent resets first, then re-expands to the
+  // preset.
   $effect(() => {
     void view.snapshot.queryText;
     void view.snapshot.sort;
@@ -33,6 +36,7 @@
     void view.snapshot.presenceView;
     void view.snapshot.sourceId;
     visibleCount = AXIS_PB_INITIAL_ROWS;
+    if (scrollEl) scrollEl.scrollTop = 0;
   });
 
   // Reveal the current preset: grow the window past its index, then center it. Replaces the old
@@ -124,7 +128,7 @@
       </span>
     </div>
   </div>
-    <div class="pb-list-scroll">
+    <div class="pb-list-scroll" bind:this={scrollEl}>
       <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
         {#each rows as entry}
           <div

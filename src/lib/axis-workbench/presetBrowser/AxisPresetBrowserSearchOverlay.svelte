@@ -246,6 +246,7 @@
               axisPresetBrowserWorkbenchController.setQuery(e.currentTarget.value);
               highlightIndex = 0;
               visibleCount = INITIAL_ROWS;
+              if (listEl) listEl.scrollTop = 0;
             }}
             onkeydown={onKey}
             placeholder="Search by name, tag, or device…"
