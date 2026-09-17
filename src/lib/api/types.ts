@@ -543,6 +543,15 @@ export interface BlockLibrarySaveResult {
   name: string;
 }
 
+/** Metadata for one preset template in the caller-selected templates directory. Templates are plain
+ *  preset `.syx` files; the server returns metadata only and raw bytes are fetched on demand. */
+export interface TemplateCandidate {
+  path: string;
+  name: string;
+  size: number;
+  mtime: string; // ISO
+}
+
 /** A stored preset version snapshot (GET /versions). */
 export interface VersionInfo {
   id: string;

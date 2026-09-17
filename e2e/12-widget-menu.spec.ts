@@ -13,11 +13,12 @@ test.describe('Widget customize menu', () => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
 
-    // `axis.widget.preset` is a loose widget in the (uncrowded) top-left bar, so
-    // it renders as its own host with the edit-mode drag/tap surface on top.
+    // `axis.widget.preset` is a loose widget in the top-left bar, so it renders as its own host with
+    // the edit-mode drag/tap surface on top. (Its auto-fit tier depends on the bar's contents — the
+    // New-preset + button now joins this cluster — so the test drives it to Mini, which is below the
+    // auto-fit cap at every width, rather than assuming a starting tier.)
     const host = page.locator('[data-widget="axis.widget.preset"]');
     await expect(host).toHaveCount(1);
-    await expect(host).toHaveAttribute('data-size', 'default');
 
     // A plain click never crosses the 5px drag threshold, so pointerup opens the
     // menu instead of performing a drop.
@@ -30,9 +31,9 @@ test.describe('Widget customize menu', () => {
     await expect(menu.getByRole('menuitem', { name: 'Remove Widget' })).toBeVisible();
 
     // Picking a size dispatches widget.resize; the host's data-size reflects it.
-    await menu.getByRole('menuitem', { name: 'Compact Size' }).click();
+    await menu.getByRole('menuitem', { name: 'Mini Size' }).click();
     await expect(menu).toHaveCount(0);
-    await expect(host).toHaveAttribute('data-size', 'compact');
+    await expect(host).toHaveAttribute('data-size', 'mini');
   });
 
   test('Escape closes the widget menu', async ({ page }) => {

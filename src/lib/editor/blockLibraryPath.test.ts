@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultBlockLibraryPath } from './blockLibraryPath';
+import { defaultBlockLibraryPath, defaultPresetTemplatesPath } from './blockLibraryPath';
 
 describe('defaultBlockLibraryPath', () => {
   it.each([
@@ -14,5 +14,20 @@ describe('defaultBlockLibraryPath', () => {
   it('has no default without a supported detected unit', () => {
     expect(defaultBlockLibraryPath(null)).toBeNull();
     expect(defaultBlockLibraryPath('VP4')).toBeNull();
+  });
+});
+
+describe('defaultPresetTemplatesPath', () => {
+  it.each([
+    ['FM3', '~/Documents/Fractal Audio/FM3-Edit/presets/templates'],
+    ['FM9', '~/Documents/Fractal Audio/FM9-Edit/presets/templates'],
+    ['axe fx iii', '~/Documents/Fractal Audio/Axe-Edit III/presets/templates']
+  ])('maps %s to its Fractal Edit templates folder', (unit, path) => {
+    expect(defaultPresetTemplatesPath(unit)).toBe(path);
+  });
+
+  it('has no default without a supported detected unit', () => {
+    expect(defaultPresetTemplatesPath(null)).toBeNull();
+    expect(defaultPresetTemplatesPath('VP4')).toBeNull();
   });
 });

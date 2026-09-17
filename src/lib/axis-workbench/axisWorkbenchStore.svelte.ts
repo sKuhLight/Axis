@@ -15,7 +15,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisNewPresetWidgetPlacement, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedOrder, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
@@ -70,6 +70,8 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // runs after ensureAxisSeedPages so a pre-Pages doc already has its `pages` map, and is idempotent.
   // ensureAxisMyControlsPanel self-heals the single pin destination onto every layout's Grid page,
   // tabbed next to History. Same ordering reason, same idempotence requirement.
+  // ensureAxisNewPresetWidgetPlacement seeds the "New preset from template" + button into the
+  // preset cluster of a doc minted before it existed (right of the scene pencil, before Save).
   // ensureAxisSaveWidgetPlacement moves the canonical Save widget beside the preset/
   // scene names for docs minted while it still lived in the far-right status cluster.
   // ensureAxisTopBarParity runs LAST and is the final word on the top bar: it copies
@@ -77,13 +79,15 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // minted with the retired per-device top bars renders one bar on every screen size.
   return ensureAxisTopBarParity(
     ensureAxisSaveWidgetPlacement(
-      ensureAxisMeterWidgetLibrary(
-        pruneAxisRetiredWidgetTypes(
-          pruneAxisTopBarSearchWidgets(
-            pruneAxisRetiredRailWidgets(
-              pruneAxisRetiredNavigationEntries(
-                ensureAxisGridControlWidgets(
-                  ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
+      ensureAxisNewPresetWidgetPlacement(
+        ensureAxisMeterWidgetLibrary(
+          pruneAxisRetiredWidgetTypes(
+            pruneAxisTopBarSearchWidgets(
+              pruneAxisRetiredRailWidgets(
+                pruneAxisRetiredNavigationEntries(
+                  ensureAxisGridControlWidgets(
+                    ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
+                  )
                 )
               )
             )

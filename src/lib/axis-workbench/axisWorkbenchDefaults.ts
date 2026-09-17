@@ -114,10 +114,13 @@ export function createAxisTopBarWidgets(): Record<string, WidgetInstance> {
   return {
     'axis.widget.preset': widget('axis.widget.preset', 'axis.preset', 'top.left', 0, { state: widgetState(95) }),
     'axis.widget.scenes': widget('axis.widget.scenes', 'axis.scenes', 'top.left', 1, { state: widgetState(60) }),
+    // "New preset from template" — a bare + that opens the template picker. Placed between the
+    // scene widget (whose trailing pencil ends the preset-identity row) and Save.
+    'axis.widget.newPreset': widget('axis.widget.newPreset', 'axis.newPreset', 'top.left', 2, { state: widgetState(88) }),
     // Save sits directly after the Scenes widget rather than in the far-right
     // status cluster, so the amber "edited" pill and the action it offers are
     // next to the scene name.
-    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 2, { state: widgetState(95) }),
+    'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 3, { state: widgetState(95) }),
     'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
     'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
@@ -409,18 +412,22 @@ export function ensureAxisSaveWidgetPlacement(doc: WorkbenchDocument): Workbench
     // Respect an explicit placement outside the top bar (hidden/custom/floating).
     if (!isAxisTopBarZone(save.zone)) continue;
 
-    // Preferred: immediately after Scenes, in whatever top-bar zone Scenes uses.
+    // Preferred anchor: the "New preset" + button when it sits in the SAME top-bar zone as Scenes
+    // (the canonical cluster — Save belongs after the +), otherwise Scenes itself. A + parked alone
+    // elsewhere must not drag Save away from the scene/preset names.
     const scenes = Object.values(layout.widgets).find((instance) => instance?.type === 'axis.scenes' && isAxisTopBarZone(instance.zone));
-    if (scenes) {
-      if (save.zone === scenes.zone && save.order === scenes.order + 1) continue;
-      // Open a slot directly after Scenes without displacing Scenes itself.
+    const plus = Object.values(layout.widgets).find((instance) => instance?.type === 'axis.newPreset' && isAxisTopBarZone(instance.zone));
+    const anchor = scenes && plus && plus.zone === scenes.zone ? plus : (scenes ?? plus);
+    if (anchor) {
+      if (save.zone === anchor.zone && save.order === anchor.order + 1) continue;
+      // Open a slot directly after the anchor without displacing the anchor itself.
       for (const instance of Object.values(layout.widgets)) {
-        if (instance && instance !== save && instance.zone === scenes.zone && instance.order >= scenes.order + 1) {
+        if (instance && instance !== save && instance.zone === anchor.zone && instance.order >= anchor.order + 1) {
           instance.order += 1;
         }
       }
-      save.zone = scenes.zone;
-      save.order = scenes.order + 1;
+      save.zone = anchor.zone;
+      save.order = anchor.order + 1;
       continue;
     }
 
@@ -431,6 +438,30 @@ export function ensureAxisSaveWidgetPlacement(doc: WorkbenchDocument): Workbench
       .reduce((max, instance) => Math.max(max, instance.order ?? 0), -1);
     save.zone = 'top.left';
     save.order = topLeftMax + 1;
+  }
+  return doc;
+}
+
+/**
+ * Seed the "New preset from template" + button onto a persisted document minted before it existed.
+ * It slots into the top-bar preset cluster directly after Scenes — whose trailing pencil ends the
+ * preset-identity row — and before Save, so the + lands to the right of the pencil. A layout with no
+ * top-bar Scenes widget (a custom bar the user built) is left alone. Idempotent.
+ */
+export function ensureAxisNewPresetWidgetPlacement(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
+    if (layout.widgets['axis.widget.newPreset']) continue;
+    const scenes = Object.values(layout.widgets).find(
+      (instance) => instance?.type === 'axis.scenes' && isAxisTopBarZone(instance.zone)
+    );
+    if (!scenes) continue;
+    for (const instance of Object.values(layout.widgets)) {
+      if (instance && instance.zone === scenes.zone && instance.order >= scenes.order + 1) instance.order += 1;
+    }
+    layout.widgets['axis.widget.newPreset'] = widget('axis.widget.newPreset', 'axis.newPreset', scenes.zone, scenes.order + 1, {
+      state: widgetState(88)
+    });
   }
   return doc;
 }

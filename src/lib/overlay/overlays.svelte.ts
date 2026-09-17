@@ -29,6 +29,7 @@ export type OverlayId =
   | 'convert'
   | 'presetPicker'
   | 'presetSearch'
+  | 'presetTemplates'
   | 'linkArm'
   | 'blockEditor'
   | 'tapTempo'
@@ -60,6 +61,7 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   convert: 60,
   presetPicker: 70,
   presetSearch: 80,
+  presetTemplates: 85,
   linkArm: 90,
   blockEditor: 100,
   tapTempo: 110,

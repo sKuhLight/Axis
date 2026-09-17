@@ -24,6 +24,7 @@
   import ShortcutsOverlay from '$lib/ancillary/ShortcutsOverlay.svelte';
   import CachePrompt from '$lib/ui/CachePrompt.svelte';
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
+  import NewPresetFromTemplateDialog from '$lib/preset/NewPresetFromTemplateDialog.svelte';
   import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/ancillary/AxisPanel.svelte';
   import Notices from '$lib/ancillary/Notices.svelte';
@@ -194,6 +195,7 @@
   <ShortcutsOverlay />
   <CachePrompt />
   <ColorLabelsPrompt />
+  <NewPresetFromTemplateDialog />
   <DeviceDefsPrompt />
   <AxisPanel />
   <Notices />

@@ -6,6 +6,7 @@ import type {
   BlockApplyResult,
   BlockLibraryCandidate,
   BlockLibrarySaveResult,
+  TemplateCandidate,
   DecodedBlockFile,
   BlockSummary,
   BlockTypeOption,
@@ -223,6 +224,22 @@ export const forgefx = {
   saveBlockLibraryBlock: (libraryPath: string, name: string, effectId: number, mode: 'current' | 'all') =>
     req<BlockLibrarySaveResult>('/fm3edit/blocks/save', { method: 'POST', body: JSON.stringify({ libraryPath, name, effectId, mode }) }),
 
+  // ── preset templates (caller-selected templates dir; plain preset .syx, NODE/Electron-only) ──
+  /** List `.syx` templates in the directory (metadata only — bytes are fetched per selection). */
+  templateSources: (templatesPath: string) =>
+    req<{ candidates: TemplateCandidate[] }>(`/fm3edit/templates/sources?templatesPath=${encodeURIComponent(templatesPath)}`),
+  /** Raw `.syx` bytes of one template (path must be a discovered candidate). */
+  templateFile: (path: string, templatesPath: string) => {
+    const qs = `?path=${encodeURIComponent(path)}&templatesPath=${encodeURIComponent(templatesPath)}`;
+    return isDirect()
+      ? transportBinary(`/fm3edit/templates/file${qs}`, 'GET').then((r) => asArrayBuffer(r.body))
+      : fetch(`${BASE}/fm3edit/templates/file${qs}`, { signal: AbortSignal.timeout(12000) })
+          .then((r) => { if (!r.ok) throw new ForgeError(r.status, `template → ${r.status}`); return r.arrayBuffer(); });
+  },
+  /** Write caller-supplied preset bytes into the templates directory as `<name>.syx` (409 on exists). */
+  saveTemplate: (templatesPath: string, name: string, bytes: number[], overwrite = false) =>
+    req<{ ok: boolean; path: string }>('/fm3edit/templates/save', { method: 'POST', body: JSON.stringify({ templatesPath, name, bytes, overwrite }) }),
+
   // ── preset + grid (live) ──
   currentPreset: () => req<PresetRef>('/preset'),
   preset: (n: number) => req<PresetRef>(`/presets/${n}`),
@@ -300,6 +317,16 @@ export const forgefx = {
   loadVersion: (id: string) => req<{ ok: boolean }>(`/version/${id}/load`, { method: 'POST' }),
   /** Restore a snapshot to its origin slot (load + commit to that slot — destructive for the slot). */
   restoreVersion: (id: string) => req<{ ok: boolean; location: number }>(`/version/${id}/restore`, { method: 'POST' }),
+  /** Raw .syx of the connected model's clean "blank" preset scaffold — the "start from zero" reset.
+   *  Callers load it through loadBytes() so the buffer replacement stays one code path. 501 on a model
+   *  with no scaffold (AM4/VP4/gen-1/2). */
+  blankPresetSyx: () =>
+    isDirect()
+      ? transportBinary('/preset/blank/syx', 'GET').then((r) => asArrayBuffer(r.body))
+      : fetch(`${BASE}/preset/blank/syx`, { signal: AbortSignal.timeout(12000) }).then((r) => {
+          if (!r.ok) throw new ForgeError(r.status, `blank preset → ${r.status}`);
+          return r.arrayBuffer();
+        }),
   /** Load arbitrary raw .syx bytes (an imported file/folder preset) straight into the edit buffer. */
   loadBytes: (bytes: ArrayBuffer | Uint8Array) =>
     isDirect()

@@ -17,6 +17,8 @@ import type { WidgetInstance } from '../../workbench/core';
 export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   'axis.preset': 390,
   'axis.scenes': 390,
+  // Bare "New preset from template" + button (38px + a small gap).
+  'axis.newPreset': 44,
   'axis.tuner': 78,
   'axis.tempo': 82,
   'axis.cpu': 124,
@@ -58,7 +60,7 @@ export const AXIS_WIDGET_EST_WIDTH_FALLBACK = 120;
  * Keep-set: units that never shed into the `⋯` overflow chip (design:
  * `{preset:1, save:1}`).
  */
-export const AXIS_WIDGET_KEEP_TYPES: ReadonlySet<string> = new Set(['axis.preset', 'axis.save']);
+export const AXIS_WIDGET_KEEP_TYPES: ReadonlySet<string> = new Set(['axis.preset', 'axis.newPreset', 'axis.save']);
 
 export function axisWidgetEstWidth(type: string): number {
   // `param:*` design key collapses to a single `param` estW; Axis uses one

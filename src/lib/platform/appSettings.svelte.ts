@@ -3,12 +3,13 @@
 
 export interface AppSettingsCfg {
   blockLibraryPath: string;
+  presetTemplatesPath: string;
 }
 
 const KEY = 'axis.settings';
 
 function defaultCfg(): AppSettingsCfg {
-  return { blockLibraryPath: '' };
+  return { blockLibraryPath: '', presetTemplatesPath: '' };
 }
 
 class AppSettingsStore {
@@ -17,16 +18,28 @@ class AppSettingsStore {
   init(): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-      if (saved && typeof saved === 'object' && typeof saved.blockLibraryPath === 'string') {
-        this.cfg = { blockLibraryPath: saved.blockLibraryPath };
+      const saved = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<AppSettingsCfg> | null;
+      if (saved && typeof saved === 'object') {
+        this.cfg = {
+          blockLibraryPath: typeof saved.blockLibraryPath === 'string' ? saved.blockLibraryPath : '',
+          presetTemplatesPath: typeof saved.presetTemplatesPath === 'string' ? saved.presetTemplatesPath : ''
+        };
       }
     } catch { /* keep default */ }
   }
 
-  setBlockLibraryPath(path: string): void {
-    this.cfg = { blockLibraryPath: path.trim() };
+  #persist(): void {
     try { localStorage.setItem(KEY, JSON.stringify(this.cfg)); } catch { /* quota / private mode */ }
+  }
+
+  setBlockLibraryPath(path: string): void {
+    this.cfg = { ...this.cfg, blockLibraryPath: path.trim() };
+    this.#persist();
+  }
+
+  setPresetTemplatesPath(path: string): void {
+    this.cfg = { ...this.cfg, presetTemplatesPath: path.trim() };
+    this.#persist();
   }
 }
 

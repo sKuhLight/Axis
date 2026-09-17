@@ -14,7 +14,8 @@
   } from '$lib/editor/editorClients.svelte';
   import { appSettings } from '$lib/platform/appSettings.svelte';
   import { blockLibrary } from '$lib/editor/blockLibrary.svelte';
-  import { defaultBlockLibraryPath } from '$lib/editor/blockLibraryPath';
+  import { defaultBlockLibraryPath, defaultPresetTemplatesPath } from '$lib/editor/blockLibraryPath';
+  import { overlays } from '$lib/overlay/overlays.svelte';
   import { library } from '$lib/preset/library.svelte';
   import { deviceDefs } from '$lib/device/deviceDefs.svelte';
   import { isDirect } from '$lib/api/forgefx';
@@ -108,6 +109,15 @@
   let blkPathDraft = $state<string | null>(null);
   const blkPathValue = $derived(blkPathDraft ?? (appSettings.cfg.blockLibraryPath || blockLibraryDefault || ''));
   const onBlkPathInput = (v: string) => { blkPathDraft = v; setBlockLibraryPath(v); };
+
+  // ── Storage tab (preset templates: the folder of preset .syx starting points) ──
+  // Same override-else-default rule as the block library: an empty setting tracks the detected
+  // unit's official editor templates folder ("~/Documents/Fractal Audio/<Editor>/presets/templates").
+  const templatesDefault = $derived(defaultPresetTemplatesPath(detectedUnit));
+  let tplPathDraft = $state<string | null>(null);
+  const tplPathValue = $derived(tplPathDraft ?? (appSettings.cfg.presetTemplatesPath || templatesDefault || ''));
+  const onTplPathInput = (v: string) => { tplPathDraft = v; appSettings.setPresetTemplatesPath(v); };
+  const openTemplates = () => { editorOverlays.axisOpen = false; overlays.open('presetTemplates'); };
 
   function restoreFromFolder() {
     if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void presetBuffer.localRestore();
@@ -234,6 +244,18 @@
                      onblur={(e) => preloadBlockLibrary((e.currentTarget as HTMLInputElement).value)} />
             </label>
           </form>
+
+          <div class="sec mt">PRESET TEMPLATES</div>
+          <p class="muted">Where Axis finds preset <strong>templates</strong> — plain preset <strong>.syx</strong> files you can start a new preset from, opened with the <strong>+</strong> beside the preset name. Defaults to the connected unit's Fractal Edit <span class="mono">presets/templates</span> folder.</p>
+          <form class="frm" onsubmit={(e) => { e.preventDefault(); appSettings.setPresetTemplatesPath(tplPathValue); }}>
+            <label class="fld" for="tpl-path"><span class="flbl">FOLDER</span>
+              <input id="tpl-path" class="in sm" type="text"
+                     placeholder="Connect an FM3, FM9, or Axe-Fx III to set a default"
+                     value={tplPathValue}
+                     oninput={(e) => onTplPathInput((e.currentTarget as HTMLInputElement).value)} />
+            </label>
+          </form>
+          <button class="sync-now" onclick={openTemplates}><Icon name="device" size={15} /> New preset from template…</button>
         </div>
 
       {:else if editorOverlays.axisTab === 'theme'}

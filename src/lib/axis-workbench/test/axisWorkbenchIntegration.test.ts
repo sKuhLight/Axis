@@ -37,6 +37,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.logo',
       'axis.preset',
       'axis.scenes',
+      'axis.newPreset',
       'axis.tuner',
       'axis.tempo',
       'axis.cpu',

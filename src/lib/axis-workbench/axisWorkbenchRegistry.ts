@@ -46,6 +46,7 @@ import AxisParamControlWidget from './widgets/AxisParamControlWidget.svelte';
 import AxisPresetWidget from './widgets/AxisPresetWidget.svelte';
 import AxisSaveWidget from './widgets/AxisSaveWidget.svelte';
 import AxisScenesWidget from './widgets/AxisScenesWidget.svelte';
+import AxisNewPresetWidget from './widgets/AxisNewPresetWidget.svelte';
 import AxisSearchWidget from './widgets/AxisSearchWidget.svelte';
 import AxisSectionHeaderWidget from './widgets/AxisSectionHeaderWidget.svelte';
 import AxisTelemetryWidget from './widgets/AxisTelemetryWidget.svelte';
@@ -127,6 +128,7 @@ const AXIS_WIDGET_COMPONENTS: Record<string, WorkbenchWidgetComponent> = {
   'axis.logo': AxisLogoWidget,
   'axis.preset': AxisPresetWidget,
   'axis.scenes': AxisScenesWidget,
+  'axis.newPreset': AxisNewPresetWidget,
   'axis.tuner': AxisTunerWidget,
   'axis.tempo': AxisTempoWidget,
   'axis.cpu': AxisCpuWidget,
