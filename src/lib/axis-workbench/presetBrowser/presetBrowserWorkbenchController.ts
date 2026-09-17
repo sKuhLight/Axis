@@ -30,7 +30,6 @@ export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSe
   // list part (§4)
   sort: AxisPresetBrowserSort;
   sortDir: AxisPresetBrowserSortDir;
-  showAllRows: boolean;
   marked: Record<string, boolean>;
   anchorId: string | null;
   // owner election (§1) — which mounted part renders shared overlays
@@ -57,7 +56,6 @@ export class AxisPresetBrowserWorkbenchController {
     saving: false,
     sort: 'num',
     sortDir: 'asc',
-    showAllRows: false,
     marked: {},
     anchorId: null,
     owner: null
@@ -233,11 +231,6 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
-  setShowAllRows(showAll: boolean): void {
-    this.#snapshot = { ...this.#snapshot, showAllRows: showAll };
-    this.#emit();
-  }
-
   scrollToCurrent(entryId: string): void {
     this.#snapshot = {
       ...this.#snapshot,
@@ -246,7 +239,6 @@ export class AxisPresetBrowserWorkbenchController {
       queryText: '',
       sort: 'num',
       sortDir: 'asc',
-      showAllRows: true,
       entryId,
       anchorId: entryId,
       focusedBlockEffectId: null,

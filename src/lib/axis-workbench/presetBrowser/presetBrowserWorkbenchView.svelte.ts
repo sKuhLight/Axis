@@ -184,8 +184,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     tagCounts = incrementTagCount(tagCounts, tag);
     persistTagCounts(tagCounts);
   }
-  // 14-row soft cap + "Show all" expander (§4.1).
-  const rowCap = $derived(viewModel.rowCap(snapshot));
+  // Lazy scroll batching (§4.1) lives in PbListBody itself — see AXIS_PB_INITIAL_ROWS/SCROLL_BATCH.
   const activeTags = $derived(
     new Set(activeConditions.filter((c) => c.kind === 'tag').map((c) => c.val.toLowerCase()))
   );
@@ -790,7 +789,6 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     applySavedFilter,
     get tagRow() { return tagRow; },
     recordTagUsage,
-    get rowCap() { return rowCap; },
     get scrollToCurrentRequest() { return scrollToCurrentRequest; },
     get activeTags() { return activeTags; },
     get isOwner() { return isOwner; },

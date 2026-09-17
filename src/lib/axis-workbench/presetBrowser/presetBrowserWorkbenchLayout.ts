@@ -1,15 +1,10 @@
 import type { AxisPresetBrowserPart } from './types';
 
-// Soft row cap for the list part (§4.1): mount a small page first so dock mounts stay fast, then the
-// "Show all {N} presets" expander reveals the rest.
-export const AXIS_PB_SOFT_ROW_CAP = 14;
-
-export interface AxisPbRowCap<T> {
-  rows: T[];
-  totalRows: number;
-  capped: boolean;
-  hiddenCount: number;
-}
+// Lazy row batching for the list part (§4.1): mount the first screenful so dock mounts stay fast,
+// then append the next batch as the user scrolls the list. No "Show all" expander, no full-library
+// DOM mount — this mirrors the Grid page's quick-search overlay (AxisPresetBrowserSearchOverlay).
+export const AXIS_PB_INITIAL_ROWS = 20;
+export const AXIS_PB_SCROLL_BATCH = 20;
 
 export interface AxisPbPresetReveal {
   highlightIndex: number;
@@ -30,13 +25,10 @@ export function axisPbPresetReveal(
   };
 }
 
-// Apply the soft cap. When `showAll` is false and there are more than the cap, only the first
-// AXIS_PB_SOFT_ROW_CAP rows are returned; `capped` flags that an expander should render.
-export function applyRowCap<T>(list: T[], showAll: boolean): AxisPbRowCap<T> {
-  const totalRows = list.length;
-  const capped = !showAll && totalRows > AXIS_PB_SOFT_ROW_CAP;
-  const rows = capped ? list.slice(0, AXIS_PB_SOFT_ROW_CAP) : list;
-  return { rows, totalRows, capped, hiddenCount: capped ? totalRows - rows.length : 0 };
+// Grow the visible window by one batch, clamped to the total. Pure so the scroll-growth step is
+// unit-testable without a DOM (components are never unit-mounted — see the testing convention).
+export function nextAxisPbVisibleCount(visible: number, total: number, batch = AXIS_PB_SCROLL_BATCH): number {
+  return Math.min(Math.max(visible, 0) + batch, total);
 }
 
 // Overlay ownership rank (§1): the lowest-rank mounted part owns all pickers/menus/dialogs/toasts.

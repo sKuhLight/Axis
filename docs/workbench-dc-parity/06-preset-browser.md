@@ -199,12 +199,12 @@ let list=this.PRESETS.filter(p=>!S.deleted[p.n] && devOK(p) && viewPred(metaOf(p
 list=list.slice().sort((a,b)=> S.sort==="name"?this.effName(a.n).localeCompare(this.effName(b.n))
                               : a.n-b.n);
 this._order=list.map(p=>p.n);
-// soft cap: mount a small page of rows first (keeps dock mounts fast); "Show all" expands
+// lazy batching: mount the first screenful, append a batch as the list scrolls
 const totalRows=list.length;
-if(!S.showAllRows && totalRows>14) list=list.slice(0,14);
+list=list.slice(0, visibleCount);
 ```
 
-The cap is a **soft cap of 14 rows** with an explicit expander button below the list: `"Show all {N} presets"` (h 40, radius 10, `bg var(--surface); border var(--border2)`), which sets `showAllRows:true`.
+The list is **lazily batched**: the first `AXIS_PB_INITIAL_ROWS` (20) rows mount immediately, then `AXIS_PB_SCROLL_BATCH` (20) more append each time the trailing sentinel scrolls into view, with a `"+{N} more — scroll to load"` hint below the rows. The whole library stays reachable without ever mounting all rows at once — the same model as the Grid page's `P` quick-search overlay. Batching state is local to each mounted list instance; a changed query/sort/source starts back at the first batch, and "scroll to current preset" grows the window past that preset's index before centering it.
 
 ### 4.2 Selection header (sticky)
 
@@ -296,7 +296,7 @@ Theme tokens identical to doc 04 (`--bg #0c0c0e … --accent #35c9d6`, Hanken Gr
 | Tag pill | mono 700 9.5, `{col}` on `{col}1f`, radius 5 |
 | Block chip (row) | mono 600 10, `{cat}` on `{cat}17`, border `{cat}33`, radius 6, maxW 160 |
 | Cloud/device chip | mono 700 9, `{col}` on `{col}1f`, border `{col}40`, radius 5 |
-| Soft cap | 14 rows + `Show all {N} presets` (h 40, radius 10) |
+| Row batching | 20 initial rows, +20 per scroll batch, `"+{N} more — scroll to load"` hint |
 | Selection header | sticky, h ~50 (`10px 18px`), buttons h 30 radius 8; Delete tint `#1f1315/#3a1f1f/#e87b6a` |
 | Context menu | fixed w 230 radius 11 shadow `0 24px 60px`; item `8px 10px` radius 8; danger `#e87b6a` |
 | Picker | w 300 maxH 360 radius 13, list maxH 288 |
@@ -319,7 +319,7 @@ Production shared state today: controller snapshot `{sourceId, entryId, focusedB
 
 ### P0 — structural gaps
 
-- [ ] **Split-list cap mismatch** *(confirmed)* — `AxisPresetBrowserPartPanel.svelte` `list` part hard-caps at 120 rows (`.slice(0, 120)`) with **no expander**; the spec is a soft cap of **14** rows with a `"Show all {N} presets"` button (`showAllRows`) so dock mounts stay fast but the full library remains reachable (§4.1). Replace the silent 120-cap with the 14 + expander pattern (or virtualization) and the exact button chrome.
+- [x] **List row batching** — the list part mounts the first 20 rows and appends +20 per scroll batch (`"+{N} more — scroll to load"`), backed by `AXIS_PB_INITIAL_ROWS`/`AXIS_PB_SCROLL_BATCH` + `nextAxisPbVisibleCount` in `presetBrowserWorkbenchLayout.ts`. Replaced the old soft cap of 14 + `"Show all {N} presets"` expander, which mounted the entire library at once. Batching state is local to each mounted list instance (`PbListBody.svelte`), mirroring the Grid quick-search overlay.
 - [ ] **List part is missing the top bar + query system** — design `showTop = full || list`: the header (count line, sync chip, device filter, sort segment, advanced toggle), query bar with autocomplete, and builder-chips row are part of the **list part**. Production list part renders only rows; the advanced query/chips/saved-filter UI lives solely in the full part. Port §2 into the list part (backed by the shared controller so sources/detail react).
 - [ ] **Sources part content mismatch** — production sources part = preset sources with proportional bars. Design sources part = **views-with-counts** (7 cloud/device views, §3) + **saved filters** (apply/duplicate/delete/save-name inline) + **quick tags**. Decide the union: at minimum add saved filters + quick tags to the part and reconcile "views" with production's source list; counts must respect the active device filter and deletions.
 - [ ] **Query/selection shared-state contract** — the parts must share `conditions/query/advanced`, `view`, `deviceFilter`, `sort`, `marked/anchorN`, `saved/saving`, `renaming/renames`, and `selected` (`entryId` exists). Extend `presetBrowserWorkbenchController` snapshot accordingly; overlay ownership (picker/ctx/confirm/toast render on the lowest-rank mounted part: list < detail < sources < full, §1) needs an explicit owner election in the controller.

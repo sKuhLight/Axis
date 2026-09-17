@@ -107,16 +107,6 @@ describe('Preset Browser view model orchestration', () => {
     expect(offline.model.data().visibleEntries.some((entry) => entry.empty)).toBe(false);
   });
 
-  it('caps the first render at 14 rows and reveals all rows on request', () => {
-    const { controller, model } = setup();
-    expect(model.rowCap()).toMatchObject({ capped: true, totalRows: 20, hiddenCount: 6 });
-    expect(model.rowCap().rows).toHaveLength(14);
-
-    controller.setShowAllRows(true);
-    expect(model.rowCap()).toMatchObject({ capped: false, totalRows: 20, hiddenCount: 0 });
-    expect(model.rowCap().rows).toHaveLength(20);
-  });
-
   it('routes rename/load actions and persists saved-filter changes through the host', () => {
     const { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, openConverted } = setup();
     expect(model.rename(summary(), '  New Lead  ')).toBe(true);

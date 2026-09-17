@@ -15,7 +15,6 @@ import type {
 import type { AxisPresetBrowserWorkbenchRuntime } from './presetBrowserWorkbenchRuntime';
 import type { AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceViewDef } from './presetBrowserWorkbenchPresence';
-import { applyRowCap, type AxisPbRowCap } from './presetBrowserWorkbenchLayout';
 import { resolvePresetLoadAction, type AxisPresetLoadAction } from './presetBrowserWorkbenchLoadAction';
 import {
   addSavedFilter,
@@ -98,10 +97,6 @@ export class AxisPresetBrowserViewModel {
       presenceView: snapshot.presenceView,
       presenceViews: this.#presenceViews
     });
-  }
-
-  rowCap(snapshot: AxisPresetBrowserControllerSnapshot = this.#controller.snapshot): AxisPbRowCap<AxisPresetBrowserEntrySummary> {
-    return applyRowCap(this.data(snapshot).visibleEntries, snapshot.showAllRows);
   }
 
   select(entry: AxisPresetBrowserEntrySummary): void {

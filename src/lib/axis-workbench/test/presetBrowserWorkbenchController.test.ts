@@ -109,7 +109,6 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
       queryText: '',
       sort: 'num',
       sortDir: 'asc',
-      showAllRows: true,
       entryId: 'dev:128',
       anchorId: 'dev:128'
     });

@@ -1,19 +1,82 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
   import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
   import AxisPresetBrowserRowMain from '../../../presetBrowser/AxisPresetBrowserRowMain.svelte';
   import { longPress } from '../../../longPress';
+  import {
+    AXIS_PB_INITIAL_ROWS,
+    axisPbPresetReveal,
+    nextAxisPbVisibleCount
+  } from '../../../presetBrowser/presetBrowserWorkbenchLayout';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
   let listEl = $state<HTMLDivElement | null>(null);
+  let sentinelEl = $state<HTMLDivElement | null>(null);
 
+  // §4.1 Lazy scroll batching — mount the first screenful, append the next batch as the sentinel
+  // enters view. Same model as the Grid page's quick-search overlay (AxisPresetBrowserSearchOverlay):
+  // the full library is reachable, but only the rows on screen are ever mounted.
+  let visibleCount = $state(AXIS_PB_INITIAL_ROWS);
+  const total = $derived(view.data.visibleEntries.length);
+  const rows = $derived(view.data.visibleEntries.slice(0, visibleCount));
+  const remaining = $derived(total - rows.length);
+
+  // A new result set (query/sort/source change) starts back at the first batch. Created BEFORE the
+  // reveal effect below so an explicit scrollToCurrent resets first, then re-expands to the preset.
+  $effect(() => {
+    void view.snapshot.queryText;
+    void view.snapshot.sort;
+    void view.snapshot.sortDir;
+    void view.snapshot.presenceView;
+    void view.snapshot.sourceId;
+    visibleCount = AXIS_PB_INITIAL_ROWS;
+  });
+
+  // Reveal the current preset: grow the window past its index, then center it. Replaces the old
+  // show-all expansion (`scrollToCurrentRequest` still signals the request). Only the request token is
+  // tracked — the entry/data reads are untracked so a later library refresh doesn't re-scroll the list.
   $effect(() => {
     if (!view.scrollToCurrentRequest) return;
+    untrack(() => {
+      const entries = view.data.visibleEntries;
+      const currentIndex = entries.findIndex((entry) => entry.id === view.snapshot.entryId);
+      visibleCount = axisPbPresetReveal(entries.length, currentIndex, AXIS_PB_INITIAL_ROWS).visibleCount;
+      void tick().then(() => {
+        listEl?.querySelector<HTMLElement>('.preset-row.active')?.scrollIntoView({ block: 'center' });
+      });
+    });
+  });
+
+  // Grow when the trailing sentinel scrolls into view. Uses the viewport as root (no scroll-parent
+  // lookup) so it works in both the full panel's `.axis-pb-list-scroll` and the list part's chrome.
+  $effect(() => {
+    const el = sentinelEl;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          visibleCount = nextAxisPbVisibleCount(visibleCount, total);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
+
+  // A tall viewport can fit the whole first batch with no scrollbar to drive the observer, so keep
+  // growing after each append while the sentinel is still within the viewport. Clamps at `total`.
+  $effect(() => {
+    void rows.length;
+    if (visibleCount >= total) return;
     void tick().then(() => {
-      listEl?.querySelector<HTMLElement>('.preset-row.active')?.scrollIntoView({ block: 'center' });
+      const rect = sentinelEl?.getBoundingClientRect();
+      if (rect && rect.top < window.innerHeight + 300) {
+        visibleCount = nextAxisPbVisibleCount(visibleCount, total);
+      }
     });
   });
 </script>
@@ -35,8 +98,8 @@
       <button type="button" class="col-sort num" class:on={view.snapshot.sort === 'num'} aria-label={view.sortLabel('num', 'slot number')} onclick={() => view.toggleSort('num')}>#{view.sortArrow('num')}</button>
       <span class="col-mid">
         <button type="button" class="col-sort" class:on={view.snapshot.sort === 'name'} aria-label={view.sortLabel('name', 'name')} onclick={() => view.toggleSort('name')}>Name{view.sortArrow('name')}</button>
-        <span class="col-count" class:filtered={view.rowCap.totalRows !== view.data.scopedTotal}>
-          {view.rowCap.totalRows === view.data.scopedTotal ? `${view.data.scopedTotal} presets` : `${view.rowCap.totalRows} of ${view.data.scopedTotal}`}
+        <span class="col-count" class:filtered={total !== view.data.scopedTotal}>
+          {total === view.data.scopedTotal ? `${view.data.scopedTotal} presets` : `${total} of ${view.data.scopedTotal}`}
         </span>
         <span class="col-sp"></span>
       </span>
@@ -60,7 +123,7 @@
     </div>
   </div>
   <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
-    {#each view.rowCap.rows as entry}
+    {#each rows as entry}
       <div
         class="preset-row"
         class:active={view.snapshot.entryId === entry.id}
@@ -119,10 +182,8 @@
       </div>
     {/each}
   </div>
-  {#if view.rowCap.capped}
-    <button type="button" class="show-all" onclick={() => axisPresetBrowserWorkbenchController.setShowAllRows(true)}>
-      Show all {view.rowCap.totalRows} presets
-    </button>
+  {#if remaining > 0}
+    <div class="more-hint" bind:this={sentinelEl}>+{remaining} more — scroll to load</div>
   {/if}
 {:else}
   <div class="axis-part-empty">
@@ -346,15 +407,12 @@
     padding: 0 10px;
     text-transform: none;
   }
-  .show-all {
-    height: 40px;
-    border-radius: 10px;
-    border: 1px solid var(--border2, var(--border));
-    background: var(--surface, var(--bg2));
-    color: var(--text2);
+  .more-hint {
+    padding: 22px 12px;
     text-align: center;
-    text-transform: none;
-    font: 700 12px/1 var(--font-ui);
+    color: var(--textdim);
+    font: 600 11px/1 var(--font-mono);
+    letter-spacing: 0.04em;
   }
   .axis-part-empty {
     flex: 1;

@@ -1,35 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AXIS_PB_SOFT_ROW_CAP,
-  applyRowCap,
+  AXIS_PB_INITIAL_ROWS,
+  AXIS_PB_SCROLL_BATCH,
   axisPbPresetReveal,
   axisPbRank,
-  electAxisPbOwner
+  electAxisPbOwner,
+  nextAxisPbVisibleCount
 } from '../presetBrowser/presetBrowserWorkbenchLayout';
 
-const rows = (n: number) => Array.from({ length: n }, (_, i) => i);
-
-describe('Preset Browser soft row cap (§4.1)', () => {
-  it('does not cap at or below the soft cap', () => {
-    const cap = applyRowCap(rows(AXIS_PB_SOFT_ROW_CAP), false);
-    expect(cap.capped).toBe(false);
-    expect(cap.rows).toHaveLength(AXIS_PB_SOFT_ROW_CAP);
-    expect(cap.hiddenCount).toBe(0);
+describe('Preset Browser lazy row batching (§4.1)', () => {
+  it('grows the visible window by one batch', () => {
+    expect(nextAxisPbVisibleCount(AXIS_PB_INITIAL_ROWS, 512)).toBe(AXIS_PB_INITIAL_ROWS + AXIS_PB_SCROLL_BATCH);
   });
 
-  it('caps to 14 rows and reports the hidden count when over cap', () => {
-    const cap = applyRowCap(rows(40), false);
-    expect(cap.capped).toBe(true);
-    expect(cap.rows).toHaveLength(14);
-    expect(cap.totalRows).toBe(40);
-    expect(cap.hiddenCount).toBe(26);
+  it('clamps to the total instead of overshooting', () => {
+    expect(nextAxisPbVisibleCount(500, 512)).toBe(512);
+    expect(nextAxisPbVisibleCount(512, 512)).toBe(512);
   });
 
-  it('shows all rows once expanded', () => {
-    const cap = applyRowCap(rows(40), true);
-    expect(cap.capped).toBe(false);
-    expect(cap.rows).toHaveLength(40);
-    expect(cap.hiddenCount).toBe(0);
+  it('honours an explicit batch size', () => {
+    expect(nextAxisPbVisibleCount(10, 100, 5)).toBe(15);
   });
 });
 
