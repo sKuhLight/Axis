@@ -39,6 +39,8 @@
   import { pollIntervalsFor } from '$lib/editor/pollIntervals';
   import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
   import { overlays } from '$lib/overlay/overlays.svelte';
+  import { axisWorkbenchController } from '$lib/axis-workbench/axisWorkbenchStore.svelte';
+  import { AXIS_PAGE_GRID } from '$lib/axis-workbench/axisWorkbenchPages';
   import '$lib/overlay/overlayRegistrations';
 
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
@@ -81,10 +83,14 @@
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
       const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      // Every shortcut below except the tuner toggle and Escape is scoped to the Grid page, so
+      // grid-editing keys can't fire while another workbench page is in view. Escape stays global
+      // because it is the fallback that closes registry-backed dialogs from any page.
+      const onGrid = axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID;
+      if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void (e.shiftKey ? history.redo() : history.undo());
-      } else if (!editing && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
+      } else if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
         void history.redo();
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T')) {
@@ -94,7 +100,7 @@
         if (!deviceSession.hasTuner) return; // same capability gate as the TopBar chip
         e.preventDefault();
         telemetry.toggleTuner();
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
         // Bare `b` taps tempo, the way `t` toggles the tuner. The first tap opens the "keep
         // tapping" prompt, which re-arms on each tap and dismisses itself after a pause.
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
@@ -102,28 +108,28 @@
         e.preventDefault();
         tapTempo.tap();
         void deviceSession.tapTempo();
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
         // toggleBypass is a no-op unless a real block is selected.
         e.preventDefault();
         void paramEditing.toggleBypass();
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Backspace') {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Backspace') {
         // removeHoveredOrSelected is a no-op unless a cell is hovered or selected.
         e.preventDefault();
         void gridEditing.removeHoveredOrSelected();
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
         // Bare `q` toggles the Quick Build block sidecar (drag blocks onto the grid).
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.quickBuildOpen = !editorOverlays.quickBuildOpen;
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '/') {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '/') {
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         window.dispatchEvent(new Event('axis:focus-control-search'));
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'p' || e.key === 'P')) {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'p' || e.key === 'P')) {
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.presetSearchOpen = true;
-      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
         // Bare `?` (Shift+/ on most layouts) opens the shortcut cheat sheet; Escape closes it.
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
