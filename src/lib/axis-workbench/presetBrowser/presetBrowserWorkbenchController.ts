@@ -1,4 +1,5 @@
 import { parseAxisPresetBrowserPart, type AxisPresetBrowserPart, type AxisPresetBrowserSelection } from './types';
+import type { AxisPbMoveStep } from './presetBrowserWorkbenchMove';
 import { electAxisPbOwner } from './presetBrowserWorkbenchLayout';
 import { condsToQuery, parseUnifiedQuery, serializeUnifiedQuery, type AxisPbCond } from './presetBrowserWorkbenchQuery';
 import type { AxisPbPresenceView } from './presetBrowserWorkbenchPresence';
@@ -32,6 +33,15 @@ export interface AxisPresetBrowserControllerSnapshot extends AxisPresetBrowserSe
   sortDir: AxisPresetBrowserSortDir;
   marked: Record<string, boolean>;
   anchorId: string | null;
+  // move overlay (§4.6) — shared across parts; the owner part renders it and the device grid is its picker.
+  moveOpen: boolean;
+  /** Moves already STAGED in the dialog (each a contiguous run + destination). Confirm applies them
+   *  all as one permutation; clicking cells never touches these. */
+  moveStaged: AxisPbMoveStep[];
+  /** The working set being built by clicks / dragged by the current gesture. */
+  moveSource: number[];
+  /** Live drop target for the working set (also how ⌥-click sets a destination). */
+  moveDestination: number | null;
   // owner election (§1) — which mounted part renders shared overlays
   owner: AxisPresetBrowserPart | null;
 }
@@ -58,6 +68,10 @@ export class AxisPresetBrowserWorkbenchController {
     sortDir: 'asc',
     marked: {},
     anchorId: null,
+    moveOpen: false,
+    moveStaged: [],
+    moveSource: [],
+    moveDestination: null,
     owner: null
   };
 
@@ -277,6 +291,93 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
+  // ── move overlay (§4.6) ──
+  /** Open the move dialog. `seed` (usually the list's marked/selected rows) pre-selects the things to
+   *  move, but the dialog always opens — the source can be chosen entirely inside it. */
+  openMove(seed: readonly number[] = []): void {
+    this.#snapshot = {
+      ...this.#snapshot,
+      moveOpen: true,
+      moveStaged: [],
+      moveSource: this.#normalizeMoveSource(seed),
+      moveDestination: null
+    };
+    this.#emit();
+  }
+
+  closeMove(): void {
+    if (!this.#snapshot.moveOpen) return;
+    this.#snapshot = { ...this.#snapshot, moveOpen: false, moveStaged: [], moveSource: [], moveDestination: null };
+    this.#emit();
+  }
+
+  /** Commit the working set + live destination as a staged move, then clear both so the next drag
+   *  starts fresh. No-op unless a set and a destination are both present. */
+  stageMove(): void {
+    const source = this.#normalizeMoveSource(this.#snapshot.moveSource);
+    const destination = this.#snapshot.moveDestination;
+    if (!source.length || destination == null) return;
+    this.#snapshot = {
+      ...this.#snapshot,
+      moveStaged: [...this.#snapshot.moveStaged, { selection: source, destination }],
+      moveSource: [],
+      moveDestination: null
+    };
+    this.#emit();
+  }
+
+  unstageMove(index: number): void {
+    if (index < 0 || index >= this.#snapshot.moveStaged.length) return;
+    this.#snapshot = {
+      ...this.#snapshot,
+      moveStaged: this.#snapshot.moveStaged.filter((_, i) => i !== index)
+    };
+    this.#emit();
+  }
+
+  /** Discard every staged move and the working set. */
+  clearMoves(): void {
+    this.#snapshot = { ...this.#snapshot, moveStaged: [], moveSource: [], moveDestination: null };
+    this.#emit();
+  }
+
+  /** Add or remove one slot from the dialog's source run. */
+  toggleMoveSource(slot: number): void {
+    const next = new Set(this.#snapshot.moveSource);
+    if (next.has(slot)) next.delete(slot);
+    else next.add(slot);
+    this.#snapshot = { ...this.#snapshot, moveSource: this.#normalizeMoveSource(next) };
+    this.#emit();
+  }
+
+  /** Replace the dialog's source run (Shift-click range selection). */
+  setMoveSource(slots: readonly number[]): void {
+    this.#snapshot = { ...this.#snapshot, moveSource: this.#normalizeMoveSource(slots) };
+    this.#emit();
+  }
+
+  setMoveDestination(slot: number | null): void {
+    if (this.#snapshot.moveDestination === slot) return;
+    this.#snapshot = { ...this.#snapshot, moveDestination: slot };
+    this.#emit();
+  }
+
+  #normalizeMoveSource(slots: Iterable<number>): number[] {
+    return [...new Set(slots)].filter((n) => Number.isInteger(n)).sort((a, b) => a - b);
+  }
+
+  /** Seed for opening the dialog from the list: the MARKED device rows only — an explicit "move
+   *  these" gesture. The single SELECTED row is deliberately NOT a seed: a plain click just browses,
+   *  and its leftover selection would pre-fill the next dialog with a source the user never chose
+   *  (which then reads as a non-contiguous run the moment they click one more cell). Empty is fine —
+   *  the dialog is where the source gets chosen. */
+  moveSlots(): number[] {
+    const marked = Object.keys(this.#snapshot.marked)
+      .filter((id) => id.startsWith('dev:'))
+      .map((id) => Number(id.slice('dev:'.length)));
+    return this.#normalizeMoveSource(marked);
+  }
+
   loadSelected(): boolean {
     const entryId = this.#snapshot.entryId;
     if (!entryId || !this.#host?.loadEntry) return false;
@@ -301,7 +402,9 @@ export class AxisPresetBrowserWorkbenchController {
   #clone(): AxisPresetBrowserControllerSnapshot {
     return {
       ...this.#snapshot,
-      marked: { ...this.#snapshot.marked }
+      marked: { ...this.#snapshot.marked },
+      moveStaged: this.#snapshot.moveStaged.map((step) => ({ ...step, selection: [...step.selection] })),
+      moveSource: [...this.#snapshot.moveSource]
     };
   }
 

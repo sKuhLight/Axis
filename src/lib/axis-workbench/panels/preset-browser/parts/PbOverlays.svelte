@@ -2,6 +2,7 @@
   import { library } from '$lib/preset/library.svelte';
   import ContextMenu from '../../../../workbench/svelte/ContextMenu.svelte';
   import { TAG_SWATCH_COUNT, tagSwatchCss } from '$lib/preset/tagColors';
+  import AxisPresetBrowserMoveOverlay from '../../../presetBrowser/AxisPresetBrowserMoveOverlay.svelte';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
@@ -12,6 +13,7 @@
      it works cross-panel. -->
 {#if view.isOwner}
   <ContextMenu open={view.menuOpen} position={view.menuPos} items={view.menuItems} label="Preset actions" onClose={() => (view.menuOpen = false)} />
+  <AxisPresetBrowserMoveOverlay {view} />
 {/if}
 
 <!-- Toolbar overflow menu (Re-scan device / Convert Preset…). Local to the query-bar owner. -->

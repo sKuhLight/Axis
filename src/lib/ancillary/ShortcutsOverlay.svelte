@@ -4,7 +4,7 @@
   import { overlays } from '$lib/overlay/overlays.svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { axisWorkbenchController } from '$lib/axis-workbench/axisWorkbenchStore.svelte';
-  import { AXIS_PAGE_GRID } from '$lib/axis-workbench/axisWorkbenchPages';
+  import { AXIS_PAGE_GRID, AXIS_PAGE_PRESET_BROWSER } from '$lib/axis-workbench/axisWorkbenchPages';
   import { visibleShortcutGroups } from './shortcuts';
 
   const open = $derived(overlays.isOpen('shortcuts'));
@@ -16,6 +16,7 @@
   const groups = $derived(
     visibleShortcutGroups({
       gridActive: $axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID,
+      presetBrowserActive: $axisWorkbenchController.activePage?.id === AXIS_PAGE_PRESET_BROWSER,
       hasTuner: deviceSession.hasTuner,
       hasTempo: deviceSession.hasTempo
     })

@@ -266,6 +266,16 @@ export const forgefx = {
       method: 'POST',
       body: JSON.stringify({ number })
     }),
+  /** Permute device slots — the preset-move feature. The write list is a bijection computed by the
+   *  pure `resolveAxisPbMoveBatch` planner from the staged moves. ForgeFX snapshots every affected
+   *  slot BEFORE the first write and rolls back on failure, so overlapping ranges are safe. Long
+   *  timeout: a batch is a run of paced dump sends + flash writes. */
+  movePresets: (writes: { from: number; to: number }[], opts?: { slotCount?: number; activeSlot?: number }) =>
+    req<{ ok: boolean; writes: { from: number; to: number }[]; slots: number }>('/preset/move', {
+      method: 'POST',
+      body: JSON.stringify({ writes, ...opts }),
+      signal: AbortSignal.timeout(600000)
+    }),
 
   // ── live block parameters (addressed by the placed instance's effect id) ──
   blockParams: (eid: number, options: { observe?: boolean } = {}) =>

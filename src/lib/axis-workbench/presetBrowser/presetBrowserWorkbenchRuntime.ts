@@ -2,7 +2,24 @@ import type {
   AxisPresetBrowserBlockSummary,
   AxisPresetBrowserLibEntryLike
 } from './presetBrowserWorkbenchData';
+import {
+  resolveAxisPbMoveBatch,
+  type AxisPbMoveFailure,
+  type AxisPbMoveStep,
+  type AxisPbMoveWrite
+} from './presetBrowserWorkbenchMove';
 import { createAxisRuntimeHostStack } from '../runtimeHostStack';
+
+/** Human-readable reason a move was refused before any device write. */
+function moveFailureMessage(reason: AxisPbMoveFailure): string {
+  switch (reason) {
+    case 'empty-selection': return 'Select at least one preset to move';
+    case 'not-contiguous': return 'A move needs a contiguous run of slots';
+    case 'selection-out-of-range': return 'That selection is outside the device slots';
+    case 'destination-out-of-range': return 'That destination is outside the device slots';
+    case 'conflicting-moves': return 'Two staged moves use the same slot - remove one';
+  }
+}
 
 export interface AxisPresetBrowserVersionLike {
   id: string;
@@ -42,6 +59,13 @@ export interface AxisPresetBrowserRuntimeHost {
   notify?: (message: string, accent?: string) => void;
   /** Stamp a successful load for the Recent sort. Host-injected so the runtime stays app-free. */
   recordLoad?: (entryId: string) => void;
+  /** Apply a resolved slot permutation on the device (snapshot-first server-side; rolls back on
+   *  failure). The host fills in the active slot to restore. */
+  applyPresetMove?: (writes: AxisPbMoveWrite[], opts: { slotCount: number }) => Promise<void>;
+  /** Device slot occupancy, so the plan can report which destinations end up empty. */
+  isSlotEmpty?: (slot: number) => boolean;
+  /** Re-read affected device slots into the library cache after a move. */
+  refreshDeviceSlots?: (slots: number[]) => Promise<void>;
 }
 
 export interface AxisPresetBrowserDetailState {
@@ -58,6 +82,8 @@ export interface AxisPresetBrowserRuntimeSnapshot {
   loadingEntryId: string | null;
   auditioningEntryId: string | null;
   hydratingEntryId: string | null;
+  /** True while a block move is being applied on the device. */
+  moving: boolean;
   error: string | null;
   lastLoadedEntryId: string | null;
   lastAuditionedEntryId: string | null;
@@ -72,6 +98,7 @@ export class AxisPresetBrowserWorkbenchRuntime {
     loadingEntryId: null,
     auditioningEntryId: null,
     hydratingEntryId: null,
+    moving: false,
     error: null,
     lastLoadedEntryId: null,
     lastAuditionedEntryId: null,
@@ -213,6 +240,45 @@ export class AxisPresetBrowserWorkbenchRuntime {
       const error = messageOf(e);
       host.notify?.(error || 'Save failed', '#d6543f');
       this.#set({ loadingEntryId: null, error });
+      return false;
+    }
+  }
+
+  /** Apply every staged move as ONE snapshot-first permutation. Each step is planned by the pure
+   *  `resolveAxisPbMoveBatch`, whose merged writes the host applies on the device — the server
+   *  snapshots every affected slot before the first write and rolls back on failure. Returns success. */
+  async moveBatch(steps: readonly AxisPbMoveStep[], slotCount: number): Promise<boolean> {
+    const host = this.#hosts.current;
+    if (!host?.applyPresetMove) {
+      this.#set({ error: 'No runtime host to move presets.' });
+      return false;
+    }
+    const resolved = resolveAxisPbMoveBatch(steps, { slotCount, isEmpty: host.isSlotEmpty });
+    if (!resolved.ok) {
+      host.notify?.(moveFailureMessage(resolved.reason), '#d6543f');
+      this.#set({ error: resolved.reason });
+      return false;
+    }
+    const { writes, unchanged, cleared } = resolved.plan;
+    if (!writes.length) {
+      host.notify?.('Those presets are already in that position', '#f5a623');
+      return true;
+    }
+
+    this.#set({ moving: true, error: null });
+    try {
+      await host.applyPresetMove(writes, { slotCount });
+      await host.reloadEditor?.();
+      const affected = [...new Set([...writes.flatMap((w) => [w.from, w.to]), ...unchanged])].sort((a, b) => a - b);
+      await host.refreshDeviceSlots?.(affected);
+      const moved = writes.length;
+      const suffix = cleared.length ? `, ${cleared.length} slot${cleared.length === 1 ? '' : 's'} emptied` : '';
+      host.notify?.(`Moved ${moved} preset${moved === 1 ? '' : 's'}${suffix}`, '#33c46b');
+      this.#set({ moving: false });
+      return true;
+    } catch (e) {
+      host.notify?.('Move failed - the device was rolled back', '#d6543f');
+      this.#set({ moving: false, error: messageOf(e) });
       return false;
     }
   }

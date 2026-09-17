@@ -7,6 +7,7 @@ import { convert } from '$lib/convert/convert.svelte';
 import { bindAxisRuntimeHost } from '../runtimeBinding';
 import { isSaveDirty } from '../widgets/saveDirtyState';
 import { loadActionWarning } from './presetBrowserWorkbenchLoadWarning';
+import type { AxisPbMoveStep } from './presetBrowserWorkbenchMove';
 import { isDevicePreset } from './presetBrowserWorkbenchLoadAction';
 import {
   type AxisPresetBrowserEntrySummary,
@@ -397,6 +398,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     if (picker) picker = null;
     if (tagMenu) tagMenu = null;
   }
+
   function removeCondAt(ci: number) { axisPresetBrowserWorkbenchController.editConds((cc) => cc.splice(ci, 1)); }
   function removeParamAt(ci: number, pi: number) {
     axisPresetBrowserWorkbenchController.editConds((cc) => { const t = cc[ci]; if (t?.kind === 'block') t.params.splice(pi, 1); });
@@ -787,6 +789,42 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     openRowMenu(entry, { x: d.x, y: d.y });
   }
 
+  // ── §4.6 move overlay ──
+  // The dialog owns everything: dragging a cell stages an independent move, clicking cells builds the
+  // working set, and the whole batch is applied as ONE permutation on confirm. The planner refuses a
+  // non-contiguous run or overlapping stages, so the overlay renders that refusal inline.
+  function moveSelectionSlots(): number[] {
+    return snapshot.moveSource;
+  }
+  function moveStagedMoves(): AxisPbMoveStep[] {
+    return snapshot.moveStaged;
+  }
+  /** Staged moves plus the working set's live move (if a drop target is set) — what the grid previews
+   *  and what confirm will apply. */
+  function moveSteps(): AxisPbMoveStep[] {
+    const steps = [...snapshot.moveStaged];
+    if (snapshot.moveSource.length && snapshot.moveDestination != null) {
+      steps.push({ selection: snapshot.moveSource, destination: snapshot.moveDestination });
+    }
+    return steps;
+  }
+  function toggleMoveSource(slot: number) { axisPresetBrowserWorkbenchController.toggleMoveSource(slot); }
+  function setMoveSource(slots: number[]) { axisPresetBrowserWorkbenchController.setMoveSource(slots); }
+  function stageMove() { axisPresetBrowserWorkbenchController.stageMove(); }
+  function unstageMove(index: number) { axisPresetBrowserWorkbenchController.unstageMove(index); }
+  function clearMoves() { axisPresetBrowserWorkbenchController.clearMoves(); }
+  function closeMove() { axisPresetBrowserWorkbenchController.closeMove(); }
+  function setMoveDestination(slot: number | null) { axisPresetBrowserWorkbenchController.setMoveDestination(slot); }
+  async function confirmMove() {
+    const steps = moveSteps();
+    if (!steps.length) return;
+    const ok = await axisPresetBrowserWorkbenchRuntime.moveBatch(steps, deviceSession.presetCount);
+    if (ok) {
+      axisPresetBrowserWorkbenchController.clearMarks();
+      axisPresetBrowserWorkbenchController.closeMove();
+    }
+  }
+
   return {
     get snapshot() { return snapshot; },
     get runtimeSnapshot() { return runtimeSnapshot; },
@@ -899,7 +937,19 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     openTagMenu,
     pickTagSwatch,
     commitTagRename,
-    rowLongPress
+    rowLongPress,
+
+    moveSelectionSlots,
+    moveStagedMoves,
+    moveSteps,
+    toggleMoveSource,
+    setMoveSource,
+    stageMove,
+    unstageMove,
+    clearMoves,
+    closeMove,
+    setMoveDestination,
+    confirmMove
   };
 }
 

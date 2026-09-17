@@ -47,7 +47,15 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     presetGrid: forgefx.presetGrid,
     versions: (presetNumber) => forgefx.versions(presetNumber).then((result) => result.versions),
     notify: editorNotifications.showToast,
-    recordLoad: presetRecency.record
+    recordLoad: presetRecency.record,
+    applyPresetMove: async (writes, opts) => {
+      const activeSlot = deviceSession.preset?.number ?? deviceSession.lastPreset ?? undefined;
+      await forgefx.movePresets(writes, { slotCount: opts.slotCount, activeSlot: activeSlot ?? undefined });
+    },
+    isSlotEmpty: (slot) => library.slotIsEmpty(slot),
+    refreshDeviceSlots: async (slots) => {
+      for (const slot of slots) await library.refreshSlot(slot);
+    }
   };
 }
 

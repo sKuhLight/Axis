@@ -40,7 +40,8 @@
   import { colorLabels } from '$lib/fm3edit/colorLabels.svelte';
   import { overlays } from '$lib/overlay/overlays.svelte';
   import { axisWorkbenchController } from '$lib/axis-workbench/axisWorkbenchStore.svelte';
-  import { AXIS_PAGE_GRID } from '$lib/axis-workbench/axisWorkbenchPages';
+  import { AXIS_PAGE_GRID, AXIS_PAGE_PRESET_BROWSER } from '$lib/axis-workbench/axisWorkbenchPages';
+  import { axisPresetBrowserWorkbenchController } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchController';
   import '$lib/overlay/overlayRegistrations';
 
   // In the web build, gate the app behind DirectGate; start the editor only once the in-page runtime is
@@ -88,6 +89,7 @@
       // Escape and `?` stay global: Escape closes registry-backed dialogs from any page, and `?`
       // opens a cheat sheet that itself lists only the keys available at that moment.
       const onGrid = axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID;
+      const onPresetBrowser = axisWorkbenchController.activePage?.id === AXIS_PAGE_PRESET_BROWSER;
       if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void (e.shiftKey ? history.redo() : history.undo());
@@ -130,6 +132,13 @@
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.presetSearchOpen = true;
+      } else if (!editing && onPresetBrowser && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'm' || e.key === 'M')) {
+        // `M` opens the move dialog. Page-scoped like the grid keys, so it stays inert everywhere
+        // else. Marked rows seed the working set, but it ALWAYS opens — what to move is chosen and
+        // staged inside the dialog.
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        axisPresetBrowserWorkbenchController.openMove(axisPresetBrowserWorkbenchController.moveSlots());
       } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
         // Bare `?` (Shift+/ on most layouts) opens the shortcut cheat sheet from any page — the
         // sheet filters itself to the keys that work where the user is; Escape closes it.

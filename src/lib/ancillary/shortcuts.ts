@@ -11,7 +11,7 @@
  * anywhere. Device-gated shortcuts additionally list the capability they need, and the cheat
  * sheet filters on both so it never advertises a key that would do nothing right now.
  */
-export type ShortcutScope = 'global' | 'grid';
+export type ShortcutScope = 'global' | 'grid' | 'presetBrowser';
 export type ShortcutRequires = 'tuner' | 'tempo';
 
 export interface ShortcutSpec {
@@ -43,7 +43,8 @@ export const SHORTCUT_TOKENS = new Set([
   'Q',
   'P',
   '/',
-  'H'
+  'H',
+  'M'
 ]);
 
 export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
@@ -64,6 +65,12 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     ]
   },
   {
+    title: 'Preset Browser',
+    items: [
+      { keys: ['M'], label: 'Move presets to another location', scope: 'presetBrowser' }
+    ]
+  },
+  {
     title: 'Tools',
     items: [
       { keys: ['T'], label: 'Tuner', requires: 'tuner' },
@@ -79,13 +86,17 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 /** The live context the cheat sheet filters against. */
 export interface ShortcutAvailabilityContext {
   gridActive: boolean;
+  /** The Preset Browser page is the active page (its `M` move shortcut is page-scoped). */
+  presetBrowserActive: boolean;
   hasTuner: boolean;
   hasTempo: boolean;
 }
 
 /** True when `item` can actually fire in `context`. */
 export function shortcutAvailable(item: ShortcutSpec, context: ShortcutAvailabilityContext): boolean {
-  if ((item.scope ?? 'global') === 'grid' && !context.gridActive) return false;
+  const scope = item.scope ?? 'global';
+  if (scope === 'grid' && !context.gridActive) return false;
+  if (scope === 'presetBrowser' && !context.presetBrowserActive) return false;
   if (item.requires === 'tuner' && !context.hasTuner) return false;
   if (item.requires === 'tempo' && !context.hasTempo) return false;
   return true;
