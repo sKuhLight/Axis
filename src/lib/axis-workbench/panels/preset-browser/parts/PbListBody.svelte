@@ -105,6 +105,7 @@
       </span>
       <span class="col-meta">
         <button type="button" class="col-sort" class:on={view.snapshot.sort === 'recent'} aria-label={view.sortLabel('recent', 'last loaded')} onclick={() => view.toggleSort('recent')}>Recent{view.sortArrow('recent')}</button>
+        <span class="meta-div" aria-hidden="true"></span>
         <button
           type="button"
           class="scroll-current"
@@ -327,6 +328,14 @@
   }
   .col-meta {
     justify-content: flex-end;
+  }
+  /* The scroll-to-current control is navigation, not a sort column — a hairline sets it apart from
+     the trailing RECENT sort so it doesn't read as a fourth sortable header. */
+  .meta-div {
+    width: 1px;
+    height: 16px;
+    flex: none;
+    background: var(--border);
   }
   .col-sp {
     flex: 1;
