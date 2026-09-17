@@ -73,7 +73,10 @@
             {view.runtimeSnapshot.loadingEntryId === view.data.selectedEntry.id ? 'Switching...' : 'Switch to Preset'}
           </button>
         {:else}
-          <!-- Not on the device (imported file / local folder): trial-load into the edit buffer. -->
+          <!-- Not on the device (imported file / local folder): Audition is the primary action —
+               try it in the buffer first without committing a slot. "Save to device…" picks a
+               destination slot and stores it directly. Both replace the edit buffer, so the primary
+               carries the dirty warning (see auditionWarning). -->
           <button
             type="button"
             class="load-action primary"
@@ -85,6 +88,16 @@
           >
             {#if view.auditionWarning.warn}<span class="warn-glyph" aria-hidden="true">⚠</span>{/if}
             {view.runtimeSnapshot.auditioningEntryId === view.data.selectedEntry.id ? 'Auditioning...' : 'Audition'}
+          </button>
+          <button
+            type="button"
+            class="load-action secondary"
+            data-action="save-to-device"
+            title={view.saveWarning.tooltip}
+            aria-label={view.saveWarning.warn ? `Save to device. ${view.saveWarning.tooltip}` : null}
+            onclick={() => view.saveEntryToDevice(view.data.selectedEntry!)}
+          >
+            Save to device…
           </button>
         {/if}
         {#if !view.data.selectedEntry.empty}

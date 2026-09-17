@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { presetBuffer } from '$lib/editor/editorClients.svelte';
+  import { editorOverlays, presetBuffer } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
   import { isSaveDirty } from './saveDirtyState';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
@@ -8,8 +8,22 @@
   const auditioning = $derived(presetBuffer.auditioned !== null);
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
   // An audition is also "not saved to a slot", so it shares the loud amber pill with a dirty
-  // edit — only the label distinguishes them ("AUDITIONING · Save" vs "EDITED · Save").
+  // edit — only the label distinguishes them ("AUDITIONING · Save to…" vs "EDITED · Save").
   const hot = $derived(saveDirty || auditioning);
+
+  // An auditioned computer preset has no destination yet, so Save opens the slot picker instead of
+  // overwriting whatever slot the device happens to be sitting on. An ordinary dirty edit still
+  // fast-saves to its own slot — the destination is unambiguous there.
+  function onSave() {
+    if (auditioning) {
+      editorOverlays.openSlotPicker(
+        (slot) => void presetBuffer.saveToSlot(slot),
+        { name: presetBuffer.auditioned?.name ?? 'preset' }
+      );
+      return;
+    }
+    void presetBuffer.save();
+  }
 </script>
 
 <!-- Save lives beside the preset/scene names (top.left), not in the far-right
@@ -23,11 +37,11 @@
   data-dirty={hot ? 'true' : 'false'}
   data-auditioning={auditioning ? 'true' : 'false'}
   type="button"
-  onclick={() => presetBuffer.save()}
-  title={auditioning ? 'Auditioning — Save to keep it on a slot' : saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}
+  onclick={onSave}
+  title={auditioning ? 'Auditioning — choose a slot to save it to' : saveDirty ? 'Save edits to the current preset' : 'No unsaved edits'}
 >
   <span class="save-dot"></span>
-  {#if expanded}<span class="save-label">{auditioning ? 'AUDITIONING · Save' : saveDirty ? 'EDITED · Save' : '✓ Saved'}</span>{/if}
+  {#if expanded}<span class="save-label">{auditioning ? 'AUDITIONING · Save to…' : saveDirty ? 'EDITED · Save' : '✓ Saved'}</span>{/if}
 </button>
 
 <style>

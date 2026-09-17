@@ -42,6 +42,21 @@ export let gridEditing: GridEditingStore;
 export let paramEditing: ParamEditingStore;
 export let telemetry: TelemetryStore;
 
+/** Context for the PresetPicker's save-to-device mode: what is being saved, shown in the dialog chrome. */
+export interface SlotPickerSaveContext {
+  /** Name of the preset being saved (a computer preset — imported file or local folder entry). */
+  name: string;
+  /** Human source label ("Files" / "Local"), shown beside the name. */
+  source?: string;
+}
+/** A "pick a slot" request bound to the shared preset picker: `onPick` receives the chosen slot and
+ *  the picker closes without loading. `save` turns on the save-to-device chrome instead of the
+ *  converter's plain slot chooser. See `EditorStore.openSlotPicker`. */
+export interface SlotPickRequest {
+  onPick: (slot: number, name: string) => void;
+  save?: SlotPickerSaveContext;
+}
+
 class EditorStore {
   // ── device-session slice (M4b) ──
   // Connection state + heartbeat poll, negotiated API version + capability gates, the port/profile
@@ -91,6 +106,7 @@ class EditorStore {
       setPreset: (p) => { e.preset = p; },
       get lastPreset() { return e.lastPreset; },
       setLastPreset: (n) => { e.lastPreset = n; },
+      get presetCount() { return e.presetCount; },
       poll: () => e.poll()
     };
   };
@@ -196,10 +212,11 @@ class EditorStore {
   set quickBuildOpen(v: boolean) { if (v) overlays.open('quickBuild'); else overlays.close('quickBuild'); }
   get presetOpen() { return overlays.isOpen('presetPicker'); }
   set presetOpen(v: boolean) { if (v) overlays.open('presetPicker'); else overlays.close('presetPicker'); }
-  /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to this
-   *  callback (e.g. the cross-device converter save dialog) INSTEAD of loading the preset onto the
-   *  device, then closes. Null = normal load-a-preset mode. Cleared whenever the picker closes. */
-  presetPick = $state<((slot: number, name: string) => void) | null>(null);
+  /** PresetPicker "pick a slot" mode. When set, the picker hands the chosen slot number + name to
+   *  `onPick` INSTEAD of loading the preset onto the device, then closes. Null = normal load-a-preset
+   *  mode. Cleared whenever the picker closes. `save` switches the picker into its save-to-device chrome
+   *  (names the preset being saved, defaults to the first empty slot, requires an explicit confirm). */
+  presetPick = $state<SlotPickRequest | null>(null);
   /** The slim, workbench-only preset search overlay opened from the Grid page's top-bar preset widget
    *  (see AxisPresetBrowserSearchOverlay.svelte) — search + results only, no navigation away from Grid. */
   get presetSearchOpen() { return overlays.isOpen('presetSearch'); }
@@ -467,9 +484,11 @@ class EditorStore {
   // registry, both owned by the overlay layer above.
   /** Open the preset picker in "pick a slot" mode: `onPick` receives the chosen slot number + name and
    *  the picker closes WITHOUT loading the preset (used by the converter save dialog to reuse the real
-   *  device-preset list as a slot chooser). */
-  openSlotPicker = (onPick: (slot: number, name: string) => void) => {
-    this.presetPick = onPick;
+   *  device-preset list as a slot chooser). Pass `save` to render the save-to-device chrome — it names
+   *  the preset being saved, defaults to the first empty slot, and requires an explicit confirm before
+   *  overwriting an occupied one. */
+  openSlotPicker = (onPick: (slot: number, name: string) => void, save?: SlotPickerSaveContext) => {
+    this.presetPick = { onPick, save };
     this.presetOpen = true;
   };
 

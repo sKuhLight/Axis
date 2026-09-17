@@ -104,6 +104,7 @@ type Fake = PresetBufferHost & {
   canDeepScan: boolean;
   preset: PresetRef | null;
   lastPreset: number | null;
+  presetCount: number;
 };
 function fakeHost(): Fake {
   return {
@@ -119,6 +120,7 @@ function fakeHost(): Fake {
     canDeepScan: true,
     preset: { number: 12, name: 'Roundtrip' },
     lastPreset: 12,
+    presetCount: 512,
     setPreset: vi.fn(function (this: void, p: PresetRef | null) { host.preset = p; }),
     setLastPreset: vi.fn(function (this: void, n: number) { host.lastPreset = n; }),
     poll: vi.fn(async () => {})
@@ -222,6 +224,57 @@ describe('save', () => {
     expect(host.showToast).toHaveBeenCalledWith('Save failed', '#d6543f');
   });
 
+});
+
+// ── save to an explicit destination slot (Preset Browser "Save to device…") ─────────────────────
+describe('saveToSlot', () => {
+  it('stores to the chosen slot, moves the device onto it, and clears the audition', async () => {
+    const { p } = fresh();
+    p.noteAudition('Crunch');
+    const ok = await p.saveToSlot(40);
+    expect(ok).toBe(true);
+    expect(store).toHaveBeenCalledWith(40);
+    expect(selectPresetReq).toHaveBeenCalledWith(40); // identity follows the stored preset
+    expect(host.lastPreset).toBe(40);
+    expect(p.auditioned).toBe(null);
+    expect(checkpoint).toHaveBeenCalledWith('Saved to preset 40', false);
+    expect(refreshSlot).toHaveBeenCalledWith(40);
+  });
+
+  it('does not re-select when the destination is already the current slot', async () => {
+    const { p } = fresh(); // preset 12
+    await p.saveToSlot(12);
+    expect(store).toHaveBeenCalledWith(12);
+    expect(selectPresetReq).not.toHaveBeenCalled();
+  });
+
+  it('refuses a slot outside the device range without storing', async () => {
+    const { p } = fresh();
+    const ok = await p.saveToSlot(512);
+    expect(ok).toBe(false);
+    expect(store).not.toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('That slot is out of range', '#d6543f');
+  });
+
+  it('a rejected store leaves the audition and the slot identity alone', async () => {
+    const { p } = fresh();
+    store.mockResolvedValue({ ok: false });
+    p.noteAudition('Crunch');
+    const ok = await p.saveToSlot(40);
+    expect(ok).toBe(false);
+    expect(selectPresetReq).not.toHaveBeenCalled();
+    expect(p.auditioned).toEqual({ name: 'Crunch' });
+  });
+
+  it('uses the AM4 codec route on a legacy v1 server and reports the bank-letter code', async () => {
+    const { p } = fresh();
+    host.legacyAm4 = true;
+    const ok = await p.saveToSlot(3);
+    expect(ok).toBe(true);
+    expect(am4StorePreset).toHaveBeenCalledWith(3);
+    expect(store).not.toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('Saved to preset 1A', '#f5a623');
+  });
 });
 
 // ── the sync-bus hook registered by editor.init() ───────────────────────────────────────────────

@@ -34,9 +34,14 @@ describe('preset row gestures', () => {
     expect(axisPbRowDoubleClickIntent({ deviceSlot: true })).toBe('load');
   });
 
-  // Disk presets (imported file / local folder) are loaded only by the explicit Audition gesture —
-  // a stray double-click must never replace the edit buffer.
-  it('a double click on a non-device row does not load', () => {
-    expect(axisPbRowDoubleClickIntent({ deviceSlot: false })).toBe('select');
+  // Disk presets (imported file / local folder) are AUDITIONED — a double-click tries them in the
+  // edit buffer without occupying a slot, so it can never overwrite a stored preset.
+  it('a double click on a disk preset auditions', () => {
+    expect(axisPbRowDoubleClickIntent({ deviceSlot: false })).toBe('audition');
+  });
+
+  // A saved conversion has no loadable bytes — its only action is re-opening in the converter.
+  it('a double click on a saved conversion is a no-op', () => {
+    expect(axisPbRowDoubleClickIntent({ deviceSlot: false, converted: true })).toBe('none');
   });
 });

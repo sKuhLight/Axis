@@ -2,7 +2,6 @@
   import { tick } from 'svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
-  import { axisPbRowDoubleClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
   import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
   import AxisPresetBrowserRowMain from '../../../presetBrowser/AxisPresetBrowserRowMain.svelte';
   import { longPress } from '../../../longPress';
@@ -72,7 +71,7 @@
         aria-selected={view.snapshot.entryId === entry.id}
         tabindex="0"
         onclick={(e) => view.onRowClick(entry, e)}
-        ondblclick={() => axisPbRowDoubleClickIntent({ deviceSlot: isDevicePreset(entry) }) === 'load' && view.loadEntry(entry)}
+        ondblclick={() => view.doubleClickRow(entry)}
         oncontextmenu={(e) => view.onRowContext(e, entry)}
         onkeydown={(e) => {
           if (e.key === 'Enter' && isDevicePreset(entry)) view.loadEntry(entry);

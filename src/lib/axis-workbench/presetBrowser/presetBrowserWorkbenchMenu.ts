@@ -6,6 +6,7 @@
 // Deliberately scoped to backed actions (task rule "no fantasy items"):
 //   - load        → runtime.loadEntry            (device slots — switch the device to the stored preset)
 //   - audition    → runtime.auditionEntry        (entries NOT on the device: imported files + local folder)
+//   - saveToDevice → runtime.saveEntryToDevice   (imported files + local folder — pick a destination slot)
 //   - favorite    → library.toggleFav            (toggles; label flips on entry.fav)
 //   - rename      → editor.renameStoredPreset    (device slots, gated on canRenamePresets)
 //   - tags        → library.addTag/removeTag     (any entry)
@@ -16,6 +17,7 @@ import type { WorkbenchMenuItem } from '../../workbench/svelte/contextMenu';
 export type AxisPbMenuActionId =
   | 'load'
   | 'audition'
+  | 'saveToDevice'
   | 'favorite'
   | 'rename'
   | 'tags'
@@ -75,6 +77,8 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
   } else {
     // Not on the device (imported file / local folder): trial-load into the edit buffer.
     actions.push({ id: 'audition', label: 'Audition', hint: '↵' });
+    // …or choose a destination slot and store it directly (no need to audition first).
+    actions.push({ id: 'saveToDevice', label: 'Save to device…' });
   }
   // Cross-device converter (M4): available for every entry — the flow reads the row's .syx and opens the
   // convert dialog seeded with it. Not gated on caps (the converter is best-effort + offline).

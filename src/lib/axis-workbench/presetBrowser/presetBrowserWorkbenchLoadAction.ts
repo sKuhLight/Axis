@@ -20,7 +20,8 @@ export function resolvePresetLoadAction(
 }
 
 /** Is this entry a stored preset on the device (source 'device' with a real slot number)? The one
- *  kind of row a double-click loads — disk presets (imported file / local folder) use Audition. */
+ *  kind of row a double-click LOADS (switches the device to it) — disk presets (imported file /
+ *  local folder) are auditioned instead. See presetBrowserWorkbenchRowGesture.ts. */
 export function isDevicePreset(
   entry: Pick<AxisPresetBrowserEntrySummary, 'sourceId' | 'number'>
 ): boolean {

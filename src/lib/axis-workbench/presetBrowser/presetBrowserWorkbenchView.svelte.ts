@@ -1,6 +1,6 @@
 import { onMount, tick } from 'svelte';
 import { library, type LibEntry } from '$lib/preset/library.svelte';
-import { deviceSession } from '$lib/editor/editorClients.svelte';
+import { deviceSession, editorOverlays } from '$lib/editor/editorClients.svelte';
 import { history } from '$lib/editor/history.svelte';
 import { startCrossConvert, openConvertedInConverter } from '$lib/preset/presetConvertSource';
 import { convert } from '$lib/convert/convert.svelte';
@@ -41,7 +41,7 @@ import {
 } from './presetBrowserWorkbenchFrequentTags';
 import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
-import { axisPbRowClickIntent } from './presetBrowserWorkbenchRowGesture';
+import { axisPbRowClickIntent, axisPbRowDoubleClickIntent } from './presetBrowserWorkbenchRowGesture';
 import {
   specsBySlug,
   type SpecLibEntry
@@ -197,6 +197,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   const saveDirty = $derived(isSaveDirty(history.entries, history.cursor));
   const loadWarning = $derived(loadActionWarning(saveDirty, 'load'));
   const auditionWarning = $derived(loadActionWarning(saveDirty, 'audition'));
+  const saveWarning = $derived(loadActionWarning(saveDirty, 'saveToDevice'));
 
   // ── V13e/V13f shared vocabulary ─────────────────────────────────────────────────────────────
   // Filter specs (which blocks/params can be filtered, and their enum/numeric domains) are derived from
@@ -561,6 +562,26 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     void axisPresetBrowserWorkbenchRuntime.auditionEntry(entry.id);
   }
 
+  // Double-click resolves by row kind (see presetBrowserWorkbenchRowGesture): a device slot loads,
+  // a disk preset (imported file / local folder) auditions, a saved conversion is a no-op.
+  function doubleClickRow(entry: AxisPresetBrowserEntrySummary) {
+    const intent = axisPbRowDoubleClickIntent({ deviceSlot: isDevicePreset(entry), converted: entry.converted });
+    if (intent === 'load') loadEntry(entry);
+    else if (intent === 'audition') auditionEntry(entry);
+  }
+
+  // Save a computer preset (imported file / local folder) to a device slot the user chooses. The slot
+  // picker is the single destination chooser (save chrome: first-empty default, overwrite confirm);
+  // its callback runs the load-into-buffer + store, so this works whether or not the entry was
+  // auditioned first. Device slots are already on the device and never reach here.
+  function saveEntryToDevice(entry: AxisPresetBrowserEntrySummary) {
+    axisPresetBrowserWorkbenchController.selectEntry(entry.id);
+    editorOverlays.openSlotPicker(
+      (slot) => void axisPresetBrowserWorkbenchRuntime.saveEntryToDevice(entry.id, slot),
+      { name: entry.name, source: entry.sourceLabel }
+    );
+  }
+
   // Cross-device converter (M4): read the row's raw .syx and open the convert dialog seeded with it.
   // The base entries carry the real LibEntry shape (library.entries / browseEntries), so the shared
   // startCrossConvert flow works identically to the monolith.
@@ -675,6 +696,9 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
       case 'audition':
         auditionEntry(entry);
         return;
+      case 'saveToDevice':
+        saveEntryToDevice(entry);
+        return;
       case 'favorite':
         library.toggleFav(entry.id);
         return;
@@ -774,6 +798,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     get saveDirty() { return saveDirty; },
     get loadWarning() { return loadWarning; },
     get auditionWarning() { return auditionWarning; },
+    get saveWarning() { return saveWarning; },
 
     get queryEl() { return queryEl; },
     set queryEl(v: HTMLInputElement | undefined) { queryEl = v; },
@@ -825,6 +850,8 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     openConverter,
     deleteConverted,
     auditionEntry,
+    doubleClickRow,
+    saveEntryToDevice,
     crossConvert,
 
     get renamingId() { return renamingId; },

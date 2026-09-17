@@ -22,6 +22,7 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     loadBytes: async (bytes) => {
       await forgefx.loadBytes(bytes);
     },
+    saveBufferToSlot: (slot) => presetBuffer.saveToSlot(slot),
     loadDeviceSlot: presetBuffer.selectPreset,
     deviceEntryBytes: async (presetNumber) => {
       if (deviceSession.isV2) {

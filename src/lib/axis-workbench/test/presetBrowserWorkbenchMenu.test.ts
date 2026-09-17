@@ -28,10 +28,11 @@ describe('context menu building (§4.4)', () => {
     expect(actions.map((a) => a.id)).toEqual(['load', 'crossConvert', 'favorite', 'tags']);
   });
 
-  it('non-device rows (files) get Audition + Convert + Favorite + Tags (no load/rename)', () => {
+  it('non-device rows (files) get Audition + Save to device + Convert + Favorite + Tags (no load/rename)', () => {
     const actions = buildAxisPbMenuActions(entry({ deviceSlot: false }), { canRename: true });
-    expect(actions.map((a) => a.id)).toEqual(['audition', 'crossConvert', 'favorite', 'tags']);
+    expect(actions.map((a) => a.id)).toEqual(['audition', 'saveToDevice', 'crossConvert', 'favorite', 'tags']);
     expect(actions[0].label).toBe('Audition');
+    expect(actions.find((a) => a.id === 'saveToDevice')?.label).toBe('Save to device…');
   });
 
   it('flips the favorite label for favourited rows', () => {

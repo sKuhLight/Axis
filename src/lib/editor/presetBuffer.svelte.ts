@@ -63,6 +63,8 @@ export interface PresetBufferHost {
   setPreset: (p: PresetRef | null) => void;
   readonly lastPreset: number | null;
   setLastPreset: (n: number) => void;
+  /** Addressable preset slots on the device (bank/number count) — bounds the explicit save target. */
+  readonly presetCount: number;
   /** Re-read the preset reference from the device (confirms a rename/save landed). */
   poll: () => Promise<void>;
 }
@@ -363,27 +365,56 @@ export class PresetBufferStore {
   };
 
   // ── save current edit buffer ──
+  /** Store the edit buffer to slot `n`. Returns the device-confirmed label (its bank-letter code
+   *  when the device reports one, else the number) on success, or null. Does NOT move the current-slot
+   *  identity or clear audition state — `save` / `saveToSlot` own those decisions. */
+  #store = async (n: number): Promise<string | null> => {
+    try {
+      // API v2: the unified /preset/store saves every device (AM4 number = stored location; the
+      // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
+      const r = this.#host.legacyAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
+      if (!r.ok) {
+        this.#host.showToast('Save rejected by device', '#d6543f');
+        return null;
+      }
+      const label = String('code' in r && r.code ? r.code : n);
+      this.#host.showToast(`Saved to preset ${label}`, '#f5a623');
+      await this.#host.poll();
+      if (this.#host.canDeepScan) library.refreshSlot(n); // library cache sync (name-scan devices re-scan on open)
+      return label;
+    } catch {
+      this.#host.showToast('Save failed', '#d6543f');
+      return null;
+    }
+  };
+  /** Save the edit buffer to the CURRENT device slot (the top-bar Save for an ordinary dirty edit). */
   save = async () => {
     const n = this.#host.preset?.number ?? this.#host.lastPreset;
     if (n == null || n < 0) {
       this.#host.showToast('No preset slot is loaded', '#d6543f');
       return;
     }
-    try {
-      // API v2: the unified /preset/store saves every device (AM4 number = stored location; the
-      // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
-      const r = this.#host.legacyAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
-      if (r.ok) {
-        this.auditioned = null; // the audition is now committed to the slot
-        history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : n}`, false); // marker — undo continues past it
-        this.#host.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');
-        await this.#host.poll();
-        if (this.#host.canDeepScan) library.refreshSlot(n); // library cache sync (name-scan devices re-scan on open)
-      } else {
-        this.#host.showToast('Save rejected by device', '#d6543f');
-      }
-    } catch {
-      this.#host.showToast('Save failed', '#d6543f');
+    const label = await this.#store(n);
+    if (label == null) return;
+    this.auditioned = null; // the audition is now committed to the slot
+    history.checkpoint(`Saved to preset ${label}`, false); // marker — undo continues past it
+  };
+  /** Save the edit buffer to an EXPLICIT destination slot — the Preset Browser's "Save to device…" and
+   *  the top-bar Save while auditioning a computer preset. Stores, then moves the device onto that slot
+   *  so the buffer's identity matches where it now lives, and clears the audition. Returns success. */
+  saveToSlot = async (n: number): Promise<boolean> => {
+    if (n < 0 || n >= this.#host.presetCount) {
+      this.#host.showToast('That slot is out of range', '#d6543f');
+      return false;
     }
+    const label = await this.#store(n);
+    if (label == null) return false;
+    this.auditioned = null; // the preset now lives on a slot — it is no longer an audition
+    history.checkpoint(`Saved to preset ${label}`, false); // marker — undo continues past it
+    // The device is still parked on the OLD slot even though the buffer now holds the new content.
+    // Re-select the destination so nav, history and the open block all point where the preset lives.
+    const current = this.#host.preset?.number ?? this.#host.lastPreset;
+    if (current !== n) await this.selectPreset(n);
+    return true;
   };
 }

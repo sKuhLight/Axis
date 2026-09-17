@@ -38,13 +38,40 @@
   }
 
   let filter = $state<'all' | 'fav' | 'recent'>('all');
+  // Pick-a-slot mode: when the editor set a pick request, the picker RETURNS the chosen slot (number +
+  // name) and closes, instead of loading the preset onto the device. Used by the cross-device converter
+  // save dialog (plain chooser) and by the browser's "Save to device…" / the top-bar Save while
+  // auditioning (`save` = the save-to-device chrome: names the preset, defaults to first empty).
+  const pickReq = $derived(editorOverlays.presetPick);
+  const pickMode = $derived(!!pickReq);
+  const saveMode = $derived(!!pickReq?.save);
+  // Save-to-device mode preselects a destination but never commits it: a row click only moves the
+  // selection, and the footer's explicit button is the one write.
+  let selectedSlot = $state<number | null>(null);
+  // The reset must fire only on the closed→open TRANSITION: `firstEmptySlot()` reads reactive library
+  // state, so without this guard a background scan landing while the picker is open would re-run the
+  // effect and throw away the user's slot choice.
+  let wasPickOpen = false;
   $effect(() => {
-    if (!editorOverlays.presetOpen) return;
-    query = '';
-    filter = 'all';
-    loadStore();
-    setTimeout(() => inputEl?.focus(), 0);
+    const open = editorOverlays.presetOpen;
+    if (open && !wasPickOpen) {
+      query = '';
+      filter = 'all';
+      selectedSlot = saveMode ? firstEmptySlot() : null;
+      loadStore();
+      setTimeout(() => inputEl?.focus(), 0);
+    }
+    wasPickOpen = open;
   });
+
+  /** First slot the library can certify as empty, or null when the device hasn't been scanned (no
+   *  slot is provably free, so the user must choose — the confirm button stays disabled). */
+  function firstEmptySlot(): number | null {
+    for (let n = 0; n < deviceSession.presetCount; n++) {
+      if (library.slotIsEmpty(n)) return n;
+    }
+    return null;
+  }
 
   const pad = (n: number) => String(n).padStart(3, '0');
   const typedNum = $derived.by(() => {
@@ -72,10 +99,9 @@
     return rows;
   });
 
-  // Pick-a-slot mode: when the editor set a pick callback, the picker RETURNS the chosen slot (number +
-  // name) to it and closes, instead of loading the preset onto the device. Used by the cross-device
-  // converter save dialog to reuse this real device-preset list as a slot chooser.
-  const pickMode = $derived(!!editorOverlays.presetPick);
+  const selectedOccupied = $derived(selectedSlot != null && !library.slotIsEmpty(selectedSlot));
+  const selectedName = $derived(selectedSlot != null ? nameOf(selectedSlot) : '');
+  const selectedPad = $derived(selectedSlot == null ? '' : pad(selectedSlot));
   function close() {
     editorOverlays.presetOpen = false;
     editorOverlays.presetPick = null;
@@ -83,16 +109,35 @@
   async function go(n: number, name = '') {
     const pick = editorOverlays.presetPick;
     if (pick) {
+      // In save mode the row click only moves the destination; the footer button commits it.
+      if (saveMode) {
+        selectedSlot = n;
+        return;
+      }
       editorOverlays.presetOpen = false;
       editorOverlays.presetPick = null;
-      pick(n, name || nameOf(n));
+      pick.onPick(n, name || nameOf(n));
       return;
     }
     await presetBuffer.selectPreset(n);
     pushRecent(n, name || deviceSession.preset?.name || '');
   }
+  function confirmSave() {
+    const pick = editorOverlays.presetPick;
+    const n = selectedSlot;
+    if (!pick || n == null) return;
+    editorOverlays.presetOpen = false;
+    editorOverlays.presetPick = null;
+    pick.onPick(n, nameOf(n));
+  }
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter') {
+      if (saveMode) {
+        // A typed number moves the destination; Enter again (or the button) commits it.
+        if (typedNum !== null) go(typedNum);
+        else if (selectedSlot != null) confirmSave();
+        return;
+      }
       if (typedNum !== null) go(typedNum);
       else if (rows[0]) go(rows[0].n, rows[0].name);
     }
@@ -113,37 +158,45 @@
   <div class="wrap">
       <div class="head">
         <div class="title-row">
-          <span class="title">{pickMode ? 'Choose a slot' : 'Presets'}</span>
+          <span class="title">{saveMode ? 'Save to device' : pickMode ? 'Choose a slot' : 'Presets'}</span>
           {#if deviceSession.preset && deviceSession.preset.number >= 0}
             <span class="cur mono">PRE {pad(deviceSession.preset.number)}</span>
           {/if}
           <span class="spacer"></span>
           <button class="close" aria-label="Close" onclick={close}>✕</button>
         </div>
+        {#if saveMode && pickReq?.save}
+          <p class="save-lede">
+            <b>{pickReq.save.name}</b>{#if pickReq.save.source}<span> · {pickReq.save.source}</span>{/if} — choose the slot it should live on.
+          </p>
+        {/if}
         <div class="search">
           <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#6a6a74" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" stroke="#6a6a74" stroke-width="1.5" stroke-linecap="round" /></svg>
           <input bind:this={inputEl} bind:value={query} onkeydown={onKey} placeholder="Type a preset number, then Enter…" />
         </div>
-        <div class="tabs scroll">
-          <button class="tab" class:on={filter === 'all'} onclick={() => (filter = 'all')}>All</button>
-          <button class="tab" class:on={filter === 'fav'} onclick={() => (filter = 'fav')}>★ Favorites</button>
-          <button class="tab" class:on={filter === 'recent'} onclick={() => (filter = 'recent')}>Recent</button>
-        </div>
+        {#if !saveMode}
+          <div class="tabs scroll">
+            <button class="tab" class:on={filter === 'all'} onclick={() => (filter = 'all')}>All</button>
+            <button class="tab" class:on={filter === 'fav'} onclick={() => (filter = 'fav')}>★ Favorites</button>
+            <button class="tab" class:on={filter === 'recent'} onclick={() => (filter = 'recent')}>Recent</button>
+          </div>
+        {/if}
       </div>
 
       {#snippet presetRow(r: Recent)}
-        <div class="rowwrap" class:active={deviceSession.preset?.number === r.n}>
+        {@const isEmptySlot = library.slotIsEmpty(r.n)}
+        <div class="rowwrap" class:active={deviceSession.preset?.number === r.n} class:chosen={saveMode && selectedSlot === r.n}>
           <button class="row" onclick={() => go(r.n, r.name)}>
             <span class="num mono">{pad(r.n)}</span>
-            <span class="rtext"><span class="rname">{r.name || `Preset ${r.n}`}</span></span>
+            <span class="rtext"><span class="rname" class:dim={isEmptySlot}>{isEmptySlot ? '<EMPTY>' : r.name || `Preset ${r.n}`}</span></span>
             {#if deviceSession.preset?.number === r.n}<span class="active-b mono">ACTIVE</span>{/if}
           </button>
-          <FavoriteStar on={isFav(r.n)} onclick={() => toggleFav(r.n, r.name)} />
+          {#if !saveMode}<FavoriteStar on={isFav(r.n)} onclick={() => toggleFav(r.n, r.name)} />{/if}
         </div>
       {/snippet}
 
       <div class="list scroll">
-        {#if !query.trim() && filter === 'all' && recents.length}
+        {#if !saveMode && !query.trim() && filter === 'all' && recents.length}
           <div class="section mono">RECENT</div>
           <div class="chiprow scroll">
             {#each recents as r (r.n)}
@@ -154,7 +207,7 @@
           </div>
         {/if}
         <div class="section mono">
-          {query.trim() ? `${mainList.length} MATCH${mainList.length === 1 ? '' : 'ES'}` : filter === 'fav' ? 'FAVORITES' : filter === 'recent' ? 'RECENT' : 'ALL PRESETS'}
+          {query.trim() ? `${mainList.length} MATCH${mainList.length === 1 ? '' : 'ES'}` : saveMode ? 'DEVICE SLOTS' : filter === 'fav' ? 'FAVORITES' : filter === 'recent' ? 'RECENT' : 'ALL PRESETS'}
         </div>
         {#each mainList.slice(0, 300) as r (r.n)}{@render presetRow(r)}{/each}
         {#if mainList.length > 300}
@@ -165,9 +218,35 @@
         {/if}
       </div>
 
-      <div class="foot mono">
-        <span>Type # + ⏎ {pickMode ? 'Choose' : 'Load'}</span><span>★ Favorite</span><span>Esc Close</span>
-      </div>
+      {#if saveMode}
+        <div class="savefoot">
+          {#if selectedSlot != null}
+            {#if selectedOccupied}
+              <div class="overwrite">Slot {pad(selectedSlot)} already holds “{selectedName || 'a preset'}”. Saving replaces it — this cannot be undone on the device.</div>
+            {:else}
+              <div class="target"><span class="ok-dot"></span>Save to empty slot {pad(selectedSlot)}.</div>
+            {/if}
+          {:else}
+            <div class="target dim">No empty slot is certified yet — pick a destination slot.</div>
+          {/if}
+          <div class="savebtns">
+            <button type="button" class="sbtn" onclick={close}>Cancel</button>
+            <button
+              type="button"
+              class="sbtn primary"
+              class:replace={selectedOccupied}
+              disabled={selectedSlot == null}
+              onclick={confirmSave}
+            >
+              {selectedOccupied ? `Replace preset ${selectedPad}` : selectedSlot != null ? `Save to slot ${selectedPad}` : 'Save to device'}
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="foot mono">
+          <span>Type # + ⏎ {pickMode ? 'Choose' : 'Load'}</span><span>★ Favorite</span><span>Esc Close</span>
+        </div>
+      {/if}
   </div>
 </Dialog>
 
@@ -377,6 +456,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* An uninitialized slot reads "<EMPTY>" and dims, matching the preset browser's result list. */
+  .rname.dim {
+    color: var(--textdim);
+    font-weight: 600;
+  }
   .active-b {
     flex: none;
     font: 700 9px/1 var(--font-mono);
@@ -386,6 +470,90 @@
     border-radius: 5px;
     padding: 4px 7px;
     letter-spacing: 0.06em;
+  }
+  /* ── save-to-device chrome ── */
+  .save-lede {
+    margin: 10px 0 0;
+    color: var(--text2);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .save-lede b {
+    color: var(--text);
+  }
+  .save-lede span {
+    color: var(--textdim);
+  }
+  .rowwrap.chosen {
+    background: var(--accent-tint);
+    box-shadow: inset 0 0 0 1px var(--accent-border);
+  }
+  .savefoot {
+    flex: none;
+    display: grid;
+    gap: 10px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--surface2);
+  }
+  .overwrite {
+    color: var(--amber);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .target {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text2);
+    font-size: 12px;
+  }
+  .target.dim {
+    color: var(--textdim);
+  }
+  .ok-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+  .savebtns {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .sbtn {
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text2);
+    font: 700 12px/1 var(--font-ui);
+    cursor: pointer;
+  }
+  .sbtn:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .sbtn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .sbtn.primary:hover {
+    border-color: var(--accent);
+    color: var(--bg);
+    filter: brightness(1.08);
+  }
+  .sbtn.primary.replace {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--bg);
+  }
+  .sbtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .empty {
     padding: 40px 20px;

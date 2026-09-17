@@ -22,6 +22,8 @@ export interface AxisPresetBrowserRuntimeHost {
   fileBytes?: (entryId: string) => Uint8Array | null;
   localPath?: (entryId: string) => string;
   loadBytes?: (bytes: ArrayBuffer | Uint8Array) => Promise<void>;
+  /** Store the CURRENT edit buffer to an explicit device slot — the browser's "Save to device…". */
+  saveBufferToSlot?: (slot: number) => Promise<boolean>;
   loadDeviceSlot?: (presetNumber: number) => Promise<void>;
   deviceEntryBytes?: (presetNumber: number) => Promise<ArrayBuffer>;
   localPresetFile?: (path: string) => Promise<ArrayBuffer>;
@@ -159,6 +161,38 @@ export class AxisPresetBrowserWorkbenchRuntime {
       const error = messageOf(e);
       host.notify?.('Audition failed', '#d6543f');
       this.#set({ auditioningEntryId: null, error });
+      return false;
+    }
+  }
+
+  /** Save a computer preset (imported file / local folder entry) straight onto a chosen device slot —
+   *  the browser's "Save to device…". There is no "write bytes to slot" call: the buffer is loaded
+   *  first (which is why this also replaces the edit buffer), then stored to the destination slot and
+   *  the device is moved onto it. Returns success. */
+  async saveEntryToDevice(entryId: string, slot: number): Promise<boolean> {
+    const entry = this.#entry(entryId);
+    if (!entry) return false;
+    const host = this.#hosts.current;
+    if (!host?.loadBytes || !host.saveBufferToSlot) {
+      this.#set({ error: 'No runtime host to save from.' });
+      return false;
+    }
+
+    this.#set({ loadingEntryId: entryId, error: null });
+    host.openBuild?.();
+    try {
+      const bytes = await this.#entryBytes(entry, host);
+      await host.loadBytes(bytes);
+      host.noteBufferReplaced?.(`Saving ${entry.summary.name ?? 'preset'} to the device`);
+      const ok = await host.saveBufferToSlot(slot);
+      if (!ok) throw new Error('Save rejected by device');
+      await host.reloadEditor?.();
+      this.#set({ loadingEntryId: null, lastLoadedEntryId: entryId });
+      return true;
+    } catch (e) {
+      const error = messageOf(e);
+      host.notify?.(error || 'Save failed', '#d6543f');
+      this.#set({ loadingEntryId: null, error });
       return false;
     }
   }

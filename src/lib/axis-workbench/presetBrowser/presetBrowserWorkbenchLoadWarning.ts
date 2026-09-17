@@ -8,7 +8,7 @@
  * and assertable.
  */
 
-export type AxisPbLoadAction = 'load' | 'audition';
+export type AxisPbLoadAction = 'load' | 'audition' | 'saveToDevice';
 
 export interface AxisPbLoadWarning {
   /** True when the action would discard unsaved edits — drives the filled amber tint and the ⚠. */
@@ -22,7 +22,9 @@ const CLEAN_TOOLTIP: Record<AxisPbLoadAction, string> = {
   load: 'Switch the device to this preset (the edit buffer is replaced)',
   // Non-device entries (imported files / local folder) are tried out in the edit buffer.
   audition:
-    'Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style'
+    'Load into the edit buffer without switching slots or saving anything — try it out Axe-Change style',
+  // Save to device loads the preset into the buffer, then stores it to the slot you pick.
+  saveToDevice: 'Choose a device slot and store this preset there — overwriting names the preset it replaces'
 };
 
 const DIRTY_TOOLTIP = '⚠ You have unsaved changes in the current preset.';

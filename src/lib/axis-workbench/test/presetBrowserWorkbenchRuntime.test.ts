@@ -237,6 +237,44 @@ describe('Preset Browser Workbench runtime', () => {
     expect(recorded).toEqual(['dev:10', 'file:pad', 'local:Folder/Lead.syx']);
   });
 
+  it('saves a computer entry to a chosen slot: load bytes into the buffer, then store there', async () => {
+    const runtime = new AxisPresetBrowserWorkbenchRuntime();
+    const calls: string[] = [];
+    runtime.bindHost({
+      findEntry: (entryId) => entries.find((entry) => entry.id === entryId) ?? null,
+      openBuild: () => calls.push('openBuild'),
+      fileBytes: () => new Uint8Array([1, 2, 3]),
+      loadBytes: async (bytes) => { calls.push(`load:${bytes.byteLength}`); },
+      noteBufferReplaced: (label) => { calls.push(label); },
+      saveBufferToSlot: async (slot) => { calls.push(`store:${slot}`); return true; },
+      reloadEditor: async () => { calls.push('reload'); }
+    });
+
+    await expect(runtime.saveEntryToDevice('file:pad', 40)).resolves.toBe(true);
+
+    expect(calls).toEqual(['openBuild', 'load:3', 'Saving Pad to the device', 'store:40', 'reload']);
+    expect(runtime.snapshot.lastLoadedEntryId).toBe('file:pad');
+    expect(runtime.snapshot.error).toBe(null);
+  });
+
+  it('reports a rejected save and does not claim the entry landed', async () => {
+    const runtime = new AxisPresetBrowserWorkbenchRuntime();
+    const notices: string[] = [];
+    runtime.bindHost({
+      findEntry: (entryId) => entries.find((entry) => entry.id === entryId) ?? null,
+      fileBytes: () => new Uint8Array([1]),
+      loadBytes: async () => {},
+      saveBufferToSlot: async () => false,
+      notify: (message) => { notices.push(message); }
+    });
+
+    await expect(runtime.saveEntryToDevice('file:pad', 40)).resolves.toBe(false);
+
+    expect(runtime.snapshot.lastLoadedEntryId).toBe(null);
+    expect(runtime.snapshot.error).toContain('Save rejected');
+    expect(notices.at(-1)).toContain('Save rejected');
+  });
+
   it('reports missing entries without calling host load actions', async () => {
     const runtime = new AxisPresetBrowserWorkbenchRuntime();
     const calls: string[] = [];
