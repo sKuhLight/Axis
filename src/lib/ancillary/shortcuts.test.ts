@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHORTCUT_GROUPS, SHORTCUT_TOKENS } from './shortcuts';
+import { SHORTCUT_GROUPS, SHORTCUT_TOKENS, visibleShortcutGroups } from './shortcuts';
 
 describe('shortcut catalog', () => {
   it('lists the help shortcut itself', () => {
@@ -28,6 +28,47 @@ describe('shortcut catalog', () => {
     for (const group of SHORTCUT_GROUPS) {
       const chords = group.items.map((item) => item.keys.join('+'));
       expect(new Set(chords).size).toBe(chords.length);
+    }
+  });
+});
+
+describe('visible shortcuts', () => {
+  const chords = (gridActive: boolean, hasTuner: boolean, hasTempo: boolean) =>
+    visibleShortcutGroups({ gridActive, hasTuner, hasTempo }).flatMap((group) =>
+      group.items.map((item) => item.keys.join('+'))
+    );
+
+  it('shows the whole catalog on the Grid page with both features', () => {
+    expect(chords(true, true, true)).toEqual(
+      SHORTCUT_GROUPS.flatMap((group) => group.items.map((item) => item.keys.join('+')))
+    );
+  });
+
+  it('drops grid-only and device-gated rows off the Grid page', () => {
+    // Off the Grid page with no tuner/tempo only the always-global help keys remain.
+    expect(chords(false, false, false)).toEqual(['?', 'Esc']);
+  });
+
+  it('offers only the global tuner key off the Grid page when the device has one', () => {
+    // Tap tempo (`B`) is grid-only regardless of the device; only tuner (`T`) is global.
+    expect(chords(false, true, true)).toEqual(['?', 'Esc', 'T']);
+  });
+
+  it('keeps a device-gated key out until the device supports it', () => {
+    const gridOnly = chords(true, true, false);
+    expect(gridOnly).not.toContain('B');
+    expect(gridOnly).toContain('T');
+  });
+
+  it('never returns an empty group', () => {
+    for (const gridActive of [true, false]) {
+      for (const hasTuner of [true, false]) {
+        for (const hasTempo of [true, false]) {
+          for (const group of visibleShortcutGroups({ gridActive, hasTuner, hasTempo })) {
+            expect(group.items.length).toBeGreaterThan(0);
+          }
+        }
+      }
     }
   });
 });

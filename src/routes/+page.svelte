@@ -83,9 +83,10 @@
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
       const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      // Every shortcut below except the tuner toggle and Escape is scoped to the Grid page, so
-      // grid-editing keys can't fire while another workbench page is in view. Escape stays global
-      // because it is the fallback that closes registry-backed dialogs from any page.
+      // Every shortcut below except the tuner toggle, the `?` cheat sheet and Escape is scoped to
+      // the Grid page, so grid-editing keys can't fire while another workbench page is in view.
+      // Escape and `?` stay global: Escape closes registry-backed dialogs from any page, and `?`
+      // opens a cheat sheet that itself lists only the keys available at that moment.
       const onGrid = axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID;
       if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
@@ -129,8 +130,9 @@
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.presetSearchOpen = true;
-      } else if (!editing && onGrid && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
-        // Bare `?` (Shift+/ on most layouts) opens the shortcut cheat sheet; Escape closes it.
+      } else if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+        // Bare `?` (Shift+/ on most layouts) opens the shortcut cheat sheet from any page — the
+        // sheet filters itself to the keys that work where the user is; Escape closes it.
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         overlays.open('shortcuts');

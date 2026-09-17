@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench } from './support/workbench';
+import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench';
 
 test.describe('Keyboard', () => {
   test('Escape closes an open context menu and restores focus to the opener (T18)', async ({ page }) => {
@@ -41,5 +41,28 @@ test.describe('Keyboard', () => {
     await expect(tuner).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(tuner).toHaveCount(0);
+  });
+
+  test('? opens the cheat sheet anywhere, listing only the keys that work there', async ({ page }) => {
+    await bootCleanWorkbench(page); // lands on Grid
+
+    const sheet = page.locator('[role="dialog"]').filter({ hasText: 'Keyboard shortcuts' });
+
+    // On Grid every group is available.
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator('.sc-group-title')).toContainText(['Essentials', 'Editing', 'Tools']);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+
+    // Off Grid the grid-only rows are gone, but the global help keys remain.
+    await clickNav(page, 'live');
+    await collapseRail(page);
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator('.sc-group-title', { hasText: 'Editing' })).toHaveCount(0);
+    await expect(sheet.locator('.sc-label', { hasText: 'Quick Build' })).toHaveCount(0);
+    await expect(sheet.locator('.sc-label', { hasText: 'Tap tempo' })).toHaveCount(0);
+    await expect(sheet.locator('.sc-label', { hasText: 'Show this shortcut list' })).toHaveCount(1);
   });
 });

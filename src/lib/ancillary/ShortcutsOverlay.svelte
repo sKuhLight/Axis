@@ -2,11 +2,24 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import DialogBody from '$lib/ui/DialogBody.svelte';
   import { overlays } from '$lib/overlay/overlays.svelte';
-  import { SHORTCUT_GROUPS } from './shortcuts';
+  import { deviceSession } from '$lib/editor/editorClients.svelte';
+  import { axisWorkbenchController } from '$lib/axis-workbench/axisWorkbenchStore.svelte';
+  import { AXIS_PAGE_GRID } from '$lib/axis-workbench/axisWorkbenchPages';
+  import { visibleShortcutGroups } from './shortcuts';
 
   const open = $derived(overlays.isOpen('shortcuts'));
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent);
   const keyLabel = (key: string) => (key === 'Mod' ? (isMac ? '⌘' : 'Ctrl') : key);
+
+  // Only advertise keys that would do something right now: off the Grid page the editing and
+  // grid-tool rows are dropped, and the device-gated rows follow the connected unit's caps.
+  const groups = $derived(
+    visibleShortcutGroups({
+      gridActive: $axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID,
+      hasTuner: deviceSession.hasTuner,
+      hasTempo: deviceSession.hasTempo
+    })
+  );
 </script>
 
 <Dialog
@@ -19,7 +32,7 @@
 >
   <DialogBody>
     <div class="sc">
-      {#each SHORTCUT_GROUPS as group (group.title)}
+      {#each groups as group (group.title)}
         <section class="sc-group">
           <h3 class="sc-group-title">{group.title}</h3>
           <dl class="sc-list">
