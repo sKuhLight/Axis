@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { baseName } from '$lib/device/blocks';
+  import { baseName, showInstance } from '$lib/device/blocks';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
   import { catFor, shade } from '$lib/device/catalog';
@@ -776,9 +776,9 @@
               {@const cat = catFor(cell.pack, baseName(cell.display))}
               {@const sel = editor.selKey === `${r},${c}`}
               {@const base = baseName(cell.display)}
-              {@const inst = cell.display.match(/\s(\d+)$/)?.[1] ?? ''}
               {@const sameFam = editor.layout.cells.filter((x) => baseName(x.display) === base).length}
-              {@const label = inst && (inst !== '1' || sameFam > 1) ? `${cat.short} ${inst}` : cat.short}
+              {@const inst = showInstance(base, cell.display, sameFam)}
+              {@const label = inst ? `${cat.short} ${inst}` : cat.short}
               {@const meter = editor.meterFor(cell)}
               {@const deco = cellDecorations?.get(`${r},${c}`) ?? null}
               {@const edp = extDrop && extDrop.row === r && extDrop.col === c ? extDrop : null}

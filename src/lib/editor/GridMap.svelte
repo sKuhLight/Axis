@@ -6,7 +6,7 @@
   // shunts through the gaps, so the destination is never restricted to the adjacent column.
   // Arm state is editor.linkFrom (shared with the SignalGrid: arm here, complete there — or vice versa).
   import { onMount } from 'svelte';
-  import { baseName } from '$lib/device/blocks';
+  import { baseName, showInstance } from '$lib/device/blocks';
   import { getEditorSurface } from './editorSurface';
   const editor = getEditorSurface();
   import { catFor } from '$lib/device/catalog';
@@ -275,6 +275,9 @@
               {#if cl?.kind === 'block'}
                 {@const cat = catFor(cl.pack, baseName(cl.display))}
                 {@const open = editor.selKey === `${r},${c}`}
+                {@const fam = baseName(cl.display || cl.pack || '') || 'Block'}
+                {@const sameFam = editor.layout.cells.filter((x) => baseName(x.display) === fam).length}
+                {@const inst = showInstance(fam, cl.display, sameFam)}
                 <div
                   class="mc block"
                   class:open
@@ -293,7 +296,7 @@
                   onmouseenter={() => setGridHover(r, c)}
                   onmouseleave={() => clearGridHover(r, c)}
                 >
-                  {#if showBlockTags}<span class="block-tag">{baseName(cl.display || cl.pack || '') || 'Block'}</span>{/if}
+                  {#if showBlockTags}<span class="block-tag">{inst ? `${fam} ${inst}` : fam}</span>{/if}
                   <span class="glyph">{@html cat.glyph}</span>
                   {#if showPort(cl)}
                     <button

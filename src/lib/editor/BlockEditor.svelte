@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { baseName } from '$lib/device/blocks';
+  import { baseName, showInstance } from '$lib/device/blocks';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from '$lib/device/catalog';
   import { appSettings } from '$lib/platform/appSettings.svelte';
@@ -30,9 +30,15 @@
   let blockFamilies = $state<BlockSummary[]>([]);
   const blockLabel = $derived.by(() => {
     if (!sel) return '';
-    return baseName(blockFamilies.find((family) => family.page === sel.effectId)?.name ?? (sel.display || sel.pack || ''))
-      ?? cat?.short
-      ?? 'Block';
+    const base =
+      baseName(blockFamilies.find((family) => family.page === sel.effectId)?.name ?? (sel.display || sel.pack || '')) ??
+      cat?.short ??
+      'Block';
+    // Instance digit so two placed Outputs (or any multi-instance family) are never read as the
+    // same block — the rail must name WHICH one is open, matching the grid tile label.
+    const sameFam = editor.layout.cells.filter((x) => baseName(x.display) === base).length;
+    const inst = showInstance(base, sel.display, sameFam);
+    return inst ? `${base} ${inst}` : base;
   });
   const isCab = $derived(sel?.pack === 'Cab');
 

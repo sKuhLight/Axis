@@ -71,6 +71,25 @@ export function baseName(display: string): string {
   return display.replace(/\s*\d+$/, '').trim();
 }
 
+/** Trailing instance number of a display name ("Output 2" -> "2"); '' when unnumbered. */
+export function instanceOf(display: string): string {
+  return display.match(/\s(\d+)$/)?.[1] ?? '';
+}
+
+/**
+ * Instance digit a block label should show, or '' when it needs none.
+ * Input/Output are ALWAYS numbered — OUT 1 vs OUT 2 is meaningful even with a single placed
+ * output, and a numbered Input/Output can never be confused for a sibling. Every other family
+ * shows the digit only when it disambiguates: not the first instance, or more than one placed.
+ * `family` is the base name (`baseName(display)`), NOT a short tile label.
+ */
+export function showInstance(family: string, display: string, siblings: number): string {
+  const n = instanceOf(display);
+  if (!n) return '';
+  if (family === 'Input' || family === 'Output') return n;
+  return n !== '1' || siblings > 1 ? n : '';
+}
+
 // map a status base name to the ForgeFX definition-pack key (for the editor + color)
 // Maps a block's base name → editor pack key. Covers BOTH the /status display names
 // (Compressor, Parametric EQ, Volume/Pan…) AND the grid-decoder base names
