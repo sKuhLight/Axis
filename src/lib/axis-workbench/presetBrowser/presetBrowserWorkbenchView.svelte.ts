@@ -110,6 +110,10 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   let snapshot = $state<AxisPresetBrowserControllerSnapshot>(axisPresetBrowserWorkbenchController.snapshot);
   let runtimeSnapshot = $state<AxisPresetBrowserRuntimeSnapshot>(axisPresetBrowserWorkbenchRuntime.snapshot);
   let scrollToCurrentRequest = $state(0);
+  // The snapshot object emitted by the last scrollToCurrent. The list's "start a new result set at
+  // the top" effect compares against this identity to skip the reset it would otherwise apply to the
+  // query/source/sort defaults scrollToCurrent sets — which is what used to clobber the reveal.
+  let scrollToCurrentSnapshot: AxisPresetBrowserControllerSnapshot | null = null;
   let lastDetailEntryId: string | null = null;
   let detailHydrateTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -540,6 +544,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     const entry = data.entries.find((candidate) => candidate.sourceId === 'device' && candidate.number === number);
     if (!entry) return;
     axisPresetBrowserWorkbenchController.scrollToCurrent(entry.id);
+    scrollToCurrentSnapshot = snapshot;
     scrollToCurrentRequest += 1;
   }
 
@@ -797,6 +802,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     get tagRow() { return tagRow; },
     recordTagUsage,
     get scrollToCurrentRequest() { return scrollToCurrentRequest; },
+    get scrollToCurrentSnapshot() { return scrollToCurrentSnapshot; },
     get activeTags() { return activeTags; },
     get isOwner() { return isOwner; },
     get selectedDetail() { return selectedDetail; },

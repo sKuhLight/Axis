@@ -26,15 +26,20 @@
   const remaining = $derived(total - rows.length);
 
   // A new result set (query/sort/source change) starts back at the first batch AND at the top of the
-  // list, so changing the search query never leaves you scrolled into stale mid-list results. Created
-  // BEFORE the reveal effect below so an explicit scrollToCurrent resets first, then re-expands to the
-  // preset.
+  // list, so changing the search query never leaves you scrolled into stale mid-list results.
+  //
+  // "Scroll to current" deliberately rewrites those fields to their defaults (clears the query, resets
+  // the sort/source), so its snapshot must NOT trigger this reset — otherwise the reset shrinks the
+  // window back and the active row vanishes ("scrolls down then back up"). The snapshot emitted by
+  // scrollToCurrent is compared by identity, untracked, so every run in that commit steps aside while
+  // a later genuine edit (a new snapshot object) still resets.
   $effect(() => {
     void view.snapshot.queryText;
     void view.snapshot.sort;
     void view.snapshot.sortDir;
     void view.snapshot.presenceView;
     void view.snapshot.sourceId;
+    if (untrack(() => view.snapshot) === view.scrollToCurrentSnapshot) return;
     visibleCount = AXIS_PB_INITIAL_ROWS;
     if (scrollEl) scrollEl.scrollTop = 0;
   });
