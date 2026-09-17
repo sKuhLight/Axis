@@ -81,6 +81,7 @@
   });
 </script>
 
+<div class="pb-list-body">
 {#if view.data.visibleEntries.length}
   {@const markedCount = Object.keys(view.snapshot.marked).length}
   {#if markedCount}
@@ -123,69 +124,71 @@
       </span>
     </div>
   </div>
-  <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
-    {#each rows as entry}
-      <div
-        class="preset-row"
-        class:active={view.snapshot.entryId === entry.id}
-        class:marked={view.snapshot.marked[entry.id]}
-        class:fav={entry.fav}
-        class:empty={entry.empty}
-        role="option"
-        aria-selected={view.snapshot.entryId === entry.id}
-        tabindex="0"
-        onclick={(e) => view.onRowClick(entry, e)}
-        ondblclick={() => view.doubleClickRow(entry)}
-        oncontextmenu={(e) => view.onRowContext(e, entry)}
-        onkeydown={(e) => {
-          if (e.key === 'Enter' && isDevicePreset(entry)) view.loadEntry(entry);
-        }}
-        use:longPress={{ onLongPress: (d) => view.rowLongPress(entry, d) }}
-      >
-        <button
-          type="button"
-          class="checkbox"
-          class:on={view.snapshot.marked[entry.id]}
-          aria-label={view.snapshot.marked[entry.id] ? 'Unmark preset' : 'Mark preset'}
-          onclick={(e) => {
-            e.stopPropagation();
-            axisPresetBrowserWorkbenchController.toggleMark(entry.id);
-          }}
-        >{view.snapshot.marked[entry.id] ? '✓' : ''}</button>
-        <span class="preset-number" class:sel={view.snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
-        <span class="preset-main">
-          <AxisPresetBrowserRowMain {entry} onTagContextMenu={view.openTagMenu}>
-            {#snippet name()}
-              {#if view.renamingId === entry.id}
-                <!-- svelte-ignore a11y_autofocus -->
-                <input
-                  class="rename-in"
-                  type="text"
-                  maxlength="32"
-                  autofocus
-                  spellcheck="false"
-                  bind:value={view.renameValue}
-                  onclick={(e) => e.stopPropagation()}
-                  ondblclick={(e) => e.stopPropagation()}
-                  onkeydown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === 'Enter') view.commitRename(entry);
-                    else if (e.key === 'Escape') view.cancelRename();
-                  }}
-                  onblur={() => view.commitRename(entry)}
-                />
-              {:else}
-                <strong class="row-name" class:dim={entry.empty}>{entry.name}</strong>
-              {/if}
-            {/snippet}
-          </AxisPresetBrowserRowMain>
-        </span>
+    <div class="pb-list-scroll">
+      <div bind:this={listEl} class="axis-preset-list" role="listbox" aria-label="Preset list" aria-multiselectable="true">
+        {#each rows as entry}
+          <div
+            class="preset-row"
+            class:active={view.snapshot.entryId === entry.id}
+            class:marked={view.snapshot.marked[entry.id]}
+            class:fav={entry.fav}
+            class:empty={entry.empty}
+            role="option"
+            aria-selected={view.snapshot.entryId === entry.id}
+            tabindex="0"
+            onclick={(e) => view.onRowClick(entry, e)}
+            ondblclick={() => view.doubleClickRow(entry)}
+            oncontextmenu={(e) => view.onRowContext(e, entry)}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' && isDevicePreset(entry)) view.loadEntry(entry);
+            }}
+            use:longPress={{ onLongPress: (d) => view.rowLongPress(entry, d) }}
+          >
+            <button
+              type="button"
+              class="checkbox"
+              class:on={view.snapshot.marked[entry.id]}
+              aria-label={view.snapshot.marked[entry.id] ? 'Unmark preset' : 'Mark preset'}
+              onclick={(e) => {
+                e.stopPropagation();
+                axisPresetBrowserWorkbenchController.toggleMark(entry.id);
+              }}
+            >{view.snapshot.marked[entry.id] ? '✓' : ''}</button>
+            <span class="preset-number" class:sel={view.snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>
+            <span class="preset-main">
+              <AxisPresetBrowserRowMain {entry} onTagContextMenu={view.openTagMenu}>
+                {#snippet name()}
+                  {#if view.renamingId === entry.id}
+                    <!-- svelte-ignore a11y_autofocus -->
+                    <input
+                      class="rename-in"
+                      type="text"
+                      maxlength="32"
+                      autofocus
+                      spellcheck="false"
+                      bind:value={view.renameValue}
+                      onclick={(e) => e.stopPropagation()}
+                      ondblclick={(e) => e.stopPropagation()}
+                      onkeydown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') view.commitRename(entry);
+                        else if (e.key === 'Escape') view.cancelRename();
+                      }}
+                      onblur={() => view.commitRename(entry)}
+                    />
+                  {:else}
+                    <strong class="row-name" class:dim={entry.empty}>{entry.name}</strong>
+                  {/if}
+                {/snippet}
+              </AxisPresetBrowserRowMain>
+            </span>
+          </div>
+        {/each}
       </div>
-    {/each}
-  </div>
-  {#if remaining > 0}
-    <div class="more-hint" bind:this={sentinelEl}>+{remaining} more — scroll to load</div>
-  {/if}
+      {#if remaining > 0}
+        <div class="more-hint" bind:this={sentinelEl}>+{remaining} more — scroll to load</div>
+      {/if}
+    </div>
 {:else}
   <div class="axis-part-empty">
     <strong>{view.data.entries.length ? 'No presets match this filter' : 'Library is empty'}</strong>
@@ -194,6 +197,7 @@
       : 'Scan the connected device or import .syx files to populate the library.'}</span>
   </div>
 {/if}
+</div>
 
 <style>
   button {
@@ -206,6 +210,24 @@
     text-align: left;
     text-transform: capitalize;
     font: 700 12px/1 var(--font-ui);
+  }
+  /* The body fills the pane; only `.pb-list-scroll` scrolls, so the column rail (+ any
+     selection header) stays pinned above the rows. Mirrors the full panel, where the query
+     bar already sits outside the scroller. */
+  .pb-list-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .pb-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
   .axis-preset-list {
     display: grid;

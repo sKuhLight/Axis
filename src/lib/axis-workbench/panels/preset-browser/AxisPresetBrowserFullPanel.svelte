@@ -66,7 +66,8 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    overflow-y: auto;
+    /* PbListBody owns the row scroll now, so the column rail stays pinned. */
+    overflow: hidden;
   }
   .axis-pb-detail {
     width: 368px;
