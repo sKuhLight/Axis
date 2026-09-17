@@ -26,7 +26,7 @@
       type="text"
       spellcheck="false"
       autocomplete="off"
-      placeholder={'Search presets, tags, amps… or `AMP(Type=5153)` for filters'}
+      placeholder={'Search presets, tags, amps — type ` to add a filter'}
       value={view.snapshot.queryText}
       oninput={view.onQueryInput}
       onkeydown={view.onQueryKey}
@@ -38,6 +38,17 @@
     {#if view.snapshot.queryText}
       <button type="button" class="clear-btn" title="Clear" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>×</button>
     {/if}
+    <!-- §2.2/§3.3 Save search → opens the inline name input in the sources sidebar. The query field is
+         the only way in for filters (the backtick), so Save search lives inside the field it reads
+         instead of as a peer toolbar control. -->
+    <button
+      type="button"
+      class="save-star"
+      class:on={view.snapshot.saving}
+      title="Save the current query as a search"
+      aria-label="Save search"
+      onclick={() => axisPresetBrowserWorkbenchController.setSaving(!view.snapshot.saving)}
+    >☆</button>
     {#if view.acOpen}
       <!-- V13e autocomplete dropdown (§2.4) -->
       <div class="ac">
@@ -60,17 +71,6 @@
     {/if}
   </div>
   <div class="query-tools">
-    <button type="button" class="add-filter" onclick={view.onAddFilter}><span class="plus">+</span> Add filter</button>
-    <!-- §2.2/§3.3 Save search → opens the inline name input in the sources sidebar. -->
-    <button
-      type="button"
-      class="save-filter"
-      class:on={view.snapshot.saving}
-      title="Save the current query as a search"
-      onclick={() => axisPresetBrowserWorkbenchController.setSaving(!view.snapshot.saving)}
-    >
-      ☆ Save search
-    </button>
     <span class="tools-sp"></span>
     {#if library.scanning}
       <span class="scan-progress">Scanning {library.scanDone}/{library.scanTotal}…</span>
@@ -164,7 +164,7 @@
     color: var(--textdim);
     font-size: 15px;
   }
-  /* One toolbar line: the query builder's own controls on the left, everything occasional behind ⋯. */
+  /* The query field carries its own controls (clear, save); only occasional tooling trails it. */
   .query-tools {
     min-width: 0;
     display: flex;
@@ -173,20 +173,6 @@
   }
   .tools-sp {
     flex: 1;
-  }
-  .add-filter {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 999px;
-    text-transform: none;
-    font: 700 11px/1 var(--font-mono);
-  }
-  .add-filter .plus {
-    color: var(--accent);
-    font-size: 13px;
   }
   .tools-more {
     width: 30px;
@@ -377,24 +363,26 @@
     font-size: 11px;
     text-transform: none;
   }
-  .save-filter {
-    height: 30px;
-    padding: 0 11px;
-    border-radius: 999px;
-    text-transform: none;
-    font: 700 11px/1 var(--font-mono);
+  /* Trailing control inside the query field: one click, adjacent to the query it saves. */
+  .save-star {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--textdim);
+    font-size: 15px;
   }
-  .save-filter.on {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accentink, var(--bg));
+  .save-star.on {
+    color: var(--accent);
   }
   @media (max-width: 760px) {
     .query-bar {
       grid-template-columns: auto minmax(0, 1fr) auto;
-    }
-    .save-filter {
-      display: none;
     }
   }
   button {
