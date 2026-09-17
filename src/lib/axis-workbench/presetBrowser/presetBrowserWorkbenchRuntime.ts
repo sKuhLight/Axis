@@ -35,6 +35,8 @@ export interface AxisPresetBrowserRuntimeHost {
   setBufferSource?: (source: { path: string; name: string } | null) => void;
   hydrateParams?: (entryId: string) => Promise<void>;
   paramsOf?: (entry: AxisPresetBrowserLibEntryLike) => AxisPresetBrowserBlockSummary[] | null;
+  /** Cab IR names per bank, for resolving a browsed Cab's slot names (`GET /cab/irs`, cached). */
+  cabIrs?: () => Promise<Record<string, string[]>>;
   presetGrid?: (presetNumber: number) => Promise<AxisPresetBrowserGridLike>;
   versions?: (presetNumber: number) => Promise<AxisPresetBrowserVersionLike[]>;
   notify?: (message: string, accent?: string) => void;
@@ -60,6 +62,8 @@ export interface AxisPresetBrowserRuntimeSnapshot {
   lastLoadedEntryId: string | null;
   lastAuditionedEntryId: string | null;
   details: Record<string, AxisPresetBrowserDetailState>;
+  /** Cab IR names per bank once fetched; null until `ensureCabIrs` resolves (or when unavailable). */
+  cabIrs: Record<string, string[]> | null;
 }
 
 export class AxisPresetBrowserWorkbenchRuntime {
@@ -71,10 +75,12 @@ export class AxisPresetBrowserWorkbenchRuntime {
     error: null,
     lastLoadedEntryId: null,
     lastAuditionedEntryId: null,
-    details: {}
+    details: {},
+    cabIrs: null
   };
   #subscribers = new Set<(snapshot: AxisPresetBrowserRuntimeSnapshot) => void>();
   #detailLoads = new Map<string, Promise<AxisPresetBrowserDetailState | null>>();
+  #cabIrsLoad: Promise<void> | null = null;
 
   get snapshot(): AxisPresetBrowserRuntimeSnapshot {
     return cloneSnapshot(this.#snapshot);
@@ -82,6 +88,20 @@ export class AxisPresetBrowserWorkbenchRuntime {
 
   bindHost(host: AxisPresetBrowserRuntimeHost | null): () => void {
     return this.#hosts.bind(host);
+  }
+
+  /** Resolve the Cab IR catalog once so a browsed Cab's slot names can render. Idempotent and
+   *  best-effort: on failure the cards fall back to the IR ordinal (`#n`) instead of a name. */
+  ensureCabIrs(): Promise<void> {
+    if (this.#snapshot.cabIrs) return Promise.resolve();
+    if (this.#cabIrsLoad) return this.#cabIrsLoad;
+    const load = this.#hosts.current?.cabIrs;
+    if (!load) return Promise.resolve();
+    this.#cabIrsLoad = load()
+      .then((irs) => this.#set({ cabIrs: irs }))
+      .catch(() => {})
+      .finally(() => (this.#cabIrsLoad = null));
+    return this.#cabIrsLoad;
   }
 
   subscribe(run: (snapshot: AxisPresetBrowserRuntimeSnapshot) => void): () => void {

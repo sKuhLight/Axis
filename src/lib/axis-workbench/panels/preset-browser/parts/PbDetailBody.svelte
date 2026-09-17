@@ -171,12 +171,30 @@
               <span class="d-blk-i">{card.instanceLabel}</span>
             </div>
             <div class="d-blk-kinds">
-              {#each card.kinds as kind}
-                <div class="d-kind">
-                  <span class="d-kk">{kind.label}</span>
-                  <span class="d-kv">{kind.value}</span>
-                </div>
-              {/each}
+              {#if card.sections && card.sections.length}
+                {#each card.sections as section (section.badge)}
+                  <div class="d-chsec">
+                    <span class="d-chb">{section.badge}</span>
+                    <span class="d-chst">{section.label}</span>
+                    {#if section.dynacab}
+                      <span class="d-chright"><span class="d-chchip">DynaCab</span></span>
+                    {/if}
+                  </div>
+                  {#each section.slots as slot (slot.label)}
+                    <div class="d-slot">
+                      <span class="d-si">{slot.label}</span>
+                      <span class="d-sv" class:empty={slot.empty}>{slot.value}</span>
+                    </div>
+                  {/each}
+                {/each}
+              {:else}
+                {#each card.kinds as kind}
+                  <div class="d-kind">
+                    <span class="d-kk">{kind.label}</span>
+                    <span class="d-kv">{kind.value}</span>
+                  </div>
+                {/each}
+              {/if}
             </div>
           </div>
         {/each}
@@ -522,6 +540,76 @@
     white-space: nowrap;
     color: var(--text);
     font: 700 12.5px/1 var(--font-mono);
+  }
+  /* Cab channel sections (Option 5): a flat badge + label + slot-count header on the SAME surface as
+     its slot lines — the 1px grid gap above supplies the only separation, so there is no tinted band. */
+  .d-chsec {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    background: var(--bg2);
+  }
+  .d-chb {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text2);
+    font: 800 9px/1 var(--font-mono);
+  }
+  .d-chst {
+    color: var(--text);
+    font: 700 11.5px/1 var(--font-mono);
+  }
+  .d-chright {
+    margin-left: auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* Flags the channel's mode, so a slot value that reads as a speaker/mic model (not an IR) is explained
+     without repeating per-slot level/pan noise. */
+  .d-chchip {
+    flex: none;
+    color: var(--accent);
+    background: var(--accent-tint, color-mix(in srgb, var(--accent) 12%, var(--surface)));
+    border: 1px solid var(--accent-border, color-mix(in srgb, var(--accent) 45%, var(--border2)));
+    border-radius: 999px;
+    padding: 3px 6px;
+    font: 800 8.5px/1 var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .d-slot {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    background: var(--bg2);
+  }
+  .d-si {
+    flex: none;
+    width: 38px;
+    color: var(--textdim);
+    font: 600 9.5px/1 var(--font-mono);
+  }
+  .d-sv {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font: 600 11.5px/1 var(--font-mono);
+  }
+  .d-sv.empty {
+    color: var(--textdim);
   }
   .axis-part-empty {
     flex: 1;

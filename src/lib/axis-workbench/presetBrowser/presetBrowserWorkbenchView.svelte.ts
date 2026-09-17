@@ -427,9 +427,16 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   });
   const detailBlockCards = $derived(
     selectedDecodedBlocks
-      ? buildDetailBlockCards(selectedDecodedBlocks, snapshot.focusedBlockEffectId)
+      ? buildDetailBlockCards(selectedDecodedBlocks, snapshot.focusedBlockEffectId, runtimeSnapshot.cabIrs ?? {})
       : null
   );
+  // A browsed Cab's IR names need the IR catalog; fetch it once the selection actually has a Cab, so a
+  // non-cab browse never pays for it. Cards render the ordinal `#n` until it resolves.
+  $effect(() => {
+    if (selectedDecodedBlocks?.some((b) => b.slug === 'cab') && !runtimeSnapshot.cabIrs) {
+      void axisPresetBrowserWorkbenchRuntime.ensureCabIrs();
+    }
+  });
 
   onMount(() => {
     return bindAxisRuntimeHost({

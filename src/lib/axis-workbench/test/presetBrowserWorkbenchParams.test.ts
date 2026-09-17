@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDetailBlockCards,
+  cabSections,
   detailKind,
   detailParams,
   encodeDragPayload,
@@ -148,5 +149,111 @@ describe('Preset Browser detail kinds', () => {
     );
     expect(cards.map((c) => c.instanceLabel)).toEqual(['#1', '#2']);
     expect(cards.map((c) => c.kinds[0].value)).toEqual(['T808', 'OCD']);
+  });
+});
+
+// ── Cab slot sections (Option 5) ─────────────────────────────────────────────────────────────────
+// A Cab carries N IR slots per channel, N set by the device (the FM3 has two, the FM9/III four). The
+// real slot count comes from the per-slot PICKER params; the name comes from the bank + raw IR ordinal
+// resolved against the IR catalog.
+const IR_CATALOG = { 'FACTORY 1': ['A 1x4', 'B 1x6', 'C 1x8', 'D 4x12 Recto V30'] };
+
+const cabChannel = (
+  ch: number,
+  slots: Record<number, { type: number; raw?: number; bank?: string }>
+): DetailBlock => {
+  const params: DetailBlock['params'][number][] = [];
+  for (const [n, s] of Object.entries(slots)) {
+    params.push(p({ name: `CABINET_PICKER${n}`, label: 'Picker', value: 0 })); // per-slot anchor = real slot
+    if (s.bank) params.push(p({ name: `CABINET_BANK${n}`, label: 'Bank', value: 0, enumLabel: s.bank }));
+    params.push(p({ name: `CABINET_TYPE${n}`, label: 'Type', value: s.type, raw: s.raw ?? s.type }));
+  }
+  return block({ slug: 'cab', effectId: 40, channel: ch, typeName: null, params });
+};
+
+describe('Preset Browser cab sections', () => {
+  it('lists one section per channel, naming each slot from the bank + IR ordinal', () => {
+    const sections = cabSections(
+      [
+        cabChannel(0, { 2: { type: 1, raw: 1, bank: 'FACTORY 1' }, 1: { type: 3, raw: 3, bank: 'FACTORY 1' } }),
+        cabChannel(1, { 1: { type: 0, raw: 0, bank: 'FACTORY 1' } })
+      ],
+      IR_CATALOG
+    );
+    expect(sections.map((s) => s.label)).toEqual(['CH A', 'CH B']);
+    expect(sections[0].slots).toEqual([
+      { label: 'CAB 1', value: 'D 4x12 Recto V30', empty: false },
+      { label: 'CAB 2', value: 'B 1x6', empty: false }
+    ]);
+  });
+
+  it('carries no per-slot level/pan noise — only the slot label and its name', () => {
+    const b = cabChannel(0, { 1: { type: 3, raw: 3, bank: 'FACTORY 1' } });
+    b.params.push(p({ name: 'CABINET_LEVEL1', label: 'Level', value: 0, unit: 'dB' }));
+    b.params.push(p({ name: 'CABINET_PAN1', label: 'Pan', value: -100, unit: 'bipolar_percent' }));
+    expect(Object.keys(cabSections([b], IR_CATALOG)[0].slots[0]).sort()).toEqual(['empty', 'label', 'value']);
+  });
+
+  it('falls back to the ordinal when the bank/name is unknown, never the scaled float', () => {
+    const [section] = cabSections([cabChannel(0, { 1: { type: 3, raw: 3 } })], IR_CATALOG);
+    expect(section.slots[0]).toEqual({ label: 'CAB 1', value: '#3', empty: false });
+  });
+
+  it('mirrors ForgeFX: a raw above the bank max is 16-bit-scaled and unscaled back', () => {
+    // raw 56000 over a 4-entry bank → round(56000/65534*3) = 3 → the last IR.
+    const [section] = cabSections([cabChannel(0, { 1: { type: 0, raw: 56000, bank: 'FACTORY 1' } })], IR_CATALOG);
+    expect(section.slots[0].value).toBe('D 4x12 Recto V30');
+  });
+
+  it('reads the device slot count from the per-slot anchors, not the universal TYPE catalog', () => {
+    const two = cabSections([cabChannel(0, { 1: { type: 1, raw: 1 }, 2: { type: 2, raw: 2 } })]);
+    const four = cabSections([
+      cabChannel(0, { 1: { type: 1, raw: 1 }, 2: { type: 2, raw: 2 }, 3: { type: 3, raw: 3 }, 4: { type: 4, raw: 4 } })
+    ]);
+    expect(two[0].slots.map((s) => s.label)).toEqual(['CAB 1', 'CAB 2']);
+    expect(four[0].slots.map((s) => s.label)).toEqual(['CAB 1', 'CAB 2', 'CAB 3', 'CAB 4']);
+  });
+
+  it('ignores the universal TYPE/LEVEL/PAN 3/4 params a 2-slot device also decodes', () => {
+    // A real FM3 still decodes CABINET_TYPE3/4 (sentinels) — only PICKER1/2 mark the real slots.
+    const b = cabChannel(0, { 1: { type: 3, raw: 3 }, 2: { type: 1, raw: 1 } });
+    b.params.push(p({ name: 'CABINET_TYPE3', label: 'Type', value: 0, raw: 0 }));
+    b.params.push(p({ name: 'CABINET_LEVEL3', label: 'Level', value: 65534 }));
+    const [section] = cabSections([b]);
+    expect(section.slots.map((s) => s.label)).toEqual(['CAB 1', 'CAB 2']);
+  });
+
+  it('flags a DynaCab channel and names its slots from the speaker model, not a legacy IR', () => {
+    const b = cabChannel(0, { 1: { type: 0, raw: 0, bank: 'FACTORY 1' } });
+    b.params.push(p({ name: 'CABINET_MODE', label: 'MODE', value: 1, enumLabel: 'DYNA-CAB' }));
+    b.params.push(p({ name: 'CABINET_DYNACAB_TYPE1', label: 'DYNACAB TYPE1', value: 3, enumLabel: '1x12 AC20' }));
+    const [section] = cabSections([b], IR_CATALOG);
+    expect(section.dynacab).toBe(true);
+    expect(section.slots[0].value).toBe('1x12 AC20');
+  });
+
+  it('leaves the DynaCab flag off a legacy-IR channel', () => {
+    const b = cabChannel(0, { 1: { type: 0, raw: 0, bank: 'FACTORY 1' } });
+    b.params.push(p({ name: 'CABINET_MODE', label: 'MODE', value: 0, enumLabel: 'LEGACY' }));
+    expect(cabSections([b], IR_CATALOG)[0].dynacab).toBe(false);
+  });
+
+  it('a channel with no slot params is a section with zero slots, not a bogus row', () => {
+    const empty = block({ slug: 'cab', effectId: 40, channel: 0, typeName: null, params: [] });
+    const [section] = cabSections([empty]);
+    expect(section.label).toBe('CH A');
+    expect(section.slots).toEqual([]);
+  });
+
+  it('buildDetailBlockCards renders a Cab as named sections, not one-type-per-channel kinds', () => {
+    const [card] = buildDetailBlockCards(
+      [cabChannel(0, { 1: { type: 3, raw: 3, bank: 'FACTORY 1' } })],
+      null,
+      IR_CATALOG
+    );
+    expect(card.kinds).toEqual([]);
+    expect(card.sections).toHaveLength(1);
+    expect(card.sections?.[0].slots[0].value).toBe('D 4x12 Recto V30');
+    expect(card.category).toBe('Cab');
   });
 });

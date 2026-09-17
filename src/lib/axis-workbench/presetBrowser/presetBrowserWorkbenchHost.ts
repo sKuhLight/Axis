@@ -9,6 +9,7 @@ import { forgefx } from '$lib/api/forgefx';
 import { library } from '$lib/preset/library.svelte';
 import { presetRecency } from '$lib/preset/presetRecency.svelte';
 import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
+import { loadCabIrsCachedFirst } from '$lib/device/cabIrsCache';
 import { openConvertedInConverter } from '$lib/preset/presetConvertSource';
 import { persistSavedFilters } from './presetBrowserWorkbenchSavedFilters';
 import type { AxisPresetBrowserRuntimeHost } from './presetBrowserWorkbenchRuntime';
@@ -42,6 +43,7 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     },
     hydrateParams: (entryId) => library.hydrateParams(entryId),
     paramsOf: (entry) => library.paramsOf(entry as Parameters<typeof library.paramsOf>[0]),
+    cabIrs: () => loadCabIrsCachedFirst(),
     presetGrid: forgefx.presetGrid,
     versions: (presetNumber) => forgefx.versions(presetNumber).then((result) => result.versions),
     notify: editorNotifications.showToast,
