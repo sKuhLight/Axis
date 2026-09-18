@@ -88,6 +88,28 @@ test('bulk Move… seeds the move dialog with the marked device slots', async ({
   await expect(dialog.locator('.mv-count')).toHaveText('2 selected');
 });
 
+test('shift-click marks a run from a fixed anchor, on the row or the checkbox', async ({ page }) => {
+  await bootPresetBrowser(page);
+  const rows = page.locator('.preset-row');
+  await expect(rows).toHaveCount(3);
+
+  // Anchor on the first row, then shift-click the last: all three mark.
+  await rows.nth(0).click();
+  await rows.nth(2).click({ modifiers: ['Shift'] });
+  await expect(selectHead(page)).toContainText('3 selected');
+
+  // The anchor stays put, so a closer shift-click shrinks the run instead of pivoting.
+  await rows.nth(1).click({ modifiers: ['Shift'] });
+  await expect(selectHead(page)).toContainText('2 selected');
+
+  // The checkbox is a mark control too, so shift-clicking it ranges rather than toggling one row.
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(selectHead(page)).toHaveCount(0);
+  await rows.nth(0).locator('.checkbox').click();
+  await rows.nth(2).locator('.checkbox').click({ modifiers: ['Shift'] });
+  await expect(selectHead(page)).toContainText('3 selected');
+});
+
 test('bulk Clear preset erases every marked device slot after ONE confirmation', async ({ page }) => {
   // A non-AM4 device's deep-dump capability is what enables Clear; detect alone decides that on this
   // offline boot. The blank-write endpoints are mocked so the round-trip never touches hardware.

@@ -2,6 +2,7 @@
   import { tick, untrack } from 'svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { axisPresetBrowserWorkbenchController } from '../../../presetBrowser/presetBrowserWorkbenchController';
+  import { axisPbRowClickIntent } from '../../../presetBrowser/presetBrowserWorkbenchRowGesture';
   import { isDevicePreset } from '../../../presetBrowser/presetBrowserWorkbenchLoadAction';
   import AxisPresetBrowserRowMain from '../../../presetBrowser/AxisPresetBrowserRowMain.svelte';
   import { longPress } from '../../../longPress';
@@ -189,7 +190,11 @@
               aria-label={view.snapshot.marked[entry.id] ? 'Unmark preset' : 'Mark preset'}
               onclick={(e) => {
                 e.stopPropagation();
-                axisPresetBrowserWorkbenchController.toggleMark(entry.id);
+                if (axisPbRowClickIntent(e) === 'markRange') {
+                  axisPresetBrowserWorkbenchController.markRange(view.data.order, entry.id);
+                } else {
+                  axisPresetBrowserWorkbenchController.toggleMark(entry.id);
+                }
               }}
             >{view.snapshot.marked[entry.id] ? '✓' : ''}</button>
             <span class="preset-number" class:sel={view.snapshot.entryId === entry.id}>{entry.number == null ? entry.sourceLabel : String(entry.number).padStart(3, '0')}</span>

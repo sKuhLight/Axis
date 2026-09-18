@@ -77,6 +77,11 @@ export class AxisPresetBrowserWorkbenchController {
 
   #subscribers = new Set<(snapshot: AxisPresetBrowserControllerSnapshot) => void>();
   #host: AxisPresetBrowserWorkbenchHost | null = null;
+  // Shift-click range bookkeeping. Holds `marked` as it stood when the CURRENT range gesture began,
+  // so each further shift-click recomputes the run from the stable anchor and can grow OR shrink it,
+  // while rows marked individually before the gesture survive. Nulled by any non-range mark/select so
+  // the next shift-click starts a fresh base.
+  #rangeBase: Record<string, boolean> | null = null;
   // parts currently mounted, in registration order, for owner election.
   #mounted = new Map<symbol, AxisPresetBrowserPart>();
 
@@ -135,6 +140,7 @@ export class AxisPresetBrowserWorkbenchController {
   }
 
   selectEntry(entryId: string | null): void {
+    this.#rangeBase = null;
     this.#snapshot = {
       ...this.#snapshot,
       entryId,
@@ -263,6 +269,7 @@ export class AxisPresetBrowserWorkbenchController {
   }
 
   toggleMark(entryId: string): void {
+    this.#rangeBase = null;
     const marked = { ...this.#snapshot.marked };
     if (marked[entryId]) delete marked[entryId];
     else marked[entryId] = true;
@@ -270,23 +277,29 @@ export class AxisPresetBrowserWorkbenchController {
     this.#emit();
   }
 
-  // Shift-click range: mark every id between the anchor and target in current display order (§4.4).
+  // Shift-click range: mark every id between the STABLE anchor and target in current display order
+  // (§4.4). The anchor does not move, so repeated shift-clicks extend or shrink the same run;
+  // recomputing from `#rangeBase` restores anything the previous run marked outside the new one.
   markRange(order: string[], targetId: string): void {
     const anchor = this.#snapshot.anchorId ?? targetId;
     const a = order.indexOf(anchor);
     const b = order.indexOf(targetId);
     if (a < 0 || b < 0) {
+      this.#rangeBase = null;
       this.toggleMark(targetId);
       return;
     }
+    const base = this.#rangeBase ?? { ...this.#snapshot.marked };
+    this.#rangeBase = base;
     const [lo, hi] = a <= b ? [a, b] : [b, a];
-    const marked = { ...this.#snapshot.marked };
+    const marked = { ...base };
     for (let i = lo; i <= hi; i++) marked[order[i]] = true;
-    this.#snapshot = { ...this.#snapshot, marked, anchorId: targetId };
+    this.#snapshot = { ...this.#snapshot, marked, anchorId: anchor };
     this.#emit();
   }
 
   clearMarks(): void {
+    this.#rangeBase = null;
     this.#snapshot = { ...this.#snapshot, marked: {} };
     this.#emit();
   }

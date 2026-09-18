@@ -69,6 +69,17 @@ describe('Preset Browser controller shared state (§1, §2)', () => {
     expect(c.snapshot.marked).toEqual({});
   });
 
+  it('keeps the anchor fixed so a later shift-click shrinks the run, preserving individual marks', () => {
+    const c = new AxisPresetBrowserWorkbenchController();
+    const order = ['a', 'b', 'c', 'd'];
+    c.toggleMark('b'); // marked {b}, anchor b
+    c.toggleMark('d'); // marked {b,d}, anchor d
+    c.markRange(order, 'a'); // anchor d → run a..d
+    expect(Object.keys(c.snapshot.marked).sort()).toEqual(['a', 'b', 'c', 'd']);
+    c.markRange(order, 'b'); // anchor still d → shrunken run b..d; the range-added `a` drops, `b` survives as an individual mark
+    expect(Object.keys(c.snapshot.marked).sort()).toEqual(['b', 'c', 'd']);
+  });
+
   it('resets direction to the field natural default when the sort field changes', () => {
     const c = new AxisPresetBrowserWorkbenchController();
     expect(c.snapshot.sort).toBe('num');
