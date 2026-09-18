@@ -22,6 +22,8 @@
   const COLUMN_ROWS = 8;
 
   const open = $derived(view.snapshot.moveOpen);
+  // A batch is a run of paced dumps + flash writes, so it can take a while — the dialog must show it.
+  const moving = $derived(view.runtimeSnapshot.moving);
   const staged = $derived(view.moveStagedMoves());
   // The working set is chosen INSIDE the dialog (click cells); it's what the next drag moves.
   const working = $derived(view.moveSelectionSlots());
@@ -108,6 +110,7 @@
   }
 
   function onCellClick(e: MouseEvent, slot: number) {
+    if (moving) return;
     stageNote = null;
     // ⌥-click sets the destination — the click-only alternative to dragging the block.
     if (e.altKey) {
@@ -138,6 +141,10 @@
   const isWorking = (slot: number) => working.includes(slot);
 
   function onCellDragStart(e: DragEvent, slot: number) {
+    if (moving) {
+      e.preventDefault();
+      return;
+    }
     stageNote = null;
     if (!isWorking(slot)) {
       view.setMoveSource([slot]);
@@ -242,11 +249,15 @@
   width="min(980px, 94vw)"
   maxHeight="86vh"
   onClose={() => view.closeMove()}
+  dismissible={!moving}
   labelledBy="pb-move-title"
 >
-  <div class="mv">
+  <div class="mv" class:busy={moving} aria-busy={moving}>
     <div class="mv-bar">
       <span class="mv-count">{countLabel}</span>
+      {#if moving}
+        <span class="mv-busy"><span class="mv-spin" aria-hidden="true"></span>Moving presets — writing to the device…</span>
+      {/if}
       {#if planHasWrites && combined.ok}
         <span class="chip moved">→ {writesCount} write{writesCount === 1 ? '' : 's'}</span>
         {#if swapCount}<span class="chip swap">{swapCount} swap back</span>{/if}
@@ -288,7 +299,7 @@
               type="button"
               class="mv-cell {cell.role}"
               class:empty={cell.empty}
-              draggable="true"
+              draggable={!moving}
               title={cell.label}
               onclick={(e) => onCellClick(e, cell.slot)}
               ondragstart={(e) => onCellDragStart(e, cell.slot)}
@@ -306,13 +317,17 @@
     <div class="mv-foot">
       <span class="mv-note">Drag a preset onto a destination · stage as many as you like, then confirm · Esc cancels</span>
       <span class="mv-sp"></span>
-      <button type="button" class="mv-btn" onclick={() => view.closeMove()}>Cancel</button>
+      <button type="button" class="mv-btn" disabled={moving} onclick={() => view.closeMove()}>Cancel</button>
       <button
         type="button"
         class="mv-btn accent"
-        disabled={!planHasWrites}
+        class:moving
+        disabled={!planHasWrites || moving}
         onclick={() => view.confirmMove()}
-      >{writesCount ? `Move ${writesCount}` : 'Move'}</button>
+      >
+        {#if moving}<span class="mv-spin" aria-hidden="true"></span>{/if}
+        {moving ? 'Moving…' : writesCount ? `Move ${writesCount}` : 'Move'}
+      </button>
     </div>
   {/snippet}
 </Dialog>
@@ -343,6 +358,40 @@
   }
   .mv-hint.bad {
     color: var(--amberink);
+  }
+
+  /* A batch is a run of paced device writes, so it is never instant — say so, and freeze the grid. */
+  .mv.busy .mv-grid {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .mv-busy {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    font: 700 11px/1 var(--font-mono);
+    white-space: nowrap;
+  }
+  .mv-spin {
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--border3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: mvspin 0.7s linear infinite;
+  }
+  /* Inside the accent button, the spinner has to read against the accent fill. */
+  .mv-btn.accent .mv-spin {
+    border-color: color-mix(in srgb, var(--accentink) 35%, transparent);
+    border-top-color: var(--accentink);
+  }
+  .mv-btn.accent.moving:disabled {
+    opacity: 0.9;
+  }
+  @keyframes mvspin {
+    to { transform: rotate(360deg); }
   }
   .chip {
     font: 700 10px/1 var(--font-mono);
@@ -512,6 +561,10 @@
     border-color: var(--border3);
   }
   .mv-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
     font: 700 13px/1 var(--font-ui);
     padding: 10px 14px;
     border-radius: 9px;

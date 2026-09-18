@@ -88,7 +88,8 @@ test('staged moves accumulate and clicking a cell never disturbs them', async ({
   await expect(dialog.locator('.mv-count')).toHaveText('2 staged');
   await expect(dialog.locator('.mv-chip-move')).toHaveCount(2);
 
-  // ONE confirm applies BOTH staged moves as a single permutation: 3→1 and 13→11, each with its swap-back.
+  // ONE confirm applies BOTH staged moves as a single atomic permutation: 3→1 and 13→11, each with
+  // its swap-back, in one request.
   await dialog.locator('.mv-btn.accent').click();
   await expect(dialog).toBeHidden({ timeout: 8000 });
   expect(requests).toHaveLength(1);
@@ -98,6 +99,35 @@ test('staged moves accumulate and clicking a cell never disturbs them', async ({
     { from: 13, to: 11 },
     { from: 11, to: 13 }
   ]);
+});
+
+test('the dialog shows a busy state while the move is being applied', async ({ page }) => {
+  // A batch is a run of paced device writes — hold the response open to observe the in-flight state.
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/preset/move', async (route) => {
+    await gate;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, writes: [], slots: 0 }) });
+  });
+  await bootPresetBrowser(page);
+
+  const dialog = moveDialog(page);
+  await page.keyboard.press('m');
+  const cells = dialog.locator('.mv-cell');
+  await cells.nth(1).dragTo(cells.nth(8));
+  await expect(dialog.locator('.mv-btn.accent')).toBeEnabled();
+
+  await dialog.locator('.mv-btn.accent').click();
+
+  // Busy: a spinner is shown, the grid is frozen, and neither button can be pressed again.
+  await expect(dialog.locator('.mv-busy')).toBeVisible();
+  await expect(dialog.locator('.mv').first()).toHaveAttribute('aria-busy', 'true');
+  await expect(dialog.locator('.mv-btn.accent')).toBeDisabled();
+  await expect(dialog.locator('.mv-btn.accent')).toContainText('Moving');
+  await expect(dialog.locator('.mv-btn').first()).toBeDisabled();
+
+  release();
+  await expect(dialog).toBeHidden({ timeout: 8000 });
 });
 
 test('cells build a contiguous set, and a broken set is called out', async ({ page }) => {
