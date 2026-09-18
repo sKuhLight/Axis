@@ -7,6 +7,8 @@
   import { defaultBlockLibraryPath } from './blockLibraryPath';
   import { forgefx, ForgeError } from '$lib/api/forgefx';
   import Icon from '$lib/ui/Icon.svelte';
+  import { editorOverlays } from '$lib/editor/editorClients.svelte';
+  import { AXIS_PB_FILTERABLE_BLOCKS } from '$lib/axis-workbench/presetBrowser/presetBrowserWorkbenchQuery';
   import DeviceCanvas from '$lib/device/DeviceCanvas.svelte';
   import GridMap from './GridMap.svelte';
   import QuickBuild from './QuickBuild.svelte';
@@ -182,6 +184,21 @@
     isCab ? (cabSummary ?? 'Browse cabinet library') : (editor.blockType?.name || sel?.pack || '—')
   );
 
+  // "Other uses" — a structured preset-browser query for the block family + the
+  // channel's decoded type (e.g. `AMP(TYPE=5153)`), so results are presets using THIS amp. Gated to
+  // the query grammar's filterable slug vocabulary; a non-listed family would be silently dropped.
+  const findMoreSlug = $derived.by(() => {
+    const s = sel?.pack?.toLowerCase() ?? '';
+    return (AXIS_PB_FILTERABLE_BLOCKS as readonly string[]).includes(s) ? s : null;
+  });
+  const canFindMore = $derived(!!findMoreSlug && !!editor.blockType?.name);
+  function findMorePresets() {
+    const slug = findMoreSlug;
+    const type = editor.blockType?.name;
+    if (!slug || !type) return;
+    editorOverlays.openPresetSearch(`\`${slug.toUpperCase()}(TYPE=${type})\``);
+  }
+
   let q = $state('');
   let controlSearch = $state<HTMLInputElement>();
   const searching = $derived(q.trim().length > 0);
@@ -288,6 +305,15 @@
             <button class="savelib" onclick={() => (saveOpen = true)} title="Save block to library" aria-label="Save block to library">
               <Icon name="save" size={16} />
               <span>Save to library</span>
+            </button>
+            <button
+              class="findpresets"
+              disabled={!canFindMore}
+              onclick={findMorePresets}
+              title={canFindMore ? `Search presets using ${editor.blockType?.name}` : 'No searchable type for this block'}
+            >
+              <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+              <span>Other uses</span>
             </button>
           </aside>
         {/if}
@@ -533,6 +559,39 @@
     border-color: var(--accent);
     color: var(--accent);
     background: var(--surface);
+  }
+  /* Same chip as Save to library, but sized to grow rather than the fixed control height so a
+     wrapped label (e.g. on a narrow rail) never clips. */
+  .findpresets {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: calc(var(--d-ctl-h) + 8px);
+    padding: 7px var(--d-pad-x);
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 11px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: var(--d-font);
+    line-height: 1.2;
+    text-align: center;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .findpresets svg {
+    flex: none;
+  }
+  .findpresets:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
+  }
+  .findpresets:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
   .t-wrap {
     flex: 1;

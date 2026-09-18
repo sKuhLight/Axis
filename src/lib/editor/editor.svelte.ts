@@ -221,6 +221,15 @@ class EditorStore {
    *  (see AxisPresetBrowserSearchOverlay.svelte) — search + results only, no navigation away from Grid. */
   get presetSearchOpen() { return overlays.isOpen('presetSearch'); }
   set presetSearchOpen(v: boolean) { if (v) overlays.open('presetSearch'); else overlays.close('presetSearch'); }
+  /** Query the next AxisPresetBrowserSearchOverlay open should seed into its search field (structured
+   *  backtick syntax, e.g. `` `AMP(TYPE=5153)` ``). Set by the Block Editor's "Other uses" button;
+   *  consumed on open and cleared on close. A plain `P` open leaves it null. */
+  presetSearchSeed = $state<string | null>(null);
+  /** Open the preset search overlay, optionally seeding the query (see `presetSearchSeed`). */
+  openPresetSearch = (query?: string) => {
+    this.presetSearchSeed = query?.trim() || null;
+    this.presetSearchOpen = true;
+  };
   get cabPickerOpen() { return overlays.isOpen('cabPicker'); }
   set cabPickerOpen(v: boolean) { if (v) overlays.open('cabPicker'); else overlays.close('cabPicker'); }
   cabPickerSlot = $state(0);

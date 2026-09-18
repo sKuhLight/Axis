@@ -73,9 +73,10 @@
   $effect(() => {
     const open = editorOverlays.presetSearchOpen;
     if (open && !wasSearchOpen) {
-      // Fresh search every time the overlay opens, same as PresetPicker's open effect.
+      // A seed (Block Editor's "Other uses" → `AMP(TYPE=…)`) pre-fills the fresh
+      // search; a plain open starts empty, same as PresetPicker's open effect.
       savedQuery = axisPresetBrowserWorkbenchController.snapshot.queryText;
-      axisPresetBrowserWorkbenchController.setQuery('');
+      axisPresetBrowserWorkbenchController.setQuery(editorOverlays.presetSearchSeed ?? '');
       const currentIndex = data.visibleEntries.findIndex(
         (entry) => entry.number === deviceSession.preset?.number
       );
@@ -91,6 +92,7 @@
       // funnel through close() flipping this flag.
       axisPresetBrowserWorkbenchController.setQuery(savedQuery ?? '');
       savedQuery = null;
+      editorOverlays.presetSearchSeed = null;
     }
     wasSearchOpen = open;
   });

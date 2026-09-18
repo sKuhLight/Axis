@@ -23,7 +23,7 @@ function publicDescriptors(value: object): Map<string, PropertyDescriptor> {
 describe('EditorStore runtime facade', () => {
   it('preserves the deliberate public member surface', () => {
     // Unique names count getter/setter pairs once; update deliberately when the public surface changes.
-    expect(publicDescriptors(editor).size).toBe(210);
+    expect(publicDescriptors(editor).size).toBe(212);
   });
 
   it('keeps every externally assigned accessor writable', () => {
@@ -49,6 +49,20 @@ describe('EditorStore runtime facade', () => {
       } finally {
         surface[name] = original;
       }
+    }
+  });
+
+  it('openPresetSearch seeds the query and opens the overlay; blank seeds clear it', () => {
+    try {
+      editor.openPresetSearch('`AMP(TYPE=5153)`');
+      expect(editor.presetSearchSeed).toBe('`AMP(TYPE=5153)`');
+      expect(editor.presetSearchOpen).toBe(true);
+
+      editor.openPresetSearch('   ');
+      expect(editor.presetSearchSeed).toBeNull();
+    } finally {
+      editor.presetSearchOpen = false;
+      editor.presetSearchSeed = null;
     }
   });
 });

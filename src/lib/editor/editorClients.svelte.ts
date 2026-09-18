@@ -31,6 +31,8 @@ export const editorOverlays: Pick<
   | 'presetOpen'
   | 'presetPick'
   | 'presetSearchOpen'
+  | 'presetSearchSeed'
+  | 'openPresetSearch'
   | 'cabPickerOpen'
   | 'cabPickerSlot'
   | 'deviceToolsOpen'
