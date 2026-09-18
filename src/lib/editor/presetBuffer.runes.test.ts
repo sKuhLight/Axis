@@ -46,6 +46,8 @@ const store = vi.fn(async (_n: number) => ({ ok: true }) as { ok: boolean; code?
 const selectPresetReq = vi.fn(async (_n: number) => ({ ok: true }));
 const am4SwitchPreset = vi.fn(async (_n: number) => ({ ok: true }));
 const am4StorePreset = vi.fn(async (_n: number) => ({ ok: true, code: '1A' }));
+const blankPresetSyx = vi.fn(async () => new ArrayBuffer(4));
+const loadBytes = vi.fn(async (_b: ArrayBuffer | Uint8Array) => ({ ok: true }));
 
 class FakeForgeError extends Error {
   status: number;
@@ -66,7 +68,9 @@ vi.mock('$lib/api/forgefx', () => ({
     store: (n: number) => store(n),
     selectPreset: (n: number) => selectPresetReq(n),
     am4SwitchPreset: (n: number) => am4SwitchPreset(n),
-    am4StorePreset: (n: number) => am4StorePreset(n)
+    am4StorePreset: (n: number) => am4StorePreset(n),
+    blankPresetSyx: () => blankPresetSyx(),
+    loadBytes: (b: ArrayBuffer | Uint8Array) => loadBytes(b)
   }
 }));
 const deviceDefs = { building: false, importing: false };
@@ -77,11 +81,13 @@ vi.mock('./history.svelte', () => ({ history: { checkpoint: (l: string, b: boole
 const refreshSlot = vi.fn();
 const refreshLocal = vi.fn();
 const applySlotName = vi.fn();
+const dropSlot = vi.fn();
 const library = {
   cacheBuilt: true,
   refreshSlot: (n: number) => refreshSlot(n),
   refreshLocal: () => refreshLocal(),
-  applySlotName: (n: number, name: string) => applySlotName(n, name)
+  applySlotName: (n: number, name: string) => applySlotName(n, name),
+  dropSlot: (n: number) => dropSlot(n)
 };
 vi.mock('$lib/preset/library.svelte', () => ({ library }));
 const recency = vi.fn();
@@ -149,6 +155,8 @@ beforeEach(() => {
   setPresetName.mockResolvedValue({ ok: true });
   store.mockResolvedValue({ ok: true });
   selectPresetReq.mockResolvedValue({ ok: true }); // a rejection staged by one test must not leak
+  blankPresetSyx.mockResolvedValue(new ArrayBuffer(4));
+  loadBytes.mockResolvedValue({ ok: true });
 
   overlays.close('presetPicker');
   onMutation(() => {}); // drop any hook a previous test registered
@@ -581,6 +589,57 @@ describe('renames', () => {
     expect(await p.renameStoredPreset(40, '   ')).toBe(false);
     expect(await p.renameStoredPreset(-1, 'Lead')).toBe(false);
     expect(setPresetName).not.toHaveBeenCalled();
+  });
+});
+
+// ── clear a stored slot (Preset Browser "Clear preset") ──────────────────────────────────────────
+describe('clearStoredPreset', () => {
+  it('hops to the slot, loads the blank preset, stores it, drops the cache and returns', async () => {
+    const { p } = fresh(); // active slot 12
+    const ok = await p.clearStoredPreset(40);
+    expect(ok).toBe(true);
+    expect(selectPresetReq.mock.calls.map((c) => c[0])).toEqual([40, 12]); // out and back
+    expect(blankPresetSyx).toHaveBeenCalled();
+    expect(loadBytes).toHaveBeenCalled();
+    expect(store).toHaveBeenCalledWith(40);
+    expect(dropSlot).toHaveBeenCalledWith(40);
+    expect(recency).not.toHaveBeenCalled(); // the round-trip is not a user load
+    expect(host.showToast).toHaveBeenCalledWith('Cleared preset 040', '#f5a623');
+  });
+
+  it('clears the ACTIVE slot without a round-trip', async () => {
+    const { p } = fresh(); // active slot 12
+    const ok = await p.clearStoredPreset(12);
+    expect(ok).toBe(true);
+    expect(selectPresetReq).not.toHaveBeenCalled();
+    expect(store).toHaveBeenCalledWith(12);
+    expect(dropSlot).toHaveBeenCalledWith(12);
+    expect(host.poll).toHaveBeenCalled();
+    expect(host.load).toHaveBeenCalled(); // the now-empty grid must replace the stale one
+  });
+
+  it('is gated on the deep-dump capability', async () => {
+    const { p } = fresh();
+    host.canDeepScan = false;
+    expect(await p.clearStoredPreset(40)).toBe(false);
+    expect(blankPresetSyx).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
+  });
+
+  it('refuses an invalid slot', async () => {
+    const { p } = fresh();
+    expect(await p.clearStoredPreset(-1)).toBe(false);
+    expect(blankPresetSyx).not.toHaveBeenCalled();
+  });
+
+  it('a rejected store restores the original slot and reports the failure', async () => {
+    const { p } = fresh();
+    store.mockResolvedValue({ ok: false });
+    const ok = await p.clearStoredPreset(40);
+    expect(ok).toBe(false);
+    expect(selectPresetReq.mock.calls.map((c) => c[0])).toEqual([40, 12]);
+    expect(dropSlot).not.toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('Clear failed', '#d6543f');
   });
 });
 

@@ -27,6 +27,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
   const persistSavedFilters = vi.fn();
   const selectPreset = vi.fn();
   const renameStoredPreset = vi.fn();
+  const clearStoredPreset = vi.fn();
   const openConverted = vi.fn();
   const host: AxisPresetBrowserViewModelHost = {
     get entries() { return entries; },
@@ -40,6 +41,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
     realNameFor: () => '',
     selectPreset,
     renameStoredPreset,
+    clearStoredPreset,
     persistSavedFilters,
     openConverted,
     ...overrides
@@ -50,7 +52,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
     host,
     presenceViews: [{ id: 'all', label: 'All presets', glyph: '◉', color: 'var(--accent)' }]
   });
-  return { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, openConverted };
+  return { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, clearStoredPreset, openConverted };
 }
 
 function summary(overrides: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBrowserEntrySummary {
@@ -108,10 +110,17 @@ describe('Preset Browser view model orchestration', () => {
   });
 
   it('routes rename/load actions and persists saved-filter changes through the host', () => {
-    const { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, openConverted } = setup();
+    const { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, clearStoredPreset, openConverted } = setup();
     expect(model.rename(summary(), '  New Lead  ')).toBe(true);
     expect(renameStoredPreset).toHaveBeenCalledWith(1, 'New Lead');
     expect(model.rename(summary({ empty: true }), 'Nope')).toBe(false);
+
+    // Clear targets real device slots only — never a synthesized empty row or a non-device entry.
+    expect(model.clear(summary())).toBe(true);
+    expect(clearStoredPreset).toHaveBeenCalledWith(1);
+    expect(model.clear(summary({ empty: true }))).toBe(false);
+    expect(model.clear(summary({ id: 'file:x', sourceId: 'file', number: -1 }))).toBe(false);
+    expect(clearStoredPreset).toHaveBeenCalledTimes(1);
 
     expect(model.load(summary({ id: 'dev:19', number: 19, name: '<EMPTY>', empty: true })))
       .toEqual({ kind: 'loadEmptySlot', number: 19 });

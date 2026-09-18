@@ -628,6 +628,16 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     renamingId = null;
   }
 
+  // §4.4 "Clear preset": reset a STORED slot to the blank `<EMPTY>` preset (empty grid + name).
+  // Destructive and not undoable on the device, so confirm first; the runtime host does the
+  // load-blank → store round-trip and drops the slot from the library cache.
+  function clearEntry(entry: AxisPresetBrowserEntrySummary) {
+    if (entry.empty || (entry.number ?? -1) < 0) return;
+    const label = String(entry.number).padStart(3, '0');
+    if (!confirm(`Clear preset ${label}? This erases its name and blocks on the device and cannot be undone.`)) return;
+    viewModel.clear(entry);
+  }
+
   // ── §4.1 column-header sorting ───────────────────────────────────────────────────────────────
   // Re-picking the active column flips its direction; picking a different one hands the direction back
   // to `setSort`, which resets to that field's natural default (A-Z ascending, RECENT descending).
@@ -687,7 +697,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
         converted: entry.converted,
         empty: entry.empty
       },
-      { canRename: deviceSession.canRenamePresets }
+      { canRename: deviceSession.canRenamePresets, canClear: deviceSession.canDeepScan }
     );
     menuItems = toWorkbenchMenuItems(actions, dispatchMenuAction);
     menuPos = pos;
@@ -717,6 +727,9 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
         return;
       case 'rename':
         beginRename(entry);
+        return;
+      case 'clear':
+        clearEntry(entry);
         return;
       case 'tags': {
         // Deferred a tick: the menu-item click that reaches us here is still bubbling toward the

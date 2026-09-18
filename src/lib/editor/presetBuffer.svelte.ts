@@ -316,6 +316,34 @@ export class PresetBufferStore {
     }
   };
 
+  /** Clear a STORED device preset by slot: replace the edit buffer with the codec's BLANK preset
+   *  (empty grid, empty scenes, `<EMPTY>` name — what the official editor's "Clear Preset" writes)
+   *  and store it to the slot. Loads the slot first if it isn't active and returns the user to the
+   *  slot they were on, exactly like renameStoredPreset. Gen-3 only (the blank scaffold is a
+   *  deep-dump feature — `canDeepScan`); returns true on success. */
+  clearStoredPreset = async (slot: number): Promise<boolean> => {
+    if (!this.#host.canDeepScan || slot < 0) return false;
+    const prevSlot = this.#host.preset?.number ?? -1; // where the user was — we return here afterwards
+    const switched = prevSlot !== slot;
+    try {
+      if (switched) await this.selectPreset(slot, { recency: false }); // load into the edit buffer
+      const bytes = await forgefx.blankPresetSyx();
+      await forgefx.loadBytes(bytes); // blank grid + <EMPTY> name in the buffer
+      this.noteBufferReplaced(`Cleared preset ${String(slot).padStart(3, '0')}`);
+      const r = await forgefx.store(slot); // persist the blank buffer to the slot
+      if (!r.ok) throw new Error('store rejected');
+      library.dropSlot(slot); // the slot is now the <EMPTY> sentinel — drop the stale cached entry
+      if (switched && prevSlot >= 0) await this.selectPreset(prevSlot, { recency: false });
+      else { await this.#host.poll(); await this.#host.load(); } // active slot: re-read the now-empty grid
+      this.#host.showToast(`Cleared preset ${String(slot).padStart(3, '0')}`, '#f5a623');
+      return true;
+    } catch {
+      if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot, { recency: false }); } catch { /* */ } } // restore on failure too
+      this.#host.showToast('Clear failed', '#d6543f');
+      return false;
+    }
+  };
+
   // ── preset nav ──
   /** `recency: false` marks an internal slot hop (the rename round-trip) that must not count as a user
    *  load — see renameStoredPreset. Optional so every existing single-arg call site is unchanged. */

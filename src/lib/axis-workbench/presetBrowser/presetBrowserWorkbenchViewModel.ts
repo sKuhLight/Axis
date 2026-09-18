@@ -34,6 +34,8 @@ export interface AxisPresetBrowserViewModelHost {
   realNameFor(slug: string, model: string): string;
   selectPreset(number: number, options?: { recency?: boolean }): unknown;
   renameStoredPreset(number: number, name: string): unknown;
+  /** Clear a stored device slot to the blank `<EMPTY>` preset (empty grid + name). */
+  clearStoredPreset(number: number): unknown;
   persistSavedFilters(filters: AxisPbSavedFilter[]): void;
   openConverted(entryId: string): void;
 }
@@ -157,6 +159,14 @@ export class AxisPresetBrowserViewModel {
     const next = name.trim();
     if (!this.canRename(entry) || !next || next === entry.name || entry.number == null) return false;
     void this.#host.renameStoredPreset(entry.number, next);
+    return true;
+  }
+
+  /** Clear a stored device slot: blank grid + `<EMPTY>` name. Device slots only (the host guards on
+   *  the deep-dump capability, which is what the blank scaffold needs). Returns true when dispatched. */
+  clear(entry: AxisPresetBrowserEntrySummary): boolean {
+    if (entry.sourceId !== 'device' || entry.empty || (entry.number ?? -1) < 0) return false;
+    void this.#host.clearStoredPreset(entry.number as number);
     return true;
   }
 

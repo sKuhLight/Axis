@@ -20,6 +20,7 @@ export type AxisPbMenuActionId =
   | 'saveToDevice'
   | 'favorite'
   | 'rename'
+  | 'clear'
   | 'tags'
   | 'crossConvert'
   | 'openConverter'
@@ -41,6 +42,8 @@ export interface AxisPbMenuEntry {
 export interface AxisPbMenuCaps {
   /** editor.canRenamePresets — device can rename+store a slot. */
   canRename: boolean;
+  /** deviceSession.canDeepScan — gen-3 devices whose scaffold/blank preset the server can serve. */
+  canClear: boolean;
 }
 
 export interface AxisPbMenuAction {
@@ -74,6 +77,9 @@ export function buildAxisPbMenuActions(entry: AxisPbMenuEntry, caps: AxisPbMenuC
     // Already on the device: the primary action navigates to the stored preset.
     actions.push({ id: 'load', label: 'Switch to Preset', hint: '↵' });
     if (caps.canRename) actions.push({ id: 'rename', label: 'Rename & save…' });
+    // Clear resets the stored slot to the blank `<EMPTY>` preset (empty grid + name). Gen-3 only:
+    // the server's blank scaffold is a deep-dump feature, so a non-gen-3 device never shows it.
+    if (caps.canClear) actions.push({ id: 'clear', label: 'Clear preset', danger: true, separatorBefore: true });
   } else {
     // Not on the device (imported file / local folder): trial-load into the edit buffer.
     actions.push({ id: 'audition', label: 'Audition', hint: '↵' });
