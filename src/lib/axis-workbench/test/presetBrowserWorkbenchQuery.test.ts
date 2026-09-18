@@ -21,7 +21,6 @@ const entry = (over: Partial<AxisPbMatchEntry> = {}): AxisPbMatchEntry => {
   return {
     name: 'Studio Clean',
     tags: ['Clean', 'Live'],
-    author: 'Cliff',
     sceneCount: 3,
     models: { amp: ['5153 red', 'deluxe verb'], reverb: ['large hall'] },
     blockSlugs,
@@ -38,10 +37,9 @@ describe('Preset Browser query grammar', () => {
     ]);
   });
 
-  it('parses tag / name / author / scalar / block terms', () => {
+  it('parses tag / name / scalar / block terms', () => {
     expect(parseTerm('tag:Lead')).toEqual({ kind: 'tag', val: 'Lead' });
     expect(parseTerm('name:"Big Verb"')).toEqual({ kind: 'name', val: 'Big Verb' });
-    expect(parseTerm('author:Cliff')).toEqual({ kind: 'author', val: 'Cliff' });
     expect(parseTerm('scenes>=4')).toEqual({ kind: 'scenes', op: '>=', val: '4' });
     expect(parseTerm('AMP')).toEqual({ kind: 'block', block: 'amp', params: [] });
     expect(parseTerm('AMP(TYPE=5153, GAIN>7)')).toEqual({
@@ -134,10 +132,9 @@ describe('Preset Browser matching', () => {
     expect(matchNumeric(70, '=', '40-60')).toBe(false);
   });
 
-  it('matches tag / name / author / scenes conditions', () => {
+  it('matches tag / name / scenes conditions', () => {
     expect(matchPreset(entry(), parseQuery('tag:clean'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('name:studio'), '')).toBe(true);
-    expect(matchPreset(entry(), parseQuery('author:cliff'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('scenes>=3'), '')).toBe(true);
     expect(matchPreset(entry(), parseQuery('scenes>3'), '')).toBe(false);
   });

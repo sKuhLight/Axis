@@ -184,7 +184,6 @@ export function chipDescriptor(c: AxisPbCond, colorOf: (tag: string) => string):
   }
   if (c.kind === 'tag') return { kind: 'scalar', color: colorOf(c.val), text: `Tag: ${c.val}` };
   if (c.kind === 'name') return { kind: 'scalar', color: '#9a9aa3', text: `Name: ${c.val}` };
-  if (c.kind === 'author') return { kind: 'scalar', color: '#9a9aa3', text: `Author: ${c.val}` };
   if (c.kind === 'scenes') return { kind: 'scalar', color: '#4f6bed', text: `Scenes ${opGlyph(c.op)} ${c.val}` };
   return { kind: 'scalar', color: '#9a9aa3', text: '' }; // unreachable — every cond kind is handled above
 }

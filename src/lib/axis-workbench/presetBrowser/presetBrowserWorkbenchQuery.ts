@@ -67,7 +67,6 @@ export type AxisPbCond =
   | { kind: 'block'; block: AxisPbBlockSlug; params: AxisPbParamCond[] }
   | { kind: 'tag'; val: string }
   | { kind: 'name'; val: string }
-  | { kind: 'author'; val: string }
   | { kind: 'scenes'; op: string; val: string };
 
 const OP = '(>=|<=|!=|=|>|<)';
@@ -112,10 +111,6 @@ export function parseTerm(t: string): AxisPbCond | null {
     const v = m[1].trim();
     return v ? { kind: 'name', val: v } : null;
   }
-  if ((m = t.match(/^author:\s*"?([^"]*)"?$/i))) {
-    const v = m[1].trim();
-    return v ? { kind: 'author', val: v } : null;
-  }
   if ((m = t.match(new RegExp(`^scenes\\s*${OP}\\s*(\\d+)$`, 'i')))) return { kind: 'scenes', op: m[1], val: m[2] };
 
   const pi = t.indexOf('(');
@@ -148,7 +143,6 @@ export function condToText(c: AxisPbCond): string {
   }
   if (c.kind === 'tag') return 'tag:' + qv(c.val);
   if (c.kind === 'name') return 'name:' + qv(c.val);
-  if (c.kind === 'author') return 'author:' + qv(c.val);
   if (c.kind === 'scenes') return 'scenes' + c.op + c.val;
   return '';
 }
@@ -269,7 +263,6 @@ export function matchParamCond(b: AxisPbDecodedBlock, pc: AxisPbParamCond): bool
 export interface AxisPbMatchEntry {
   name: string;
   tags: string[];
-  author?: string | null;
   sceneCount: number;
   models: Partial<Record<string, string[]>>;
   blockSlugs: string[];
@@ -313,7 +306,6 @@ export function matchEntryFromSummary(
   return {
     name: entry.name,
     tags: entry.tags,
-    author: null,
     sceneCount: entry.sceneCount,
     models,
     blockSlugs: entry.blocks.map((b) => (b.slug ?? '').toLowerCase()).filter(Boolean),
@@ -346,8 +338,6 @@ export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
       return entry.tags.some((t) => t.toLowerCase().includes(cond.val.toLowerCase()));
     case 'name':
       return entry.name.toLowerCase().includes(cond.val.toLowerCase());
-    case 'author':
-      return (entry.author ?? '').toLowerCase().includes(cond.val.toLowerCase());
     case 'scenes':
       return matchNumeric(entry.sceneCount, cond.op, cond.val);
     case 'block':
@@ -355,7 +345,7 @@ export function matchCond(entry: AxisPbMatchEntry, cond: AxisPbCond): boolean {
   }
 }
 
-// The free-text haystack for one matchable entry — name + tags + author + models (each followed by its
+// The free-text haystack for one matchable entry — name + tags + models (each followed by its
 // real-world gear name) + block slugs, lowercased. Factored out of `matchSimple` so a host can build it
 // ONCE per entry (idle) and reuse it across keystrokes instead of rebuilding it per keystroke (rebuilding
 // name+blocks+models for 500 presets each keystroke was the typing lag, same as the monolith).
@@ -368,7 +358,6 @@ export function entryHaystack(entry: AxisPbMatchEntry, realNameFor?: AxisPbRealN
   return [
     entry.name,
     entry.tags.join(' '),
-    entry.author ?? '',
     modelHay,
     entry.blockSlugs.join(' ')
   ]
