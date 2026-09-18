@@ -60,15 +60,15 @@ export interface LibEntry {
   provenance?: string;
 }
 
-/** The FM3 names an uninitialized slot `<EMPTY>` — a valid CRC'd preset, so it must be filtered
- *  explicitly or it pollutes the library/search as a ghost entry. */
+/** The FM3 names an uninitialized/Cleared slot `<EMPTY>` — a valid CRC'd preset, so it must be
+ *  filtered explicitly or it pollutes the library/search as a ghost entry. This is the ONLY reliable
+ *  cleared signal: the official editor's "Clear Preset" writes the literal `<EMPTY>` into the name
+ *  field, and a preset with a real name but an empty block list (e.g. a user's named section-divider
+ *  preset) is an occupied slot — FM3-Edit shows it by name. Never infer emptiness from `blocks: []`. */
 const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
 
-/** True when a decoded preset is effectively empty. "Clear preset" on the FM3 empties the grid and
- *  scenes but LEAVES the name header intact (the old name still decodes), so the name is NOT a
- *  reliable cleared signal — the empty block list is. An empty grid decodes to `blocks: []` because
- *  `#summarizeDump` skips shunts/unplaced cells. */
-const isEmptySummary = (s: PresetSummary): boolean => !(s.blocks?.length);
+/** True when a stored slot carries no usable identity — the `<EMPTY>` sentinel or a blank name. */
+const isEmptySlotSummary = (s: PresetSummary): boolean => !s.name.trim() || isEmptyName(s.name);
 
 const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', tagColors: 'axs.lib.tagColors', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders', decode: 'axs.lib.decode' };
 const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
@@ -145,7 +145,7 @@ class LibraryStore {
     // restore the cached device scan so the library isn't empty on launch
     const favs = new Set(load<string[]>(LS.favs, []));
     const cached = (load<unknown[]>(LS.cache, []).filter((s) => summarySchema.safeParse(s).success) as PresetSummary[])
-      .filter((s) => !isEmptyName(s.name) && !isEmptySummary(s)); // self-heal: drop ghost/cleared entries from older caches
+      .filter((s) => !isEmptySlotSummary(s)); // self-heal: drop ghost/cleared entries from older caches
     const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
     const files = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
@@ -331,13 +331,13 @@ class LibraryStore {
       for (let n = from; n <= to; n++) {
         try {
           const s = await forgefx.presetSummary(n, true); // full=1 → summary + params in one dump
-          if (s.crcValid && s.name.trim() && !isEmptyName(s.name) && !isEmptySummary(s)) {
+          if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
             const id = `dev:${n}`;
             if (s.params) { params[id] = s.params; delete s.params; } // params → idb; keep summary light
             byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
           } else {
-            // slot cleared/emptied — drop the stale cached entry + params (a cleared FM3 preset still
-            // carries its old name, but its grid decodes to zero blocks → isEmptySummary)
+            // slot is the <EMPTY>/blank sentinel — drop the stale cached entry + params. A named preset
+            // with an empty block list is NOT cleared (divider presets, FM3-Edit parity) and is kept.
             byId.delete(`dev:${n}`);
             delete params[`dev:${n}`];
           }
@@ -700,11 +700,11 @@ class LibraryStore {
       // unchanged + already fully cached → nothing to do (skip the IndexedDB write + reactivity churn)
       if (cached && cached.summary.crc != null && cached.summary.crc === s.crc && this.#paramsCache[id]) return;
       const byId = new Map(this.entries.map((e) => [e.id, e] as const));
-      if (s.crcValid && s.name.trim() && !isEmptyName(s.name) && !isEmptySummary(s)) {
+      if (s.crcValid && s.name.trim() && !isEmptyName(s.name)) {
         if (s.params) { this.#paramsCache = { ...this.#paramsCache, [id]: s.params }; delete s.params; this.#persistParams(); }
         byId.set(id, { id, source: 'device', summary: s, fav: byId.get(id)?.fav ?? false });
       } else {
-        byId.delete(id); // slot was cleared/emptied (a cleared FM3 preset keeps its old name but has no blocks)
+        byId.delete(id); // slot holds the <EMPTY>/blank sentinel (a named empty-grid preset is kept)
       }
       this.entries = [...byId.values()].sort(this.#order);
       this.#cacheDevice();

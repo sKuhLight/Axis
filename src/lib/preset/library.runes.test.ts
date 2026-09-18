@@ -201,9 +201,10 @@ describe('fileBytes lifecycle survives the raw switch', () => {
   });
 });
 
-// `buildCache` rebuilds the device index from the hardware. A slot the user cleared on the FM3 (or
-// AM4) comes back as an empty/<EMPTY> preset, so a rescan must DROP the stale cached name — not just
-// skip re-adding it (which left the ghost entry behind and kept cleared slots showing names).
+// `buildCache` rebuilds the device index from the hardware. A slot the user cleared comes back with
+// the `<EMPTY>` name sentinel (the official editor's "Clear Preset" writes it), so a rescan must DROP
+// the stale cached entry. A named preset with an EMPTY block list (e.g. a user's section divider) is
+// NOT cleared — FM3-Edit shows it by name, and Axis must keep it.
 describe('buildCache drops presets cleared on the device', () => {
   const v2Deep = { apiVersion: 2, model: 'FM3', capabilities: { presets: { canScanNames: false, canDeepScan: true, count: 512 } } };
   const v2Name = { apiVersion: 2, model: 'AM4', capabilities: { presets: { canScanNames: true, canDeepScan: false, count: 512 } } };
@@ -220,27 +221,27 @@ describe('buildCache drops presets cleared on the device', () => {
     expect(library.entries).toEqual([]);
   });
 
-  // The real FM3 "clear preset" leaves the NAME header intact (still decodes the old name) while the
-  // grid empties to zero blocks — so the cleared signal is `blocks: []`, not an empty name.
-  it('full scan drops a cleared slot that keeps its old name but has no blocks', async () => {
-    library.entries = [deviceEntry()];
-    const n = library.entries[0].summary.number;
+  // The user's bank uses named, block-less "divider" presets (`====== Plexis ======`). FM3-Edit shows
+  // them by name; treating `blocks: []` as cleared hid them as `<EMPTY>`. Emptiness is the NAME only.
+  it('full scan KEEPS a named preset that has no blocks (divider)', async () => {
+    library.entries = [];
     device.mockResolvedValue(v2Deep);
     presetSummary.mockResolvedValue({
-      number: n,
-      name: '====== Plexis ======',
+      number: 20,
+      name: '===== Hot-rodded Marshall =====',
       model: 'FM3',
       crcValid: true,
-      crc: 21527,
+      crc: 21733,
       scenes: ['', '', '', '', '', '', '', ''],
       blocks: [],
       models: {},
       amps: []
     });
 
-    await library.buildCache(n, n);
+    await library.buildCache(20, 20);
 
-    expect(library.entries).toEqual([]);
+    expect(library.entries.map((e) => e.summary.name)).toEqual(['===== Hot-rodded Marshall =====']);
+    expect(library.slotIsEmpty(20)).toBe(false);
   });
 
   it('full scan keeps the cached entry when the slot read throws (transient, not a clear)', async () => {
