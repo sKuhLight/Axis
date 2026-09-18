@@ -89,6 +89,15 @@ import {
   type WorkbenchMenuItem,
   type WorkbenchMenuPosition
 } from '../../workbench/svelte/contextMenu';
+import {
+  buildNarrowGroups,
+  clearAllNarrow as clearAllNarrowConds,
+  clearNarrowDim,
+  isNarrowGroupActive,
+  toggleNarrowValue,
+  type AxisPbNarrowEntry,
+  type AxisPbNarrowGroup
+} from './presetBrowserWorkbenchNarrow';
 import { createPresetBrowserIndex } from './presetBrowserWorkbenchIndex.svelte';
 import { createPresetBrowserOramaIndex } from './presetBrowserWorkbenchOrama.svelte';
 import { getOptionalWorkbenchContext } from '../../workbench';
@@ -168,6 +177,37 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     void freeText;
     return viewModel.data(snapshot);
   });
+
+  // Refinement is meaningful only once something has been searched: with an empty query the groups
+  // would just enumerate the whole library. Free text or any structured condition counts as a search.
+  const narrowVisible = $derived(activeConditions.length > 0 || freeText.trim().length > 0);
+  const narrowGroups = $derived.by<AxisPbNarrowGroup[]>(() => {
+    if (!narrowVisible) return [];
+    void activeConditions;
+    void freeText;
+    void data.scopedEntries;
+    const entries: AxisPbNarrowEntry[] = [];
+    for (const entry of data.scopedEntries) {
+      const prepared = index.match.get(entry.id);
+      if (prepared) entries.push({ match: prepared.match, hay: prepared.hay });
+    }
+    return buildNarrowGroups(entries, activeConditions, freeText);
+  });
+  const hasNarrow = $derived(narrowGroups.some((group) => group.values.some((value) => value.selected)));
+  function narrowActive(group: AxisPbNarrowGroup): boolean {
+    return isNarrowGroupActive(activeConditions, group);
+  }
+  function toggleNarrow(group: AxisPbNarrowGroup, value: string): void {
+    if (group.kind === 'tag') recordTagUsage(value);
+    axisPresetBrowserWorkbenchController.editConds((conds) => toggleNarrowValue(conds, group, value));
+  }
+  function clearNarrow(group: AxisPbNarrowGroup): void {
+    axisPresetBrowserWorkbenchController.editConds((conds) => clearNarrowDim(conds, group));
+  }
+  function clearAllNarrow(): void {
+    const groups = narrowGroups;
+    axisPresetBrowserWorkbenchController.editConds((conds) => clearAllNarrowConds(conds, groups));
+  }
 
   // Saved filters — shared list (localStorage["axs.pb.saved"] + config mirror), reused from the monolith.
   let savedFilters = $state<AxisPbSavedFilter[]>(loadSavedFilters());
@@ -915,6 +955,13 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     get activeConditions() { return activeConditions; },
     get data() { return data; },
     get presenceViews() { return presenceViews; },
+    get narrowGroups() { return narrowGroups; },
+    get narrowVisible() { return narrowVisible; },
+    get hasNarrow() { return hasNarrow; },
+    narrowActive,
+    toggleNarrow,
+    clearNarrow,
+    clearAllNarrow,
     get savedFilters() { return savedFilters; },
     get saveName() { return saveName; },
     set saveName(v: string) { saveName = v; },

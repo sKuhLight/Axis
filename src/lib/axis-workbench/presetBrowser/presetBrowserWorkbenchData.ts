@@ -68,6 +68,9 @@ export interface AxisPresetBrowserDataView {
   sources: AxisPresetBrowserSourceSummary[];
   entries: AxisPresetBrowserEntrySummary[];
   visibleEntries: AxisPresetBrowserEntrySummary[];
+  /** The entries `scopedTotal` counts — source + presence filtered, query not applied. Feeds the
+   *  "Narrow" refinement panel, whose counts are taken over exactly this scope. */
+  scopedEntries: AxisPresetBrowserEntrySummary[];
   /** Entries in scope BEFORE the query runs — source + presence filters applied, conditions not. The
    *  list header reports "N of scopedTotal" so the count only reads as a result when it is one. */
   scopedTotal: number;
@@ -315,6 +318,7 @@ export function createAxisPresetBrowserDataView(input: AxisPresetBrowserDataInpu
     sources,
     entries,
     visibleEntries,
+    scopedEntries: byPresence,
     scopedTotal: byPresence.length,
     selectedEntry,
     activeSourceId,
