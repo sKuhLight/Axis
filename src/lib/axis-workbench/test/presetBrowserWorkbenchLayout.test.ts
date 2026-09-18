@@ -4,6 +4,7 @@ import {
   AXIS_PB_SCROLL_BATCH,
   axisPbPresetReveal,
   axisPbRank,
+  axisPbResultSetKey,
   electAxisPbOwner,
   nextAxisPbVisibleCount
 } from '../presetBrowser/presetBrowserWorkbenchLayout';
@@ -34,6 +35,25 @@ describe('Grid preset search reveal', () => {
 
   it('falls back to the first row when there is no current preset', () => {
     expect(axisPbPresetReveal(512, -1, 20)).toEqual({ highlightIndex: 0, visibleCount: 20 });
+  });
+});
+
+describe('Preset Browser result-set signature', () => {
+  const base = { queryText: '', sort: 'num', sortDir: 'asc', presenceView: 'all', sourceId: 'device' };
+
+  it('ignores selection/marking/overlay state', () => {
+    // Those fields live on the same snapshot but are deliberately excluded, so a row click or
+    // right-click emits a new snapshot without changing the signature — and does not reset scroll.
+    const selected = { ...base, entryId: 'dev:3', anchorId: 'dev:3', marked: { 'dev:3': true }, detailOpen: true };
+    expect(axisPbResultSetKey(selected)).toBe(axisPbResultSetKey(base));
+  });
+
+  it('changes when any result-set field changes', () => {
+    expect(axisPbResultSetKey({ ...base, queryText: 'amp' })).not.toBe(axisPbResultSetKey(base));
+    expect(axisPbResultSetKey({ ...base, sort: 'name' })).not.toBe(axisPbResultSetKey(base));
+    expect(axisPbResultSetKey({ ...base, sortDir: 'desc' })).not.toBe(axisPbResultSetKey(base));
+    expect(axisPbResultSetKey({ ...base, presenceView: 'device' })).not.toBe(axisPbResultSetKey(base));
+    expect(axisPbResultSetKey({ ...base, sourceId: 'computer' })).not.toBe(axisPbResultSetKey(base));
   });
 });
 

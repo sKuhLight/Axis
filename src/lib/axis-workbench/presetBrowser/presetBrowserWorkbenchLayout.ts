@@ -31,6 +31,22 @@ export function nextAxisPbVisibleCount(visible: number, total: number, batch = A
   return Math.min(Math.max(visible, 0) + batch, total);
 }
 
+// The fields that define a RESULT SET. The list starts back at the first batch + top of the scroller
+// only when one of these changes. Selection, marking, overlay and detail state all emit new controller
+// snapshots too, so the list cannot key off snapshot identity — doing so reset the scroll on every
+// row click/right-click and made the list jump. See PbListBody's "start a new result set" effect.
+export interface AxisPbResultSetFields {
+  queryText: string;
+  sort: string;
+  sortDir: string;
+  presenceView: string;
+  sourceId: string;
+}
+
+export function axisPbResultSetKey(fields: AxisPbResultSetFields): string {
+  return [fields.queryText, fields.sort, fields.sortDir, fields.presenceView, fields.sourceId].join('\u0000');
+}
+
 // Overlay ownership rank (§1): the lowest-rank mounted part owns all pickers/menus/dialogs/toasts.
 export const AXIS_PB_OWNER_RANK: Record<AxisPresetBrowserPart, number> = {
   list: 0,

@@ -8,6 +8,7 @@
   import {
     AXIS_PB_INITIAL_ROWS,
     axisPbPresetReveal,
+    axisPbResultSetKey,
     nextAxisPbVisibleCount
   } from '../../../presetBrowser/presetBrowserWorkbenchLayout';
   import type { AxisPresetBrowserPartView } from '../../../presetBrowser/presetBrowserWorkbenchView.svelte';
@@ -28,17 +29,24 @@
   // A new result set (query/sort/source change) starts back at the first batch AND at the top of the
   // list, so changing the search query never leaves you scrolled into stale mid-list results.
   //
+  // The controller emits a fresh snapshot for EVERY change — selection, marking, overlays — and
+  // `view.snapshot` is the whole rune, so the effect re-runs on all of them. Compare a signature of
+  // just the result-set fields (not snapshot identity) and bail when it is unchanged; otherwise
+  // clicking/right-clicking a row would reset the scroll and the list would jump to the top.
+  //
   // "Scroll to current" deliberately rewrites those fields to their defaults (clears the query, resets
   // the sort/source), so its snapshot must NOT trigger this reset — otherwise the reset shrinks the
   // window back and the active row vanishes ("scrolls down then back up"). The snapshot emitted by
-  // scrollToCurrent is compared by identity, untracked, so every run in that commit steps aside while
-  // a later genuine edit (a new snapshot object) still resets.
+  // scrollToCurrent is compared by identity, untracked, so that commit steps aside while a later
+  // genuine edit still resets.
+  let lastResultSetKey: string | null = null;
   $effect(() => {
-    void view.snapshot.queryText;
-    void view.snapshot.sort;
-    void view.snapshot.sortDir;
-    void view.snapshot.presenceView;
-    void view.snapshot.sourceId;
+    const key = axisPbResultSetKey(view.snapshot);
+    if (key === lastResultSetKey) return;
+    const firstRun = lastResultSetKey === null;
+    lastResultSetKey = key;
+    // The initial batch + top-of-list position already hold on mount; only a later change resets.
+    if (firstRun) return;
     if (untrack(() => view.snapshot) === view.scrollToCurrentSnapshot) return;
     visibleCount = AXIS_PB_INITIAL_ROWS;
     if (scrollEl) scrollEl.scrollTop = 0;
