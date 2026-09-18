@@ -8,10 +8,13 @@ const templateSources = vi.fn<(path: string) => Promise<{ candidates: TemplateCa
 const templateFile = vi.fn<(path: string, dir: string) => Promise<ArrayBuffer>>();
 const loadBytes = vi.fn<(bytes: ArrayBuffer) => Promise<{ ok: boolean }>>();
 const decodePresetFile = vi.fn();
+const presetBackup = vi.fn<() => Promise<{ name: string; bytes: number[] }>>();
+const saveTemplate = vi.fn<(dir: string, name: string, bytes: number[], overwrite?: boolean) => Promise<{ ok: boolean; path: string }>>();
 const showToast = vi.fn();
 const noteBufferReplaced = vi.fn();
 const load = vi.fn<() => Promise<void>>();
 const detected = { connected: true, name: 'FM3' };
+const preset = { number: 3, name: 'Brit 800' };
 const cfg = { blockLibraryPath: '', presetTemplatesPath: '' };
 
 vi.mock('$lib/api/forgefx', () => ({
@@ -19,11 +22,13 @@ vi.mock('$lib/api/forgefx', () => ({
     templateSources: (p: string) => templateSources(p),
     templateFile: (p: string, d: string) => templateFile(p, d),
     loadBytes: (b: ArrayBuffer) => loadBytes(b),
-    decodePresetFile: (b: ArrayBuffer) => decodePresetFile(b)
+    decodePresetFile: (b: ArrayBuffer) => decodePresetFile(b),
+    presetBackup: () => presetBackup(),
+    saveTemplate: (d: string, n: string, b: number[], o?: boolean) => saveTemplate(d, n, b, o)
   }
 }));
 vi.mock('$lib/editor/editorClients.svelte', () => ({
-  deviceSession: { get detected() { return detected; } },
+  deviceSession: { get detected() { return detected; }, get preset() { return preset; } },
   editorNotifications: { showToast: (t: string, a?: string) => showToast(t, a) },
   gridEditing: { load: () => load() },
   presetBuffer: { noteBufferReplaced: (l: string) => noteBufferReplaced(l) }
@@ -38,6 +43,8 @@ beforeEach(() => {
   templateFile.mockReset();
   loadBytes.mockReset();
   decodePresetFile.mockReset();
+  presetBackup.mockReset();
+  saveTemplate.mockReset();
   showToast.mockReset();
   noteBufferReplaced.mockReset();
   load.mockReset();
@@ -122,5 +129,76 @@ describe('presetTemplates.loadIntoBuffer', () => {
     expect(ok).toBe(false);
     expect(loadBytes).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith('boom', '#d6543f');
+  });
+});
+
+describe('presetTemplates.saveCurrentAsTemplate', () => {
+  it('offers the current preset name as the default template name', async () => {
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+    expect(presetTemplates.defaultTemplateName).toBe('Brit 800');
+  });
+
+  it('dumps the edit buffer and writes it into the templates folder, refreshing the list', async () => {
+    cfg.presetTemplatesPath = '/t';
+    const bytes = [0xf0, 1, 2, 0xf7];
+    presetBackup.mockResolvedValue({ name: 'Brit 800', bytes });
+    saveTemplate.mockResolvedValue({ ok: true, path: '/t/Brit 800.syx' });
+    templateSources.mockResolvedValue({ candidates: [CANDIDATE] });
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+
+    const outcome = await presetTemplates.saveCurrentAsTemplate('Brit 800');
+
+    expect(outcome).toEqual({ ok: true, path: '/t/Brit 800.syx' });
+    expect(saveTemplate).toHaveBeenCalledWith('/t', 'Brit 800', bytes, false);
+    expect(templateSources).toHaveBeenCalledWith('/t');
+    expect(presetTemplates.candidates).toEqual([CANDIDATE]);
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Brit 800'), '#33c46b');
+  });
+
+  it('reports a name clash as exists without toasting (the dialog offers a replace)', async () => {
+    cfg.presetTemplatesPath = '/t';
+    presetBackup.mockResolvedValue({ name: 'Brit 800', bytes: [1] });
+    saveTemplate.mockRejectedValue(Object.assign(new Error('409'), { status: 409 }));
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+
+    const outcome = await presetTemplates.saveCurrentAsTemplate('Brit 800');
+
+    expect(outcome).toEqual({ ok: false, reason: 'exists' });
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('retries with overwrite when asked', async () => {
+    cfg.presetTemplatesPath = '/t';
+    presetBackup.mockResolvedValue({ name: 'Brit 800', bytes: [1] });
+    saveTemplate.mockResolvedValue({ ok: true, path: '/t/Brit 800.syx' });
+    templateSources.mockResolvedValue({ candidates: [] });
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+
+    const outcome = await presetTemplates.saveCurrentAsTemplate('Brit 800', true);
+
+    expect(outcome.ok).toBe(true);
+    expect(saveTemplate).toHaveBeenCalledWith('/t', 'Brit 800', [1], true);
+  });
+
+  it('refuses with a toast when no templates folder is configured', async () => {
+    detected.connected = false;
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+
+    const outcome = await presetTemplates.saveCurrentAsTemplate('Brit 800');
+
+    expect(outcome).toMatchObject({ ok: false, reason: 'error' });
+    expect(presetBackup).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Setup'), '#d6543f');
+  });
+
+  it('toasts and reports error when the dump or write fails for another reason', async () => {
+    cfg.presetTemplatesPath = '/t';
+    presetBackup.mockRejectedValue(new Error('no dump'));
+    const { presetTemplates } = await import('./presetTemplates.svelte');
+
+    const outcome = await presetTemplates.saveCurrentAsTemplate('Brit 800');
+
+    expect(outcome).toEqual({ ok: false, reason: 'error', message: 'no dump' });
+    expect(showToast).toHaveBeenCalledWith('no dump', '#d6543f');
   });
 });

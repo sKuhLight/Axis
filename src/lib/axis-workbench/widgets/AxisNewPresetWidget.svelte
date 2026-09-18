@@ -10,9 +10,11 @@
   let menuOpen = $state(false);
   let menuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 
-  // "New preset": start from a saved template, or start from zero (a clean blank preset).
+  // "New preset": start from a saved template, start from zero (a clean blank preset), or save the
+  // current buffer back into the templates folder.
   const items: WorkbenchMenuItem[] = [
     { id: 'template', label: 'New from template…', run: () => overlays.open('presetTemplates') },
+    { id: 'saveTemplate', label: 'Save preset as template…', separatorBefore: true, run: () => overlays.open('presetTemplateSave') },
     { id: 'blank', label: 'Clear grid', separatorBefore: true, run: () => void startBlankPreset() }
   ];
 
@@ -24,8 +26,8 @@
   }
 </script>
 
-<!-- "New preset": a bare + beside the preset/scene cluster. It opens a two-item menu —
-     start from a template, or clear the buffer to a blank preset. -->
+<!-- "New preset": a bare + beside the preset/scene cluster. It opens a menu — start from a template,
+     save the current buffer as a template, or clear the buffer to a blank preset. -->
 <button
   class="axis-widget new-preset"
   class:clickable={!editMode}

@@ -25,6 +25,7 @@
   import CachePrompt from '$lib/ui/CachePrompt.svelte';
   import ColorLabelsPrompt from '$lib/fm3edit/ColorLabelsPrompt.svelte';
   import NewPresetFromTemplateDialog from '$lib/preset/NewPresetFromTemplateDialog.svelte';
+  import SavePresetAsTemplateDialog from '$lib/preset/SavePresetAsTemplateDialog.svelte';
   import DeviceDefsPrompt from '$lib/device/DeviceDefsPrompt.svelte';
   import AxisPanel from '$lib/ancillary/AxisPanel.svelte';
   import Notices from '$lib/ancillary/Notices.svelte';
@@ -196,6 +197,7 @@
   <CachePrompt />
   <ColorLabelsPrompt />
   <NewPresetFromTemplateDialog />
+  <SavePresetAsTemplateDialog />
   <DeviceDefsPrompt />
   <AxisPanel />
   <Notices />

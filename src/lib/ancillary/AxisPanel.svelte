@@ -118,6 +118,7 @@
   const tplPathValue = $derived(tplPathDraft ?? (appSettings.cfg.presetTemplatesPath || templatesDefault || ''));
   const onTplPathInput = (v: string) => { tplPathDraft = v; appSettings.setPresetTemplatesPath(v); };
   const openTemplates = () => { editorOverlays.axisOpen = false; overlays.open('presetTemplates'); };
+  const openSaveTemplate = () => { editorOverlays.axisOpen = false; overlays.open('presetTemplateSave'); };
 
   function restoreFromFolder() {
     if (confirm('Import preset versions from the Sync/ folder into this PC’s version store? Existing versions are kept; nothing is overwritten.')) void presetBuffer.localRestore();
@@ -256,6 +257,7 @@
             </label>
           </form>
           <button class="sync-now" onclick={openTemplates}><Icon name="device" size={15} /> New preset from template…</button>
+          <button class="sync-now" onclick={openSaveTemplate}><Icon name="save" size={15} /> Save current preset as template…</button>
         </div>
 
       {:else if editorOverlays.axisTab === 'theme'}
