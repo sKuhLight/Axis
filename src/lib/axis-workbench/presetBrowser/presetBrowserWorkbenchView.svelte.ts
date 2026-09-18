@@ -554,6 +554,18 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     axisPresetBrowserWorkbenchController.openMove(axisPresetBrowserWorkbenchController.moveSlots());
   }
 
+  // §4.4 "Clear preset" for a whole selection: erase every marked stored slot (gen-3 only). This is
+  // not undoable on the device, so confirm the count once up front; the host does the bulk blank-write
+  // round-trip and drops each slot from the cache.
+  function clearMarkedPresets() {
+    const slots = markedSummary.clearableSlots;
+    if (!slots.length) return;
+    const what = slots.length === 1 ? `preset ${String(slots[0]).padStart(3, '0')}` : `${slots.length} presets`;
+    const possessive = slots.length === 1 ? 'its name and blocks' : 'their names and blocks';
+    if (!confirm(`Clear ${what}? This erases ${possessive} on the device and cannot be undone.`)) return;
+    viewModel.clearMany(slots);
+  }
+
   // The detail region hydrates whenever it is actually shown — as a dedicated `detail` part OR as the
   // right column of the composed `full` panel (§"full" = sources | list | detail).
   const showsDetail = $derived(part === 'detail' || part === 'full');
@@ -968,6 +980,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     openBulkTags,
     toggleMarkedFavorites,
     openMarkedMove,
+    clearMarkedPresets,
     selectSource,
     selectEntry,
     scrollToCurrent,

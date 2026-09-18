@@ -73,6 +73,7 @@ export function createAxisPresetBrowserViewModelHost(): AxisPresetBrowserViewMod
     selectPreset: presetBuffer.selectPreset,
     renameStoredPreset: presetBuffer.renameStoredPreset,
     clearStoredPreset: presetBuffer.clearStoredPreset,
+    clearStoredPresets: presetBuffer.clearStoredPresets,
     persistSavedFilters,
     openConverted: (entryId) => {
       const entry = library.entries.find((candidate) => candidate.id === entryId);

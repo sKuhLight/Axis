@@ -5,9 +5,11 @@
 // owns every side effect (library mutations, opening the picker, opening the move dialog).
 
 /** The subset of an entry the bulk model reads. `empty` marks a synthesized non-entry device slot
- *  (never taggable/favoritable); `tags` is the entry's current tag list. */
+ *  (never taggable/favoritable); `sourceId` + `number` decide whether a slot can be cleared. */
 export interface AxisPbBulkEntry {
   id: string;
+  sourceId: string;
+  number: number | null;
   fav: boolean;
   tags: string[];
   empty?: boolean;
@@ -20,6 +22,9 @@ export interface AxisPbBulkSummary {
   taggable: number;
   /** Marked device slot numbers (sorted, unique) — the Move seed. */
   deviceSlots: number[];
+  /** The subset of `deviceSlots` that are real (non-empty) stored presets — the Clear seed. Empty
+   *  slots are already blank, so they are excluded. */
+  clearableSlots: number[];
   /** Every taggable target is already a favorite, so the header offers Unfavorite. */
   allFav: boolean;
 }
@@ -56,6 +61,7 @@ export function axisPbMarkedSummary(
   let selected = 0;
   let taggable = 0;
   let favCount = 0;
+  const clearable: number[] = [];
   for (const id of Object.keys(marked)) {
     if (!marked[id]) continue;
     selected++;
@@ -63,11 +69,13 @@ export function axisPbMarkedSummary(
     if (!entry || entry.empty) continue;
     taggable++;
     if (entry.fav) favCount++;
+    if (entry.sourceId === 'device' && entry.number != null && entry.number >= 0) clearable.push(entry.number);
   }
   return {
     selected,
     taggable,
     deviceSlots: axisPbMarkedDeviceSlots(marked),
+    clearableSlots: [...new Set(clearable)].sort((a, b) => a - b),
     allFav: taggable > 0 && favCount === taggable
   };
 }

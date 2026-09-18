@@ -36,6 +36,8 @@ export interface AxisPresetBrowserViewModelHost {
   renameStoredPreset(number: number, name: string): unknown;
   /** Clear a stored device slot to the blank `<EMPTY>` preset (empty grid + name). */
   clearStoredPreset(number: number): unknown;
+  /** Clear several stored device slots in one pass (gen-3/deep-dump only). */
+  clearStoredPresets(slots: readonly number[]): unknown;
   persistSavedFilters(filters: AxisPbSavedFilter[]): void;
   openConverted(entryId: string): void;
 }
@@ -168,6 +170,16 @@ export class AxisPresetBrowserViewModel {
     if (entry.sourceId !== 'device' || entry.empty || (entry.number ?? -1) < 0) return false;
     void this.#host.clearStoredPreset(entry.number as number);
     return true;
+  }
+
+  /** Clear several stored device slots in one pass. Slots are normalized here; the host does the
+   *  blank-write round-trip and no-ops when the device lacks the deep-dump capability. Returns how
+   *  many slots were dispatched. */
+  clearMany(slots: readonly number[]): number {
+    const valid = [...new Set(slots)].filter((n) => Number.isInteger(n) && n >= 0).sort((a, b) => a - b);
+    if (!valid.length) return 0;
+    void this.#host.clearStoredPresets(valid);
+    return valid.length;
   }
 
   load(entry: AxisPresetBrowserEntrySummary): AxisPresetLoadAction {

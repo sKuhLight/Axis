@@ -11,6 +11,8 @@ import {
 
 const entry = (id: string, over: Partial<AxisPbBulkEntry> = {}): AxisPbBulkEntry => ({
   id,
+  sourceId: 'device',
+  number: 0,
   fav: false,
   tags: [],
   ...over
@@ -46,6 +48,21 @@ describe('axisPbMarkedSummary', () => {
   it('collects sorted unique marked device slots for the move seed', () => {
     const s = axisPbMarkedSummary({ 'dev:5': true, 'dev:2': true, 'file:x': true, 'dev:2x': true }, []);
     expect(s.deviceSlots).toEqual([2, 5]);
+  });
+
+  // Clear only touches real, stored device slots — an empty slot is already blank, and a file/ghost
+  // mark has no device slot to erase.
+  it('collects clearable slots from real device entries only', () => {
+    const s = axisPbMarkedSummary(
+      { 'dev:1': true, 'file:x': true, 'dev:2': true, 'ghost': true },
+      [
+        entry('dev:1', { number: 1 }),
+        entry('file:x', { sourceId: 'file', number: null }),
+        entry('dev:2', { number: 2, empty: true })
+      ]
+    );
+    expect(s.selected).toBe(4);
+    expect(s.clearableSlots).toEqual([1]);
   });
 });
 

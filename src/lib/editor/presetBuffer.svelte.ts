@@ -344,6 +344,42 @@ export class PresetBufferStore {
     }
   };
 
+  /** Clear SEVERAL stored device presets in one pass (Preset Browser bulk "Clear preset"). The blank
+   *  bytes are fetched once and, for each slot in turn, written to the buffer and stored; each cleared
+   *  slot is dropped from the library cache and the user is returned to the slot they started on. A
+   *  failure stops the run and restores the starting slot, reporting how many actually cleared. Gen-3
+   *  only (the blank scaffold is a deep-dump feature — `canDeepScan`). Returns the number cleared. */
+  clearStoredPresets = async (slots: readonly number[]): Promise<number> => {
+    if (!this.#host.canDeepScan) return 0;
+    const targets = [...new Set(slots)].filter((n) => Number.isInteger(n) && n >= 0).sort((a, b) => a - b);
+    if (!targets.length) return 0;
+    const prevSlot = this.#host.preset?.number ?? -1; // where the user was — we return here afterwards
+    let cleared = 0;
+    try {
+      const blank = await forgefx.blankPresetSyx();
+      for (const slot of targets) {
+        if ((this.#host.preset?.number ?? -1) !== slot) await this.selectPreset(slot, { recency: false });
+        // `slice(0)` gives each load its own buffer — the transport can consume the one it is handed.
+        await forgefx.loadBytes(blank.slice(0));
+        const r = await forgefx.store(slot);
+        if (!r.ok) throw new Error('store rejected');
+        library.dropSlot(slot);
+        cleared++;
+      }
+    } catch {
+      /* report what succeeded and restore the starting slot below */
+    }
+    if (cleared) this.noteBufferReplaced(`Cleared ${cleared} preset${cleared === 1 ? '' : 's'}`);
+    try {
+      if (prevSlot >= 0 && (this.#host.preset?.number ?? -1) !== prevSlot) await this.selectPreset(prevSlot, { recency: false });
+      else { await this.#host.poll(); await this.#host.load(); } // active (or no) slot: re-read the now-empty grid
+    } catch { /* */ }
+    if (cleared === targets.length) this.#host.showToast(`Cleared ${cleared} preset${cleared === 1 ? '' : 's'}`, '#f5a623');
+    else if (cleared) this.#host.showToast(`Cleared ${cleared} of ${targets.length} presets`, '#d6543f');
+    else this.#host.showToast('Clear failed', '#d6543f');
+    return cleared;
+  };
+
   // ── preset nav ──
   /** `recency: false` marks an internal slot hop (the rename round-trip) that must not count as a user
    *  load — see renameStoredPreset. Optional so every existing single-arg call site is unchanged. */

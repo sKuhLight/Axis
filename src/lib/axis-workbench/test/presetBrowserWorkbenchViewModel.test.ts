@@ -28,6 +28,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
   const selectPreset = vi.fn();
   const renameStoredPreset = vi.fn();
   const clearStoredPreset = vi.fn();
+  const clearStoredPresets = vi.fn();
   const openConverted = vi.fn();
   const host: AxisPresetBrowserViewModelHost = {
     get entries() { return entries; },
@@ -42,6 +43,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
     selectPreset,
     renameStoredPreset,
     clearStoredPreset,
+    clearStoredPresets,
     persistSavedFilters,
     openConverted,
     ...overrides
@@ -52,7 +54,7 @@ function setup(overrides: Partial<AxisPresetBrowserViewModelHost> = {}) {
     host,
     presenceViews: [{ id: 'all', label: 'All presets', glyph: '◉', color: 'var(--accent)' }]
   });
-  return { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, clearStoredPreset, openConverted };
+  return { controller, runtime, model, persistSavedFilters, selectPreset, renameStoredPreset, clearStoredPreset, clearStoredPresets, openConverted };
 }
 
 function summary(overrides: Partial<AxisPresetBrowserEntrySummary> = {}): AxisPresetBrowserEntrySummary {
@@ -142,5 +144,15 @@ describe('Preset Browser view model orchestration', () => {
     expect(persistSavedFilters).toHaveBeenLastCalledWith(saved);
     expect(model.deleteSavedFilter(saved, saved[0].id)).toEqual([]);
     expect(persistSavedFilters).toHaveBeenLastCalledWith([]);
+  });
+
+  it('clearMany normalizes the slot list and dispatches ONE bulk clear', () => {
+    const { model, clearStoredPresets, clearStoredPreset } = setup();
+    expect(model.clearMany([3, 1, 3, -1, 1.5])).toBe(2);
+    expect(clearStoredPresets).toHaveBeenCalledWith([1, 3]);
+    expect(clearStoredPreset).not.toHaveBeenCalled(); // bulk never falls back to per-slot clears
+
+    expect(model.clearMany([])).toBe(0);
+    expect(clearStoredPresets).toHaveBeenCalledTimes(1);
   });
 });

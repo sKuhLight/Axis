@@ -110,6 +110,12 @@
           {view.markedSummary.allFav ? 'Unfavorite' : 'Favorite'}
         </button>
         <button type="button" disabled={!view.markedSummary.deviceSlots.length} onclick={view.openMarkedMove}>Move…</button>
+        <button
+          type="button"
+          class="danger"
+          disabled={!deviceSession.canDeepScan || !view.markedSummary.clearableSlots.length}
+          onclick={view.clearMarkedPresets}
+        >Clear preset…</button>
         <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
       </div>
     </div>
@@ -478,6 +484,14 @@
   .select-head button:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+  /* The destructive bulk action, tinted apart from the metadata actions beside it. */
+  .select-head button.danger {
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+    color: var(--danger);
+  }
+  .select-head button.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
   }
   .more-hint {
     padding: 22px 12px;

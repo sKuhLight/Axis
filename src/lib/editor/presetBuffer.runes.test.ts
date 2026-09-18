@@ -643,6 +643,56 @@ describe('clearStoredPreset', () => {
   });
 });
 
+// ── bulk clear (Preset Browser selection header) ────────────────────────────────────────────────
+describe('clearStoredPresets', () => {
+  it('blank-writes each slot, drops each cache entry, fetches once and returns to the start', async () => {
+    const { p } = fresh(); // active slot 12
+    const cleared = await p.clearStoredPresets([40, 3]);
+    expect(cleared).toBe(2);
+    // 12 → 3 → 40 (sorted targets), then back to 12.
+    expect(selectPresetReq.mock.calls.map((c) => c[0])).toEqual([3, 40, 12]);
+    expect(store.mock.calls.map((c) => c[0])).toEqual([3, 40]);
+    expect(dropSlot.mock.calls.map((c) => c[0])).toEqual([3, 40]);
+    expect(blankPresetSyx).toHaveBeenCalledTimes(1); // one scaffold for the whole batch
+    expect(loadBytes).toHaveBeenCalledTimes(2);
+    expect(recency).not.toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('Cleared 2 presets', '#f5a623');
+  });
+
+  it('clears the ACTIVE slot without a hop and still reloads its now-empty grid', async () => {
+    const { p } = fresh(); // active slot 12
+    expect(await p.clearStoredPresets([12])).toBe(1);
+    expect(selectPresetReq).not.toHaveBeenCalled();
+    expect(host.poll).toHaveBeenCalled();
+    expect(host.load).toHaveBeenCalled();
+    expect(host.showToast).toHaveBeenCalledWith('Cleared 1 preset', '#f5a623');
+  });
+
+  it('stops at the first failure, restores the starting slot and reports the partial count', async () => {
+    const { p } = fresh();
+    store.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false });
+    expect(await p.clearStoredPresets([40, 3])).toBe(1);
+    expect(dropSlot).toHaveBeenCalledTimes(1);
+    expect(selectPresetReq.mock.calls.map((c) => c[0])).toEqual([3, 40, 12]);
+    expect(host.showToast).toHaveBeenCalledWith('Cleared 1 of 2 presets', '#d6543f');
+  });
+
+  it('is gated on the deep-dump capability and ignores invalid slots', async () => {
+    const { p } = fresh();
+    host.canDeepScan = false;
+    expect(await p.clearStoredPresets([40])).toBe(0);
+    host.canDeepScan = true;
+    expect(await p.clearStoredPresets([-1, 1.5])).toBe(0);
+    expect(blankPresetSyx).not.toHaveBeenCalled();
+  });
+
+  it('dedupes and sorts the target slots', async () => {
+    const { p } = fresh();
+    expect(await p.clearStoredPresets([40, 40, 3])).toBe(2);
+    expect(store.mock.calls.map((c) => c[0])).toEqual([3, 40]);
+  });
+});
+
 // ── preset watch ────────────────────────────────────────────────────────────────────────────────
 describe('watchPreset', () => {
   it('reloads everything when the device moved to another slot', async () => {
