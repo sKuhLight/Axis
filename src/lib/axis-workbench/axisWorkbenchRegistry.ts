@@ -157,32 +157,27 @@ AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, co
 // + keep-set. The generic layer stays widget-type agnostic.
 registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
 
-// Removing a My Controls section header cascades to the controls under it —
-// see myControlsSections.ts. Every other widget type removes just itself,
-// which axisMyControlsSectionRemovalIds also returns for a blank divider.
-registry.registerWidgetRemoval({
-  idsForRemoval: (widget, doc) =>
-    widget.type === AXIS_SECTION_HEADER_TYPE ? axisMyControlsSectionRemovalIds(doc, widget.id) : [widget.id]
-});
-
-// My Controls is a pin board, not a layout surface — the size / move / save
-// items are layout-editing chrome the pin flow retired, so its widgets get a
-// context menu of just removal. A named header cascades to its controls, so it
-// reads "Remove whole section"; a divider or control is a plain "Remove".
+// The generic layout context menu is retired, so the only widget menu left is
+// Pinned Controls' remove action — a pin board, not layout editing. Removing a
+// section header cascades to the controls under it (`myControlsSections.ts`); a
+// divider or an ordinary control removes just itself. A named header reads
+// "Remove whole section", everything else "Remove".
 registry.registerWidgetMenu({
-  filterItems: (widget, doc, items) => {
-    if (widget.zone !== AXIS_MY_CONTROLS_ZONE) return items;
-    const label = isAxisSectionHeader(widget) && axisSectionHeaderLabel(widget) ? 'Remove whole section' : 'Remove';
-    // WidgetHost's standard "remove" item now also disables when edit mode is
-    // off (layout editing is retired). My Controls is a pin board, not layout
-    // editing, so pin removal must survive that clamp — re-enable it here from
-    // lock state alone, same cascade `idsForWidgetRemoval` uses above.
+  menuItems: (widget, doc, controller) => {
+    if (widget.zone !== AXIS_MY_CONTROLS_ZONE) return [];
     const removalIds = widget.type === AXIS_SECTION_HEADER_TYPE ? axisMyControlsSectionRemovalIds(doc, widget.id) : [widget.id];
     const layout = selectActiveLayout(doc);
     const removalLocked = removalIds.some((id) => layout?.widgets[id]?.locked);
-    return items
-      .filter((item) => item.id === 'remove')
-      .map((item) => ({ ...item, label, disabled: removalLocked }));
+    const label = isAxisSectionHeader(widget) && axisSectionHeaderLabel(widget) ? 'Remove whole section' : 'Remove';
+    return [
+      {
+        id: 'remove',
+        label,
+        danger: true,
+        disabled: removalLocked,
+        run: () => controller.dispatch({ type: 'widget.hide', widgetIds: removalIds })
+      }
+    ];
   }
 });
 

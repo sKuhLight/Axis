@@ -12,7 +12,6 @@ import {
   createWorkbenchBindingRegistry,
   createWorkbenchController,
   createWorkbenchRenderRegistry,
-  PANEL_REGION_MOVE_OPTIONS,
   pickWidgetSize,
   workbenchThemeStyle
 } from '../index';
@@ -31,7 +30,6 @@ describe('workbench public exports', () => {
     expect(createWorkbenchBindingRegistry).toBeTypeOf('function');
     expect(createWorkbenchController).toBeTypeOf('function');
     expect(createWorkbenchRenderRegistry).toBeTypeOf('function');
-    expect(PANEL_REGION_MOVE_OPTIONS.map((option) => option.id)).toContain('main');
     expect(pickWidgetSize(160)).toBe('default');
     expect(workbenchThemeStyle({ name: 'Test', vars: { '--aw-bg': '#000' } })).toBe('--aw-bg: #000');
   });

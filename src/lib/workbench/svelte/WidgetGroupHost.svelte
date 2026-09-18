@@ -1,13 +1,6 @@
 <script lang="ts">
   import WidgetHost from './WidgetHost.svelte';
   import { getWorkbenchContext } from './context';
-  import ContextMenu from './ContextMenu.svelte';
-  import {
-    menuPositionBelowRect,
-    menuPositionFromPointer,
-    type WorkbenchMenuItem,
-    type WorkbenchMenuPosition
-  } from './contextMenu';
   import {
     pointerDistance,
     widgetDropCommand,
@@ -16,8 +9,7 @@
     zoneUnitWidgetCounts,
     type WorkbenchRect
   } from './drag';
-  import { createWidgetTemplateFromGroup } from './library';
-  import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
+  import { nextOrderedIndex } from './moveAlternatives';
   import {
     createCustomPanelFromWidgetsCommands,
     selectVisibleWidgetsByZone,
@@ -30,8 +22,6 @@
   const { controller } = getWorkbenchContext();
   const group = $derived($controller.activeLayout?.widgetGroups[groupId]);
   let groupEl = $state<HTMLElement | null>(null);
-  let menuOpen = $state(false);
-  let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 
   // ── Drag-state derivations (V14 follow-up: in-flow slot + origin lift) ──
   const drag = $derived($controller.drag);
@@ -68,83 +58,6 @@
     if (!group || slotIndex < 0) return false;
     return slotIndex >= group.widgetIds.filter((id) => !draggingIds.includes(id)).length;
   });
-
-  const menuItems = $derived.by<WorkbenchMenuItem[]>(() => [
-    ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
-      id: `move-${option.id}`,
-      label: option.label,
-      separatorBefore: index === 0,
-      danger: option.id === 'hidden',
-      disabled: !group || group.locked,
-      run: () =>
-        group &&
-        controller.dispatch({
-          type: 'widget.move',
-          widgetIds: group.widgetIds,
-          zone: option.id,
-          floatingRect: option.id === 'floating' ? { x: 48, y: 72 } : undefined
-        })
-    })),
-    {
-      id: 'save',
-      label: 'Save Group To Library',
-      separatorBefore: true,
-      disabled: !group || group.locked,
-      run: saveGroupTemplate
-    },
-    {
-      id: 'ungroup',
-      label: 'Ungroup Widgets',
-      disabled: !group || group.locked,
-      run: () => group && controller.dispatch({ type: 'widget.ungroup', groupId: group.id })
-    },
-    // The group's "settings" surface is placement (move-to), save, and ungroup —
-    // the group carries no size control today (members keep their own sizes), so
-    // nothing else is wired. This explicit danger item replaces the removed inset
-    // chrome: it hides every member, so the whole group leaves the layout.
-    {
-      id: 'remove',
-      label: 'Remove Group',
-      separatorBefore: true,
-      danger: true,
-      disabled: !group || group.locked,
-      run: () => group && controller.dispatch({ type: 'widget.hide', widgetIds: group.widgetIds })
-    }
-  ]);
-
-  function openMenu(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    menuPosition = menuPositionFromPointer(event);
-    menuOpen = true;
-  }
-
-  // Open the group menu anchored BELOW the whole module (R16b: touch-friendly
-  // menu replaces the inset ungroup/⋯ buttons). Anchored on the module rect so
-  // it drops under the entire group, not under the grip alone.
-  function openMenuBelowGroup() {
-    if (!groupEl) return;
-    const rect = groupEl.getBoundingClientRect();
-    menuPosition = menuPositionBelowRect(rect);
-    menuOpen = true;
-  }
-
-  // Grip keyboard affordance: Enter/Space opens the group menu; arrows reorder
-  // the whole module via `moveByKey`.
-  function gripKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      openMenuBelowGroup();
-      return;
-    }
-    moveByKey(e);
-  }
-
-  function saveGroupTemplate() {
-    if (!group) return;
-    const template = createWidgetTemplateFromGroup($controller.document, group.id);
-    if (template) controller.dispatch({ type: 'library.widget.save', template });
-  }
 
   // Top-level zone units under a zone element: loose widget hosts + group
   // modules, in DOM order. Nested member hosts and this group itself (lifted
@@ -226,11 +139,7 @@
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
-      if (!dragging) {
-        // A tap on the grip (no drag) opens the group menu below the module.
-        openMenuBelowGroup();
-        return;
-      }
+      if (!dragging) return;
       if (dragging && group) {
         const target = widgetDropAt(ev.clientX, ev.clientY);
         const edgeDrop = !target ? workspaceEdgeDropAt(ev.clientX, ev.clientY) : null;
@@ -307,23 +216,18 @@
     class:insert-target={slotIndex >= 0}
     data-widget-group={group.id}
     role="group"
-    oncontextmenu={openMenu}
   >
     {#if $controller.editMode && !group.locked}
       <!-- Whole-group grip is in-flow (a stretched column at the module's left
-           edge — design AxisGroup grip), so it never escapes the module box. It
-           is both the drag handle and the menu affordance: a tap opens the group
-           menu below the module, a drag moves the whole group (R16b — the inset
-           ungroup/⋯ buttons are gone). -->
+           edge — design AxisGroup grip), so it never escapes the module box.
+           Drag it to move the whole group. -->
       <button
         class="aw-group-grip"
         type="button"
-        title="Group actions"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        aria-label="Group actions (drag to move group)"
+        title="Move group"
+        aria-label="Drag to move group"
         onpointerdown={dragPointerDown}
-        onkeydown={gripKeydown}
+        onkeydown={moveByKey}
       >⋮</button>
     {/if}
     <!-- Members with the design AxisGroup flow: the insertion slot is a REAL
@@ -345,8 +249,6 @@
     {/if}
   </div>
 {/if}
-
-<ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Widget group actions" onClose={() => (menuOpen = false)} />
 
 <style>
   /* Design AxisGroup module chrome: bg --aw-bg-2, border 1px --aw-border, radius

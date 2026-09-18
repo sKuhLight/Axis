@@ -33,6 +33,17 @@ describe('Axis Workbench persistence helpers', () => {
     expect(normalized.layouts[normalized.profiles[normalized.activeProfileId].layoutId].widgets['axis.widget.search']).toBeUndefined();
   });
 
+  it('clamps every layout back to side navigation on load', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    for (const layout of Object.values(doc.layouts)) layout.navigation.mode = 'bottom';
+
+    const normalized = normalizeAxisWorkbenchDocument(doc);
+
+    expect(Object.values(normalized.layouts).map((layout) => layout.navigation.mode)).toEqual(
+      Object.values(normalized.layouts).map(() => 'side')
+    );
+  });
+
   it('applies remote documents to the singleton controller without dispatching commands', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     doc.metadata = { ...doc.metadata, marker: 'remote' };

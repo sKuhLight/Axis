@@ -2,17 +2,7 @@
   import { getWorkbenchContext } from './context';
   import { selectVisibleNavigationEntries, type WorkbenchCommand } from '../core';
   import { createFailedActionPanelCommand, createMissingActionPanelCommand } from './actions';
-  import ContextMenu from './ContextMenu.svelte';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
-  import {
-    canDeleteNavigationPage,
-    canHideNavigationEntry,
-    canMoveNavigationEntry,
-    isPageNavigationEntry,
-    navigationEntryActive,
-    navigationEntryCommand,
-    navigationEntryIndex
-  } from './navigation';
+  import { navigationEntryActive, navigationEntryCommand } from './navigation';
 
   const { controller, registry } = getWorkbenchContext();
   const entries = $derived(selectVisibleNavigationEntries($controller.document));
@@ -28,95 +18,6 @@
         .map((entry) => entry.id)
     );
   });
-  let menuOpen = $state(false);
-  let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
-  let menuEntryId = $state<string | null>(null);
-  const menuEntry = $derived(entries.find((entry) => entry.id === menuEntryId));
-  // Inline page rename (mirrors the layout drawer's commit/cancel semantics):
-  // a small floating input anchored at the context-menu position.
-  let renamingPageId = $state<string | null>(null);
-  let renameDraft = $state('');
-  let renamePosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
-  const menuItems = $derived.by<WorkbenchMenuItem[]>(() => {
-    if (!menuEntry) return [];
-    const index = navigationEntryIndex(entries, menuEntry.id);
-    const movable = canMoveNavigationEntry(menuEntry);
-    const hideable = canHideNavigationEntry(menuEntry);
-    const mode = $controller.activeLayout?.navigation.mode ?? 'side';
-    const pageEntry = isPageNavigationEntry(menuEntry);
-    const pageId = menuEntry.pageId;
-    const items: WorkbenchMenuItem[] = [
-      {
-        id: 'open',
-        label: `Open ${menuEntry.label ?? menuEntry.id}`,
-        run: () => runNavigation(menuEntry)
-      },
-      {
-        id: 'move-up',
-        label: mode === 'bottom' ? 'Move Left' : 'Move Up',
-        disabled: !$controller.editMode || !movable || index <= 0,
-        run: () => controller.dispatch({ type: 'navigation.move', entryId: menuEntry.id, index: Math.max(0, index - 1) })
-      },
-      {
-        id: 'move-down',
-        label: mode === 'bottom' ? 'Move Right' : 'Move Down',
-        disabled: !$controller.editMode || !movable || index < 0 || index >= entries.length - 1,
-        run: () => controller.dispatch({ type: 'navigation.move', entryId: menuEntry.id, index: index + 1 })
-      }
-    ];
-    if (pageEntry && pageId) {
-      const page = $controller.activeLayout?.pages[pageId];
-      items.push(
-        {
-          id: 'rename-page',
-          label: 'Rename Page…',
-          separatorBefore: true,
-          disabled: !$controller.editMode,
-          run: () => {
-            renamingPageId = pageId;
-            renameDraft = page?.label ?? menuEntry.label ?? '';
-            renamePosition = menuPosition;
-          }
-        },
-        {
-          id: 'duplicate-page',
-          label: 'Duplicate Page',
-          disabled: !$controller.editMode,
-          run: () => controller.duplicatePage(pageId)
-        },
-        {
-          id: 'delete-page',
-          label: 'Delete Page',
-          danger: true,
-          disabled: !$controller.editMode || !canDeleteNavigationPage($controller.activeLayout),
-          run: () => controller.removePage(pageId)
-        }
-      );
-    }
-    items.push(
-      {
-        id: 'mode',
-        label: mode === 'bottom' ? 'Use Side Navigation' : 'Use Bottom Navigation',
-        separatorBefore: true,
-        run: () => controller.dispatch({ type: 'navigation.mode', mode: mode === 'bottom' ? 'side' : 'bottom' })
-      },
-      {
-        id: 'hide',
-        label: 'Hide Navigation Entry',
-        danger: true,
-        separatorBefore: true,
-        disabled: !$controller.editMode || !hideable,
-        run: () => controller.dispatch({ type: 'navigation.hide', entryId: menuEntry.id })
-      }
-    );
-    return items;
-  });
-
-  function commitPageRename(): void {
-    if (renamingPageId && renameDraft.trim()) controller.renamePage(renamingPageId, renameDraft);
-    renamingPageId = null;
-  }
-
   function addPage(): void {
     const count = $controller.pages.length;
     controller.addPage({ label: `Page ${count + 1}` });
@@ -149,23 +50,12 @@
     }
   }
 
-  function openMenu(entry: (typeof entries)[number], event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    menuEntryId = entry.id;
-    menuPosition = menuPositionFromPointer(event);
-    menuOpen = true;
-  }
 </script>
 
 <nav class="aw-nav" data-aw-nav data-nav-mode={$controller.activeLayout?.navigation.mode ?? 'side'}>
   {#each entries as entry (entry.id)}
     {@const Component = registry.navigation(entry.id)}
     {#if Component}
-      <!-- V13c: the rail carries no per-entry hover controls (drag/hide/menu
-           buttons). Reorder / hide / nav-mode remain reachable via the entry's
-           right-click context menu (openMenu below), which is the single path
-           now. -->
       <div
         class="aw-nav-entry"
         class:active={activeEntryIds.has(entry.id)}
@@ -173,7 +63,6 @@
         data-nav-active={activeEntryIds.has(entry.id) ? 'true' : undefined}
         data-fixed={entry.fixedSlot ?? 'none'}
         role="group"
-        oncontextmenu={(event) => openMenu(entry, event)}
       >
         <Component
           entry={entry}
@@ -191,26 +80,6 @@
     <button class="aw-nav-add-page" type="button" title="Add Page" aria-label="Add Page" data-nav-add-page onclick={addPage}>+</button>
   {/if}
 </nav>
-
-<ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Navigation actions" onClose={() => (menuOpen = false)} />
-
-{#if renamingPageId}
-  <!-- Inline page rename: floating input at the invoking menu position. -->
-  <div class="aw-nav-rename" style={`left:${renamePosition.x}px;top:${renamePosition.y}px;`} data-nav-page-rename>
-    <!-- svelte-ignore a11y_autofocus -->
-    <input
-      type="text"
-      bind:value={renameDraft}
-      autofocus
-      aria-label="Page name"
-      onkeydown={(event) => {
-        if (event.key === 'Enter') commitPageRename();
-        if (event.key === 'Escape') renamingPageId = null;
-      }}
-      onblur={() => commitPageRename()}
-    />
-  </div>
-{/if}
 
 <style>
   .aw-nav {
@@ -278,20 +147,6 @@
     flex: 0 1 40px;
     height: 32px;
     align-self: center;
-  }
-  .aw-nav-rename {
-    position: fixed;
-    z-index: 400;
-  }
-  .aw-nav-rename input {
-    width: 160px;
-    padding: 6px 8px;
-    border: 1px solid var(--aw-accent);
-    border-radius: 8px;
-    background: var(--aw-bg-2);
-    color: var(--aw-text);
-    font: 600 12px/1 var(--aw-font-ui);
-    outline: none;
   }
   .aw-nav-entry[data-fixed='rail.footer'] {
     margin-top: auto;

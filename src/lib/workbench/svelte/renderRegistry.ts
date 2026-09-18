@@ -75,30 +75,17 @@ export interface WorkbenchNavigationStateProvider {
 }
 
 /**
- * App-provided expansion of "Remove Widget" to more than the one widget under
- * the pointer — e.g. Axis section headers, which are chrome markers, not
- * containers (`myControlsSections.ts`): removing one also removes the controls
- * it reads as owning. The generic layer holds no notion of what a widget type
- * "owns", so it defers to this seam and falls back to just the widget itself
- * when no provider is registered.
- */
-export interface WorkbenchWidgetRemovalProvider {
-  /** Ids to hide when the user removes `widget` (must include its own id). */
-  idsForRemoval: (widget: WidgetInstance, doc: WorkbenchDocument) => string[];
-}
-
-/**
- * App-provided narrowing of the widget context menu. The generic menu offers
- * size / move / save / remove; an app can filter that list per-widget (Axis:
- * My Controls offers only "Remove"). Falls back to the full list when no
- * provider is registered.
+ * App-provided widget context menu. The generic layout menu was retired, so a
+ * widget has NO context menu by default; an app may supply one for a specific
+ * widget (Axis: Pinned Controls offers only a remove action). There is no
+ * standard item list to narrow — the provider owns the whole menu.
  */
 export interface WorkbenchWidgetMenuProvider {
-  /** The menu items to show for `widget`, in order, from the standard `items`. */
-  filterItems: (
+  /** The menu items to show for `widget`, in order. */
+  menuItems: (
     widget: WidgetInstance,
     doc: WorkbenchDocument,
-    items: WorkbenchMenuItem[]
+    controller: WorkbenchController
   ) => WorkbenchMenuItem[];
 }
 
@@ -109,7 +96,6 @@ export class WorkbenchRenderRegistry {
   #actions = new Map<string, WorkbenchActionHandler['run']>();
   #widgetSizing: WorkbenchWidgetSizingProvider | null = null;
   #navigationState: WorkbenchNavigationStateProvider | null = null;
-  #widgetRemoval: WorkbenchWidgetRemovalProvider | null = null;
   #widgetMenu: WorkbenchWidgetMenuProvider | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
@@ -151,28 +137,13 @@ export class WorkbenchRenderRegistry {
     return this.#navigationState;
   }
 
-  registerWidgetRemoval(provider: WorkbenchWidgetRemovalProvider): void {
-    this.#widgetRemoval = provider;
-  }
-
   registerWidgetMenu(provider: WorkbenchWidgetMenuProvider): void {
     this.#widgetMenu = provider;
   }
 
-  /** Ids to hide for removing `widget` — just itself when no provider is registered. */
-  idsForWidgetRemoval(widget: WidgetInstance, doc: WorkbenchDocument): string[] {
-    return this.#widgetRemoval?.idsForRemoval(widget, doc) ?? [widget.id];
-  }
-
-  /** The items to show in `widget`'s menu — the standard list when no provider is registered. */
-  menuItemsForWidget(widget: WidgetInstance, doc: WorkbenchDocument, items: WorkbenchMenuItem[]): WorkbenchMenuItem[] {
-    const result = this.#widgetMenu?.filterItems(widget, doc, items) ?? items;
-    // A filter that drops earlier groups can strand a leading separator; a menu
-    // never wants its first item visually separated from a group above it.
-    if (result.length && result[0].separatorBefore) {
-      return [{ ...result[0], separatorBefore: false }, ...result.slice(1)];
-    }
-    return result;
+  /** The items to show in `widget`'s menu — empty when no provider is registered. */
+  menuItemsForWidget(widget: WidgetInstance, doc: WorkbenchDocument, controller: WorkbenchController): WorkbenchMenuItem[] {
+    return this.#widgetMenu?.menuItems(widget, doc, controller) ?? [];
   }
 
   /** Whether a nav entry is the active section. False when no provider is registered. */

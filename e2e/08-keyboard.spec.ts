@@ -5,8 +5,9 @@ test.describe('Keyboard', () => {
   test('Escape closes an open context menu and restores focus to the opener (T18)', async ({ page }) => {
     await bootCleanWorkbench(page);
 
-    // Open the pane header actions menu via its button.
-    const opener = page.locator('.aw-pane-btn[title="Panel actions"]').first();
+    // The New Preset top-bar button is an app menu (not a layout menu) that
+    // opens through the shared ContextMenu — the opener we can still exercise.
+    const opener = page.locator('button.new-preset[title="New preset"]').first();
     await opener.click();
     const menu = page.locator('.aw-context-menu');
     await expect(menu).toBeVisible();

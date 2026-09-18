@@ -1,6 +1,5 @@
 <script lang="ts">
   import PanelHost from './PanelHost.svelte';
-  import ContextMenu from './ContextMenu.svelte';
   import { getWorkbenchContext } from './context';
   import { onDestroy } from 'svelte';
   import {
@@ -10,9 +9,7 @@
     type PanelInstance,
     type TabStackDockNode
   } from '../core';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
   import { createPanelTemplateFromPanel } from './library';
-  import { PANEL_REGION_MOVE_OPTIONS } from './moveAlternatives';
   import { dockTargetLabel, panelDropCommand, pointerDistance, splitIntentFromRect, widgetDropIndex, type PanelDropIntent, type WorkbenchRect } from './drag';
   import { enqueueToast } from './toasts';
 
@@ -35,46 +32,6 @@
   // it makes a NEW "Controls" tab here (T21 directive #2).
   let paramTabHover = $state(false);
 
-  let menuOpen = $state(false);
-  let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
-  let menuPanelId = $state<string | null>(null);
-  const menuPanel = $derived(menuPanelId ? layout?.panels[menuPanelId] : undefined);
-
-  const menuItems = $derived.by<WorkbenchMenuItem[]>(() => {
-    const panel = menuPanel;
-    if (!panel) return [];
-    return [
-      {
-        id: 'collapse',
-        label: panel.collapsed ? 'Expand Panel' : 'Collapse Panel',
-        disabled: panel.collapsible === false,
-        run: () => controller.dispatch({ type: 'panel.collapse', panelId: panel.id, collapsed: !panel.collapsed })
-      },
-      ...PANEL_REGION_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
-        id: `move-${option.id}`,
-        label: option.label,
-        separatorBefore: index === 0,
-        disabled: !$controller.editMode || panel.locked,
-        run: () => controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: option.id } })
-      })),
-      {
-        id: 'save',
-        label: 'Save To Library',
-        separatorBefore: true,
-        disabled: !$controller.editMode || panel.locked,
-        run: () => savePanelTemplate(panel)
-      },
-      {
-        id: 'close',
-        label: 'Close Panel',
-        danger: true,
-        separatorBefore: true,
-        disabled: !$controller.editMode || panel.locked || panel.closable === false,
-        run: () => controller.dispatch({ type: 'panel.close', panelId: panel.id })
-      }
-    ];
-  });
-
   function savePanelTemplate(panel: PanelInstance) {
     const template = createPanelTemplateFromPanel($controller.document, panel.id);
     if (!template) return;
@@ -83,21 +40,6 @@
     // data, so this message carries no Axis-specific vocabulary.
     const title = panel.title ?? panel.type;
     enqueueToast({ text: `Saved "${title}" to library` });
-  }
-
-  function openHeaderMenu(panelId: string, event: MouseEvent) {
-    event.preventDefault();
-    menuPanelId = panelId;
-    menuPosition = menuPositionFromPointer(event);
-    menuOpen = true;
-  }
-
-  function openButtonMenu(panelId: string, event: MouseEvent) {
-    event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    menuPanelId = panelId;
-    menuPosition = { x: rect.right - 8, y: rect.bottom + 6 };
-    menuOpen = true;
   }
 
   function rectOf(el: Element): DOMRect {
@@ -354,7 +296,6 @@
     role="toolbar"
     tabindex="-1"
     bind:this={headEl}
-    oncontextmenu={(e) => activePanelId && openHeaderMenu(activePanelId, e)}
     ondragover={onHeaderParameterDragOver}
     ondragleave={onHeaderParameterDragLeave}
     ondrop={onHeaderParameterDrop}
@@ -380,19 +321,6 @@
     <span class="aw-pane-spacer"></span>
     {#if activePanel}
       <div class="aw-pane-actions">
-        {#if $controller.layoutEditable}
-          <!-- Every item in this menu is `disabled: !editMode` (see the builder
-               above), so without layout editing it would open a menu of dead
-               entries. -->
-          <button
-            class="aw-pane-btn"
-            type="button"
-            title="Panel actions"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onclick={(e) => openButtonMenu(activePanel.id, e)}
-          >⋯</button>
-        {/if}
         {#if $controller.editMode && !activePanel.locked}
           <button
             class="aw-pane-btn"
@@ -427,8 +355,6 @@
     {/if}
   </div>
 </section>
-
-<ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Panel actions" onClose={() => (menuOpen = false)} />
 
 <style>
   .aw-tabstack {

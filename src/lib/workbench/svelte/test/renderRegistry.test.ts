@@ -34,33 +34,19 @@ describe('WorkbenchRenderRegistry', () => {
     expect(registry.isNavigationEntryActive('fc')).toBe(false);
   });
 
-  it('resolves widget removal via the registered provider, falling back to just the widget itself', () => {
+  it('resolves widget menu items via the registered provider, defaulting to none', () => {
     const registry = createWorkbenchRenderRegistry();
     const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
-    // No provider registered → just this widget.
-    expect(registry.idsForWidgetRemoval(widget, doc)).toEqual(['w1']);
+    const controller = createWorkbenchController(doc);
+    // No provider registered → the widget has no menu at all.
+    expect(registry.menuItemsForWidget(widget, doc, controller)).toEqual([]);
 
-    registry.registerWidgetRemoval({ idsForRemoval: (w) => [w.id, 'w2', 'w3'] });
-    expect(registry.idsForWidgetRemoval(widget, doc)).toEqual(['w1', 'w2', 'w3']);
-  });
-
-  it('filters widget menu items via the registered provider, defaulting to the full list', () => {
-    const registry = createWorkbenchRenderRegistry();
-    const doc = createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' });
-    const items = [
-      { id: 'size-default', label: 'Default Size', run: () => {} },
-      { id: 'remove', label: 'Remove Widget', separatorBefore: true, danger: true, run: () => {} }
-    ];
-    // No provider registered → the standard list passes through unchanged.
-    expect(registry.menuItemsForWidget(widget, doc, items)).toBe(items);
-
+    const remove = { id: 'remove', label: 'Remove', danger: true, run: () => {} };
     registry.registerWidgetMenu({
-      filterItems: (w) => (w.zone === 'panel' ? items.filter((item) => item.id === 'remove') : items)
+      menuItems: (w) => (w.zone === 'panel' ? [remove] : [])
     });
-    // Narrowed to "Remove" only, with the now-stranding leading separator stripped.
-    expect(registry.menuItemsForWidget(widget, doc, items)).toEqual([
-      { id: 'remove', label: 'Remove Widget', separatorBefore: false, danger: true, run: items[1].run }
-    ]);
+    expect(registry.menuItemsForWidget(widget, doc, controller)).toEqual([remove]);
+    expect(registry.menuItemsForWidget({ ...widget, zone: 'rail' }, doc, controller)).toEqual([]);
   });
 
   it('registers and runs host action handlers', () => {

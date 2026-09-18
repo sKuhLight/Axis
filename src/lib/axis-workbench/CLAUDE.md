@@ -84,17 +84,16 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   — the only generic-layer support this needed). Controls after a marker merely read
   as belonging to it, so ordering and persistence are unchanged. One type covers both
   affordances: a labelled header renders a titled rule, a blank one a bare divider.
-  The label is edited INLINE in the widget — do not add a rename item to
-  `WidgetHost`'s generic menu. `args.sectionId` on the pin action names a header
-  widget and only moves the INSERT INDEX inside the one panel; it is not a second pin
-  target and must not become one. `axisMyControlsWidgetCount` excludes headers, or
-  the pin menu's hint inflates by one per section.
+  The label is edited INLINE in the widget. `args.sectionId` on the pin action names a
+  header widget and only moves the INSERT INDEX inside the one panel; it is not a
+  second pin target and must not become one. `axisMyControlsWidgetCount` excludes
+  headers, or the pin menu's hint inflates by one per section.
   Removing a **named** header cascades: `axisMyControlsSectionRemovalIds` collects the
   header plus every control up to the next marker, and `axisWorkbenchRegistry.ts`
-  registers that as the generic `registerWidgetRemoval` provider (`renderRegistry.ts`
-  — `WidgetHost`'s "Remove Widget" defers to it, defaulting to just the widget itself
-  when no provider is registered). A **blank divider** is not a section — it cascades
-  nothing, same as removing an ordinary control.
+  supplies that as the `registerWidgetMenu` provider's only action for a pinned
+  widget (`renderRegistry.ts`). The generic layout menu is retired, so Pinned
+  Controls is the only widget with a context menu at all. A **blank divider** is not
+  a section — it cascades nothing, same as removing an ordinary control.
 - `widgets/` — one component per widget type (`AxisLogoWidget.svelte`,
   `AxisPresetWidget.svelte`, …), each registered directly against its own type in
   `axisWorkbenchRegistry.ts` — no switch. Each widget owns its own scoped `<style>`;

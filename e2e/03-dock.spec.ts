@@ -66,24 +66,21 @@ test.describe('Dock interactions', () => {
     await expect(mainTabs.filter({ hasText: 'History' })).not.toHaveClass(/active/);
   });
 
-  test('collapse and close a panel from the pane header menu', async ({ page }) => {
+  test('collapse and close a panel from the pane header buttons', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'setup');
     await enterEditMode(page);
 
-    // Open the header actions (⋯) menu of the main stack's active panel.
-    await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();
-    const menu = page.locator('.aw-context-menu');
-    await expect(menu).toBeVisible();
-    await expect(menu.locator('.aw-menu-item')).toContainText(['Collapse Panel', 'Close Panel']);
+    // The Setup panel's stack — its header's collapse/close buttons act on the
+    // active panel directly (the old ⋯ menu is gone).
+    const stack = page.locator('.aw-tabstack').filter({ has: page.locator('.aw-pane-tab', { hasText: 'Setup' }) }).first();
 
-    // Collapse the active panel.
-    await menu.getByRole('menuitem', { name: /Collapse Panel/ }).click();
-    await expect(menu).toHaveCount(0);
+    // Collapse the active panel; the header button flips to "Expand panel".
+    await stack.locator('.aw-pane-btn[title="Collapse panel"]').click();
+    await expect(stack.locator('.aw-pane-btn[title="Expand panel"]')).toHaveCount(1);
 
-    // Re-open and close the panel; Setup tab disappears from the main stack.
-    await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();
-    await page.locator('.aw-context-menu').getByRole('menuitem', { name: /Close Panel/ }).click();
+    // Close the panel; the Setup tab disappears from the stack.
+    await stack.locator('.aw-pane-btn[title="Close panel"]').click();
     await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(0);
   });
 });

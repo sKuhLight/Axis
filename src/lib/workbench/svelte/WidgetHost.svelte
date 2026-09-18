@@ -17,7 +17,6 @@
   import {
     menuPositionBelowRect,
     menuPositionFromPointer,
-    type WorkbenchMenuItem,
     type WorkbenchMenuPosition
   } from './contextMenu';
   import {
@@ -32,8 +31,7 @@
     type WorkbenchRect
   } from './drag';
   import { groupInsertIndex, groupHitArea } from './groupInsertion';
-  import { createWidgetTemplateFromWidget } from './library';
-  import { nextOrderedIndex, WIDGET_ZONE_MOVE_OPTIONS } from './moveAlternatives';
+  import { nextOrderedIndex } from './moveAlternatives';
 
   let {
     widget,
@@ -53,98 +51,25 @@
   let menuOpen = $state(false);
   let menuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
 
-  // Ids "Remove Widget" will hide — possibly more than this widget (see
-  // `registerWidgetRemoval` in renderRegistry.ts). `widget.hide` fails the WHOLE
-  // command if any id in it is locked, so the menu item must disable on any
-  // locked member of the cascade, not just this widget — otherwise a locked
-  // control pinned under a section makes removing the section silently no-op.
-  const removalIds = $derived(registry.idsForWidgetRemoval(widget, $controller.document));
-  const removalLocked = $derived(removalIds.some((id) => $controller.activeLayout?.widgets[id]?.locked));
-
-  const standardMenuItems = $derived.by<WorkbenchMenuItem[]>(() => [
-    {
-      id: 'size-default',
-      label: 'Default Size',
-      hint: widget.size === 'default' ? 'Current' : undefined,
-      disabled: !$controller.editMode || widget.locked || widget.size === 'default',
-      run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'default' })
-    },
-    {
-      id: 'size-compact',
-      label: 'Compact Size',
-      hint: widget.size === 'compact' ? 'Current' : undefined,
-      disabled: !$controller.editMode || widget.locked || widget.size === 'compact',
-      run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'compact' })
-    },
-    {
-      id: 'size-mini',
-      label: 'Mini Size',
-      hint: widget.size === 'mini' ? 'Current' : undefined,
-      disabled: !$controller.editMode || widget.locked || widget.size === 'mini',
-      run: () => controller.dispatch({ type: 'widget.resize', widgetId: widget.id, size: 'mini' })
-    },
-    ...WIDGET_ZONE_MOVE_OPTIONS.map((option, index): WorkbenchMenuItem => ({
-      id: `move-${option.id}`,
-      label: option.label,
-      separatorBefore: index === 0,
-      danger: option.id === 'hidden',
-      disabled: !$controller.editMode || widget.locked || widget.zone === option.id,
-      run: () =>
-        controller.dispatch({
-          type: 'widget.move',
-          widgetIds: [widget.id],
-          zone: option.id,
-          floatingRect: option.id === 'floating' ? (widget.floatingRect ?? { x: 48, y: 72 }) : undefined
-        })
-    })),
-    {
-      id: 'save',
-      label: 'Save To Library',
-      separatorBefore: true,
-      disabled: !$controller.editMode || widget.locked,
-      run: saveWidgetTemplate
-    },
-    // The widget's "settings" surface is exactly the items above — size,
-    // placement (move-to), and save. No widget type exposes per-widget custom
-    // settings today, so there is nothing else to wire here. This explicit
-    // danger item is the replacement for the removed inset × close button.
-    // Gated on edit mode like the rest of this menu — the registry seam below
-    // (`filterItems`, My Controls) re-enables its own kept "remove" from lock
-    // state alone, since that panel is a pin board, not layout editing.
-    {
-      id: 'remove',
-      label: 'Remove Widget',
-      separatorBefore: true,
-      danger: true,
-      disabled: !$controller.editMode || widget.locked || removalLocked,
-      run: () => controller.dispatch({ type: 'widget.hide', widgetIds: removalIds })
-    }
-  ]);
-
-  // An app may narrow this per-widget (Axis: My Controls offers only "Remove") —
-  // the registry seam filters the standard list above and defaults to it intact.
-  const menuItems = $derived(
-    registry.menuItemsForWidget(widget, $controller.document, standardMenuItems)
-  );
-
-  function saveWidgetTemplate() {
-    const template = createWidgetTemplateFromWidget($controller.document, widget.id);
-    if (template) controller.dispatch({ type: 'library.widget.save', template });
-  }
+  // The generic layout menu was retired, so a widget has no context menu by
+  // default. An app may provide one for a specific widget — Axis: Pinned
+  // Controls offers only its remove action, which is a pin board, not layout
+  // editing. No items means no menu (and no right-click affordance at all).
+  const menuItems = $derived(registry.menuItemsForWidget(widget, $controller.document, controller));
 
   function openMenu(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
+    if (!menuItems.length) return;
     menuPosition = menuPositionFromPointer(event);
     menuOpen = true;
   }
 
-  // Open the widget menu anchored BELOW the widget host (design R16b: a
-  // touch-friendly menu replaces the tiny inset size/close buttons). The anchor
-  // is the host's live rect; ContextMenu clamps + de-zooms it, so a widget near
-  // the bottom edge still gets an on-screen menu.
+  // Open the widget menu anchored BELOW the widget host — the touch affordance
+  // for an app-provided menu (the host's live rect; ContextMenu clamps +
+  // de-zooms it, so a widget near the bottom edge still gets an on-screen menu).
   function openMenuBelowHost() {
-    if (!hostEl) return;
+    if (!hostEl || !menuItems.length) return;
     const rect = hostEl.getBoundingClientRect();
     menuPosition = menuPositionBelowRect(rect);
     menuOpen = true;

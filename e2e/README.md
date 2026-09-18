@@ -77,7 +77,7 @@ attributes were added**:
 - `[data-zone-shell="rail"]`, `[data-zone-shell="bottom-nav"]`,
   `[data-zone="top.left|top.right"]`
 - `[data-tabstack]`, `[data-region="main|bottom|…"]`, `.aw-tabstack[data-region]`
-- `.aw-pane-tab`, `.aw-pane-btn[title="Panel actions"]`, `.aw-tabbody`
+- `.aw-pane-tab`, `.aw-pane-btn[title="Collapse panel"]`, `.aw-tabbody`
 - `[data-nav-entry="<id>"]`, `[data-nav-active="true"]`, `button.axis-nav-entry`
 - `.aw-context-menu`, `.aw-menu-item` (roles `menu`/`menuitem`)
 - `.axis-gridbar .pill-chip` (Full/Map/Auto), `.axis-gridbar .block-size .step`
@@ -92,7 +92,7 @@ attributes were added**:
 2. **02-edit-mode** — Customize opens the EDIT LAYOUT ribbon; per-panel Close
    chrome appears; Done exits.
 3. **03-dock** — drag a panel tab between regions (manual pointer drag);
-   tab switching; collapse + close from the pane header menu.
+   tab switching; collapse + close from the pane header buttons.
 4. **04-nav** — Setup docks a VirtualScreen panel + active tint, second click
    focuses (no duplicate); Live docks a placeholder; active tint follows.
 5. **05-widgets** — gridbar GRID chips visible, Map switches active mode;

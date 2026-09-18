@@ -77,16 +77,18 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
   // ensureAxisTopBarParity runs LAST and is the final word on the top bar: it copies
   // the desktop layout's top-bar widgets onto every other profile, so a persisted doc
   // minted with the retired per-device top bars renders one bar on every screen size.
-  return ensureAxisTopBarParity(
-    ensureAxisSaveWidgetPlacement(
-      ensureAxisNewPresetWidgetPlacement(
-        ensureAxisMeterWidgetLibrary(
-          pruneAxisRetiredWidgetTypes(
-            pruneAxisTopBarSearchWidgets(
-              pruneAxisRetiredRailWidgets(
-                pruneAxisRetiredNavigationEntries(
-                  ensureAxisGridControlWidgets(
-                    ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
+  return clampAxisNavigationMode(
+    ensureAxisTopBarParity(
+      ensureAxisSaveWidgetPlacement(
+        ensureAxisNewPresetWidgetPlacement(
+          ensureAxisMeterWidgetLibrary(
+            pruneAxisRetiredWidgetTypes(
+              pruneAxisTopBarSearchWidgets(
+                pruneAxisRetiredRailWidgets(
+                  pruneAxisRetiredNavigationEntries(
+                    ensureAxisGridControlWidgets(
+                      ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
+                    )
                   )
                 )
               )
@@ -96,6 +98,21 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
       )
     )
   );
+}
+
+/**
+ * Navigation is ALWAYS the side rail on Axis — the bottom-bar mode was retired
+ * with the workbench layout menus, and no user path may switch to it. This is the
+ * single choke point: a persisted or synced document that still carries
+ * `navigation.mode: 'bottom'` is clamped to `'side'` on every load, so stored
+ * state (or an older client) cannot strand a user in a mode the UI no longer
+ * offers. Runs last so it wins over every seed/preset that might set a mode.
+ */
+function clampAxisNavigationMode(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (layout?.navigation) layout.navigation.mode = 'side';
+  }
+  return doc;
 }
 
 function cacheLoad(): WorkbenchDocument {
