@@ -116,7 +116,7 @@
           class="danger"
           disabled={!deviceSession.canDeepScan || !view.markedSummary.clearableSlots.length}
           onclick={view.clearMarkedPresets}
-        >Clear preset…</button>
+        >Clear {view.markedSummary.clearableSlots.length === 1 ? 'preset' : 'presets'}…</button>
         <button
           type="button"
           class="clear-marks"

@@ -142,6 +142,7 @@ test('bulk Clear preset erases every marked device slot after ONE confirmation',
   await rows.nth(1).click({ modifiers: ['Meta'] });
 
   const clear = headButton(page, 'Clear preset');
+  await expect(clear).toHaveText('Clear presets…');
   await expect(clear).toBeEnabled();
   await clear.click();
 
