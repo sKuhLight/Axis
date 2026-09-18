@@ -16,7 +16,7 @@ import {
 } from './presetBrowserWorkbenchSpecs';
 import type { AxisPbCond, AxisPbParamCond } from './presetBrowserWorkbenchQuery';
 
-export type AxisPbPickerKind = 'addfilter' | 'tag' | 'edittags' | 'param' | 'value';
+export type AxisPbPickerKind = 'addfilter' | 'tag' | 'edittags' | 'bulktags' | 'param' | 'value';
 
 export interface AxisPbPickerCtx {
   block?: string;
@@ -29,6 +29,11 @@ export interface AxisPbPickerCtx {
   entryId?: string;
   entryTags?: string[];
   entryName?: string;
+  /** `bulktags` only: every marked entry being tagged, the selection size, and per-tag target counts
+   *  (for the checked / partial state). Captured at open time, same reasoning as `entryId`. */
+  bulkIds?: string[];
+  bulkCount?: number;
+  bulkTagCounts?: Record<string, number>;
 }
 
 export interface AxisPbPickerItem {
@@ -38,7 +43,7 @@ export interface AxisPbPickerItem {
   sub: string;
   dot: boolean;
   color: string;
-  /** `edittags` only: does the entry already have this tag? */
+  /** `edittags` / `bulktags`: does the entry (or every bulk target) already have this tag? */
   checked?: boolean;
 }
 
@@ -73,6 +78,30 @@ export function pickerItems(ctx: AxisPbFiltersContext, kind: AxisPbPickerKind, p
     const items: AxisPbPickerItem[] = ctx.tags
       .filter((t) => t.toLowerCase().includes(f))
       .map((t) => ({ v: t, label: t, sub: '', dot: true, color: ctx.colorOf(t), checked: current.has(t) }));
+    const query = search.trim();
+    const exact = ctx.tags.some((t) => t.toLowerCase() === query.toLowerCase());
+    if (query && !exact) {
+      items.push({ v: query, label: `Create "${query}"`, sub: 'new tag', dot: false, color: '#6e6e78', checked: false });
+    }
+    return items;
+  }
+  if (kind === 'bulktags') {
+    const counts = pctx.bulkTagCounts ?? {};
+    const total = pctx.bulkCount ?? 0;
+    const items: AxisPbPickerItem[] = ctx.tags
+      .filter((t) => t.toLowerCase().includes(f))
+      .map((t) => {
+        const n = counts[t] ?? 0;
+        return {
+          v: t,
+          label: t,
+          // A partial count reads "2/3"; all/none carry no sub (the ✓ already says "all").
+          sub: n > 0 && n < total ? `${n}/${total}` : '',
+          dot: true,
+          color: ctx.colorOf(t),
+          checked: total > 0 && n === total
+        };
+      });
     const query = search.trim();
     const exact = ctx.tags.some((t) => t.toLowerCase() === query.toLowerCase());
     if (query && !exact) {

@@ -107,6 +107,19 @@ describe('Preset Browser filters picker', () => {
     expect(items).toEqual([{ v: 'Solo', label: 'Create "Solo"', sub: 'new tag', dot: false, color: '#6e6e78', checked: false }]);
   });
 
+  it('bulktags checks a tag only when every target has it and shows a partial count', () => {
+    const items = pickerItems(ctx, 'bulktags', { bulkIds: ['a', 'b'], bulkCount: 2, bulkTagCounts: { Lead: 2, Ambient: 1 } }, '');
+    expect(items.map((i) => [i.v, i.checked, i.sub])).toEqual([
+      ['Lead', true, ''],
+      ['Ambient', false, '1/2']
+    ]);
+  });
+
+  it('bulktags offers a Create row for an unmatched search', () => {
+    const items = pickerItems(ctx, 'bulktags', { bulkIds: ['a'], bulkCount: 1, bulkTagCounts: {} }, 'Solo');
+    expect(items).toEqual([{ v: 'Solo', label: 'Create "Solo"', sub: 'new tag', dot: false, color: '#6e6e78', checked: false }]);
+  });
+
   it('chipDescriptor builds block + scalar chips', () => {
     const block = chipDescriptor({ kind: 'block', block: 'amp', params: [{ name: 'Gain', op: '>', val: '7' }] }, colorOf);
     expect(block).toMatchObject({ kind: 'block', block: 'amp', label: 'Amp' });

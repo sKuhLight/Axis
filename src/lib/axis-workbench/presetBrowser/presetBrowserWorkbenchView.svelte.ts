@@ -77,6 +77,11 @@ import {
   type AxisPbMenuActionId
 } from './presetBrowserWorkbenchMenu';
 import {
+  axisPbBulkTagCounts,
+  axisPbBulkTargets,
+  axisPbMarkedSummary
+} from './presetBrowserWorkbenchBulk';
+import {
   effectiveZoom,
   menuPositionBelowRect,
   menuPositionFromPointer,
@@ -372,6 +377,20 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
       }
       return;
     }
+    if (picker.kind === 'bulktags') {
+      const ids = picker.ctx.bulkIds ?? [];
+      const total = picker.ctx.bulkCount ?? 0;
+      const counts = { ...(picker.ctx.bulkTagCounts ?? {}) };
+      // Every target already carries the tag → remove it everywhere; otherwise add it everywhere
+      // (which is also what a brand-new tag does). One deterministic toggle for the whole selection.
+      const haveAll = total > 0 && (counts[v] ?? 0) === total;
+      if (haveAll) library.removeTagMany(ids, v);
+      else { library.addTagMany(ids, v); recordTagUsage(v); }
+      if (haveAll) delete counts[v];
+      else counts[v] = total;
+      picker = { ...picker, ctx: { ...picker.ctx, bulkTagCounts: counts } };
+      return;
+    }
     const res = applyPick(filtersContext, picker.kind, picker.ctx, v);
     if (res.type === 'chain') { openPickerKind(res.kind, res.ctx); return; }
     if (res.type === 'edit') {
@@ -384,6 +403,10 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   function onAddFilter(e: MouseEvent) { e.stopPropagation(); lastAnchor = e.currentTarget as HTMLElement; openPicker('addfilter', {}, lastAnchor); }
   function onAddParam(e: MouseEvent, ci: number, block: string) { e.stopPropagation(); lastAnchor = e.currentTarget as HTMLElement; openPicker('param', { block, ci }, lastAnchor); }
   function onPickerKey(e: KeyboardEvent) {
+    // The handler is on BOTH the search input and the popover container (so arrow/Enter work whether
+    // focus sits in the field or on a row button), which would otherwise run it twice per key — a
+    // double-toggle for Enter on the tag pickers. Handle each key exactly once.
+    e.stopPropagation();
     const items = pickerList;
     if (e.key === 'ArrowDown') { e.preventDefault(); pickerHi = Math.min(items.length - 1, pickerHi + 1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); pickerHi = Math.max(0, pickerHi - 1); }
@@ -493,6 +516,42 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     } else {
       selectEntry(entry);
     }
+  }
+
+  // ── bulk selection actions (§4.2) ────────────────────────────────────────────────────────────
+  // The selection-header buttons all operate on the marked set. Tag/favorite target only real
+  // (non-empty) entries; Move stays device-slot-only, matching the M shortcut's seed.
+  const markedEntries = $derived.by(() => axisPbBulkTargets(snapshot.marked, data.entries));
+  const markedSummary = $derived.by(() => axisPbMarkedSummary(snapshot.marked, data.entries));
+
+  function openBulkTags(event: MouseEvent) {
+    const targets = markedEntries;
+    if (!targets.length) return;
+    // The window click-closer below would otherwise null the picker as this very click bubbles to it.
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    openPickerAt(
+      'bulktags',
+      {
+        bulkIds: targets.map((entry) => entry.id),
+        bulkCount: targets.length,
+        bulkTagCounts: axisPbBulkTagCounts(targets)
+      },
+      rect.left,
+      rect.bottom + 6
+    );
+  }
+
+  function toggleMarkedFavorites() {
+    const targets = markedEntries;
+    if (!targets.length) return;
+    // Deterministic (set, not toggle): a mixed selection is made uniformly fav or unfav — the label
+    // already committed to one of the two.
+    library.setFavMany(targets.map((entry) => entry.id), !targets.every((entry) => entry.fav));
+  }
+
+  function openMarkedMove() {
+    axisPresetBrowserWorkbenchController.openMove(axisPresetBrowserWorkbenchController.moveSlots());
   }
 
   // The detail region hydrates whenever it is actually shown — as a dedicated `detail` part OR as the
@@ -905,6 +964,10 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     get detailBlockCards() { return detailBlockCards; },
 
     onRowClick,
+    get markedSummary() { return markedSummary; },
+    openBulkTags,
+    toggleMarkedFavorites,
+    openMarkedMove,
     selectSource,
     selectEntry,
     scrollToCurrent,

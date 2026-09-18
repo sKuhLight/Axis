@@ -720,6 +720,19 @@ class LibraryStore {
     e.fav = !e.fav;
     persistCfg('favs', LS.favs, this.entries.filter((x) => x.fav).map((x) => x.id));
   }
+  /** Set (not toggle) the favorite flag for many presets at once — one persist. Unknown ids are
+   *  ignored. Deterministic, so a mixed selection is made uniformly fav or unfav rather than flipped. */
+  setFavMany(ids: readonly string[], fav: boolean): void {
+    const wanted = new Set(ids);
+    if (!wanted.size) return;
+    let changed = false;
+    for (const e of this.entries) {
+      if (!wanted.has(e.id) || e.fav === fav) continue;
+      e.fav = fav;
+      changed = true;
+    }
+    if (changed) persistCfg('favs', LS.favs, this.entries.filter((x) => x.fav).map((x) => x.id));
+  }
   addTag(id: string, tag: string): void {
     const t = tag.trim();
     if (!t) return;
@@ -733,6 +746,40 @@ class LibraryStore {
     if (!this.tags[id]) return;
     this.tags[id] = this.tags[id].filter((x) => x !== tag);
     if (!this.tags[id].length) delete this.tags[id];
+    persistCfg('tags', LS.tags, this.tags);
+  }
+  /** Add a tag to many presets at once — one persist + one color-claim pass. Ids already carrying the
+   *  tag are skipped; a blank tag is a no-op. */
+  addTagMany(ids: readonly string[], tag: string): void {
+    const t = tag.trim();
+    if (!t) return;
+    const next = { ...this.tags };
+    let changed = false;
+    for (const id of new Set(ids)) {
+      const cur = next[id] ?? [];
+      if (cur.includes(t)) continue;
+      next[id] = [...cur, t];
+      changed = true;
+    }
+    if (!changed) return;
+    this.tags = next;
+    persistCfg('tags', LS.tags, this.tags);
+    this.ensureTagColors();
+  }
+  /** Remove a tag from many presets at once — one persist. Ids without the tag are skipped. */
+  removeTagMany(ids: readonly string[], tag: string): void {
+    const next = { ...this.tags };
+    let changed = false;
+    for (const id of new Set(ids)) {
+      const cur = next[id];
+      if (!cur || !cur.includes(tag)) continue;
+      const filtered = cur.filter((x) => x !== tag);
+      if (filtered.length) next[id] = filtered;
+      else delete next[id];
+      changed = true;
+    }
+    if (!changed) return;
+    this.tags = next;
     persistCfg('tags', LS.tags, this.tags);
   }
   /** Rename a tag everywhere it exists: on every preset, and in the color registry. Case-insensitive

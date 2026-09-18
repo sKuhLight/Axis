@@ -40,7 +40,7 @@
     onkeydown={view.onPickerKey}
   >
     <div class="pk-h">
-      <div class="pk-lbl">{picker.kind === 'addfilter' ? 'Add a filter' : picker.kind === 'tag' ? 'Pick a tag' : picker.kind === 'edittags' ? `Tags for ${picker.ctx.entryName ?? 'preset'}` : picker.kind === 'param' ? 'Pick a parameter' : 'Pick a value'}</div>
+      <div class="pk-lbl">{picker.kind === 'addfilter' ? 'Add a filter' : picker.kind === 'tag' ? 'Pick a tag' : picker.kind === 'edittags' ? `Tags for ${picker.ctx.entryName ?? 'preset'}` : picker.kind === 'bulktags' ? `Tag ${picker.ctx.bulkCount ?? 0} presets` : picker.kind === 'param' ? 'Pick a parameter' : 'Pick a value'}</div>
       <div class="pk-search">
         <span aria-hidden="true">⌕</span>
         <!-- svelte-ignore a11y_autofocus -->

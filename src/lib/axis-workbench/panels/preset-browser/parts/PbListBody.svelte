@@ -96,7 +96,14 @@
   {#if markedCount}
     <div class="select-head">
       <span>{markedCount} selected</span>
-      <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
+      <div class="select-actions">
+        <button type="button" disabled={!view.markedSummary.taggable} onclick={(e) => view.openBulkTags(e)}>Tag…</button>
+        <button type="button" disabled={!view.markedSummary.taggable} onclick={view.toggleMarkedFavorites}>
+          {view.markedSummary.allFav ? 'Unfavorite' : 'Favorite'}
+        </button>
+        <button type="button" disabled={!view.markedSummary.deviceSlots.length} onclick={view.openMarkedMove}>Move…</button>
+        <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
+      </div>
     </div>
   {/if}
   <!-- §4.1 Sorting is a property of this list, not of the search above it: each column header IS its
@@ -432,9 +439,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px 10px;
     min-height: 42px;
-    padding: 0 11px;
+    padding: 6px 11px;
     border: 1px solid var(--accent);
     border-radius: 8px;
     background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -442,10 +450,26 @@
     font: 700 11px/1 var(--font-mono);
     text-transform: uppercase;
   }
+  .select-head > span {
+    white-space: nowrap;
+  }
+  .select-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
   .select-head button {
     height: 28px;
     padding: 0 10px;
     text-transform: none;
+    white-space: nowrap;
+  }
+  .select-head button:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
   .more-hint {
     padding: 22px 12px;

@@ -511,3 +511,75 @@ describe('an old-decoder params cache is deleted, not restored', () => {
     vi.doUnmock('$lib/platform/idb');
   });
 });
+
+// Bulk multi-select actions (tag / favorite) persist ONCE and are deterministic — a mixed selection
+// is set uniformly rather than flipped per entry, and unknown ids must not create ghost metadata.
+describe('bulk metadata mutations', () => {
+  it('setFavMany sets every known id to the requested flag', () => {
+    const a = deviceEntry();
+    const b = deviceEntry();
+    library.entries = [a, b];
+    library.setFavMany([a.id], true); // mixed selection: a fav, b not
+    expect(library.entries.map((e) => e.fav)).toEqual([true, false]);
+
+    library.setFavMany([a.id, b.id], true);
+    expect(library.entries.map((e) => e.fav)).toEqual([true, true]);
+
+    library.setFavMany([a.id, b.id], false);
+    expect(library.entries.map((e) => e.fav)).toEqual([false, false]);
+  });
+
+  it('setFavMany ignores unknown ids', () => {
+    const a = deviceEntry();
+    library.entries = [a];
+    library.setFavMany([a.id, 'ghost'], true);
+    expect(library.entries.find((e) => e.id === a.id)!.fav).toBe(true);
+    expect(library.entries.some((e) => e.id === 'ghost')).toBe(false);
+  });
+
+  it('addTagMany tags every id once and claims a color for the new tag', () => {
+    const a = deviceEntry();
+    const b = deviceEntry();
+    library.entries = [a, b];
+    library.tags = {};
+    library.tagColors = {};
+
+    library.addTagMany([a.id, b.id, a.id], 'BulkTag');
+
+    expect(library.tags[a.id]).toEqual(['BulkTag']);
+    expect(library.tags[b.id]).toEqual(['BulkTag']);
+    expect(library.colorOf('BulkTag')).toBe(tagSwatchCss(library.tagColors['BulkTag']));
+  });
+
+  it('addTagMany is a no-op when every id already carries the tag', () => {
+    const a = deviceEntry();
+    library.entries = [a];
+    library.tags = {};
+    library.addTagMany([a.id], 'Once');
+    library.addTagMany([a.id], 'Once');
+    expect(library.tags[a.id]).toEqual(['Once']);
+  });
+
+  it('removeTagMany strips the tag from every id and drops the empty assignment', () => {
+    const a = deviceEntry();
+    const b = deviceEntry();
+    library.entries = [a, b];
+    library.tags = {};
+    library.addTagMany([a.id, b.id], 'Shared');
+    library.addTagMany([a.id], 'Keep');
+
+    library.removeTagMany([a.id, b.id], 'Shared');
+
+    expect(library.tags[a.id]).toEqual(['Keep']);
+    expect(library.tags[b.id]).toBeUndefined();
+  });
+
+  it('bulk methods leave a blank tag a no-op', () => {
+    const a = deviceEntry();
+    library.entries = [a];
+    library.tags = {};
+    library.addTagMany([a.id], '   ');
+    library.removeTagMany([a.id], '');
+    expect(library.tags[a.id]).toBeUndefined();
+  });
+});
