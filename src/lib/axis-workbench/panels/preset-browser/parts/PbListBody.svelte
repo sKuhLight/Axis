@@ -116,7 +116,15 @@
           disabled={!deviceSession.canDeepScan || !view.markedSummary.clearableSlots.length}
           onclick={view.clearMarkedPresets}
         >Clear preset…</button>
-        <button type="button" onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}>Clear</button>
+        <button
+          type="button"
+          class="clear-marks"
+          aria-label="Clear selection"
+          title="Clear selection"
+          onclick={() => axisPresetBrowserWorkbenchController.clearMarks()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
       </div>
     </div>
   {/if}
@@ -492,6 +500,22 @@
   }
   .select-head button.danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--danger) 14%, transparent);
+  }
+  /* Clearing the selection is a dismiss, not an action label — a square icon button reads as "×". */
+  .select-head button.clear-marks {
+    width: 28px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .select-head button.clear-marks svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
   }
   .more-hint {
     padding: 22px 12px;
