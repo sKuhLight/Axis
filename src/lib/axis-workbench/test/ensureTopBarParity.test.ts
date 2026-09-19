@@ -57,10 +57,9 @@ describe('ensureAxisTopBarParity', () => {
     ensureAxisTopBarParity(doc);
 
     expect(topBarOf(tablet)).toEqual(topBarOf(desktop));
-    // Scenes/Save come back to top.left and the meter returns.
+    // Scenes/Save come back to top.left.
     expect(tablet.widgets['axis.widget.scenes'].zone).toBe('top.left');
     expect(tablet.widgets['axis.widget.save'].zone).toBe('top.left');
-    expect(tablet.widgets['axis.widget.meterToggle']).toBeDefined();
   });
 
   it('prunes the retired status group but leaves non-top widgets and groups alone', () => {

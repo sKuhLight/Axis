@@ -136,7 +136,7 @@ export class TelemetryStore {
   // serializes behind every other read on the shared request chain. (The one evidenced audio-dropout
   // incident was AM4 background block re-reads every 1.5 s — FORGEFX-25, CHANGELOG 0.9.x — not
   // metering; captures show FM3-Edit itself polls its meters round-robin at a ~60 ms tick.)
-  meteringOn = $state(true); // on by default, like the official editors; canMeterBlocks still gates it
+  // Metering is always on while the block editor is open — `canMeterBlocks` still gates it.
   /** Live audio meters per placed monitored block (normalized 0..1 + mapped dB), keyed by effectId. */
   liveMeters = $state<Record<number, LiveMonitor[]>>({});
   /** Primary live meter for a block (first monitor; null if none / not yet read) — back-compat. */
@@ -161,7 +161,7 @@ export class TelemetryStore {
     const tick = async () => {
       this.#liveMeterTimer = null;
       const eid = this.#host.selectedEffectId;
-      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.#host.onVirtualScreen;
+      const ok = this.canMeterBlocks && eid != null && !this.#host.onVirtualScreen;
       if (ok) {
         try {
           const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
@@ -178,7 +178,7 @@ export class TelemetryStore {
         }
       }
       if (!this.#liveMetersRunning) return; // stopped mid-tick — do not re-arm
-      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
+      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is unavailable.
       this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
     };
     tick();

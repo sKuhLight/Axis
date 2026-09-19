@@ -40,7 +40,6 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   'axis.fcSwitchView': 220,
   // Axis-only widgets not present in the design estW table.
   'axis.logo': 44,
-  'axis.meterToggle': 60,
   // `hint` is `flex:1` in the bottom bar — it flexes down, so keep its estW
   // small so it never forces the bottom zone to compact/mini on its own.
   'axis.hint': 40,

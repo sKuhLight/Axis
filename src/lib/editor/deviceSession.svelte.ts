@@ -64,7 +64,7 @@ export class DeviceSessionStore {
   get presetLiveQuery(): boolean { return this.isV2 ? !!this.caps?.presets?.liveQuery : !this.isAm4; }
   /** Per-block meter/param sweep reads are supported (grid level fills + swipe controls). */
   get hasBlockMeters(): boolean { return this.isV2 ? !!this.caps?.meters?.blockMeters : !this.isAm4; }
-  /** Live per-block audio monitors are supported (METER toggle). */
+  /** Live per-block audio monitors are supported (always-on block metering). */
   get hasLiveMonitors(): boolean { return this.isV2 ? !!this.caps?.meters?.liveMonitors : !this.isAm4; }
   /** Device supports tempo read/write + tap. */
   get hasTempo(): boolean { return this.isV2 ? !!this.caps?.tempo : !this.isAm4; }

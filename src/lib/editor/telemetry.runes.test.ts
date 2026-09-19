@@ -352,13 +352,7 @@ describe('live meters', () => {
     expect(t.monitorFor(106)).toBeNull(); // stopping clears the readings
   });
 
-  it('issues no device read while metering is off or on a virtual screen', async () => {
-    const off = fresh();
-    off.t.meteringOn = false;
-    off.t.startLiveMeters();
-    await flush();
-    off.t.stopLiveMeters();
-
+  it('issues no device read on a virtual screen or with no selected block', async () => {
     const virt = fresh({ onVirtualScreen: true });
     virt.t.startLiveMeters();
     await flush();

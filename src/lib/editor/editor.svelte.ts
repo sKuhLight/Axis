@@ -642,7 +642,7 @@ class EditorStore {
 
   // ── telemetry facade ─────────────────────────────────────────────────────────────────────────
   // Straight delegation to `#telemetry` (telemetry.svelte.ts). This exists so the ~44 modules that
-  // import `editor` keep reading `editor.tuner`, `editor.meteringOn`, `editor.uploadDebugReport()`
+  // import `editor` keep reading `editor.tuner`, `editor.uploadDebugReport()`
   // and friends unchanged — the extraction is invisible to call sites. Migrating those call sites to
   // import `TelemetryStore` directly is a separate, later change; until then ADD to this facade
   // rather than re-adding state to `EditorStore`.
@@ -662,8 +662,6 @@ class EditorStore {
   set consentPromptOpen(v) { this.#telemetry.consentPromptOpen = v; }
   get reportPrompt() { return this.#telemetry.reportPrompt; }
   set reportPrompt(v) { this.#telemetry.reportPrompt = v; }
-  get meteringOn() { return this.#telemetry.meteringOn; }
-  set meteringOn(v) { this.#telemetry.meteringOn = v; }
   get liveMeters() { return this.#telemetry.liveMeters; }
   get canMeterBlocks() { return this.#telemetry.canMeterBlocks; }
   monitorFor = (effectId: number) => this.#telemetry.monitorFor(effectId);

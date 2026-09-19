@@ -65,7 +65,7 @@
   // either). `live.db` is 0 at idle/unity and negative as reduction increases; a non-negative reading
   // (idle, or the COMP_GAINMONITOR pid's alternate 0..+40 makeup-gain display mode on some Comp Types)
   // has no reduction to place on the curve, so the dot rests at the silent corner (MIN,MIN) instead —
-  // only the total absence of a live reading (metering off) hides it outright.
+  // only the total absence of a live reading (device not metering) hides it outright.
   const dot = $derived.by(() => {
     if (!hasTransfer || live?.db == null) return null;
     if (transfer) {

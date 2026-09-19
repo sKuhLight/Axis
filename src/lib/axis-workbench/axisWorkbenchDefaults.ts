@@ -123,8 +123,7 @@ export function createAxisTopBarWidgets(): Record<string, WidgetInstance> {
     'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 3, { state: widgetState(95) }),
     'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
-    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4),
-    'axis.widget.meterToggle': widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 5, { state: widgetState(40) })
+    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4)
   };
 }
 
@@ -231,9 +230,6 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     'axis.library.widget.tools': widgetTemplate('axis.library.widget.tools', 'Tuner + Tempo', [
       layout.widgets['axis.widget.tuner'],
       layout.widgets['axis.widget.tempo']
-    ]),
-    'axis.library.widget.meter': widgetTemplate('axis.library.widget.meter', 'Meter', [
-      layout.widgets['axis.widget.meterToggle']
     ])
   };
 
@@ -312,22 +308,33 @@ export function pruneAxisTopBarSearchWidgets(doc: WorkbenchDocument): WorkbenchD
  * carry their instances in a top/bottom zone, where the retired-rail prune (above)
  * can't reach them. Unlike the rail prune this is unconditional on zone — the type is
  * no longer registered, so any instance is dead: it renders nothing, yet would still
- * be listed as an addable entry in the Customize → Widgets library drawer.
- * Idempotent.
+ * be listed as an addable entry in the Customize → Widgets library drawer. A
+ * widget-library template left holding only retired types is dropped too. Idempotent.
  *
  *   - `axis.addBlock` — the Add Block widget (T-series).
  *   - `axis.view` — the Basic/Advanced VIEW chip; blocks now always open on Ideal.
+ *   - `axis.meterToggle` — the meter ON/OFF toggle; per-block metering is always on.
  */
-const AXIS_RETIRED_WIDGET_TYPES = ['axis.addBlock', 'axis.view'] as const;
+const AXIS_RETIRED_WIDGET_TYPES = ['axis.addBlock', 'axis.view', 'axis.meterToggle'] as const;
 
 export function pruneAxisRetiredWidgetTypes(doc: WorkbenchDocument): WorkbenchDocument {
+  const isRetired = (type: unknown): boolean =>
+    AXIS_RETIRED_WIDGET_TYPES.includes(type as (typeof AXIS_RETIRED_WIDGET_TYPES)[number]);
   for (const layout of Object.values(doc.layouts ?? {})) {
     if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
     for (const [id, instance] of Object.entries(layout.widgets)) {
-      if (instance && AXIS_RETIRED_WIDGET_TYPES.includes(instance.type as (typeof AXIS_RETIRED_WIDGET_TYPES)[number])) {
-        delete layout.widgets[id];
-      }
+      if (instance && isRetired(instance.type)) delete layout.widgets[id];
     }
+  }
+  // A retired type may also survive inside a widget-library template (the Meter
+  // toggle shipped with its own template). Strip the dead members and drop the
+  // template once it no longer holds any widget.
+  for (const [templateId, template] of Object.entries(doc.widgetLibrary ?? {})) {
+    if (!template?.widgets) continue;
+    for (const [widgetId, instance] of Object.entries(template.widgets)) {
+      if (instance && isRetired(instance.type)) delete template.widgets[widgetId];
+    }
+    if (!Object.keys(template.widgets).length) delete doc.widgetLibrary[templateId];
   }
   return doc;
 }
@@ -367,24 +374,6 @@ export function ensureAxisGridControlWidgets(doc: WorkbenchDocument): WorkbenchD
     const gridbarCount = Object.values(widgets).filter((instance) => instance?.zone === 'gridbar').length;
     widgets['axis.widget.gridMode'] = widget('axis.widget.gridMode', 'axis.gridMode', 'gridbar', gridbarCount, { state: { mode: 'auto' } });
     widgets['axis.widget.blockSize'] = widget('axis.widget.blockSize', 'axis.blockSize', 'gridbar', gridbarCount + 1, { state: { size: 'M' } });
-  }
-  return doc;
-}
-
-/**
- * Ensure the Meter toggle is offered in the widget library (Customize → Widgets → "Saved Widgets").
- * Marker-free and idempotent, like `ensureAxisConvertPage`: a document that already carries the
- * `axis.library.widget.meter` template is left untouched, so a persisted doc minted before the
- * library entry shipped self-heals on the next load. The widget instance is constructed fresh here
- * (not sourced from `layout.widgets['axis.widget.meterToggle']`) because a preset-applied or
- * hand-built layout may not carry that instance.
- */
-export function ensureAxisMeterWidgetLibrary(doc: WorkbenchDocument): WorkbenchDocument {
-  doc.widgetLibrary = doc.widgetLibrary ?? {};
-  if (!doc.widgetLibrary['axis.library.widget.meter']) {
-    doc.widgetLibrary['axis.library.widget.meter'] = widgetTemplate('axis.library.widget.meter', 'Meter', [
-      widget('axis.widget.meterToggle', 'axis.meterToggle', 'top.right', 0, { state: widgetState(40) })
-    ]);
   }
   return doc;
 }

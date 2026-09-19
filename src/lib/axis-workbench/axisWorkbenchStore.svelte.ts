@@ -15,7 +15,7 @@ import {
   type AxisWorkbenchBackupEntry
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
-import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisMeterWidgetLibrary, ensureAxisNewPresetWidgetPlacement, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
+import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisNewPresetWidgetPlacement, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
 import { ensureAxisConvertPage, ensureAxisSeedOrder, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
@@ -81,14 +81,12 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
     ensureAxisTopBarParity(
       ensureAxisSaveWidgetPlacement(
         ensureAxisNewPresetWidgetPlacement(
-          ensureAxisMeterWidgetLibrary(
-            pruneAxisRetiredWidgetTypes(
-              pruneAxisTopBarSearchWidgets(
-                pruneAxisRetiredRailWidgets(
-                  pruneAxisRetiredNavigationEntries(
-                    ensureAxisGridControlWidgets(
-                      ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
-                    )
+          pruneAxisRetiredWidgetTypes(
+            pruneAxisTopBarSearchWidgets(
+              pruneAxisRetiredRailWidgets(
+                pruneAxisRetiredNavigationEntries(
+                  ensureAxisGridControlWidgets(
+                    ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
                   )
                 )
               )

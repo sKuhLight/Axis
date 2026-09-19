@@ -41,7 +41,6 @@ import AxisHintWidget from './widgets/AxisHintWidget.svelte';
 import AxisHistoryWidget from './widgets/AxisHistoryWidget.svelte';
 import AxisLegalWidget from './widgets/AxisLegalWidget.svelte';
 import AxisLogoWidget from './widgets/AxisLogoWidget.svelte';
-import AxisMeterToggleWidget from './widgets/AxisMeterToggleWidget.svelte';
 import AxisParamControlWidget from './widgets/AxisParamControlWidget.svelte';
 import AxisPresetWidget from './widgets/AxisPresetWidget.svelte';
 import AxisSaveWidget from './widgets/AxisSaveWidget.svelte';
@@ -132,7 +131,6 @@ const AXIS_WIDGET_COMPONENTS: Record<string, WorkbenchWidgetComponent> = {
   'axis.tuner': AxisTunerWidget,
   'axis.tempo': AxisTempoWidget,
   'axis.cpu': AxisCpuWidget,
-  'axis.meterToggle': AxisMeterToggleWidget,
   'axis.save': AxisSaveWidget,
   'axis.search': AxisSearchWidget,
   'axis.history': AxisHistoryWidget,

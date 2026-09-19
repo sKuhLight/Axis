@@ -4,7 +4,7 @@ import { editor } from './editor.svelte';
 const assignedMembers = [
   'axisOpen', 'paletteOpen', 'presetOpen', 'presetSearchOpen', 'cabPickerOpen',
   'deviceToolsOpen', 'quickBuildOpen', 'consentPromptOpen',
-  'editorH', 'meteringOn', 'virtual', 'bufferSource', 'reportPrompt', 'placeTarget',
+  'editorH', 'virtual', 'bufferSource', 'reportPrompt', 'placeTarget',
   'presetPick', 'paletteMode', 'axisTab'
 ] as const;
 
@@ -23,7 +23,7 @@ function publicDescriptors(value: object): Map<string, PropertyDescriptor> {
 describe('EditorStore runtime facade', () => {
   it('preserves the deliberate public member surface', () => {
     // Unique names count getter/setter pairs once; update deliberately when the public surface changes.
-    expect(publicDescriptors(editor).size).toBe(212);
+    expect(publicDescriptors(editor).size).toBe(211);
   });
 
   it('keeps every externally assigned accessor writable', () => {
