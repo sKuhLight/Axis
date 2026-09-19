@@ -285,7 +285,7 @@
                   class:tgt={isTarget(c)}
                   class:dragging={drag?.cell === cl}
                   class:drop-target={dragTarget?.row === r && dragTarget?.col === c}
-                  style="--c:{cat.accent}; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px;"
+                  style="--c:{cat.accent}; --glyph-size:{Math.max(13, Math.round(cell * 0.42))}px; --io-wm-size:{Math.max(12, Math.round(cell * 0.8))}px;"
                   data-idx="{r},{c}"
                   role="button"
                   tabindex="0"
@@ -297,6 +297,9 @@
                   onmouseleave={() => clearGridHover(r, c)}
                 >
                   {#if showBlockTags}<span class="block-tag">{inst ? `${fam} ${inst}` : fam}</span>{/if}
+                  {#if inst && (fam === 'Input' || fam === 'Output')}
+                    <span class="io-watermark">{inst}</span>
+                  {/if}
                   <span class="glyph">{@html cat.glyph}</span>
                   {#if showPort(cl)}
                     <button
@@ -528,9 +531,25 @@
     pointer-events: none;
   }
   .mc.block .glyph {
+    position: relative;
+    z-index: 1;
     font-size: var(--glyph-size, 13px);
     line-height: 1;
     color: var(--text);
+  }
+  /* Input/Output always carry their instance number, independent of the H name legend:
+     a small, heavily dimmed digit behind the glyph, tinted from the block accent. */
+  .io-watermark {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 800 var(--io-wm-size, 16px) / 1 var(--font-mono);
+    color: color-mix(in srgb, var(--c) 60%, var(--text));
+    opacity: 0.08;
+    pointer-events: none;
   }
   .block-tag {
     position: absolute;
