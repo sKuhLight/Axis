@@ -62,6 +62,7 @@
     pseudoText = (() => null) as (c: LayoutControl) => string | null,
     onPseudoClick = (() => {}) as (c: LayoutControl) => void,
     pseudoOn = (() => false) as (c: LayoutControl) => boolean,
+    center = false,
     q = $bindable('')
   }: {
     slug?: string;
@@ -81,6 +82,8 @@
     onPseudoClick?: (c: LayoutControl) => void;
     /** Whether a pseudo-param button reads as active (the cab Mute button). Host's business. */
     pseudoOn?: (c: LayoutControl) => boolean;
+    /** Center the fixed-width device canvas in its scroller (full-page hosts: Setup / Controllers). */
+    center?: boolean;
     q?: string;
   } = $props();
 
@@ -569,7 +572,7 @@
          dials scale with the boxes — laying out at 2x with 11px labels would draw device-sized
          controls around half-sized text. `.canvas` reserves the rendered footprint for the scroller;
          `.surface` is the device's own 1240px canvas, magnified. -->
-    <div class="canvas" style:width="{TAB_RAIL_W + RAIL_PAD + page.width}px" style:height="{page.height}px" style:--c={accent}>
+    <div class="canvas" class:center style:width="{TAB_RAIL_W + RAIL_PAD + page.width}px" style:height="{page.height}px" style:--c={accent}>
       <!-- Page tabs live in the device's own identity column (the ~305px strip `placePage` collapses)
            as a vertical rail; the canvas surface sits to its right with a small gap. -->
       <nav class="tabs" style:width="{TAB_RAIL_W}px">
@@ -677,6 +680,10 @@
     font-size: 13px;
   }
   .canvas { position: relative; }
+  /* Full-page hosts (Setup / Controllers) center the device's fixed-width canvas
+     in the scroller; auto margins collapse to 0 when it overflows, so a canvas
+     wider than the pane still starts at the left and scrolls. */
+  .canvas.center { margin-inline: auto; }
   .surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
   /* The identity column's controls, scaled exactly like the surface but living in the tab rail's strip.
      Sits under the tabs (z-index 0 vs the tabs' 1) so page tabs stay on top. */

@@ -422,6 +422,11 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Frame the editor as a centered column so the expanded nav rail (which
+       overlays the pane's left edge) never covers the header or the fields. */
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
   }
   .fhead {
     display: flex;

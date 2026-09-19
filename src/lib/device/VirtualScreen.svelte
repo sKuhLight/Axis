@@ -39,7 +39,7 @@
       <div class="msg"><p>No parameters available for {paramEditing.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <DeviceCanvas slug={paramEditing.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} />
+        <DeviceCanvas slug={paramEditing.virtual.slug} {accent} {modulationGraphs} {adsrGraphs} center />
       </div>
     {/if}
   </section>
@@ -56,6 +56,7 @@
   .vhead {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     padding: 12px 18px;
     border-bottom: 1px solid var(--line, var(--border2));
