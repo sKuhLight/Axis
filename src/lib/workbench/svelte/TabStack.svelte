@@ -289,65 +289,72 @@
 </script>
 
 <section class="aw-tabstack" data-tabstack={stack.id} data-region={region}>
-  <header
-    class="aw-pane-head"
-    class:single
-    class:param-tab-hover={paramTabHover}
-    role="toolbar"
-    tabindex="-1"
-    bind:this={headEl}
-    ondragover={onHeaderParameterDragOver}
-    ondragleave={onHeaderParameterDragLeave}
-    ondrop={onHeaderParameterDrop}
-  >
-    <span class="aw-pane-grip" aria-hidden="true">⠿</span>
-    <div class="aw-pane-tabs">
-      {#each stack.panelIds as panelId (panelId)}
-        {@const panel = layout?.panels[panelId]}
-        {#if panel}
-          <button
-            class="aw-pane-tab"
-            class:active={panelId === activePanelId}
-            type="button"
-            data-panel-tab={panelId}
-            onpointerdown={(e) => tabPointerDown(panelId, e)}
-            onclick={() => !$controller.editMode && controller.dispatch({ type: 'panel.activate', panelId })}
-          >
-            <span>{panel.title ?? panel.type}</span>
-          </button>
-        {/if}
-      {/each}
-    </div>
-    <span class="aw-pane-spacer"></span>
-    {#if activePanel}
-      <div class="aw-pane-actions">
-        {#if $controller.editMode && !activePanel.locked}
-          <button
-            class="aw-pane-btn"
-            type="button"
-            title="Save panel to library"
-            onclick={() => savePanelTemplate(activePanel)}
-          >▤</button>
-        {/if}
-        {#if activePanel.collapsible !== false}
-          <button
-            class="aw-pane-btn"
-            type="button"
-            title={activePanel.collapsed ? 'Expand panel' : 'Collapse panel'}
-            onclick={() => controller.dispatch({ type: 'panel.collapse', panelId: activePanel.id, collapsed: !activePanel.collapsed })}
-          >{activePanel.collapsed ? '+' : '−'}</button>
-        {/if}
-        {#if $controller.editMode && activePanel.closable !== false && !activePanel.locked}
-          <button
-            class="aw-pane-btn danger"
-            type="button"
-            title="Close panel"
-            onclick={() => controller.dispatch({ type: 'panel.close', panelId: activePanel.id })}
-          >×</button>
-        {/if}
-      </div>
-    {/if}
-  </header>
+  <!-- Pane header: multi-panel stacks keep their tab strip; single-panel stacks
+       show no header at all in normal use (the panel names itself), but keep it
+       while editing so collapse/close affordances stay reachable. -->
+  {#if !single || $controller.editMode}
+    <header
+      class="aw-pane-head"
+      class:param-tab-hover={paramTabHover}
+      role="toolbar"
+      tabindex="-1"
+      bind:this={headEl}
+      ondragover={onHeaderParameterDragOver}
+      ondragleave={onHeaderParameterDragLeave}
+      ondrop={onHeaderParameterDrop}
+    >
+      {#if !single}
+        <div class="aw-pane-tabs">
+          {#each stack.panelIds as panelId (panelId)}
+            {@const panel = layout?.panels[panelId]}
+            {#if panel}
+              <button
+                class="aw-pane-tab"
+                class:active={panelId === activePanelId}
+                type="button"
+                data-panel-tab={panelId}
+                onpointerdown={(e) => tabPointerDown(panelId, e)}
+                onclick={() => !$controller.editMode && controller.dispatch({ type: 'panel.activate', panelId })}
+              >
+                <span>{panel.title ?? panel.type}</span>
+              </button>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+      <span class="aw-pane-spacer"></span>
+      {#if activePanel}
+        <div class="aw-pane-actions">
+          {#if $controller.editMode && !activePanel.locked}
+            <button
+              class="aw-pane-btn"
+              type="button"
+              title="Save panel to library"
+              onclick={() => savePanelTemplate(activePanel)}
+            >▤</button>
+          {/if}
+          <!-- A tabbed pane is not collapsible: hiding one panel's body behind a
+               shared header would strand its siblings. Only lone panels collapse. -->
+          {#if single && activePanel.collapsible !== false}
+            <button
+              class="aw-pane-btn"
+              type="button"
+              title={activePanel.collapsed ? 'Expand panel' : 'Collapse panel'}
+              onclick={() => controller.dispatch({ type: 'panel.collapse', panelId: activePanel.id, collapsed: !activePanel.collapsed })}
+            >{activePanel.collapsed ? '+' : '−'}</button>
+          {/if}
+          {#if $controller.editMode && activePanel.closable !== false && !activePanel.locked}
+            <button
+              class="aw-pane-btn danger"
+              type="button"
+              title="Close panel"
+              onclick={() => controller.dispatch({ type: 'panel.close', panelId: activePanel.id })}
+            >×</button>
+          {/if}
+        </div>
+      {/if}
+    </header>
+  {/if}
 
   <div class="aw-tabbody">
     {#if activePanel}
@@ -369,8 +376,8 @@
     /* Design §2.2: panes are separated by an inset 1px white-alpha box-shadow, not borders. */
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
-  /* Design §2.2 pane header: grip → tab chips → spacer → mini action buttons,
-     transparent background, drag-to-dock handle. */
+  /* Design §2.2 pane header: tab chips → spacer → mini action buttons,
+     transparent background. */
   .aw-pane-head {
     flex: none;
     min-width: 0;
@@ -389,13 +396,6 @@
     box-shadow: inset 0 -2px 0 0 var(--aw-accent);
     border-radius: 8px;
   }
-  .aw-pane-grip {
-    flex: none;
-    padding: 0 3px;
-    color: var(--aw-text-faint);
-    font: 700 11px/1 var(--aw-font-mono);
-    cursor: grab;
-  }
   .aw-pane-tabs {
     min-width: 0;
     display: flex;
@@ -403,8 +403,8 @@
     gap: 4px;
     overflow: hidden;
   }
-  /* Single-panel stacks read as one floating pill label; multi-tab stacks are
-     compact pill tabs (design §2.2). */
+  /* Multi-tab stacks render compact pill tabs (design §2.2). Single-panel stacks
+     show no label — the panel names itself, and the header keeps only its actions. */
   .aw-pane-tab {
     min-width: 0;
     max-width: 180px;
@@ -427,11 +427,6 @@
   .aw-pane-tab.active {
     color: color-mix(in srgb, var(--aw-accent) 68%, white);
     background: color-mix(in srgb, var(--aw-accent) 15%, var(--aw-surface));
-  }
-  /* A lone panel label still reads as a pill so the head has a clear anchor. */
-  .aw-pane-head.single .aw-pane-tab {
-    color: var(--aw-text-2);
-    background: color-mix(in srgb, var(--aw-surface) 80%, transparent);
   }
   .aw-pane-spacer {
     flex: 1;

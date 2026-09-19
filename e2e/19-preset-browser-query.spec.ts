@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootCleanWorkbench, clickNav } from './support/workbench';
+import { bootCleanWorkbench, clickNav, regionPanel } from './support/workbench';
 
 /**
  * Preset Browser — unified query bar.
@@ -30,7 +30,7 @@ test.describe('Preset Browser query bar', () => {
   test('typing outside backticks is plain search — no autocomplete', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'library');
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.presetBrowser')).toHaveCount(1);
 
     await expect(page.locator('.query-input input')).toHaveAttribute('placeholder', /Search presets/);
 

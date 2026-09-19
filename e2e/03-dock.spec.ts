@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, exitEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode, exitEditMode, clickNav, collapseRail, regionTabs, regionPanel } from './support/workbench';
 
 test.describe('Dock interactions', () => {
   test('drag a panel tab from the right dock into the main region', async ({ page }) => {
@@ -29,8 +29,12 @@ test.describe('Dock interactions', () => {
     await page.mouse.move(tx, ty, { steps: 4 });
     await page.mouse.up();
 
-    // History now lives in the main stack alongside Block Editor.
-    await expect(regionTabs(page, 'main')).toHaveText([/Block Editor/, /History/]);
+    // History now lives in the main stack alongside Block Editor (order depends on
+    // where the drop lands, so assert membership rather than sequence).
+    const mainTabs = regionTabs(page, 'main');
+    await expect(mainTabs).toHaveCount(2);
+    await expect(mainTabs.filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(mainTabs.filter({ hasText: 'History' })).toHaveCount(1);
   });
 
   test('tab switching activates the clicked panel', async ({ page }) => {
@@ -54,7 +58,9 @@ test.describe('Dock interactions', () => {
     await page.mouse.up();
 
     const mainTabs = regionTabs(page, 'main');
-    await expect(mainTabs).toHaveText([/Block Editor/, /History/]);
+    await expect(mainTabs).toHaveCount(2);
+    await expect(mainTabs.filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(mainTabs.filter({ hasText: 'History' })).toHaveCount(1);
     await exitEditMode(page);
     await collapseRail(page);
 
@@ -71,16 +77,16 @@ test.describe('Dock interactions', () => {
     await clickNav(page, 'setup');
     await enterEditMode(page);
 
-    // The Setup panel's stack — its header's collapse/close buttons act on the
-    // active panel directly (the old ⋯ menu is gone).
-    const stack = page.locator('.aw-tabstack').filter({ has: page.locator('.aw-pane-tab', { hasText: 'Setup' }) }).first();
+    // The Setup page's only panel docks in main — its header's collapse/close
+    // buttons act on the active panel directly (the old ⋯ menu is gone).
+    const stack = page.locator('.aw-tabstack[data-region="main"]').first();
 
     // Collapse the active panel; the header button flips to "Expand panel".
     await stack.locator('.aw-pane-btn[title="Collapse panel"]').click();
     await expect(stack.locator('.aw-pane-btn[title="Expand panel"]')).toHaveCount(1);
 
-    // Close the panel; the Setup tab disappears from the stack.
+    // Close the panel; the Setup panel disappears from the stack.
     await stack.locator('.aw-pane-btn[title="Close panel"]').click();
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(0);
+    await expect(regionPanel(page, 'main', 'axis.setup')).toHaveCount(0);
   });
 });

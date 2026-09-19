@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench';
+import { bootCleanWorkbench, clickNav, collapseRail, regionPanel } from './support/workbench';
 
 /**
  * ROUND 15 — Pages navigation model: every seed page must ACTIVATE cleanly.
@@ -13,44 +13,13 @@ import { bootCleanWorkbench, clickNav, collapseRail } from './support/workbench'
  * frozen renderer, so each assertion doubles as a liveness probe).
  */
 
-/** The seed pages: nav entry id → expected visible content probe. */
-const SEED_PAGES: { entry: string; pageId: string; probe: (page: import('@playwright/test').Page) => Promise<void> }[] = [
-  {
-    entry: 'library',
-    pageId: 'axis.page.presetBrowser',
-    probe: async (page) => {
-      // The full-size Preset Browser panel body mounts in the main region.
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Preset Browser' })).toHaveCount(1);
-    }
-  },
-  {
-    entry: 'fc',
-    pageId: 'axis.page.fc',
-    probe: async (page) => {
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Footswitches' })).toHaveCount(1);
-    }
-  },
-  {
-    entry: 'controllers',
-    pageId: 'axis.page.controllers',
-    probe: async (page) => {
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Controllers' })).toHaveCount(1);
-    }
-  },
-  {
-    entry: 'live',
-    pageId: 'axis.page.live',
-    probe: async (page) => {
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Live' })).toHaveCount(1);
-    }
-  },
-  {
-    entry: 'setup',
-    pageId: 'axis.page.setup',
-    probe: async (page) => {
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Setup' })).toHaveCount(1);
-    }
-  }
+/** The seed pages: nav entry id → the panel id docked full-size in main. */
+const SEED_PAGES: { entry: string; pageId: string; panelId: string }[] = [
+  { entry: 'library', pageId: 'axis.page.presetBrowser', panelId: 'axis.presetBrowser' },
+  { entry: 'fc', pageId: 'axis.page.fc', panelId: 'axis.fc' },
+  { entry: 'controllers', pageId: 'axis.page.controllers', panelId: 'axis.controllers' },
+  { entry: 'live', pageId: 'axis.page.live', panelId: 'axis.live' },
+  { entry: 'setup', pageId: 'axis.page.setup', panelId: 'axis.setup' }
 ];
 
 test.describe('Pages: every seed page activates cleanly', () => {
@@ -70,13 +39,14 @@ test.describe('Pages: every seed page activates cleanly', () => {
 
       // The nav entry tints active (its page is the layout's activePageId).
       await expect(page.locator(`[data-nav-entry="${seed.entry}"][data-nav-active="true"]`)).toHaveCount(1);
-      await seed.probe(page);
+      // The page's full-size panel mounts in the main region.
+      await expect(regionPanel(page, 'main', seed.panelId)).toHaveCount(1);
 
       // And the way BACK to Grid still works (page swap in both directions).
       await collapseRail(page);
       await clickNav(page, 'grid');
       await expect(page.locator('[data-nav-entry="grid"][data-nav-active="true"]')).toHaveCount(1);
-      await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+      await expect(regionPanel(page, 'main', 'axis.blockEditor')).toHaveCount(1);
     });
   }
 });
@@ -94,7 +64,7 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
     await expect(overlay).toHaveCount(1);
     // Still on Grid — the overlay opens in place, no page swap.
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.blockEditor')).toHaveCount(1);
 
     await page.keyboard.press('Escape');
     await expect(overlay).toHaveCount(0);
@@ -106,7 +76,7 @@ test.describe('Preset widget: Grid ↔ Preset Browser round trip', () => {
     await clickNav(page, 'live');
     await collapseRail(page); // else the expanded rail overlays the top bar widget (see collapseRail doc)
     await page.locator('[data-widget="axis.widget.preset"] .preset-main').click();
-    await expect(page.locator('.aw-tabstack[data-region="main"] .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.blockEditor')).toHaveCount(1);
   });
 
   test('preset paging targets stay fixed and the scene dropdown exposes every scene', async ({ page }) => {

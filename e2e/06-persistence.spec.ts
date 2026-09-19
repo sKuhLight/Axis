@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, clickNav, regionTabs, WORKBENCH_DOC_KEY } from './support/workbench';
+import { bootCleanWorkbench, clickNav, regionPanel, WORKBENCH_DOC_KEY } from './support/workbench';
 
 test.describe('Persistence', () => {
   test('a rearrangement survives a reload', async ({ page }) => {
@@ -9,7 +9,7 @@ test.describe('Persistence', () => {
     // (Grid is active by default, so the Live page becoming active is an
     // unambiguous signal that the page selection was persisted).
     await clickNav(page, 'live');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.live')).toHaveCount(1);
 
     // Wait for the ~150ms-debounced cache write to actually land before reloading —
     // otherwise this races the debounce (the pagehide flush covers it on Chromium
@@ -22,7 +22,7 @@ test.describe('Persistence', () => {
     // Reload WITHOUT clearing storage — the layout must persist.
     await page.reload();
     await page.waitForSelector('.aw-root');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.live')).toHaveCount(1);
   });
 
   test('a corrupt stored document self-heals to defaults (no blank page)', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('Persistence', () => {
     // Activate a non-default page (Live) so we can prove the corrupt reload drops
     // it and returns to the canonical default layout.
     await clickNav(page, 'live');
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.live')).toHaveCount(1);
 
     // Cache writes are debounced ~150ms (storage hardening round 11) with a
     // pagehide flush of PENDING writes — corrupting inside the debounce window
@@ -58,9 +58,9 @@ test.describe('Persistence', () => {
     // The shell still boots and renders the default layout — not a blank page.
     await page.waitForSelector('.aw-root');
     await expect(page.locator('.aw-root')).toHaveCount(1);
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.blockEditor')).toHaveCount(1);
     // The Live page from the corrupt doc is gone — we're back to defaults
     // (Block Editor in main).
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Live' })).toHaveCount(0);
+    await expect(regionPanel(page, 'main', 'axis.live')).toHaveCount(0);
   });
 });

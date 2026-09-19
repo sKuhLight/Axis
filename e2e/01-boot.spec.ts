@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, regionTabs } from './support/workbench';
+import { bootCleanWorkbench, regionPanel } from './support/workbench';
 
 test.describe('Boot', () => {
   test('shell renders its core chrome', async ({ page }) => {
@@ -14,7 +14,7 @@ test.describe('Boot', () => {
     await expect(page.locator('[data-zone="top.right"]')).toHaveCount(1);
 
     // Default dock: Block Editor main (Signal Grid ships undocked by default).
-    await expect(regionTabs(page, 'main').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(regionPanel(page, 'main', 'axis.blockEditor')).toHaveCount(1);
 
     // Navigation rail is populated.
     await expect(page.locator('[data-nav-entry]').first()).toBeVisible();

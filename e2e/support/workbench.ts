@@ -157,9 +157,14 @@ export async function exitEditMode(page: Page): Promise<void> {
   await expect(page.locator('.aw-root.aw-editing')).toHaveCount(0);
 }
 
-/** Tabs in a given dock region's tab stack. */
+/** Tabs in a given dock region's tab stack. Only multi-panel stacks render tabs. */
 export function regionTabs(page: Page, region: string) {
   return page.locator(`.aw-tabstack[data-region="${region}"] .aw-pane-tab`);
+}
+
+/** The rendered panel (by panel id) in a given dock region's tab stack. */
+export function regionPanel(page: Page, region: string, panelId: string) {
+  return page.locator(`.aw-tabstack[data-region="${region}"] .aw-panel[data-panel="${panelId}"]`);
 }
 
 /** Click a navigation entry by its stable entry id (grid, setup, live, …). */
