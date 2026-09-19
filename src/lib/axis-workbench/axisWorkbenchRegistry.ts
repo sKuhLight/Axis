@@ -15,6 +15,7 @@ import AxisMyControlsPanel from './panels/AxisMyControlsPanel.svelte';
 import AxisPlaceholderPanel from './panels/AxisPlaceholderPanel.svelte';
 import AxisPresetBrowserPanel from './panels/AxisPresetBrowserPanel.svelte';
 import AxisSignalGridPanel from './panels/AxisSignalGridPanel.svelte';
+import AxisStatsPanel from './panels/AxisStatsPanel.svelte';
 import AxisVirtualScreenPanel from './panels/AxisVirtualScreenPanel.svelte';
 import AxisBlockEditorModifierPanel from './panels/block-editor/AxisBlockEditorModifierPanel.svelte';
 import AxisFcBoardPanel from './panels/fc/AxisFcBoardPanel.svelte';
@@ -85,6 +86,7 @@ const AXIS_BASE_PANEL_COMPONENTS: Record<string, WorkbenchPanelComponent> = {
   'axis.myControls': AxisMyControlsPanel,
   'axis.virtualScreen': AxisVirtualScreenPanel,
   'axis.placeholder': AxisPlaceholderPanel,
+  'axis.stats': AxisStatsPanel,
   'axis.convertGrid': AxisConvertGridPanel,
   'axis.convertBlockEditor': AxisConvertBlockEditorPanel,
   'axis.convertMinimap': AxisConvertMinimapPanel,

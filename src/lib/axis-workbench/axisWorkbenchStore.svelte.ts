@@ -16,7 +16,7 @@ import {
 } from './axisWorkbenchBackups';
 import { registerAxisWorkbenchBindings } from './axisWorkbenchBindings';
 import { createAxisWorkbenchDefaultDocument, ensureAxisGridControlWidgets, ensureAxisNewPresetWidgetPlacement, ensureAxisSaveWidgetPlacement, ensureAxisTopBarParity, pruneAxisRetiredNavigationEntries, pruneAxisRetiredWidgetTypes, pruneAxisRetiredRailWidgets, pruneAxisTopBarSearchWidgets } from './axisWorkbenchDefaults';
-import { ensureAxisConvertPage, ensureAxisSeedOrder, ensureAxisSeedPages, pruneAxisScenesPage } from './axisWorkbenchPages';
+import { ensureAxisConvertPage, ensureAxisSeedOrder, ensureAxisSeedPages, ensureAxisStatsPage, pruneAxisScenesPage } from './axisWorkbenchPages';
 import { ensureAxisMyControlsPanel } from './myControlsPanel';
 
 export const AXIS_WORKBENCH_CONFIG_DOC = 'workbench';
@@ -86,7 +86,7 @@ export function normalizeAxisWorkbenchDocument(input: unknown): WorkbenchDocumen
               pruneAxisRetiredRailWidgets(
                 pruneAxisRetiredNavigationEntries(
                   ensureAxisGridControlWidgets(
-                    ensureAxisMyControlsPanel(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input))))))
+                    ensureAxisMyControlsPanel(ensureAxisStatsPage(ensureAxisConvertPage(pruneAxisScenesPage(ensureAxisSeedOrder(ensureAxisSeedPages(migrateWorkbenchDocument(input)))))))
                   )
                 )
               )

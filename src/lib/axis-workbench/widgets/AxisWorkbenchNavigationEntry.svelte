@@ -31,6 +31,7 @@
     library: line(
       '<path d="M3.4 6.2h9.6M3.4 11h6.6M3.4 15.8h4"/><circle cx="16" cy="15" r="3.5"/><path d="m18.6 17.6 2.8 2.8"/>'
     ),
+    stats: line('<path d="M4 20V10M10 20V4M16 20v-7"/><path d="M3 20h18"/>'),
     fc: solid(
       '<rect x="2.6" y="3.4" width="18.8" height="17.2" rx="4.2" fill="currentColor"/><text x="12" y="15.9" font-weight="800" font-size="10.6" letter-spacing="-0.4" text-anchor="middle" style="fill:var(--aw-bg-2)">FC</text>'
     ),

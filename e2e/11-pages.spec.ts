@@ -16,6 +16,7 @@ import { bootCleanWorkbench, clickNav, collapseRail, regionPanel } from './suppo
 /** The seed pages: nav entry id → the panel id docked full-size in main. */
 const SEED_PAGES: { entry: string; pageId: string; panelId: string }[] = [
   { entry: 'library', pageId: 'axis.page.presetBrowser', panelId: 'axis.presetBrowser' },
+  { entry: 'stats', pageId: 'axis.page.stats', panelId: 'axis.stats' },
   { entry: 'fc', pageId: 'axis.page.fc', panelId: 'axis.fc' },
   { entry: 'controllers', pageId: 'axis.page.controllers', panelId: 'axis.controllers' },
   { entry: 'live', pageId: 'axis.page.live', panelId: 'axis.live' },

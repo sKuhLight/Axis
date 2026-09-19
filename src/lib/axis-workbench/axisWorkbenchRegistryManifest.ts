@@ -16,6 +16,8 @@ export const AXIS_WORKBENCH_BASE_PANEL_TYPES = [
   'axis.myControls',
   'axis.virtualScreen',
   'axis.placeholder',
+  // Library statistics page (read-only roll-up of the preset library cache).
+  'axis.stats',
   // Cross-device preset converter page panels (M4 · META-24). Each sets the OFFLINE editor surface
   // (convertEditor) into context so the embedded SignalGrid/BlockEditor/GridMap render the converted
   // scratch buffer with zero device I/O.
@@ -60,6 +62,7 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
 export const AXIS_WORKBENCH_NAVIGATION_IDS = [
   'grid',
   'library',
+  'stats',
   'fc',
   'controllers',
   'live',

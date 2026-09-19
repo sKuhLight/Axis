@@ -17,19 +17,22 @@ import {
   AXIS_PAGE_LIVE,
   AXIS_PAGE_PRESET_BROWSER,
   AXIS_PAGE_SETUP,
+  AXIS_PAGE_STATS,
   AXIS_SEED_PAGES_MARKER,
   AXIS_SEED_PAGE_ORDER,
   AXIS_SEED_ORDER_MARKER,
   ensureAxisSeedOrder,
   ensureAxisSeedPages,
+  ensureAxisStatsPage,
   pruneAxisScenesPage
 } from '../axisWorkbenchPages';
 
-// The six nav-bound seed pages plus the nav-less converter page (M4), which is seeded on every layout
+// The nav-bound seed pages plus the nav-less converter page (M4), which is seeded on every layout
 // so it can be activated on demand but carries no navigation entry.
 const ALL_SEED_PAGES = [
   AXIS_PAGE_GRID,
   AXIS_PAGE_PRESET_BROWSER,
+  AXIS_PAGE_STATS,
   AXIS_PAGE_FC,
   AXIS_PAGE_CONTROLLERS,
   AXIS_PAGE_LIVE,
@@ -59,6 +62,7 @@ describe('ROUND 15 — default document seed pages', () => {
   it('each secondary page docks its single full-size panel in main', () => {
     const expected: Record<string, string> = {
       [AXIS_PAGE_PRESET_BROWSER]: 'axis.presetBrowser',
+      [AXIS_PAGE_STATS]: 'axis.stats',
       [AXIS_PAGE_FC]: 'axis.fc',
       [AXIS_PAGE_CONTROLLERS]: 'axis.controllers',
       [AXIS_PAGE_LIVE]: 'axis.live',
@@ -72,11 +76,12 @@ describe('ROUND 15 — default document seed pages', () => {
     }
   });
 
-  it('binds the seven nav entries to their pages and keeps Axis as an action', () => {
+  it('binds the page nav entries to their pages and keeps Axis as an action', () => {
     const entries = layout.navigation.entries;
     expect(entries.grid.pageId).toBe(AXIS_PAGE_GRID);
     expect(entries.grid.target).toBeUndefined();
     expect(entries.library.pageId).toBe(AXIS_PAGE_PRESET_BROWSER);
+    expect(entries.stats.pageId).toBe(AXIS_PAGE_STATS);
     expect(entries.fc.pageId).toBe(AXIS_PAGE_FC);
     expect(entries.setup.pageId).toBe(AXIS_PAGE_SETUP);
     // Axis stays an ACTION entry (no page binding); Theme was folded into the Axis hub.
@@ -246,7 +251,7 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
     doc.metadata = { ...(doc.metadata ?? {}) };
     delete doc.metadata[AXIS_SEED_ORDER_MARKER];
     const layout = Object.values(doc.layouts)[0];
-    // The pre-change order: Grid first, FC before Controllers, Convert trailing.
+    // The pre-change order: Grid first, FC before Controllers, Stats trailing, Convert last.
     layout.pageOrder = [
       AXIS_PAGE_GRID,
       AXIS_PAGE_PRESET_BROWSER,
@@ -254,16 +259,17 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
       AXIS_PAGE_CONTROLLERS,
       AXIS_PAGE_LIVE,
       AXIS_PAGE_SETUP,
+      AXIS_PAGE_STATS,
       AXIS_PAGE_CONVERT
     ];
-    layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'account'];
+    layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'stats', 'account'];
     return doc;
   }
 
   it('reorders pageOrder and the page-bound nav entries to the canonical order', () => {
     const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
     expect(layout.pageOrder).toEqual([...AXIS_SEED_PAGE_ORDER, AXIS_PAGE_CONVERT]);
-    expect(layout.navigation.order).toEqual(['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'account']);
+    expect(layout.navigation.order).toEqual(['library', 'grid', 'stats', 'controllers', 'fc', 'live', 'setup', 'account']);
   });
 
   it('keeps non-seed entries (the Axis action) trailing', () => {
@@ -276,6 +282,44 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
     expect(once.metadata?.[AXIS_SEED_ORDER_MARKER]).toBe('v1');
     const before = JSON.stringify(once.layouts);
     expect(JSON.stringify(ensureAxisSeedOrder(once).layouts)).toBe(before);
+  });
+});
+
+// ── Self-healing Statistics page (ensureAxisStatsPage) ───────────────────────
+
+describe('ensureAxisStatsPage — self-heal the Statistics page', () => {
+  /** A document minted before Statistics shipped: the page, its panel and its nav entry are absent. */
+  function withoutStatsPage(): WorkbenchDocument {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const layout = Object.values(doc.layouts)[0];
+    delete layout.pages[AXIS_PAGE_STATS];
+    delete layout.panels['axis.stats'];
+    delete layout.navigation.entries.stats;
+    layout.pageOrder = layout.pageOrder.filter((id) => id !== AXIS_PAGE_STATS);
+    layout.navigation.order = layout.navigation.order.filter((id) => id !== 'stats');
+    return doc;
+  }
+
+  it('re-adds the page (right after Grid), its panel and its nav binding', () => {
+    const layout = Object.values(ensureAxisStatsPage(withoutStatsPage()).layouts)[0];
+    expect(layout.pages[AXIS_PAGE_STATS]).toBeDefined();
+    expect(layout.pageOrder.indexOf(AXIS_PAGE_STATS)).toBe(layout.pageOrder.indexOf(AXIS_PAGE_GRID) + 1);
+    expect(layout.panels['axis.stats']?.type).toBe('axis.stats');
+    expect(panelIdsInPageDock(layout.pages[AXIS_PAGE_STATS])).toEqual(['axis.stats']);
+    expect(layout.navigation.entries.stats.pageId).toBe(AXIS_PAGE_STATS);
+    expect(layout.navigation.order.indexOf('stats')).toBe(layout.navigation.order.indexOf('grid') + 1);
+  });
+
+  it('is idempotent', () => {
+    const once = ensureAxisStatsPage(withoutStatsPage());
+    const before = JSON.stringify(once.layouts);
+    expect(JSON.stringify(ensureAxisStatsPage(once).layouts)).toBe(before);
+  });
+
+  it('leaves an already-seeded document untouched', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const before = JSON.stringify(doc.layouts);
+    expect(JSON.stringify(ensureAxisStatsPage(doc).layouts)).toBe(before);
   });
 });
 

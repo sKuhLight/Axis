@@ -41,6 +41,9 @@ export const AXIS_PAGE_FC = 'axis.page.fc';
 export const AXIS_PAGE_CONTROLLERS = 'axis.page.controllers';
 export const AXIS_PAGE_LIVE = 'axis.page.live';
 export const AXIS_PAGE_SETUP = 'axis.page.setup';
+/** Library statistics page — a read-only roll-up of the preset library cache. */
+export const AXIS_PAGE_STATS = 'axis.page.stats';
+const AXIS_STATS_PANEL_ID = 'axis.stats';
 
 /**
  * Cross-device preset-converter page (M4 · META-24). NOT a nav-bound seed page — it has no navigation
@@ -59,16 +62,18 @@ export const AXIS_CONVERT_TRAY_PANEL = 'axis.convertTray';
 export const AXIS_SEED_PAGE_ORDER = [
   AXIS_PAGE_PRESET_BROWSER,
   AXIS_PAGE_GRID,
+  AXIS_PAGE_STATS,
   AXIS_PAGE_CONTROLLERS,
   AXIS_PAGE_FC,
   AXIS_PAGE_LIVE,
   AXIS_PAGE_SETUP
 ] as const;
 
-/** Navigation-entry id → bound page id for the six page entries. */
+/** Navigation-entry id → bound page id for the page entries. */
 export const AXIS_PAGE_NAV_BINDINGS: Record<string, string> = {
   grid: AXIS_PAGE_GRID,
   library: AXIS_PAGE_PRESET_BROWSER,
+  stats: AXIS_PAGE_STATS,
   fc: AXIS_PAGE_FC,
   controllers: AXIS_PAGE_CONTROLLERS,
   live: AXIS_PAGE_LIVE,
@@ -79,6 +84,7 @@ export const AXIS_PAGE_NAV_BINDINGS: Record<string, string> = {
 const NAV_LABELS: Record<string, string> = {
   grid: 'Grid',
   library: 'Preset Browser',
+  stats: 'Statistics',
   fc: 'Footswitches',
   controllers: 'Controllers',
   live: 'Live',
@@ -150,6 +156,14 @@ export const AXIS_SECONDARY_PAGE_SPECS: AxisPagePanelSpec[] = [
     panelTitle: 'Setup',
     singletonKey: 'axis.setup',
     state: { slug: 'global' }
+  },
+  {
+    pageId: AXIS_PAGE_STATS,
+    label: NAV_LABELS.stats,
+    panelId: 'axis.stats',
+    panelType: 'axis.stats',
+    panelTitle: 'Statistics',
+    singletonKey: 'axis.stats'
   }
 ];
 
@@ -286,6 +300,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
     entries: {
       grid: pageNavEntry('grid', NAV_LABELS.grid, AXIS_PAGE_GRID),
       library: pageNavEntry('library', NAV_LABELS.library, AXIS_PAGE_PRESET_BROWSER),
+      stats: pageNavEntry('stats', NAV_LABELS.stats, AXIS_PAGE_STATS),
       fc: pageNavEntry('fc', NAV_LABELS.fc, AXIS_PAGE_FC),
       controllers: pageNavEntry('controllers', NAV_LABELS.controllers, AXIS_PAGE_CONTROLLERS),
       live: pageNavEntry('live', NAV_LABELS.live, AXIS_PAGE_LIVE),
@@ -295,7 +310,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
         fixedSlot: 'rail.footer'
       })
     },
-    order: ['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'account']
+    order: ['library', 'grid', 'stats', 'controllers', 'fc', 'live', 'setup', 'account']
   };
 }
 
@@ -521,6 +536,50 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
     // (it shipped as the converted-grid "Grid Map" minimap). Idempotent: only rewrites the old title.
     const srcPanel = layout.panels[AXIS_CONVERT_MINIMAP_PANEL];
     if (srcPanel && srcPanel.title === 'Grid Map') srcPanel.title = 'Source';
+  }
+  return doc;
+}
+
+/**
+ * Ensure the Statistics page + its panel + its nav entry exist on every layout. Idempotent and
+ * marker-free (same reason as `ensureAxisConvertPage`): a document persisted before Statistics shipped
+ * already carries the seed-pages marker, so `ensureAxisSeedPages` leaves it alone; this self-heals the
+ * page on load. Inserted immediately after Grid so it reads with the other analysis/build pages.
+ */
+export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object') continue;
+    layout.pages = layout.pages ?? {};
+    layout.panels = layout.panels ?? {};
+    if (!layout.panels[AXIS_STATS_PANEL_ID]) {
+      layout.panels[AXIS_STATS_PANEL_ID] = {
+        id: AXIS_STATS_PANEL_ID,
+        type: 'axis.stats',
+        title: NAV_LABELS.stats,
+        closable: true,
+        collapsible: true,
+        singletonKey: 'axis.stats'
+      };
+    }
+    if (!layout.pages[AXIS_PAGE_STATS]) {
+      const dock = createEmptyDockLayout();
+      dock.root.main = mainTabs(AXIS_STATS_PANEL_ID, () => createWorkbenchId('tabs'));
+      layout.pages[AXIS_PAGE_STATS] = { id: AXIS_PAGE_STATS, label: NAV_LABELS.stats, dock };
+      if (Array.isArray(layout.pageOrder) && !layout.pageOrder.includes(AXIS_PAGE_STATS)) {
+        const gridIndex = layout.pageOrder.indexOf(AXIS_PAGE_GRID);
+        if (gridIndex >= 0) layout.pageOrder.splice(gridIndex + 1, 0, AXIS_PAGE_STATS);
+        else layout.pageOrder.push(AXIS_PAGE_STATS);
+      }
+    }
+    layout.navigation = layout.navigation ?? { mode: 'side', entries: {}, order: [] };
+    if (!layout.navigation.entries.stats) {
+      layout.navigation.entries.stats = pageNavEntry('stats', NAV_LABELS.stats, AXIS_PAGE_STATS);
+      if (Array.isArray(layout.navigation.order) && !layout.navigation.order.includes('stats')) {
+        const gridIndex = layout.navigation.order.indexOf('grid');
+        if (gridIndex >= 0) layout.navigation.order.splice(gridIndex + 1, 0, 'stats');
+        else layout.navigation.order.push('stats');
+      }
+    }
   }
   return doc;
 }

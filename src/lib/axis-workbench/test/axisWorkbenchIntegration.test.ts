@@ -24,6 +24,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.myControls',
       'axis.virtualScreen',
       'axis.placeholder',
+      'axis.stats',
       'axis.convertGrid',
       'axis.convertBlockEditor',
       'axis.convertMinimap',
@@ -63,6 +64,7 @@ describe('Axis Workbench integration contracts', () => {
     expect(AXIS_WORKBENCH_NAVIGATION_IDS).toEqual([
       'grid',
       'library',
+      'stats',
       'fc',
       'controllers',
       'live',
