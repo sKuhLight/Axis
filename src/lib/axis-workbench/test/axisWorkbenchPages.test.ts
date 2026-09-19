@@ -249,27 +249,34 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
   function withLegacyOrder(): WorkbenchDocument {
     const doc = createAxisWorkbenchDefaultDocument();
     doc.metadata = { ...(doc.metadata ?? {}) };
-    delete doc.metadata[AXIS_SEED_ORDER_MARKER];
+    // A document persisted at the PREVIOUS canonical order (marked 'v1'): Statistics sat
+    // right after Grid, FC preceded Controllers.
+    doc.metadata[AXIS_SEED_ORDER_MARKER] = 'v1';
     const layout = Object.values(doc.layouts)[0];
-    // The pre-change order: Grid first, FC before Controllers, Stats trailing, Convert last.
     layout.pageOrder = [
-      AXIS_PAGE_GRID,
       AXIS_PAGE_PRESET_BROWSER,
-      AXIS_PAGE_FC,
+      AXIS_PAGE_GRID,
+      AXIS_PAGE_STATS,
       AXIS_PAGE_CONTROLLERS,
+      AXIS_PAGE_FC,
       AXIS_PAGE_LIVE,
       AXIS_PAGE_SETUP,
-      AXIS_PAGE_STATS,
       AXIS_PAGE_CONVERT
     ];
-    layout.navigation.order = ['grid', 'library', 'fc', 'controllers', 'live', 'setup', 'stats', 'account'];
+    layout.navigation.order = ['library', 'grid', 'stats', 'controllers', 'fc', 'live', 'setup', 'account'];
     return doc;
   }
 
-  it('reorders pageOrder and the page-bound nav entries to the canonical order', () => {
+  it('re-runs for a doc marked at an older version and reorders to canonical', () => {
     const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
     expect(layout.pageOrder).toEqual([...AXIS_SEED_PAGE_ORDER, AXIS_PAGE_CONVERT]);
-    expect(layout.navigation.order).toEqual(['library', 'grid', 'stats', 'controllers', 'fc', 'live', 'setup', 'account']);
+    expect(layout.navigation.order).toEqual(['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'stats', 'account']);
+  });
+
+  it('moves Statistics to the end of the main entries, above the pinned Axis footer', () => {
+    const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
+    expect(layout.navigation.order.indexOf('stats')).toBe(layout.navigation.order.indexOf('account') - 1);
+    expect(layout.pageOrder.at(-2)).toBe(AXIS_PAGE_STATS);
   });
 
   it('keeps non-seed entries (the Axis action) trailing', () => {
@@ -279,7 +286,7 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
 
   it('sets the marker and is idempotent', () => {
     const once = ensureAxisSeedOrder(withLegacyOrder());
-    expect(once.metadata?.[AXIS_SEED_ORDER_MARKER]).toBe('v1');
+    expect(once.metadata?.[AXIS_SEED_ORDER_MARKER]).toBe('v2');
     const before = JSON.stringify(once.layouts);
     expect(JSON.stringify(ensureAxisSeedOrder(once).layouts)).toBe(before);
   });
@@ -300,14 +307,14 @@ describe('ensureAxisStatsPage — self-heal the Statistics page', () => {
     return doc;
   }
 
-  it('re-adds the page (right after Grid), its panel and its nav binding', () => {
+  it('re-adds the page (last main entry, above the Axis footer), its panel and its nav binding', () => {
     const layout = Object.values(ensureAxisStatsPage(withoutStatsPage()).layouts)[0];
     expect(layout.pages[AXIS_PAGE_STATS]).toBeDefined();
-    expect(layout.pageOrder.indexOf(AXIS_PAGE_STATS)).toBe(layout.pageOrder.indexOf(AXIS_PAGE_GRID) + 1);
+    expect(layout.pageOrder.at(-1)).toBe(AXIS_PAGE_STATS);
     expect(layout.panels['axis.stats']?.type).toBe('axis.stats');
     expect(panelIdsInPageDock(layout.pages[AXIS_PAGE_STATS])).toEqual(['axis.stats']);
     expect(layout.navigation.entries.stats.pageId).toBe(AXIS_PAGE_STATS);
-    expect(layout.navigation.order.indexOf('stats')).toBe(layout.navigation.order.indexOf('grid') + 1);
+    expect(layout.navigation.order.indexOf('stats')).toBe(layout.navigation.order.indexOf('account') - 1);
   });
 
   it('is idempotent', () => {

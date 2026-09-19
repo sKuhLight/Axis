@@ -62,11 +62,11 @@ export const AXIS_CONVERT_TRAY_PANEL = 'axis.convertTray';
 export const AXIS_SEED_PAGE_ORDER = [
   AXIS_PAGE_PRESET_BROWSER,
   AXIS_PAGE_GRID,
-  AXIS_PAGE_STATS,
   AXIS_PAGE_CONTROLLERS,
   AXIS_PAGE_FC,
   AXIS_PAGE_LIVE,
-  AXIS_PAGE_SETUP
+  AXIS_PAGE_SETUP,
+  AXIS_PAGE_STATS
 ] as const;
 
 /** Navigation-entry id → bound page id for the page entries. */
@@ -310,7 +310,7 @@ export function createAxisSeedNavigation(mode: NavigationMode): NavigationLayout
         fixedSlot: 'rail.footer'
       })
     },
-    order: ['library', 'grid', 'stats', 'controllers', 'fc', 'live', 'setup', 'account']
+    order: ['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'stats', 'account']
   };
 }
 
@@ -409,10 +409,12 @@ export function ensureAxisSeedPages(doc: WorkbenchDocument): WorkbenchDocument {
 
 /**
  * doc.metadata marker: the seed pages / page-bound nav entries have been put into
- * their canonical order (see {@link ensureAxisSeedOrder}). One-shot, so a user who
- * deliberately reorders pages after this ships is never clobbered on the next load.
+ * their canonical order (see {@link ensureAxisSeedOrder}). Versioned, so bumping
+ * {@link AXIS_SEED_ORDER_VERSION} re-runs the one-shot reconciliation for documents
+ * persisted at an older canonical order (a previous value must not be treated as done).
  */
 export const AXIS_SEED_ORDER_MARKER = 'axisSeedOrder';
+export const AXIS_SEED_ORDER_VERSION = 'v2';
 
 /** Stable reorder: ranked (known) ids first in rank order; everything else keeps its relative position. */
 function moveRankedToFront<T>(ids: T[], rankOf: (id: T) => number | undefined): T[] {
@@ -423,14 +425,15 @@ function moveRankedToFront<T>(ids: T[], rankOf: (id: T) => number | undefined): 
 
 /**
  * Put the six seed pages — and the nav entries bound to them — into
- * {@link AXIS_SEED_PAGE_ORDER}. The Preset Browser moved to the top of the rail, so a
- * document persisted before that change still carries the old order; this repairs it
- * once (marker-gated). Only the known seed page ids are moved among themselves — every
- * other page / nav entry keeps its relative position (the nav-less Convert page trails).
- * Idempotent via the marker.
+ * {@link AXIS_SEED_PAGE_ORDER}. The Preset Browser moved to the top of the rail and the
+ * Statistics page moved to the end of the main entries (just above the pinned Axis
+ * footer), so a document persisted before either change still carries the old order;
+ * this repairs it once (marker-gated). Only the known seed page ids are moved among
+ * themselves — every other page / nav entry keeps its relative position (the nav-less
+ * Convert page trails). Idempotent via the marker.
  */
 export function ensureAxisSeedOrder(doc: WorkbenchDocument): WorkbenchDocument {
-  if (doc.metadata?.[AXIS_SEED_ORDER_MARKER]) return doc;
+  if (doc.metadata?.[AXIS_SEED_ORDER_MARKER] === AXIS_SEED_ORDER_VERSION) return doc;
 
   const pageRank = new Map<string, number>(AXIS_SEED_PAGE_ORDER.map((id, index) => [id, index]));
   for (const layout of Object.values(doc.layouts ?? {})) {
@@ -447,7 +450,7 @@ export function ensureAxisSeedOrder(doc: WorkbenchDocument): WorkbenchDocument {
     }
   }
 
-  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_ORDER_MARKER]: 'v1' };
+  doc.metadata = { ...(doc.metadata ?? {}), [AXIS_SEED_ORDER_MARKER]: AXIS_SEED_ORDER_VERSION };
   return doc;
 }
 
@@ -544,7 +547,8 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
  * Ensure the Statistics page + its panel + its nav entry exist on every layout. Idempotent and
  * marker-free (same reason as `ensureAxisConvertPage`): a document persisted before Statistics shipped
  * already carries the seed-pages marker, so `ensureAxisSeedPages` leaves it alone; this self-heals the
- * page on load. Inserted immediately after Grid so it reads with the other analysis/build pages.
+ * page on load. Inserted at the end of the main entries — just above the pinned Axis footer — so it
+ * reads as the last analysis page before the account action.
  */
 export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
   for (const layout of Object.values(doc.layouts ?? {})) {
@@ -566,8 +570,8 @@ export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
       dock.root.main = mainTabs(AXIS_STATS_PANEL_ID, () => createWorkbenchId('tabs'));
       layout.pages[AXIS_PAGE_STATS] = { id: AXIS_PAGE_STATS, label: NAV_LABELS.stats, dock };
       if (Array.isArray(layout.pageOrder) && !layout.pageOrder.includes(AXIS_PAGE_STATS)) {
-        const gridIndex = layout.pageOrder.indexOf(AXIS_PAGE_GRID);
-        if (gridIndex >= 0) layout.pageOrder.splice(gridIndex + 1, 0, AXIS_PAGE_STATS);
+        const convertIndex = layout.pageOrder.indexOf(AXIS_PAGE_CONVERT);
+        if (convertIndex >= 0) layout.pageOrder.splice(convertIndex, 0, AXIS_PAGE_STATS);
         else layout.pageOrder.push(AXIS_PAGE_STATS);
       }
     }
@@ -575,8 +579,8 @@ export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
     if (!layout.navigation.entries.stats) {
       layout.navigation.entries.stats = pageNavEntry('stats', NAV_LABELS.stats, AXIS_PAGE_STATS);
       if (Array.isArray(layout.navigation.order) && !layout.navigation.order.includes('stats')) {
-        const gridIndex = layout.navigation.order.indexOf('grid');
-        if (gridIndex >= 0) layout.navigation.order.splice(gridIndex + 1, 0, 'stats');
+        const accountIndex = layout.navigation.order.indexOf('account');
+        if (accountIndex >= 0) layout.navigation.order.splice(accountIndex, 0, 'stats');
         else layout.navigation.order.push('stats');
       }
     }
