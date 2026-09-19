@@ -7,6 +7,45 @@
   let { view }: { view: AxisPresetBrowserPartView } = $props();
 </script>
 
+<!-- §3.3 SAVED SEARCHES: name + query subtitle + active highlight (parsed-query equality) + delete ×.
+     Applying one loads its query via applyQueryText. Persisted to the shared axs.pb.saved store. -->
+<header class="section-head saved-head">
+  <span>Saved searches</span>
+  <em>{view.savedFilters.length}</em>
+</header>
+{#if view.snapshot.saving}
+  <div class="save-in">
+    <input
+      type="text"
+      bind:value={view.saveName}
+      placeholder="Name this search…"
+      spellcheck="false"
+      onkeydown={(e) => {
+        if (e.key === 'Enter') view.commitSaveFilter();
+        else if (e.key === 'Escape') axisPresetBrowserWorkbenchController.setSaving(false);
+      }}
+    />
+  </div>
+{/if}
+<div class="saved-list">
+  {#each view.savedFilters as filter (filter.id)}
+    {@const active = isSavedFilterActive(filter, view.activeConditions)}
+    <div class="sv" class:active>
+      <button type="button" class="sv-main" onclick={() => view.applySavedFilter(filter)}>
+        <span class="sv-dot" style:background={savedFilterDotColor(filter)}></span>
+        <span class="sv-txt">
+          <strong>{filter.name}</strong>
+          <small>{filter.query || '(empty)'}</small>
+        </span>
+      </button>
+      <button type="button" class="sv-x" title="Delete search" onclick={() => view.deleteSavedFilter(filter.id)}>×</button>
+    </div>
+  {/each}
+  {#if !view.savedFilters.length}
+    <div class="empty-s">No saved searches yet. Build a query and hit Save search.</div>
+  {/if}
+</div>
+
 <!-- NARROW: the clickable ways to narrow the current results, one group per dimension, each value
      carrying a live count. Clicking builds the same condition the typed language would (see
      presetBrowserWorkbenchNarrow.ts). Only shown once something has been searched — with no query it
@@ -49,45 +88,6 @@
     <div class="narrow-empty">No further refinement for these results.</div>
   {/if}
 {/if}
-
-<!-- §3.3 SAVED SEARCHES: name + query subtitle + active highlight (parsed-query equality) + delete ×.
-     Applying one loads its query via applyQueryText. Persisted to the shared axs.pb.saved store. -->
-<header class="section-head saved-head">
-  <span>Saved searches</span>
-  <em>{view.savedFilters.length}</em>
-</header>
-{#if view.snapshot.saving}
-  <div class="save-in">
-    <input
-      type="text"
-      bind:value={view.saveName}
-      placeholder="Name this search…"
-      spellcheck="false"
-      onkeydown={(e) => {
-        if (e.key === 'Enter') view.commitSaveFilter();
-        else if (e.key === 'Escape') axisPresetBrowserWorkbenchController.setSaving(false);
-      }}
-    />
-  </div>
-{/if}
-<div class="saved-list">
-  {#each view.savedFilters as filter (filter.id)}
-    {@const active = isSavedFilterActive(filter, view.activeConditions)}
-    <div class="sv" class:active>
-      <button type="button" class="sv-main" onclick={() => view.applySavedFilter(filter)}>
-        <span class="sv-dot" style:background={savedFilterDotColor(filter)}></span>
-        <span class="sv-txt">
-          <strong>{filter.name}</strong>
-          <small>{filter.query || '(empty)'}</small>
-        </span>
-      </button>
-      <button type="button" class="sv-x" title="Delete search" onclick={() => view.deleteSavedFilter(filter.id)}>×</button>
-    </div>
-  {/each}
-  {#if !view.savedFilters.length}
-    <div class="empty-s">No saved searches yet. Build a query and hit Save search.</div>
-  {/if}
-</div>
 
 <header class="section-head"><span>Frequent tags</span></header>
 <div class="quick-tags">
