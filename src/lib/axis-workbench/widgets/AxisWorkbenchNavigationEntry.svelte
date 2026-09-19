@@ -15,9 +15,10 @@
 
   // Inline SVG nav glyphs — 24×24 viewBox, 1em square so they inherit the `.ic`
   // font-size. `line` is the chosen 1.7px rounded-stroke set; `solid` covers the
-  // two filled glyphs (Footswitches, Setup). The Footswitches switch cut-outs use
-  // `--aw-bg-2` (the bottom bar's own background) so they read as holes. No hex,
-  // and `style` (not the `fill` attribute) carries the `var()` for Safari.
+  // two filled glyphs (Footswitches, Setup). The Footswitches glyph knocks its
+  // "FC" letters out of the plate with `--aw-bg-2` (the bar's own background) so
+  // they read as holes, and sets them in the UI face. No hex, and `style` (not
+  // the `fill` attribute) carries the `var()` for Safari.
   const line = (inner: string) =>
     `<svg viewBox="0 0 24 24" width="1em" height="1em" style="display:block" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
   const solid = (inner: string) =>
@@ -31,7 +32,7 @@
       '<path d="M3.4 6.2h9.6M3.4 11h6.6M3.4 15.8h4"/><circle cx="16" cy="15" r="3.5"/><path d="m18.6 17.6 2.8 2.8"/>'
     ),
     fc: solid(
-      '<rect x="2.8" y="4.2" width="18.4" height="15.6" rx="2.8" fill="currentColor"/><circle cx="7.6" cy="15.6" r="3" style="fill:var(--aw-bg-2)"/><circle cx="7.6" cy="15.6" r="1.4" fill="currentColor"/><circle cx="12" cy="15.6" r="3" style="fill:var(--aw-bg-2)"/><circle cx="12" cy="15.6" r="1.4" fill="currentColor"/><circle cx="16.4" cy="15.6" r="3" style="fill:var(--aw-bg-2)"/><circle cx="16.4" cy="15.6" r="1.4" fill="currentColor"/>'
+      '<rect x="2.6" y="3.4" width="18.8" height="17.2" rx="4.2" fill="currentColor"/><text x="12" y="15.9" font-weight="800" font-size="10.6" letter-spacing="-0.4" text-anchor="middle" style="fill:var(--aw-bg-2)">FC</text>'
     ),
     controllers: line(
       '<circle cx="12" cy="15.6" r="5.6"/><path d="M12 15.6V11"/><path d="M4.6 8.6a8.5 8.5 0 0 1 14.8 0"/>'
