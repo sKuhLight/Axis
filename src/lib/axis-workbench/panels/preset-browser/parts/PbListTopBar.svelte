@@ -6,6 +6,12 @@
 
   let { view }: { view: AxisPresetBrowserPartView } = $props();
 
+  // Narrow refinement is a collapsible "Filters" band under the query bar (moved out of the sources
+  // sidebar), collapsed by default so it does not push the results down until asked for.
+  let narrowOpen = $state(false);
+  const narrowSelCount = $derived(
+    view.narrowGroups.reduce((n, group) => n + group.values.filter((v) => v.selected).length, 0)
+  );
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -116,6 +122,64 @@
     {/each}
     <span class="fsp"></span>
     <button type="button" class="fclrall" onclick={() => axisPresetBrowserWorkbenchController.clearQuery()}>Clear all</button>
+  </div>
+  {/if}
+  <!-- FILTERS (the "narrow" model): the clickable ways to narrow the current results, one group per
+       dimension, each value carrying a live count. Relocated from the sources sidebar to sit under
+       the query bar as a collapsible band, next to the search it refines. Only shown once something
+       has been searched — with no query it would just enumerate the whole library. -->
+  {#if view.narrowVisible}
+  <div class="narrow-sec">
+    <div class="narrow-bar">
+      <button
+        type="button"
+        class="narrow-toggle"
+        aria-expanded={narrowOpen}
+        onclick={() => (narrowOpen = !narrowOpen)}
+      >
+        <span class="narrow-chev" class:open={narrowOpen} aria-hidden="true">›</span>
+        <span>Filters</span>
+        {#if narrowSelCount}<span class="narrow-badge">{narrowSelCount}</span>{/if}
+      </button>
+      <span class="narrow-sp"></span>
+      {#if view.hasNarrow}
+        <button type="button" class="narrow-clear" onclick={view.clearAllNarrow}>Clear</button>
+      {/if}
+    </div>
+    {#if narrowOpen}
+      {#if view.narrowGroups.length}
+        <div class="narrow">
+          {#each view.narrowGroups as group (group.key)}
+            <div class="ngroup">
+              <header class="ng-head">
+                <span>{group.label}</span>
+                {#if view.narrowActive(group)}
+                  <button type="button" class="ng-x" title={`Clear ${group.label}`} aria-label={`Clear ${group.label}`} onclick={() => view.clearNarrow(group)}>×</button>
+                {/if}
+              </header>
+              <div class="ng-list">
+                {#each group.values as v (v.value)}
+                  <button
+                    type="button"
+                    class="nv"
+                    class:on={v.selected}
+                    title={`${v.count} match${v.count === 1 ? '' : 'es'}`}
+                    onclick={() => view.toggleNarrow(group, v.value)}
+                  >
+                    <span class="nv-box">{v.selected ? '✓' : ''}</span>
+                    {#if group.kind === 'tag'}<span class="nv-dot" style:background={library.colorOf(v.value)}></span>{/if}
+                    <span class="nv-lbl">{v.value}</span>
+                    <span class="nv-cnt">{v.count}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="narrow-empty">No further refinement for these results.</div>
+      {/if}
+    {/if}
   </div>
   {/if}
 </div>
@@ -362,6 +426,194 @@
     color: var(--textdim);
     font-size: 11px;
     text-transform: none;
+  }
+  /* FILTERS (narrow model) — collapsible band under the query bar, moved from the sources sidebar. */
+  .narrow-sec {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .narrow-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .narrow-toggle {
+    height: 26px;
+    padding: 0 8px 0 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--textdim);
+    font: 800 10px/1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .narrow-toggle:hover {
+    color: var(--text2);
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  .narrow-chev {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1;
+    transition: transform 120ms ease;
+  }
+  .narrow-chev.open {
+    transform: rotate(90deg);
+  }
+  .narrow-badge {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 5px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--bg);
+    font: 800 9px/1 var(--font-mono);
+    letter-spacing: 0;
+  }
+  .narrow-sp {
+    flex: 1;
+  }
+  .narrow-clear {
+    height: 22px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--textdim);
+    font: 700 10px/1 var(--font-mono);
+    text-transform: none;
+  }
+  .narrow-clear:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+  }
+  .narrow {
+    border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--accent) 4%, var(--bg2));
+    padding: 9px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 9px 14px;
+  }
+  .narrow-empty {
+    padding: 8px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 9px;
+    color: var(--textdim);
+    font: 500 11px/1.3 var(--font-mono);
+  }
+  .ngroup {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .ng-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 4px 3px;
+    color: var(--textfaint);
+    font: 800 8.5px/1 var(--font-mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+  .ng-x {
+    margin-left: auto;
+    width: 15px;
+    height: 15px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--textfaint);
+    font-size: 11px;
+    text-transform: none;
+  }
+  .ng-x:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+  }
+  .ng-list {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .nv {
+    height: auto;
+    min-height: 28px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text2);
+    text-align: left;
+    text-transform: none;
+    font: 600 12px/1.2 var(--font-ui);
+  }
+  .nv:hover {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  .nv-box {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border3);
+    border-radius: 4px;
+    color: var(--bg);
+    font: 800 9px/1 var(--font-mono);
+  }
+  .nv-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 2px;
+  }
+  .nv-lbl {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nv-cnt {
+    margin-left: auto;
+    flex: none;
+    color: var(--textfaint);
+    font: 700 10px/1 var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .nv.on {
+    border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .nv.on .nv-box {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .nv.on .nv-lbl {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .nv.on .nv-cnt {
+    color: var(--accent);
   }
   /* Trailing control inside the query field: one click, adjacent to the query it saves. */
   .save-star {
