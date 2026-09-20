@@ -67,7 +67,9 @@ const paramMetaSchema = z.object({
   unitCode: z.string().optional(),
   kind: z.enum(['enum', 'float']).optional(),
   unusable: z.enum(['no-range', 'degenerate-range', 'duplicate-id']).optional(),
-  help: z.object({ blurb: z.string(), tip: z.string().optional() }).optional()
+  help: z.object({ blurb: z.string(), tip: z.string().optional() }).optional(),
+  // Client-tagged on params hydrated for a cross-block control (server does not send it).
+  effectId: z.number().optional()
 });
 
 const namedParamSchema = paramMetaSchema.extend({
@@ -105,7 +107,9 @@ const layoutControlSchema = z.object({
     effect: z.string(),
     family: z.string().nullable(),
     paramName: z.string().nullable(),
-    paramId: z.number().nullable()
+    paramId: z.number().nullable(),
+    // Serve-time resolution (Phase 2): the wire effectId the control addresses, or null.
+    effectId: z.number().nullable().optional()
   }).optional(),
   fw: fwRangeSchema.optional(),
   render: renderMetaSchema.optional(),
@@ -196,10 +200,15 @@ describe('ForgeFX blockParams contract (fixtures/blockParams/*.json)', () => {
         const ok = layoutControlSchema.pick({ crossBlock: true }).safeParse({
           crossBlock: { effect: 'ID_GLOBAL', family: null, paramName: 'GLOBAL_TEMPO', paramId: null },
         });
+        // The serve-time wire eid resolution rides alongside the token, or null when unresolvable.
+        const resolved = layoutControlSchema.pick({ crossBlock: true }).safeParse({
+          crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'GLOBAL_METRONOME', paramId: 14878, effectId: 1 },
+        });
         const bad = layoutControlSchema.pick({ crossBlock: true }).safeParse({
           crossBlock: { effect: 199, family: 'GLOBAL', paramName: 'GLOBAL_TEMPO', paramId: null },
         });
         expect(ok.success).toBe(true);
+        expect(resolved.success).toBe(true);
         expect(bad.success).toBe(false);
       });
 

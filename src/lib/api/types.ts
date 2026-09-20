@@ -55,6 +55,10 @@ export interface ParamMeta {
   unusable?: UnusableParamReason;
   /** Curated tooltip copy, when this param has a curated help entry. */
   help?: ParamHelp;
+  /** Wire effectId of the block that OWNS this param. Absent for the queried block's own params; set
+   *  client-side on params hydrated for a cross-block layout control (a global metronome knob drawn on
+   *  the Controllers page). Writes route here, so the pid can't be mis-addressed to the open block. */
+  effectId?: number;
 }
 
 /** A named parameter value read back from the device (GET /block/{name}/params). */
@@ -105,6 +109,9 @@ export interface LayoutCrossBlock {
   family: string | null;
   paramName: string | null;
   paramId: number | null;
+  /** Wire effectId this control actually reads/writes, resolved by ForgeFX from `effect` + `family`.
+   *  Null/absent when the token names no param-addressable effect — the control stays display-only. */
+  effectId?: number | null;
 }
 
 /** Where the device's own editor draws a control, on its ~1240px canvas.

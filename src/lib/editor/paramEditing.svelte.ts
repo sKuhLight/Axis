@@ -40,6 +40,11 @@ export class ParamEditingStore {
   #paramsEid: number | null = null;
   blockLayout = $state<DeviceLayout | null>(null);
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
+  /** Params of blocks a layout control cross-references (`crossBlock.effectId`), keyed by effectId.
+   *  A global metronome knob on the Controllers page lives on effectId 1, not on Controllers — this is
+   *  where its live params come from. Each param is tagged with `effectId` so writes route there. */
+  crossParams = $state<Record<number, { named: NamedParam[]; enums: EnumParam[] }>>({});
+  #crossLoading = new Set<number>();
 
   activePage = $state('');
   customLayouts = $state<Record<string, TabDef[]>>({});
@@ -179,8 +184,9 @@ export class ParamEditingStore {
       const p = this.params.find((x) => x.id === ctl.id);
       if (p) p.norm = norm;
     }
-    clearTimeout(this.#sendTimers[ctl.id]);
-    this.#sendTimers[ctl.id] = setTimeout(() => forgefx.setParam(cell.effectId, ctl.id, norm, true).catch(() => {}), 50);
+    const swipeKey = `${cell.effectId}:${ctl.id}`;
+    clearTimeout(this.#sendTimers[swipeKey]);
+    this.#sendTimers[swipeKey] = setTimeout(() => forgefx.setParam(cell.effectId, ctl.id, norm, true).catch(() => {}), 50);
   };
   fetchMeters = () => {
     if (!this.#host.hasBlockMeters || this.#host.slowLink) return;
@@ -223,7 +229,52 @@ export class ParamEditingStore {
     if (Object.keys(this.pinnedParams).length) this.pinnedParams = {};
     if (this.#pinnedRefs.size) this.#scheduleHydratePinned();
   };
-  onGridLoaded = () => { this.fetchMeters(); this.invalidatePinned(); };
+  onGridLoaded = () => {
+    this.fetchMeters();
+    this.invalidatePinned();
+    // A preset change can move the cross-referenced blocks' values, so refetch them — a bare clear
+    // would blank a cross control (the metronome) until the page was reopened. Reuses the open layout.
+    this.crossParams = {};
+    const c = this.selected;
+    if (c && this.blockLayout) void this.#hydrateCrossParams(c.effectId ?? null, this.blockLayout);
+  };
+  /** Resolve a cross-block control's param by its owner effectId + editor symbol. Pid is NEVER used to
+   *  join across families — the same pid exists in several (GLOBAL pid 119 is METLEVEL1, CONTROLLERS
+   *  pid 119 is LFO1BETA). */
+  crossParamFor = (effectId: number, paramName: string | null | undefined): NamedParam | EnumParam | undefined => {
+    if (!paramName) return undefined;
+    const cp = this.crossParams[effectId];
+    if (!cp) return undefined;
+    return cp.named.find((p) => p.paramName === paramName) ?? cp.enums.find((e) => e.paramName === paramName);
+  };
+  /** Fetch the params of every block this layout's controls cross-reference (deduped, once each, and
+   *  never the open block itself). `observe:false` keeps the device-edit poll target on the open block.
+   *  Best-effort: a failed cross read leaves its controls display-only rather than failing the open. */
+  #hydrateCrossParams = async (ownerEid: number | null, layout: DeviceLayout | null): Promise<void> => {
+    if (this.#host.legacyAm4 || !layout) return;
+    const ids = new Set<number>();
+    for (const page of layout.pages ?? [])
+      for (const row of page.rows ?? [])
+        for (const ctl of row.controls ?? []) {
+          const eid = ctl.crossBlock?.effectId;
+          if (typeof eid === 'number' && eid !== ownerEid) ids.add(eid);
+        }
+    await Promise.all([...ids].map(async (eid) => {
+      if (this.crossParams[eid] || this.#crossLoading.has(eid)) return;
+      this.#crossLoading.add(eid);
+      try {
+        const r = await forgefx.blockParams(eid, { observe: false });
+        this.crossParams = {
+          ...this.crossParams,
+          [eid]: {
+            named: (r.named ?? []).map((p) => ({ ...p, effectId: eid })),
+            enums: (r.enums ?? []).map((e) => ({ ...e, effectId: eid }))
+          }
+        };
+      } catch { /* cross params are best-effort */ }
+      finally { this.#crossLoading.delete(eid); }
+    }));
+  };
   #hydratePinned = async () => {
     this.#hydratePinnedTimer = null;
     if (!this.#pinnedRefs.size || this.#host.slowLink || this.#host.status !== 'ready') return;
@@ -250,8 +301,9 @@ export class ParamEditingStore {
     this.pinnedParams = { ...this.pinnedParams };
     const cell = this.#cellFor(effectId);
     history.recordGesture({ kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v, block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
-    clearTimeout(this.#sendTimers[p.id]);
-    this.#sendTimers[p.id] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
+    const pinnedKey = `${effectId}:${p.id}`;
+    clearTimeout(this.#sendTimers[pinnedKey]);
+    this.#sendTimers[pinnedKey] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
   };
   setPinnedEnum = (effectId: number, e: EnumParam, value: number) => {
     if (this.selected?.effectId === effectId) { this.setEnum(e, value); return; }
@@ -315,6 +367,9 @@ export class ParamEditingStore {
       this.blockSlug = r.slug ?? null;
       if (this.blockSlug !== 'looper') this.#host.clearLooperWave();
       this.blockLayout = r.layout ?? null;
+      // Hydrate any cross-referenced blocks' params (the Controllers page's global metronome lives on
+      // effectId 1). Not awaited by callers: the canvas binds each control as its param arrives.
+      void this.#hydrateCrossParams(c.effectId ?? null, r.layout ?? null);
       if (c.effectId != null) {
         const fallback = this.params[0];
         const m = this.meters[c.effectId] ?? { defaultId: fallback?.id ?? -1, defaultName: fallback?.name ?? '', typeName: '', vals: {} as Record<number, MeterVal> };
@@ -338,26 +393,32 @@ export class ParamEditingStore {
     p.norm = v;
     const c = this.selected;
     if (!c || (!c.pack && !this.#host.paramsWithoutPack)) return;
-    if (p.id != null && c.effectId != null) {
-      const m = this.meters[c.effectId];
+    // A cross-block param carries its owner effectId — write THERE, never to the open block (its pid
+    // would address a different parameter: GLOBAL pid 119 is METLEVEL1, CONTROLLERS pid 119 is LFO1BETA).
+    const eid = p.effectId ?? c.effectId;
+    if (p.id != null && eid != null && eid === c.effectId) {
+      const m = this.meters[eid];
       if (m && m.vals[p.id]) {
         m.vals[p.id] = { ...m.vals[p.id], norm: v, value: paramValue({ norm: v, min: p.min, max: p.max, unit: p.unit, log: p.log }) };
-        this.meters = { ...this.meters, [c.effectId]: { ...m } };
+        this.meters = { ...this.meters, [eid]: { ...m } };
       }
     }
-    if (p.id == null) return;
-    history.recordGesture({ kind: 'param', eid: c.effectId, paramId: p.id, continuous: true, from, to: v, block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
-    clearTimeout(this.#sendTimers[p.id]);
-    const eid = c.effectId, pid = p.id as number;
-    this.#sendTimers[pid] = setTimeout(() => (this.#host.legacyAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}), 60);
+    if (p.id == null || eid == null) return;
+    history.recordGesture({ kind: 'param', eid, paramId: p.id, continuous: true, from, to: v, block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
+    const pid = p.id as number;
+    const key = `${eid}:${pid}`;
+    clearTimeout(this.#sendTimers[key]);
+    this.#sendTimers[key] = setTimeout(() => (this.#host.legacyAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}), 60);
   };
   setEnum = (e: EnumParam, value: number) => {
     const from = e.value;
     e.value = value;
     const c = this.selected;
     if (!c || (!c.pack && !this.#host.paramsWithoutPack)) return;
-    if (from !== value) history.record({ kind: 'param', eid: c.effectId, paramId: e.id, continuous: false, from, to: value, block: c.display, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
-    (this.#host.legacyAm4 ? forgefx.am4SetParamValue(c.effectId, e.id, value) : forgefx.setParam(c.effectId, e.id, value, false)).catch(() => {});
+    const eid = e.effectId ?? c.effectId;
+    if (eid == null) return;
+    if (from !== value) history.record({ kind: 'param', eid, paramId: e.id, continuous: false, from, to: value, block: c.display, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
+    (this.#host.legacyAm4 ? forgefx.am4SetParamValue(eid, e.id, value) : forgefx.setParam(eid, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {
     const c = cell ?? this.selected;
@@ -426,6 +487,13 @@ export class ParamEditingStore {
     if (this.selected?.effectId === effectId) {
       const p = this.params.find((x) => x.id === paramId);
       if (p && p.norm !== norm) { p.norm = norm; this.params = [...this.params]; }
+    } else {
+      // A cross-referenced block (e.g. GLOBAL) echoed back — refresh its hydrated param in place.
+      const cp = this.crossParams[effectId];
+      if (cp) {
+        const p = cp.named.find((x) => x.id === paramId);
+        if (p && p.norm !== norm) { p.norm = norm; this.crossParams = { ...this.crossParams }; }
+      }
     }
     const m = this.meters[effectId];
     if (m) {

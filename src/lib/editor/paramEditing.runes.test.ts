@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, Layout } from '$lib/device/grid';
-import type { EnumParam, NamedParam } from '$lib/api/types';
+import type { DeviceLayout, EnumParam, NamedParam } from '$lib/api/types';
 import type { ParamEditingHost } from './paramEditing.svelte';
 
 const setParamReq = vi.fn(async (..._args: unknown[]) => ({}));
 const setBypass = vi.fn(async (..._args: unknown[]) => ({}));
 const setChannel = vi.fn(async (..._args: unknown[]) => ({}));
-type ParamsResult = { named: NamedParam[]; enums: EnumParam[]; type: { value: number; name: string } | null; slug: string | null; layout: null };
+type ParamsResult = { named: NamedParam[]; enums: EnumParam[]; type: { value: number; name: string } | null; slug: string | null; layout: DeviceLayout | null };
 const emptyParams = (): ParamsResult => ({ named: [], enums: [], type: null, slug: null, layout: null });
 const blockParams = vi.fn(async (..._args: unknown[]): Promise<ParamsResult> => emptyParams());
 const monitors = vi.fn(async () => ({}));
@@ -206,6 +206,97 @@ describe('selection and refresh', () => {
     expect(store.selected?.effectId).toBe(1);
     store.virtual = null;
     expect(store.selected?.effectId).toBe(7);
+  });
+});
+
+describe('cross-block params', () => {
+  const crossLayout = (): DeviceLayout => ({
+    family: 'CONTROLLERS',
+    pages: [
+      {
+        name: 'Tempo/Pitch',
+        rows: [
+          {
+            section: 'parameters',
+            controls: [
+              { label: 'Metronome', paramName: 'GLOBAL_METRONOME', paramId: 14878, widget: 'toggle', rawWidget: 'toggle', crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'GLOBAL_METRONOME', paramId: 14878, effectId: 1 } },
+              { label: 'Output 1', paramName: 'GLOBAL_METLEVEL1', paramId: 119, widget: 'knob', rawWidget: 'knob', crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: 'GLOBAL_METLEVEL1', paramId: 119, effectId: 1 } }
+            ]
+          }
+        ]
+      }
+    ]
+  });
+
+  it('hydrates a cross-referenced block from the layout and resolves by paramName (not pid)', async () => {
+    blockParams.mockImplementation(async (eid: unknown) => {
+      if (eid === 7) return { named: [], enums: [], type: null, slug: 'controllers', layout: crossLayout() };
+      if (eid === 1) {
+        return {
+          named: [{ id: 119, name: 'Output 1', paramName: 'GLOBAL_METLEVEL1', value: 0, norm: 0.5 }],
+          enums: [{ id: 14878, name: 'Metronome', paramName: 'GLOBAL_METRONOME', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }],
+          type: null,
+          slug: 'global',
+          layout: null
+        };
+      }
+      return emptyParams();
+    });
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METRONOME')).toBeTruthy());
+    // The cross fetch must observe:false so the device-edit poll target stays on the open block.
+    expect(blockParams).toHaveBeenCalledWith(1, { observe: false });
+    const met = store.crossParamFor(1, 'GLOBAL_METRONOME') as EnumParam;
+    expect(met.id).toBe(14878);
+    expect(met.effectId).toBe(1);
+  });
+
+  it('routes a cross param write to its owner effectId, not the open block', async () => {
+    blockParams.mockImplementation(async (eid: unknown) => {
+      if (eid === 7) return { named: [], enums: [], type: null, slug: 'controllers', layout: crossLayout() };
+      if (eid === 1) {
+        return {
+          named: [{ id: 119, name: 'Output 1', paramName: 'GLOBAL_METLEVEL1', value: 0, norm: 0.5 }],
+          enums: [{ id: 14878, name: 'Metronome', paramName: 'GLOBAL_METRONOME', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }],
+          type: null,
+          slug: 'global',
+          layout: null
+        };
+      }
+      return emptyParams();
+    });
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METRONOME')).toBeTruthy());
+    const level = store.crossParamFor(1, 'GLOBAL_METLEVEL1') as NamedParam;
+    const met = store.crossParamFor(1, 'GLOBAL_METRONOME') as EnumParam;
+    vi.useFakeTimers();
+    store.setParam(level, 0.8);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(setParamReq).toHaveBeenCalledWith(1, 119, 0.8, true);
+    store.setEnum(met, 1);
+    await Promise.resolve();
+    expect(setParamReq).toHaveBeenCalledWith(1, 14878, 1, false);
+  });
+
+  it('refreshes hydrated cross params on a grid (preset) reload rather than blanking them', async () => {
+    let globalReads = 0;
+    blockParams.mockImplementation(async (eid: unknown) => {
+      if (eid === 7) return { named: [], enums: [], type: null, slug: 'controllers', layout: crossLayout() };
+      if (eid === 1) {
+        globalReads++;
+        return { named: [{ id: 119, name: 'Output 1', paramName: 'GLOBAL_METLEVEL1', value: 0, norm: 0.5 }], enums: [], type: null, slug: 'global', layout: null };
+      }
+      return emptyParams();
+    });
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METLEVEL1')).toBeTruthy());
+    expect(globalReads).toBe(1);
+    store.onGridLoaded();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METLEVEL1')).toBeTruthy());
+    expect(globalReads).toBe(2);
   });
 });
 

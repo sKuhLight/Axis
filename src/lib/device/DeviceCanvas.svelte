@@ -13,7 +13,7 @@
   //     (`graphKind`) — both tables live in `deviceWidgets.ts`, next to the sizes;
   //   • how a control binds to a live parameter, by the device-true `paramId` the layout carries.
   import { getEditorSurface } from '$lib/editor/editorSurface';
-  import { deviceSession } from '$lib/editor/editorClients.svelte';
+  import { deviceSession, paramEditing } from '$lib/editor/editorClients.svelte';
   import { modifierBindings } from '$lib/editor/modifierBindings.svelte';
   import { placeLayout, DEVICE_SCALE, type PlacedControl, type PlacedPage } from './deviceCanvas';
   import { widgetView, graphKind, graphSlotsForPage, dropdownFieldHeight } from './deviceWidgets';
@@ -115,8 +115,22 @@
     for (const e of editor.enums) if (e.paramName) m.set(e.paramName, e);
     return m;
   });
-  const paramFor = (c: LayoutControl): NamedParam | EnumParam | undefined =>
-    c.paramName ? bySymbol.get(c.paramName) : undefined;
+  // A control bound to ANOTHER block (the Controllers page's global metronome) resolves against that
+  // block's hydrated params, never the open block's — a pid/name join would bind the wrong effect
+  // (GLOBAL pid 119 is METLEVEL1, CONTROLLERS pid 119 is LFO1BETA). Only when the cross effect differs
+  // from the open block; otherwise the open block's own params are the source (self-referencing refs).
+  const crossEidFor = (c: LayoutControl): number | null => {
+    const eid = c.crossBlock?.effectId;
+    return typeof eid === 'number' && eid !== editor.selected?.effectId ? eid : null;
+  };
+  const paramFor = (c: LayoutControl): NamedParam | EnumParam | undefined => {
+    const xid = crossEidFor(c);
+    if (xid != null && c.paramName) {
+      const cp = paramEditing.crossParamFor(xid, c.paramName);
+      if (cp) return cp;
+    }
+    return c.paramName ? bySymbol.get(c.paramName) : undefined;
+  };
   const named = (c: LayoutControl): NamedParam | undefined => {
     const p = paramFor(c);
     return p && !('options' in p) ? p : undefined;
@@ -206,7 +220,7 @@
   };
   /** A param the device also reports as a MONITOR is a reading, not a control — it must never render
    *  as a draggable knob (a drag would WRITE to it). */
-  const isMonitor = (c: LayoutControl) => c.paramId != null && blockMons.has(c.paramId);
+  const isMonitor = (c: LayoutControl) => crossEidFor(c) == null && c.paramId != null && blockMons.has(c.paramId);
 
   // ── how to draw one control ──
   // A view is chosen only after the binding is known: an unbound or `unusable` param the device draws
@@ -226,10 +240,12 @@
 
   // ── modifier badges ──
   // A control has a modifier attached when a modifier slot's source points at its (effectId, paramId).
+  // Modifiers bind to the OPEN block's (effectId, paramId); a cross-block control's target lives on the
+  // other effect, so its modifier badge/flyout is suppressed rather than shown against the wrong block.
   const modded = (c: LayoutControl) =>
-    c.paramId != null && modifierBindings.has(editor.selected?.effectId, c.paramId);
+    crossEidFor(c) == null && c.paramId != null && modifierBindings.has(editor.selected?.effectId, c.paramId);
   const modVisualization = (c: LayoutControl) =>
-    c.paramId == null ? null : modifierBindings.visualization(editor.selected?.effectId, c.paramId);
+    crossEidFor(c) != null || c.paramId == null ? null : modifierBindings.visualization(editor.selected?.effectId, c.paramId);
 
   // ── value plumbing ──
   const valText = (p: NamedParam | undefined) => (p ? fmtControlValue(p) : '–');
@@ -354,6 +370,9 @@
     const pc = menuTarget;
     if (!pc) return [];
     const c = pc.control;
+    // Pinning and modifier-assignment both address the OPEN block; a cross-block control's target is on
+    // another effect, so offer no context actions for it rather than write to the wrong one.
+    if (crossEidFor(c) != null) return [];
     const items: WorkbenchMenuItem[] = [];
     const pinId = paramFor(c)?.id ?? c.paramId;
     if (wb && pinId != null) {
