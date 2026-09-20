@@ -50,8 +50,8 @@ describe('visible shortcuts', () => {
   });
 
   it('offers only the global tuner key off the Grid page when the device has one', () => {
-    // Tap tempo (`B`) is grid-only regardless of the device; only tuner (`T`) is global.
-    expect(chords(false, true, true)).toEqual(['?', 'Esc', 'T']);
+    // Tap tempo (`B`) is grid-only regardless of the device; tuner (`T`) and metronome (`M`) are global.
+    expect(chords(false, true, true)).toEqual(['?', 'Esc', 'T', 'M']);
   });
 
   it('keeps a device-gated key out until the device supports it', () => {

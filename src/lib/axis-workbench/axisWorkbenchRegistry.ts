@@ -50,6 +50,7 @@ import AxisNewPresetWidget from './widgets/AxisNewPresetWidget.svelte';
 import AxisSearchWidget from './widgets/AxisSearchWidget.svelte';
 import AxisSectionHeaderWidget from './widgets/AxisSectionHeaderWidget.svelte';
 import AxisTelemetryWidget from './widgets/AxisTelemetryWidget.svelte';
+import AxisMetronomeWidget from './widgets/AxisMetronomeWidget.svelte';
 import AxisTempoWidget from './widgets/AxisTempoWidget.svelte';
 import AxisTunerWidget from './widgets/AxisTunerWidget.svelte';
 import AxisUndoRedoWidget from './widgets/AxisUndoRedoWidget.svelte';
@@ -132,6 +133,7 @@ const AXIS_WIDGET_COMPONENTS: Record<string, WorkbenchWidgetComponent> = {
   'axis.newPreset': AxisNewPresetWidget,
   'axis.tuner': AxisTunerWidget,
   'axis.tempo': AxisTempoWidget,
+  'axis.metronome': AxisMetronomeWidget,
   'axis.cpu': AxisCpuWidget,
   'axis.save': AxisSaveWidget,
   'axis.search': AxisSearchWidget,

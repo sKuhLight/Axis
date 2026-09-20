@@ -123,7 +123,8 @@ export function createAxisTopBarWidgets(): Record<string, WidgetInstance> {
     'axis.widget.save': widget('axis.widget.save', 'axis.save', 'top.left', 3, { state: widgetState(95) }),
     'axis.widget.tuner': widget('axis.widget.tuner', 'axis.tuner', 'top.right', 2, { state: widgetState(70) }),
     'axis.widget.tempo': widget('axis.widget.tempo', 'axis.tempo', 'top.right', 3),
-    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 4)
+    'axis.widget.metronome': widget('axis.widget.metronome', 'axis.metronome', 'top.right', 4),
+    'axis.widget.cpu': widget('axis.widget.cpu', 'axis.cpu', 'top.right', 5)
   };
 }
 
@@ -451,6 +452,27 @@ export function ensureAxisNewPresetWidgetPlacement(doc: WorkbenchDocument): Work
     layout.widgets['axis.widget.newPreset'] = widget('axis.widget.newPreset', 'axis.newPreset', scenes.zone, scenes.order + 1, {
       state: widgetState(88)
     });
+  }
+  return doc;
+}
+
+/**
+ * Seed the metronome chip onto a persisted document minted before it existed. It slots into
+ * the top bar directly after the tap-tempo widget (the two are a pair); a layout with no
+ * top-bar tempo widget (a custom bar the user built) is left alone. Idempotent.
+ */
+export function ensureAxisMetronomeWidgetPlacement(doc: WorkbenchDocument): WorkbenchDocument {
+  for (const layout of Object.values(doc.layouts ?? {})) {
+    if (!layout || typeof layout !== 'object' || !layout.widgets) continue;
+    if (layout.widgets['axis.widget.metronome']) continue;
+    const tempo = Object.values(layout.widgets).find(
+      (instance) => instance?.type === 'axis.tempo' && isAxisTopBarZone(instance.zone)
+    );
+    if (!tempo) continue;
+    for (const instance of Object.values(layout.widgets)) {
+      if (instance && instance.zone === tempo.zone && instance.order >= tempo.order + 1) instance.order += 1;
+    }
+    layout.widgets['axis.widget.metronome'] = widget('axis.widget.metronome', 'axis.metronome', tempo.zone, tempo.order + 1);
   }
   return doc;
 }

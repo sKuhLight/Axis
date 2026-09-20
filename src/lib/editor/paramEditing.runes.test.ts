@@ -46,6 +46,7 @@ vi.mock('./layouts', () => ({
 vi.mock('$lib/graphs/eq', () => ({ geqBandsFromLayout: () => [] }));
 
 const { ParamEditingStore } = await import('./paramEditing.svelte');
+const { metronome } = await import('./metronome.svelte');
 
 const cell = (): Cell => ({ row: 0, col: 1, kind: 'block', effectId: 7, display: 'Amp 1', pack: 'Amp', color: '#fff', fromRows: [], bypassed: false, channel: 'A' });
 const emptyLayout = (): Layout => ({ cells: [], shunts: [], rows: 4, cols: 12, name: '', model: '', crcValid: true });
@@ -82,6 +83,8 @@ beforeEach(() => {
   setChannel.mockResolvedValue({});
   blockParams.mockResolvedValue(emptyParams());
   monitors.mockResolvedValue({});
+  metronome.applySwitch(false);
+  metronome.applyLevel(-18);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -309,6 +312,39 @@ describe('cross-block params', () => {
     // GLOBAL (effectId 1) is not a preset grid block, so neither write may dirty the preset.
     expect(recordGesture).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  const globalParams = (switchValue = 0, level = 0) => ({
+    named: [{ id: 119, name: 'Output 1', paramName: 'GLOBAL_METLEVEL1', value: level, norm: 0.5, min: -40, max: 20 }],
+    enums: [{ id: 14878, name: 'Metronome', paramName: 'GLOBAL_METRONOME', value: switchValue, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }],
+    type: null as null,
+    slug: 'global',
+    layout: null
+  });
+  const controllersWith = () => ({ named: [], enums: [], type: null, slug: 'controllers', layout: crossLayout() });
+
+  it('mirrors the Controllers switch into the store, and a store change back into the switch', async () => {
+    blockParams.mockImplementation(async (eid: unknown) => (eid === 7 ? controllersWith() : eid === 1 ? globalParams(1) : emptyParams()));
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METRONOME')).toBeTruthy());
+    // Device/Controllers switch is ON → the top-bar widget lights without the modal being touched.
+    expect(metronome.running).toBe(true);
+    // Stopping from the modal/widget flips the Controllers switch back off.
+    metronome.stop();
+    expect((store.crossParamFor(1, 'GLOBAL_METRONOME') as EnumParam).value).toBe(0);
+    expect(metronome.running).toBe(false);
+  });
+
+  it('lights the store when the Controllers switch is toggled on, and dims it when off', async () => {
+    blockParams.mockImplementation(async (eid: unknown) => (eid === 7 ? controllersWith() : eid === 1 ? globalParams(0) : emptyParams()));
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METRONOME')).toBeTruthy());
+    expect(metronome.running).toBe(false);
+    const met = store.crossParamFor(1, 'GLOBAL_METRONOME') as EnumParam;
+    store.setEnum(met, 1);
+    expect(metronome.running).toBe(true);
   });
 
   it('still records a cross edit whose owner block IS in the preset grid', async () => {

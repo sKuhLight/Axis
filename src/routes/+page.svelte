@@ -13,6 +13,8 @@
   } from '$lib/editor/editorClients.svelte';
   import { history } from '$lib/editor/history.svelte';
   import { tapTempo } from '$lib/editor/tapTempo.svelte';
+  import { metronome } from '$lib/editor/metronome.svelte';
+  import MetronomeOverlay from '$lib/editor/MetronomeOverlay.svelte';
   import HistoryPanel from '$lib/editor/HistoryPanel.svelte';
   import CommandPalette from '$lib/shell/CommandPalette.svelte';
   import CabPicker from '$lib/device/CabPicker.svelte';
@@ -67,6 +69,11 @@
     const tw = setInterval(() => presetBuffer.watchPreset(), watchMs);
     return () => { clearInterval(tp); clearInterval(tw); };
   });
+  // Light the metronome widget from the device's real switch state once the link is ready, so it
+  // mirrors the Controllers Tempo/Pitch toggle even before the modal is ever opened.
+  $effect(() => {
+    if (deviceSession.isV2 && deviceSession.conn.state === 'online') void metronome.syncFromDevice();
+  });
   // Web build: start the app the moment the in-page runtime (direct)
   // goes live. Desktop starts immediately in onMount.
   $effect(() => { if (directBoot.active && directBoot.phase === 'ready') startApp(); });
@@ -92,7 +99,16 @@
       // opens a cheat sheet that itself lists only the keys available at that moment.
       const onGrid = axisWorkbenchController.activePage?.id === AXIS_PAGE_GRID;
       const onPresetBrowser = axisWorkbenchController.activePage?.id === AXIS_PAGE_PRESET_BROWSER;
-      if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (!editing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'm' || e.key === 'M')) {
+        // Bare `m` toggles the metronome — global, the counterpart to `t` for the tuner.
+        if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
+        e.preventDefault();
+        overlays.toggle('metronome');
+      } else if (!editing && overlays.isOpen('metronome') && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
+        // Space is scoped to the modal while it is open, so it never also bypasses a grid block.
+        e.preventDefault();
+        metronome.toggle();
+      } else if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void (e.shiftKey ? history.redo() : history.undo());
       } else if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
@@ -193,6 +209,7 @@
   <AxisPresetBrowserSearchOverlay />
   <TunerOverlay />
   <TapTempoOverlay />
+  <MetronomeOverlay />
   <ShortcutsOverlay />
   <CachePrompt />
   <ColorLabelsPrompt />

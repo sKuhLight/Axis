@@ -41,6 +41,7 @@ describe('Axis Workbench integration contracts', () => {
       'axis.newPreset',
       'axis.tuner',
       'axis.tempo',
+      'axis.metronome',
       'axis.cpu',
       'axis.save',
       'axis.search',

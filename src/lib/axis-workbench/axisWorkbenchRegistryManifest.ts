@@ -38,6 +38,7 @@ export const AXIS_WORKBENCH_WIDGET_TYPES = [
   'axis.newPreset',
   'axis.tuner',
   'axis.tempo',
+  'axis.metronome',
   'axis.cpu',
   'axis.save',
   'axis.search',

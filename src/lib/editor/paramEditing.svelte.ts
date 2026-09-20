@@ -8,6 +8,7 @@ import { paramValue } from '$lib/ui/format';
 import type { DecodedBlockFile, DeviceLayout, EnumParam, MeterVal, NamedParam, ResolvedTab, TabDef } from '$lib/api/types';
 import { history } from './history.svelte';
 import { loadLayouts, loadSwipe, newTabId, resolveTabs, saveLayouts, saveSwipe, type SwipeCtrl } from './layouts';
+import { isMetronomeLevel, isMetronomeSwitch, metronome, METRONOME_DEVICE } from './metronome.svelte';
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
@@ -27,7 +28,38 @@ export interface ParamEditingHost {
 
 export class ParamEditingStore {
   #host: ParamEditingHost;
-  constructor(host: ParamEditingHost) { this.#host = host; }
+  constructor(host: ParamEditingHost) {
+    this.#host = host;
+    // The metronome switch/level appear on two surfaces — this slice's Controllers Tempo/Pitch page
+    // (via `crossParams`) and the metronome modal/widget. Mirror a modal/widget change back into the
+    // hydrated cross params so the Controllers control flips immediately.
+    metronome.onChange(() => this.#mirrorMetronome());
+  }
+
+  #seedMetronomeFromCross = () => {
+    const global = this.crossParams[METRONOME_DEVICE.switchEid];
+    if (!global) return;
+    const sw = global.enums.find((e) => e.paramName === 'GLOBAL_METRONOME');
+    if (sw) metronome.applySwitch(sw.value > 0);
+    const lvl = global.named.find((p) => p.paramName === 'GLOBAL_METLEVEL1');
+    if (lvl) metronome.applyLevel(lvl.value);
+  };
+
+  #mirrorMetronome = () => {
+    const cp = this.crossParams[METRONOME_DEVICE.switchEid];
+    if (!cp) return;
+    let changed = false;
+    const sw = cp.enums.find((e) => e.paramName === 'GLOBAL_METRONOME');
+    const on = metronome.running ? 1 : 0;
+    if (sw && sw.value !== on) { sw.value = on; changed = true; }
+    const lvl = cp.named.find((p) => p.paramName === 'GLOBAL_METLEVEL1');
+    if (lvl && lvl.value !== metronome.level) {
+      lvl.value = metronome.level;
+      if (lvl.min != null && lvl.max != null) lvl.norm = (metronome.level - lvl.min) / (lvl.max - lvl.min);
+      changed = true;
+    }
+    if (changed) this.crossParams = { ...this.crossParams };
+  };
 
   selKey = $state<string | null>(null);
   editorOpen = $state(false);
@@ -271,6 +303,7 @@ export class ParamEditingStore {
             enums: (r.enums ?? []).map((e) => ({ ...e, effectId: eid }))
           }
         };
+        this.#seedMetronomeFromCross();
       } catch { /* cross params are best-effort */ }
       finally { this.#crossLoading.delete(eid); }
     }));
@@ -412,6 +445,8 @@ export class ParamEditingStore {
     if (p.id == null || eid == null) return;
     if (this.#isPresetParam(p)) history.recordGesture({ kind: 'param', eid, paramId: p.id, continuous: true, from, to: v, block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
     const pid = p.id as number;
+    if (isMetronomeLevel(eid, p.paramName))
+      metronome.applyLevel(p.min != null && p.max != null ? p.min + v * (p.max - p.min) : metronome.level);
     const key = `${eid}:${pid}`;
     clearTimeout(this.#sendTimers[key]);
     this.#sendTimers[key] = setTimeout(() => (this.#host.legacyAm4 ? forgefx.am4SetParamNorm(eid, pid, v) : forgefx.setParam(eid, pid, v, true)).catch(() => {}), 60);
@@ -424,6 +459,7 @@ export class ParamEditingStore {
     const eid = e.effectId ?? c.effectId;
     if (eid == null) return;
     if (from !== value && this.#isPresetParam(e)) history.record({ kind: 'param', eid, paramId: e.id, continuous: false, from, to: value, block: c.display, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
+    if (isMetronomeSwitch(eid, e.paramName)) metronome.applySwitch(value > 0);
     (this.#host.legacyAm4 ? forgefx.am4SetParamValue(eid, e.id, value) : forgefx.setParam(eid, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {

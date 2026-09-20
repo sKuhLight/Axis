@@ -44,7 +44,8 @@ export const SHORTCUT_TOKENS = new Set([
   'P',
   '/',
   'H',
-  'V'
+  'V',
+  'M'
 ]);
 
 export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
@@ -74,6 +75,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     title: 'Tools',
     items: [
       { keys: ['T'], label: 'Tuner', requires: 'tuner' },
+      { keys: ['M'], label: 'Metronome', requires: 'tempo' },
       { keys: ['B'], label: 'Tap tempo', scope: 'grid', requires: 'tempo' },
       { keys: ['Q'], label: 'Quick Build', scope: 'grid' },
       { keys: ['/'], label: 'Find a block control', scope: 'grid' },

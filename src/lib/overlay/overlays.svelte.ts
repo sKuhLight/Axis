@@ -34,6 +34,7 @@ export type OverlayId =
   | 'linkArm'
   | 'blockEditor'
   | 'tapTempo'
+  | 'metronome'
   | 'shortcuts'
   | 'deviceTools'
   | 'axisHub'
@@ -67,6 +68,7 @@ const ESCAPE_ORDER: Record<OverlayId, number> = {
   linkArm: 90,
   blockEditor: 100,
   tapTempo: 110,
+  metronome: 115,
   shortcuts: 120,
   deviceTools: 200,
   axisHub: 220

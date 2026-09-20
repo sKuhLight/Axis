@@ -21,6 +21,8 @@ export const AXIS_WIDGET_EST_WIDTHS: Record<string, number> = {
   'axis.newPreset': 44,
   'axis.tuner': 78,
   'axis.tempo': 82,
+  // Metronome chip: glyph + "MET", sits directly after tap tempo.
+  'axis.metronome': 78,
   'axis.cpu': 124,
   // The Save widget widens into a filled amber pill while hot — "AUDITIONING · Save"
   // (audition) is the widest state, so its estimate tracks that (it is a keep-type
