@@ -323,6 +323,18 @@ describe('ensureAxisStatsPage — self-heal the Insights page', () => {
     expect(JSON.stringify(ensureAxisStatsPage(once).layouts)).toBe(before);
   });
 
+  it('renames the retired "Statistics" label on the page, panel and nav entry', () => {
+    const doc = createAxisWorkbenchDefaultDocument();
+    const layout = Object.values(doc.layouts)[0];
+    layout.pages[AXIS_PAGE_STATS].label = 'Statistics';
+    layout.panels['axis.stats'].title = 'Statistics';
+    layout.navigation.entries.stats.label = 'Statistics';
+    const healed = Object.values(ensureAxisStatsPage(doc).layouts)[0];
+    expect(healed.pages[AXIS_PAGE_STATS].label).toBe('Insights');
+    expect(healed.panels['axis.stats'].title).toBe('Insights');
+    expect(healed.navigation.entries.stats.label).toBe('Insights');
+  });
+
   it('leaves an already-seeded document untouched', () => {
     const doc = createAxisWorkbenchDefaultDocument();
     const before = JSON.stringify(doc.layouts);

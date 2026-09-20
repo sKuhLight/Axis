@@ -44,6 +44,8 @@ export const AXIS_PAGE_SETUP = 'axis.page.setup';
 /** Library insights page — a read-only roll-up of the preset library cache. */
 export const AXIS_PAGE_STATS = 'axis.page.stats';
 const AXIS_STATS_PANEL_ID = 'axis.stats';
+/** The label the page/panel/nav entry shipped with before the Statistics → Insights rename. */
+const AXIS_STATS_RETIRED_LABEL = 'Statistics';
 
 /**
  * Cross-device preset-converter page (M4 · META-24). NOT a nav-bound seed page — it has no navigation
@@ -548,7 +550,8 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
  * marker-free (same reason as `ensureAxisConvertPage`): a document persisted before Insights shipped
  * already carries the seed-pages marker, so `ensureAxisSeedPages` leaves it alone; this self-heals the
  * page on load. Inserted at the end of the main entries — just above the pinned Axis footer — so it
- * reads as the last analysis page before the account action.
+ * reads as the last analysis page before the account action. Also rewrites the retired "Statistics"
+ * label on the page, panel and nav entry (the seed rename only fixes new documents).
  */
 export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
   for (const layout of Object.values(doc.layouts ?? {})) {
@@ -584,6 +587,14 @@ export function ensureAxisStatsPage(doc: WorkbenchDocument): WorkbenchDocument {
         else layout.navigation.order.push('stats');
       }
     }
+    // Heal the pre-rename label on documents persisted before Statistics became Insights: the
+    // adds above only fire when an entry is missing, so a persisted "Statistics" survives otherwise.
+    const statsPage = layout.pages[AXIS_PAGE_STATS];
+    if (statsPage?.label === AXIS_STATS_RETIRED_LABEL) statsPage.label = NAV_LABELS.stats;
+    const statsPanel = layout.panels[AXIS_STATS_PANEL_ID];
+    if (statsPanel?.title === AXIS_STATS_RETIRED_LABEL) statsPanel.title = NAV_LABELS.stats;
+    const statsNav = layout.navigation.entries.stats;
+    if (statsNav?.label === AXIS_STATS_RETIRED_LABEL) statsNav.label = NAV_LABELS.stats;
   }
   return doc;
 }
