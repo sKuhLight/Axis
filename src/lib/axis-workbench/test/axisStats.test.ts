@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { PresetSummary, PresetSummaryBlock } from '$lib/api/types';
-import { computeAxisStats, familyStats, topAmpDrivePairings, type AxisStatsEntry } from '../axisStats';
+import type { BlockTypeOption, PresetSummary, PresetSummaryBlock } from '$lib/api/types';
+import {
+  collectLibraryModels,
+  computeAxisStats,
+  familyStats,
+  modelRowsForFamily,
+  topAmpDrivePairings,
+  type AxisStatsEntry
+} from '../axisStats';
 
 function block(slug: string | null, name = slug ?? 'block'): PresetSummaryBlock {
   return { effectId: 1, slug, name, instance: null };
@@ -144,5 +151,61 @@ describe('familyStats', () => {
     const stats = computeAxisStats([entry('a', { models: { amp: ['USA Lead'] } })]);
     expect(familyStats(stats, 'AMP')?.slug).toBe('amp');
     expect(familyStats(stats, 'cab')).toBeUndefined();
+  });
+});
+
+describe('collectLibraryModels — all sources, one count per preset', () => {
+  it('folds every entry regardless of source and keeps the first-seen casing', () => {
+    const models = collectLibraryModels([
+      entry('dev:1', { models: { amp: ['Plexi 100W', 'HIPOWER'] } }),
+      entry('file:Lead.syx', { models: { amp: ['hipower'] } }),
+      entry('conv:1', { models: { amp: ['HIPOWER'] } })
+    ]);
+    const amp = models.get('amp')!;
+    expect(amp.get('hipower')).toEqual({ name: 'HIPOWER', count: 3 });
+    expect(amp.get('plexi 100w')).toEqual({ name: 'Plexi 100W', count: 1 });
+  });
+
+  it('counts a model once per preset even when listed twice', () => {
+    const models = collectLibraryModels([entry('a', { models: { amp: ['Plexi 100W', 'plexi 100w'] } })]);
+    expect(models.get('amp')!.get('plexi 100w')).toEqual({ name: 'Plexi 100W', count: 1 });
+  });
+});
+
+describe('modelRowsForFamily — the two rows', () => {
+  const option = (name: string, manufacturer: string | null = null, basedOn: string | null = null): BlockTypeOption => ({
+    value: 1,
+    name,
+    manufacturer,
+    basedOn
+  });
+
+  const used = new Map([
+    ['plexi 100w', { name: 'Plexi 100W', count: 5 }],
+    ['hipower', { name: 'HIPOWER', count: 3 }],
+    ['friedman be', { name: 'FRIEDMAN BE', count: 1 }]
+  ]);
+
+  it('splits library-only models (foreign, most-used first) from device-only models (untried)', () => {
+    const rows = modelRowsForFamily(used, [option('Plexi 100W'), option('USA MK IV', 'Mesa/Boogie', 'Mark IV'), option('SHIVER CLEAN')]);
+    expect(rows.foreign).toEqual([
+      { name: 'HIPOWER', count: 3 },
+      { name: 'FRIEDMAN BE', count: 1 }
+    ]);
+    expect(rows.untried).toEqual([
+      { name: 'SHIVER CLEAN', realName: '' },
+      { name: 'USA MK IV', realName: 'Mesa/Boogie Mark IV' }
+    ]);
+  });
+
+  it('matches case-insensitively and treats a missing used map as empty', () => {
+    const rows = modelRowsForFamily(undefined, [option('plexI 100W')]);
+    expect(rows.foreign).toEqual([]);
+    expect(rows.untried).toEqual([{ name: 'plexI 100W', realName: '' }]);
+  });
+
+  it('drops blank device option names', () => {
+    const rows = modelRowsForFamily(new Map(), [option('  '), option('Brit 800')]);
+    expect(rows.untried).toEqual([{ name: 'Brit 800', realName: '' }]);
   });
 });

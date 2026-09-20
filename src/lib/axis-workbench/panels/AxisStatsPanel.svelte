@@ -5,9 +5,18 @@
   import { library } from '$lib/preset/library.svelte';
   import { deviceSession } from '$lib/editor/editorClients.svelte';
   import { catFor } from '$lib/device/catalog';
+  import { deviceRealNames } from '$lib/device/deviceRealNames.svelte';
   import { axisPbCatColor, axisPbCatLabel } from '../presetBrowser/presetBrowserWorkbenchRowChips';
-  import { computeAxisStats, topAmpDrivePairings, type AxisStatsFamily } from '../axisStats';
-  import type { PanelInstance } from '../../workbench';
+  import { axisPresetBrowserWorkbenchController } from '../presetBrowser/presetBrowserWorkbenchController';
+  import { AXIS_PAGE_PRESET_BROWSER } from '../axisWorkbenchPages';
+  import {
+    collectLibraryModels,
+    computeAxisStats,
+    modelRowsForFamily,
+    topAmpDrivePairings,
+    type AxisStatsFamily
+  } from '../axisStats';
+  import { getOptionalWorkbenchContext, type PanelInstance } from '../../workbench';
 
   let { panel: _panel }: { panel: PanelInstance } = $props();
 
@@ -26,6 +35,42 @@
   const activeFamily = $derived.by<AxisStatsFamily | undefined>(
     () => families.find((family) => family.slug === selectedSlug) ?? families[0]
   );
+
+  // The two rows under the histogram read the WHOLE library (every source), unlike the histogram
+  // itself, which stays device-preset-only. `foreign` = library models the device lacks; `untried` =
+  // device models no library preset uses.
+  const libraryModels = $derived(collectLibraryModels(library.entries));
+  const deviceTypes = $derived.by(() => {
+    const slug = activeFamily?.slug;
+    return slug ? deviceRealNames.typesFor(slug) : undefined;
+  });
+  const modelRows = $derived.by(() => {
+    const slug = activeFamily?.slug;
+    if (!slug || !Array.isArray(deviceTypes)) return null;
+    return modelRowsForFamily(libraryModels.get(slug), deviceTypes);
+  });
+  // "Not used anywhere" can run to hundreds of models, so it renders as a compact name list capped
+  // at this many, not as chips. The cap is per family and collapses when the family changes.
+  const UNTRIED_VISIBLE_LIMIT = 32;
+  let untriedExpanded = $state(false);
+  const visibleUntried = $derived.by(() =>
+    modelRows ? (untriedExpanded ? modelRows.untried : modelRows.untried.slice(0, UNTRIED_VISIBLE_LIMIT)) : []
+  );
+  // Fetch the active family's model catalog (idempotent; shares the cache with preset-browser search).
+  $effect(() => {
+    const slug = activeFamily?.slug;
+    if (slug) deviceRealNames.loadTypes(slug);
+  });
+  $effect(() => {
+    void activeFamily?.slug;
+    untriedExpanded = false;
+  });
+
+  /** Find the library presets that reference a model the device can't play. */
+  function searchModel(name: string) {
+    axisPresetBrowserWorkbenchController.setQuery(name);
+    getOptionalWorkbenchContext()?.controller.activatePage(AXIS_PAGE_PRESET_BROWSER);
+  }
 
   // Catalogue keys differ only where the browser's display label differs from the catalog's pack key.
   const SLUG_PACK: Record<string, string> = { peq: 'Peq', geq: 'Geq', multitap: 'Multitap', megatap: 'Megatap' };
@@ -128,6 +173,61 @@
             {:else}
               <p class="none">No model names were decoded for this family.</p>
             {/if}
+
+            <div class="model-rows">
+              {#if Array.isArray(deviceTypes) && modelRows}
+                <div class="mrow foreign">
+                  <div class="mrow-head">
+                    <span class="mrow-dot" style={`background:${colorOf(activeFamily.slug)}`}></span>
+                    <span class="mrow-title">In your library but not this device</span>
+                    <span class="mrow-sub">{modelRows.foreign.length} {modelRows.foreign.length === 1 ? 'model' : 'models'}</span>
+                  </div>
+                  {#if modelRows.foreign.length}
+                    <div class="chips">
+                      {#each modelRows.foreign as model (model.name)}
+                        <button class="mchip foreign" type="button" title={`Search presets using ${model.name}`} onclick={() => searchModel(model.name)}>
+                          <span class="nm">{model.name}</span><span class="why">{model.count}</span><span class="go">↗</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {:else}
+                    <p class="mrow-empty">Nothing foreign — every model your library references is available here.</p>
+                  {/if}
+                </div>
+                <div class="mrow untried">
+                  <div class="mrow-head">
+                    <span class="mrow-dot" style={`background:${colorOf(activeFamily.slug)}`}></span>
+                    <span class="mrow-title">Not used anywhere</span>
+                    <span class="mrow-sub">{modelRows.untried.length} of {deviceTypes.length} {labelOf(activeFamily.slug)} models</span>
+                  </div>
+                  {#if modelRows.untried.length}
+                    <div class="model-list">
+                      {#each visibleUntried as model, i (model.name)}
+                        <span class="ml-name" title={model.realName || model.name}>{model.name}</span>{#if i < visibleUntried.length - 1}<span class="ml-sep">·</span>{/if}
+                      {/each}
+                      {#if modelRows.untried.length > UNTRIED_VISIBLE_LIMIT}
+                        <button class="ml-more" type="button" onclick={() => (untriedExpanded = !untriedExpanded)}>
+                          {untriedExpanded ? 'Show less' : `+${modelRows.untried.length - UNTRIED_VISIBLE_LIMIT} more`}
+                        </button>
+                      {/if}
+                    </div>
+                  {:else}
+                    <p class="mrow-empty">You've used every {labelOf(activeFamily.slug)} model on this device.</p>
+                  {/if}
+                </div>
+              {:else if deviceTypes === 'error'}
+                <p class="none">Couldn't load this device's model list. The rows above are unaffected.</p>
+              {:else}
+                <div class="mrow">
+                  <div class="mrow-head"><span class="spinner" aria-hidden="true"></span><span class="mrow-title loading">In your library but not this device</span><span class="mrow-sub">looking up models…</span></div>
+                  <div class="chips"><span class="skel" style="width:150px"></span><span class="skel" style="width:120px"></span><span class="skel" style="width:96px"></span></div>
+                </div>
+                <div class="mrow">
+                  <div class="mrow-head"><span class="spinner" aria-hidden="true"></span><span class="mrow-title loading">Not used anywhere</span><span class="mrow-sub">looking up models…</span></div>
+                  <div class="chips"><span class="skel" style="width:128px"></span><span class="skel" style="width:160px"></span><span class="skel" style="width:104px"></span></div>
+                </div>
+              {/if}
+            </div>
           </section>
         {/if}
       {/if}
@@ -487,6 +587,168 @@
     margin: 16px 0 0;
     font-size: 12.5px;
     color: var(--textdim);
+  }
+
+  .model-rows {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .mrow {
+    padding: 12px 0 11px;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .mrow:last-child {
+    border-bottom: 0;
+  }
+  .mrow-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .mrow-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    align-self: center;
+    opacity: 0.85;
+  }
+  .mrow-title {
+    font-family: var(--font-mono, monospace);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .mrow.untried .mrow-title {
+    color: var(--accent);
+  }
+  .mrow-title.loading {
+    color: var(--textdim);
+  }
+  .mrow-sub {
+    font-size: 11.5px;
+    color: var(--textdim);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+  .mchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    min-width: 0;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text2, var(--text));
+    font-size: 12px;
+  }
+  .mchip .nm {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mchip .why {
+    font-family: var(--font-mono, monospace);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--textdim);
+    white-space: nowrap;
+  }
+  .mchip .go {
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--amber);
+    opacity: 0.85;
+  }
+  .mrow.foreign .mchip {
+    border-color: color-mix(in srgb, var(--amber) 38%, var(--border));
+    background: color-mix(in srgb, var(--amber) 8%, var(--surface));
+  }
+  button.mchip {
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  button.mchip:hover {
+    border-color: var(--amber);
+    color: var(--text);
+    background: color-mix(in srgb, var(--amber) 16%, var(--surface));
+  }
+  .model-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 3px 7px;
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .ml-name {
+    color: var(--text2, var(--text));
+    overflow-wrap: anywhere;
+  }
+  .ml-sep {
+    color: var(--textfaint, var(--textdim));
+  }
+  .ml-more {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .ml-more:hover {
+    text-decoration: underline;
+  }
+  .mrow-empty {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--textdim);
+    font-style: italic;
+  }
+  .spinner {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    animation: stats-spin 0.7s linear infinite;
+  }
+  @keyframes stats-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .skel {
+    display: inline-block;
+    height: 30px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--border) 24%, var(--border2, var(--border)) 38%, var(--border) 62%);
+    background-size: 420px 100%;
+    animation: stats-shimmer 1.25s ease-in-out infinite;
+  }
+  @keyframes stats-shimmer {
+    0% {
+      background-position: -210px 0;
+    }
+    100% {
+      background-position: 210px 0;
+    }
   }
 
   @media (max-width: 980px) {

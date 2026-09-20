@@ -3,7 +3,7 @@
 // Read-only by construction: it folds the already-cached `PresetSummary` data (blocks + per-family
 // `models` + tags) into the "most-used model per family" board and the tag histogram. No device I/O,
 // no new persistence — the panel only renders what this returns, and a unit test pins the folding.
-import type { PresetSummary } from '$lib/api/types';
+import type { BlockTypeOption, PresetSummary } from '$lib/api/types';
 
 /** One model within a family: how many presets use it. */
 export interface AxisStatsModel {
@@ -195,4 +195,95 @@ export function topAmpDrivePairings(entries: readonly AxisStatsEntry[], limit = 
 export function familyStats(stats: AxisStats, slug: string): AxisStatsFamily | undefined {
   const key = slug.toLowerCase();
   return stats.families.find((family) => family.slug === key);
+}
+
+// ── Library-wide model rows (the two rows under the histogram) ───────────────────────────────────
+
+/** Per-family model usage across ALL library entries (every `source`, not just device slots): slug →
+ *  lowercase model name → the first-seen name casing + how many entries use it. */
+export type AxisLibraryModels = Map<string, Map<string, { name: string; count: number }>>;
+
+/**
+ * Fold every library entry's decoded `models` into {@link AxisLibraryModels}. Model names are folded
+ * per entry (a model used twice in one preset counts once), like {@link computeAxisStats}, so the
+ * count is "presets using it", not placements.
+ */
+export function collectLibraryModels(entries: readonly AxisStatsEntry[]): AxisLibraryModels {
+  const out: AxisLibraryModels = new Map();
+  for (const entry of entries) {
+    const models = modelsOf(entry.summary);
+    for (const [slugRaw, names] of Object.entries(models)) {
+      const slug = slugRaw.toLowerCase();
+      let perFamily = out.get(slug);
+      if (!perFamily) {
+        perFamily = new Map();
+        out.set(slug, perFamily);
+      }
+      const seen = new Set<string>();
+      for (const raw of names) {
+        const name = raw.trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const current = perFamily.get(key);
+        if (current) current.count++;
+        else perFamily.set(key, { name, count: 1 });
+      }
+    }
+  }
+  return out;
+}
+
+export interface AxisStatsModelCount {
+  name: string;
+  count: number;
+}
+
+export interface AxisStatsModelOption {
+  name: string;
+  /** "manufacturer basedOn" from the device catalog, or "" when it has no lineage. */
+  realName: string;
+}
+
+/** The two rows under a family histogram: `foreign` = library-not-device, `untried` = device-not-used. */
+export interface AxisStatsModelRows {
+  foreign: AxisStatsModelCount[];
+  untried: AxisStatsModelOption[];
+}
+
+/** Real-world name text for a device option ("Hiwatt Custom 100"), or "" when it has no lineage. */
+export function optionRealName(option: Pick<BlockTypeOption, 'manufacturer' | 'basedOn'>): string {
+  return `${option.manufacturer ?? ''} ${option.basedOn ?? ''}`.trim();
+}
+
+/**
+ * The two rows under a family histogram, from one family's used models (`collectLibraryModels`) and
+ * the device's offered models (`GET /blocks/:slug/types`):
+ *
+ *  - `foreign` (library \ device) — models the library uses that the device has no model for, so
+ *    presets referencing them can't play here. Most-used first.
+ *  - `untried` (device \ library) — models the device offers that no library preset uses.
+ *
+ * Matching is case-insensitive; each side's own casing is kept for display. A model that only a
+ * device preset uses is still `used` here — device presets are library entries too.
+ */
+export function modelRowsForFamily(
+  used: Map<string, { name: string; count: number }> | undefined,
+  options: readonly BlockTypeOption[]
+): AxisStatsModelRows {
+  const usedMap = used ?? new Map<string, { name: string; count: number }>();
+  const offered = new Set(options.map((option) => option.name.trim().toLowerCase()));
+  const foreign = [...usedMap.entries()]
+    .filter(([key]) => !offered.has(key))
+    .map(([, value]) => ({ name: value.name, count: value.count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const untried = options
+    .filter((option) => {
+      const key = option.name.trim().toLowerCase();
+      return !!key && !usedMap.has(key);
+    })
+    .map((option) => ({ name: option.name, realName: optionRealName(option) }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.realName.localeCompare(b.realName));
+  return { foreign, untried };
 }

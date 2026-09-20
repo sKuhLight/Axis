@@ -13,6 +13,7 @@ import { deviceName } from '$lib/convert/convertReport';
 import { claimSwatch, fallbackSwatch, findTagKey, normalizeTagColors, tagSwatchCss } from './tagColors';
 import { renameTagAssignments, renameTagColorKey } from './tagRename';
 import { DECODE_VERSION, decodeCacheStale } from './libraryDecodeCache';
+import { modelsFromConverterBlocks } from './converterModels';
 import { mapFm3Color } from '$lib/fm3edit/fm3ColorMap';
 
 // Validate persisted summaries on load → drop anything corrupt or from an older schema (instead of
@@ -520,6 +521,10 @@ class LibraryStore {
   #convertedEntry(docId: string, doc: ConvertedPresetDoc, favs: Set<string>): LibEntry {
     const id = `conv:${docId}`;
     const blocks = doc.preset.blocks.map((b) => ({ effectId: 0, slug: b.family, name: b.typeName ?? b.family, instance: b.instance }));
+    // The doc carries each target block's resolved model (`typeName`), so fold it into `models` —
+    // otherwise converted presets are invisible to every model-based view (Insights rows, modelsByFamily,
+    // search), which would wrongly report their models as "not used anywhere".
+    const models = modelsFromConverterBlocks(doc.preset.blocks);
     const summary: PresetSummary = {
       number: doc.slot ?? -1,
       name: doc.name,
@@ -527,8 +532,8 @@ class LibraryStore {
       crcValid: true,
       scenes: doc.preset.sceneNames ?? [],
       blocks,
-      models: {},
-      amps: []
+      models,
+      amps: models.amp ?? []
     };
     return { id, source: 'converted', summary, fav: favs.has(id), converted: doc, provenance: `${doc.sourceDevice} → ${deviceName(doc.targetDevice)}` };
   }

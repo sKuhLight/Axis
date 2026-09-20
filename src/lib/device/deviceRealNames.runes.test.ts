@@ -63,6 +63,30 @@ describe('device real names cache', () => {
     expect(deviceRealNames.realNameFor('reverb', 'SOMETHING ELSE')).toBe('');
   });
 
+  it('typesFor exposes the full option list (not just names with a lineage) after the same fetch', async () => {
+    const list = [type({ name: 'HIPOWER', manufacturer: 'Hiwatt', basedOn: 'Custom 100' }), type({ name: 'MARSHALL', value: 2 })];
+    blockTypes.mockResolvedValue(list);
+
+    expect(deviceRealNames.typesFor('phaser')).toBeUndefined();
+
+    deviceRealNames.loadTypes('phaser');
+    expect(deviceRealNames.typesFor('phaser')).toBe('loading');
+    await vi.waitFor(() => expect(deviceRealNames.typesFor('phaser')).toEqual(list));
+    expect(blockTypes).toHaveBeenCalledTimes(1);
+
+    // The real-name map and the full list come from the one fetch.
+    expect(deviceRealNames.realNameFor('phaser', 'HIPOWER')).toBe('Hiwatt Custom 100');
+  });
+
+  it('typesFor reports "error" after a failed fetch', async () => {
+    blockTypes.mockRejectedValueOnce(new Error('network'));
+
+    deviceRealNames.loadTypes('flanger');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(deviceRealNames.typesFor('flanger')).toBe('error');
+  });
+
   it('a fetch failure resolves to "" rather than throwing, and does not wedge future priming', async () => {
     blockTypes.mockRejectedValueOnce(new Error('network'));
 
