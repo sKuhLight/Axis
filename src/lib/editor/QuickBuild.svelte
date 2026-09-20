@@ -111,9 +111,13 @@
   }
 
   // Esc / ✕ can close the sidecar mid-drag (pointer capture is released, so `endDrag` never fires) —
-  // clear any lingering drop preview so the grid doesn't keep a stuck ＋/✕.
+  // cancel the in-flight drag and clear any lingering drop preview so the grid doesn't keep a stuck ＋/✕
+  // and reopening doesn't resume the abandoned drag.
   $effect(() => {
-    if (!editorOverlays.quickBuildOpen) gridEditing.clearExternalDrop();
+    if (editorOverlays.quickBuildOpen) return;
+    ghost = null;
+    dragging = null;
+    gridEditing.clearExternalDrop();
   });
 </script>
 
