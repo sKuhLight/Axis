@@ -87,48 +87,27 @@
       {#if families.length === 0}
         <p class="none">No block models are decoded in the cached library yet.</p>
       {:else}
-        <div class="board">
-          {#each families as family (family.slug)}
-            <button
-              class="fam"
-              class:sel={activeFamily?.slug === family.slug}
-              type="button"
-              style={`--fa:${colorOf(family.slug)}`}
-              onclick={() => (selectedSlug = family.slug)}
-            >
-              <span class="fam-top">
-                <span class="glyph" aria-hidden="true">{@html glyphOf(family.slug)}</span>
-                <span class="fam-id">
-                  <span class="fam-name">{labelOf(family.slug)}</span>
-                  <span class="fam-used">in {family.used} of {stats.presetCount}</span>
-                </span>
-              </span>
-              {#if family.models.length}
-                <span class="top-model">{family.models[0].name}</span>
-                <span class="top-count">{family.models[0].count} presets · {pct(family.models[0].count, stats.presetCount)}% of library</span>
-              {:else}
-                <span class="top-model muted">—</span>
-                <span class="top-count">no model decoded</span>
-              {/if}
-              {#if family.models.length > 1}
-                <span class="alts">
-                  {#each family.models.slice(1, 4) as model (model.name)}
-                    <span class="alt">
-                      <span class="alt-name">{model.name}</span>
-                      <span class="alt-track"><i style={`width:${pct(model.count, family.models[0].count)}%`}></i></span>
-                      <span class="alt-count">{model.count}</span>
-                    </span>
-                  {/each}
-                </span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-
         {#if activeFamily}
           <section class="detail">
+            <div class="detail-tabs" role="tablist" aria-label="Block family">
+              {#each families as family (family.slug)}
+                <button
+                  class="fam-tab"
+                  class:on={activeFamily.slug === family.slug}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeFamily.slug === family.slug}
+                  style={`--fa:${colorOf(family.slug)}`}
+                  onclick={() => (selectedSlug = family.slug)}
+                >
+                  <span class="glyph" aria-hidden="true">{@html glyphOf(family.slug)}</span>
+                  <span class="fam-tab-name">{labelOf(family.slug)}</span>
+                  <span class="fam-tab-count">{family.used}</span>
+                </button>
+              {/each}
+            </div>
             <header class="detail-head">
-              <h2>{labelOf(activeFamily.slug)} · every model</h2>
+              <h2>Every {labelOf(activeFamily.slug)} model</h2>
               <span class="detail-sub">{activeFamily.models.length} models used · in {activeFamily.used} of {stats.presetCount} presets</span>
             </header>
             {#if activeFamily.models.length}
@@ -343,45 +322,6 @@
     border-bottom-color: var(--accent);
   }
 
-  .board {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-    gap: 10px;
-    margin-top: 14px;
-  }
-  .fam {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    padding: 12px 13px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-  }
-  .fam::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: var(--fa);
-  }
-  .fam:hover {
-    border-color: var(--border3, var(--border2, var(--border)));
-  }
-  .fam.sel {
-    border-color: color-mix(in srgb, var(--fa) 55%, var(--border));
-  }
-  .fam-top {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-  }
   .glyph {
     display: flex;
     align-items: center;
@@ -395,83 +335,50 @@
     background: color-mix(in srgb, var(--fa) 15%, var(--surface));
     border: 1px solid color-mix(in srgb, var(--fa) 34%, var(--border));
   }
-  .fam-id {
-    min-width: 0;
-  }
-  .fam-name {
-    display: block;
-    font-size: 13px;
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .fam-used {
-    display: block;
-    font-family: var(--font-mono, monospace);
-    font-size: 10px;
-    color: var(--textfaint, var(--textdim));
-  }
-  .top-model {
-    margin-top: 8px;
-    font-size: 14px;
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .top-model.muted {
-    color: var(--textmuted, var(--textdim));
-  }
-  .top-count {
-    font-family: var(--font-mono, monospace);
-    font-size: 10.5px;
-    color: var(--textdim);
-  }
-  .alts {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-top: 9px;
-    padding-top: 9px;
-    border-top: 1px solid var(--border);
-  }
-  .alt {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 54px 30px;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .alt-name {
-    font-size: 11.5px;
-    color: var(--text2, var(--textdim));
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .alt-track {
-    height: 5px;
-    border-radius: 3px;
-    background: var(--border);
-    overflow: hidden;
-  }
-  .alt-track i {
-    display: block;
-    height: 100%;
-    border-radius: 3px;
-    background: var(--fa);
-    opacity: 0.85;
-  }
-  .alt-count {
-    font-family: var(--font-mono, monospace);
-    font-size: 10px;
-    color: var(--textfaint, var(--textdim));
-    text-align: right;
-  }
-
   .detail {
-    margin-top: 22px;
+    margin-top: 16px;
+  }
+  .detail-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .fam-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 6px 11px 6px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--textdim);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .fam-tab:hover {
+    border-color: var(--border3, var(--border2, var(--border)));
+    color: var(--text2, var(--text));
+  }
+  .fam-tab.on {
+    color: var(--fa);
+    background: color-mix(in srgb, var(--fa) 13%, var(--surface));
+    border-color: color-mix(in srgb, var(--fa) 45%, var(--border));
+  }
+  .fam-tab .glyph {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .fam-tab-count {
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.7;
   }
   .detail-head {
     display: flex;
