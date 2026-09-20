@@ -136,6 +136,8 @@ test.describe('Controllers page: cross-block (global) controls', () => {
     await metronome.click();
     const req = await put;
     expect(req.method()).toBe('PUT');
+    // A GLOBAL (device) setting is not preset content: the Save chip must stay clean.
+    await expect(page.locator('.save[data-dirty]')).toHaveAttribute('data-dirty', 'false');
     await collapseRail(page);
   });
 

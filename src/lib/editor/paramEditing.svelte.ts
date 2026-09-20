@@ -293,6 +293,12 @@ export class ParamEditingStore {
   };
   #cellFor = (effectId: number): Cell | undefined =>
     [...this.#host.layout.cells, ...this.#host.layout.shunts].find((c) => c.effectId === effectId);
+  /** A param whose owner effect is one of the preset's grid blocks (or untagged, i.e. the open block)
+   *  is preset content. A cross param owned by a block NOT in the grid is a device-global setting — the
+   *  metronome lives on GLOBAL (effectId 1) — so editing it must not mark the preset dirty or enter the
+   *  preset's undo stack. */
+  #isPresetParam = (p: { effectId?: number }): boolean =>
+    p.effectId == null || this.#cellFor(p.effectId) != null;
   setPinnedParam = (effectId: number, p: NamedParam, v: number) => {
     if (this.selected?.effectId === effectId) { this.setParam(p, v); return; }
     if (p.id == null) return;
@@ -300,7 +306,7 @@ export class ParamEditingStore {
     p.norm = v;
     this.pinnedParams = { ...this.pinnedParams };
     const cell = this.#cellFor(effectId);
-    history.recordGesture({ kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v, block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
+    if (this.#isPresetParam(p)) history.recordGesture({ kind: 'param', eid: effectId, paramId: p.id, continuous: true, from, to: v, block: cell?.display ?? p.name, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
     const pinnedKey = `${effectId}:${p.id}`;
     clearTimeout(this.#sendTimers[pinnedKey]);
     this.#sendTimers[pinnedKey] = setTimeout(() => forgefx.setParam(effectId, p.id as number, v, true).catch(() => {}), 60);
@@ -311,7 +317,7 @@ export class ParamEditingStore {
     e.value = value;
     this.pinnedParams = { ...this.pinnedParams };
     const cell = this.#cellFor(effectId);
-    if (from !== value) history.record({ kind: 'param', eid: effectId, paramId: e.id, continuous: false, from, to: value, block: cell?.display ?? e.name, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
+    if (from !== value && this.#isPresetParam(e)) history.record({ kind: 'param', eid: effectId, paramId: e.id, continuous: false, from, to: value, block: cell?.display ?? e.name, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
     forgefx.setParam(effectId, e.id, value, false).catch(() => {});
   };
 
@@ -404,7 +410,7 @@ export class ParamEditingStore {
       }
     }
     if (p.id == null || eid == null) return;
-    history.recordGesture({ kind: 'param', eid, paramId: p.id, continuous: true, from, to: v, block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
+    if (this.#isPresetParam(p)) history.recordGesture({ kind: 'param', eid, paramId: p.id, continuous: true, from, to: v, block: c.display, param: p.name, min: p.min, max: p.max, unit: p.unit, log: p.log });
     const pid = p.id as number;
     const key = `${eid}:${pid}`;
     clearTimeout(this.#sendTimers[key]);
@@ -417,7 +423,7 @@ export class ParamEditingStore {
     if (!c || (!c.pack && !this.#host.paramsWithoutPack)) return;
     const eid = e.effectId ?? c.effectId;
     if (eid == null) return;
-    if (from !== value) history.record({ kind: 'param', eid, paramId: e.id, continuous: false, from, to: value, block: c.display, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
+    if (from !== value && this.#isPresetParam(e)) history.record({ kind: 'param', eid, paramId: e.id, continuous: false, from, to: value, block: c.display, param: e.name, fromLabel: e.options.find((o) => o.value === from)?.label, toLabel: e.options.find((o) => o.value === value)?.label });
     (this.#host.legacyAm4 ? forgefx.am4SetParamValue(eid, e.id, value) : forgefx.setParam(eid, e.id, value, false)).catch(() => {});
   };
   toggleBypass = async (cell?: Cell) => {

@@ -280,6 +280,48 @@ describe('cross-block params', () => {
     expect(setParamReq).toHaveBeenCalledWith(1, 14878, 1, false);
   });
 
+  it('keeps a device-global cross edit out of preset history (the metronome must not read as EDITED)', async () => {
+    blockParams.mockImplementation(async (eid: unknown) => {
+      if (eid === 7) return { named: [], enums: [], type: null, slug: 'controllers', layout: crossLayout() };
+      if (eid === 1) {
+        return {
+          named: [{ id: 119, name: 'Output 1', paramName: 'GLOBAL_METLEVEL1', value: 0, norm: 0.5 }],
+          enums: [{ id: 14878, name: 'Metronome', paramName: 'GLOBAL_METRONOME', value: 0, options: [{ value: 0, label: 'Off' }, { value: 1, label: 'On' }] }],
+          type: null,
+          slug: 'global',
+          layout: null
+        };
+      }
+      return emptyParams();
+    });
+    const { store } = fresh();
+    await store.reloadParams();
+    await vi.waitFor(() => expect(store.crossParamFor(1, 'GLOBAL_METRONOME')).toBeTruthy());
+    const level = store.crossParamFor(1, 'GLOBAL_METLEVEL1') as NamedParam;
+    const met = store.crossParamFor(1, 'GLOBAL_METRONOME') as EnumParam;
+    vi.useFakeTimers();
+    store.setParam(level, 0.8);
+    await vi.advanceTimersByTimeAsync(60);
+    store.setEnum(met, 1);
+    await Promise.resolve();
+    expect(setParamReq).toHaveBeenCalledWith(1, 119, 0.8, true);
+    expect(setParamReq).toHaveBeenCalledWith(1, 14878, 1, false);
+    // GLOBAL (effectId 1) is not a preset grid block, so neither write may dirty the preset.
+    expect(recordGesture).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('still records a cross edit whose owner block IS in the preset grid', async () => {
+    const { store, c } = fresh();
+    host.layout = { ...emptyLayout(), cells: [c, { ...c, row: 0, col: 2, effectId: 43, display: 'Output 2' }] };
+    store.crossParams = { 43: { named: [{ id: 900, name: 'Level', paramName: 'OUTPUT2_LEVEL', norm: 0.1, effectId: 43 } as NamedParam], enums: [] } };
+    vi.useFakeTimers();
+    store.setParam(store.crossParams[43].named[0], 0.6);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(recordGesture).toHaveBeenLastCalledWith(expect.objectContaining({ eid: 43, from: 0.1, to: 0.6 }));
+    expect(setParamReq).toHaveBeenCalledWith(43, 900, 0.6, true);
+  });
+
   it('refreshes hydrated cross params on a grid (preset) reload rather than blanking them', async () => {
     let globalReads = 0;
     blockParams.mockImplementation(async (eid: unknown) => {
