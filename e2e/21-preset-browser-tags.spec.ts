@@ -234,6 +234,52 @@ test.describe('Preset Browser tag creation', () => {
     await expect(chips.nth(1)).toHaveClass(/\bon\b/); // the click registered as a tag filter
     await expect(chips).toHaveText(['Ambient', 'Motown', 'Zeta']);
   });
+
+  /**
+   * A tag chip in the DETAIL pane is a filter shortcut, same as the Frequent Tags chips: clicking it
+   * toggles a `tag:` condition on the active query. Detail resolves from the full entry list, not the
+   * filtered one, so the pane (and its chip) survives being filtered out — which is what lets a
+   * second click untoggle it.
+   */
+  test('clicking a tag in the detail pane toggles a tag filter', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await page.evaluate(
+      ({ cache, tags }) => {
+        window.localStorage.setItem('axs.lib.cache', JSON.stringify(cache));
+        window.localStorage.setItem('axs.lib.tags', JSON.stringify(tags));
+      },
+      { cache: [summary(1, 'Studio Clean'), summary(2, 'Stage Lead')], tags: { 'dev:1': ['Lush'] } }
+    );
+    await page.reload();
+    await page.waitForSelector('.aw-root');
+    await clickNav(page, 'library');
+
+    const rows = page.locator('.aw-tabstack[data-region="main"] .preset-row');
+    await expect(rows).toHaveCount(2);
+
+    // Select the tagged preset to populate the detail pane.
+    await rows.first().click();
+    const detailTag = page.locator('.axis-preset-detail .tag-row button', { hasText: 'Lush' });
+    await expect(detailTag).toHaveCount(1);
+    await expect(detailTag).not.toHaveClass(/\bon\b/);
+
+    // A pill, not a circle: the component's generic `button { height: 34px }` must not leak in and
+    // square off the rounded chip (the border-radius turns a square box into a dot).
+    const box = (await detailTag.boundingBox())!;
+    expect(box.width).toBeGreaterThan(box.height);
+
+    // Click toggles the tag on: the chip highlights, a filter chip appears, and the list narrows.
+    await detailTag.click();
+    await expect(detailTag).toHaveClass(/\bon\b/);
+    await expect(page.locator('.filters-row .fchip', { hasText: 'Lush' })).toHaveCount(1);
+    await expect(rows).toHaveCount(1);
+
+    // Click again toggles it off; the chip and the filter both clear, and the list restores.
+    await detailTag.click();
+    await expect(detailTag).not.toHaveClass(/\bon\b/);
+    await expect(page.locator('.filters-row .fchip', { hasText: 'Lush' })).toHaveCount(0);
+    await expect(rows).toHaveCount(2);
+  });
 });
 
 /**

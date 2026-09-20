@@ -238,6 +238,12 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
   const activeTags = $derived(
     new Set(activeConditions.filter((c) => c.kind === 'tag').map((c) => c.val.toLowerCase()))
   );
+  // Toggle a `tag:` condition from a tag chip anywhere in the browser (detail row, frequent tags).
+  // Bumps the frequent-tag counter only when adding, matching the "Frequent tags" chip behavior.
+  function toggleTag(tag: string): void {
+    if (!activeTags.has(tag.toLowerCase())) recordTagUsage(tag);
+    axisPresetBrowserWorkbenchController.toggleTag(tag);
+  }
   const isOwner = $derived(snapshot.owner === part);
   const selectedDetail = $derived(snapshot.entryId ? runtimeSnapshot.details[snapshot.entryId] : null);
 
@@ -970,6 +976,7 @@ export function createAxisPresetBrowserPartView(part: AxisPresetBrowserPart) {
     applySavedFilter,
     get tagRow() { return tagRow; },
     recordTagUsage,
+    toggleTag,
     get scrollToCurrentRequest() { return scrollToCurrentRequest; },
     get scrollToCurrentSnapshot() { return scrollToCurrentSnapshot; },
     get activeTags() { return activeTags; },

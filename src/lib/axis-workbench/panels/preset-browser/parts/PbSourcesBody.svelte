@@ -55,10 +55,7 @@
       class="quick-tag"
       class:on
       style:--tag-col={library.colorOf(tag)}
-      onclick={() => {
-        if (!on) view.recordTagUsage(tag);
-        axisPresetBrowserWorkbenchController.toggleTag(tag);
-      }}
+      onclick={() => view.toggleTag(tag)}
       oncontextmenu={(e) => view.openTagMenu(e, tag)}
     >
       {tag}

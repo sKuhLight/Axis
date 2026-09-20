@@ -18,8 +18,13 @@
         {#if view.data.selectedEntry.tags.length}
           <div class="tag-row">
             {#each view.data.selectedEntry.tags as tag}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <span style:--tag-col={library.colorOf(tag)} oncontextmenu={(e) => view.openTagMenu(e, tag)}>{tag}</span>
+              <button
+                type="button"
+                class:on={view.activeTags.has(tag.toLowerCase())}
+                style:--tag-col={library.colorOf(tag)}
+                title={`Filter by “${tag}”`}
+                onclick={() => view.toggleTag(tag)}
+                oncontextmenu={(e) => view.openTagMenu(e, tag)}>{tag}</button>
             {/each}
           </div>
         {/if}
@@ -301,12 +306,25 @@
     flex-wrap: wrap;
     gap: 5px;
   }
-  .tag-row span {
+  .tag-row button {
+    height: auto;
     border: 1px solid color-mix(in srgb, var(--tag-col) 40%, transparent);
     border-radius: 999px;
     padding: 4px 7px;
+    background: transparent;
     color: var(--tag-col);
+    font: inherit;
     font-size: 10px;
+    text-transform: none;
+    cursor: pointer;
+  }
+  .tag-row button:hover {
+    background: color-mix(in srgb, var(--tag-col) 16%, transparent);
+  }
+  .tag-row button.on {
+    background: var(--tag-col);
+    border-color: var(--tag-col);
+    color: var(--bg);
   }
   .scene-table {
     min-width: 0;
