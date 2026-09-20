@@ -249,7 +249,7 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
   function withLegacyOrder(): WorkbenchDocument {
     const doc = createAxisWorkbenchDefaultDocument();
     doc.metadata = { ...(doc.metadata ?? {}) };
-    // A document persisted at the PREVIOUS canonical order (marked 'v1'): Statistics sat
+    // A document persisted at the PREVIOUS canonical order (marked 'v1'): Insights sat
     // right after Grid, FC preceded Controllers.
     doc.metadata[AXIS_SEED_ORDER_MARKER] = 'v1';
     const layout = Object.values(doc.layouts)[0];
@@ -273,7 +273,7 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
     expect(layout.navigation.order).toEqual(['library', 'grid', 'controllers', 'fc', 'live', 'setup', 'stats', 'account']);
   });
 
-  it('moves Statistics to the end of the main entries, above the pinned Axis footer', () => {
+  it('moves Insights to the end of the main entries, above the pinned Axis footer', () => {
     const layout = Object.values(ensureAxisSeedOrder(withLegacyOrder()).layouts)[0];
     expect(layout.navigation.order.indexOf('stats')).toBe(layout.navigation.order.indexOf('account') - 1);
     expect(layout.pageOrder.at(-2)).toBe(AXIS_PAGE_STATS);
@@ -292,10 +292,10 @@ describe('ensureAxisSeedOrder — persisted old order', () => {
   });
 });
 
-// ── Self-healing Statistics page (ensureAxisStatsPage) ───────────────────────
+// ── Self-healing Insights page (ensureAxisStatsPage) ─────────────────────────
 
-describe('ensureAxisStatsPage — self-heal the Statistics page', () => {
-  /** A document minted before Statistics shipped: the page, its panel and its nav entry are absent. */
+describe('ensureAxisStatsPage — self-heal the Insights page', () => {
+  /** A document minted before Insights shipped: the page, its panel and its nav entry are absent. */
   function withoutStatsPage(): WorkbenchDocument {
     const doc = createAxisWorkbenchDefaultDocument();
     const layout = Object.values(doc.layouts)[0];

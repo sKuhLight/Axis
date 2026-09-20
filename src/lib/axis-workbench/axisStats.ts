@@ -1,4 +1,4 @@
-// Library statistics — the pure aggregation behind the Statistics page.
+// Library insights — the pure aggregation behind the Insights page.
 //
 // Read-only by construction: it folds the already-cached `PresetSummary` data (blocks + per-family
 // `models` + tags) into the "most-used model per family" board and the tag histogram. No device I/O,

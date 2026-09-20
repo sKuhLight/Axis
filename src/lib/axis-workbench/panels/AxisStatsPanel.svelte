@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Statistics page (read-only). Folds the already-cached preset library into the two reviewed
+  // Insights page (read-only). Folds the already-cached preset library into the two reviewed
   // anchors — the most-used model per block family, and a tag histogram — as two tabs. Pure
   // aggregation lives in ../axisStats.ts; this panel only reads `library` and renders.
   import { library } from '$lib/preset/library.svelte';
@@ -42,7 +42,7 @@
 <div class="axis-stats">
   <header class="head">
     <div class="titles">
-      <h1>Statistics</h1>
+      <h1>Insights</h1>
       <p>{stats.presetCount} device presets · {stats.tags.length} tags · {stats.untagged} untagged</p>
     </div>
     {#if scanning}<span class="scanning">Scanning {library.scanDone}/{library.scanTotal}…</span>{/if}
@@ -51,7 +51,7 @@
   {#if deviceEntries.length === 0}
     <div class="empty">
       <p class="empty-big">No device presets yet</p>
-      <p class="empty-copy">Statistics are computed from your device presets. Build the library cache to fill this page.</p>
+      <p class="empty-copy">Insights are computed from your device presets. Build the library cache to fill this page.</p>
       {#if online}
         <button class="build" type="button" onclick={build} disabled={scanning}>{scanning ? 'Building…' : 'Build library cache'}</button>
       {:else}

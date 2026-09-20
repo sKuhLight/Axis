@@ -41,7 +41,7 @@ export const AXIS_PAGE_FC = 'axis.page.fc';
 export const AXIS_PAGE_CONTROLLERS = 'axis.page.controllers';
 export const AXIS_PAGE_LIVE = 'axis.page.live';
 export const AXIS_PAGE_SETUP = 'axis.page.setup';
-/** Library statistics page — a read-only roll-up of the preset library cache. */
+/** Library insights page — a read-only roll-up of the preset library cache. */
 export const AXIS_PAGE_STATS = 'axis.page.stats';
 const AXIS_STATS_PANEL_ID = 'axis.stats';
 
@@ -84,7 +84,7 @@ export const AXIS_PAGE_NAV_BINDINGS: Record<string, string> = {
 const NAV_LABELS: Record<string, string> = {
   grid: 'Grid',
   library: 'Preset Browser',
-  stats: 'Statistics',
+  stats: 'Insights',
   fc: 'Footswitches',
   controllers: 'Controllers',
   live: 'Live',
@@ -162,7 +162,7 @@ export const AXIS_SECONDARY_PAGE_SPECS: AxisPagePanelSpec[] = [
     label: NAV_LABELS.stats,
     panelId: 'axis.stats',
     panelType: 'axis.stats',
-    panelTitle: 'Statistics',
+    panelTitle: 'Insights',
     singletonKey: 'axis.stats'
   }
 ];
@@ -426,7 +426,7 @@ function moveRankedToFront<T>(ids: T[], rankOf: (id: T) => number | undefined): 
 /**
  * Put the six seed pages — and the nav entries bound to them — into
  * {@link AXIS_SEED_PAGE_ORDER}. The Preset Browser moved to the top of the rail and the
- * Statistics page moved to the end of the main entries (just above the pinned Axis
+ * Insights page moved to the end of the main entries (just above the pinned Axis
  * footer), so a document persisted before either change still carries the old order;
  * this repairs it once (marker-gated). Only the known seed page ids are moved among
  * themselves — every other page / nav entry keeps its relative position (the nav-less
@@ -544,8 +544,8 @@ export function ensureAxisConvertPage(doc: WorkbenchDocument): WorkbenchDocument
 }
 
 /**
- * Ensure the Statistics page + its panel + its nav entry exist on every layout. Idempotent and
- * marker-free (same reason as `ensureAxisConvertPage`): a document persisted before Statistics shipped
+ * Ensure the Insights page + its panel + its nav entry exist on every layout. Idempotent and
+ * marker-free (same reason as `ensureAxisConvertPage`): a document persisted before Insights shipped
  * already carries the seed-pages marker, so `ensureAxisSeedPages` leaves it alone; this self-heals the
  * page on load. Inserted at the end of the main entries — just above the pinned Axis footer — so it
  * reads as the last analysis page before the account action.
