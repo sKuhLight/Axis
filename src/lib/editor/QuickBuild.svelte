@@ -200,7 +200,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: 50%;
+    height: auto;
+    max-height: 100%;
     z-index: 150;
     display: flex;
     flex-direction: column;
@@ -308,10 +309,10 @@
     color: var(--accent);
   }
   .list {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 8px;
+    padding: 8px 8px 12px;
   }
   .grid {
     display: grid;
