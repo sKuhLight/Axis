@@ -33,6 +33,10 @@
   const colorOf = (slug: string): string => axisPbCatColor(slug);
   const glyphOf = (slug: string): string => catFor(SLUG_PACK[slug] ?? null, labelOf(slug)).glyph;
   const pct = (count: number, max: number): number => (max > 0 ? Math.round((count / max) * 100) : 0);
+  // The tab bar reads alphabetically by block name; `families` stays usage-ordered for the default pick.
+  const familyTabs = $derived(
+    [...families].sort((a, b) => labelOf(a.slug).localeCompare(labelOf(b.slug), undefined, { sensitivity: 'base' }))
+  );
 
   function build() {
     void library.buildCache();
@@ -90,7 +94,7 @@
         {#if activeFamily}
           <section class="detail">
             <div class="detail-tabs" role="tablist" aria-label="Block family">
-              {#each families as family (family.slug)}
+              {#each familyTabs as family (family.slug)}
                 <button
                   class="fam-tab"
                   class:on={activeFamily.slug === family.slug}
