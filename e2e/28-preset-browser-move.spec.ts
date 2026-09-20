@@ -2,9 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { bootCleanWorkbench, clickNav } from './support/workbench';
 
 /**
- * Preset Browser — the `M` move dialog.
+ * Preset Browser — the `V` move dialog.
  *
- * `M` is page-scoped (opens only while the Preset Browser page is active, inert elsewhere) and always
+ * `V` is page-scoped (opens only while the Preset Browser page is active, inert elsewhere) and always
  * opens with nothing chosen. Each DRAG stages an independent move (grab any cell, straight onto a
  * destination — no click-to-select first); staged moves show as removable chips and are applied
  * together on confirm. Clicking cells builds the working set the next drag moves, and never disturbs a
@@ -36,11 +36,11 @@ async function bootPresetBrowser(page: Page): Promise<void> {
 
 const moveDialog = (page: Page) => page.getByRole('dialog').filter({ hasText: 'Move presets' });
 
-test('M drags a preset straight onto a destination without selecting it first', async ({ page }) => {
+test('V drags a preset straight onto a destination without selecting it first', async ({ page }) => {
   await bootPresetBrowser(page);
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.mv-count')).toHaveText('Nothing staged');
 
@@ -70,7 +70,7 @@ test('staged moves accumulate and clicking a cell never disturbs them', async ({
   await bootPresetBrowser(page);
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   const cells = dialog.locator('.mv-cell');
   await expect(cells.first()).toBeVisible();
 
@@ -112,7 +112,7 @@ test('the dialog shows a busy state while the move is being applied', async ({ p
   await bootPresetBrowser(page);
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   const cells = dialog.locator('.mv-cell');
   await cells.nth(1).dragTo(cells.nth(8));
   await expect(dialog.locator('.mv-btn.accent')).toBeEnabled();
@@ -134,7 +134,7 @@ test('cells build a contiguous set, and a broken set is called out', async ({ pa
   await bootPresetBrowser(page);
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   const cells = dialog.locator('.mv-cell');
   await expect(cells.first()).toBeVisible();
 
@@ -154,7 +154,7 @@ test('cells build a contiguous set, and a broken set is called out', async ({ pa
   await expect(dialog.locator('.mv-count')).toHaveText('Nothing staged');
 });
 
-test('M is seeded by the marked rows and is inert off the Preset Browser page', async ({ page }) => {
+test('V is seeded by the marked rows and is inert off the Preset Browser page', async ({ page }) => {
   await bootPresetBrowser(page);
   const rows = page.locator('.preset-row');
   await expect(rows).toHaveCount(3);
@@ -164,7 +164,7 @@ test('M is seeded by the marked rows and is inert off the Preset Browser page', 
   await expect(page.locator('.select-head')).toBeVisible();
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.mv-count')).toHaveText('2 selected');
 
@@ -172,11 +172,11 @@ test('M is seeded by the marked rows and is inert off the Preset Browser page', 
   await expect(dialog).toBeHidden();
 
   await clickNav(page, 'grid');
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   await expect(dialog).toBeHidden();
 });
 
-test('M opens empty when a row is merely selected, and can be run again after a move', async ({ page }) => {
+test('V opens empty when a row is merely selected, and can be run again after a move', async ({ page }) => {
   await page.route('**/preset/move', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, writes: [], slots: 0 }) })
   );
@@ -190,7 +190,7 @@ test('M opens empty when a row is merely selected, and can be run again after a 
   await expect(page.locator('.select-head')).toHaveCount(0);
 
   const dialog = moveDialog(page);
-  await page.keyboard.press('m');
+  await page.keyboard.press('v');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.mv-count')).toHaveText('Nothing staged');
   await page.keyboard.press('Escape');
@@ -199,7 +199,7 @@ test('M opens empty when a row is merely selected, and can be run again after a 
   // Two moves back to back, each picking its own source inside the dialog.
   const cells = dialog.locator('.mv-cell');
   for (const target of [10, 20]) {
-    await page.keyboard.press('m');
+    await page.keyboard.press('v');
     await expect(dialog).toBeVisible();
     await expect(dialog.locator('.mv-count')).toHaveText('Nothing staged');
     await cells.nth(1).click();

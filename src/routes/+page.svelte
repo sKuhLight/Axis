@@ -134,8 +134,8 @@
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         editorOverlays.presetSearchOpen = true;
-      } else if (!editing && onPresetBrowser && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'm' || e.key === 'M')) {
-        // `M` opens the move dialog. Page-scoped like the grid keys, so it stays inert everywhere
+      } else if (!editing && onPresetBrowser && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
+        // `V` opens the move dialog. Page-scoped like the grid keys, so it stays inert everywhere
         // else. Marked rows seed the working set, but it ALWAYS opens — what to move is chosen and
         // staged inside the dialog.
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up

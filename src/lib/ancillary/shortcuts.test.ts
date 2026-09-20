@@ -61,8 +61,8 @@ describe('visible shortcuts', () => {
   });
 
   it('advertises the move shortcut only on the Preset Browser page', () => {
-    expect(chords(false, true, true, true)).toContain('M');
-    expect(chords(false, true, true, false)).not.toContain('M');
+    expect(chords(false, true, true, true)).toContain('V');
+    expect(chords(false, true, true, false)).not.toContain('V');
   });
 
   it('never returns an empty group', () => {

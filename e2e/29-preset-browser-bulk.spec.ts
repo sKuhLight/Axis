@@ -6,7 +6,7 @@ import { bootCleanWorkbench, clickNav } from './support/workbench';
  *
  * Marking multiple rows surfaces a header with Tag… / Favorite / Move… alongside Clear. Tag and
  * Favorite apply to every marked real entry; Move seeds the existing move dialog with the marked
- * device slots — the same seed the `M` shortcut uses, just reachable from a button.
+ * device slots — the same seed the `V` shortcut uses, just reachable from a button.
  */
 
 const summary = (number: number, name: string) => ({

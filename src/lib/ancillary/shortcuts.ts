@@ -44,7 +44,7 @@ export const SHORTCUT_TOKENS = new Set([
   'P',
   '/',
   'H',
-  'M'
+  'V'
 ]);
 
 export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
@@ -67,7 +67,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: 'Preset Browser',
     items: [
-      { keys: ['M'], label: 'Move presets to another location', scope: 'presetBrowser' }
+      { keys: ['V'], label: 'Move presets to another location', scope: 'presetBrowser' }
     ]
   },
   {
@@ -86,7 +86,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 /** The live context the cheat sheet filters against. */
 export interface ShortcutAvailabilityContext {
   gridActive: boolean;
-  /** The Preset Browser page is the active page (its `M` move shortcut is page-scoped). */
+  /** The Preset Browser page is the active page (its `V` move shortcut is page-scoped). */
   presetBrowserActive: boolean;
   hasTuner: boolean;
   hasTempo: boolean;
