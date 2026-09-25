@@ -142,8 +142,10 @@
     realNameFor: deviceRealNames.realNameFor,
     prepared: index.match,
     freeTextRank: oramaIndex.rank,
-    sort: snapshot.sort,
-    sortDir: snapshot.sortDir,
+    // Always render in preset number order: this picker must not inherit the sort the user chose in
+    // the docked Preset Browser (it shares that controller). Number order is the device slot order.
+    sort: 'num',
+    sortDir: 'asc',
     presenceView: 'all',
     presenceViews: presenceViewDefs()
   }));
