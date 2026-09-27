@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * The metronome modal (Mixer Ruler design). Opened by the top-bar metronome widget or the
-   * global `M` key. Space starts/stops; the tempo seeds from the preset tap tempo and — when
+   * global `M` key. Space starts/stops, Up/Down nudge the tempo; the tempo seeds from the preset tap tempo and — when
    * moved — drives the Tempo/Pitch page's Tempo knob; Level drives the device metronome level.
    */
   import Dialog from '$lib/ui/Dialog.svelte';

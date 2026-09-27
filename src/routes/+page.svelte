@@ -111,6 +111,12 @@
         // Space is scoped to the modal while it is open, so it never also bypasses a grid block.
         e.preventDefault();
         metronome.toggle();
+      } else if ((!editing || rangeFocused) && overlays.isOpen('metronome') && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        // Up/Down nudge the tempo while the modal is open, even when a slider has focus (which would
+        // otherwise let the browser move that slider instead). Shift widens the step to 10 BPM.
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        metronome.setBpm(metronome.bpm + (e.key === 'ArrowUp' ? step : -step));
       } else if (!editing && onGrid && (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void (e.shiftKey ? history.redo() : history.undo());
