@@ -93,6 +93,9 @@
       // never hijack undo/redo while typing (rename fields, search inputs)
       const t = e.target as HTMLElement | null;
       const editing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      // A focused range slider is an INPUT, but it doesn't consume Space for text entry — don't let
+      // it block the metronome's Space-to-start/stop while the modal is open.
+      const rangeFocused = t instanceof HTMLInputElement && t.type === 'range';
       // Every shortcut below except the tuner toggle, the `?` cheat sheet and Escape is scoped to
       // the Grid page, so grid-editing keys can't fire while another workbench page is in view.
       // Escape and `?` stay global: Escape closes registry-backed dialogs from any page, and `?`
@@ -104,7 +107,7 @@
         if (editorOnboarding.tourActive) return; // Tour.svelte owns keys while the tour is up
         e.preventDefault();
         overlays.toggle('metronome');
-      } else if (!editing && overlays.isOpen('metronome') && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
+      } else if ((!editing || rangeFocused) && overlays.isOpen('metronome') && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === 'Space') {
         // Space is scoped to the modal while it is open, so it never also bypasses a grid block.
         e.preventDefault();
         metronome.toggle();
