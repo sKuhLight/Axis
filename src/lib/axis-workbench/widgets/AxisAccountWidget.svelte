@@ -4,7 +4,7 @@
   let { size }: AxisWorkbenchWidgetProps = $props();
 </script>
 
-<button class="axis-widget square account" data-size={size} type="button" onclick={() => editorOverlays.openAxis('about')} title="Axis — storage, privacy &amp; about">
+<button class="axis-widget square account" data-size={size} type="button" onclick={() => editorOverlays.openAxis('about')} title="Axis — storage &amp; about">
   <span>AX</span>
 </button>
 

@@ -26,12 +26,10 @@ function loadInstanceId(): string {
     return id;
   } catch { return 'anon'; }
 }
-// Device-telemetry polling mode (META-17). Local mirror so the poll intervals + UI have it synchronously
-// on boot (before /device confirms telemetryControl); the synced `config/profile` doc carries it across
-// devices. Default 'balanced' (mirrors the server default).
-const POLLING_MODE_KEY = 'axs.telemetry.pollingMode';
-export const isTelemetryMode = (v: unknown): v is TelemetryMode => v === 'performance' || v === 'balanced' || v === 'reduced';
-const loadPollingMode = (): TelemetryMode => { try { const v = localStorage.getItem(POLLING_MODE_KEY); return isTelemetryMode(v) ? v : 'balanced'; } catch { return 'balanced'; } };
+// Device-telemetry polling mode (META-17) is fixed: Axis always polls in 'performance' — the snappiest
+// mode, and the one that puts the most traffic on the device link. There is no user-selectable mode;
+// `reapplyPollingMode` pushes this value to the device on every connect/reconnect.
+const POLLING_MODE: TelemetryMode = 'performance';
 // Whether the user has made a first-run telemetry choice (accept OR decline). Distinct from the consent
 // value: unset → show the first-run prompt once; set → respect the stored consent silently.
 const DECIDED_KEY = 'axs.telemetry.decided';
@@ -110,10 +108,9 @@ export class TelemetryStore {
   #events: EventSource | null = null;
 
   // ── device-telemetry polling mode (META-17) ──
-  /** Active polling mode — drives the poll/watch interval selection (pollIntervals.ts) + the mode UI.
-   *  Seeded from the local mirror; reconciled with the server (PUT on reconnect, adopt on telemetryConfig
-   *  events). */
-  pollingMode = $state<TelemetryMode>(loadPollingMode());
+  /** Active polling mode — drives the poll/watch interval selection (pollIntervals.ts). Fixed to
+   *  'performance'; never changes, so there is no mode UI and nothing to reconcile. */
+  readonly pollingMode: TelemetryMode = POLLING_MODE;
 
   // ── telemetry / diagnostics ── `enabled` = live RUM gate (AXIS_TELEMETRY); `uploadEnabled` = on-demand
   // debug-report upload available; `consent` = user opted into live telemetry (default OFF). The on-demand
@@ -232,36 +229,11 @@ export class TelemetryStore {
   };
 
   // ── device-telemetry polling mode (META-17) ──
-  /** Set the polling mode from a LOCAL user action: optimistic update → PUT → revert on failure. Follows
-   *  the store's optimistic-update idiom. Persists (local mirror + synced profile) only after the PUT
-   *  succeeds, so a rejected change never leaks into the profile. A no-op if unchanged. */
-  setPollingMode = async (mode: TelemetryMode) => {
-    const prev = this.pollingMode;
-    if (prev === mode) return;
-    this.pollingMode = mode; // optimistic
-    try {
-      await forgefx.setTelemetryMode(mode);
-      try { localStorage.setItem(POLLING_MODE_KEY, mode); } catch { /* */ }
-      this.#host.persistProfile(); // mirror the choice to the synced profile when logged in
-    } catch {
-      this.pollingMode = prev; // revert — server rejected / unsupported
-      this.#host.showToast('Could not change polling mode', '#d6543f');
-    }
-  };
-  /** Re-apply the saved polling mode to the device after a connect/reconnect, once caps confirm the
-   *  control exists. Fire-and-forget with error tolerance — an old/unsupported server just ignores it.
-   *  NOT a user action, so it never persists (the local mirror is already the source of the value). */
+  /** Re-apply the fixed 'performance' mode to the device after a connect/reconnect, once caps confirm
+   *  the control exists. Fire-and-forget with error tolerance — an old/unsupported server just ignores it. */
   reapplyPollingMode = () => {
     if (!this.#host.hasTelemetryControl) return;
-    forgefx.setTelemetryMode(this.pollingMode).catch(() => { /* unsupported / not ready — leave as-is */ });
-  };
-  /** Adopt a polling mode that came from the synced profile: state + local mirror + push to the device.
-   *  Not a fresh user action, so it never re-persists the profile. */
-  adoptPollingMode = (mode: TelemetryMode) => {
-    if (mode === this.pollingMode) return;
-    this.pollingMode = mode;
-    try { localStorage.setItem(POLLING_MODE_KEY, mode); } catch { /* */ }
-    this.reapplyPollingMode();
+    forgefx.setTelemetryMode(POLLING_MODE).catch(() => { /* unsupported / not ready — leave as-is */ });
   };
 
   // ── failure reporting ──
@@ -362,13 +334,9 @@ export class TelemetryStore {
       case 'changed': this.#host.scheduleStructuralReload(); break;
       case 'config': if (e.origin !== CLIENT_ID) this.#host.applyConfig(e.id, e.data); break; // ignore our own echo
       case 'telemetryConfig': {
-        // The polling mode changed server-side (another UI, or our own PUT's echo). Adopt it into state
-        // + the local mirror WITHOUT re-triggering a PUT or a profile persist — only a local user action
-        // (setPollingMode) writes back, so this can never loop.
-        if (isTelemetryMode(e.mode) && e.mode !== this.pollingMode) {
-          this.pollingMode = e.mode;
-          try { localStorage.setItem(POLLING_MODE_KEY, e.mode); } catch { /* */ }
-        }
+        // Polling mode is fixed to 'performance'. If the server reports any other mode (changed by another
+        // client), re-assert it; our own PUT's echo reports 'performance', so this can never loop.
+        if (e.mode !== POLLING_MODE) this.reapplyPollingMode();
         break;
       }
       case 'traffic': {

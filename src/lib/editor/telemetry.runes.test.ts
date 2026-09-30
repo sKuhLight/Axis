@@ -4,8 +4,8 @@
 //
 // Four things this pins, all of which were load-bearing before the extraction and stayed that way:
 //   1. `scrubPII` strips emails + home-directory usernames from anything leaving the machine.
-//   2. Polling-mode transitions: optimistic → PUT → persist, revert on failure, and a server echo
-//      that adopts WITHOUT writing back (the loop that would otherwise form).
+//   2. Polling mode is fixed to 'performance': re-applied on connect, and re-asserted when the server
+//      reports any other mode (without looping on our own echo).
 //   3. Consent defaults OFF, is asked at most once, and never gates the per-incident debug upload.
 //   4. The live-meter loop reads exactly ONE block per tick, and only when it's allowed to — a
 //      full-preset sweep serializes behind every other read on the shared request chain.
@@ -136,64 +136,31 @@ describe('scrubPII', () => {
 
 // ── polling mode ────────────────────────────────────────────────────────────────────────────────
 describe('polling mode', () => {
-  it('seeds from the local mirror, defaulting to balanced and rejecting garbage', () => {
-    expect(fresh().t.pollingMode).toBe('balanced');
-    localStorage.setItem('axs.telemetry.pollingMode', 'performance');
+  it('is always performance, ignoring any stored value', () => {
     expect(fresh().t.pollingMode).toBe('performance');
-    localStorage.setItem('axs.telemetry.pollingMode', 'turbo');
-    expect(fresh().t.pollingMode).toBe('balanced');
-  });
-
-  it('a local change is optimistic, then persists the mirror + profile once the PUT lands', async () => {
-    const { host, t } = fresh();
-    const p = t.setPollingMode('reduced');
-    expect(t.pollingMode).toBe('reduced'); // optimistic — before the PUT resolves
-    expect(localStorage.getItem('axs.telemetry.pollingMode')).toBeNull();
-    await p;
-    expect(setTelemetryMode).toHaveBeenCalledWith('reduced');
-    expect(localStorage.getItem('axs.telemetry.pollingMode')).toBe('reduced');
-    expect(host.persistProfile).toHaveBeenCalledTimes(1);
-  });
-
-  it('reverts, toasts, and leaves nothing persisted when the device rejects it', async () => {
-    const { host, t } = fresh();
-    setTelemetryMode.mockRejectedValueOnce(new Error('unsupported'));
-    await t.setPollingMode('performance');
-    expect(t.pollingMode).toBe('balanced'); // reverted
-    expect(localStorage.getItem('axs.telemetry.pollingMode')).toBeNull(); // a rejected change never leaks
-    expect(host.persistProfile).not.toHaveBeenCalled();
-    expect(host.showToast).toHaveBeenCalledWith('Could not change polling mode', '#d6543f');
-  });
-
-  it('is a no-op when the mode is unchanged', async () => {
-    const { t } = fresh();
-    await t.setPollingMode('balanced');
-    expect(setTelemetryMode).not.toHaveBeenCalled();
-  });
-
-  it('adopts a server echo WITHOUT writing back — the loop that would otherwise form', () => {
-    const { host, t } = fresh();
-    t.applyDeviceEvent({ type: 'telemetryConfig', mode: 'reduced' } as never);
-    expect(t.pollingMode).toBe('reduced');
-    expect(localStorage.getItem('axs.telemetry.pollingMode')).toBe('reduced');
-    expect(setTelemetryMode).not.toHaveBeenCalled(); // no PUT
-    expect(host.persistProfile).not.toHaveBeenCalled(); // no profile write
+    localStorage.setItem('axs.telemetry.pollingMode', 'reduced');
+    expect(fresh().t.pollingMode).toBe('performance');
   });
 
   it('re-applies to the device on reconnect only when caps say the control exists', () => {
     fresh({ hasTelemetryControl: false }).t.reapplyPollingMode();
     expect(setTelemetryMode).not.toHaveBeenCalled();
     fresh({ hasTelemetryControl: true }).t.reapplyPollingMode();
-    expect(setTelemetryMode).toHaveBeenCalledWith('balanced');
+    expect(setTelemetryMode).toHaveBeenCalledWith('performance');
   });
 
-  it('adopting a profile mode pushes to the device but never re-persists', () => {
-    const { host, t } = fresh();
-    t.adoptPollingMode('performance');
+  it('re-asserts performance when the server reports any other mode', () => {
+    const { t } = fresh();
+    t.applyDeviceEvent({ type: 'telemetryConfig', mode: 'reduced' } as never);
     expect(t.pollingMode).toBe('performance');
-    expect(localStorage.getItem('axs.telemetry.pollingMode')).toBe('performance');
     expect(setTelemetryMode).toHaveBeenCalledWith('performance');
-    expect(host.persistProfile).not.toHaveBeenCalled();
+  });
+
+  it('does not write back on the echo of our own performance PUT', () => {
+    const { t } = fresh();
+    t.applyDeviceEvent({ type: 'telemetryConfig', mode: 'performance' } as never);
+    expect(t.pollingMode).toBe('performance');
+    expect(setTelemetryMode).not.toHaveBeenCalled(); // no loop
   });
 });
 

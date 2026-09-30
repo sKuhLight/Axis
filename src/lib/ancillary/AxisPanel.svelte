@@ -1,7 +1,6 @@
 <script lang="ts">
   // The single "Axis" hub — one rail button opens this. Tabs: Storage (local folder + backups),
-  // Connection, Performance, Privacy (diagnostics consent + send debug report), About
-  // (version · support · legal).
+  // Theme, About (version · support · legal).
   import {
     deviceSession,
     editorNotifications,
@@ -34,14 +33,6 @@
   let showDetail = $state(false); // Privacy: "View what's sent" disclosure
 
   const version = (globalThis as { axisDesktop?: { version?: string } }).axisDesktop?.version ?? 'dev';
-
-  // ── Performance tab (device-telemetry polling mode, META-17) ──
-  const POLL_MODES: { key: import('$lib/api/types').TelemetryMode; label: string; desc: string }[] = [
-    { key: 'performance', label: 'Performance', desc: 'Snappiest reflection — the most device traffic.' },
-    { key: 'balanced', label: 'Balanced', desc: 'The default — responsive with moderate background traffic.' },
-    { key: 'reduced', label: 'Reduced (Live)', desc: 'Minimal background traffic for stage use — on AM4, successive front-panel edits reflect only on save / scene / channel change.' }
-  ];
-  const pm = $derived(telemetry.pollingMode);
 
   // ── Connection & Device tab ──
   const PROFILES: { key: import('$lib/api/types').ProfileKey; label: string }[] = [
@@ -152,11 +143,6 @@
           <button class="tb" class:on={editorOverlays.axisTab === 'storage'} onclick={() => (editorOverlays.axisTab = 'storage')}>Storage</button>
         {/if}
         <button class="tb" class:on={editorOverlays.axisTab === 'theme'} onclick={() => (editorOverlays.axisTab = 'theme')}>Theme</button>
-        <button class="tb" class:on={editorOverlays.axisTab === 'device'} onclick={() => editorOverlays.openAxis('device')}>Connection</button>
-        {#if deviceSession.hasTelemetryControl}
-          <button class="tb" class:on={editorOverlays.axisTab === 'performance'} onclick={() => (editorOverlays.axisTab = 'performance')}>Performance</button>
-        {/if}
-        <button class="tb" class:on={editorOverlays.axisTab === 'privacy'} onclick={() => (editorOverlays.axisTab = 'privacy')}>Privacy</button>
         <button class="tb" class:on={editorOverlays.axisTab === 'about'} onclick={() => (editorOverlays.axisTab = 'about')}>About</button>
       </div>
 
@@ -268,32 +254,6 @@
             <div><div class="h1">Theme</div><div class="sub">Presets, accent, mode, scale &amp; fonts — saved on this device</div></div>
           </div>
           <AppearanceSettings />
-        </div>
-
-      {:else if editorOverlays.axisTab === 'performance' && deviceSession.hasTelemetryControl}
-        <!-- Device polling mode (META-17): how aggressively Axis reads the device in the background. -->
-        <div class="pad">
-          <div class="head">
-            <div class="logo sm">⚡</div>
-            <div><div class="h1">Performance</div><div class="sub">How often Axis polls your device in the background</div></div>
-          </div>
-
-          <div class="sec">POLLING MODE</div>
-          <p class="muted">Faster modes reflect front-panel and footswitch changes sooner, at the cost of more traffic on the device link. Slower modes keep a stage rig quiet.</p>
-          <div class="modes tri">
-            {#each POLL_MODES as m}
-              <button class="mbtn" class:on={pm === m.key} onclick={() => telemetry.setPollingMode(m.key)}>{m.label}</button>
-            {/each}
-          </div>
-
-          <div class="pmodes">
-            {#each POLL_MODES as m}
-              <div class="pmode" class:on={pm === m.key}>
-                <span class="pmk">{m.label}</span>
-                <span class="pmd">{m.desc}</span>
-              </div>
-            {/each}
-          </div>
         </div>
 
       {:else if editorOverlays.axisTab === 'privacy'}
@@ -518,15 +478,6 @@
   .mbtn { flex: 1; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; }
   .mbtn.on { background: var(--accent); color: var(--accentink); }
   .slownote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 14px; padding: 10px 12px; background: rgba(245, 166, 35, 0.06); border: 1px solid rgba(245, 166, 35, 0.3); border-radius: 10px; font-size: 11.5px; line-height: 1.5; color: var(--text2); }
-
-  /* performance tab */
-  .modes.tri .mbtn { font-size: 12px; }
-  .pmodes { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-  .pmode { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg2); }
-  .pmode.on { border-color: var(--accent); background: var(--accent-tint, var(--bg2)); }
-  .pmk { font-size: 12.5px; font-weight: 700; color: var(--text2); }
-  .pmode.on .pmk { color: var(--accent); }
-  .pmd { font-size: 11px; color: var(--textfaint); line-height: 1.5; }
 
   /* storage tab */
   .pathtxt { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }

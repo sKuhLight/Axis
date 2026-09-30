@@ -12,10 +12,10 @@ import { notifyMutation } from './syncBus';
 import type { Cell } from '$lib/device/grid';
 import { baseName, packFor } from '$lib/device/blocks';
 import { isWebBuild } from '$lib/platform/buildMode';
-import type { NamedParam, EnumParam, ConnPick, ProfileKey, DebugReport, DeviceEvent, TelemetryMode, DecodedBlockFile } from '$lib/api/types';
+import type { NamedParam, EnumParam, ConnPick, ProfileKey, DebugReport, DeviceEvent, DecodedBlockFile } from '$lib/api/types';
 import type { EditorSurface } from './editorSurface';
 import { overlays } from '$lib/overlay/overlays.svelte';
-import { TelemetryStore, isTelemetryMode, type TelemetryHost, type ReportTrigger } from './telemetry.svelte';
+import { TelemetryStore, type TelemetryHost, type ReportTrigger } from './telemetry.svelte';
 import { DeviceSessionStore, type DeviceSessionHost } from './deviceSession.svelte';
 import { PresetBufferStore, type PresetBufferHost } from './presetBuffer.svelte';
 import { GridEditingStore, type GridEditingHost } from './gridEditing.svelte';
@@ -186,7 +186,7 @@ class EditorStore {
   vh = $state(800);
 
   // ── overlays ──
-  // ── Axis hub (single rail entry point: Storage · Connection · Privacy · About) ──
+  // ── Axis hub (single rail entry point: Storage · Theme · About) ──
   // Modal open-state lives in the overlay registry (src/lib/overlay/overlays.svelte.ts) — the
   // single owner of "which overlay is open" and of Escape priority. These accessors keep the
   // long-standing `editor.xOpen` call sites (and the EditorSurface contract) working unchanged.
@@ -346,7 +346,7 @@ class EditorStore {
    *  telemetry choice (updating the local mirror + Faro state to match). */
   #loadProfile = async () => {
     try {
-      const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean; pollingMode?: TelemetryMode }>('config', 'profile');
+      const doc = await forgefx.getDoc<{ contact?: string; telemetryConsent?: boolean }>('config', 'profile');
       const p = doc?.data;
       if (!p) return;
       if (typeof p.contact === 'string' && p.contact !== this.contact) {
@@ -356,9 +356,6 @@ class EditorStore {
       if (typeof p.telemetryConsent === 'boolean' && p.telemetryConsent !== this.telemetry.consent) {
         this.setTelemetryConsent(p.telemetryConsent);
       }
-      // Adopt a stored polling mode: update state + local mirror, then push it to the device (if the
-      // control is available). Not a fresh user action, so we don't re-persist the profile.
-      if (isTelemetryMode(p.pollingMode)) this.#telemetry.adoptPollingMode(p.pollingMode);
     } catch { /* no profile yet / engine not ready */ }
   };
 
@@ -670,7 +667,6 @@ class EditorStore {
   stopLiveMeters = () => this.#telemetry.stopLiveMeters();
   applyDeviceEvent = (e: DeviceEvent) => this.#telemetry.applyDeviceEvent(e);
   toggleTuner = () => this.#telemetry.toggleTuner();
-  setPollingMode = (mode: TelemetryMode) => this.#telemetry.setPollingMode(mode);
   setTelemetryConsent = (on: boolean) => this.#telemetry.setTelemetryConsent(on);
   decideTelemetry = (on: boolean) => this.#telemetry.decideTelemetry(on);
   uploadDebugReport = (trigger?: DebugReport['trigger']) => this.#telemetry.uploadDebugReport(trigger);

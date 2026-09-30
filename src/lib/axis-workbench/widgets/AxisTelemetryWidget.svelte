@@ -1,7 +1,7 @@
 <script lang="ts">
   import { deviceSession, telemetry } from '$lib/editor/editorClients.svelte';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
-  import type { TelemetryMode, TrafficSnapshot } from '$lib/api/types';
+  import type { TrafficSnapshot } from '$lib/api/types';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
 
   let { size }: AxisWorkbenchWidgetProps = $props();
@@ -9,11 +9,6 @@
   const expanded = $derived(size === 'default');
 
   const hasTelemetry = $derived(deviceSession.hasTelemetryControl);
-  const POLL_MODE_KEYS: { key: TelemetryMode; short: string; label: string }[] = [
-    { key: 'performance', short: 'P', label: 'Performance' },
-    { key: 'balanced', short: 'B', label: 'Balanced' },
-    { key: 'reduced', short: 'R', label: 'Reduced (Live)' }
-  ];
   // Previous cumulative snapshot kept locally (plain vars — NOT reactive, so updating them inside the
   // effect below can't loop). trafficRates is $state so the readout re-renders when it changes.
   let prevTraffic: TrafficSnapshot | null = null;
@@ -32,20 +27,8 @@
 </script>
 
 {#if hasTelemetry}
-  <div class="axis-widget axis-telemetry" data-size={size} data-mode={telemetry.pollingMode} title="Device polling mode & live traffic">
-    {#if expanded}<span class="mono token">POLL</span>{/if}
-    <div class="tmode-row" role="group" aria-label="Polling mode">
-      {#each POLL_MODE_KEYS as m}
-        <button
-          class="tmode"
-          class:on={telemetry.pollingMode === m.key}
-          type="button"
-          aria-pressed={telemetry.pollingMode === m.key}
-          title={`Polling: ${m.label}`}
-          onclick={() => telemetry.setPollingMode(m.key)}
-        >{m.short}</button>
-      {/each}
-    </div>
+  <div class="axis-widget axis-telemetry" data-size={size} title="Live device traffic">
+    {#if expanded}<span class="mono token">TRAFFIC</span>{/if}
     {#if notMini}
       <span class="mono trate" title="TX / RX messages per second">
         <span class="trk">TX</span>{formatRate(trafficRates?.txMsgs ?? 0)}<span class="tru">/s</span>
@@ -62,37 +45,9 @@
 {/if}
 
 <style>
-  /* telemetry monitor (META-17): P/B/R quick-switch + live TX/RX rate + loop dots */
+  /* telemetry monitor (META-17): live TX/RX rate + loop dots */
   .axis-telemetry {
     gap: 7px;
-  }
-  .axis-telemetry .tmode-row {
-    display: flex;
-    flex: none;
-    gap: 2px;
-  }
-  .axis-telemetry .tmode {
-    width: 20px;
-    height: 20px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-    background: var(--surface2);
-    color: var(--textfaint);
-    cursor: pointer;
-    font: 800 10px/1 var(--font-mono);
-  }
-  .axis-telemetry .tmode:hover {
-    color: var(--text2);
-  }
-  .axis-telemetry .tmode.on {
-    background: var(--accent);
-    color: var(--accentink);
-  }
-  [data-size='mini'].axis-telemetry .tmode {
-    width: 18px;
-    height: 18px;
   }
   .axis-telemetry .trate {
     display: inline-flex;
