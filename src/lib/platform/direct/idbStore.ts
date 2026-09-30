@@ -84,10 +84,6 @@ export async function createIdbStoreBackend(): Promise<IdbStoreBackend> {
       docs.set(docKey(doc.collection, doc.id), doc);
       enqueue('docs', (s) => s.put(structuredClone(doc), docKey(doc.collection, doc.id)));
     },
-    deleteDoc: (collection, id) => {
-      docs.delete(docKey(collection, id));
-      enqueue('docs', (s) => s.delete(docKey(collection, id)));
-    },
 
     listVersions: () => [...versions],
     putVersion: (v) => {
