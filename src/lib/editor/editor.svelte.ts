@@ -24,10 +24,7 @@ import { ParamEditingStore, type ParamEditingHost } from './paramEditing.svelte'
 // Optional contact the user may leave so we can follow up on a bug (Fractal forum / Reddit / email).
 const CONTACT_KEY = 'axs.profile.contact';
 const loadContact = (): string => { try { return localStorage.getItem(CONTACT_KEY) ?? ''; } catch { return ''; } };
-// One-time "support development on Ko-fi" nudge (voluntary donation — allowed in-app).
-const KOFI_SEEN_KEY = 'axs.kofi.seen';
-const loadKofiSeen = (): boolean => { try { return localStorage.getItem(KOFI_SEEN_KEY) === '1'; } catch { return false; } };
-// First-run guided tour: shown once (after consent + Ko-fi). TOUR_LAST = index of the last step; must
+// First-run guided tour: shown once (after consent). TOUR_LAST = index of the last step; must
 // match the STEPS array length in Tour.svelte (9 steps → 0..8).
 const TOUR_KEY = 'axs.tour.done';
 const TOUR_LAST = 8;
@@ -172,7 +169,7 @@ class EditorStore {
       get onVirtualScreen() { return !!e.virtual; },
       showToast: (text, accent) => e.showToast(text, accent),
       persistProfile: () => e.#persistProfile(),
-      onConsentResolved: () => e.#maybeShowKofi(),
+      onConsentResolved: () => e.#maybeStartTour(),
       applyTempo: (bpm) => e.#device.applyTempo(bpm),
       applyScene: (index) => e.#device.applyScene(index),
       applyParamEcho: (effectId, paramId, norm) => e.#param.applyParamEcho(effectId, paramId, norm),
@@ -198,9 +195,6 @@ class EditorStore {
   contact = $state<string>(loadContact());
   /** Bottom-bar hover hint (left slot) — describes the parameter/control under the cursor. */
   hint = $state<string | null>(null);
-  /** First-run popups: `consentPrompt` = telemetry accept/decline (only when telemetry is enabled in the
-   *  build and the user hasn't decided yet); `kofiNotice` = a one-time "support development" nudge. */
-  kofiNoticeOpen = $state(false);
   /** First-run guided tour (see Tour.svelte). `tourStep` is a 0-based index into its STEPS array. */
   tourActive = $state(false);
   tourStep = $state(0);
@@ -262,7 +256,7 @@ class EditorStore {
     setRequestFailureReporter(this.#telemetry.onReqFailure); // auto-report every 5xx/network failure to Faro
     this.loadPorts(); // know the transport early (drives slowLink → meter throttling over MIDI)
     // Desktop-only first-run + update flows: the remote web app has no desktop to update, and the tour /
-    // telemetry-consent / Ko-fi first-run popups belong to the PC install (the host handles telemetry), so
+    // telemetry-consent first-run popups belong to the PC install (the host handles telemetry), so
     // skip them in the remote build — otherwise every browser session nags with banners it can't act on.
     if (!isWebBuild()) {
       this.#telemetry.init();
@@ -296,25 +290,11 @@ class EditorStore {
     this.#device.syncSceneTempo();
   };
 
-  // ── first-run onboarding chain (consent → Ko-fi → tour) ──
-  /** Called by the telemetry slice once the consent question is settled (answered, or never asked).
-   *  Show the one-time "support development on Ko-fi" notice, unless it's already been seen or a
-   *  consent prompt is currently up (never stack two first-run popups). If Ko-fi won't show, hand off to
-   *  the tour so the first-run sequence continues (consent → Ko-fi → tour). */
-  #maybeShowKofi = () => {
-    if (this.consentPromptOpen) return;
-    if (loadKofiSeen()) { this.#maybeStartTour(); return; }
-    this.kofiNoticeOpen = true;
-  };
-  dismissKofiNotice = () => {
-    this.kofiNoticeOpen = false;
-    try { localStorage.setItem(KOFI_SEEN_KEY, '1'); } catch { /* */ }
-    this.#maybeStartTour(); // continue the first-run sequence
-  };
-  /** First-run guided tour. Auto-starts once, only after the consent + Ko-fi notices are resolved so
+  // ── first-run onboarding chain (consent → tour) ──
+  /** First-run guided tour. Auto-starts once, only after the consent question is resolved so
    *  nothing stacks; persists `axs.tour.done` on finish/skip. Replayable via startTour() from the hub. */
   #maybeStartTour = () => {
-    if (!TOUR_ENABLED || loadTourDone() || this.consentPromptOpen || this.kofiNoticeOpen) return;
+    if (!TOUR_ENABLED || loadTourDone() || this.consentPromptOpen) return;
     this.tourStep = 0;
     this.tourActive = true;
   };

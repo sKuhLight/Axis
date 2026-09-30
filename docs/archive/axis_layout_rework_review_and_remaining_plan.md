@@ -146,7 +146,7 @@ Verified against the old shell's full control inventory (`TopBar`/`ToolRail`/`St
 - **Scenes/Live/Setup nav** — toast stubs instead of placeholder panels.
 - **Grid mode / block size controls** — invisible (gridbar) and read-only even if rendered.
 - **Modifier editing as a block-editor part** (`be-part="modifier"` in the design) — only the overlay flyout exists.
-- **StatusBar content** (hint ticker, Ko-fi/imprint links) — no Workbench equivalent in the `bottom` zone; legal links matter for the imprint requirement.
+- **StatusBar content** (hint ticker, imprint link) — no Workbench equivalent in the `bottom` zone; legal links matter for the imprint requirement.
 - **Preset browser split list** caps at 120 rows with no paging/virtualization.
 - **Param widgets** silently degrade to read-only when the bound block isn't open — acceptable v1, but needs explicit visual state and later cross-block writes.
 

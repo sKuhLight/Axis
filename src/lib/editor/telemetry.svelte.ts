@@ -70,7 +70,7 @@ export interface TelemetryHost {
   /** Mirror the consent / polling-mode choice into the synced `config/profile` doc. */
   persistProfile: () => void;
   /** First-run: the consent question is settled (answered, or never asked) — continue the
-   *  Ko-fi → tour chain, which is onboarding and stays on the host. */
+   *  first-run chain (tour), which is onboarding and stays on the host. */
   onConsentResolved: () => void;
 
   // ── applyDeviceEvent cases owned by other slices ──
@@ -221,7 +221,7 @@ export class TelemetryStore {
     this.#host.persistProfile(); // mirror the choice to the synced profile when logged in
   };
   /** First-run consent choice (accept/decline). Records it, closes the prompt, then hands back to the
-   *  host's first-run chain (Ko-fi → tour). */
+   *  host's first-run chain (tour). */
   decideTelemetry = (on: boolean) => {
     this.consentPromptOpen = false;
     this.setTelemetryConsent(on);

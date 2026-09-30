@@ -1,14 +1,11 @@
 <script lang="ts">
   // Transient, self-dismissing popups that live outside the Axis hub:
   //  • first-run telemetry consent (accept/decline) — shown once if the build ships live diagnostics
-  //  • one-time "support development on Ko-fi" nudge
   //  • the major-error "upload a debug report" prompt (with an optional contact field)
-  import { editorOnboarding, editorProfile, telemetry } from '$lib/editor/editorClients.svelte';
-  import Icon from '$lib/ui/Icon.svelte';
+  import { editorProfile, telemetry } from '$lib/editor/editorClients.svelte';
   import Dialog from '$lib/ui/Dialog.svelte';
   import DialogBody from '$lib/ui/DialogBody.svelte';
   import { LEGAL, openExternal } from './legal';
-  import { KOFI_URL } from './support';
 
   const t = $derived(telemetry.telemetry);
   let showDetail = $state(false);
@@ -37,19 +34,6 @@
       </div>
     </DialogBody>
 </Dialog>
-
-<!-- ── one-time Ko-fi nudge ── -->
-{#if editorOnboarding.kofiNoticeOpen}
-  <div class="toast">
-    <span class="ki">☕</span>
-    <div class="tbody">
-      <div class="tt">Enjoying Axis?</div>
-      <div class="td">It's free &amp; open-source. You can support development on Ko-fi.</div>
-    </div>
-    <button class="tgo" onclick={() => { openExternal(KOFI_URL); editorOnboarding.dismissKofiNotice(); }}>Support</button>
-    <button class="tx" aria-label="Dismiss" onclick={editorOnboarding.dismissKofiNotice}><Icon name="close" size={12} /></button>
-  </div>
-{/if}
 
 <!-- ── major-error → upload report ── -->
 {#if telemetry.reportPrompt}
@@ -109,16 +93,4 @@
   .link.dim { color: var(--textdim); }
   .link.center { display: block; width: 100%; text-align: center; margin-top: 12px; }
   .legal { text-align: center; margin-top: 16px; font-size: 11px; color: var(--textfaint); line-height: 1.55; }
-
-  /* ko-fi toast (bottom-right, above the status bar) */
-  .toast { position: fixed; right: 16px; bottom: 46px; z-index: 340; width: 340px; max-width: calc(100vw - 32px); display: flex; align-items: center; gap: 12px; padding: 13px 14px; background: var(--surface); border: 1px solid var(--border2); border-radius: 13px; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5); animation: axsPop 0.16s ease; }
-  @keyframes axsPop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .ki { font-size: 22px; flex: none; }
-  .tbody { flex: 1; min-width: 0; }
-  .tt { font-size: 13.5px; font-weight: 800; color: var(--text); }
-  .td { font-size: 11.5px; color: var(--textdim); margin-top: 2px; line-height: 1.4; }
-  .tgo { flex: none; height: 34px; padding: 0 14px; background: #13c3ff; color: var(--accentink); border: none; border-radius: 9px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
-  .tgo:hover { filter: brightness(1.08); }
-  .tx { flex: none; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--textfaint); cursor: pointer; }
-  .tx:hover { background: var(--surface2); color: var(--text); }
 </style>

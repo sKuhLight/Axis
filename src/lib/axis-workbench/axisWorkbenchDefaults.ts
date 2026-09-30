@@ -190,7 +190,7 @@ export function createAxisWorkbenchDefaultDocument(): WorkbenchDocument {
     // the widget (renders nothing when the server has no telemetry control), so it degrades to an empty
     // slot on older servers.
     'axis.widget.telemetry': widget('axis.widget.telemetry', 'axis.telemetry', 'gridbar', 2, { state: widgetState(30) }),
-    // Bottom utility bar (StatusBar parity, T10): left = hover-hint ticker, right = Ko-fi / imprint.
+    // Bottom utility bar (StatusBar parity, T10): left = hover-hint ticker, right = copyright / imprint.
     'axis.widget.hint': widget('axis.widget.hint', 'axis.hint', 'bottom', 0, { state: widgetState(20) }),
     'axis.widget.legal': widget('axis.widget.legal', 'axis.legal', 'bottom', 1, { state: widgetState(90) })
   };
