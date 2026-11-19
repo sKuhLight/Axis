@@ -15,7 +15,8 @@ import { resolveTabs, loadLayouts, saveLayouts, newTabId, loadSwipe, saveSwipe, 
 import { surfApplyRemote } from './surfaceStore.svelte';
 import { isRemoteBuild } from './cloudBrowser';
 import { paramValue } from './format';
-import type { NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
+import { resolveCurrentSlot, checkSaveTarget, guardedStore, isSlotConfirmed, saveBlockedText, withTimeout, canProbePreset, saveProbeMs } from './saveTarget';
+import type { PresetRef, NamedParam, EnumParam, TabDef, ResolvedTab, MeterVal, DetectResult, ConnPick, ConnInfo, ProfileKey, DeviceLayout, DebugReport, DeviceEvent, TelemetryMode, TrafficSnapshot } from './types';
 import type { EditorSurface } from './editorSurface';
 
 export type ViewMode = 'basic' | 'advanced';
@@ -1273,9 +1274,30 @@ class EditorStore {
       /* engine not ready — poll() keeps retrying and adopts caps when it comes up */
     }
   };
+  #adoptedDeviceKey: string | null = null;
+  /** Forget everything we believe about "the loaded preset". It belonged to a previous port / profile /
+   *  device; keeping it would let Save propose (or the nav step from) a slot of the wrong unit. A live-query
+   *  device repopulates it on the next poll; one without a live query stays unknown until a preset is selected. */
+  #presetGen = 0; // bumped on every reset — lets an in-flight openSave notice its answer is for the old device
+  #resetPresetContext = () => {
+    this.#presetGen++;
+    this.savePending = false;
+    this.preset = null;
+    this.lastPreset = null;
+    this.saveCurrent = null;
+    this.saveTarget = null;
+    this.saveOpen = false; // an open dialog was drafted against the old device
+  };
   /** Adopt a /device payload: capabilities, API version, preset-slot count. */
   #adoptDevice = (dev: import('./types').DeviceInfo | null) => {
     if (!dev) return;
+    // A different model/port than the one adopted before → its preset context is void. (An offline/empty
+    // payload carries no key and is ignored, so a plain reconnect to the same unit keeps its context.)
+    const key = dev.model ? `${dev.model}@${dev.port ?? ''}` : null;
+    if (key) {
+      if (this.#adoptedDeviceKey && this.#adoptedDeviceKey !== key) this.#resetPresetContext();
+      this.#adoptedDeviceKey = key;
+    }
     if (dev.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
     if (dev.apiVersion) this.apiVersion = dev.apiVersion;
     const count = dev.capabilities?.presets?.count;
@@ -1926,13 +1948,31 @@ class EditorStore {
    *  buffer first if it isn't active (device switches to it), renames the working buffer, then stores it
    *  back — content-safe (same preset, new name). Returns true on success. */
   renameStoredPreset = async (slot: number, name: string): Promise<boolean> => {
-    if (!this.canRenamePresets || slot < 0) return false;
+    if (!this.canRenamePresets || !checkSaveTarget(slot).ok) return false; // explicit, known slot only
     const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, 32).trimEnd();
     if (!clean) return false;
+    // A definitions walk/import owns the transport: no preset switch/read may be interleaved (FORGEFX-32),
+    // and without the confirming read below this rename could not be made safe — so don't start it.
+    if (this.#walkActive()) {
+      this.showToast('Rename unavailable while device definitions are being read — try again when it finishes', '#d6543f');
+      return false;
+    }
     const prevSlot = this.preset?.number ?? -1; // where the user was — we return here afterwards
     const switched = prevSlot !== slot;
+    let abortMsg: string | null = null;
     try {
-      if (switched) await this.selectPreset(slot); // load into edit buffer (switches device)
+      const acked = switched ? await this.selectPreset(slot) : false; // load into edit buffer (switches device)
+      // Never rename/store on a buffer not CONFIRMED to be `slot`: a timed-out or refused switch leaves the
+      // previous preset's content in the buffer, and the store below would write that over `slot`. (Devices
+      // without a live query can only be checked weakly — see isSlotConfirmed.)
+      const live = this.presetLiveQuery;
+      const reported = live && !this.#walkActive()
+        ? (await withTimeout<PresetRef | null>(forgefx.currentPreset(), saveProbeMs(this.slowLink), null))?.number
+        : undefined; // no read during a walk that started meanwhile → unconfirmed → abort below
+      if (!isSlotConfirmed(slot, { live, reported, selectAcked: acked })) {
+        abortMsg = `Rename aborted — preset ${String(slot).padStart(3, '0')} could not be confirmed as loaded`;
+        throw new Error('target not confirmed');
+      }
       const r1 = await forgefx.setPresetName(clean);
       if (!r1.ok) throw new Error('name rejected');
       if (this.preset) this.preset = { ...this.preset, name: clean };
@@ -1952,7 +1992,7 @@ class EditorStore {
       return true;
     } catch {
       if (switched && prevSlot >= 0) { try { await this.selectPreset(prevSlot); } catch { /* */ } } // restore on failure too
-      this.showToast('Rename failed', '#d6543f');
+      this.showToast(abortMsg ?? 'Rename failed', '#d6543f');
       return false;
     }
   };
@@ -2000,6 +2040,7 @@ class EditorStore {
     this.portsOpen = false;
     try {
       await forgefx.selectPort(conn);
+      this.#resetPresetContext(); // the loaded-preset belief belonged to the previous port
       this.conn = { state: 'connecting' };
       await this.poll();
       const d = await forgefx.detect().catch(() => null);
@@ -2019,6 +2060,7 @@ class EditorStore {
     try {
       await forgefx.selectPort(this.portOverride, model);
       this.profileOverride = model === 'auto' ? null : model;
+      this.#resetPresetContext(); // a different device profile → the previous profile's preset is void
       this.conn = { state: 'connecting' };
       await this.poll();
       const d = await forgefx.detect().catch(() => null);
@@ -2040,10 +2082,15 @@ class EditorStore {
     this.presetPick = onPick;
     this.presetOpen = true;
   };
-  selectPreset = async (n: number) => {
+  /** Switch the device to preset `n`. Resolves `false` when the request failed or was refused (state untouched),
+   *  `true` otherwise. Weak on devices whose select is fire-and-forget (AM4, gen-2): there `true` only means the
+   *  command was sent, not that the unit switched. Callers that go on to WRITE must still confirm (see
+   *  `isSlotConfirmed`), and can only do so for real on live-query devices. */
+  selectPreset = async (n: number): Promise<boolean> => {
     if (!this.isV2 && this.isAm4) return this.loadAm4Preset(n); // legacy v1 fallback: AM4's own codec route
     try {
-      await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
+      const r = await forgefx.selectPreset(n); // API v2: unified for every device (AM4 number = stored location)
+      if (r?.ok === false) return false; // device refused — the buffer still holds the previous preset
       this.lastPreset = n;
       this.bufferSource = null; // slot load replaced the buffer — it no longer holds a local file
       this.#histSwitch(n);
@@ -2052,8 +2099,9 @@ class EditorStore {
       await this.load();
       // no live current-preset query → watchPreset can't refresh the open block after the switch
       if (!this.presetLiveQuery && this.selKey) await this.#loadParams();
+      return true;
     } catch {
-      /* */
+      return false;
     }
   };
   stepPreset = (dir: number) => {
@@ -2063,35 +2111,78 @@ class EditorStore {
   };
   /** @deprecated legacy v1 fallback — AM4: load a stored location (0..103) into the edit buffer,
    *  then re-read the 4-slot grid. API v2 goes through the unified selectPreset(). */
-  loadAm4Preset = async (location: number) => {
+  loadAm4Preset = async (location: number): Promise<boolean> => {
     try {
       await forgefx.am4SwitchPreset(location);
       this.presetOpen = false;
       await this.load();
       if (this.selKey) await this.#loadParams();
+      return true;
     } catch {
       this.showToast('Load failed', '#d6543f');
+      return false;
     }
   };
 
   // ── save (DESTRUCTIVE: overwrites a preset slot) ──
   saveOpen = $state(false);
-  saveTarget = $state<number>(0);
-  openSave = () => {
-    this.saveTarget = this.preset?.number ?? this.lastPreset ?? 0;
-    this.saveOpen = true;
+  /** Slot the Save dialog starts on. `null` = current preset unknown → the dialog makes the user choose;
+   *  there is deliberately NO default slot (a guessed slot 0 overwrites a real preset). */
+  saveTarget = $state<number | null>(null);
+  /** The slot the device reported as current at the moment Save was opened (`null` = unknown / unverified).
+   *  Only used to word the dialog ("overwrites the current preset"); seeds `saveTarget`. */
+  saveCurrent = $state<number | null>(null);
+  /** True while `openSave` waits for the device's current-preset answer (buttons show "Reading…"). */
+  savePending = $state(false);
+  /** A definitions walk/import owns the transport: preset reads are off-limits (FORGEFX-32), same as in poll(). */
+  #walkActive = () => !!(deviceDefs.building || deviceDefs.importing);
+  /** Open the Save dialog. On a device with a live preset query the current slot is re-read FRESH (bounded
+   *  wait) instead of trusting the cached `preset`/`lastPreset` — those go stale when the preset is switched
+   *  on the unit (the query then answers -1 and the cache keeps the old slot). -1 / failure / timeout, or a
+   *  definitions walk in progress (no query allowed) → unknown, so the dialog makes the user choose. The
+   *  dialog only appears once this is settled; an answer for a device that has since changed is discarded. */
+  openSave = async () => {
+    if (this.saveOpen || this.savePending) return;
+    this.savePending = true;
+    const gen = this.#presetGen;
+    try {
+      const live = this.presetLiveQuery;
+      let fresh: number | null = null;
+      if (canProbePreset({ live, walking: this.#walkActive() })) {
+        const p = await withTimeout<PresetRef | null>(forgefx.currentPreset(), saveProbeMs(this.slowLink), null);
+        if (gen !== this.#presetGen) return; // port/profile/device changed while waiting — this answer is stale
+        if (p && p.number >= 0) {
+          fresh = p.number;
+          this.preset = p; // same refresh poll() does — keeps the dialog's name hint in step (lastPreset stays: watchPreset owns it)
+        }
+      }
+      const cur = resolveCurrentSlot({ live, fresh, preset: this.preset?.number, last: this.lastPreset });
+      this.saveCurrent = cur;
+      this.saveTarget = cur;
+      this.saveOpen = true;
+    } finally {
+      if (gen === this.#presetGen) this.savePending = false; // a reset already cleared (and may have re-armed) it
+    }
   };
-  save = async (n: number) => {
+  /** Store the edit buffer to slot `n`. Refuses (no device write) unless `n` is an explicit, valid slot. */
+  save = async (n: number | null | undefined) => {
     try {
       // API v2: the unified /preset/store saves every device (AM4 number = stored location; the
       // response additionally carries its bank-letter code). Legacy v1 AM4 uses its own codec route.
-      const r = !this.isV2 && this.isAm4 ? await forgefx.am4StorePreset(n) : await forgefx.store(n);
+      const g = await guardedStore(n, (slot) =>
+        !this.isV2 && this.isAm4 ? forgefx.am4StorePreset(slot) : forgefx.store(slot)
+      );
+      if (!g.ok) {
+        this.showToast(saveBlockedText(g.reason), '#d6543f'); // dialog stays open so a slot can be chosen
+        return;
+      }
+      const { slot, result: r } = g;
       this.saveOpen = false;
       if (r.ok) {
-        history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : n}`, false); // marker — undo continues past it
-        this.showToast(`Saved to preset ${'code' in r && r.code ? r.code : n}`, '#f5a623');
+        history.checkpoint(`Saved to preset ${'code' in r && r.code ? r.code : slot}`, false); // marker — undo continues past it
+        this.showToast(`Saved to preset ${'code' in r && r.code ? r.code : slot}`, '#f5a623');
         await this.poll();
-        if (this.canDeepScan) library.refreshSlot(n); // library cache sync (name-scan devices re-scan on open)
+        if (this.canDeepScan) library.refreshSlot(slot); // library cache sync (name-scan devices re-scan on open)
       } else {
         this.showToast('Save rejected by device', '#d6543f');
       }

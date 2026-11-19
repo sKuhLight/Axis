@@ -526,11 +526,12 @@
     class:dirty={saveDirty}
     data-size={size}
     type="button"
+    aria-busy={editor.savePending}
     onclick={openWidget}
-    title={saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}
+    title={editor.savePending ? 'Reading the current preset from the device…' : saveDirty ? 'Unsaved edits — click to Save' : 'No unsaved edits'}
   >
     <span class="save-dot"></span>
-    {#if expanded}<span>{saveDirty ? 'Save' : 'Saved'}</span>{/if}
+    {#if expanded}<span>{editor.savePending ? 'Reading…' : saveDirty ? 'Save' : 'Saved'}</span>{/if}
   </button>
 {:else if kind === 'addBlock'}
   <button class="axis-widget add" data-size={size} type="button" onclick={openWidget} title="Add block">
