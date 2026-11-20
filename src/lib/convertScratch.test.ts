@@ -794,3 +794,67 @@ describe('enum params without enumOptions', () => {
     for (const bad of [0.3, 1.5, -1, 3, 99]) expect(paramsOf(setBlockParam(s0, 'amp1', 0, bad))[0]).toEqual(paramsOf(s0)[0]);
   });
 });
+
+// ── library docs saved before the sync fix: re-derive a stale normalized on load ──────────────────
+describe('seedScratch re-derives a stale normalized on load (value is authoritative)', () => {
+  const GEOMEAN = Math.sqrt(20 * 20000);
+  const seedParams = (params: Record<string, unknown>[]) =>
+    seedScratch(
+      preset({ blocks: [{ key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params } as never] }),
+      [],
+      'fm3'
+    ).blocks[0].params as unknown as { value: number; normalized?: number; norm?: number }[];
+
+  it('fixes ranged params (linear + log) and enum-option params; leaves consistent ones bit-identical', () => {
+    const ps = seedParams([
+      { nativeName: 'lin', value: 7.5, min: 0, max: 10, normalized: 0.1 }, // stale
+      { nativeName: 'log', value: GEOMEAN, min: 20, max: 20000, log: true, normalized: 0 }, // stale
+      { nativeName: 'enum', value: 2, enumOptions: ['A', 'B', 'C'], normalized: 0.9 }, // stale
+      { nativeName: 'ok', value: 5, min: 0, max: 10, normalized: 0.5 } // already consistent
+    ]);
+    expect(ps[0].normalized).toBeCloseTo(0.75, 10);
+    expect(ps[1].normalized).toBeCloseTo(0.5, 10);
+    expect(ps[2].normalized).toBeCloseTo(2 / 65534, 12);
+    expect(ps[3].normalized).toBe(0.5);
+  });
+
+  it('leaves range-less params alone (no scale to check against), even when value and normalized disagree', () => {
+    const ps = seedParams([
+      { nativeName: 'raw', value: 3000, normalized: 0.0458 },
+      { nativeName: 'lifted-enum', value: 3, normalized: 3 / 65534, displayValue: 'High' },
+      { nativeName: 'tagged-enum', value: 3, normalized: 0.7, kind: 'enum' } // no range, no options → untouched
+    ]);
+    expect(ps.map((p) => p.normalized)).toEqual([0.0458, 3 / 65534, 0.7]);
+  });
+
+  it('never invents a normalized the IR did not carry', () => {
+    const ps = seedParams([{ nativeName: 'lin', value: 5, min: 0, max: 10 }]);
+    expect('normalized' in ps[0]).toBe(false);
+  });
+
+  it('keeps a `norm` alias in step', () => {
+    const ps = seedParams([{ nativeName: 'lin', value: 7.5, min: 0, max: 10, norm: 0.1, normalized: 0.1 }]);
+    expect(ps[0].normalized).toBeCloseTo(0.75, 10);
+    expect(ps[0].norm).toBeCloseTo(0.75, 10);
+  });
+
+  it('a pre-fix saved doc reopens with the knob where the saved value says', () => {
+    // a doc as the OLD setBlockParam left it: value edited, normalized stale
+    const stale = parseConvertedDoc({
+      v: 1,
+      name: 'Old Save',
+      sourceDevice: 'fm9',
+      targetDevice: 'fm3',
+      savedAt: 1,
+      preset: preset({
+        blocks: [
+          { key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params: [{ nativeName: 'bass', value: 7.5, min: 0, max: 10, normalized: 0.1 }] } as never
+        ]
+      })
+    })!;
+    const s = seedScratch(stale.preset, [], stale.targetDevice);
+    expect(buildParams(s.blocks[0].params)[0].norm).toBeCloseTo(0.75, 10);
+    const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+    expect((wire.blocks[0].params[0] as unknown as { normalized: number }).normalized).toBeCloseTo(0.75, 10);
+  });
+});

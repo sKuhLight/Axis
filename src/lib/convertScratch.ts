@@ -155,7 +155,7 @@ export function seedScratch(
     instance: b.instance,
     typeName: b.typeName,
     typeValue: b.typeValue,
-    params: b.params.map((p) => ({ ...p })),
+    params: b.params.map(reconcileNormalized),
     position: normalizePosition(b.position, def.kind),
     channels: b.channels
   }));
@@ -403,6 +403,18 @@ function withParamValue(p: ConverterParam, value: number): ConverterParam | unde
     if (!Number.isInteger(value) || value < 0 || value >= count) return undefined; // count 0 → always refused
   }
   return withNormalized({ ...p, value }, normalizedForValue(p, value));
+}
+
+/** On load, `value` is authoritative for a param with a display range or enum options: recompute a
+ *  `normalized` that disagrees with it (a library doc saved by a build that updated `value` but left
+ *  `normalized` stale). Same formulas as the converter engine and the knob; a range-less param without
+ *  options has no scale to check `normalized` against, so it is left alone. Returns a copy either way. */
+function reconcileNormalized(p: ConverterParam): ConverterParam {
+  const stored = numAttr(p as unknown as Record<string, unknown>, 'normalized');
+  const checkable = enumOptionCount(p) > 0 || rangeOf(p as unknown as Record<string, unknown>) !== undefined;
+  if (stored == null || !checkable || !Number.isFinite(p.value)) return { ...p };
+  const derived = normalizedForValue(p, p.value);
+  return Math.abs(derived - stored) <= 1e-6 ? { ...p } : withNormalized(p, derived);
 }
 
 // ── transitions (pure — each returns a new ScratchState) ─────────────────────────────────────────
