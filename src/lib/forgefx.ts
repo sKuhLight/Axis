@@ -38,6 +38,7 @@ import type {
   ConvertExportResponse,
   ConverterPreset
 } from './types';
+import { checkSaveTarget, saveBlockedText } from './saveTarget';
 
 const BASE = import.meta.env.VITE_FORGEFX_BASE ?? '/api';
 
@@ -53,6 +54,14 @@ class ForgeError extends Error {
     super(message);
     this.name = 'ForgeError';
   }
+}
+
+/** Client-side guard in front of the destructive slot stores: a target that is not an explicit slot number
+ *  (null/undefined/NaN/negative/fractional) is rejected WITHOUT sending a request, so no caller can reach the
+ *  device with a missing or defaulted slot. `null` = target is fine, go ahead. */
+function refuseBadStoreSlot(target: unknown): Promise<never> | null {
+  const check = checkSaveTarget(target);
+  return check.ok ? null : Promise.reject(new ForgeError(400, `Refusing to store: ${saveBlockedText(check.reason)}`));
 }
 
 /** Fleet-telemetry hook: invoked for every server-side (5xx) or network failure so the store can
@@ -242,6 +251,7 @@ export const forgefx = {
   /** Store the edit buffer to a preset slot. DESTRUCTIVE — overwrites that location.
    *  `location`/`code` are ADDITIVE (bank-letter devices report e.g. "C02"). */
   store: (number: number) =>
+    refuseBadStoreSlot(number) ??
     req<{ ok: boolean; location?: number; code?: string }>('/preset/store', {
       method: 'POST',
       body: JSON.stringify({ number })
@@ -590,6 +600,7 @@ export const forgefx = {
   am4ModModel: () => req<import('./types').Am4ModifierModel>('/am4/mod/model'),
   /** @deprecated legacy v1 fallback — API v2 stores via store(). */
   am4StorePreset: (location: number) =>
+    refuseBadStoreSlot(location) ??
     req<{ ok: boolean; location: number; code: string }>('/am4/preset/store', { method: 'POST', body: JSON.stringify({ location }) }),
   /** @deprecated legacy v1 fallback — API v2 backs up via presetBackup(). */
   am4BackupPreset: (location?: number) =>

@@ -3,8 +3,10 @@
   // restore (caps.restoreDump), offline .syx decode (works for both device families), firmware
   // validation (caps.firmwareValidate) and a read-only modifier-model view (caps.modifiers.model).
   // Legacy v1 fallback: an AM4 on a pre-v2 server keeps the old /am4/* routes behind the same UI.
+  import { untrack } from 'svelte';
   import { editor } from './editor.svelte';
   import { forgefx } from './forgefx';
+  import { describeRestoreTarget, guardedStore, saveBlockedText, seedOnOpen, type RestoreDecode } from './saveTarget';
   import type { SyxDecodeResult } from './types';
 
   // Loose display view over BOTH modifier-model DTOs (unified gen-3 ModModel + legacy Am4ModifierModel).
@@ -24,7 +26,14 @@
   let fw = $state<string>('');
   let modModel = $state<ModView | null>(null);
   let modOpen = $state(false);
-  let storeLoc = $state(0);
+  let storeLoc = $state<number | ''>(''); // '' = no slot chosen — never preselect one (a store overwrites it)
+  // …and don't carry a previous visit's choice into the next one: re-blank it on every open.
+  let wasOpen = false;
+  $effect(() => {
+    const next = seedOnOpen<number | ''>({ wasOpen, value: untrack(() => storeLoc) }, editor.deviceToolsOpen, () => '');
+    wasOpen = next.wasOpen;
+    storeLoc = next.value;
+  });
 
   const caps = $derived(editor.caps);
   const legacyAm4 = $derived(!editor.isV2 && editor.isAm4); // v1 fallback path (old /am4/* routes)
@@ -73,6 +82,19 @@
     busy = true; say('');
     try {
       const bytes = await fileBytes(f);
+      // A restore writes to the location embedded in the file, not one the user picked — so decode it FIRST
+      // and make the user confirm that exact target. Not every restore-capable device can decode (gen-2 has
+      // restoreDump but its decode answers 501): then the prompt says the location couldn't be determined and
+      // the user still has to confirm — never a silent write.
+      let dec: RestoreDecode = {};
+      try {
+        dec = legacyAm4 ? await forgefx.am4DecodeSyx(bytes) : await forgefx.decodeSyxBytes(bytes);
+      } catch { /* decode unavailable/failed → undetermined target, confirm below */ }
+      const target = describeRestoreTarget(dec, (n) => (editor.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
+      if (!confirm(`Restore "${f.name}" to ${target}?\n\nThis overwrites what is stored there on the device.`)) {
+        say('Restore cancelled — nothing was written');
+        return;
+      }
       const r = legacyAm4 ? await forgefx.am4RestorePreset(bytes) : await forgefx.presetRestore(bytes);
       say(`Restored → ${r.code ?? (r.location != null ? String(r.location) : '(active)')}`);
     } catch (err) { say('Restore rejected: ' + (err as Error).message, false); }
@@ -130,8 +152,12 @@
   async function storeToSlot() {
     busy = true;
     try {
-      const r = legacyAm4 ? await forgefx.am4StorePreset(storeLoc) : await forgefx.store(storeLoc);
-      say(`Saved active buffer → ${('code' in r && r.code) || bankCode(storeLoc)}`);
+      const g = await guardedStore(storeLoc === '' ? null : Number(storeLoc), (slot) =>
+        legacyAm4 ? forgefx.am4StorePreset(slot) : forgefx.store(slot)
+      );
+      if (!g.ok) { say(saveBlockedText(g.reason), false); return; }
+      const r = g.result;
+      say(`Saved active buffer → ${('code' in r && r.code) || bankCode(g.slot)}`);
     } catch (e) { say('Store failed: ' + (e as Error).message, false); }
     finally { busy = false; }
   }
@@ -173,10 +199,11 @@
             <div class="line">
               <label class="filebtn">Save active buffer → slot
                 <select bind:value={storeLoc} disabled={busy}>
+                  <option value="" disabled>— choose slot —</option>
                   {#each Array(locCount) as _, i (i)}<option value={i}>{bankCode(i)}</option>{/each}
                 </select>
               </label>
-              <button onclick={storeToSlot} disabled={busy}>Store</button>
+              <button onclick={storeToSlot} disabled={busy || storeLoc === ''}>Store</button>
             </div>
           {/if}
         </section>
