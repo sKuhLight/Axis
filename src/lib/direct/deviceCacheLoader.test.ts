@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Doc, Store } from 'forgefx-server/runtime';
+import { CURRENT_CACHE_SCHEMA, type Doc, type Store } from 'forgefx-server/runtime';
 import { makeDeviceCacheLoader } from './deviceCacheLoader';
 
 /** Minimal getDoc-only store over a fixture map keyed `${collection}/${id}`. */
@@ -13,9 +13,17 @@ function fakeStore(docs: Record<string, { data: unknown; deleted?: boolean }>): 
   };
 }
 
+/** A synthetic profile stamped with the given schema (undefined = unstamped, like a profile from before
+ *  profiles were versioned). */
+function profile(schema: unknown, extra: Record<string, unknown> = {}) {
+  const meta: Record<string, unknown> = { recordCount: 3, source: 'live' };
+  if (schema !== undefined) meta.schema = schema;
+  return { model: 0x11, firmware: '12.0', meta, ...extra };
+}
+
 describe('makeDeviceCacheLoader', () => {
-  it('returns the stored BuiltCache for a known key', () => {
-    const built = { model: 0x11, firmware: '12.0', records: [] };
+  it('returns the stored BuiltCache for a known key when it carries the current schema', () => {
+    const built = profile(CURRENT_CACHE_SCHEMA);
     const load = makeDeviceCacheLoader(fakeStore({ 'deviceCaches/fm3-12-0': { data: built } }));
     expect(load('fm3-12-0')).toBe(built);
   });
@@ -26,7 +34,7 @@ describe('makeDeviceCacheLoader', () => {
   });
 
   it('returns null for a tombstoned (deleted) doc', () => {
-    const load = makeDeviceCacheLoader(fakeStore({ 'deviceCaches/x': { data: { model: 1 }, deleted: true } }));
+    const load = makeDeviceCacheLoader(fakeStore({ 'deviceCaches/x': { data: profile(CURRENT_CACHE_SCHEMA), deleted: true } }));
     expect(load('x')).toBeNull();
   });
 
@@ -40,5 +48,30 @@ describe('makeDeviceCacheLoader', () => {
     };
     makeDeviceCacheLoader(store)('fm9-11-2');
     expect(seen).toEqual([['deviceCaches', 'fm9-11-2']]);
+  });
+
+  describe('stale profiles are not applied', () => {
+    const stale: Array<[string, unknown]> = [
+      ['an unstamped profile', undefined],
+      ['an older schema', CURRENT_CACHE_SCHEMA - 1],
+      ['a newer schema than this build understands', CURRENT_CACHE_SCHEMA + 1],
+      ['a non-numeric stamp', 'one']
+    ];
+    for (const [label, schema] of stale) {
+      it(`returns null for ${label}`, () => {
+        const load = makeDeviceCacheLoader(fakeStore({ 'deviceCaches/k': { data: profile(schema) } }));
+        expect(load('k')).toBeNull();
+      });
+    }
+
+    it('does not delete a stale profile and picks it up again once it is current', () => {
+      const docs: Record<string, { data: unknown; deleted?: boolean }> = { 'deviceCaches/k': { data: profile(undefined) } };
+      const load = makeDeviceCacheLoader(fakeStore(docs));
+      expect(load('k')).toBeNull();
+      expect(docs['deviceCaches/k']?.deleted).toBeUndefined(); // the loader never touches the store
+      const rebuilt = profile(CURRENT_CACHE_SCHEMA);
+      docs['deviceCaches/k'] = { data: rebuilt };
+      expect(load('k')).toBe(rebuilt);
+    });
   });
 });
