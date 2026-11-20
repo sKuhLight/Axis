@@ -666,7 +666,13 @@ export interface DeviceCacheMeta {
   /** How the profile was obtained: 'live' = A3 self-describe walk, 'editor-cache' = imported official
    *  editor file, 'cloud' = pulled shared profile. Absent on servers that don't stamp it. */
   source?: 'live' | 'editor-cache' | 'cloud' | (string & {});
+  /** The schema stamp the stored profile carries (null = none). Absent on servers that don't report it. */
+  schema?: number | null;
 }
+
+/** Why a stored definition profile can't be used: no schema stamp, an older one (derived under rules
+ *  that have since changed), or one newer than this build understands. */
+export type DeviceDefsStaleReason = 'missing' | 'outdated' | 'newer';
 
 /** POST /device/cache/import and /device/cache/cloud/pull success body. */
 export interface DeviceCacheImportResult {
@@ -685,12 +691,20 @@ export interface DeviceCacheImportResult {
 export interface DeviceCacheStatus {
   /** Opaque cache key (model+firmware) the server addresses this profile by. */
   key: string;
-  /** A persisted profile exists for the connected device+firmware. */
+  /** A persisted profile exists for the connected device+firmware — whether or not it is usable (see `stale`). */
   exists: boolean;
   /** A build is currently running. */
   building: boolean;
   progress?: { done: number; total: number; phase: string };
   meta?: DeviceCacheMeta;
+  /** The stored profile can't be used (its schema is missing/outdated/newer): the server doesn't apply
+   *  it, Axis runs on the bundled definitions, and the definitions must be re-read. Absent on servers
+   *  that predate the schema gate — treat as false. */
+  stale?: boolean;
+  /** Why the stored profile is stale — only present when `stale`. */
+  staleReason?: DeviceDefsStaleReason;
+  /** The schema the server writes and accepts. */
+  currentSchema?: number;
 }
 
 /** One editor-cache file discovered on disk (Node/Electron) — GET /device/cache/sources → candidates. */
@@ -719,6 +733,9 @@ export interface CloudCacheStatus {
   enabled?: boolean;
   available: boolean;
   meta?: { source?: string; recordCount?: number | null; createdAt?: string; contentHash?: string };
+  /** A shared profile exists but is out of date for this server (so `available` is false). */
+  stale?: boolean;
+  staleReason?: DeviceDefsStaleReason;
 }
 
 export interface Health {

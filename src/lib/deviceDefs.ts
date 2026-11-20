@@ -1,7 +1,9 @@
 // Pure decision logic for the device-definitions feature (A4, AXIS-17/44 · META-22).
 //
 // Axis ships BUNDLED effect definitions. When the connected device+firmware has no persisted profile,
-// it offers to build one. This module holds the framework-free, unit-tested core: which actions to offer
+// it offers to build one — and offers again when the stored profile is STALE (the server stamps every
+// profile with a schema and refuses to apply one it can't use, so Axis is back on the bundled
+// definitions until they are re-read). This module holds the framework-free, unit-tested core: which actions to offer
 // (and in what order of preference), whether the prompt should appear at all, which source the active
 // definitions came from, and how to parse/match an official editor cache filename. The store
 // (`deviceDefs.svelte.ts`) and component (`DeviceDefsPrompt.svelte`) are thin shells over these.
@@ -68,22 +70,34 @@ export function isBuildProgressPhase(phase: string): boolean {
   return !TERMINAL_BUILD_PHASES.has(phase);
 }
 
+/** The stored profile exists but the server can't use it (schema missing / outdated / newer): it is not
+ *  applied, so Axis is on the bundled definitions exactly as if nothing were stored. */
+export function isDefsStale(status: Pick<DeviceCacheStatus, 'exists' | 'stale'> | null | undefined): boolean {
+  return !!status?.exists && !!status.stale;
+}
+
+/** A USABLE profile is stored (exists and not stale) — the only state in which Axis runs on device definitions. */
+export function hasUsableDefs(status: Pick<DeviceCacheStatus, 'exists' | 'stale'> | null | undefined): boolean {
+  return !!status?.exists && !status.stale;
+}
+
 /**
  * Whether the connect-time prompt should appear. It appears when the device can acquire a
  * definition profile at all — self-describe (walk) OR cache import (import-only devices like the
  * AM4, whose action list simply has no "Read from device") — the status has loaded and reports NO
- * persisted profile for the current firmware, and the user hasn't dismissed it for this
- * device+firmware. `building` in-flight also shows the prompt (so its progress bar is visible),
- * but a persisted profile (`exists`) or a missing capability hides it.
+ * USABLE profile for the current firmware (none stored, or a stale one the server won't apply), and
+ * the user hasn't dismissed it for this device+firmware+state (see `dismissKey`: a dismissal of the
+ * "no profile" prompt does not cover the stale prompt). `building` in-flight also shows the prompt
+ * (so its progress bar is visible), but a usable profile or a missing capability hides it.
  */
 export function shouldOfferDeviceDefs(
   caps: { selfDescribe?: boolean; cacheImport?: boolean } | null,
-  status: Pick<DeviceCacheStatus, 'exists' | 'building'> | null,
+  status: Pick<DeviceCacheStatus, 'exists' | 'building' | 'stale'> | null,
   dismissed: boolean
 ): boolean {
   if ((!caps?.selfDescribe && !caps?.cacheImport) || !status) return false;
   if (status.building) return true; // always surface an in-flight build
-  if (status.exists) return false; // already have a profile — nothing to prompt
+  if (hasUsableDefs(status)) return false; // already have a usable profile — nothing to prompt
   return !dismissed;
 }
 
@@ -94,6 +108,8 @@ export interface ActiveDefsSource {
   label: string;
   /** Longer tooltip detail (record count / firmware / coverage), or '' when nothing extra to say. */
   detail: string;
+  /** A profile is stored but out of date, so these are still the bundled definitions (`origin: 'bundled'`). */
+  stale: boolean;
 }
 
 /**
@@ -105,9 +121,18 @@ export function activeDefsSource(
   status: DeviceCacheStatus | null,
   sources: Pick<DeviceCacheSources, 'persisted'> | null
 ): ActiveDefsSource {
+  // A stale profile is stored but NOT applied — the active definitions are the bundled ones.
+  if (isDefsStale(status)) {
+    return {
+      origin: 'bundled',
+      label: 'Bundled definitions (stored profile out of date)',
+      detail: 'The definitions stored for this device are out of date and are not used. Re-read them to match this device and firmware again.',
+      stale: true
+    };
+  }
   const persisted = !!status?.exists || !!sources?.persisted;
   if (!persisted) {
-    return { origin: 'bundled', label: 'Bundled definitions', detail: 'Axis is using its shipped effect definitions.' };
+    return { origin: 'bundled', label: 'Bundled definitions', detail: 'Axis is using its shipped effect definitions.', stale: false };
   }
   const meta = status?.meta;
   const bits: string[] = [];
@@ -119,19 +144,43 @@ export function activeDefsSource(
   // The server stamps meta.source: 'live' (self-describe walk) | 'editor-cache' | 'cloud'.
   switch (meta?.source) {
     case 'live':
-      return { origin: 'device', label: 'Read from device', detail };
+      return { origin: 'device', label: 'Read from device', detail, stale: false };
     case 'editor-cache':
-      return { origin: 'editorCache', label: 'Editor cache file', detail };
+      return { origin: 'editorCache', label: 'Editor cache file', detail, stale: false };
     case 'cloud':
-      return { origin: 'cloud', label: 'Shared cloud profile', detail };
+      return { origin: 'cloud', label: 'Shared cloud profile', detail, stale: false };
     default:
-      return { origin: 'device', label: 'Device profile', detail };
+      return { origin: 'device', label: 'Device profile', detail, stale: false };
   }
 }
 
-/** localStorage dismissal key for a device+firmware pair (null-safe; unknowns collapse to '?'). */
-export function dismissKey(model: string | null | undefined, firmware: string | null | undefined): string {
-  return `${(model || '?').toLowerCase()}|${firmware || '?'}`;
+/** localStorage dismissal key for a device+firmware pair (null-safe; unknowns collapse to '?'). With a
+ *  `staleTag` (see `staleDismissTag`) it is a DIFFERENT key, so dismissing the "no definitions yet"
+ *  prompt for this device+firmware never silences the later "definitions are out of date" prompt. The
+ *  plain key (no tag) is unchanged, so earlier dismissals keep working. */
+export function dismissKey(model: string | null | undefined, firmware: string | null | undefined, staleTag?: string | null): string {
+  const base = `${(model || '?').toLowerCase()}|${firmware || '?'}`;
+  return staleTag ? `${base}|stale:${staleTag}` : base;
+}
+
+/** Has the user dismissed the prompt for the CURRENT state of this device+firmware? The stale state is part
+ *  of the key, so a dismissal made while no profile was stored (plain key) does not cover a later
+ *  stale profile, and a dismissed stale state does not cover a different one (another schema). */
+export function isDismissed(
+  dismissed: ReadonlySet<string>,
+  model: string | null | undefined,
+  firmware: string | null | undefined,
+  status: Pick<DeviceCacheStatus, 'exists' | 'stale' | 'currentSchema' | 'meta'> | null | undefined
+): boolean {
+  return dismissed.has(dismissKey(model, firmware, staleDismissTag(status)));
+}
+
+/** The stale state as a dismissal-key tag: stored schema to current schema (`none` / `?` when unknown), or
+ *  null when the profile isn't stale. A later schema bump changes the tag, so a dismissal of one stale
+ *  state never hides the next. */
+export function staleDismissTag(status: Pick<DeviceCacheStatus, 'exists' | 'stale' | 'currentSchema' | 'meta'> | null | undefined): string | null {
+  if (!isDefsStale(status)) return null;
+  return `${status?.meta?.schema ?? 'none'}>${status?.currentSchema ?? '?'}`;
 }
 
 /** Parsed pieces of an official editor cache filename. */

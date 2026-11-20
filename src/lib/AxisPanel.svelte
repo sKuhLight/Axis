@@ -438,11 +438,15 @@
 
           <div class="sec mt">DEFINITIONS</div>
           <p class="statline" title={deviceDefs.activeSource.detail}>
-            <span class="badge" class:ok={deviceDefs.activeSource.origin !== 'bundled'}>{deviceDefs.activeSource.origin === 'bundled' ? 'BUNDLED' : 'PROFILE'}</span>
+            <span class="badge" class:ok={deviceDefs.activeSource.origin !== 'bundled'} class:warn={deviceDefs.activeSource.stale}>{deviceDefs.activeSource.origin === 'bundled' ? 'BUNDLED' : 'PROFILE'}</span>
             {deviceDefs.activeSource.label}{#if editor.conn.fw} · fw {editor.conn.fw}{/if}
           </p>
           {#if deviceDefs.canRebuild}
-            <p class="muted">After a firmware update, discard the definitions and read them from the device again.</p>
+            {#if deviceDefs.activeSource.stale}
+              <p class="muted">The stored definitions are out of date and not used. Read them again to match this device and firmware.</p>
+            {:else}
+              <p class="muted">After a firmware update, discard the definitions and read them from the device again.</p>
+            {/if}
             <button class="signout" onclick={() => deviceDefs.rebuild()}>Re-read definitions</button>
           {/if}
 

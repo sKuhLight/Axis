@@ -4,6 +4,10 @@ import {
   shouldOfferDeviceDefs,
   activeDefsSource,
   dismissKey,
+  staleDismissTag,
+  isDismissed,
+  isDefsStale,
+  hasUsableDefs,
   parseEditorCacheName,
   normalizeModelHex,
   parseFirmware,
@@ -147,6 +151,60 @@ describe('shouldOfferDeviceDefs — when the prompt appears', () => {
   });
 });
 
+describe('shouldOfferDeviceDefs — stale profiles', () => {
+  const staleStatus = { exists: true, building: false, stale: true };
+
+  it('appears for a stored-but-stale profile (the server no longer applies it)', () => {
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, staleStatus, false)).toBe(true);
+    expect(shouldOfferDeviceDefs({ cacheImport: true }, staleStatus, false)).toBe(true); // import-only devices too
+  });
+
+  it('stays hidden for a stale profile once that state was dismissed', () => {
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, staleStatus, true)).toBe(false);
+  });
+
+  it('a profile that is stored and NOT stale still hides the prompt, as before', () => {
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, { exists: true, building: false, stale: false }, false)).toBe(false);
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, { exists: true, building: false }, false)).toBe(false); // older server: no field
+  });
+
+  it('still surfaces an in-flight build over a stale profile, even if dismissed', () => {
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, { exists: true, building: true, stale: true }, true)).toBe(true);
+  });
+
+  it('classifies the status: stale vs usable', () => {
+    expect(isDefsStale({ exists: true, stale: true })).toBe(true);
+    expect(isDefsStale({ exists: true, stale: false })).toBe(false);
+    expect(isDefsStale({ exists: false, stale: true })).toBe(false); // nothing stored, nothing stale
+    expect(isDefsStale(null)).toBe(false);
+    expect(hasUsableDefs({ exists: true })).toBe(true);
+    expect(hasUsableDefs({ exists: true, stale: true })).toBe(false);
+    expect(hasUsableDefs({ exists: false })).toBe(false);
+    expect(hasUsableDefs(undefined)).toBe(false);
+  });
+});
+
+describe('activeDefsSource — a stale profile is not the active definitions', () => {
+  const stale: DeviceCacheStatus = { key: 'k', exists: true, building: false, stale: true, staleReason: 'missing', currentSchema: 1, meta: { recordCount: 10, builtAt: null, source: 'live', schema: null } };
+
+  it('reports the bundled definitions, flagged stale, even though a profile is stored', () => {
+    const s = activeDefsSource(stale, null);
+    expect(s.origin).toBe('bundled');
+    expect(s.stale).toBe(true);
+    expect(s.label).toMatch(/out of date/);
+    expect(s.detail).toMatch(/not used/);
+  });
+
+  it('is not rescued by sources.persisted', () => {
+    expect(activeDefsSource(stale, { persisted: true }).origin).toBe('bundled');
+  });
+
+  it('is not flagged stale for bundled-only or in-use profiles', () => {
+    expect(activeDefsSource(null, null).stale).toBe(false);
+    expect(activeDefsSource({ key: 'k', exists: true, building: false, meta: { recordCount: 1, builtAt: null, source: 'live' } }, null).stale).toBe(false);
+  });
+});
+
 describe('activeDefsSource — where the active definitions came from', () => {
   const status = (o: Partial<DeviceCacheStatus>): DeviceCacheStatus => ({ key: 'k', exists: true, building: false, ...o });
 
@@ -224,5 +282,59 @@ describe('dismissKey', () => {
     expect(dismissKey('FM3', '1.07.15')).toBe('fm3|1.07.15');
     expect(dismissKey(null, null)).toBe('?|?');
     expect(dismissKey('AxeFx III', undefined)).toBe('axefx iii|?');
+  });
+
+  it('keeps the plain key when there is no stale state (earlier dismissals stay valid)', () => {
+    expect(dismissKey('FM3', '12.0', null)).toBe('fm3|12.0');
+    expect(dismissKey('FM3', '12.0', undefined)).toBe('fm3|12.0');
+  });
+
+  it('is a different key for a stale state', () => {
+    expect(dismissKey('FM3', '12.0', 'none>1')).toBe('fm3|12.0|stale:none>1');
+    expect(dismissKey('FM3', '12.0', 'none>1')).not.toBe(dismissKey('FM3', '12.0'));
+  });
+});
+
+describe('staleDismissTag + isDismissed — a dismissal never suppresses the stale prompt', () => {
+  const stale = (schema: number | null, currentSchema = 2): DeviceCacheStatus => ({
+    key: 'k', exists: true, building: false, stale: true, currentSchema, meta: { recordCount: 1, builtAt: null, schema }
+  });
+  const usable: DeviceCacheStatus = { key: 'k', exists: true, building: false, stale: false, currentSchema: 2, meta: { recordCount: 1, builtAt: null, schema: 2 } };
+  const none: DeviceCacheStatus = { key: 'k', exists: false, building: false, currentSchema: 2 };
+
+  it('tags only a stale state, with the stored and the current schema', () => {
+    expect(staleDismissTag(stale(1))).toBe('1>2');
+    expect(staleDismissTag(stale(null))).toBe('none>2');
+    expect(staleDismissTag({ exists: true, stale: true })).toBe('none>?'); // a server that reports neither number
+    expect(staleDismissTag(usable)).toBeNull();
+    expect(staleDismissTag(none)).toBeNull();
+    expect(staleDismissTag({ exists: false, stale: true })).toBeNull();
+    expect(staleDismissTag(null)).toBeNull();
+  });
+
+  it('a dismissal of the no-profile prompt does not hide the stale prompt for the same model+firmware', () => {
+    const dismissed = new Set([dismissKey('FM3', '12.0')]); // user clicked Later while nothing was stored
+    expect(isDismissed(dismissed, 'FM3', '12.0', none)).toBe(true);
+    expect(isDismissed(dismissed, 'FM3', '12.0', stale(null))).toBe(false);
+    // so the prompt logic re-offers: the stale status is shown although this device+firmware was dismissed
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, stale(null), isDismissed(dismissed, 'FM3', '12.0', stale(null)))).toBe(true);
+  });
+
+  it('dismissing the stale prompt hides exactly that stale state', () => {
+    const dismissed = new Set([dismissKey('FM3', '12.0', staleDismissTag(stale(1)))]);
+    expect(isDismissed(dismissed, 'FM3', '12.0', stale(1))).toBe(true);
+    expect(shouldOfferDeviceDefs({ selfDescribe: true }, stale(1), isDismissed(dismissed, 'FM3', '12.0', stale(1)))).toBe(false);
+    // a different stored schema, or a later schema bump, is a new state and prompts again
+    expect(isDismissed(dismissed, 'FM3', '12.0', stale(null))).toBe(false);
+    expect(isDismissed(dismissed, 'FM3', '12.0', stale(1, 3))).toBe(false);
+    // another firmware / model is its own pair
+    expect(isDismissed(dismissed, 'FM3', '13.0', stale(1))).toBe(false);
+    expect(isDismissed(dismissed, 'FM9', '12.0', stale(1))).toBe(false);
+  });
+
+  it('the stale dismissal does not leak into the plain key once the profile is rebuilt', () => {
+    const dismissed = new Set([dismissKey('FM3', '12.0', staleDismissTag(stale(1)))]);
+    expect(isDismissed(dismissed, 'FM3', '12.0', usable)).toBe(false);
+    expect(isDismissed(dismissed, 'FM3', '12.0', none)).toBe(false);
   });
 });
