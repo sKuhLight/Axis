@@ -23,7 +23,9 @@
         <button class="preset" class:on={cfg.preset === p.id} onclick={() => theme.setPreset(p.id)}
           style:--pv-bg={p.pal.bg ?? (p.base === 'light' ? '#e9ebf0' : '#0c0c0e')}
           style:--pv-surf={p.pal.surface ?? (p.base === 'light' ? '#ffffff' : '#141417')}
-          style:--pv-acc={p.accent}>
+          style:--pv-acc={p.accent}
+          style:--pv-text={p.pal.text ?? (p.base === 'light' ? '#181a20' : '#e9e9ee')}
+          style:--pv-dim={p.pal.textdim ?? (p.base === 'light' ? '#5e626e' : '#9a9aa3')}>
           <span class="swatch"><span class="dot"></span></span>
           <span class="pname">{p.name}</span>
           <span class="pbase">{p.base}</span>
@@ -86,8 +88,11 @@
   .preset.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .preset .swatch { width: 100%; height: 26px; border-radius: 7px; background: var(--pv-surf); border: 1px solid rgba(128, 128, 128, 0.18); display: flex; align-items: center; padding: 0 8px; }
   .preset .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pv-acc); }
-  .pname { font-size: 12.5px; font-weight: 700; color: var(--text); }
-  .pbase { font: 600 8.5px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--textfaint); }
+  /* Card text follows the PREVIEWED preset's palette, not the active theme — a
+     light card under a dark theme (or vice versa) otherwise renders its name
+     in the wrong ink and it vanishes. */
+  .pname { font-size: 12.5px; font-weight: 700; color: var(--pv-text); }
+  .pbase { font: 600 8.5px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--pv-dim); }
   .accents { display: flex; flex-wrap: wrap; gap: 9px; }
   .acc { width: 34px; height: 34px; border-radius: 9px; border: 2px solid transparent; cursor: pointer; padding: 0; position: relative; }
   .acc.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
