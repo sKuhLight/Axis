@@ -58,6 +58,14 @@ export interface WorkbenchWidgetSizingProvider {
   estWidth: (type: string) => number;
   /** Whether a widget type is keep-protected (never sheds into `⋯`). */
   isKeep?: (type: string) => boolean;
+  /**
+   * Whether a widget type can render right now (e.g. the connected device has
+   * the capability it needs). Unavailable widgets are skipped by WidgetZone —
+   * not mounted and not counted by auto-fit — so they leave neither an empty
+   * shell nor phantom width. Read inside reactive scope; absent = always
+   * available.
+   */
+  isAvailable?: (type: string) => boolean;
 }
 
 /**

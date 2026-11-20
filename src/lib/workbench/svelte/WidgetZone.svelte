@@ -48,7 +48,7 @@
   let zoneWidth = $state(0);
   let groupWidth = $state(0);
   let overflowOpen = $state(false);
-  const widgets = $derived(selectVisibleWidgetsByZone($controller.document, zone));
+  const widgets = $derived(availableWidgets(selectVisibleWidgetsByZone($controller.document, zone)));
   const units = $derived(unitsForZone(widgets));
   const visible = $derived(units.length > 0 || $controller.editMode);
   const vertical = $derived(zone === 'rail');
@@ -62,6 +62,14 @@
   }
   function isKeepType(type: string): boolean {
     return registry.widgetSizing?.isKeep?.(type) ?? false;
+  }
+  // App-gated widget types (e.g. a device capability) that cannot render right
+  // now: never mounted here and never counted by the fit (no phantom width).
+  function isAvailableType(type: string): boolean {
+    return registry.widgetSizing?.isAvailable?.(type) ?? true;
+  }
+  function availableWidgets(source: WidgetInstance[]): WidgetInstance[] {
+    return source.filter((widget) => isAvailableType(widget.type));
   }
 
   function unitsForZone(source: WidgetInstance[]): WidgetUnit[] {
@@ -82,7 +90,7 @@
 
   function unitDescriptor(unit: WidgetUnit): WidgetFitDescriptor {
     const layout = $controller.activeLayout;
-    const members = unit.widgetIds.map((id) => layout?.widgets[id]).filter(Boolean) as WidgetInstance[];
+    const members = availableWidgets(unit.widgetIds.map((id) => layout?.widgets[id]).filter(Boolean) as WidgetInstance[]);
     const estW = members.reduce((total, widget) => total + estWidthOf(widget.type), 0) || 120;
     // Keep-protected if any member is in the app keep-set OR is locked.
     const keep = members.some((widget) => widget.locked || isKeepType(widget.type));
@@ -96,7 +104,7 @@
     const zones = fitGroup && fitGroup.length ? fitGroup : [zone];
     const out: WidgetFitDescriptor[] = [];
     for (const z of zones) {
-      const zoneWidgets = z === zone ? widgets : selectVisibleWidgetsByZone($controller.document, z);
+      const zoneWidgets = z === zone ? widgets : availableWidgets(selectVisibleWidgetsByZone($controller.document, z));
       for (const unit of unitsForZone(zoneWidgets)) out.push(unitDescriptor(unit));
     }
     return out;

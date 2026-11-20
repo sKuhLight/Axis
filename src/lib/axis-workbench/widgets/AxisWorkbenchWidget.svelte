@@ -31,6 +31,7 @@
   } from './widgetControls';
   import { resolveParamWidgetState } from './paramWidgetState';
   import { isSaveDirty } from './saveDirtyState';
+  import { axisConnectionLabel, axisPresetDisplayName } from './statusLabels';
   import { computeTrafficRates, formatRate, type TrafficRates } from './telemetryTraffic';
   import type { TelemetryMode, TrafficSnapshot } from '../../types';
 
@@ -53,12 +54,21 @@
   const kind = $derived(widget.type.replace(/^axis\./, ''));
   const pnumRaw = $derived(editor.preset && editor.preset.number >= 0 ? editor.preset.number : -1);
   const pnum = $derived(pnumRaw >= 0 ? String(pnumRaw).padStart(3, '0') : '---');
-  const pname = $derived(editor.preset?.name || (editor.conn.state === 'online' ? 'DEBUG' : 'offline'));
+  const pname = $derived(axisPresetDisplayName(editor.preset?.name, editor.conn.state));
   const cpu = $derived(Math.max(0, Math.min(100, editor.cpu ?? 0)));
   const cpuText = $derived(editor.cpu != null ? `${editor.cpu.toFixed(0)}%` : '--');
   const cpuColor = $derived(cpu > 75 ? 'var(--danger)' : cpu > 55 ? 'var(--amber)' : 'var(--accent)');
   const connDot = $derived(editor.conn.state === 'online' ? 'var(--ok)' : editor.conn.state === 'offline' ? 'var(--danger)' : 'var(--amber)');
-  const sceneCount = $derived(Math.max(1, editor.sceneCount || 8));
+  // Device name from auto-detect, never `conn.device`: /healthz reports the
+  // provisional profile (FM3) for AM4/VP4/gen1/gen2 and with nothing attached.
+  const connLabel = $derived(
+    axisConnectionLabel({
+      state: editor.conn.state,
+      fw: editor.conn.fw,
+      device: editor.detected?.connected ? editor.detected.short : undefined
+    })
+  );
+  const sceneCount = $derived(Math.max(1, editor.sceneCount));
   const activeScene = $derived(Math.max(1, Math.min(sceneCount, editor.scene || 1)));
   const initials = $derived((editor.cloud.user?.email?.slice(0, 2) || 'AX').toUpperCase());
   // Bottom-bar status hint (parity with the old StatusBar left slot): the hover-hint for the
@@ -363,25 +373,28 @@
     {/if}
   </div>
 {:else if kind === 'scenes'}
-  <div class="axis-widget chips" data-size={size}>
-    {#if expanded}<span class="mono token">SCN</span>{/if}
-    <div class="chip-row">
-      {#each Array(sceneCount) as _, i}
-        {@const s = i + 1}
-        {#if !mini || activeScene === s}
-          <button
-            class="num-chip"
-            class:on={activeScene === s}
-            type="button"
-            title={`Scene ${s}`}
-            onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : s)}
-          >
-            {s}
-          </button>
-        {/if}
-      {/each}
+  <!-- Capability-gated like the legacy TopBar: no scene chips on a device without scenes (or before caps load). -->
+  {#if editor.sceneCount > 0}
+    <div class="axis-widget chips" data-size={size}>
+      {#if expanded}<span class="mono token">SCN</span>{/if}
+      <div class="chip-row">
+        {#each Array(sceneCount) as _, i}
+          {@const s = i + 1}
+          {#if !mini || activeScene === s}
+            <button
+              class="num-chip"
+              class:on={activeScene === s}
+              type="button"
+              title={`Scene ${s}`}
+              onclick={() => editor.selectScene(mini ? (activeScene % sceneCount) + 1 : s)}
+            >
+              {s}
+            </button>
+          {/if}
+        {/each}
+      </div>
     </div>
-  </div>
+  {/if}
 {:else if kind === 'view'}
   <div class="axis-widget chips" data-size={size}>
     {#if expanded}<span class="mono token">VIEW</span>{/if}
@@ -493,11 +506,20 @@
     <span class="mono strong param-val">{paramMissing ? '--' : paramValueText}</span>
     {#if !mini}<span class="mono token param-name">{paramLabel}</span>{/if}
   </button>
+{:else if kind === 'tuner'}
+  {#if editor.hasTuner}
+    <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title="Tuner">
+      <span class="glyph">♪</span>
+      {#if expanded}<span class="mono token">TUNE</span>{/if}
+    </button>
+  {/if}
 {:else if kind === 'tempo'}
-  <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title="Tap tempo">
-    <span class="mono big">{editor.bpm}</span>
-    {#if notMini}<span class="mono token">BPM</span>{/if}
-  </button>
+  {#if editor.hasTempo}
+    <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title="Tap tempo">
+      <span class="mono big">{editor.bpm}</span>
+      {#if notMini}<span class="mono token">BPM</span>{/if}
+    </button>
+  {/if}
 {:else if kind === 'cpu'}
   <div class="axis-widget meter" data-size={size} title="DSP load">
     <span class="mono token">CPU</span>
@@ -507,7 +529,7 @@
 {:else if kind === 'connection'}
   <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title="Connection">
     <span class="led" style:background={connDot}></span>
-    {#if expanded}<span class="mono token">{editor.conn.fw ? `AX-3 · FW${editor.conn.fw}` : editor.conn.state}</span>{/if}
+    {#if expanded}<span class="mono token">{connLabel}</span>{/if}
   </button>
 {:else if kind === 'account'}
   <button class="axis-widget square account" data-size={size} type="button" onclick={openWidget} title="Account and cloud sync">
@@ -707,8 +729,8 @@
   </div>
 {:else}
   <button class="axis-widget" data-size={size} type="button" onclick={openWidget} title={kind}>
-    <span class="glyph">{kind === 'tuner' ? '♪' : kind === 'undoRedo' ? '↶' : '•'}</span>
-    {#if expanded}<span class="mono token">{kind === 'tuner' ? 'TUNE' : kind}</span>{/if}
+    <span class="glyph">{kind === 'undoRedo' ? '↶' : '•'}</span>
+    {#if expanded}<span class="mono token">{kind}</span>{/if}
   </button>
 {/if}
 
