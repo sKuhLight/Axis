@@ -101,8 +101,9 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
     // On-connect / post-build device-cache lookup — mirrors the Node registry (drivers/registry.ts) so
     // the registry adopts the device-true runtime profile after a self-describe walk and on reconnect.
     // Without it applyRuntimeCache() no-ops and a completed walk is persisted but never used. See
-    // deviceCacheLoader.ts for why this is a named helper rather than an inline closure.
-    loadDeviceCache: makeDeviceCacheLoader(store)
+    // deviceCacheLoader.ts for why this is a named helper rather than an inline closure (and why the loader
+    // takes the runtime's loadUsableProfile as an argument instead of importing it).
+    loadDeviceCache: makeDeviceCacheLoader(store, rt.loadUsableProfile)
   };
   const registry = rt.createRegistry(deps);
 
