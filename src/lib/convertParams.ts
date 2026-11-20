@@ -32,6 +32,12 @@ function enumOptionsOf(o: Record<string, unknown>): string[] | undefined {
   return undefined;
 }
 
+/** True when the converter tagged the param as an enum (it carries clean `enumOptions`): it renders as a
+ *  dropdown, its `value` is the ordinal, and the device wants it as a discrete write, not a knob fraction. */
+export function isEnumParam(p: ConverterParam): boolean {
+  return enumOptionsOf(p as unknown as Record<string, unknown>) !== undefined;
+}
+
 /** Build the open block's knob params. `id` = the param's index in the block's params array so
  *  `setParam(p, v)` maps 1:1 back to `convertScratch.setParam(key, id, …)`. Params the converter tagged
  *  as enums (they carry `enumOptions`) are EXCLUDED here — they render as dropdowns (see buildEnums).

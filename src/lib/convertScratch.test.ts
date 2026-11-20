@@ -29,8 +29,10 @@ import {
   parseConvertedDoc,
   buildApplyPlan,
   blockEffectId,
+  normalizedForValue,
   type ScratchState
 } from './convertScratch';
+import { buildParams, buildEnums } from './convertParams';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -461,5 +463,139 @@ describe('offline block edits', () => {
     s = unplaceBlock(s, 'amp1');
     expect(blockOf(s, 'amp1').position).toBeNull();
     expect(blockOf(s, 'amp1').fromRows).toEqual([]);
+  });
+});
+
+// ── offline edits keep the wire fraction in sync (export / reopen) ───────────────────────────────
+describe('setBlockParam keeps `normalized` in sync with `value`', () => {
+  const GEOMEAN = Math.sqrt(20 * 20000); // geometric midpoint of a 20..20000 log range
+
+  /** A scratch buffer with a linear knob, a log knob, a range-less knob and an enum, all carrying the
+   *  converter's (soon stale) `normalized`. */
+  function editable(): ScratchState {
+    const p = preset({
+      blocks: [
+        {
+          key: 'amp1',
+          family: 'amp',
+          instance: 1,
+          typeValue: 12,
+          position: { row: 0, col: 0 },
+          params: [
+            { nativeName: 'bass', value: 1, min: 0, max: 10, normalized: 0.1 },
+            { nativeName: 'hicut', value: 20, min: 20, max: 20000, unit: 'Hz', log: true, normalized: 0 },
+            { nativeName: 'raw', value: 0.2, normalized: 0.2 },
+            { nativeName: 'mode', value: 0, enumOptions: ['Off', 'Low', 'High', 'Max'], normalized: 0 }
+          ]
+        } as never
+      ]
+    });
+    return seedScratch(p, [], 'fm3');
+  }
+  const paramsOf = (s: ScratchState, key = 'amp1') => s.blocks.find((b) => b.key === key)!.params;
+  const norm = (p: unknown) => (p as { normalized?: number }).normalized;
+
+  it('re-derives `normalized` on a linear range', () => {
+    const s = setBlockParam(editable(), 'amp1', 0, 7.5);
+    expect(paramsOf(s)[0].value).toBe(7.5);
+    expect(norm(paramsOf(s)[0])).toBeCloseTo(0.75, 10);
+  });
+
+  it('re-derives `normalized` on a log range with the knob mapping (geometric, not linear)', () => {
+    const s = setBlockParam(editable(), 'amp1', 1, GEOMEAN);
+    expect(norm(paramsOf(s)[1])).toBeCloseTo(0.5, 10);
+    // a linear fraction would be ~0.031 — the stale-vs-wrong distinction this guards
+    expect(norm(paramsOf(s)[1])).not.toBeCloseTo((GEOMEAN - 20) / 19980, 2);
+  });
+
+  it('clamps a value outside the range to the 0..1 fraction', () => {
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 0, 50))[0])).toBe(1);
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 0, -5))[0])).toBe(0);
+  });
+
+  it('range-less params keep the 0..1 knob semantics (value is the fraction)', () => {
+    const s = setBlockParam(editable(), 'amp1', 2, 0.65);
+    expect(norm(paramsOf(s)[2])).toBe(0.65);
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 2, 3))[2])).toBe(1);
+  });
+
+  it('enum params carry the ordinal as its gen-3 wire fraction (ordinal/65534)', () => {
+    const s = setBlockParam(editable(), 'amp1', 3, 2);
+    expect(paramsOf(s)[3].value).toBe(2);
+    expect(norm(paramsOf(s)[3])).toBeCloseTo(2 / 65534, 12);
+    // …so the authoring's round(normalized * 65534) lands exactly on the ordinal
+    expect(Math.round(norm(paramsOf(s)[3])! * 65534)).toBe(2);
+  });
+
+  it('touches only the edited param and does not mutate the previous state', () => {
+    const before = editable();
+    const snapshot = JSON.stringify(before);
+    const s = setBlockParam(before, 'amp1', 0, 7.5);
+    expect(JSON.stringify(before)).toBe(snapshot);
+    expect(paramsOf(s)[1]).toBe(paramsOf(before)[1]);
+    expect(paramsOf(s)[2]).toBe(paramsOf(before)[2]);
+  });
+
+  it('ignores a non-finite value', () => {
+    const s = editable();
+    expect(setBlockParam(s, 'amp1', 0, Number.NaN)).toBe(s);
+  });
+
+  it('keeps a `norm` alias in sync too (it would shadow `normalized` on reopen)', () => {
+    const p = preset({
+      blocks: [
+        {
+          key: 'amp1',
+          family: 'amp',
+          instance: 1,
+          params: [{ nativeName: 'bass', value: 1, min: 0, max: 10, norm: 0.1, normalized: 0.1 }],
+          position: { row: 0, col: 0 }
+        } as never
+      ]
+    });
+    const s = setBlockParam(seedScratch(p, [], 'fm3'), 'amp1', 0, 4);
+    expect(buildParams(paramsOf(s))[0].norm).toBeCloseTo(0.4, 10);
+  });
+
+  it('the exported / serialized preset carries the new normalized (what the server authors from)', () => {
+    let s = editable();
+    s = setBlockParam(s, 'amp1', 0, 7.5);
+    s = setBlockParam(s, 'amp1', 1, GEOMEAN);
+    s = setBlockParam(s, 'amp1', 3, 3);
+    // export sends scratchToPreset(...) as JSON; the library doc embeds the same preset
+    const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+    const ps = wire.blocks[0].params;
+    expect(norm(ps[0])).toBeCloseTo(0.75, 10);
+    expect(norm(ps[1])).toBeCloseTo(0.5, 10);
+    expect(norm(ps[3])).toBeCloseTo(3 / 65534, 12);
+    const { doc } = buildLibraryDoc(s, 1);
+    expect(norm(doc.preset.blocks[0].params[0])).toBeCloseTo(0.75, 10);
+    // …and survives a save → reopen round-trip through the persisted-doc schema
+    const reopened = parseConvertedDoc(JSON.parse(JSON.stringify(doc)))!;
+    expect(norm(reopened.preset.blocks[0].params[0])).toBeCloseTo(0.75, 10);
+  });
+
+  it('a reopened block positions its knobs from the edited value, not the stale fraction', () => {
+    let s = editable();
+    s = setBlockParam(s, 'amp1', 0, 7.5);
+    s = setBlockParam(s, 'amp1', 1, GEOMEAN);
+    s = setBlockParam(s, 'amp1', 2, 0.65);
+    // openCell → buildParams(block.params): knob position = norm ?? normalized ?? derived from the range
+    const knobs = buildParams(paramsOf(s));
+    expect(knobs.find((k) => k.name === 'bass')!.norm).toBeCloseTo(0.75, 10);
+    expect(knobs.find((k) => k.name === 'hicut')!.norm).toBeCloseTo(0.5, 10);
+    expect(knobs.find((k) => k.name === 'raw')!.norm).toBeCloseTo(0.65, 10);
+    expect(buildEnums(paramsOf(setBlockParam(s, 'amp1', 3, 2)))[0].value).toBe(2);
+  });
+
+  it('normalizedForValue matches the knob mapping both ways (round trip)', () => {
+    const lin = { nativeName: 'a', value: 0, min: 0, max: 10 };
+    const log = { nativeName: 'b', value: 20, min: 20, max: 20000, log: true };
+    for (const v of [0, 0.25, 0.5, 0.9, 1]) {
+      const lv = lin.min + v * (lin.max - lin.min);
+      const gv = log.min * Math.pow(log.max / log.min, v);
+      expect(normalizedForValue(lin, lv)).toBeCloseTo(v, 10);
+      expect(normalizedForValue(log, gv)).toBeCloseTo(v, 10);
+    }
   });
 });

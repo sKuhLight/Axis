@@ -18,6 +18,8 @@ import type {
   ConvertResponse
 } from './types';
 import type { Severity } from './convertReport';
+import { normFromValue } from './format';
+import { isEnumParam } from './convertParams';
 
 // ── target topology ──────────────────────────────────────────────────────────────────────────────
 
@@ -345,6 +347,53 @@ export function canPlaceAt(state: ScratchState, row: number, col: number, except
   return !occ || occ.key === exceptKey;
 }
 
+// ── param value ↔ wire fraction ──────────────────────────────────────────────────────────────────
+// A converted param carries TWO views of one setting: `value` (what the knob shows — display units when
+// the converter attached a `min`/`max` range, otherwise the 0..1 knob position) and `normalized` (the 0..1
+// wire fraction the server writes: the `.syx` authoring prefers it over `value`, and a device write of a
+// continuous param is a 0..1 fraction). Anything that changes `value` MUST re-derive `normalized`, or the
+// edit is silently dropped from the export and the knob snaps back when the block is reopened.
+
+/** Read a finite numeric extra off a loosely-typed IR object (the wire may carry extras the IR interface
+ *  doesn't formally declare — e.g. a target `effectId`, a param `paramId`, `min`/`max`/`normalized`). */
+function numAttr(obj: Record<string, unknown>, key: string): number | undefined {
+  const v = obj[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** gen-3 value model: the converter lifts a stored raw (enum ordinals included) as `normalized = raw/65534`. */
+const WIRE_MAX = 65534;
+
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** The display range the converter attached to a param, when it is usable for a knob sweep. */
+function rangeOf(o: Record<string, unknown>): { min: number; max: number; log: boolean } | undefined {
+  const min = numAttr(o, 'min');
+  const max = numAttr(o, 'max');
+  return min != null && max != null ? { min, max, log: o['log'] === true } : undefined;
+}
+
+/** The wire fraction (0..1) for `value` on this param — the inverse of what the knob does:
+ *  - enum (dropdown) params hold an ordinal, whose gen-3 wire fraction is `ordinal/65534` (so the
+ *    authoring's `round(normalized*65534)` reproduces the exact ordinal);
+ *  - ranged params use the knob's own mapping (`normFromValue`: geometric for a log range with min > 0,
+ *    linear otherwise), so the knob and the wire agree;
+ *  - range-less params keep the 0..1 knob semantics: the value IS the fraction. */
+export function normalizedForValue(p: ConverterParam, value: number): number {
+  if (isEnumParam(p)) return clamp01(value / WIRE_MAX);
+  const range = rangeOf(p as unknown as Record<string, unknown>);
+  return range ? normFromValue(value, range) : clamp01(value);
+}
+
+/** A copy of `p` holding `value`, with `normalized` (and a `norm` alias, if the IR carries one — it
+ *  would otherwise shadow `normalized` when the block is reopened) re-derived to match. */
+function withParamValue(p: ConverterParam, value: number): ConverterParam {
+  const normalized = normalizedForValue(p, value);
+  const next: ConverterParam = { ...p, value, normalized };
+  if (typeof next['norm'] === 'number') next['norm'] = normalized;
+  return next;
+}
+
 // ── transitions (pure — each returns a new ScratchState) ─────────────────────────────────────────
 
 function patchBlocks(state: ScratchState, fn: (b: ScratchBlock) => ScratchBlock): ScratchState {
@@ -411,12 +460,15 @@ export function unplaceBlock(state: ScratchState, blockKey: string): ScratchStat
 }
 
 /** Set one param's value on a block (offline), addressed by its index in the block's `params` array —
- *  the convert surface maps a NamedParam id 1:1 to this index. No-op on an out-of-range index. */
+ *  the convert surface maps a NamedParam id 1:1 to this index. Re-derives the param's `normalized` wire
+ *  fraction alongside `value` (see {@link normalizedForValue}) so export / apply / reopen all see the edit.
+ *  No-op on an out-of-range index or a non-finite value. */
 export function setBlockParam(state: ScratchState, blockKey: string, paramIndex: number, value: number): ScratchState {
+  if (!Number.isFinite(value)) return state;
   return patchBlocks(state, (b) => {
     if (b.key !== blockKey) return b;
     if (paramIndex < 0 || paramIndex >= b.params.length) return b;
-    const params = b.params.map((p, i) => (i === paramIndex ? { ...p, value } : p));
+    const params = b.params.map((p, i) => (i === paramIndex ? withParamValue(p, value) : p));
     return { ...b, params };
   });
 }
@@ -582,13 +634,6 @@ export interface ApplyPlan {
   unresolvedBlocks: number;
   /** Params carried in resolvable blocks but lacking a numeric paramId (can't be written). */
   unresolvedParams: number;
-}
-
-/** Read a numeric extra attribute off a loosely-typed IR object (the wire may carry device addresses the
- *  IR interface doesn't formally declare — e.g. a target `effectId` or a param `paramId`). */
-function numAttr(obj: Record<string, unknown>, key: string): number | undefined {
-  const v = obj[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
 /** Resolve a block's device effect-id from the IR (extra `effectId` key), if present. */
