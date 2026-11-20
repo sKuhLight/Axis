@@ -11,7 +11,16 @@ import {
   deviceDefsActions,
   shouldOfferDeviceDefs,
   activeDefsSource,
-  dismissKey,
+  currentDismissKey,
+  isDismissed,
+  isDefsStale,
+  effectiveStatus,
+  staleCopy,
+  cloudStaleNote,
+  cloudPullFailureMessage,
+  rebuildPlan,
+  canAutoImportFromFolder,
+  canRebuildDefs,
   normalizeModelHex,
   parseFirmware,
   isBuildProgressPhase,
@@ -69,15 +78,35 @@ class DeviceDefsStore {
     if (typeof localStorage !== 'undefined') this.#dismissed = loadDismissed();
   }
 
+  /** The status as it matters for THIS device: an import-only device's profile is never applied, so it
+   *  can't be "stale" in any way the user could see (see effectiveStatus). All decisions below use this. */
+  get #eff(): DeviceCacheStatus | null {
+    return effectiveStatus(this.status, this.#ctx?.caps ?? null);
+  }
+  /** Dismissal key of the CURRENT state: device+firmware, plus the stale state when the stored profile is
+   *  stale — so an earlier "Later" for this device+firmware never hides the out-of-date prompt. */
   get key(): string {
-    return dismissKey(this.#ctx?.model, this.#ctx?.firmware);
+    return currentDismissKey(this.#ctx?.model, this.#ctx?.firmware, this.#eff);
   }
   get dismissed(): boolean {
-    return this.#dismissed.has(this.key);
+    return isDismissed(this.#dismissed, this.#ctx?.model, this.#ctx?.firmware, this.#eff);
   }
-  /** Whether the connect-time prompt should appear (self-describe + no profile + not dismissed). */
+  /** A profile is stored for this device+firmware but the server can't use it (schema missing / outdated /
+   *  newer): the prompt then asks to re-read the definitions instead of offering them for the first time. */
+  get stale(): boolean {
+    return isDefsStale(this.#eff);
+  }
+  /** Title + body of the prompt's stale variant (wording differs for a profile from a newer Axis). */
+  get staleCopy(): ReturnType<typeof staleCopy> {
+    return staleCopy(this.#eff?.staleReason);
+  }
+  /** Why no shared-profile option is offered although the cloud has one (its schema can't be used), or null. */
+  get cloudNote(): string | null {
+    return cloudStaleNote(this.cloud);
+  }
+  /** Whether the connect-time prompt should appear (self-describe/import + no USABLE profile + not dismissed). */
   get shouldShow(): boolean {
-    return shouldOfferDeviceDefs(this.#ctx?.caps ?? null, this.status, this.dismissed);
+    return shouldOfferDeviceDefs(this.#ctx?.caps ?? null, this.#eff, this.dismissed);
   }
   /** Ordered actions to offer, most-preferred first. */
   get actions(): DeviceDefAction[] {
@@ -97,17 +126,15 @@ class DeviceDefsStore {
   get canPublish(): boolean {
     return this.cloud !== null && !this.publishDenied;
   }
-  /** Whether to offer "Definitionen neu einlesen" (rebuild): a profile is persisted AND this local
-   *  session can re-acquire one (self-describe walk or import). Hidden over a relay — the follow-up
-   *  device read isn't usable there. */
+  /** Whether to offer "Re-read definitions" (rebuild): a profile is persisted (in use, or stored but out
+   *  of date) AND this local session can re-acquire one (self-describe walk or import). Hidden over a
+   *  relay — the follow-up device read isn't usable there. */
   get canRebuild(): boolean {
-    return this.activeSource.origin !== 'bundled'
-      && !isRemote()
-      && (!!this.#ctx?.caps?.selfDescribe || !!this.#ctx?.caps?.cacheImport);
+    return canRebuildDefs({ source: this.activeSource, isRemote: isRemote(), caps: this.#ctx?.caps ?? null });
   }
   /** Human-facing readout of where the ACTIVE definitions come from (bundled/device/editor/cloud). */
   get activeSource(): ActiveDefsSource {
-    return activeDefsSource(this.status, this.sources);
+    return activeDefsSource(this.#eff, this.sources);
   }
 
   /** Refresh all three status endpoints for the connected device. Called on connect/reconnect. */
@@ -159,20 +186,34 @@ class DeviceDefsStore {
     this.building = null;
   };
 
-  /** Firmware-update path: drop the persisted profile so the connect prompt re-offers the normal build
-   *  flow. Deleting flips `status.exists` false → `shouldShow` true → the DeviceDefsPrompt re-appears via
-   *  existing reactivity. Also un-dismisses this device+firmware so the offer can actually surface again. */
+  /** "Re-read definitions" (see `rebuildPlan`). A usable profile (firmware-update path): drop it so the
+   *  connect prompt re-offers the normal build flow — deleting flips `status.exists` false → `shouldShow`
+   *  true → the DeviceDefsPrompt re-appears via existing reactivity; this device+firmware is un-dismissed so
+   *  the offer can actually surface again. A STALE profile is not in use, so nothing is discarded (it stays
+   *  stored until a fresh one replaces it): a device that can read definitions starts the read right away, and
+   *  everything else — always a profile from a newer Axis — gets the prompt back (un-dismissed), whose
+   *  actions are the user's explicit choice. */
   rebuild = async () => {
     this.error = null;
     this.succeeded = false;
-    await forgefx.deleteDeviceCache().catch(() => null);
-    if (this.#dismissed.has(this.key)) {
-      this.#dismissed = new Set([...this.#dismissed].filter((k) => k !== this.key));
-      try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...this.#dismissed])); } catch { /* */ }
+    const plan = rebuildPlan(this.#eff, this.#ctx?.caps ?? null);
+    if (plan !== 'discard') {
+      this.#undismiss(this.key);
+      if (plan === 'build') await this.build();
+      return;
     }
+    await forgefx.deleteDeviceCache().catch(() => null);
+    this.#undismiss(this.key);
     // Re-read the authoritative status + sources so the prompt (and the source readout) reflect the drop.
     this.status = await forgefx.deviceCache().catch(() => this.status);
     void forgefx.cacheSources().then((s) => { if (s) this.sources = s; }).catch(() => {});
+  };
+
+  /** Forget a dismissal (persisted), so the prompt can surface again for that key. */
+  #undismiss = (key: string) => {
+    if (!this.#dismissed.has(key)) return;
+    this.#dismissed = new Set([...this.#dismissed].filter((k) => k !== key));
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...this.#dismissed])); } catch { /* */ }
   };
 
   /** Import raw cache bytes (browser drag-drop / folder pick). `force` overrides a firmware mismatch. */
@@ -218,8 +259,8 @@ class DeviceDefsStore {
       await forgefx.cloudCachePull();
       this.status = await forgefx.deviceCache().catch(() => this.status);
       this.#onAcquired();
-    } catch {
-      this.error = 'Could not fetch the shared definitions.';
+    } catch (e) {
+      this.error = cloudPullFailureMessage(e instanceof ForgeError ? e.status : null, this.#ctx?.caps ?? null, isRemote());
     } finally {
       this.importing = false;
     }
@@ -278,7 +319,8 @@ class DeviceDefsStore {
 
   // Silent re-scan of a previously-picked folder on connect (permission re-checked, non-interactive).
   #tryPersistedFolder = async () => {
-    if (this.status?.exists || !this.#ctx?.caps?.cacheImport) return;
+    // not over a usable profile, and not over one from a NEWER Axis (see canAutoImportFromFolder)
+    if (!canAutoImportFromFolder(this.#ctx?.caps ?? null, this.#eff)) return;
     const handle = await persistedEditorFolder();
     if (!handle) return;
     await this.#scanAndImport(handle, false);
