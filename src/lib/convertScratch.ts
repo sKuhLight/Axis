@@ -19,7 +19,7 @@ import type {
 } from './types';
 import type { Severity } from './convertReport';
 import { normFromValue } from './format';
-import { enumOptionCount, isEnumParam } from './convertParams';
+import { enumOptionCount, isEnumParam, GEN3_WIRE_MAX } from './convertParams';
 
 // ── target topology ──────────────────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ export function seedScratch(
     instance: b.instance,
     typeName: b.typeName,
     typeValue: b.typeValue,
-    params: b.params.map(reconcileNormalized),
+    params: b.params.map((p) => reconcileNormalized(p, targetDevice)),
     position: normalizePosition(b.position, def.kind),
     channels: b.channels
   }));
@@ -361,8 +361,11 @@ function numAttr(obj: Record<string, unknown>, key: string): number | undefined 
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
-/** gen-3 value model: the converter lifts a stored raw (enum ordinals included) as `normalized = raw/65534`. */
-const WIRE_MAX = 65534;
+/** Targets whose `.syx` authoring uses the gen-3 preset-body value model (see `GEN3_WIRE_MAX`): the three
+ *  devices the export supports. Every other target (AM4, gen-2, VP4, gen-1) has no such authoring path —
+ *  export is gen-3 only and an apply writes enums as discrete ordinals — so a gen-3 enum fraction is
+ *  meaningless there and the engine's own `normalized` is left untouched. */
+const GEN3_VALUE_MODEL_TARGETS: ReadonlySet<ConverterDeviceId> = new Set<ConverterDeviceId>(['axe-fx-iii', 'fm9', 'fm3']);
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 
@@ -374,13 +377,16 @@ function rangeOf(o: Record<string, unknown>): { min: number; max: number; log: b
 }
 
 /** The wire fraction (0..1) for `value` on this param — the inverse of what the knob does:
- *  - enum params hold an ordinal, whose gen-3 wire fraction is `ordinal/65534` (so the authoring's
- *    `round(normalized*65534)` reproduces the exact ordinal);
+ *  - enum params hold an ordinal. On a GEN-3 target its wire fraction is `ordinal / 65534` (the gen-3
+ *    preset-body value model, `GEN3_WIRE_MAX`: the authoring writes `raw = round(normalized * 65534)` and
+ *    the gen-3 lift stores `normalized = raw / 65534`, ordinals included), so the authoring reproduces the
+ *    exact ordinal. On any other target that convention does not apply → `undefined` (leave `normalized`
+ *    as the engine produced it);
  *  - ranged params use the knob's own mapping (`normFromValue`: geometric for a log range with min > 0,
- *    linear otherwise), so the knob and the wire agree;
+ *    linear otherwise), so the knob and the wire agree — device-independent, same as the engine;
  *  - range-less params keep the 0..1 knob semantics: the value IS the fraction. */
-export function normalizedForValue(p: ConverterParam, value: number): number {
-  if (isEnumParam(p)) return clamp01(value / WIRE_MAX);
+export function normalizedForValue(p: ConverterParam, value: number, targetDevice: ConverterDeviceId): number | undefined {
+  if (isEnumParam(p)) return GEN3_VALUE_MODEL_TARGETS.has(targetDevice) ? clamp01(value / GEN3_WIRE_MAX) : undefined;
   const range = rangeOf(p as unknown as Record<string, unknown>);
   return range ? normFromValue(value, range) : clamp01(value);
 }
@@ -397,24 +403,35 @@ function withNormalized(p: ConverterParam, normalized: number): ConverterParam {
  *  refused. An enum only accepts a whole ordinal inside its option list; an enum with no option list has
  *  no known valid ordinal at all, so it keeps its value (writing a fraction into a selector slot would
  *  corrupt it). */
-function withParamValue(p: ConverterParam, value: number): ConverterParam | undefined {
+function withParamValue(p: ConverterParam, value: number, targetDevice: ConverterDeviceId): ConverterParam | undefined {
   if (isEnumParam(p)) {
     const count = enumOptionCount(p);
     if (!Number.isInteger(value) || value < 0 || value >= count) return undefined; // count 0 → always refused
   }
-  return withNormalized({ ...p, value }, normalizedForValue(p, value));
+  const normalized = normalizedForValue(p, value, targetDevice);
+  const next: ConverterParam = { ...p, value };
+  return normalized === undefined ? next : withNormalized(next, normalized);
 }
 
 /** On load, `value` is authoritative for a param with a display range or enum options: recompute a
  *  `normalized` that disagrees with it (a library doc saved by a build that updated `value` but left
  *  `normalized` stale). Same formulas as the converter engine and the knob; a range-less param without
- *  options has no scale to check `normalized` against, so it is left alone. Returns a copy either way. */
-function reconcileNormalized(p: ConverterParam): ConverterParam {
+ *  options has no scale to check `normalized` against, so it is left alone, as is an enum on a non-gen-3
+ *  target (no ordinal fraction convention there — the engine's value stays). Returns a copy either way. */
+function reconcileNormalized(p: ConverterParam, targetDevice: ConverterDeviceId): ConverterParam {
   const stored = numAttr(p as unknown as Record<string, unknown>, 'normalized');
   const checkable = enumOptionCount(p) > 0 || rangeOf(p as unknown as Record<string, unknown>) !== undefined;
   if (stored == null || !checkable || !Number.isFinite(p.value)) return { ...p };
-  const derived = normalizedForValue(p, p.value);
-  return Math.abs(derived - stored) <= 1e-6 ? { ...p } : withNormalized(p, derived);
+  const derived = normalizedForValue(p, p.value, targetDevice);
+  if (derived === undefined || Math.abs(derived - stored) <= 1e-6) return { ...p };
+  return withNormalized(p, derived);
+}
+
+/** The stored `value` of one param of one block (by its index in the block's `params`), or undefined when
+ *  the block / index doesn't exist. The editor re-reads this after an edit so what it shows is what the
+ *  scratch actually holds — a refused edit (see {@link setBlockParam}) leaves the old value displayed. */
+export function paramValueOf(state: ScratchState | null, blockKey: string, paramIndex: number): number | undefined {
+  return state?.blocks.find((b) => b.key === blockKey)?.params[paramIndex]?.value;
 }
 
 // ── transitions (pure — each returns a new ScratchState) ─────────────────────────────────────────
@@ -492,7 +509,7 @@ export function setBlockParam(state: ScratchState, blockKey: string, paramIndex:
   return patchBlocks(state, (b) => {
     if (b.key !== blockKey) return b;
     if (paramIndex < 0 || paramIndex >= b.params.length) return b;
-    const params = b.params.map((p, i) => (i === paramIndex ? (withParamValue(p, value) ?? p) : p));
+    const params = b.params.map((p, i) => (i === paramIndex ? (withParamValue(p, value, state.targetDevice) ?? p) : p));
     return { ...b, params };
   });
 }

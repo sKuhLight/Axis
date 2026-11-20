@@ -38,12 +38,20 @@ export function enumOptionCount(p: ConverterParam): number {
   return enumOptionsOf(p as unknown as Record<string, unknown>)?.length ?? 0;
 }
 
+/** The gen-3 preset-body value model: a param slot is a u16 raw in 0..65534, the `.syx` authoring writes
+ *  `raw = round(normalized * 65534)`, and the gen-3 lift emits `normalized = raw / 65534` for EVERY param,
+ *  enum ordinals included — so an enum ordinal `k` has the wire fraction `k / 65534`. Only meaningful for
+ *  gen-3 IR / gen-3 targets (see `normalizedForValue`). */
+export const GEN3_WIRE_MAX = 65534;
+
 /** True when the param is a discrete selector: its `value` is the ordinal, and the device wants it as a
  *  discrete write, never a knob fraction. A param is an enum when
  *  1. it carries clean `enumOptions`, or
  *  2. the codec tags it `kind: 'enum'` (an enum without labels — e.g. a same-vocabulary gen-3 lift), or
- *  3. INTERIM, for IR that carries no `kind` at all: it has no display range and a non-numeric
- *     `displayValue` (the gen-3 lift sets `displayValue` from the enum label on that path).
+ *  3. INTERIM, for IR that carries no `kind` at all (e.g. library docs saved before the codec tagged it),
+ *     it has no display range and a `displayValue` that is either non-numeric (the gen-3 lift sets
+ *     `displayValue` from the enum label on that path), or numeric ("4") while `value` is exactly the raw
+ *     ordinal behind `normalized` (`value === round(normalized * 65534)`).
  *  `kind: 'float' | 'int'` is authoritative for "not an enum" and switches the interim guess off. */
 export function isEnumParam(p: ConverterParam): boolean {
   const o = p as unknown as Record<string, unknown>;
@@ -53,14 +61,26 @@ export function isEnumParam(p: ConverterParam): boolean {
   if (kind === 'float' || kind === 'int') return false;
   if (num(o, 'min') != null && num(o, 'max') != null) return false; // a ranged param is a knob
   const label = str(o, 'displayValue');
-  return label != null && label.trim() !== '' && !Number.isFinite(Number(label));
+  if (label == null || label.trim() === '') return false;
+  if (!Number.isFinite(Number(label))) return true; // a textual label can only be an enum's
+  const normalized = num(o, 'normalized');
+  return normalized != null && Number.isInteger(p.value) && p.value === Math.round(normalized * GEN3_WIRE_MAX);
+}
+
+/** The read-only display text for an enum param that has NO option labels (so there is no dropdown to
+ *  show it in): the converter's `displayValue` when present, else the ordinal as `#<n>`. Undefined for
+ *  anything else (a knob, or an enum with options — those render as a dropdown). */
+export function readOnlyEnumLabel(p: ConverterParam): string | undefined {
+  if (!isEnumParam(p) || enumOptionCount(p) > 0) return undefined;
+  const label = str(p as unknown as Record<string, unknown>, 'displayValue')?.trim();
+  return label ? label : `#${p.value}`;
 }
 
 /** Build the open block's knob params. `id` = the param's index in the block's params array so
  *  `setParam(p, v)` maps 1:1 back to `convertScratch.setParam(key, id, …)`. Enum params (see
  *  {@link isEnumParam}) are EXCLUDED here — those with `enumOptions` render as dropdowns (see
  *  buildEnums); an enum with no labels has nothing valid to edit to, so it is neither a knob nor a
- *  dropdown and simply keeps its value.
+ *  dropdown: it keeps its value and is listed read-only (see {@link readOnlyEnumLabel}).
  *  Range / unit / taper / knob position are taken from the IR extras when present, else the raw value
  *  renders coarse (no device-free param catalog is otherwise available offline). */
 export function buildParams(params: readonly ConverterParam[]): NamedParam[] {

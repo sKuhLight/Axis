@@ -381,3 +381,31 @@ describe('sourceOutcome', () => {
     }
   });
 });
+
+// ── read-only rows for enums without option labels ───────────────────────────────────────────────
+describe('blockParamViews: unlabelled enums', () => {
+  const block = {
+    key: 'amp1',
+    params: [
+      { nativeName: 'gain', value: 5, min: 0, max: 10, normalized: 0.5 },
+      { nativeName: 'bright', value: 3, normalized: 3 / 65534, displayValue: 'High' }, // lift: label, no options
+      { nativeName: 'bypassmode', value: 2, normalized: 2 / 65534, kind: 'enum' }, // tagged, no label at all
+      { nativeName: 'mode', value: 1, enumOptions: ['Off', 'On'], normalized: 1 / 65534 } // labelled → dropdown
+    ]
+  };
+
+  it('lists them read-only with their label, else "#<ordinal>" — not hidden, not a knob value', () => {
+    const views = blockParamViews([], block as never);
+    expect(views.map((v) => v.name)).toEqual(['gain', 'bright', 'bypassmode', 'mode']);
+    expect(views[1]).toMatchObject({ value: 'High', readOnly: true });
+    expect(views[2]).toMatchObject({ value: '#2', readOnly: true });
+  });
+
+  it('knobs and labelled enums are not read-only rows', () => {
+    const views = blockParamViews([], block as never);
+    expect(views[0].value).toBe('5');
+    expect(views[0].readOnly).toBeUndefined();
+    expect(views[3].value).toBe('1');
+    expect(views[3].readOnly).toBeUndefined();
+  });
+});
