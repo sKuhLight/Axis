@@ -6,6 +6,7 @@ import { forgefx, isRemote } from './forgefx';
 import { isRemoteBuild } from './cloudBrowser';
 import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
+import { PARAMS_DECODE_VERSION, wrapParams, loadParamsCache, dropStaleEmbeddedParams } from './paramsCacheVersion';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
@@ -60,8 +61,10 @@ export interface LibEntry {
  *  explicitly or it pollutes the library/search as a ghost entry. */
 const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
-const IDB_PARAMS = 'lib.params'; // IndexedDB key for the per-preset param index (id → DecodedBlock[])
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders', paramsVer: 'axs.lib.paramsVer' };
+// IndexedDB key for the per-preset param index (id → DecodedBlock[]), stored in a versioned envelope
+// (paramsCacheVersion.ts): decoded values from an older decode are never served next to fresh ones.
+const IDB_PARAMS = 'lib.params';
 const IDB_FILEBYTES = 'lib.fileBytes'; // raw .syx bytes for imported file/folder presets (id → number[]) — for live load
 function load<T>(key: string, fallback: T): T {
   try {
@@ -142,6 +145,9 @@ class LibraryStore {
   hydrateDone = $state(0);
   /** True once a full cache build has completed (persisted) — drives the startup prompt. */
   cacheBuilt = $state(load<boolean>(LS.built, false));
+  /** Imported-file summaries were persisted by an older param decode: their embedded params are dropped on
+   *  launch and re-decoded from the stored bytes (see #redecodeStaleFiles). Cleared once that succeeds. */
+  #filesStale = false;
 
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
@@ -150,8 +156,11 @@ class LibraryStore {
       .filter((s) => !isEmptyName(s.name)); // self-heal: drop ghost <EMPTY> entries from older caches
     const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
-    const files = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
+    const storedFiles = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
       .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary }[];
+    // embedded params written by an older decode would mix scales in deep search → drop them, re-decode below
+    const { items: files, stale: filesStale } = dropStaleEmbeddedParams(storedFiles, load<unknown>(LS.paramsVer, null));
+    this.#filesStale = filesStale;
     const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
     this.entries = [...deviceEntries, ...fileEntries].sort(this.#order);
     this.folders = load<string[]>(LS.folders, []);
@@ -160,8 +169,11 @@ class LibraryStore {
     if (deviceEntries.length) this.#pushIndex(cached.map((s) => ({ ...s, params: undefined })));
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
-      idb.get<Record<string, DecodedBlock[]>>(IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
-      idb.get<Record<string, number[]>>(IDB_FILEBYTES).then((b) => { if (b) this.#fileBytes = b; });
+      // legacy / other-decode-version caches are dropped here (and re-decoded by the deep scan), never served
+      loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+      idb.get<Record<string, number[]>>(IDB_FILEBYTES)
+        .then((b) => { if (b) this.#fileBytes = b; })
+        .then(() => this.#redecodeStaleFiles());
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();
@@ -332,7 +344,7 @@ class LibraryStore {
       this.entries = [...byId.values()].sort(this.#order);
       this.#paramsCache = params;
       this.#cacheDevice();
-      if (idb.available()) await idb.set(IDB_PARAMS, params);
+      if (idb.available()) await idb.set(IDB_PARAMS, wrapParams(params));
       this.cacheBuilt = true;
       persist(LS.built, true);
     } catch (e) {
@@ -445,7 +457,29 @@ class LibraryStore {
   #persistFiles(): void {
     const files = this.entries.filter((e) => e.source === 'file').map((e) => ({ id: e.id, folder: e.folder, summary: e.summary }));
     persist(LS.files, files);
+    // the decode-version marker is only advanced once no file still awaits a re-decode, so a failed/partial
+    // re-decode is retried on the next launch instead of being treated as current
+    if (!this.#filesStale) persist(LS.paramsVer, PARAMS_DECODE_VERSION);
     if (idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
+  }
+  /** Re-decode imported files whose persisted params came from an older decode, from their stored raw bytes
+   *  (best-effort: offline/unreadable files stay without params and are retried next launch). */
+  async #redecodeStaleFiles(): Promise<void> {
+    if (!this.#filesStale) return;
+    let failed = 0;
+    for (const e of this.entries.filter((x) => x.source === 'file')) {
+      const bytes = this.#fileBytes[e.id];
+      if (!bytes) continue; // nothing to decode from → stays without params
+      try {
+        const fresh = await forgefx.decodePresetFile(new Uint8Array(bytes).buffer);
+        // keep the (possibly user-visible) name; take the freshly decoded params + structure
+        this.entries = this.entries.map((x) => (x.id === e.id ? { ...x, summary: { ...fresh, name: x.summary.name } } : x));
+      } catch {
+        failed++;
+      }
+    }
+    if (failed === 0) this.#filesStale = false;
+    this.#persistFiles();
   }
 
   // ── converted presets (cross-device conversions saved to the `converted` store collection) ──
@@ -508,7 +542,7 @@ class LibraryStore {
     }
   }
   #persistParams() {
-    if (idb.available()) idb.set(IDB_PARAMS, { ...this.#paramsCache });
+    if (idb.available()) idb.set(IDB_PARAMS, wrapParams({ ...this.#paramsCache }));
   }
   /** Hydrate every device entry's params so deep search spans the whole library; persisted to IndexedDB. */
   async deepScan(): Promise<void> {

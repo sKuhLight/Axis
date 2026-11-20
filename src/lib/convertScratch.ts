@@ -363,8 +363,9 @@ function numAttr(obj: Record<string, unknown>, key: string): number | undefined 
 
 /** Targets whose `.syx` authoring uses the gen-3 preset-body value model (see `GEN3_WIRE_MAX`): the three
  *  devices the export supports. Every other target (AM4, gen-2, VP4, gen-1) has no such authoring path —
- *  export is gen-3 only and an apply writes enums as discrete ordinals — so a gen-3 enum fraction is
- *  meaningless there and the engine's own `normalized` is left untouched. */
+ *  export is gen-3 only and an apply writes enums as discrete ordinals — so the `k/65534` enum fraction is
+ *  meaningless there; an enum's `normalized` follows the codec's own range convention instead (see
+ *  `normalizedForValue`). */
 const GEN3_VALUE_MODEL_TARGETS: ReadonlySet<ConverterDeviceId> = new Set<ConverterDeviceId>(['axe-fx-iii', 'fm9', 'fm3']);
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
@@ -380,14 +381,19 @@ function rangeOf(o: Record<string, unknown>): { min: number; max: number; log: b
  *  - enum params hold an ordinal. On a GEN-3 target its wire fraction is `ordinal / 65534` (the gen-3
  *    preset-body value model, `GEN3_WIRE_MAX`: the authoring writes `raw = round(normalized * 65534)` and
  *    the gen-3 lift stores `normalized = raw / 65534`, ordinals included), so the authoring reproduces the
- *    exact ordinal. On any other target that convention does not apply → `undefined` (leave `normalized`
- *    as the engine produced it);
+ *    exact ordinal. On any other target that convention does not apply: the enum's `normalized` follows the
+ *    codec's range convention, `normFromValue(value, range)` with the param's own `min`/`max` (for an AM4
+ *    target this is the codec's `k/(N-1)`); with no range there is nothing to compute → `undefined`
+ *    (leave `normalized` as the engine produced it);
  *  - ranged params use the knob's own mapping (`normFromValue`: geometric for a log range with min > 0,
  *    linear otherwise), so the knob and the wire agree — device-independent, same as the engine;
  *  - range-less params keep the 0..1 knob semantics: the value IS the fraction. */
 export function normalizedForValue(p: ConverterParam, value: number, targetDevice: ConverterDeviceId): number | undefined {
-  if (isEnumParam(p)) return GEN3_VALUE_MODEL_TARGETS.has(targetDevice) ? clamp01(value / GEN3_WIRE_MAX) : undefined;
   const range = rangeOf(p as unknown as Record<string, unknown>);
+  if (isEnumParam(p)) {
+    if (GEN3_VALUE_MODEL_TARGETS.has(targetDevice)) return clamp01(value / GEN3_WIRE_MAX);
+    return range ? normFromValue(value, range) : undefined;
+  }
   return range ? normFromValue(value, range) : clamp01(value);
 }
 
@@ -416,8 +422,8 @@ function withParamValue(p: ConverterParam, value: number, targetDevice: Converte
 /** On load, `value` is authoritative for a param with a display range or enum options: recompute a
  *  `normalized` that disagrees with it (a library doc saved by a build that updated `value` but left
  *  `normalized` stale). Same formulas as the converter engine and the knob; a range-less param without
- *  options has no scale to check `normalized` against, so it is left alone, as is an enum on a non-gen-3
- *  target (no ordinal fraction convention there — the engine's value stays). Returns a copy either way. */
+ *  options has no scale to check `normalized` against, so it is left alone, as is a range-less enum on a
+ *  non-gen-3 target (no fraction convention to apply). Returns a copy either way. */
 function reconcileNormalized(p: ConverterParam, targetDevice: ConverterDeviceId): ConverterParam {
   const stored = numAttr(p as unknown as Record<string, unknown>, 'normalized');
   const checkable = enumOptionCount(p) > 0 || rangeOf(p as unknown as Record<string, unknown>) !== undefined;

@@ -976,3 +976,48 @@ describe('paramValueOf', () => {
     expect(paramValueOf(null, 'amp1', 0)).toBeUndefined();
   });
 });
+
+// ── non-gen-3 enums follow the codec's range convention (k/(N-1)), not the gen-3 k/65534 ─────────
+describe('enum normalized on non-gen-3 targets', () => {
+  /** An enum the engine mapped onto an AM4-style range 0..3 (4 options): normalized = k/3. */
+  const rangedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 1, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 1 / 3, norm: 1 / 3 });
+  const seedFor = (dev: Parameters<typeof seedScratch>[2], p: Record<string, unknown> = rangedEnum()) =>
+    seedScratch(
+      preset({ blocks: [{ key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params: [p] } as never] }),
+      [],
+      dev
+    );
+  const p0 = (s: ScratchState) => s.blocks[0].params[0] as unknown as { value: number; normalized?: number; norm?: number };
+
+  it('an edited enum recomputes normalized as normFromValue(value, range) on AM4 / gen-2 / VP4 / gen-1', () => {
+    for (const dev of ['am4', 'axe-fx-ii', 'vp4', 'axe-fx-gen1'] as const) {
+      const p = p0(setBlockParam(seedFor(dev), 'amp1', 0, 3));
+      expect(p.value).toBe(3);
+      expect(p.normalized).toBeCloseTo(1, 12); // 3/3, NOT the engine's stale 1/3 and NOT 3/65534
+      expect(p.norm).toBeCloseTo(1, 12);
+      expect(p0(setBlockParam(seedFor(dev), 'amp1', 0, 2)).normalized).toBeCloseTo(2 / 3, 12);
+    }
+  });
+
+  it('the same edit on a gen-3 target still writes k/65534', () => {
+    expect(p0(setBlockParam(seedFor('fm3'), 'amp1', 0, 3)).normalized).toBeCloseTo(3 / 65534, 12);
+  });
+
+  it('a range-less enum off gen-3 still keeps the engine normalized (nothing to compute)', () => {
+    const rangeless = { nativeName: 'mode', value: 1, enumOptions: ['A', 'B', 'C'], normalized: 0.5 };
+    expect(p0(setBlockParam(seedFor('am4', rangeless), 'amp1', 0, 2)).normalized).toBe(0.5);
+  });
+
+  it('on load a stale ranged-enum normalized is re-derived with the range off gen-3 (k/65534 only on gen-3)', () => {
+    const stale = { ...rangedEnum(), value: 2, normalized: 0.9, norm: 0.9 };
+    expect(p0(seedFor('am4', stale)).normalized).toBeCloseTo(2 / 3, 12);
+    expect(p0(seedFor('fm9', stale)).normalized).toBeCloseTo(2 / 65534, 12);
+  });
+
+  it('normalizedForValue: off gen-3 an enum uses its range; a range-less one is undefined', () => {
+    const en = { nativeName: 'm', value: 1, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'] };
+    expect(normalizedForValue(en, 3, 'am4')).toBeCloseTo(1, 12);
+    expect(normalizedForValue(en, 3, 'axe-fx-iii')).toBeCloseTo(3 / 65534, 12);
+    expect(normalizedForValue({ nativeName: 'm', value: 1, enumOptions: ['A', 'B'] }, 1, 'am4')).toBeUndefined();
+  });
+});
