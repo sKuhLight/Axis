@@ -443,7 +443,7 @@
           </p>
           {#if deviceDefs.canRebuild}
             {#if deviceDefs.activeSource.stale}
-              <p class="muted">The stored definitions are out of date and not used. Read them again to match this device and firmware.</p>
+              <p class="muted">{deviceDefs.staleCopy.panel}</p>
             {:else}
               <p class="muted">After a firmware update, discard the definitions and read them from the device again.</p>
             {/if}

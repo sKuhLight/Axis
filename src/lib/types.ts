@@ -733,9 +733,12 @@ export interface CloudCacheStatus {
   enabled?: boolean;
   available: boolean;
   meta?: { source?: string; recordCount?: number | null; createdAt?: string; contentHash?: string };
-  /** A shared profile exists but is out of date for this server (so `available` is false). */
+  /** A shared profile exists but its schema can't be used by this server (so `available` is false). */
   stale?: boolean;
   staleReason?: DeviceDefsStaleReason;
+  /** The shared profile's schema stamp (null = none) and the schema this server accepts. */
+  schema?: number | null;
+  currentSchema?: number;
 }
 
 export interface Health {

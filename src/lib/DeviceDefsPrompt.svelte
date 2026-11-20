@@ -107,8 +107,8 @@
         <span class="ic">⧉</span>
         <div class="msg">
           {#if deviceDefs.stale}
-            <b>Re-read the definitions for this device</b>
-            <span class="sub">The definitions saved for this device are out of date and no longer used, so Axis is using its bundled ones. Read them again to match your exact firmware.</span>
+            <b>{deviceDefs.staleCopy.title}</b>
+            <span class="sub">{deviceDefs.staleCopy.sub}</span>
           {:else}
             <b>Get definitions for this device?</b>
             <span class="sub">Axis is using bundled definitions. Match them to your exact firmware for accurate model names, ranges &amp; parameters.</span>
@@ -116,6 +116,10 @@
         </div>
         <button class="later" onclick={() => deviceDefs.dismiss()} title="Keep using the bundled definitions">Later</button>
       </div>
+
+      {#if deviceDefs.cloudNote}
+        <div class="note">{deviceDefs.cloudNote}</div>
+      {/if}
 
       {#if deviceDefs.error}
         <div class="err">
@@ -343,6 +347,12 @@
     color: var(--text2);
   }
   .dropic { font-size: 15px; }
+  .note {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--textdim);
+    line-height: 1.35;
+  }
   .err {
     margin-top: 8px;
     font-size: 11.5px;
