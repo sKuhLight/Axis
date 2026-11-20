@@ -19,7 +19,7 @@ import type {
 } from './types';
 import type { Severity } from './convertReport';
 import { normFromValue } from './format';
-import { isEnumParam } from './convertParams';
+import { enumOptionCount, isEnumParam } from './convertParams';
 
 // ── target topology ──────────────────────────────────────────────────────────────────────────────
 
@@ -374,8 +374,8 @@ function rangeOf(o: Record<string, unknown>): { min: number; max: number; log: b
 }
 
 /** The wire fraction (0..1) for `value` on this param — the inverse of what the knob does:
- *  - enum (dropdown) params hold an ordinal, whose gen-3 wire fraction is `ordinal/65534` (so the
- *    authoring's `round(normalized*65534)` reproduces the exact ordinal);
+ *  - enum params hold an ordinal, whose gen-3 wire fraction is `ordinal/65534` (so the authoring's
+ *    `round(normalized*65534)` reproduces the exact ordinal);
  *  - ranged params use the knob's own mapping (`normFromValue`: geometric for a log range with min > 0,
  *    linear otherwise), so the knob and the wire agree;
  *  - range-less params keep the 0..1 knob semantics: the value IS the fraction. */
@@ -385,13 +385,24 @@ export function normalizedForValue(p: ConverterParam, value: number): number {
   return range ? normFromValue(value, range) : clamp01(value);
 }
 
-/** A copy of `p` holding `value`, with `normalized` (and a `norm` alias, if the IR carries one — it
- *  would otherwise shadow `normalized` when the block is reopened) re-derived to match. */
-function withParamValue(p: ConverterParam, value: number): ConverterParam {
-  const normalized = normalizedForValue(p, value);
-  const next: ConverterParam = { ...p, value, normalized };
+/** A copy of `p` holding `normalized` — and the `norm` alias, if the IR carries one (it would otherwise
+ *  shadow `normalized` when the block is reopened). */
+function withNormalized(p: ConverterParam, normalized: number): ConverterParam {
+  const next: ConverterParam = { ...p, normalized };
   if (typeof next['norm'] === 'number') next['norm'] = normalized;
   return next;
+}
+
+/** A copy of `p` holding `value`, with `normalized` re-derived to match — or undefined when the edit is
+ *  refused. An enum only accepts a whole ordinal inside its option list; an enum with no option list has
+ *  no known valid ordinal at all, so it keeps its value (writing a fraction into a selector slot would
+ *  corrupt it). */
+function withParamValue(p: ConverterParam, value: number): ConverterParam | undefined {
+  if (isEnumParam(p)) {
+    const count = enumOptionCount(p);
+    if (!Number.isInteger(value) || value < 0 || value >= count) return undefined; // count 0 → always refused
+  }
+  return withNormalized({ ...p, value }, normalizedForValue(p, value));
 }
 
 // ── transitions (pure — each returns a new ScratchState) ─────────────────────────────────────────
@@ -462,13 +473,14 @@ export function unplaceBlock(state: ScratchState, blockKey: string): ScratchStat
 /** Set one param's value on a block (offline), addressed by its index in the block's `params` array —
  *  the convert surface maps a NamedParam id 1:1 to this index. Re-derives the param's `normalized` wire
  *  fraction alongside `value` (see {@link normalizedForValue}) so export / apply / reopen all see the edit.
- *  No-op on an out-of-range index or a non-finite value. */
+ *  No-op on an out-of-range index or a non-finite value, and on an enum edit that is not a whole ordinal
+ *  of the param's option list (an enum without options can't be edited). */
 export function setBlockParam(state: ScratchState, blockKey: string, paramIndex: number, value: number): ScratchState {
   if (!Number.isFinite(value)) return state;
   return patchBlocks(state, (b) => {
     if (b.key !== blockKey) return b;
     if (paramIndex < 0 || paramIndex >= b.params.length) return b;
-    const params = b.params.map((p, i) => (i === paramIndex ? withParamValue(p, value) : p));
+    const params = b.params.map((p, i) => (i === paramIndex ? (withParamValue(p, value) ?? p) : p));
     return { ...b, params };
   });
 }
@@ -643,12 +655,12 @@ export interface ApplyPlan {
 /** What goes on the wire for one param, or undefined when it can't be determined. The server's contract
  *  (`PUT /preset/blocks/:eid/params/:paramId`): a continuous write takes a 0..1 fraction (gen-3 clamp01,
  *  AM4 SET_NORM), a discrete write takes the ordinal. So:
- *  - enum (dropdown) params → their ordinal, `continuous: false`;
+ *  - enum params (labelled or not — see `isEnumParam`) → their raw ordinal, `continuous: false`;
  *  - knobs → the wire fraction `normalized`, else derived from `value` + the display range with the knob's
  *    own mapping. NEVER the display `value`: a 500 ms delay time would clamp to the maximum.
  *  A knob with neither `normalized` nor a range has no known scale, so it is not guessed. */
 export function paramWriteOf(p: ConverterParam): { value: number; continuous: boolean } | undefined {
-  if (isEnumParam(p)) return Number.isFinite(p.value) ? { value: p.value, continuous: false } : undefined;
+  if (isEnumParam(p)) return Number.isInteger(p.value) && p.value >= 0 ? { value: p.value, continuous: false } : undefined;
   const o = p as unknown as Record<string, unknown>;
   const normalized = numAttr(o, 'normalized');
   if (normalized != null) return { value: clamp01(normalized), continuous: true };

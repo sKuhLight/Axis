@@ -33,7 +33,7 @@ import {
   paramWriteOf,
   type ScratchState
 } from './convertScratch';
-import { buildParams, buildEnums } from './convertParams';
+import { buildParams, buildEnums, isEnumParam } from './convertParams';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -692,5 +692,105 @@ describe('buildApplyPlan wire values', () => {
 
   it('paramWriteOf is undefined for a non-finite enum ordinal', () => {
     expect(paramWriteOf({ nativeName: 'm', value: Number.NaN, enumOptions: ['A', 'B'] })).toBeUndefined();
+  });
+});
+
+// ── enums without option labels (same-vocabulary gen-3 lift) are never edited as knobs ────────────
+describe('enum params without enumOptions', () => {
+  /** The shape the gen-3 lift emits on the lossless path: value = raw ordinal, normalized = raw/65534, a
+   *  non-numeric displayValue (the enum label), NO range, NO enumOptions. */
+  const liftedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 3, normalized: 3 / 65534, displayValue: 'High' });
+  /** The same param once the codec tags it (`kind`), with no label hint at all. */
+  const taggedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 3, normalized: 3 / 65534, kind: 'enum' });
+  const knob = () => ({ nativeName: 'level', paramId: 8, value: 0.5, normalized: 0.5 });
+
+  function withBlock(params: Record<string, unknown>[]): ScratchState {
+    return seedScratch(
+      preset({
+        blocks: [
+          { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, effectId: 106, position: { row: 0, col: 0 }, params } as never
+        ]
+      }),
+      [],
+      'fm3'
+    );
+  }
+  const paramsOf = (s: ScratchState) => s.blocks[0].params;
+  const wireRaw = (p: unknown) => Math.round((p as { normalized: number }).normalized * 65534);
+
+  it('isEnumParam: enumOptions, kind:"enum", or (no kind) a range-less non-numeric displayValue', () => {
+    expect(isEnumParam({ nativeName: 'a', value: 1, enumOptions: ['x', 'y'] })).toBe(true);
+    expect(isEnumParam({ nativeName: 'a', value: 1, kind: 'enum' })).toBe(true);
+    expect(isEnumParam({ nativeName: 'a', value: 3, displayValue: 'High' })).toBe(true); // interim guard
+    expect(isEnumParam({ nativeName: 'a', value: 3, displayValue: '1/4' })).toBe(true);
+    // not enums
+    expect(isEnumParam({ nativeName: 'a', value: 5.1, displayValue: '5.1' })).toBe(false); // numeric label
+    expect(isEnumParam({ nativeName: 'a', value: 5 })).toBe(false); // no hint at all
+    expect(isEnumParam({ nativeName: 'a', value: 5, displayValue: '  ' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 5, min: 0, max: 10, displayValue: 'Fast' })).toBe(false); // ranged → knob
+    // `kind` float / int is authoritative: it switches the interim guess off
+    expect(isEnumParam({ nativeName: 'a', value: 0.4, kind: 'float', displayValue: 'Fast' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, kind: 'int', displayValue: 'Four' })).toBe(false);
+    // …but enumOptions still win over a stray kind
+    expect(isEnumParam({ nativeName: 'a', value: 1, kind: 'float', enumOptions: ['x', 'y'] })).toBe(true);
+  });
+
+  for (const [label, make] of [
+    ['interim guard (displayValue label, no kind)', liftedEnum],
+    ['kind: "enum" (no label hint)', taggedEnum]
+  ] as const) {
+    it(`the reviewer's 0.3 scenario — a knob turn cannot write a fraction into the slot [${label}]`, () => {
+      const s0 = withBlock([make(), knob()]);
+      const s = setBlockParam(s0, 'amp1', 0, 0.3);
+      // value and the wire fraction are unchanged: the export still writes the exact raw ordinal 3
+      expect(paramsOf(s)[0]).toEqual(make());
+      expect(wireRaw(paramsOf(s)[0])).toBe(3); // not 19660 (= round(0.3 * 65534))
+      const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+      expect(wireRaw(wire.blocks[0].params[0])).toBe(3);
+    });
+
+    it(`has no valid ordinal to edit to, so even an integer edit is refused [${label}]`, () => {
+      const s0 = withBlock([make()]);
+      for (const v of [0, 2, 3, 4, -1, 2.5]) expect(paramsOf(setBlockParam(s0, 'amp1', 0, v))[0]).toEqual(make());
+    });
+
+    it(`is neither a knob nor a dropdown (it keeps its value) and the sibling knob still edits [${label}]`, () => {
+      const s = setBlockParam(withBlock([make(), knob()]), 'amp1', 1, 0.8);
+      expect(buildParams(paramsOf(s)).map((k) => k.name)).toEqual(['level']);
+      expect(buildParams(paramsOf(s))[0]).toMatchObject({ id: 1, norm: 0.8 }); // id stays the array index
+      expect(buildEnums(paramsOf(s))).toEqual([]);
+      expect(paramsOf(s)[0]).toEqual(make());
+      expect(paramsOf(s)[1]).toMatchObject({ value: 0.8, normalized: 0.8 });
+    });
+
+    it(`the apply plan writes the raw ordinal discretely [${label}]`, () => {
+      const plan = buildApplyPlan(withBlock([make(), knob()]));
+      expect(plan.ops.filter((o) => o.kind === 'set-param')).toEqual([
+        { kind: 'set-param', blockKey: 'amp1', effectId: 106, paramId: 7, value: 3, continuous: false },
+        { kind: 'set-param', blockKey: 'amp1', effectId: 106, paramId: 8, value: 0.5, continuous: true }
+      ]);
+      expect(plan.unresolvedParams).toBe(0);
+    });
+  }
+
+  it('a non-integer enum ordinal is not written (unresolved), never rounded or sent as a fraction', () => {
+    const plan = buildApplyPlan(withBlock([{ ...liftedEnum(), value: 2.5 }]));
+    expect(plan.ops.some((o) => o.kind === 'set-param')).toBe(false);
+    expect(plan.unresolvedParams).toBe(1);
+  });
+
+  it('kind:"float" keeps a labelled-looking param a knob: editable, written continuously', () => {
+    const s0 = withBlock([{ nativeName: 'speed', paramId: 9, value: 0.1, normalized: 0.1, displayValue: 'Slow', kind: 'float' }]);
+    expect(buildParams(paramsOf(s0)).map((k) => k.name)).toEqual(['speed']);
+    const s = setBlockParam(s0, 'amp1', 0, 0.4);
+    expect(paramsOf(s)[0]).toMatchObject({ value: 0.4, normalized: 0.4 });
+    expect(buildApplyPlan(s).ops.find((o) => o.kind === 'set-param')).toMatchObject({ value: 0.4, continuous: true });
+  });
+
+  it('an enum WITH options accepts only a whole ordinal inside its list', () => {
+    const s0 = withBlock([{ nativeName: 'mode', paramId: 7, value: 1, enumOptions: ['A', 'B', 'C'], normalized: 1 / 65534 }]);
+    const ok = setBlockParam(s0, 'amp1', 0, 2);
+    expect(paramsOf(ok)[0]).toMatchObject({ value: 2, normalized: 2 / 65534 });
+    for (const bad of [0.3, 1.5, -1, 3, 99]) expect(paramsOf(setBlockParam(s0, 'amp1', 0, bad))[0]).toEqual(paramsOf(s0)[0]);
   });
 });

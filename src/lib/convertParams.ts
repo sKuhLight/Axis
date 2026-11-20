@@ -32,22 +32,42 @@ function enumOptionsOf(o: Record<string, unknown>): string[] | undefined {
   return undefined;
 }
 
-/** True when the converter tagged the param as an enum (it carries clean `enumOptions`): it renders as a
- *  dropdown, its `value` is the ordinal, and the device wants it as a discrete write, not a knob fraction. */
+/** How many ordered enum option labels the converter attached to the param (0 = none): the param renders
+ *  as a dropdown, and valid ordinals are `0..count-1`. */
+export function enumOptionCount(p: ConverterParam): number {
+  return enumOptionsOf(p as unknown as Record<string, unknown>)?.length ?? 0;
+}
+
+/** True when the param is a discrete selector: its `value` is the ordinal, and the device wants it as a
+ *  discrete write, never a knob fraction. A param is an enum when
+ *  1. it carries clean `enumOptions`, or
+ *  2. the codec tags it `kind: 'enum'` (an enum without labels — e.g. a same-vocabulary gen-3 lift), or
+ *  3. INTERIM, for IR that carries no `kind` at all: it has no display range and a non-numeric
+ *     `displayValue` (the gen-3 lift sets `displayValue` from the enum label on that path).
+ *  `kind: 'float' | 'int'` is authoritative for "not an enum" and switches the interim guess off. */
 export function isEnumParam(p: ConverterParam): boolean {
-  return enumOptionsOf(p as unknown as Record<string, unknown>) !== undefined;
+  const o = p as unknown as Record<string, unknown>;
+  if (enumOptionsOf(o)) return true;
+  const kind = o['kind'];
+  if (kind === 'enum') return true;
+  if (kind === 'float' || kind === 'int') return false;
+  if (num(o, 'min') != null && num(o, 'max') != null) return false; // a ranged param is a knob
+  const label = str(o, 'displayValue');
+  return label != null && label.trim() !== '' && !Number.isFinite(Number(label));
 }
 
 /** Build the open block's knob params. `id` = the param's index in the block's params array so
- *  `setParam(p, v)` maps 1:1 back to `convertScratch.setParam(key, id, …)`. Params the converter tagged
- *  as enums (they carry `enumOptions`) are EXCLUDED here — they render as dropdowns (see buildEnums).
+ *  `setParam(p, v)` maps 1:1 back to `convertScratch.setParam(key, id, …)`. Enum params (see
+ *  {@link isEnumParam}) are EXCLUDED here — those with `enumOptions` render as dropdowns (see
+ *  buildEnums); an enum with no labels has nothing valid to edit to, so it is neither a knob nor a
+ *  dropdown and simply keeps its value.
  *  Range / unit / taper / knob position are taken from the IR extras when present, else the raw value
  *  renders coarse (no device-free param catalog is otherwise available offline). */
 export function buildParams(params: readonly ConverterParam[]): NamedParam[] {
   const out: NamedParam[] = [];
   params.forEach((p, i) => {
     const o = p as unknown as Record<string, unknown>;
-    if (enumOptionsOf(o)) return; // enum → dropdown
+    if (isEnumParam(p)) return; // enum → dropdown (labelled) or read-only (unlabelled), never a knob
     const min = num(o, 'min');
     const max = num(o, 'max');
     const unit = str(o, 'unit');
