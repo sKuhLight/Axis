@@ -6,7 +6,7 @@ import { forgefx, isRemote } from './forgefx';
 import { isRemoteBuild } from './cloudBrowser';
 import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
-import { PARAMS_DECODE_VERSION, wrapParams, loadParamsCache, dropStaleEmbeddedParams } from './paramsCacheVersion';
+import { PARAMS_DECODE_VERSION, wrapParams, loadParamsCache, settleFilesOnLoad, redecodePass } from './paramsCacheVersion';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
@@ -61,7 +61,7 @@ export interface LibEntry {
  *  explicitly or it pollutes the library/search as a ghost entry. */
 const isEmptyName = (name: string) => /^<empty>$/i.test(name.trim());
 
-const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders', paramsVer: 'axs.lib.paramsVer' };
+const LS = { tags: 'axs.lib.tags', collections: 'axs.lib.collections', favs: 'axs.lib.favs', cache: 'axs.lib.cache', built: 'axs.lib.built', files: 'axs.lib.files', folders: 'axs.lib.folders' };
 // IndexedDB key for the per-preset param index (id → DecodedBlock[]), stored in a versioned envelope
 // (paramsCacheVersion.ts): decoded values from an older decode are never served next to fresh ones.
 const IDB_PARAMS = 'lib.params';
@@ -145,9 +145,17 @@ class LibraryStore {
   hydrateDone = $state(0);
   /** True once a full cache build has completed (persisted) — drives the startup prompt. */
   cacheBuilt = $state(load<boolean>(LS.built, false));
-  /** Imported-file summaries were persisted by an older param decode: their embedded params are dropped on
-   *  launch and re-decoded from the stored bytes (see #redecodeStaleFiles). Cleared once that succeeds. */
-  #filesStale = false;
+  /** Imported files whose persisted params came from an older decode: dropped on launch, then re-decoded
+   *  from the stored raw bytes. Each file carries its OWN decode stamp (`#fileStamp`, persisted as `paramsV`),
+   *  so only files still pending are ever retried — never the whole library. */
+  #pendingFiles: string[] = [];
+  /** id → decode version of that file's embedded params (set when imported / re-decoded / settled). */
+  #fileStamp = new Map<string, number>();
+  #redecoding = false;
+  /** The raw-bytes blob was read from IndexedDB — a re-decode pass only runs once it has been. */
+  #bytesLoaded = false;
+  /** The one extra re-decode pass allowed per session (after the server connects) for transient failures. */
+  #redecodeRetryUsed = false;
 
   constructor() {
     // restore the cached device scan so the library isn't empty on launch
@@ -156,11 +164,13 @@ class LibraryStore {
       .filter((s) => !isEmptyName(s.name)); // self-heal: drop ghost <EMPTY> entries from older caches
     const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
-    const storedFiles = (load<{ id: string; folder?: string; summary: unknown }[]>(LS.files, [])
-      .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary }[];
-    // embedded params written by an older decode would mix scales in deep search → drop them, re-decode below
-    const { items: files, stale: filesStale } = dropStaleEmbeddedParams(storedFiles, load<unknown>(LS.paramsVer, null));
-    this.#filesStale = filesStale;
+    const storedFiles = (load<{ id: string; folder?: string; summary: unknown; paramsV?: number }[]>(LS.files, [])
+      .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary; paramsV?: number }[];
+    // embedded params written by an older decode would mix scales in deep search → drop them per file. With
+    // IndexedDB the raw bytes are there to re-decode from (below); without it they are settled right away.
+    const { items: files, pending } = settleFilesOnLoad(storedFiles, idb.available());
+    this.#pendingFiles = pending;
+    for (const f of files) if (f.paramsV === PARAMS_DECODE_VERSION) this.#fileStamp.set(f.id, PARAMS_DECODE_VERSION);
     const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
     this.entries = [...deviceEntries, ...fileEntries].sort(this.#order);
     this.folders = load<string[]>(LS.folders, []);
@@ -172,8 +182,12 @@ class LibraryStore {
       // legacy / other-decode-version caches are dropped here (and re-decoded by the deep scan), never served
       loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
       idb.get<Record<string, number[]>>(IDB_FILEBYTES)
-        .then((b) => { if (b) this.#fileBytes = b; })
-        .then(() => this.#redecodeStaleFiles());
+        .then((b) => {
+          if (!b) return; // blob unreadable or absent: can't tell "no bytes" from a failed read → leave files pending
+          this.#fileBytes = b;
+          this.#bytesLoaded = true;
+          return this.#redecodePending();
+        });
     }
     // surface any previously-saved cross-device conversions (best-effort; async)
     void this.loadConverted();
@@ -371,6 +385,8 @@ class LibraryStore {
         const id = `file:${folder ? folder + '/' : ''}${f.name}`;
         byId.set(id, { id, source: 'file', summary: { ...summary, name: summary.name || f.name.replace(/\.syx$/i, '') }, fav: byId.get(id)?.fav ?? false, folder });
         this.#fileBytes[id] = Array.from(new Uint8Array(buf));
+        this.#fileStamp.set(id, PARAMS_DECODE_VERSION); // freshly decoded by the current decoder
+        this.#pendingFiles = this.#pendingFiles.filter((p) => p !== id); // a re-import supersedes a pending re-decode
         ok++;
       } catch {
         failed++;
@@ -444,43 +460,65 @@ class LibraryStore {
   removeFile(id: string): void {
     this.entries = this.entries.filter((e) => e.id !== id);
     delete this.#fileBytes[id];
+    this.#fileStamp.delete(id);
+    this.#pendingFiles = this.#pendingFiles.filter((p) => p !== id);
     this.#persistFiles();
   }
   /** Remove every preset imported from a folder. */
   removeFolder(folder: string): void {
-    for (const e of this.entries) if (e.folder === folder) delete this.#fileBytes[e.id];
+    for (const e of this.entries) {
+      if (e.folder !== folder) continue;
+      delete this.#fileBytes[e.id];
+      this.#fileStamp.delete(e.id);
+      this.#pendingFiles = this.#pendingFiles.filter((p) => p !== e.id);
+    }
     this.entries = this.entries.filter((e) => e.folder !== folder);
     this.folders = this.folders.filter((f) => f !== folder);
     persist(LS.folders, this.folders);
     this.#persistFiles();
   }
-  #persistFiles(): void {
-    const files = this.entries.filter((e) => e.source === 'file').map((e) => ({ id: e.id, folder: e.folder, summary: e.summary }));
+  /** Persist the imported-file list: each record carries its own decode stamp (`paramsV`; absent while its
+   *  params still await a re-decode). `withBytes: false` leaves the raw-bytes blob alone (a re-decode pass
+   *  never changes it, and a failed earlier read must not be able to overwrite it with an empty map). */
+  #persistFiles(withBytes = true): void {
+    const files = this.entries
+      .filter((e) => e.source === 'file')
+      .map((e) => ({ id: e.id, folder: e.folder, summary: e.summary, paramsV: this.#fileStamp.get(e.id) }));
     persist(LS.files, files);
-    // the decode-version marker is only advanced once no file still awaits a re-decode, so a failed/partial
-    // re-decode is retried on the next launch instead of being treated as current
-    if (!this.#filesStale) persist(LS.paramsVer, PARAMS_DECODE_VERSION);
-    if (idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
+    if (withBytes && idb.available()) idb.set(IDB_FILEBYTES, { ...this.#fileBytes });
   }
-  /** Re-decode imported files whose persisted params came from an older decode, from their stored raw bytes
-   *  (best-effort: offline/unreadable files stay without params and are retried next launch). */
-  async #redecodeStaleFiles(): Promise<void> {
-    if (!this.#filesStale) return;
-    let failed = 0;
-    for (const e of this.entries.filter((x) => x.source === 'file')) {
-      const bytes = this.#fileBytes[e.id];
-      if (!bytes) continue; // nothing to decode from → stays without params
-      try {
-        const fresh = await forgefx.decodePresetFile(new Uint8Array(bytes).buffer);
-        // keep the (possibly user-visible) name; take the freshly decoded params + structure
-        this.entries = this.entries.map((x) => (x.id === e.id ? { ...x, summary: { ...fresh, name: x.summary.name } } : x));
-      } catch {
-        failed++;
-      }
+  /** Re-decode the pending imported files (params dropped on launch) from their stored raw bytes. Only the
+   *  pending files are touched; a file settles for good on success, with no stored bytes, or on a
+   *  deterministic server rejection (4xx — left without params, never retried). A transient failure (server
+   *  offline / 5xx / timeout) stops the pass after ONE request and leaves the rest pending. */
+  async #redecodePending(): Promise<void> {
+    if (this.#redecoding || !this.#bytesLoaded || !this.#pendingFiles.length) return;
+    this.#redecoding = true;
+    try {
+      this.#pendingFiles = await redecodePass(
+        this.#pendingFiles,
+        async (id) => {
+          const bytes = this.#fileBytes[id];
+          return bytes ? forgefx.decodePresetFile(new Uint8Array(bytes).buffer) : null;
+        },
+        (id, fresh) => {
+          // keep the (possibly user-visible) name; take the freshly decoded params + structure
+          if (fresh) this.entries = this.entries.map((x) => (x.id === id ? { ...x, summary: { ...fresh, name: x.summary.name } } : x));
+          this.#fileStamp.set(id, PARAMS_DECODE_VERSION);
+        }
+      );
+    } finally {
+      this.#redecoding = false;
+      this.#persistFiles(false);
     }
-    if (failed === 0) this.#filesStale = false;
-    this.#persistFiles();
   }
+  /** Called once the server is reachable: ONE more re-decode pass for files that failed transiently at
+   *  launch. At most one retry per session (anything still failing waits for the next launch). */
+  retryStaleFiles = async (): Promise<void> => {
+    if (this.#redecodeRetryUsed || this.#redecoding || !this.#pendingFiles.length) return;
+    this.#redecodeRetryUsed = true;
+    await this.#redecodePending();
+  };
 
   // ── converted presets (cross-device conversions saved to the `converted` store collection) ──
   /** Build a lightweight library entry from a stored conversion doc. Summary blocks map the target IR's

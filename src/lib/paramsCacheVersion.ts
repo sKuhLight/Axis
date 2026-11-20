@@ -50,13 +50,69 @@ export function isStaleParamsVersion(stored: unknown): boolean {
   return stored !== PARAMS_DECODE_VERSION;
 }
 
-/** Persisted entries whose summaries embed decoded `params` (imported files): when the stored version is
- *  stale, drop the embedded params so a stale scale is never searched; the caller re-decodes them from the
- *  raw bytes. Returns the input untouched (same references) when the version is current. */
-export function dropStaleEmbeddedParams<T extends { summary: { params?: unknown } }>(
+/** A persisted imported-file record. `paramsV` stamps WHICH decode version this file's embedded `params`
+ *  came from — per file, so one file the server rejects never forces the whole library to be re-decoded. */
+export interface PersistedFile {
+  id: string;
+  folder?: string;
+  summary: { params?: unknown };
+  paramsV?: number;
+}
+
+/** Load-time settle for persisted imported files. A file stamped with the current decode version is kept
+ *  untouched (same reference). Any other (missing / older stamp) has its embedded params dropped so a stale
+ *  scale is never searched, and then:
+ *  - `canRedecode` (the raw bytes live in IndexedDB) → its id is returned in `pending` and its stamp is left
+ *    stale, so a crash or a failed re-decode is retried;
+ *  - otherwise there are no bytes to re-decode from, so it is settled on the spot: params dropped, stamp
+ *    advanced — it is not dropped again on every launch. */
+export function settleFilesOnLoad<T extends PersistedFile>(
   items: T[],
-  storedVersion: unknown
-): { items: T[]; stale: boolean } {
-  if (!isStaleParamsVersion(storedVersion)) return { items, stale: false };
-  return { items: items.map((it) => ({ ...it, summary: { ...it.summary, params: undefined } }) as T), stale: true };
+  canRedecode: boolean
+): { items: T[]; pending: string[] } {
+  const pending: string[] = [];
+  const out = items.map((it) => {
+    if (it.paramsV === PARAMS_DECODE_VERSION) return it;
+    const dropped = { ...it, summary: { ...it.summary, params: undefined } } as T;
+    if (canRedecode) {
+      pending.push(it.id);
+      return dropped;
+    }
+    return { ...dropped, paramsV: PARAMS_DECODE_VERSION } as T;
+  });
+  return { items: out, pending };
+}
+
+/** Is a failed decode worth retrying? A deterministic rejection (HTTP 4xx other than 408/429: the server
+ *  looked at these bytes and refused them) never is. No HTTP status at all (network down, server offline,
+ *  timeout), 5xx, 408 and 429 are transient. */
+export function isTransientDecodeError(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null | undefined)?.status;
+  if (typeof status !== 'number') return true;
+  return !(status >= 400 && status < 500 && status !== 408 && status !== 429);
+}
+
+/** One re-decode pass over `ids`. `decode` resolves to the fresh summary, or null when there is nothing to
+ *  decode from (no stored bytes). Every id that reaches a final outcome is passed to `settle` (with the fresh
+ *  summary, or null → settled WITHOUT params: no bytes, or a deterministic rejection). The first TRANSIENT
+ *  failure stops the pass — an offline server costs one request, not one per file — and the unattempted ids
+ *  plus the failed one are returned, still pending. Never loops: the caller decides about a later pass. */
+export async function redecodePass<S>(
+  ids: readonly string[],
+  decode: (id: string) => Promise<S | null>,
+  settle: (id: string, fresh: S | null) => void
+): Promise<string[]> {
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i]!;
+    let fresh: S | null;
+    try {
+      fresh = await decode(id);
+    } catch (e) {
+      if (isTransientDecodeError(e)) return ids.slice(i);
+      settle(id, null); // deterministic: the server will never accept these bytes — done, not retried
+      continue;
+    }
+    settle(id, fresh);
+  }
+  return [];
 }

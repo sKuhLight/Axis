@@ -791,7 +791,13 @@ class EditorStore {
       const s = await forgefx.localConfig();
       this.local = { ...this.local, available: true, configured: s.configured, root: s.root, exists: s.exists, lastSync: s.lastSync };
       if (s.configured && s.exists) void library.refreshLocal();
-    } catch { /* 404 = older engine → feature hidden (available stays false) */ }
+      // the server answered: imported files whose re-decode failed transiently at launch get their ONE retry
+      // (bounded inside the library — a single extra pass per session)
+      void library.retryStaleFiles();
+    } catch (e) {
+      // 404 = older engine → feature hidden (available stays false). An HTTP status means the server is up.
+      if (typeof (e as { status?: unknown })?.status === 'number') void library.retryStaleFiles();
+    }
   };
   /** Set (or clear with null) the local root. Native picker in AxisPanel feeds this an absolute path. */
   setLocalRoot = async (root: string | null) => {
