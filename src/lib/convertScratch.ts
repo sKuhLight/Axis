@@ -622,18 +622,39 @@ export function buildLibraryDoc(
 
 /** One executable device op. Ordered place → set-type → set-param (a block must exist before its type
  *  is set, and its type before its params). Only emitted when the numeric device address is resolvable
- *  from the IR — see {@link buildApplyPlan}. */
+ *  from the IR — see {@link buildApplyPlan}.
+ *
+ *  `set-param` mirrors the server's unified param write: `continuous: true` → `value` is the 0..1 wire
+ *  fraction (a knob); `continuous: false` → `value` is the discrete ordinal (an enum / dropdown). */
 export type ApplyOp =
   | { kind: 'place'; blockKey: string; effectId: number; row: number; col: number }
   | { kind: 'set-type'; blockKey: string; effectId: number; value: number }
-  | { kind: 'set-param'; blockKey: string; effectId: number; paramId: number; value: number };
+  | { kind: 'set-param'; blockKey: string; effectId: number; paramId: number; value: number; continuous: boolean };
 
 export interface ApplyPlan {
   ops: ApplyOp[];
   /** Placed blocks whose device effect-id couldn't be resolved from the IR (can't be applied). */
   unresolvedBlocks: number;
-  /** Params carried in resolvable blocks but lacking a numeric paramId (can't be written). */
+  /** Params carried in resolvable blocks but lacking a numeric paramId, or a determinable wire value
+   *  (no `normalized` and no display range for a knob) — can't be written. */
   unresolvedParams: number;
+}
+
+/** What goes on the wire for one param, or undefined when it can't be determined. The server's contract
+ *  (`PUT /preset/blocks/:eid/params/:paramId`): a continuous write takes a 0..1 fraction (gen-3 clamp01,
+ *  AM4 SET_NORM), a discrete write takes the ordinal. So:
+ *  - enum (dropdown) params → their ordinal, `continuous: false`;
+ *  - knobs → the wire fraction `normalized`, else derived from `value` + the display range with the knob's
+ *    own mapping. NEVER the display `value`: a 500 ms delay time would clamp to the maximum.
+ *  A knob with neither `normalized` nor a range has no known scale, so it is not guessed. */
+export function paramWriteOf(p: ConverterParam): { value: number; continuous: boolean } | undefined {
+  if (isEnumParam(p)) return Number.isFinite(p.value) ? { value: p.value, continuous: false } : undefined;
+  const o = p as unknown as Record<string, unknown>;
+  const normalized = numAttr(o, 'normalized');
+  if (normalized != null) return { value: clamp01(normalized), continuous: true };
+  const range = rangeOf(o);
+  if (range && Number.isFinite(p.value)) return { value: normFromValue(p.value, range), continuous: true };
+  return undefined;
 }
 
 /** Resolve a block's device effect-id from the IR (extra `effectId` key), if present. */
@@ -667,11 +688,12 @@ export function buildApplyPlan(state: ScratchState): ApplyPlan {
     if (b.typeValue != null) types.push({ kind: 'set-type', blockKey: b.key, effectId: eid, value: b.typeValue });
     for (const p of b.params) {
       const pid = numAttr(p as unknown as Record<string, unknown>, 'paramId');
-      if (pid == null) {
+      const write = paramWriteOf(p);
+      if (pid == null || write == null) {
         unresolvedParams++;
         continue;
       }
-      params.push({ kind: 'set-param', blockKey: b.key, effectId: eid, paramId: pid, value: p.value });
+      params.push({ kind: 'set-param', blockKey: b.key, effectId: eid, paramId: pid, ...write });
     }
   }
 

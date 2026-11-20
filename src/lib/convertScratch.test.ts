@@ -30,6 +30,7 @@ import {
   buildApplyPlan,
   blockEffectId,
   normalizedForValue,
+  paramWriteOf,
   type ScratchState
 } from './convertScratch';
 import { buildParams, buildEnums } from './convertParams';
@@ -297,7 +298,7 @@ describe('buildApplyPlan', () => {
     // drive1 is in the tray (unplaced) so never applied.
     const p = preset({
       blocks: [
-        { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, params: [{ nativeName: 'Gain', value: 5, paramId: 3 } as never], position: { row: 0, col: 2 }, effectId: 106 } as never,
+        { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, params: [{ nativeName: 'Gain', value: 5, normalized: 0.5, paramId: 3 } as never], position: { row: 0, col: 2 }, effectId: 106 } as never,
         { key: 'cab1', family: 'cab', instance: 1, typeValue: 3, params: [], position: { row: 0, col: 3 }, effectId: 112 } as never,
         { key: 'no-eid', family: 'drive', instance: 1, typeValue: 1, params: [{ nativeName: 'Drive', value: 7 }], position: { row: 1, col: 0 } },
         { key: 'drive1', family: 'drive', instance: 2, typeValue: 1, params: [], position: null }
@@ -312,7 +313,8 @@ describe('buildApplyPlan', () => {
     expect(plan.unresolvedBlocks).toBe(1); // 'no-eid'
     expect(plan.unresolvedParams).toBe(0);
     const setParam = plan.ops.find((o) => o.kind === 'set-param');
-    expect(setParam).toMatchObject({ effectId: 106, paramId: 3, value: 5 });
+    // the wire fraction, not the display value 5
+    expect(setParam).toMatchObject({ effectId: 106, paramId: 3, value: 0.5, continuous: true });
   });
 
   it('counts params without a paramId as unresolved', () => {
@@ -597,5 +599,98 @@ describe('setBlockParam keeps `normalized` in sync with `value`', () => {
       expect(normalizedForValue(lin, lv)).toBeCloseTo(v, 10);
       expect(normalizedForValue(log, gv)).toBeCloseTo(v, 10);
     }
+  });
+});
+
+// ── apply plan sends wire values, not display values ─────────────────────────────────────────────
+describe('buildApplyPlan wire values', () => {
+  /** One placed, addressable block holding the given params (each gets a paramId from its index). */
+  function planFor(params: Record<string, unknown>[], edit?: (s: ScratchState) => ScratchState) {
+    const p = preset({
+      blocks: [
+        {
+          key: 'delay1',
+          family: 'delay',
+          instance: 1,
+          typeValue: 2,
+          effectId: 120,
+          position: { row: 0, col: 0 },
+          params: params.map((q, i) => ({ paramId: 10 + i, ...q }))
+        } as never
+      ]
+    });
+    const s = seedScratch(p, [], 'fm3');
+    return buildApplyPlan(edit ? edit(s) : s);
+  }
+  const setParams = (plan: ReturnType<typeof buildApplyPlan>) => plan.ops.filter((o) => o.kind === 'set-param');
+
+  it('sends the 0..1 wire fraction for a knob, never the display value (500 ms is not "max")', () => {
+    const plan = planFor([{ nativeName: 'time', value: 500, min: 0, max: 2000, unit: 'ms', normalized: 0.25 }]);
+    expect(setParams(plan)).toEqual([
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 10, value: 0.25, continuous: true }
+    ]);
+  });
+
+  it('derives the fraction from value + range when the IR has no `normalized` (log-aware)', () => {
+    const mid = Math.sqrt(20 * 20000);
+    const plan = planFor([
+      { nativeName: 'lin', value: 500, min: 0, max: 2000 },
+      { nativeName: 'log', value: mid, min: 20, max: 20000, log: true }
+    ]);
+    const ops = setParams(plan) as { value: number; continuous: boolean }[];
+    expect(ops[0]).toMatchObject({ value: 0.25, continuous: true });
+    expect(ops[1].value).toBeCloseTo(0.5, 10);
+    expect(ops[1].continuous).toBe(true);
+  });
+
+  it('clamps an out-of-range fraction into 0..1', () => {
+    const plan = planFor([
+      { nativeName: 'a', value: 1, normalized: 1.7 },
+      { nativeName: 'b', value: 1, normalized: -0.2 }
+    ]);
+    expect((setParams(plan) as { value: number }[]).map((o) => o.value)).toEqual([1, 0]);
+  });
+
+  it('sends the ordinal as a discrete (continuous:false) write for enum params, value unchanged', () => {
+    const plan = planFor([
+      { nativeName: 'mode', value: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 3 / 65534 },
+      { nativeName: 'ranged-enum', value: 2, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 0.66 }
+    ]);
+    expect(setParams(plan)).toEqual([
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 10, value: 3, continuous: false },
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 11, value: 2, continuous: false }
+    ]);
+  });
+
+  it('does not guess a scale: a knob with neither `normalized` nor a range is skipped as unresolved', () => {
+    const plan = planFor([{ nativeName: 'opaque', value: 500 }]);
+    expect(setParams(plan)).toEqual([]);
+    expect(plan.unresolvedParams).toBe(1);
+  });
+
+  it('plans the EDITED value: edit → plan carries the new fraction (linear, log, range-less, enum)', () => {
+    const plan = planFor(
+      [
+        { nativeName: 'time', value: 100, min: 0, max: 2000, normalized: 0.05 },
+        { nativeName: 'hicut', value: 20, min: 20, max: 20000, log: true, normalized: 0 },
+        { nativeName: 'mix', value: 0.1, normalized: 0.1 },
+        { nativeName: 'mode', value: 0, enumOptions: ['A', 'B', 'C'] }
+      ],
+      (s) => {
+        s = setBlockParam(s, 'delay1', 0, 500);
+        s = setBlockParam(s, 'delay1', 1, Math.sqrt(20 * 20000));
+        s = setBlockParam(s, 'delay1', 2, 0.8);
+        return setBlockParam(s, 'delay1', 3, 2);
+      }
+    );
+    const ops = setParams(plan) as { value: number; continuous: boolean }[];
+    expect(ops[0]).toMatchObject({ value: 0.25, continuous: true });
+    expect(ops[1].value).toBeCloseTo(0.5, 10);
+    expect(ops[2]).toMatchObject({ value: 0.8, continuous: true });
+    expect(ops[3]).toMatchObject({ value: 2, continuous: false });
+  });
+
+  it('paramWriteOf is undefined for a non-finite enum ordinal', () => {
+    expect(paramWriteOf({ nativeName: 'm', value: Number.NaN, enumOptions: ['A', 'B'] })).toBeUndefined();
   });
 });
