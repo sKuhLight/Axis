@@ -169,9 +169,12 @@
   }
   $effect(() => {
     if (!barEl || !measureEl) return;
-    const ro = new ResizeObserver(() => measureBar());
+    // The card is observed too: the bottom sheet grows upward when the content height changes, which moves the ⋯
+    // button (and so an open menu) without resizing the bar.
+    const ro = new ResizeObserver(() => { measureBar(); if (menuOpen) placeMenu(); });
     ro.observe(barEl);
     ro.observe(measureEl);
+    if (cardEl) ro.observe(cardEl);
     untrack(measureBar); // synchronous first read; the observer then keeps it current
     return () => ro.disconnect();
   });
@@ -246,27 +249,33 @@
     if (moreWrap && !moreWrap.contains(e.target as Node)) closeMenu(false);
   }
   // The mobile sheet slides in (CSS animation on the card): a menu opened — or placed — mid-slide used the button's
-  // in-flight rect, so re-place once the slide has finished.
+  // in-flight rect, so re-place once the slide has finished (or was cancelled).
   function onCardAnimationEnd(e: AnimationEvent) {
     if (e.target === e.currentTarget) placeMenu();
   }
-  // Window listeners exist only while the menu is open; the fixed menu follows the ⋯ button on resize / card scroll.
+  // Scrolling the card moves the ⋯ button away from a fixed menu, so a card scroll closes the menu.
+  const onCardScroll = () => closeMenu(false);
+  // Window/card listeners exist only while the menu is open; the fixed menu follows the ⋯ button on window resize.
   $effect(() => {
     if (!menuOpen) return;
     const card = cardEl;
     window.addEventListener('keydown', onWinKey, true);
     window.addEventListener('pointerdown', onWinPointer, true);
     window.addEventListener('resize', placeMenu);
-    card?.addEventListener('scroll', placeMenu, { passive: true });
+    card?.addEventListener('scroll', onCardScroll, { passive: true });
+    card?.addEventListener('animationend', onCardAnimationEnd);
+    card?.addEventListener('animationcancel', onCardAnimationEnd);
     return () => {
       window.removeEventListener('keydown', onWinKey, true);
       window.removeEventListener('pointerdown', onWinPointer, true);
       window.removeEventListener('resize', placeMenu);
-      card?.removeEventListener('scroll', placeMenu);
+      card?.removeEventListener('scroll', onCardScroll);
+      card?.removeEventListener('animationend', onCardAnimationEnd);
+      card?.removeEventListener('animationcancel', onCardAnimationEnd);
     };
   });
-  // (Re)place when the menu mounts or the split moves the ⋯ button.
-  $effect(() => { void menuEl; void overflow.visible; void avail; untrack(placeMenu); });
+  // (Re)place when the menu mounts, the split moves the ⋯ button, or the menu's own content (hidden tabs) changes.
+  $effect(() => { void menuEl; void overflow.visible; void avail; void parts.hidden.length; untrack(placeMenu); });
   // The menu can't outlive the dialog or the overflow, and a split change while it is open must not drop keyboard
   // focus to <body> when the focused item (or the whole ⋯ button) disappears.
   $effect(() => {
@@ -306,7 +315,7 @@
 {#if editor.axisOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="bg" class:mob role="presentation" onclick={close}>
-    <div class="card" class:mob role="dialog" tabindex="-1" bind:this={cardEl} onclick={(e) => e.stopPropagation()} onanimationend={onCardAnimationEnd}>
+    <div class="card" class:mob role="dialog" tabindex="-1" bind:this={cardEl} onclick={(e) => e.stopPropagation()}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar" bind:this={barEl}>
@@ -733,6 +742,7 @@
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
   .more-btn { padding: 0 10px; font-size: 16px; line-height: 1; }
   .more { position: relative; flex: 0 0 auto; display: flex; }
+  /* position: fixed relies on .bg (its backdrop-filter makes it the containing block) having the viewport's box (inset 0) — placeMenu computes left/top in that space. */
   .menu { position: fixed; z-index: 5; min-width: 156px; padding: 4px; display: flex; flex-direction: column; gap: 1px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
   .mi { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 34px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--textdim); font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; white-space: nowrap; cursor: pointer; }
   .mi:hover, .mi:focus-visible { background: var(--accent-tint); color: var(--text); outline: none; }

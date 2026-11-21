@@ -134,12 +134,18 @@ describe('settings dialog tab bar (source pins)', () => {
     expect(fn('placeMenu')).toMatch(/zoomOf\(\)/);
     // flips above the button when there is no room below (bottom sheet), and re-places once the sheet's slide-in ends
     expect(fn('placeMenu')).toMatch(/menuAnchorPlacement\(/);
-    expect(panel).toMatch(/onanimationend=\{/);
+    expect(panel).toMatch(/addEventListener\('animationend'/);
+    expect(panel).toMatch(/addEventListener\('animationcancel'/);
+    // a card scroll moves the ⋯ away from the fixed menu, so it closes the menu instead of leaving it floating
+    expect(panel).toMatch(/addEventListener\('scroll', onCardScroll/);
+    expect(panel).toMatch(/const onCardScroll = \(\) => closeMenu\(false\)/);
+    // the card's own resize (the bottom sheet grows upward) re-places an open menu
+    expect(panel).toMatch(/ro\.observe\(cardEl\)/);
   });
 
   it('window listeners are attached only while the menu is open, and a split change cannot strand focus', () => {
-    // no component-lifetime window handlers for the menu
-    expect(panel).not.toMatch(/<svelte:window/);
+    // no component-lifetime window handlers for the menu (svelte:window itself stays allowed for other purposes)
+    expect(panel).not.toMatch(/<svelte:window[^>]*\bon(keydown|pointerdown)/);
     expect(panel).toContain("window.addEventListener('keydown'");
     expect(panel).toContain("window.removeEventListener('keydown'");
     expect(panel).toContain("window.addEventListener('pointerdown'");
