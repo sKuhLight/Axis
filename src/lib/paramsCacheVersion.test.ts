@@ -138,13 +138,15 @@ describe('isTransientDecodeError', () => {
 });
 
 // A mini lifecycle over the pure pieces the library store composes: load → settle → one re-decode pass →
-// persist (stamp each settled file). `launch` returns what would be persisted for the NEXT launch.
+// persist (stamp each settled file, keep counted failures). `launch` returns what would be persisted for the
+// NEXT launch.
 async function launch(
   persisted: FileRec[],
   opts: { idb?: boolean; bytes?: Set<string>; decode: (id: string) => Promise<SummaryLike> }
 ) {
   const calls: string[] = [];
   const { items, pending } = settleFilesOnLoad(persisted, opts.idb ?? true);
+  const failures = new Map<string, number>(items.filter((i) => i.paramsFail).map((i) => [i.id, i.paramsFail!]));
   const byId = new Map<string, FileRec>(items.map((i): [string, FileRec] => [i.id, { ...i }]));
   const stillPending = await redecodePass<SummaryLike>(
     pending,
@@ -157,9 +159,15 @@ async function launch(
       const rec = byId.get(id)!;
       if (fresh) rec.summary = { ...fresh, name: rec.summary.name }; // the store keeps the visible name
       rec.paramsV = PARAMS_DECODE_VERSION;
-    }
+      failures.delete(id);
+    },
+    failures
   );
-  return { persisted: [...byId.values()] as FileRec[], calls, stillPending };
+  for (const rec of byId.values()) {
+    if (rec.paramsV === PARAMS_DECODE_VERSION || !failures.get(rec.id)) delete rec.paramsFail;
+    else rec.paramsFail = failures.get(rec.id);
+  }
+  return { persisted: [...byId.values()], calls, stillPending, pendingAtLoad: pending };
 }
 const freshDecode = (id: string): Promise<SummaryLike> => Promise.resolve({ name: 'decoded', params: blocks(`${id} (new decode)`) });
 const mustNotDecode = (): Promise<SummaryLike> => Promise.reject(new Error('decode must not be called'));
@@ -194,25 +202,36 @@ describe('re-decode lifecycle: one bad file among many', () => {
     const second = await launch(first.persisted, { bytes: new Set(['a']), decode: mustNotDecode });
     expect(second.calls).toEqual([]);
   });
+
+  it('with an ABSENT bytes blob (IndexedDB there, never written) every pending file settles at once and is not re-dropped', async () => {
+    const first = await launch([file('a'), file('b')], { bytes: new Set(), decode: mustNotDecode });
+    expect(first.calls).toEqual([]);
+    expect(first.persisted.every((f) => f.paramsV === PARAMS_DECODE_VERSION && f.summary.params === undefined)).toBe(true);
+    const second = await launch(first.persisted, { bytes: new Set(), decode: mustNotDecode });
+    expect(second.pendingAtLoad).toEqual([]);
+  });
 });
 
 describe('re-decode lifecycle: server offline / transient failures', () => {
   const offline = (): Promise<SummaryLike> => Promise.reject(new TypeError('fetch failed'));
 
-  it('an offline server costs ONE request per pass, not one per file; every file stays pending', async () => {
+  it('an offline server costs ONE request per pass, not one per file; every file stays pending and nothing is counted', async () => {
     const files = ['a', 'b', 'c', 'd', 'e'].map((id) => file(id));
     const r = await launch(files, { decode: offline });
     expect(r.calls).toEqual(['a']); // one attempt, then stop
     expect(r.stillPending).toEqual(['a', 'b', 'c', 'd', 'e']);
     // nothing was stamped current → all retried next launch; params stay dropped meanwhile
     expect(r.persisted.every((f) => f.paramsV === undefined && f.summary.params === undefined)).toBe(true);
+    // being offline is never held against a file: no failure counts, however many launches
+    const again = await launch(r.persisted, { decode: offline });
+    expect(again.persisted.every((f) => f.paramsFail === undefined)).toBe(true);
   });
 
   it('the single in-session retry is one further request while still offline: bounded, no loop', async () => {
     let requests = 0;
     const decode = async (): Promise<null> => {
       requests++;
-      throw new HttpError(503);
+      throw new TypeError('fetch failed');
     };
     const pass1 = await redecodePass(['a', 'b', 'c'], decode, () => {});
     const retry = await redecodePass(pass1, decode, () => {}); // the one allowed retry
@@ -220,20 +239,72 @@ describe('re-decode lifecycle: server offline / transient failures', () => {
     expect(retry).toEqual(['a', 'b', 'c']); // still pending → next launch
   });
 
-  it('a transient failure mid-way settles what was done; only the rest stays pending and is the only thing decoded next launch', async () => {
+  it('server-wide errors (every request 503): stops after 3 in a row, counts nothing, keeps the rest pending', async () => {
+    const calls: string[] = [];
+    const failures = new Map<string, number>();
+    const left = await redecodePass(
+      ['a', 'b', 'c', 'd', 'e'],
+      async (id) => {
+        calls.push(id);
+        throw new HttpError(503);
+      },
+      () => {},
+      failures
+    );
+    expect(calls).toEqual(['a', 'b', 'c']);
+    expect(left).toEqual(['d', 'e', 'a', 'b', 'c']); // unattempted first, the failed ones deferred behind them
+    expect(failures.size).toBe(0); // no success in the pass → could be a down/starting server → not counted
+  });
+
+  it('an always-500 file FIRST in line does not block the rest: it is deferred behind them and counted', async () => {
+    const files = ['bad', 'a', 'b', 'c'].map((id) => file(id));
+    const decode = (id: string) => (id === 'bad' ? Promise.reject(new HttpError(500)) : freshDecode(id));
+    const r = await launch(files, { decode });
+    expect(r.calls).toEqual(['bad', 'a', 'b', 'c']); // the pass carried on past it
+    expect(r.stillPending).toEqual(['bad']);
+    expect(r.persisted.filter((f) => f.paramsV === PARAMS_DECODE_VERSION).map((f) => f.id)).toEqual(['a', 'b', 'c']);
+    expect(r.persisted.find((f) => f.id === 'bad')).toMatchObject({ paramsFail: 1 }); // counted: others decoded fine
+    expect(r.persisted.find((f) => f.id === 'bad')!.paramsV).toBeUndefined();
+  });
+
+  it('the persistently failing file is tried LAST on the next launch and is settled after 3 counted failures', async () => {
+    const bad = (id: string) => (id === 'bad' ? Promise.reject(new HttpError(500)) : freshDecode(id));
+    // launch 1: bad (first) fails, 1 other file decodes → counted once
+    let r = await launch([file('bad'), file('x')], { decode: bad });
+    expect(r.persisted.find((f) => f.id === 'bad')!.paramsFail).toBe(1);
+    // a NEW stale file shows up (e.g. imported with an older build) → the failing one is ordered after it
+    r = await launch([...r.persisted, file('late')], { decode: bad });
+    expect(r.pendingAtLoad).toEqual(['late', 'bad']); // fewest failures first
+    expect(r.persisted.find((f) => f.id === 'late')!.paramsV).toBe(PARAMS_DECODE_VERSION);
+    expect(r.persisted.find((f) => f.id === 'bad')!.paramsFail).toBe(2);
+    // launch 3: bad is the only pending file → no other success in the pass → NOT counted, still retried
+    r = await launch(r.persisted, { decode: bad });
+    expect(r.persisted.find((f) => f.id === 'bad')).toMatchObject({ paramsFail: 2 });
+    // launch 4: with another stale file decoding fine alongside, the 3rd counted failure settles it for good
+    r = await launch([...r.persisted, file('more')], { decode: bad });
+    const settled = r.persisted.find((f) => f.id === 'bad')!;
+    expect(settled.paramsV).toBe(PARAMS_DECODE_VERSION);
+    expect(settled.summary.params).toBeUndefined();
+    expect(settled.paramsFail).toBeUndefined();
+    expect(r.stillPending).toEqual([]);
+    const after = await launch(r.persisted, { decode: mustNotDecode });
+    expect(after.calls).toEqual([]);
+  });
+
+  it('a transient HTTP failure mid-way settles what was done; the failed file alone stays pending', async () => {
     const files = ['a', 'b', 'c', 'd'].map((id) => file(id));
     const r1 = await launch(files, { decode: (id) => (id === 'c' ? Promise.reject(new HttpError(503)) : freshDecode(id)) });
-    expect(r1.calls).toEqual(['a', 'b', 'c']);
-    expect(r1.stillPending).toEqual(['c', 'd']);
-    expect(r1.persisted.map((f) => f.paramsV)).toEqual([PARAMS_DECODE_VERSION, PARAMS_DECODE_VERSION, undefined, undefined]);
-    // server is back
+    expect(r1.calls).toEqual(['a', 'b', 'c', 'd']);
+    expect(r1.stillPending).toEqual(['c']);
+    expect(r1.persisted.map((f) => f.paramsV)).toEqual([PARAMS_DECODE_VERSION, PARAMS_DECODE_VERSION, undefined, PARAMS_DECODE_VERSION]);
+    // server healthy again: only c is decoded — a, b, d are NOT re-decoded
     const r2 = await launch(r1.persisted, { decode: freshDecode });
-    expect(r2.calls).toEqual(['c', 'd']); // a and b are NOT re-decoded
+    expect(r2.calls).toEqual(['c']);
     expect(r2.stillPending).toEqual([]);
     expect(r2.persisted.every((f) => f.summary.params !== undefined && f.paramsV === PARAMS_DECODE_VERSION)).toBe(true);
   });
 
-  it('a deterministic rejection is settled; a transient one stays pending (never mixed up)', async () => {
+  it('a deterministic rejection is settled; a network failure stays pending (never mixed up)', async () => {
     const r = await launch([file('x'), file('y')], { decode: (id) => (id === 'x' ? Promise.reject(new HttpError(400)) : offline()) });
     expect(r.calls).toEqual(['x', 'y']);
     expect(r.stillPending).toEqual(['y']);

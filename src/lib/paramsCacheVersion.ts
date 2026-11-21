@@ -51,36 +51,45 @@ export function isStaleParamsVersion(stored: unknown): boolean {
 }
 
 /** A persisted imported-file record. `paramsV` stamps WHICH decode version this file's embedded `params`
- *  came from — per file, so one file the server rejects never forces the whole library to be re-decoded. */
+ *  came from — per file, so one file the server rejects never forces the whole library to be re-decoded.
+ *  `paramsFail` counts re-decode attempts that failed with a server error for this file (see redecodePass). */
 export interface PersistedFile {
   id: string;
   folder?: string;
   summary: { params?: unknown };
   paramsV?: number;
+  paramsFail?: number;
 }
+
+/** After this many counted server-error failures a file is settled without params instead of retried. */
+export const MAX_REDECODE_FAILURES = 3;
+/** This many server errors in a row (no success between) look like a server-wide problem: stop the pass. */
+export const MAX_CONSECUTIVE_HTTP_FAILURES = 3;
 
 /** Load-time settle for persisted imported files. A file stamped with the current decode version is kept
  *  untouched (same reference). Any other (missing / older stamp) has its embedded params dropped so a stale
  *  scale is never searched, and then:
  *  - `canRedecode` (the raw bytes live in IndexedDB) → its id is returned in `pending` and its stamp is left
- *    stale, so a crash or a failed re-decode is retried;
+ *    stale, so a crash or a failed re-decode is retried. `pending` is ordered by persisted failure count
+ *    (fewest first, otherwise file order) so a file that keeps failing is tried last and cannot starve the rest;
  *  - otherwise there are no bytes to re-decode from, so it is settled on the spot: params dropped, stamp
  *    advanced — it is not dropped again on every launch. */
 export function settleFilesOnLoad<T extends PersistedFile>(
   items: T[],
   canRedecode: boolean
 ): { items: T[]; pending: string[] } {
-  const pending: string[] = [];
+  const pending: { id: string; fails: number }[] = [];
   const out = items.map((it) => {
     if (it.paramsV === PARAMS_DECODE_VERSION) return it;
     const dropped = { ...it, summary: { ...it.summary, params: undefined } } as T;
     if (canRedecode) {
-      pending.push(it.id);
+      pending.push({ id: it.id, fails: it.paramsFail ?? 0 });
       return dropped;
     }
     return { ...dropped, paramsV: PARAMS_DECODE_VERSION } as T;
   });
-  return { items: out, pending };
+  pending.sort((x, y) => x.fails - y.fails); // stable: ties keep file order
+  return { items: out, pending: pending.map((x) => x.id) };
 }
 
 /** Is a failed decode worth retrying? A deterministic rejection (HTTP 4xx other than 408/429: the server
@@ -92,27 +101,67 @@ export function isTransientDecodeError(e: unknown): boolean {
   return !(status >= 400 && status < 500 && status !== 408 && status !== 429);
 }
 
+const hasHttpStatus = (e: unknown): boolean => typeof (e as { status?: unknown } | null | undefined)?.status === 'number';
+
 /** One re-decode pass over `ids`. `decode` resolves to the fresh summary, or null when there is nothing to
  *  decode from (no stored bytes). Every id that reaches a final outcome is passed to `settle` (with the fresh
- *  summary, or null → settled WITHOUT params: no bytes, or a deterministic rejection). The first TRANSIENT
- *  failure stops the pass — an offline server costs one request, not one per file — and the unattempted ids
- *  plus the failed one are returned, still pending. Never loops: the caller decides about a later pass. */
+ *  summary, or null → settled WITHOUT params: no bytes, a deterministic rejection, or too many failures).
+ *
+ *  Failures:
+ *  - no HTTP status (network down / server offline / timeout): the pass stops right there — an offline server
+ *    costs one request, not one per file — and everything unattempted stays pending, in order;
+ *  - an HTTP server error (5xx / 408 / 429): the file is DEFERRED — moved behind the rest — and the pass
+ *    carries on, so one always-failing file cannot block the others; but `MAX_CONSECUTIVE_HTTP_FAILURES` in a
+ *    row look like a server-wide problem and stop the pass;
+ *  - a deferred file's failure is COUNTED (in `failures`, which the caller persists) only when some other file
+ *    decoded fine in the same pass — evidence that it is this file, not a server that is down/starting. At
+ *    `MAX_REDECODE_FAILURES` counted failures the file is settled without params.
+ *  Returns the ids still pending (unattempted first, deferred last). Never loops. */
 export async function redecodePass<S>(
   ids: readonly string[],
   decode: (id: string) => Promise<S | null>,
-  settle: (id: string, fresh: S | null) => void
+  settle: (id: string, fresh: S | null) => void,
+  failures: Map<string, number> = new Map()
 ): Promise<string[]> {
+  const deferred: string[] = [];
+  let successes = 0;
+  let consecutiveHttp = 0;
+  const finish = (unattempted: string[]): string[] => {
+    const keep: string[] = [];
+    for (const id of deferred) {
+      if (successes > 0) {
+        const n = (failures.get(id) ?? 0) + 1;
+        failures.set(id, n);
+        if (n >= MAX_REDECODE_FAILURES) {
+          settle(id, null);
+          continue;
+        }
+      }
+      keep.push(id);
+    }
+    return [...unattempted, ...keep];
+  };
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]!;
     let fresh: S | null;
     try {
       fresh = await decode(id);
     } catch (e) {
-      if (isTransientDecodeError(e)) return ids.slice(i);
-      settle(id, null); // deterministic: the server will never accept these bytes — done, not retried
+      if (!isTransientDecodeError(e)) {
+        settle(id, null); // deterministic: the server will never accept these bytes — done, not retried
+        consecutiveHttp = 0;
+        continue;
+      }
+      if (!hasHttpStatus(e)) return finish(ids.slice(i)); // offline: stop, this id stays first in line
+      deferred.push(id);
+      if (++consecutiveHttp >= MAX_CONSECUTIVE_HTTP_FAILURES) return finish(ids.slice(i + 1));
       continue;
+    }
+    if (fresh !== null) {
+      successes++;
+      consecutiveHttp = 0;
     }
     settle(id, fresh);
   }
-  return [];
+  return finish([]);
 }

@@ -655,6 +655,7 @@ class EditorStore {
     // warn if it isn't a model we have a live codec for
     try {
       this.detected = await forgefx.detect();
+      void library.retryStaleFiles(); // the server answered → imported files left pending at launch get their retry
       if (this.detected.connected && !this.detected.supported) this.showToast(`${this.detected.name} detected — not yet supported`, '#d6543f');
     } catch {
       /* detect failed — proceed; load() falls back to the gen-3 path */
@@ -1395,6 +1396,7 @@ class EditorStore {
       this.sceneNames = grid.scenes ?? [];
       this.everLoaded = true;
       this.status = 'ready';
+      void library.retryStaleFiles(); // (re)connected: spends the one-per-session retry only if a pass is due
       this.fetchMeters(); // background: fill every block's level meter
       this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
       this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)
