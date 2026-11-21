@@ -8,6 +8,8 @@
 // under another version — including legacy caches written before versioning existed — is dropped and
 // re-decoded. Framework-free so it is unit-tested directly (library.svelte.ts is a runes store).
 
+import { plainCopy } from './guardedBlob';
+
 /** Version of the preset-param decode the caches below were written with. 1 = the implicit, unversioned
  *  era (linear decode of log-taper params); 2 = log-taper params decoded to their true display value. */
 export const PARAMS_DECODE_VERSION = 2;
@@ -20,6 +22,19 @@ export interface ParamsEnvelope<T> {
 
 export function wrapParams<T>(params: T): ParamsEnvelope<T> {
   return { v: PARAMS_DECODE_VERSION, params };
+}
+
+/** Persist a decoded-params cache: a plain SNAPSHOT of `params` in a versioned envelope. The library's cache is
+ *  a Svelte `$state` record; IndexedDB can't structured-clone a proxy (DataCloneError, which idb.set used to
+ *  swallow — nothing was ever persisted), so the value must be snapshotted first (`$state.snapshot` in the
+ *  store; a JSON copy by default). */
+export function saveParamsCache(
+  kv: { set: (key: string, val: unknown) => Promise<unknown> },
+  key: string,
+  params: unknown,
+  snapshot: <T>(v: T) => T = plainCopy
+): Promise<unknown> {
+  return kv.set(key, wrapParams(snapshot(params)));
 }
 
 /** The cached params when `raw` is an envelope of the CURRENT decode version, else null — a legacy
@@ -50,6 +65,14 @@ export function isStaleParamsVersion(stored: unknown): boolean {
   return stored !== PARAMS_DECODE_VERSION;
 }
 
+/** Stamp for a file whose embedded params were decoded by an OLDER decoder and can never be re-decoded (its raw
+ *  bytes are gone): the stale params are KEPT so deep search still works (log-taper values may be off until the
+ *  file is re-imported), and the file is settled — never retried, never dropped. */
+export const LEGACY_STAMP = 'legacy' as const;
+
+/** The decode version a file's params carry: the current one, or LEGACY_STAMP (settled, kept stale). */
+export type ParamsStamp = number | typeof LEGACY_STAMP;
+
 /** A persisted imported-file record. `paramsV` stamps WHICH decode version this file's embedded `params`
  *  came from — per file, so one file the server rejects never forces the whole library to be re-decoded.
  *  `paramsFail` counts re-decode attempts that failed with a server error for this file (see redecodePass). */
@@ -57,7 +80,7 @@ export interface PersistedFile {
   id: string;
   folder?: string;
   summary: { params?: unknown };
-  paramsV?: number;
+  paramsV?: ParamsStamp;
   paramsFail?: number;
 }
 
@@ -66,30 +89,41 @@ export const MAX_REDECODE_FAILURES = 3;
 /** This many server errors in a row (no success between) look like a server-wide problem: stop the pass. */
 export const MAX_CONSECUTIVE_HTTP_FAILURES = 3;
 
-/** Load-time settle for persisted imported files. A file stamped with the current decode version is kept
- *  untouched (same reference). Any other (missing / older stamp) has its embedded params dropped so a stale
- *  scale is never searched, and then:
- *  - `canRedecode` (the raw bytes live in IndexedDB) → its id is returned in `pending` and its stamp is left
- *    stale, so a crash or a failed re-decode is retried. `pending` is ordered by persisted failure count
- *    (fewest first, otherwise file order) so a file that keeps failing is tried last and cannot starve the rest;
- *  - otherwise there are no bytes to re-decode from, so it is settled on the spot: params dropped, stamp
- *    advanced — it is not dropped again on every launch. */
+/** Load-time settle for persisted imported files. A file stamped with the current decode version, or settled as
+ *  LEGACY, is kept untouched (same reference). Any other (missing / older stamp) is stale, and:
+ *  - `canRedecode` (IndexedDB is there, so the raw bytes MAY be) → its id is returned in `pending`, params left
+ *    as they are for now: whether bytes actually exist is only known once the bytes blob has been read (see
+ *    `partitionByBytes`). `pending` is ordered by persisted failure count (fewest first, otherwise file order)
+ *    so a file that keeps failing is tried last and cannot starve the rest;
+ *  - otherwise there are no bytes at all, so it is settled on the spot as LEGACY: its stale params are KEPT. */
 export function settleFilesOnLoad<T extends PersistedFile>(
   items: T[],
   canRedecode: boolean
 ): { items: T[]; pending: string[] } {
   const pending: { id: string; fails: number }[] = [];
   const out = items.map((it) => {
-    if (it.paramsV === PARAMS_DECODE_VERSION) return it;
-    const dropped = { ...it, summary: { ...it.summary, params: undefined } } as T;
+    if (it.paramsV === PARAMS_DECODE_VERSION || it.paramsV === LEGACY_STAMP) return it;
     if (canRedecode) {
       pending.push({ id: it.id, fails: it.paramsFail ?? 0 });
-      return dropped;
+      return it;
     }
-    return { ...dropped, paramsV: PARAMS_DECODE_VERSION } as T;
+    return { ...it, paramsV: LEGACY_STAMP } as T;
   });
   pending.sort((x, y) => x.fails - y.fails); // stable: ties keep file order
   return { items: out, pending: pending.map((x) => x.id) };
+}
+
+/** Once the bytes blob has been read, decide each pending file: with stored bytes → `redecode` (its stale params
+ *  must be dropped so no old scale is searched, then it is re-decoded); WITHOUT bytes → `legacy` (settled, the
+ *  stale params are kept, never retried). Order within each list is preserved. */
+export function partitionByBytes(
+  pending: readonly string[],
+  hasBytes: (id: string) => boolean
+): { redecode: string[]; legacy: string[] } {
+  const redecode: string[] = [];
+  const legacy: string[] = [];
+  for (const id of pending) (hasBytes(id) ? redecode : legacy).push(id);
+  return { redecode, legacy };
 }
 
 /** Is a failed decode worth retrying? A deterministic rejection (HTTP 4xx other than 408/429: the server
@@ -113,15 +147,18 @@ const hasHttpStatus = (e: unknown): boolean => typeof (e as { status?: unknown }
  *  - an HTTP server error (5xx / 408 / 429): the file is DEFERRED — moved behind the rest — and the pass
  *    carries on, so one always-failing file cannot block the others; but `MAX_CONSECUTIVE_HTTP_FAILURES` in a
  *    row look like a server-wide problem and stop the pass;
- *  - a deferred file's failure is COUNTED (in `failures`, which the caller persists) only when some other file
- *    decoded fine in the same pass — evidence that it is this file, not a server that is down/starting. At
+ *  - a deferred file's failure is COUNTED (in `failures`, which the caller persists) only with evidence that the
+ *    server itself is fine, so it is this file and not a server that is down/starting: some other file decoded
+ *    fine in the same pass, OR `serverHealthy()` says the server has otherwise answered successfully (e.g. the
+ *    app's own detect/load requests) — which also lets a file that is the ONLY pending one be counted. At
  *    `MAX_REDECODE_FAILURES` counted failures the file is settled without params.
  *  Returns the ids still pending (unattempted first, deferred last). Never loops. */
 export async function redecodePass<S>(
   ids: readonly string[],
   decode: (id: string) => Promise<S | null>,
   settle: (id: string, fresh: S | null) => void,
-  failures: Map<string, number> = new Map()
+  failures: Map<string, number> = new Map(),
+  serverHealthy: () => boolean = () => false
 ): Promise<string[]> {
   const deferred: string[] = [];
   let successes = 0;
@@ -129,7 +166,7 @@ export async function redecodePass<S>(
   const finish = (unattempted: string[]): string[] => {
     const keep: string[] = [];
     for (const id of deferred) {
-      if (successes > 0) {
+      if (successes > 0 || serverHealthy()) {
         const n = (failures.get(id) ?? 0) + 1;
         failures.set(id, n);
         if (n >= MAX_REDECODE_FAILURES) {

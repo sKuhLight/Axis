@@ -797,7 +797,8 @@ class EditorStore {
       void library.retryStaleFiles();
     } catch (e) {
       // 404 = older engine → feature hidden (available stays false). An HTTP status means the server is up.
-      if (typeof (e as { status?: unknown })?.status === 'number') void library.retryStaleFiles();
+      const status = (e as { status?: unknown })?.status;
+      if (typeof status === 'number' && status < 500) void library.retryStaleFiles(); // answered sanely (not a 5xx)
     }
   };
   /** Set (or clear with null) the local root. Native picker in AxisPanel feeds this an absolute path. */

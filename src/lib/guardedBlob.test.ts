@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GuardedBlob, type BlobKv, type ReadResult } from './guardedBlob';
+import { deepProxy, cloneCheckedSet, isStructuredCloneable } from './testing/idbClone';
 
 const KEY = 'lib.fileBytes';
 
@@ -204,5 +205,61 @@ describe('GuardedBlob: key absent is a completed read', () => {
     await blob.load();
     expect(blob.data).toBe(target);
     expect(target).toEqual({ ...old, 'file:new': [9] });
+  });
+});
+
+// ── a reactive ($state) record must be snapshotted before it reaches IndexedDB ───────────────────
+describe('GuardedBlob: a reactive ($state) record is snapshotted before it is written', () => {
+  // Svelte 5 `$state` records are deep Proxies. IndexedDB structured-clones what it stores, which throws
+  // DataCloneError for a Proxy (also for `{...proxy}`, whose nested arrays stay proxied) — and idb.set used to
+  // swallow that, so the imported bytes were never persisted.
+  const absentKv = (set: BlobKv['set']): BlobKv => ({ read: async () => ({ ok: true, value: undefined }), set });
+  const reactiveTarget = () => deepProxy<Record<string, number[]>>({});
+
+  it('control: the helper really emulates the problem — the proxied record and a spread of it are not cloneable', () => {
+    const t = reactiveTarget();
+    t['file:a'] = [1, 2, 3];
+    expect(isStructuredCloneable(t)).toBe(false);
+    expect(isStructuredCloneable({ ...t })).toBe(false);
+  });
+
+  it('flush writes a plain, structured-cloneable snapshot (default snapshot) with the right contents', async () => {
+    const { set, store } = cloneCheckedSet(); // rejects with DataCloneError if handed a proxy
+    const blob = new GuardedBlob<number[]>(absentKv(set), KEY, reactiveTarget());
+    blob.put('file:a', [1, 2, 3]);
+    blob.put('file:b', [4, 5]);
+    expect(await blob.flush()).toBe(true);
+    expect(store.get(KEY)).toEqual({ 'file:a': [1, 2, 3], 'file:b': [4, 5] });
+  });
+
+  it('the same after a merge with a stored blob and a removal', async () => {
+    const { set, store } = cloneCheckedSet();
+    const kv: BlobKv = { read: async () => ({ ok: true, value: { 'file:old': [9] } }), set };
+    const blob = new GuardedBlob<number[]>(kv, KEY, reactiveTarget());
+    blob.put('file:new', [1]);
+    blob.remove('file:gone');
+    await blob.flush();
+    expect(store.get(KEY)).toEqual({ 'file:old': [9], 'file:new': [1] });
+  });
+
+  it('uses the injected snapshotter (the library passes $state.snapshot) on the live record', async () => {
+    const { set, store } = cloneCheckedSet();
+    const target = reactiveTarget();
+    const seen: unknown[] = [];
+    const blob = new GuardedBlob<number[]>(absentKv(set), KEY, target, (d) => {
+      seen.push(d);
+      return JSON.parse(JSON.stringify(d));
+    });
+    blob.put('file:a', [1]);
+    await blob.flush();
+    expect(seen).toEqual([target]);
+    expect(store.get(KEY)).toEqual({ 'file:a': [1] });
+  });
+
+  it('without a snapshot step the clone-checking store fails the write (so a regression cannot hide)', async () => {
+    const { set } = cloneCheckedSet();
+    const blob = new GuardedBlob<number[]>(absentKv(set), KEY, reactiveTarget(), (d) => ({ ...d }));
+    blob.put('file:a', [1]);
+    await expect(blob.flush()).rejects.toThrow();
   });
 });

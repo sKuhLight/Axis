@@ -7,7 +7,16 @@ import { isRemoteBuild } from './cloudBrowser';
 import { refreshCabIrsCache } from './cabIrsCache';
 import { idb } from './idb';
 import { GuardedBlob } from './guardedBlob';
-import { PARAMS_DECODE_VERSION, wrapParams, loadParamsCache, settleFilesOnLoad, redecodePass } from './paramsCacheVersion';
+import {
+  PARAMS_DECODE_VERSION,
+  LEGACY_STAMP,
+  saveParamsCache,
+  loadParamsCache,
+  settleFilesOnLoad,
+  partitionByBytes,
+  redecodePass,
+  type ParamsStamp
+} from './paramsCacheVersion';
 import { notifyMutation } from './syncBus';
 import type { PresetSummary, DecodedBlock } from './types';
 import { parseConvertedDoc, type ConvertedPresetDoc } from './convertScratch';
@@ -146,7 +155,10 @@ class LibraryStore {
   #bytes = new GuardedBlob<number[]>(
     { read: (k) => idb.read<unknown>(k), set: (k, v) => idb.set(k, v) },
     IDB_FILEBYTES,
-    this.#fileBytes
+    this.#fileBytes,
+    // IndexedDB can't structured-clone a $state proxy (nor `{...proxy}`, whose nested arrays stay proxied):
+    // write a plain snapshot
+    (data) => $state.snapshot(data) as Record<string, number[]>
   );
   /** Folder paths the user has imported presets from (for the sidebar folder list). */
   folders = $state<string[]>([]);
@@ -159,10 +171,12 @@ class LibraryStore {
    *  so only files still pending are ever retried — never the whole library. */
   #pendingFiles: string[] = [];
   /** id → decode version of that file's embedded params (set when imported / re-decoded / settled). */
-  #fileStamp = new Map<string, number>();
+  #fileStamp = new Map<string, ParamsStamp>();
   /** id → counted server-error re-decode failures (persisted as `paramsFail`; see redecodePass). */
   #fileFails = new Map<string, number>();
   #redecoding = false;
+  /** The server has answered something successfully this session (evidence a failing file is the problem). */
+  #serverSeen = false;
   /** Re-decode passes that actually ran this session: the startup pass plus at most ONE retry. */
   #redecodePasses = 0;
 
@@ -173,14 +187,16 @@ class LibraryStore {
       .filter((s) => !isEmptyName(s.name)); // self-heal: drop ghost <EMPTY> entries from older caches
     const deviceEntries = cached.map((s) => ({ id: `dev:${s.number}`, source: 'device' as const, summary: s, fav: favs.has(`dev:${s.number}`) }));
     // restore imported file/folder presets (summaries in localStorage; raw bytes in IndexedDB for live load)
-    const storedFiles = (load<{ id: string; folder?: string; summary: unknown; paramsV?: number; paramsFail?: number }[]>(LS.files, [])
-      .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary; paramsV?: number; paramsFail?: number }[];
-    // embedded params written by an older decode would mix scales in deep search → drop them per file. With
-    // IndexedDB the raw bytes are there to re-decode from (below); without it they are settled right away.
+    const storedFiles = (load<{ id: string; folder?: string; summary: unknown; paramsV?: ParamsStamp; paramsFail?: number }[]>(LS.files, [])
+      .filter((f) => summarySchema.safeParse(f.summary).success)) as { id: string; folder?: string; summary: PresetSummary; paramsV?: ParamsStamp; paramsFail?: number }[];
+    // Params written by an older decode are queued per file. Whether a file CAN be re-decoded (raw bytes stored)
+    // is only known once the bytes blob has been read: files with bytes then lose their stale params and are
+    // re-decoded; files without bytes keep them, stamped legacy. Without IndexedDB there are no bytes at all →
+    // legacy right here.
     const { items: files, pending } = settleFilesOnLoad(storedFiles, idb.available());
     this.#pendingFiles = pending;
     for (const f of files) {
-      if (f.paramsV === PARAMS_DECODE_VERSION) this.#fileStamp.set(f.id, PARAMS_DECODE_VERSION);
+      if (f.paramsV === PARAMS_DECODE_VERSION || f.paramsV === LEGACY_STAMP) this.#fileStamp.set(f.id, f.paramsV);
       else if (f.paramsFail) this.#fileFails.set(f.id, f.paramsFail);
     }
     const fileEntries = files.map((f) => ({ id: f.id, source: 'file' as const, summary: f.summary, fav: favs.has(f.id), folder: f.folder }));
@@ -365,7 +381,7 @@ class LibraryStore {
       this.entries = [...byId.values()].sort(this.#order);
       this.#paramsCache = params;
       this.#cacheDevice();
-      if (idb.available()) await idb.set(IDB_PARAMS, wrapParams(params));
+      if (idb.available()) await saveParamsCache(idb, IDB_PARAMS, params, (v) => $state.snapshot(v) as typeof v);
       this.cacheBuilt = true;
       persist(LS.built, true);
     } catch (e) {
@@ -501,14 +517,32 @@ class LibraryStore {
     persist(LS.files, files);
     if (withBytes && idb.available()) void this.#bytes.flush();
   }
-  /** Re-decode the pending imported files (params dropped on launch) from their stored raw bytes — only once
-   *  the bytes blob has been read (a failed read leaves them pending; an ABSENT blob means no file has bytes,
-   *  so each settles without params). Resolves true when a pass actually ran. See redecodePass for how a file
-   *  settles, is deferred behind the rest, or stops the pass. */
+  /** Settle the files left pending at launch, now that the bytes blob has been read. A file WITH stored bytes
+   *  loses its stale embedded params (so no old scale is searched meanwhile) and stays queued for a re-decode.
+   *  A file WITHOUT bytes can never be re-decoded, so its stale params are KEPT (deep search keeps working;
+   *  log-taper values may be off until it is re-imported) and it is stamped legacy: settled, never retried. */
+  #resolvePendingFiles(): void {
+    const { redecode, legacy } = partitionByBytes(this.#pendingFiles, (id) => this.#bytes.get(id) !== undefined);
+    for (const id of legacy) {
+      this.#fileStamp.set(id, LEGACY_STAMP);
+      this.#fileFails.delete(id);
+    }
+    if (redecode.length) {
+      const stale = new Set(redecode);
+      this.entries = this.entries.map((e) => (stale.has(e.id) && e.summary.params ? { ...e, summary: { ...e.summary, params: undefined } } : e));
+    }
+    this.#pendingFiles = redecode;
+    if (legacy.length) this.#persistFiles(false);
+  }
+  /** Re-decode the pending imported files from their stored raw bytes — only once the bytes blob has been read
+   *  (a failed read leaves them pending; see #resolvePendingFiles for files with no bytes). Resolves true when
+   *  a pass actually ran. See redecodePass for how a file settles, is deferred behind the rest, or stops it. */
   async #redecodePending(): Promise<boolean> {
     if (this.#redecoding || !this.#pendingFiles.length) return false;
     if (!(await this.#bytes.load())) return false;
     if (this.#redecoding || !this.#pendingFiles.length) return false; // re-check after the await
+    this.#resolvePendingFiles();
+    if (!this.#pendingFiles.length) return false; // nothing had bytes → all settled as legacy, no request needed
     this.#redecoding = true;
     this.#redecodePasses++;
     try {
@@ -524,7 +558,8 @@ class LibraryStore {
           this.#fileStamp.set(id, PARAMS_DECODE_VERSION);
           this.#fileFails.delete(id);
         },
-        this.#fileFails
+        this.#fileFails,
+        () => this.#serverSeen
       );
     } finally {
       this.#redecoding = false;
@@ -532,10 +567,12 @@ class LibraryStore {
     }
     return true;
   }
-  /** Called when the server is reachable: ONE more re-decode pass for files left pending by the startup pass.
-   *  The budget (startup pass + one retry) is spent only by passes that actually ran, so an early call that
-   *  finds nothing to do (bytes not read yet, nothing pending, a pass already running) costs nothing. */
+  /** Called at a moment the server has just answered successfully: records that (so a file failing with a
+   *  server error is counted against even when it is the only pending one) and runs ONE more re-decode pass for
+   *  files left pending by the startup pass. The budget (startup pass + one retry) is spent only by passes that
+   *  actually ran, so an early call that finds nothing to do costs nothing. */
   retryStaleFiles = async (): Promise<void> => {
+    this.#serverSeen = true;
     if (this.#redecodePasses >= 2) return;
     await this.#redecodePending();
   };
@@ -600,7 +637,8 @@ class LibraryStore {
     }
   }
   #persistParams() {
-    if (idb.available()) idb.set(IDB_PARAMS, wrapParams({ ...this.#paramsCache }));
+    // `#paramsCache` is $state: snapshot it (a proxy — and `{...proxy}` — can't be structured-cloned into IndexedDB)
+    if (idb.available()) void saveParamsCache(idb, IDB_PARAMS, this.#paramsCache, (v) => $state.snapshot(v) as typeof v);
   }
   /** Hydrate every device entry's params so deep search spans the whole library; persisted to IndexedDB. */
   async deepScan(): Promise<void> {

@@ -34,7 +34,13 @@ export const idb = {
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const })
     ),
-  set: (key: string, val: unknown): Promise<unknown> => tx('readwrite', (s) => s.put(val, key)).catch(() => undefined),
+  set: (key: string, val: unknown): Promise<unknown> =>
+    tx('readwrite', (s) => s.put(val, key)).catch((e) => {
+      // best-effort cache, but never SILENT: a value IndexedDB can't clone (a Svelte $state proxy →
+      // DataCloneError) used to vanish here and nothing was ever persisted
+      console.warn(`[idb] write of "${key}" failed`, e);
+      return undefined;
+    }),
   del: (key: string): Promise<unknown> => tx('readwrite', (s) => s.delete(key)).catch(() => undefined),
   /** Is IndexedDB usable in this context? (Electron/web: yes; some sandboxed contexts: no.) */
   available: (): boolean => typeof indexedDB !== 'undefined'

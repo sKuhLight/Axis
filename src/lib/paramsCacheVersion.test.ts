@@ -1,14 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   PARAMS_DECODE_VERSION,
+  LEGACY_STAMP,
   wrapParams,
   unwrapParams,
   loadParamsCache,
+  saveParamsCache,
   settleFilesOnLoad,
+  partitionByBytes,
   isTransientDecodeError,
   redecodePass,
   type PersistedFile
 } from './paramsCacheVersion';
+import { deepProxy, cloneCheckedSet, isStructuredCloneable } from './testing/idbClone';
 
 // Synthetic decoded blocks (the shape is irrelevant to the version gate).
 const blocks = (label: string) => [{ effectId: 1, slug: 'amp', params: [{ label, value: 5 }] }];
@@ -74,11 +78,46 @@ describe('loadParamsCache (the library IndexedDB read path)', () => {
   });
 });
 
+describe('saveParamsCache: a reactive ($state) cache is snapshotted before it reaches IndexedDB', () => {
+  // `$state` records are deep Proxies; `{...proxy}` keeps the proxied nested arrays. structuredClone (what
+  // IndexedDB does) throws DataCloneError for those, and idb.set used to swallow it → nothing was persisted.
+  const reactive = () => deepProxy({ 'dev:1': blocks('Gain'), 'dev:2': blocks('Drive') });
+
+  it('the failure being guarded against is real: a spread of the proxied cache is not cloneable', () => {
+    expect(isStructuredCloneable({ ...reactive() })).toBe(false);
+    expect(isStructuredCloneable(wrapParams({ ...reactive() }))).toBe(false);
+  });
+
+  it('writes a structured-cloneable envelope (default snapshot) with the same contents', async () => {
+    const { set, store } = cloneCheckedSet();
+    await saveParamsCache({ set }, 'lib.params', reactive()); // would reject with DataCloneError if still proxied
+    const stored = store.get('lib.params');
+    expect(unwrapParams(stored)).toEqual({ 'dev:1': blocks('Gain'), 'dev:2': blocks('Drive') });
+  });
+
+  it('uses the injected snapshotter (the store passes $state.snapshot) on the value it is given', async () => {
+    const { set, store } = cloneCheckedSet();
+    const seen: unknown[] = [];
+    const cache = reactive();
+    await saveParamsCache({ set }, 'lib.params', cache, (v) => {
+      seen.push(v);
+      return JSON.parse(JSON.stringify(v));
+    });
+    expect(seen).toEqual([cache]);
+    expect(unwrapParams(store.get('lib.params'))).toEqual({ 'dev:1': blocks('Gain'), 'dev:2': blocks('Drive') });
+  });
+
+  it('without a snapshot step the clone-checking store DOES fail (the helper catches the bug)', async () => {
+    const { set } = cloneCheckedSet();
+    await expect(saveParamsCache({ set }, 'lib.params', reactive(), (v) => v)).rejects.toThrow();
+  });
+});
+
 // ── imported files: per-file decode stamp ────────────────────────────────────────────────────────
 type SummaryLike = { name: string; params?: unknown };
 type FileRec = PersistedFile & { summary: SummaryLike };
 
-const file = (id: string, paramsV?: number): FileRec => ({
+const file = (id: string, paramsV?: PersistedFile['paramsV']): FileRec => ({
   id,
   summary: { name: id, params: blocks(`${id} (old decode)`) },
   ...(paramsV !== undefined ? { paramsV } : {})
@@ -98,32 +137,49 @@ describe('settleFilesOnLoad (per-file stamp)', () => {
     expect(pending).toEqual([]);
   });
 
-  it("with IndexedDB: drops a stale / unstamped file's params and leaves it pending (stamp stays stale)", () => {
+  it('keeps a LEGACY-stamped file untouched too: settled, params kept, never pending', () => {
+    const f = file('a', LEGACY_STAMP);
+    const { items, pending } = settleFilesOnLoad([f], true);
+    expect(items[0]).toBe(f);
+    expect(items[0].summary.params).toBeDefined();
+    expect(pending).toEqual([]);
+  });
+
+  it('with IndexedDB: a stale / unstamped file is queued with its params LEFT in place (bytes not known yet)', () => {
     for (const stamp of [undefined, PARAMS_DECODE_VERSION - 1]) {
       const input = [file('a', stamp)];
-      const snapshot = JSON.stringify(input);
       const { items, pending } = settleFilesOnLoad(input, true);
-      expect(items[0].summary.params).toBeUndefined();
-      expect(items[0].summary.name).toBe('a');
-      expect(items[0].paramsV).toBe(stamp); // not advanced: a crash / failed re-decode retries it
+      expect(items[0]).toBe(input[0]);
+      expect(items[0].summary.params).toBeDefined();
       expect(pending).toEqual(['a']);
-      expect(JSON.stringify(input)).toBe(snapshot); // input untouched
     }
   });
 
-  it('only the stale files are dropped / pending; current ones keep their params', () => {
+  it('only the stale files are pending; current ones are untouched', () => {
     const cur = file('cur', PARAMS_DECODE_VERSION);
     const { items, pending } = settleFilesOnLoad([file('s1'), cur, file('s2', 1)], true);
     expect(pending).toEqual(['s1', 's2']);
     expect(items[1]).toBe(cur);
-    expect(items[1].summary.params).toBeDefined();
   });
 
-  it('WITHOUT IndexedDB: drops stale params once and advances the stamp immediately (nothing to re-decode from)', () => {
+  it('WITHOUT IndexedDB there are no bytes at all: stale files are stamped legacy and KEEP their params', () => {
     const { items, pending } = settleFilesOnLoad([file('a'), file('b', 1)], false);
     expect(pending).toEqual([]);
-    expect(items.map((i) => i.paramsV)).toEqual([PARAMS_DECODE_VERSION, PARAMS_DECODE_VERSION]);
-    expect(items.map((i) => i.summary.params)).toEqual([undefined, undefined]);
+    expect(items.map((i) => i.paramsV)).toEqual([LEGACY_STAMP, LEGACY_STAMP]);
+    expect(items.every((i) => i.summary.params !== undefined)).toBe(true);
+  });
+
+  it('orders the pending files by persisted failure count (fewest first, ties keep file order)', () => {
+    const f = (id: string, fails?: number): FileRec => ({ ...file(id), ...(fails ? { paramsFail: fails } : {}) });
+    const { pending } = settleFilesOnLoad([f('a', 2), f('b'), f('c', 1), f('d')], true);
+    expect(pending).toEqual(['b', 'd', 'c', 'a']);
+  });
+});
+
+describe('partitionByBytes', () => {
+  it('files WITH stored bytes are re-decoded; files WITHOUT are legacy (order kept)', () => {
+    const has = new Set(['a', 'c']);
+    expect(partitionByBytes(['a', 'b', 'c', 'd'], (id) => has.has(id))).toEqual({ redecode: ['a', 'c'], legacy: ['b', 'd'] });
   });
 });
 
@@ -137,21 +193,30 @@ describe('isTransientDecodeError', () => {
   });
 });
 
-// A mini lifecycle over the pure pieces the library store composes: load → settle → one re-decode pass →
-// persist (stamp each settled file, keep counted failures). `launch` returns what would be persisted for the
-// NEXT launch.
+// A mini lifecycle over the pure pieces the library store composes: load → settle → (bytes known) partition →
+// one re-decode pass → persist (stamp each settled file, keep counted failures). `launch` returns what would be
+// persisted for the NEXT launch.
 async function launch(
   persisted: FileRec[],
-  opts: { idb?: boolean; bytes?: Set<string>; decode: (id: string) => Promise<SummaryLike> }
+  opts: {
+    idb?: boolean;
+    /** ids whose raw bytes are stored (undefined = every file has bytes; empty set = bytes blob absent) */
+    bytes?: Set<string>;
+    decode: (id: string) => Promise<SummaryLike>;
+    /** the server has answered something successfully this session */
+    healthy?: boolean;
+  }
 ) {
   const calls: string[] = [];
   const { items, pending } = settleFilesOnLoad(persisted, opts.idb ?? true);
   const failures = new Map<string, number>(items.filter((i) => i.paramsFail).map((i) => [i.id, i.paramsFail!]));
   const byId = new Map<string, FileRec>(items.map((i): [string, FileRec] => [i.id, { ...i }]));
+  const { redecode, legacy } = partitionByBytes(pending, (id) => (opts.bytes ? opts.bytes.has(id) : true));
+  for (const id of legacy) byId.get(id)!.paramsV = LEGACY_STAMP; // no bytes: stale params kept, settled
+  for (const id of redecode) byId.get(id)!.summary = { name: byId.get(id)!.summary.name }; // bytes: stale params dropped
   const stillPending = await redecodePass<SummaryLike>(
-    pending,
+    redecode,
     async (id) => {
-      if (opts.bytes && !opts.bytes.has(id)) return null; // no stored bytes
       calls.push(id);
       return opts.decode(id);
     },
@@ -161,13 +226,14 @@ async function launch(
       rec.paramsV = PARAMS_DECODE_VERSION;
       failures.delete(id);
     },
-    failures
+    failures,
+    () => opts.healthy ?? false
   );
   for (const rec of byId.values()) {
-    if (rec.paramsV === PARAMS_DECODE_VERSION || !failures.get(rec.id)) delete rec.paramsFail;
+    if (rec.paramsV === PARAMS_DECODE_VERSION || rec.paramsV === LEGACY_STAMP || !failures.get(rec.id)) delete rec.paramsFail;
     else rec.paramsFail = failures.get(rec.id);
   }
-  return { persisted: [...byId.values()], calls, stillPending, pendingAtLoad: pending };
+  return { persisted: [...byId.values()], calls, stillPending, pendingAtLoad: pending, redecode, legacy };
 }
 const freshDecode = (id: string): Promise<SummaryLike> => Promise.resolve({ name: 'decoded', params: blocks(`${id} (new decode)`) });
 const mustNotDecode = (): Promise<SummaryLike> => Promise.reject(new Error('decode must not be called'));
@@ -193,22 +259,37 @@ describe('re-decode lifecycle: one bad file among many', () => {
     expect(second.persisted).toEqual(first.persisted);
     expect(second.persisted.filter((f) => f.summary.params !== undefined).map((f) => f.id)).toEqual(['a', 'b', 'c', 'd']);
   });
+});
 
-  it('a file with no stored bytes is settled without params and is not retried either', async () => {
+describe('migration: files whose stored bytes are ABSENT keep their stale params (legacy)', () => {
+  it('a file with no stored bytes keeps its old params, is stamped legacy and is never retried; files with bytes are re-decoded', async () => {
     const first = await launch([file('a'), file('nobytes')], { bytes: new Set(['a']), decode: freshDecode });
-    expect(first.calls).toEqual(['a']);
-    expect(first.persisted.find((f) => f.id === 'nobytes')).toMatchObject({ paramsV: PARAMS_DECODE_VERSION, summary: { name: 'nobytes' } });
-    expect(first.persisted.find((f) => f.id === 'nobytes')!.summary.params).toBeUndefined();
+    expect(first.calls).toEqual(['a']); // only the file with bytes is decoded
+    const nobytes = first.persisted.find((f) => f.id === 'nobytes')!;
+    expect(nobytes.paramsV).toBe(LEGACY_STAMP);
+    expect(nobytes.summary.params).toEqual(blocks('nobytes (old decode)')); // KEPT: deep search keeps working
+    expect(JSON.stringify(first.persisted.find((f) => f.id === 'a')!.summary.params)).toContain('new decode');
     const second = await launch(first.persisted, { bytes: new Set(['a']), decode: mustNotDecode });
     expect(second.calls).toEqual([]);
+    expect(second.persisted.find((f) => f.id === 'nobytes')!.summary.params).toEqual(blocks('nobytes (old decode)'));
   });
 
-  it('with an ABSENT bytes blob (IndexedDB there, never written) every pending file settles at once and is not re-dropped', async () => {
+  it('with an ABSENT bytes blob (IndexedDB there, never written — the likely state of existing users) every file keeps its params', async () => {
     const first = await launch([file('a'), file('b')], { bytes: new Set(), decode: mustNotDecode });
     expect(first.calls).toEqual([]);
-    expect(first.persisted.every((f) => f.paramsV === PARAMS_DECODE_VERSION && f.summary.params === undefined)).toBe(true);
+    expect(first.redecode).toEqual([]);
+    expect(first.persisted.every((f) => f.paramsV === LEGACY_STAMP)).toBe(true);
+    expect(first.persisted.map((f) => f.summary.params)).toEqual([blocks('a (old decode)'), blocks('b (old decode)')]);
     const second = await launch(first.persisted, { bytes: new Set(), decode: mustNotDecode });
     expect(second.pendingAtLoad).toEqual([]);
+    expect(second.persisted).toEqual(first.persisted);
+  });
+
+  it('a legacy file stays untouched even after the stamp scheme moves on (re-import is what refreshes it)', async () => {
+    const legacy = file('old', LEGACY_STAMP);
+    const r = await launch([legacy], { decode: mustNotDecode });
+    expect(r.pendingAtLoad).toEqual([]);
+    expect(r.persisted[0]).toEqual(legacy);
   });
 });
 
@@ -220,10 +301,10 @@ describe('re-decode lifecycle: server offline / transient failures', () => {
     const r = await launch(files, { decode: offline });
     expect(r.calls).toEqual(['a']); // one attempt, then stop
     expect(r.stillPending).toEqual(['a', 'b', 'c', 'd', 'e']);
-    // nothing was stamped current → all retried next launch; params stay dropped meanwhile
+    // nothing was stamped current → all retried next launch; the stale params were dropped (bytes exist)
     expect(r.persisted.every((f) => f.paramsV === undefined && f.summary.params === undefined)).toBe(true);
     // being offline is never held against a file: no failure counts, however many launches
-    const again = await launch(r.persisted, { decode: offline });
+    const again = await launch(r.persisted, { decode: offline, healthy: true });
     expect(again.persisted.every((f) => f.paramsFail === undefined)).toBe(true);
   });
 
@@ -277,7 +358,7 @@ describe('re-decode lifecycle: server offline / transient failures', () => {
     expect(r.pendingAtLoad).toEqual(['late', 'bad']); // fewest failures first
     expect(r.persisted.find((f) => f.id === 'late')!.paramsV).toBe(PARAMS_DECODE_VERSION);
     expect(r.persisted.find((f) => f.id === 'bad')!.paramsFail).toBe(2);
-    // launch 3: bad is the only pending file → no other success in the pass → NOT counted, still retried
+    // launch 3 (no other file decoding, server not otherwise known healthy): not counted, still retried
     r = await launch(r.persisted, { decode: bad });
     expect(r.persisted.find((f) => f.id === 'bad')).toMatchObject({ paramsFail: 2 });
     // launch 4: with another stale file decoding fine alongside, the 3rd counted failure settles it for good
@@ -289,6 +370,27 @@ describe('re-decode lifecycle: server offline / transient failures', () => {
     expect(r.stillPending).toEqual([]);
     const after = await launch(r.persisted, { decode: mustNotDecode });
     expect(after.calls).toEqual([]);
+  });
+
+  it('an always-500 file that is the ONLY pending one is still counted once the server has answered elsewhere, and settles after 3 launches', async () => {
+    const always500 = () => Promise.reject(new HttpError(500));
+    let persisted = [file('only')];
+    for (let launchNo = 1; launchNo <= 2; launchNo++) {
+      const r = await launch(persisted, { decode: always500, healthy: true }); // e.g. detect/load answered fine
+      expect(r.persisted[0]).toMatchObject({ paramsFail: launchNo }); // counted although nothing else decoded
+      expect(r.persisted[0].paramsV).toBeUndefined();
+      persisted = r.persisted;
+    }
+    // without any health evidence it is never counted (a starting server must not be held against the file)
+    const unproven = await launch(persisted, { decode: always500, healthy: false });
+    expect(unproven.persisted[0]).toMatchObject({ paramsFail: 2 });
+    // 3rd counted failure → settled without params; the next launch makes no request at all
+    const third = await launch(persisted, { decode: always500, healthy: true });
+    expect(third.persisted[0].paramsV).toBe(PARAMS_DECODE_VERSION);
+    expect(third.persisted[0].summary.params).toBeUndefined();
+    expect(third.persisted[0].paramsFail).toBeUndefined();
+    const next = await launch(third.persisted, { decode: mustNotDecode, healthy: true });
+    expect(next.calls).toEqual([]);
   });
 
   it('a transient HTTP failure mid-way settles what was done; the failed file alone stays pending', async () => {
@@ -313,19 +415,18 @@ describe('re-decode lifecycle: server offline / transient failures', () => {
 });
 
 describe('re-decode lifecycle: no IndexedDB', () => {
-  it('drops stale params once and advances at once; files imported fresh last session keep theirs', async () => {
+  it('there are no bytes at all: stale files keep their params stamped legacy; files imported fresh last session keep theirs', async () => {
     const imported = file('fresh', PARAMS_DECODE_VERSION); // stamped when imported last session
     const first = await launch([file('old'), imported], { idb: false, decode: mustNotDecode });
     expect(first.calls).toEqual([]); // nothing to re-decode from → no requests at all
     expect(first.stillPending).toEqual([]);
-    expect(first.persisted.find((f) => f.id === 'old')).toMatchObject({ paramsV: PARAMS_DECODE_VERSION });
-    expect(first.persisted.find((f) => f.id === 'old')!.summary.params).toBeUndefined();
+    expect(first.persisted.find((f) => f.id === 'old')).toMatchObject({ paramsV: LEGACY_STAMP });
+    expect(first.persisted.find((f) => f.id === 'old')!.summary.params).toEqual(blocks('old (old decode)')); // kept
     expect(first.persisted.find((f) => f.id === 'fresh')!.summary.params).toBeDefined();
 
-    // next launch (still no IndexedDB): nothing is dropped again — the fresh file keeps its params
+    // next launch (still no IndexedDB): nothing changes — no drops, no requests
     const second = await launch(first.persisted, { idb: false, decode: mustNotDecode });
     expect(second.persisted).toEqual(first.persisted);
-    expect(second.persisted.find((f) => f.id === 'fresh')!.summary.params).toBeDefined();
   });
 });
 
@@ -334,15 +435,22 @@ describe('redecodePass', () => {
     const settled: [string, boolean][] = [];
     const left = await redecodePass(['a', 'b'], freshDecode, (id, fresh) => settled.push([id, fresh !== null]));
     expect(left).toEqual([]);
-    expect(settled).toEqual([['a', true], ['b', true]]);
+    expect(settled).toEqual([
+      ['a', true],
+      ['b', true]
+    ]);
   });
 
   it('an empty pending list makes no request', async () => {
     let calls = 0;
-    const left = await redecodePass([], async () => {
-      calls++;
-      return null;
-    }, () => {});
+    const left = await redecodePass(
+      [],
+      async () => {
+        calls++;
+        return null;
+      },
+      () => {}
+    );
     expect(left).toEqual([]);
     expect(calls).toBe(0);
   });

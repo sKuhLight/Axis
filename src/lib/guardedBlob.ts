@@ -19,6 +19,12 @@ export interface BlobKv {
   set: (key: string, val: unknown) => Promise<unknown>;
 }
 
+/** A plain, structured-cloneable deep copy for JSON-shaped data (also unwraps a Svelte `$state` proxy). The
+ *  default snapshot — the library injects `$state.snapshot` instead, which does the same without a JSON pass. */
+export function plainCopy<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export class GuardedBlob<V> {
   /** The in-memory view: stored entries once read, plus every put since construction. Mutated in place. */
   readonly data: Record<string, V>;
@@ -29,10 +35,14 @@ export class GuardedBlob<V> {
   /** ids removed while the blob was unread (must not be resurrected by the merge). */
   #removed = new Set<string>();
 
+  /** @param snapshot turns the in-memory record into a plain, structured-cloneable value right before it is
+   *  written. IndexedDB can't store a Svelte `$state` proxy (DataCloneError), and `{...data}` would keep the
+   *  proxied nested values — so a reactive `target` MUST be snapshotted (the library passes `$state.snapshot`). */
   constructor(
     private readonly kv: BlobKv,
     private readonly key: string,
-    target: Record<string, V> = {}
+    target: Record<string, V> = {},
+    private readonly snapshot: (data: Record<string, V>) => Record<string, V> = plainCopy
   ) {
     this.data = target;
   }
@@ -81,7 +91,7 @@ export class GuardedBlob<V> {
    *  pending changes kept, when that read fails). Resolves true when the blob was written. */
   async flush(): Promise<boolean> {
     if (!(await this.load())) return false;
-    await this.kv.set(this.key, { ...this.data });
+    await this.kv.set(this.key, this.snapshot(this.data));
     return true;
   }
 
