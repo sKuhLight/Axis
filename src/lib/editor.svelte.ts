@@ -6,6 +6,7 @@ import { forgefx, ForgeError, setRequestFailureReporter, isRemote, isDirect, CLI
 import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { deviceDefs } from './deviceDefs.svelte';
+import { diagnostics } from './diagnostics.svelte';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
@@ -291,7 +292,7 @@ class EditorStore {
   }>({ available: false, configured: false, root: null, exists: true, syncing: false, lastSync: null, note: null, autoSync: loadLocalAutoSync() });
   // ── Axis hub (single rail entry point: Account · Privacy · About) ──
   axisOpen = $state(false);
-  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance'>('account');
+  axisTab = $state<'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance' | 'debug'>('account');
   themeOpen = $state(false); // Appearance / theme picker modal
   drawerOpen = $state(false); // mobile nav drawer (replaces the tool rail on phones)
   /** Optional contact the user may leave (Fractal forum / Reddit / email) so we can follow up on a bug.
@@ -935,7 +936,7 @@ class EditorStore {
   };
 
   // ── Axis hub + profile (contact / synced prefs) ──
-  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
+  openAxis = (tab: 'account' | 'storage' | 'privacy' | 'about' | 'device' | 'performance' | 'debug' = 'account') => { this.axisTab = tab; this.axisOpen = true; if (tab === 'device') this.loadPorts(); };
   /** Bottom-bar hover hint helpers — a control calls setHint on mouseenter/focus, clearHint on leave/blur. */
   setHint = (text: string) => { this.hint = text; };
   clearHint = () => { this.hint = null; };
@@ -1307,6 +1308,7 @@ class EditorStore {
       this.#adoptedDeviceKey = key;
     }
     if (dev.capabilities) this.caps = dev.capabilities; // per-model UI capabilities (scenes, channels, …)
+    if (dev.capabilities?.diagnosticCapture) diagnostics.resume(); // pick up a diagnostic run that is already going
     if (dev.apiVersion) this.apiVersion = dev.apiVersion;
     const count = dev.capabilities?.presets?.count;
     if (count) this.presetCount = count;
@@ -1317,8 +1319,9 @@ class EditorStore {
   poll = async () => {
     if (this.#polling) return; // never let interval ticks stack serial ops on a slow link
     // A definitions walk/import owns the exclusive transport (FORGEFX-32) — /healthz and /device are
-    // free, but #adoptDevice fans out into real device reads on change. Sit the whole tick out.
-    if (deviceDefs.building || deviceDefs.importing) return;
+    // free, but #adoptDevice fans out into real device reads on change. Sit the whole tick out. The same goes
+    // for a device diagnostic run: its wire log must hold only its own traffic, and it owns the transport too.
+    if (deviceDefs.building || deviceDefs.importing || diagnostics.running) return;
     this.#polling = true;
     try {
       const h = await forgefx.health();
@@ -1416,8 +1419,8 @@ class EditorStore {
     if (!this.presetLiveQuery) return; // no live current-preset query on this device — polling would just time out
     if (this.#watching) return; // skip a tick rather than queue behind an in-flight watch
     // A definitions walk/import owns the exclusive transport — interleaved preset reads during the
-    // 3ms-paced query stream have frozen an FM3 (FORGEFX-32). Skip ticks until it finishes.
-    if (deviceDefs.building || deviceDefs.importing) return;
+    // 3ms-paced query stream have frozen an FM3 (FORGEFX-32). Skip ticks until it finishes (a diagnostic run too).
+    if (deviceDefs.building || deviceDefs.importing || diagnostics.running) return;
     // On a slow MIDI link, background preset-watch polling competes with edits and inflates latency —
     // run it only every 4th tick (~16s instead of ~4s) so the link stays free for what the user is doing.
     if (this.slowLink && this.#watchTick++ % 4 !== 0) return;
@@ -2144,7 +2147,7 @@ class EditorStore {
   /** True while `openSave` waits for the device's current-preset answer (buttons show "Reading…"). */
   savePending = $state(false);
   /** A definitions walk/import owns the transport: preset reads are off-limits (FORGEFX-32), same as in poll(). */
-  #walkActive = () => !!(deviceDefs.building || deviceDefs.importing);
+  #walkActive = () => !!(deviceDefs.building || deviceDefs.importing || diagnostics.running);
   /** Open the Save dialog. On a device with a live preset query the current slot is re-read FRESH (bounded
    *  wait) instead of trusting the cached `preset`/`lastPreset` — those go stale when the preset is switched
    *  on the unit (the query then answers -1 and the cache keeps the old slot). -1 / failure / timeout, or a

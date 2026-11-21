@@ -1,13 +1,14 @@
 <script lang="ts">
   // The single "Axis" hub — one rail button opens this, replacing the separate Cloud + Privacy panels.
-  // Three tabs: Account (sign-in / register / sync / contact / delete), Privacy (diagnostics consent +
-  // send debug report), About (version · support · legal). Ported from CloudPanel + DiagnosticsPanel.
+  // Tabs: Account (sign-in / register / sync / contact / delete), Privacy (diagnostics consent +
+  // send debug report), About (version · support · legal), Debug (device diagnostics). Ported from CloudPanel + DiagnosticsPanel.
   import { editor } from './editor.svelte';
   import { library } from './library.svelte';
   import { deviceDefs } from './deviceDefs.svelte';
   import { isDirect } from './forgefx';
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
+  import DiagnosticsPanel from './DiagnosticsPanel.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
 
@@ -148,6 +149,7 @@
         {/if}
         <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
         <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
+        <button class="tb" class:on={editor.axisTab === 'debug'} onclick={() => (editor.axisTab = 'debug')}>Debug</button>
       </div>
 
       {#if editor.axisTab === 'account'}
@@ -418,6 +420,10 @@
           <p class="legal"><button class="link" onclick={() => openExternal(LEGAL.privacy)}>Privacy Policy</button> · Anonymous ID: <span class="mono">{t.instanceId.slice(0, 8)}</span> · Axis is open-source; self-hosters can point diagnostics at their own server.</p>
         </div>
 
+      {:else if editor.axisTab === 'debug'}
+        <!-- Debugging: device diagnostics (gated probe run → redacted result → save locally / upload) -->
+        <DiagnosticsPanel />
+
       {:else if editor.axisTab === 'device'}
         <!-- Connection & Device -->
         <div class="pad">
@@ -529,8 +535,9 @@
   .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: var(--surface2); border: 1px solid var(--border2); color: var(--textdim); font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
   .x:hover { color: var(--text); border-color: var(--border3); }
 
-  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; }
-  .tb { flex: 1; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; overflow-x: auto; scrollbar-width: none; }
+  .tabbar::-webkit-scrollbar { display: none; }
+  .tb { flex: 1 0 auto; padding: 0 8px; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
   .tb:hover { color: var(--text2); }
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
 
