@@ -147,7 +147,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Linux pinned to 24.04: ubuntu-latest moved to 26.04, whose rpmbuild fails on the spec that
+        # electron-builder's bundled fpm generates (rpm target). Revisit when electron-builder/fpm catch up.
+        os: [ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Axis
