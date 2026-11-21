@@ -22,6 +22,8 @@ import {
   parseFirmware,
   matchEditorCacheFile,
   isBuildProgressPhase,
+  buildConflictKind,
+  DIAGNOSTIC_RUNNING_MESSAGE,
   type DeviceDefsInputs
 } from './deviceDefs';
 import type { DeviceCacheStatus } from './types';
@@ -608,5 +610,23 @@ describe('wiring (source pins)', () => {
     expect(prompt).toContain('{#if deviceDefs.cloudNote}');
     expect(panel).toContain('{deviceDefs.staleCopy.panel}');
     expect(panel).toContain('deviceDefs.canRebuild');
+  });
+});
+
+// ── a 409 from the build route: a running device diagnostic is not "already building" ──
+describe('buildConflictKind', () => {
+  it('reads the diagnostic-busy answer as its own case, everything else as an already-running build', () => {
+    expect(buildConflictKind({ error: 'busy', what: 'capture' })).toBe('diagnostic');
+    expect(buildConflictKind({ error: 'building' })).toBe('building');
+    expect(buildConflictKind({ error: 'busy', what: 'cache-build' })).toBe('building');
+    expect(buildConflictKind({ error: 'busy' })).toBe('building');
+    for (const none of [undefined, null, 'busy', 42]) expect(buildConflictKind(none)).toBe('building');
+  });
+  it('words the refusal', () => {
+    expect(DIAGNOSTIC_RUNNING_MESSAGE).toMatch(/^A device diagnostic is running\./);
+  });
+  it('the store keeps the build state untouched and shows the message for it (source pin)', () => {
+    const store = readFileSync(new URL('./deviceDefs.svelte.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+    expect(store).toMatch(/if \(buildConflictKind\(e\.body\) === 'diagnostic'\) this\.error = DIAGNOSTIC_RUNNING_MESSAGE;\s*else this\.building = /);
   });
 });

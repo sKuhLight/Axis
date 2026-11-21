@@ -24,6 +24,8 @@ import {
   normalizeModelHex,
   parseFirmware,
   isBuildProgressPhase,
+  buildConflictKind,
+  DIAGNOSTIC_RUNNING_MESSAGE,
   type DeviceDefAction,
   type ActiveDefsSource
 } from './deviceDefs';
@@ -176,7 +178,12 @@ class DeviceDefsStore {
       await forgefx.buildDeviceCache(mode ? { mode } : {});
       this.building = { done: 0, total: 0, phase: 'starting' };
     } catch (e) {
-      if (e instanceof ForgeError && e.status === 409) { this.building = { done: 0, total: 0, phase: 'building' }; return; } // already building
+      if (e instanceof ForgeError && e.status === 409) {
+        // a device diagnostic owns the device → nothing is building; otherwise a build is already running
+        if (buildConflictKind(e.body) === 'diagnostic') this.error = DIAGNOSTIC_RUNNING_MESSAGE;
+        else this.building = { done: 0, total: 0, phase: 'building' };
+        return;
+      }
       this.error = e instanceof ForgeError && e.status === 501 ? 'Reading from device isn’t supported here.' : 'Could not start the build.';
     }
   };

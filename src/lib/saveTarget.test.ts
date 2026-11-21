@@ -412,7 +412,7 @@ describe('wiring (source pins)', () => {
     expect(openSave).toMatch(/gen !== this\.#presetGen\) return/);
     expect(openSave).toContain('saveProbeMs(this.slowLink)');
     expect(openSave).toContain('this.savePending = true');
-    expect(editorSrc).toMatch(/#walkActive = \(\) => !!\(deviceDefs\.building \|\| deviceDefs\.importing\)/);
+    expect(editorSrc).toMatch(/#walkActive = \(\) => !!\(deviceDefs\.building \|\| deviceDefs\.importing \|\| diagnostics\.running\)/);
     expect(editorSrc).toMatch(/#resetPresetContext = \(\) => \{\s*this\.#presetGen\+\+;/);
     expect(read('./TopBar.svelte')).toContain('editor.savePending');
     expect(read('./axis-workbench/widgets/AxisWorkbenchWidget.svelte')).toContain('editor.savePending');

@@ -629,6 +629,10 @@ export interface DeviceCaps {
    *  FM3/FM9/Axe-Fx III; absent/false on units like the VP4. Gates the secondary "full capture"
    *  affordance — the default read-only build works regardless. */
   fullCapture?: boolean;
+  /** Device can run the in-product device diagnostic (`/diagnostics/capture*`): a gated probe run that
+   *  produces a redacted result bundle the user can save or upload for analysis. True for gen-3 devices
+   *  that self-describe. Absent on older servers → the Debug tab only explains why it is unavailable. */
+  diagnosticCapture?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */
@@ -988,3 +992,63 @@ export interface PortList {
   profile?: { key: string; name: string; model: string };
   ports: ConnInfo[];
 }
+
+// ── Device diagnostics (in-product diagnostic capture · Settings → Debug) ──
+// Mirrors the ForgeFX `/diagnostics/capture*` contract. A run executes a fixed, staged set of probe
+// steps against the connected device and always ends in a redacted result bundle (success, failure or
+// cancel), which the user can save locally or upload for analysis.
+
+/** The probe steps of a run. `fullWalk` is opt-in and only runs for firmware where full capture is allowed. */
+export type CaptureStepName = 'info' | 'readonlyWalk' | 'labelProbe' | 'dumpHeaderProbe' | 'reloadProbe' | 'fullWalk';
+export type CaptureStepStatus = 'pending' | 'running' | 'ok' | 'failed' | 'aborted' | 'skipped';
+export type CaptureRunState = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/** `GET /diagnostics/capture` — progress of the current run, or of the last finished one. */
+export interface CaptureStatus {
+  state: CaptureRunState;
+  id?: string;
+  startedAt?: string;
+  endedAt?: string;
+  steps?: { name: CaptureStepName; status: CaptureStepStatus; progress?: { done: number; total: number }; note?: string }[];
+  /** Why the run stopped early, e.g. `cancelled`, `device-silent`, `query-bound`, `error: …`. */
+  abortReason?: string;
+  /** A result bundle exists (`GET /diagnostics/capture/result` answers 200). */
+  resultAvailable: boolean;
+}
+
+/** `POST /diagnostics/capture` body. `acknowledged` is a literal `true`: the call cannot be typed without it. */
+export interface CaptureStartRequest {
+  acknowledged: true;
+  steps?: CaptureStepName[];
+  includeFullWalk?: boolean;
+}
+
+/** `GET /diagnostics/capture/result` — the redacted result bundle (`schema: 1`). */
+export interface CaptureBundle {
+  schema: 1;
+  id: string;
+  createdAt: string;
+  endedAt: string;
+  state: 'done' | 'failed' | 'cancelled';
+  abortReason?: string;
+  /** Versions; `axis` is filled in by the client when it saves a copy locally. */
+  app: { forgefx: string; codec: string; axis?: string };
+  device: { model: number; modelName: string; firmware: string | null; transport: string };
+  steps: { name: CaptureStepName; status: CaptureStepStatus; startedAt?: string; endedAt?: string; result?: unknown; error?: string; note?: string }[];
+  /** Full wire log of the run (ms since start), already redacted by the engine. */
+  frames: { t: number; dir: 'TX' | 'RX'; hex: string }[];
+  logs: { t: number; level: 'debug' | 'info' | 'warn' | 'error'; msg: string }[];
+  /** How many frames had names / dump payloads removed before the bundle left the engine. */
+  redaction: { presetNames: number; dumpPayloadFrames: number };
+}
+
+/** `POST /diagnostics/capture` → 202. */
+export interface CaptureStartResult { started: true; id: string }
+
+/** `POST /diagnostics/capture/upload` body. `consent` is a literal `true`; `axisVersion` is the client's own version,
+ *  which the engine stamps into the uploaded copy only. */
+export interface CaptureUploadRequest { consent: true; axisVersion?: string }
+
+/** `POST /diagnostics/capture/upload` → 200. `captureId` is the cloud's reference for the stored result;
+ *  `deduped` = the cloud already had this result (nothing new was stored). */
+export interface CaptureUploadResult { ok: true; captureId: string; bytes: number; deduped?: boolean }

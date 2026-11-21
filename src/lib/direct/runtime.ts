@@ -144,7 +144,13 @@ export async function assembleRuntime(opts: AssembleOpts): Promise<AssembledRunt
     : undefined;
 
   // 5. Router in, SSE out: install as the forgefx transport, events via subscription.
-  const router = rt.createRouter({ registry, store, local, cloud } satisfies RuntimeDeps);
+  // Version stamps for the router's device-diagnostic bundles (this in-page runtime has no package.json to read):
+  // the engine's own version and the Axis version. `axis` is for engines that take it; older ones ignore the key.
+  const versions: NonNullable<RuntimeDeps['versions']> & { axis?: string } = {
+    ...(typeof __FORGEFX_VERSION__ !== 'undefined' && __FORGEFX_VERSION__ ? { forgefx: __FORGEFX_VERSION__ } : {}),
+    ...(typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? { axis: __APP_VERSION__ } : {})
+  };
+  const router = rt.createRouter({ registry, store, local, cloud, versions } satisfies RuntimeDeps);
   setRemoteTransport(async (rq): Promise<RemoteResponse> => {
     const r = await router.handle(rq.method, rq.path, rq.body);
     return {

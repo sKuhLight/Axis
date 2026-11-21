@@ -58,8 +58,9 @@ import it directly — no context or props threading.
   loop**.
 - SSE: `#openEvents` feeds `applyDeviceEvent`, a single `switch` over the
   `DeviceEvent` union. To react to a device-side change (e.g. scene change),
-  extend the existing `case` and reuse the `#eventReload` debounce — do not add
-  parallel timers.
+  extend the existing `case` and reuse the `#reloads` scheduler
+  (`reloadScheduler.ts`; strongest pending kind wins, waits while a walk or
+  diagnostic run owns the device) — do not add parallel timers.
 - **THE canonical action shape** — optimistic update, await, revert on catch:
 
   ```ts
