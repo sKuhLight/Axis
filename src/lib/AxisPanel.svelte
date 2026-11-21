@@ -9,7 +9,7 @@
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
   import { tick, untrack } from 'svelte';
-  import { computeTabOverflow, splitTabs, nextMenuIndex, toLayoutPx, menuBelowRightEdge } from './tabOverflow';
+  import { computeTabOverflow, splitTabs, nextMenuIndex, toLayoutPx, menuAnchorPlacement } from './tabOverflow';
   import { effectiveZoom, resolveMenuPlacement } from './workbench/svelte/contextMenu';
   import DiagnosticsPanel from './DiagnosticsPanel.svelte';
   import { LEGAL, openExternal } from './legal';
@@ -191,16 +191,18 @@
   const activeLabel = $derived(parts.hidden.find((t) => t.id === editor.axisTab)?.label ?? '');
   const menuItems = () => (menuEl ? [...menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : []);
 
-  /** Below the ⋯ button, right edges aligned, clamped to the viewport; fed through the shared zoom-aware placement
-   *  (visual coords in, layout left/top out) so it also lands correctly under the UI-scale zoom. */
+  /** Below the ⋯ button (above it when there is no room below, e.g. the bottom sheet), right edges aligned, clamped to
+   *  the viewport; fed through the shared zoom-aware placement (visual coords in, layout left/top out) so it also
+   *  lands correctly under the UI-scale zoom. */
   function placeMenu() {
     if (!menuOpen || !menuEl || !moreBtn) return;
     const z = zoomOf();
     const anchor = moreBtn.getBoundingClientRect();
     const box = menuEl.getBoundingClientRect();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
     const p = resolveMenuPlacement(
-      menuBelowRightEdge(anchor, box.width, 4 * z),
-      { width: window.innerWidth, height: window.innerHeight },
+      menuAnchorPlacement(anchor, { width: box.width, height: box.height }, viewport, 4 * z),
+      viewport,
       { width: box.width, height: box.height },
       z
     );
@@ -242,6 +244,11 @@
   }
   function onWinPointer(e: PointerEvent) {
     if (moreWrap && !moreWrap.contains(e.target as Node)) closeMenu(false);
+  }
+  // The mobile sheet slides in (CSS animation on the card): a menu opened — or placed — mid-slide used the button's
+  // in-flight rect, so re-place once the slide has finished.
+  function onCardAnimationEnd(e: AnimationEvent) {
+    if (e.target === e.currentTarget) placeMenu();
   }
   // Window listeners exist only while the menu is open; the fixed menu follows the ⋯ button on resize / card scroll.
   $effect(() => {
@@ -299,7 +306,7 @@
 {#if editor.axisOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="bg" class:mob role="presentation" onclick={close}>
-    <div class="card" class:mob role="dialog" tabindex="-1" bind:this={cardEl} onclick={(e) => e.stopPropagation()}>
+    <div class="card" class:mob role="dialog" tabindex="-1" bind:this={cardEl} onclick={(e) => e.stopPropagation()} onanimationend={onCardAnimationEnd}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
       <div class="tabbar" bind:this={barEl}>

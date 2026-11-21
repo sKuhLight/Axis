@@ -82,11 +82,36 @@ export function toLayoutPx(visual: number, zoom: number): number {
   return Number.isFinite(zoom) && zoom > 0 ? visual / zoom : visual;
 }
 
+export interface MenuAnchorPlacement {
+  x: number;
+  y: number;
+  /** Which side of the anchor the menu opens on. */
+  side: 'below' | 'above';
+}
+
 /**
- * Where a menu opens relative to its anchor button, in the SAME coordinate space as the anchor rect: its right edge
- * aligned with the anchor's right edge, `gap` below the anchor's bottom. Feed the result (visual px) through
- * `resolveMenuPlacement` to clamp it to the viewport and convert it to the layout px a `position: fixed` menu needs.
+ * Where a menu opens relative to its anchor button, in the SAME coordinate space as the anchor rect / viewport /
+ * menu size (visual px): right edges aligned, `gap` between the anchor and the menu.
+ *
+ * - Below the anchor when the whole menu fits there (`margin` kept to the viewport edge).
+ * - Otherwise ABOVE the anchor (menu bottom = anchor top - gap) when it fits there — e.g. the ⋯ of a bottom sheet,
+ *   where the viewport bottom would otherwise clamp the menu on top of the tab bar and the button itself.
+ * - Neither fits: below; the caller's viewport clamp (`resolveMenuPlacement`) then pins it on screen.
+ *
+ * Feed the result through `resolveMenuPlacement` to clamp it and convert it to the layout px a `position: fixed`
+ * menu needs under the UI-scale zoom.
  */
-export function menuBelowRightEdge(anchor: { right: number; bottom: number }, menuWidth: number, gap: number): { x: number; y: number } {
-  return { x: anchor.right - menuWidth, y: anchor.bottom + gap };
+export function menuAnchorPlacement(
+  anchor: { top: number; right: number; bottom: number },
+  menu: { width: number; height: number },
+  viewport: { height: number },
+  gap: number,
+  margin = 8
+): MenuAnchorPlacement {
+  const x = anchor.right - menu.width;
+  const below = anchor.bottom + gap;
+  const fitsBelow = below + menu.height <= viewport.height - margin;
+  const above = anchor.top - gap - menu.height;
+  if (!fitsBelow && above >= margin) return { x, y: above, side: 'above' };
+  return { x, y: below, side: 'below' };
 }

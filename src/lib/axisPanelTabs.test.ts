@@ -132,6 +132,9 @@ describe('settings dialog tab bar (source pins)', () => {
     // placed from the ⋯ button's rect through the shared zoom-aware helper
     expect(fn('placeMenu')).toMatch(/resolveMenuPlacement\(/);
     expect(fn('placeMenu')).toMatch(/zoomOf\(\)/);
+    // flips above the button when there is no room below (bottom sheet), and re-places once the sheet's slide-in ends
+    expect(fn('placeMenu')).toMatch(/menuAnchorPlacement\(/);
+    expect(panel).toMatch(/onanimationend=\{/);
   });
 
   it('window listeners are attached only while the menu is open, and a split change cannot strand focus', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTabOverflow, menuBelowRightEdge, nextMenuIndex, splitTabs, toLayoutPx } from './tabOverflow';
+import { computeTabOverflow, menuAnchorPlacement, nextMenuIndex, splitTabs, toLayoutPx } from './tabOverflow';
 import { effectiveZoom, resolveMenuPlacement } from './workbench/svelte/contextMenu';
 
 // ILLUSTRATIVE natural widths (px) in the settings dialog's order: Account, Storage, Connection, Performance, Privacy,
@@ -170,28 +170,74 @@ describe('toLayoutPx (UI-scale zoom)', () => {
   });
 });
 
-describe('menuBelowRightEdge', () => {
-  it('right edge aligned with the anchor, `gap` below it', () => {
-    expect(menuBelowRightEdge({ right: 386, bottom: 48 }, 156, 4)).toEqual({ x: 230, y: 52 });
+describe('menuAnchorPlacement', () => {
+  const VIEWPORT = { height: 900 };
+  const MENU = { width: 156, height: 149 };
+
+  it('desktop card: right edge aligned with the anchor, `gap` below it', () => {
+    expect(menuAnchorPlacement({ top: 14, right: 386, bottom: 48 }, MENU, VIEWPORT, 4)).toEqual({ x: 230, y: 52, side: 'below' });
   });
 
-  it('through the shared zoom-aware placement the fixed menu lands on the anchor at any UI scale', () => {
+  it('opens ABOVE when it does not fit below but fits above (the bottom sheet case)', () => {
+    // 375x812 sheet: the ⋯ sits at y 681-715, a 149px menu below would end at 868 > 804
+    const r = menuAnchorPlacement({ top: 681, right: 321, bottom: 715 }, MENU, { height: 812 }, 4);
+    expect(r.side).toBe('above');
+    expect(r.y).toBe(681 - 4 - 149); // menu bottom = anchor top - gap
+    expect(r.y + MENU.height + 4).toBe(681);
+    expect(r.x).toBe(321 - 156); // right edge still aligned
+  });
+
+  it('stays below when it fits below, even if it would also fit above', () => {
+    expect(menuAnchorPlacement({ top: 400, right: 300, bottom: 434 }, MENU, VIEWPORT, 4).side).toBe('below');
+  });
+
+  it('fit boundary: the last pixel that still fits below keeps it below, one more flips it above', () => {
+    const margin = 8;
+    const top = VIEWPORT.height - margin - MENU.height - 4 - 34; // bottom + gap + height == viewport - margin
+    expect(menuAnchorPlacement({ top, right: 300, bottom: top + 34 }, MENU, VIEWPORT, 4).side).toBe('below');
+    expect(menuAnchorPlacement({ top: top + 1, right: 300, bottom: top + 35 }, MENU, VIEWPORT, 4).side).toBe('above');
+  });
+
+  it('fits neither below nor above (tiny viewport): falls back to below for the caller to clamp', () => {
+    const r = menuAnchorPlacement({ top: 100, right: 300, bottom: 134 }, MENU, { height: 200 }, 4);
+    expect(r.side).toBe('below');
+    expect(r.y).toBe(138);
+    // the shared clamp then pins it on screen instead of leaving it off the bottom edge
+    const p = resolveMenuPlacement(r, { width: 400, height: 200 }, MENU, 1);
+    expect(p.y).toBeGreaterThanOrEqual(8);
+    expect(p.y + MENU.height).toBeLessThanOrEqual(200 - 8);
+  });
+
+  it('above is only taken when the menu really fits there with the margin (not a clipped flip)', () => {
+    // anchor near the top of a short viewport: above would start at y < margin
+    expect(menuAnchorPlacement({ top: 100, right: 300, bottom: 134 }, MENU, { height: 260 }, 4).side).toBe('below');
+  });
+
+  it('through the shared zoom-aware placement the fixed menu lands on the anchor at any UI scale, both sides', () => {
     const viewport = { width: 1600, height: 900 };
     for (const zoom of [0.8, 1, 1.3]) {
-      const anchor = { right: 386 * zoom + 300, bottom: 48 * zoom + 60 }; // visual rect of the ⋯ button
-      const m = { width: 156 * zoom, height: 140 * zoom };
-      const p = resolveMenuPlacement(menuBelowRightEdge(anchor, m.width, 4 * zoom), viewport, m, zoom);
-      // layout left/top, re-multiplied by the zoom, equal the visual target
-      expect(p.x * zoom).toBeCloseTo(anchor.right - m.width, 6);
-      expect(p.y * zoom).toBeCloseTo(anchor.bottom + 4 * zoom, 6);
+      const m = { width: 156 * zoom, height: 149 * zoom }; // visual box of the menu
+      // below: anchor near the top
+      const top = { top: 14 * zoom + 60, right: 386 * zoom + 300, bottom: 48 * zoom + 60 };
+      const b = menuAnchorPlacement(top, m, viewport, 4 * zoom);
+      expect(b.side).toBe('below');
+      const pb = resolveMenuPlacement(b, viewport, m, zoom);
+      expect(pb.x * zoom).toBeCloseTo(top.right - m.width, 6);
+      expect(pb.y * zoom).toBeCloseTo(top.bottom + 4 * zoom, 6);
+      // above: anchor near the bottom
+      const bottom = { top: 800, right: 600, bottom: 834 };
+      const a = menuAnchorPlacement(bottom, m, viewport, 4 * zoom);
+      expect(a.side).toBe('above');
+      const pa = resolveMenuPlacement(a, viewport, m, zoom);
+      expect(pa.x * zoom).toBeCloseTo(bottom.right - m.width, 6);
+      expect(pa.y * zoom + m.height + 4 * zoom).toBeCloseTo(bottom.top, 6); // menu bottom + gap = anchor top
     }
   });
 
-  it('clamps into the viewport instead of opening off-screen (⋯ close to the left edge / bottom)', () => {
-    const viewport = { width: 400, height: 300 };
+  it('clamps into the viewport instead of opening off-screen (⋯ close to the left edge)', () => {
     const m = { width: 156, height: 140 };
-    const p = resolveMenuPlacement(menuBelowRightEdge({ right: 53, bottom: 280 }, m.width, 4), viewport, m, 1);
+    const r = menuAnchorPlacement({ top: 14, right: 53, bottom: 48 }, m, { height: 300 }, 4);
+    const p = resolveMenuPlacement(r, { width: 400, height: 300 }, m, 1);
     expect(p.x).toBeGreaterThanOrEqual(8);
-    expect(p.y + m.height).toBeLessThanOrEqual(viewport.height - 8);
   });
 });
