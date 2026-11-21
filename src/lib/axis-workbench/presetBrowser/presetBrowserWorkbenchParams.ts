@@ -7,6 +7,7 @@
 // param onto the FILTERS row. The docked runtime reaches the SAME decoded blocks the monolith uses
 // (library.paramsOf via the runtime host), so this is FULL param parity — not a summary-only fallback.
 
+import { catalogUnitSymbol, withUnit } from '../../format';
 import type { AxisPbCond, AxisPbParamCond } from './presetBrowserWorkbenchQuery';
 import { cmp } from './presetBrowserWorkbenchQuery';
 import type { AxisPbDragPayload } from './presetBrowserWorkbenchFilters';
@@ -35,7 +36,9 @@ export function fmtNum(v: number): string {
 export function fmtVal(p: { value: number | null; enumLabel?: string | null; unit?: string }): string {
   if (p.enumLabel != null) return p.enumLabel;
   if (p.value == null) return '—';
-  return fmtNum(p.value) + (p.unit && p.unit !== 'enum' && p.unit !== 'numeric' ? ' ' + p.unit : '');
+  // The catalog unit code ForgeFX returns (percent, knob_0_10, semitones …) → its symbol; codes that name
+  // no unit drop out, unknown device-true tokens pass through verbatim (same mapping as the monolith).
+  return withUnit(fmtNum(p.value), catalogUnitSymbol(p.unit));
 }
 
 // A block's params worth showing in the detail: skip zero/default noise; cap at 12 per block

@@ -13,6 +13,7 @@
   import { notifyMutation } from './syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
   import { convert } from './convert.svelte';
+  import { catalogUnitSymbol, withUnit } from './format';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
@@ -945,7 +946,8 @@
   function fmtVal(p: { value: number | null; enumLabel?: string; unit?: string }) {
     if (p.enumLabel != null) return p.enumLabel;
     if (p.value == null) return '—';
-    return fmtNum(p.value) + (p.unit && p.unit !== 'enum' && p.unit !== 'numeric' ? ' ' + p.unit : '');
+    // catalog unit code → symbol (shared with the docked browser + converter); '%' attaches, no-unit codes drop
+    return withUnit(fmtNum(p.value), catalogUnitSymbol(p.unit));
   }
   // which params are highlighted in the detail (matched by an active block-param condition)
   function matchedKeys(e: LibEntry): Set<string> {

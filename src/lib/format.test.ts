@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtValue, withUnit, type DispRange } from './format';
+import { catalogUnitSymbol, fmtValue, withUnit, type DispRange } from './format';
 
 // A ranged param whose linear taper lands exactly on `value` at norm 0.5 (min/max straddle it).
 // Lets each case declare the device-true value + unit token it should render.
@@ -79,5 +79,55 @@ describe('fmtValue', () => {
       expect(s).not.toMatch(/ {2}/);
       expect(s).not.toContain('undefined');
     }
+  });
+});
+
+describe('catalogUnitSymbol', () => {
+  it('maps the unitful catalog codes to their display symbols', () => {
+    expect(catalogUnitSymbol('percent')).toBe('%');
+    expect(catalogUnitSymbol('bipolar_percent')).toBe('%');
+    expect(catalogUnitSymbol('semitones')).toBe('st');
+    expect(catalogUnitSymbol('db')).toBe('dB');
+    expect(catalogUnitSymbol('hz')).toBe('Hz');
+    expect(catalogUnitSymbol('khz')).toBe('kHz');
+    expect(catalogUnitSymbol('ms')).toBe('ms');
+    expect(catalogUnitSymbol('seconds')).toBe('s');
+    expect(catalogUnitSymbol('sec')).toBe('s');
+    expect(catalogUnitSymbol('ratio')).toBe(':1');
+    expect(catalogUnitSymbol('cents')).toBe('ct');
+    expect(catalogUnitSymbol('bpm')).toBe('BPM');
+    expect(catalogUnitSymbol('degrees')).toBe('°');
+    expect(catalogUnitSymbol('deg')).toBe('°');
+    expect(catalogUnitSymbol('pf')).toBe('pF');
+  });
+
+  it('drops the codes that name no unit', () => {
+    for (const code of ['knob_0_10', 'knob_0_20', 'numeric', 'count', 'enum', 'unverified', '']) {
+      expect(catalogUnitSymbol(code)).toBe('');
+    }
+    expect(catalogUnitSymbol(undefined)).toBe('');
+    expect(catalogUnitSymbol(null)).toBe('');
+  });
+
+  it('is idempotent on symbols and leaves unknown device-true tokens verbatim', () => {
+    for (const symbol of ['%', 'st', 'dB', 'Hz', 'kHz', 'ms', 's', ':1', 'ct', 'BPM', '°', 'pF']) {
+      expect(catalogUnitSymbol(symbol)).toBe(symbol);
+      expect(catalogUnitSymbol(catalogUnitSymbol(symbol))).toBe(symbol);
+    }
+    // device-true tokens keep their casing; objects' own keys are not unit codes
+    for (const token of ['dB/OCT', 'SECONDS', 'SAMPLES', 'dBu', 'dBV', 'constructor', '__proto__', 'toString']) {
+      expect(catalogUnitSymbol(token)).toBe(token);
+    }
+  });
+
+  it('composes with withUnit: % attaches, symbols single-space, no-unit codes give the bare number', () => {
+    expect(withUnit('5', catalogUnitSymbol('percent'))).toBe('5%');
+    expect(withUnit('5', catalogUnitSymbol('bipolar_percent'))).toBe('5%');
+    expect(withUnit('-7', catalogUnitSymbol('semitones'))).toBe('-7 st');
+    expect(withUnit('4', catalogUnitSymbol('db'))).toBe('4 dB');
+    expect(withUnit('12', catalogUnitSymbol('dB/OCT'))).toBe('12 dB/OCT');
+    expect(withUnit('5', catalogUnitSymbol('knob_0_10'))).toBe('5');
+    expect(withUnit('5', catalogUnitSymbol('knob_0_20'))).toBe('5');
+    expect(withUnit('5', catalogUnitSymbol('numeric'))).toBe('5');
   });
 });

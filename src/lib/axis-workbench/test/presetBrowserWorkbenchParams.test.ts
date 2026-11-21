@@ -42,6 +42,38 @@ describe('Preset Browser detail params', () => {
     expect(fmtVal({ value: null, enumLabel: null })).toBe('—');
   });
 
+  it('shows unit symbols, never raw catalog codes (percent, knob_0_10, semitones, bipolar_percent …)', () => {
+    expect(fmtVal({ value: 5, enumLabel: null, unit: 'percent' })).toBe('5%');
+    expect(fmtVal({ value: -12, enumLabel: null, unit: 'bipolar_percent' })).toBe('-12%');
+    expect(fmtVal({ value: 5, enumLabel: null, unit: 'knob_0_10' })).toBe('5');
+    expect(fmtVal({ value: 5, enumLabel: null, unit: 'knob_0_20' })).toBe('5');
+    expect(fmtVal({ value: 7, enumLabel: null, unit: 'semitones' })).toBe('7 st');
+    expect(fmtVal({ value: 4, enumLabel: null, unit: 'db' })).toBe('4 dB');
+    expect(fmtVal({ value: 440, enumLabel: null, unit: 'hz' })).toBe('440 Hz');
+    expect(fmtVal({ value: 120, enumLabel: null, unit: 'ms' })).toBe('120 ms');
+    expect(fmtVal({ value: 2, enumLabel: null, unit: 'seconds' })).toBe('2 s');
+    expect(fmtVal({ value: 4, enumLabel: null, unit: 'ratio' })).toBe('4 :1');
+    expect(fmtVal({ value: 45, enumLabel: null, unit: 'degrees' })).toBe('45 °');
+    // the unitless / selector codes the listing already hid stay hidden
+    for (const unit of ['numeric', 'count', 'enum', 'unverified', '']) {
+      expect(fmtVal({ value: 5, enumLabel: null, unit })).toBe('5');
+    }
+    // unknown device-true tokens still render verbatim, and symbols are left alone
+    expect(fmtVal({ value: 12, enumLabel: null, unit: 'dB/OCT' })).toBe('12 dB/OCT');
+    expect(fmtVal({ value: 5, enumLabel: null, unit: '%' })).toBe('5%');
+    // an enum label wins over any unit
+    expect(fmtVal({ value: 1, enumLabel: 'ON', unit: 'percent' })).toBe('ON');
+  });
+
+  it('the detail cards carry the symbol, not the code', () => {
+    const cards = buildDetailBlockCards(
+      [block({ params: [p({ paramId: 1, label: 'Mix', value: 5, unit: 'percent' }), p({ paramId: 2, label: 'Drive', value: 6.5, unit: 'knob_0_10' })] })],
+      [],
+      null
+    );
+    expect(cards[0]!.cells.map((c) => c.value)).toEqual(['5%', '6.5']);
+  });
+
   it('detailParams skips zero/default noise and caps at 12', () => {
     const b = block({
       params: [

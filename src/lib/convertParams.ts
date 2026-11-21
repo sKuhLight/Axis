@@ -10,7 +10,7 @@
 // Framework-free (no runes / DOM) so it is unit-tested directly; `convertEditor.svelte.ts` is the only
 // caller and simply snapshots the results into its `params` / `enums` reactive arrays on openCell.
 
-import { normFromValue } from './format';
+import { catalogUnitSymbol, normFromValue } from './format';
 import type { NamedParam, EnumParam, ConverterParam } from './types';
 
 /** Read a finite numeric extra off a loosely-typed ConverterParam (IR carries display range / unit). */
@@ -90,7 +90,10 @@ export function buildParams(params: readonly ConverterParam[]): NamedParam[] {
     if (isEnumParam(p)) return; // enum → dropdown (labelled) or read-only (unlabelled), never a knob
     const min = num(o, 'min');
     const max = num(o, 'max');
-    const unit = str(o, 'unit');
+    // The converter names a display symbol, but route it through the shared catalog mapping so a raw
+    // catalog code (percent, knob_0_10, semitones …) can never reach a knob readout; a code that names no
+    // unit (knob_0_10, numeric, …) leaves the knob unitless (undefined, as when the extra is absent).
+    const unit = catalogUnitSymbol(str(o, 'unit')) || undefined;
     const log = o['log'] === true;
     const value = p.value;
     const norm =
