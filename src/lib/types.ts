@@ -864,6 +864,10 @@ export interface ConverterParam {
   nativeName: string;
   conceptKey?: string;
   value: number;
+  /** What the param is, when the codec reports it: `enum` = a discrete selector (`value` is the ordinal,
+   *  written discretely; `enumOptions` are attached where labels exist), `float` = a continuous knob,
+   *  `int` = a stepper. Absent on older IR — Axis then falls back to `enumOptions` / `displayValue` hints. */
+  kind?: 'enum' | 'float' | 'int';
   [k: string]: unknown;
 }
 

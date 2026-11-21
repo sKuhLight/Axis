@@ -23,6 +23,7 @@ import {
 } from './convertReport';
 import { remainingConflicts, type ScratchState } from './convertScratch';
 import { catFor, type CatEntry } from './catalog';
+import { readOnlyEnumLabel } from './convertParams';
 
 // ── constants ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -225,6 +226,8 @@ export interface ParamView {
   name: string;
   status: ParamStatus;
   value?: string | number;
+  /** An enum with no option labels: shown as text (its label, else `#<ordinal>`), with no edit affordance. */
+  readOnly?: boolean;
   from?: number | string;
   to?: number | string;
   range?: string;
@@ -269,7 +272,17 @@ export function paramStatusFor(
 export function blockParamViews(events: ConversionEvent[], block: { key: string; params: ConverterParam[] }): ParamView[] {
   return block.params.map((p) => {
     const st = paramStatusFor(events, block.key, p.nativeName);
-    return { name: p.nativeName, status: st.status, value: fmtValue(p.value), from: st.from, to: st.to, range: st.range, reason: st.reason };
+    const ro = readOnlyEnumLabel(p);
+    return {
+      name: p.nativeName,
+      status: st.status,
+      value: ro ?? fmtValue(p.value),
+      ...(ro != null ? { readOnly: true } : {}),
+      from: st.from,
+      to: st.to,
+      range: st.range,
+      reason: st.reason
+    };
   });
 }
 

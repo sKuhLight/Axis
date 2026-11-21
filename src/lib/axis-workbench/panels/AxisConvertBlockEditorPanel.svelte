@@ -170,7 +170,7 @@
               <div class="prow {p.status}">
                 <span class="pdot" style="background:{dotColor(p.status)};"></span>
                 <span class="pname" class:strike={p.status === 'dropped'}>{p.name}</span>
-                <span class="pval">
+                <span class="pval" title={p.readOnly ? 'Read-only: no option labels for this setting' : undefined}>
                   {#if p.status === 'clamped'}
                     {p.from} → {p.to}{#if p.range}<span class="prange"> · {p.range}</span>{/if}
                   {:else if p.status === 'dropped'}

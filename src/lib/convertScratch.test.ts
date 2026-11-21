@@ -29,8 +29,12 @@ import {
   parseConvertedDoc,
   buildApplyPlan,
   blockEffectId,
+  normalizedForValue,
+  paramWriteOf,
+  paramValueOf,
   type ScratchState
 } from './convertScratch';
+import { buildParams, buildEnums, isEnumParam } from './convertParams';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -295,7 +299,7 @@ describe('buildApplyPlan', () => {
     // drive1 is in the tray (unplaced) so never applied.
     const p = preset({
       blocks: [
-        { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, params: [{ nativeName: 'Gain', value: 5, paramId: 3 } as never], position: { row: 0, col: 2 }, effectId: 106 } as never,
+        { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, params: [{ nativeName: 'Gain', value: 5, normalized: 0.5, paramId: 3 } as never], position: { row: 0, col: 2 }, effectId: 106 } as never,
         { key: 'cab1', family: 'cab', instance: 1, typeValue: 3, params: [], position: { row: 0, col: 3 }, effectId: 112 } as never,
         { key: 'no-eid', family: 'drive', instance: 1, typeValue: 1, params: [{ nativeName: 'Drive', value: 7 }], position: { row: 1, col: 0 } },
         { key: 'drive1', family: 'drive', instance: 2, typeValue: 1, params: [], position: null }
@@ -310,7 +314,8 @@ describe('buildApplyPlan', () => {
     expect(plan.unresolvedBlocks).toBe(1); // 'no-eid'
     expect(plan.unresolvedParams).toBe(0);
     const setParam = plan.ops.find((o) => o.kind === 'set-param');
-    expect(setParam).toMatchObject({ effectId: 106, paramId: 3, value: 5 });
+    // the wire fraction, not the display value 5
+    expect(setParam).toMatchObject({ effectId: 106, paramId: 3, value: 0.5, continuous: true });
   });
 
   it('counts params without a paramId as unresolved', () => {
@@ -461,5 +466,558 @@ describe('offline block edits', () => {
     s = unplaceBlock(s, 'amp1');
     expect(blockOf(s, 'amp1').position).toBeNull();
     expect(blockOf(s, 'amp1').fromRows).toEqual([]);
+  });
+});
+
+// ── offline edits keep the wire fraction in sync (export / reopen) ───────────────────────────────
+describe('setBlockParam keeps `normalized` in sync with `value`', () => {
+  const GEOMEAN = Math.sqrt(20 * 20000); // geometric midpoint of a 20..20000 log range
+
+  /** A scratch buffer with a linear knob, a log knob, a range-less knob and an enum, all carrying the
+   *  converter's (soon stale) `normalized`. */
+  function editable(): ScratchState {
+    const p = preset({
+      blocks: [
+        {
+          key: 'amp1',
+          family: 'amp',
+          instance: 1,
+          typeValue: 12,
+          position: { row: 0, col: 0 },
+          params: [
+            { nativeName: 'bass', value: 1, min: 0, max: 10, normalized: 0.1 },
+            { nativeName: 'hicut', value: 20, min: 20, max: 20000, unit: 'Hz', log: true, normalized: 0 },
+            { nativeName: 'raw', value: 0.2, normalized: 0.2 },
+            { nativeName: 'mode', value: 0, enumOptions: ['Off', 'Low', 'High', 'Max'], normalized: 0 }
+          ]
+        } as never
+      ]
+    });
+    return seedScratch(p, [], 'fm3');
+  }
+  const paramsOf = (s: ScratchState, key = 'amp1') => s.blocks.find((b) => b.key === key)!.params;
+  const norm = (p: unknown) => (p as { normalized?: number }).normalized;
+
+  it('re-derives `normalized` on a linear range', () => {
+    const s = setBlockParam(editable(), 'amp1', 0, 7.5);
+    expect(paramsOf(s)[0].value).toBe(7.5);
+    expect(norm(paramsOf(s)[0])).toBeCloseTo(0.75, 10);
+  });
+
+  it('re-derives `normalized` on a log range with the knob mapping (geometric, not linear)', () => {
+    const s = setBlockParam(editable(), 'amp1', 1, GEOMEAN);
+    expect(norm(paramsOf(s)[1])).toBeCloseTo(0.5, 10);
+    // a linear fraction would be ~0.031 — the stale-vs-wrong distinction this guards
+    expect(norm(paramsOf(s)[1])).not.toBeCloseTo((GEOMEAN - 20) / 19980, 2);
+  });
+
+  it('clamps a value outside the range to the 0..1 fraction', () => {
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 0, 50))[0])).toBe(1);
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 0, -5))[0])).toBe(0);
+  });
+
+  it('range-less params keep the 0..1 knob semantics (value is the fraction)', () => {
+    const s = setBlockParam(editable(), 'amp1', 2, 0.65);
+    expect(norm(paramsOf(s)[2])).toBe(0.65);
+    expect(norm(paramsOf(setBlockParam(editable(), 'amp1', 2, 3))[2])).toBe(1);
+  });
+
+  it('enum params carry the ordinal as its gen-3 wire fraction (ordinal/65534)', () => {
+    const s = setBlockParam(editable(), 'amp1', 3, 2);
+    expect(paramsOf(s)[3].value).toBe(2);
+    expect(norm(paramsOf(s)[3])).toBeCloseTo(2 / 65534, 12);
+    // …so the authoring's round(normalized * 65534) lands exactly on the ordinal
+    expect(Math.round(norm(paramsOf(s)[3])! * 65534)).toBe(2);
+  });
+
+  it('touches only the edited param and does not mutate the previous state', () => {
+    const before = editable();
+    const snapshot = JSON.stringify(before);
+    const s = setBlockParam(before, 'amp1', 0, 7.5);
+    expect(JSON.stringify(before)).toBe(snapshot);
+    expect(paramsOf(s)[1]).toBe(paramsOf(before)[1]);
+    expect(paramsOf(s)[2]).toBe(paramsOf(before)[2]);
+  });
+
+  it('ignores a non-finite value', () => {
+    const s = editable();
+    expect(setBlockParam(s, 'amp1', 0, Number.NaN)).toBe(s);
+  });
+
+  it('keeps a `norm` alias in sync too (it would shadow `normalized` on reopen)', () => {
+    const p = preset({
+      blocks: [
+        {
+          key: 'amp1',
+          family: 'amp',
+          instance: 1,
+          params: [{ nativeName: 'bass', value: 1, min: 0, max: 10, norm: 0.1, normalized: 0.1 }],
+          position: { row: 0, col: 0 }
+        } as never
+      ]
+    });
+    const s = setBlockParam(seedScratch(p, [], 'fm3'), 'amp1', 0, 4);
+    expect(buildParams(paramsOf(s))[0].norm).toBeCloseTo(0.4, 10);
+  });
+
+  it('the exported / serialized preset carries the new normalized (what the server authors from)', () => {
+    let s = editable();
+    s = setBlockParam(s, 'amp1', 0, 7.5);
+    s = setBlockParam(s, 'amp1', 1, GEOMEAN);
+    s = setBlockParam(s, 'amp1', 3, 3);
+    // export sends scratchToPreset(...) as JSON; the library doc embeds the same preset
+    const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+    const ps = wire.blocks[0].params;
+    expect(norm(ps[0])).toBeCloseTo(0.75, 10);
+    expect(norm(ps[1])).toBeCloseTo(0.5, 10);
+    expect(norm(ps[3])).toBeCloseTo(3 / 65534, 12);
+    const { doc } = buildLibraryDoc(s, 1);
+    expect(norm(doc.preset.blocks[0].params[0])).toBeCloseTo(0.75, 10);
+    // …and survives a save → reopen round-trip through the persisted-doc schema
+    const reopened = parseConvertedDoc(JSON.parse(JSON.stringify(doc)))!;
+    expect(norm(reopened.preset.blocks[0].params[0])).toBeCloseTo(0.75, 10);
+  });
+
+  it('a reopened block positions its knobs from the edited value, not the stale fraction', () => {
+    let s = editable();
+    s = setBlockParam(s, 'amp1', 0, 7.5);
+    s = setBlockParam(s, 'amp1', 1, GEOMEAN);
+    s = setBlockParam(s, 'amp1', 2, 0.65);
+    // openCell → buildParams(block.params): knob position = norm ?? normalized ?? derived from the range
+    const knobs = buildParams(paramsOf(s));
+    expect(knobs.find((k) => k.name === 'bass')!.norm).toBeCloseTo(0.75, 10);
+    expect(knobs.find((k) => k.name === 'hicut')!.norm).toBeCloseTo(0.5, 10);
+    expect(knobs.find((k) => k.name === 'raw')!.norm).toBeCloseTo(0.65, 10);
+    expect(buildEnums(paramsOf(setBlockParam(s, 'amp1', 3, 2)))[0].value).toBe(2);
+  });
+
+  it('normalizedForValue matches the knob mapping both ways (round trip)', () => {
+    const lin = { nativeName: 'a', value: 0, min: 0, max: 10 };
+    const log = { nativeName: 'b', value: 20, min: 20, max: 20000, log: true };
+    for (const v of [0, 0.25, 0.5, 0.9, 1]) {
+      const lv = lin.min + v * (lin.max - lin.min);
+      const gv = log.min * Math.pow(log.max / log.min, v);
+      expect(normalizedForValue(lin, lv, 'fm3')).toBeCloseTo(v, 10);
+      expect(normalizedForValue(log, gv, 'fm3')).toBeCloseTo(v, 10);
+    }
+  });
+});
+
+// ── apply plan sends wire values, not display values ─────────────────────────────────────────────
+describe('buildApplyPlan wire values', () => {
+  /** One placed, addressable block holding the given params (each gets a paramId from its index). */
+  function planFor(params: Record<string, unknown>[], edit?: (s: ScratchState) => ScratchState) {
+    const p = preset({
+      blocks: [
+        {
+          key: 'delay1',
+          family: 'delay',
+          instance: 1,
+          typeValue: 2,
+          effectId: 120,
+          position: { row: 0, col: 0 },
+          params: params.map((q, i) => ({ paramId: 10 + i, ...q }))
+        } as never
+      ]
+    });
+    const s = seedScratch(p, [], 'fm3');
+    return buildApplyPlan(edit ? edit(s) : s);
+  }
+  const setParams = (plan: ReturnType<typeof buildApplyPlan>) => plan.ops.filter((o) => o.kind === 'set-param');
+
+  it('sends the 0..1 wire fraction for a knob, never the display value (500 ms is not "max")', () => {
+    const plan = planFor([{ nativeName: 'time', value: 500, min: 0, max: 2000, unit: 'ms', normalized: 0.25 }]);
+    expect(setParams(plan)).toEqual([
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 10, value: 0.25, continuous: true }
+    ]);
+  });
+
+  it('derives the fraction from value + range when the IR has no `normalized` (log-aware)', () => {
+    const mid = Math.sqrt(20 * 20000);
+    const plan = planFor([
+      { nativeName: 'lin', value: 500, min: 0, max: 2000 },
+      { nativeName: 'log', value: mid, min: 20, max: 20000, log: true }
+    ]);
+    const ops = setParams(plan) as { value: number; continuous: boolean }[];
+    expect(ops[0]).toMatchObject({ value: 0.25, continuous: true });
+    expect(ops[1].value).toBeCloseTo(0.5, 10);
+    expect(ops[1].continuous).toBe(true);
+  });
+
+  it('clamps an out-of-range fraction into 0..1', () => {
+    const plan = planFor([
+      { nativeName: 'a', value: 1, normalized: 1.7 },
+      { nativeName: 'b', value: 1, normalized: -0.2 }
+    ]);
+    expect((setParams(plan) as { value: number }[]).map((o) => o.value)).toEqual([1, 0]);
+  });
+
+  it('sends the ordinal as a discrete (continuous:false) write for enum params, value unchanged', () => {
+    const plan = planFor([
+      { nativeName: 'mode', value: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 3 / 65534 },
+      { nativeName: 'ranged-enum', value: 2, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 0.66 }
+    ]);
+    expect(setParams(plan)).toEqual([
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 10, value: 3, continuous: false },
+      { kind: 'set-param', blockKey: 'delay1', effectId: 120, paramId: 11, value: 2, continuous: false }
+    ]);
+  });
+
+  it('does not guess a scale: a knob with neither `normalized` nor a range is skipped as unresolved', () => {
+    const plan = planFor([{ nativeName: 'opaque', value: 500 }]);
+    expect(setParams(plan)).toEqual([]);
+    expect(plan.unresolvedParams).toBe(1);
+  });
+
+  it('plans the EDITED value: edit → plan carries the new fraction (linear, log, range-less, enum)', () => {
+    const plan = planFor(
+      [
+        { nativeName: 'time', value: 100, min: 0, max: 2000, normalized: 0.05 },
+        { nativeName: 'hicut', value: 20, min: 20, max: 20000, log: true, normalized: 0 },
+        { nativeName: 'mix', value: 0.1, normalized: 0.1 },
+        { nativeName: 'mode', value: 0, enumOptions: ['A', 'B', 'C'] }
+      ],
+      (s) => {
+        s = setBlockParam(s, 'delay1', 0, 500);
+        s = setBlockParam(s, 'delay1', 1, Math.sqrt(20 * 20000));
+        s = setBlockParam(s, 'delay1', 2, 0.8);
+        return setBlockParam(s, 'delay1', 3, 2);
+      }
+    );
+    const ops = setParams(plan) as { value: number; continuous: boolean }[];
+    expect(ops[0]).toMatchObject({ value: 0.25, continuous: true });
+    expect(ops[1].value).toBeCloseTo(0.5, 10);
+    expect(ops[2]).toMatchObject({ value: 0.8, continuous: true });
+    expect(ops[3]).toMatchObject({ value: 2, continuous: false });
+  });
+
+  it('paramWriteOf is undefined for a non-finite enum ordinal', () => {
+    expect(paramWriteOf({ nativeName: 'm', value: Number.NaN, enumOptions: ['A', 'B'] })).toBeUndefined();
+  });
+});
+
+// ── enums without option labels (same-vocabulary gen-3 lift) are never edited as knobs ────────────
+describe('enum params without enumOptions', () => {
+  /** The shape the gen-3 lift emits on the lossless path: value = raw ordinal, normalized = raw/65534, a
+   *  non-numeric displayValue (the enum label), NO range, NO enumOptions. */
+  const liftedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 3, normalized: 3 / 65534, displayValue: 'High' });
+  /** The same param once the codec tags it (`kind`), with no label hint at all. */
+  const taggedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 3, normalized: 3 / 65534, kind: 'enum' });
+  const knob = () => ({ nativeName: 'level', paramId: 8, value: 0.5, normalized: 0.5 });
+
+  function withBlock(params: Record<string, unknown>[]): ScratchState {
+    return seedScratch(
+      preset({
+        blocks: [
+          { key: 'amp1', family: 'amp', instance: 1, typeValue: 12, effectId: 106, position: { row: 0, col: 0 }, params } as never
+        ]
+      }),
+      [],
+      'fm3'
+    );
+  }
+  const paramsOf = (s: ScratchState) => s.blocks[0].params;
+  const wireRaw = (p: unknown) => Math.round((p as { normalized: number }).normalized * 65534);
+
+  it('isEnumParam: enumOptions, kind:"enum", or (no kind) a range-less non-numeric displayValue', () => {
+    expect(isEnumParam({ nativeName: 'a', value: 1, enumOptions: ['x', 'y'] })).toBe(true);
+    expect(isEnumParam({ nativeName: 'a', value: 1, kind: 'enum' })).toBe(true);
+    expect(isEnumParam({ nativeName: 'a', value: 3, displayValue: 'High' })).toBe(true); // interim guard
+    expect(isEnumParam({ nativeName: 'a', value: 3, displayValue: '1/4' })).toBe(true);
+    // not enums
+    expect(isEnumParam({ nativeName: 'a', value: 5.1, displayValue: '5.1' })).toBe(false); // numeric label
+    expect(isEnumParam({ nativeName: 'a', value: 5 })).toBe(false); // no hint at all
+    expect(isEnumParam({ nativeName: 'a', value: 5, displayValue: '  ' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 5, min: 0, max: 10, displayValue: 'Fast' })).toBe(false); // ranged → knob
+    // `kind` float / int is authoritative: it switches the interim guess off
+    expect(isEnumParam({ nativeName: 'a', value: 0.4, kind: 'float', displayValue: 'Fast' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, kind: 'int', displayValue: 'Four' })).toBe(false);
+    // …but enumOptions still win over a stray kind
+    expect(isEnumParam({ nativeName: 'a', value: 1, kind: 'float', enumOptions: ['x', 'y'] })).toBe(true);
+  });
+
+  for (const [label, make] of [
+    ['interim guard (displayValue label, no kind)', liftedEnum],
+    ['kind: "enum" (no label hint)', taggedEnum]
+  ] as const) {
+    it(`the reviewer's 0.3 scenario — a knob turn cannot write a fraction into the slot [${label}]`, () => {
+      const s0 = withBlock([make(), knob()]);
+      const s = setBlockParam(s0, 'amp1', 0, 0.3);
+      // value and the wire fraction are unchanged: the export still writes the exact raw ordinal 3
+      expect(paramsOf(s)[0]).toEqual(make());
+      expect(wireRaw(paramsOf(s)[0])).toBe(3); // not 19660 (= round(0.3 * 65534))
+      const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+      expect(wireRaw(wire.blocks[0].params[0])).toBe(3);
+    });
+
+    it(`has no valid ordinal to edit to, so even an integer edit is refused [${label}]`, () => {
+      const s0 = withBlock([make()]);
+      for (const v of [0, 2, 3, 4, -1, 2.5]) expect(paramsOf(setBlockParam(s0, 'amp1', 0, v))[0]).toEqual(make());
+    });
+
+    it(`is neither a knob nor a dropdown (it keeps its value) and the sibling knob still edits [${label}]`, () => {
+      const s = setBlockParam(withBlock([make(), knob()]), 'amp1', 1, 0.8);
+      expect(buildParams(paramsOf(s)).map((k) => k.name)).toEqual(['level']);
+      expect(buildParams(paramsOf(s))[0]).toMatchObject({ id: 1, norm: 0.8 }); // id stays the array index
+      expect(buildEnums(paramsOf(s))).toEqual([]);
+      expect(paramsOf(s)[0]).toEqual(make());
+      expect(paramsOf(s)[1]).toMatchObject({ value: 0.8, normalized: 0.8 });
+    });
+
+    it(`the apply plan writes the raw ordinal discretely [${label}]`, () => {
+      const plan = buildApplyPlan(withBlock([make(), knob()]));
+      expect(plan.ops.filter((o) => o.kind === 'set-param')).toEqual([
+        { kind: 'set-param', blockKey: 'amp1', effectId: 106, paramId: 7, value: 3, continuous: false },
+        { kind: 'set-param', blockKey: 'amp1', effectId: 106, paramId: 8, value: 0.5, continuous: true }
+      ]);
+      expect(plan.unresolvedParams).toBe(0);
+    });
+  }
+
+  it('a non-integer enum ordinal is not written (unresolved), never rounded or sent as a fraction', () => {
+    const plan = buildApplyPlan(withBlock([{ ...liftedEnum(), value: 2.5 }]));
+    expect(plan.ops.some((o) => o.kind === 'set-param')).toBe(false);
+    expect(plan.unresolvedParams).toBe(1);
+  });
+
+  it('kind:"float" keeps a labelled-looking param a knob: editable, written continuously', () => {
+    const s0 = withBlock([{ nativeName: 'speed', paramId: 9, value: 0.1, normalized: 0.1, displayValue: 'Slow', kind: 'float' }]);
+    expect(buildParams(paramsOf(s0)).map((k) => k.name)).toEqual(['speed']);
+    const s = setBlockParam(s0, 'amp1', 0, 0.4);
+    expect(paramsOf(s)[0]).toMatchObject({ value: 0.4, normalized: 0.4 });
+    expect(buildApplyPlan(s).ops.find((o) => o.kind === 'set-param')).toMatchObject({ value: 0.4, continuous: true });
+  });
+
+  it('an enum WITH options accepts only a whole ordinal inside its list', () => {
+    const s0 = withBlock([{ nativeName: 'mode', paramId: 7, value: 1, enumOptions: ['A', 'B', 'C'], normalized: 1 / 65534 }]);
+    const ok = setBlockParam(s0, 'amp1', 0, 2);
+    expect(paramsOf(ok)[0]).toMatchObject({ value: 2, normalized: 2 / 65534 });
+    for (const bad of [0.3, 1.5, -1, 3, 99]) expect(paramsOf(setBlockParam(s0, 'amp1', 0, bad))[0]).toEqual(paramsOf(s0)[0]);
+  });
+});
+
+// ── library docs saved before the sync fix: re-derive a stale normalized on load ──────────────────
+describe('seedScratch re-derives a stale normalized on load (value is authoritative)', () => {
+  const GEOMEAN = Math.sqrt(20 * 20000);
+  const seedParams = (params: Record<string, unknown>[]) =>
+    seedScratch(
+      preset({ blocks: [{ key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params } as never] }),
+      [],
+      'fm3'
+    ).blocks[0].params as unknown as { value: number; normalized?: number; norm?: number }[];
+
+  it('fixes ranged params (linear + log) and enum-option params; leaves consistent ones bit-identical', () => {
+    const ps = seedParams([
+      { nativeName: 'lin', value: 7.5, min: 0, max: 10, normalized: 0.1 }, // stale
+      { nativeName: 'log', value: GEOMEAN, min: 20, max: 20000, log: true, normalized: 0 }, // stale
+      { nativeName: 'enum', value: 2, enumOptions: ['A', 'B', 'C'], normalized: 0.9 }, // stale
+      { nativeName: 'ok', value: 5, min: 0, max: 10, normalized: 0.5 } // already consistent
+    ]);
+    expect(ps[0].normalized).toBeCloseTo(0.75, 10);
+    expect(ps[1].normalized).toBeCloseTo(0.5, 10);
+    expect(ps[2].normalized).toBeCloseTo(2 / 65534, 12);
+    expect(ps[3].normalized).toBe(0.5);
+  });
+
+  it('leaves range-less params alone (no scale to check against), even when value and normalized disagree', () => {
+    const ps = seedParams([
+      { nativeName: 'raw', value: 3000, normalized: 0.0458 },
+      { nativeName: 'lifted-enum', value: 3, normalized: 3 / 65534, displayValue: 'High' },
+      { nativeName: 'tagged-enum', value: 3, normalized: 0.7, kind: 'enum' } // no range, no options → untouched
+    ]);
+    expect(ps.map((p) => p.normalized)).toEqual([0.0458, 3 / 65534, 0.7]);
+  });
+
+  it('never invents a normalized the IR did not carry', () => {
+    const ps = seedParams([{ nativeName: 'lin', value: 5, min: 0, max: 10 }]);
+    expect('normalized' in ps[0]).toBe(false);
+  });
+
+  it('keeps a `norm` alias in step', () => {
+    const ps = seedParams([{ nativeName: 'lin', value: 7.5, min: 0, max: 10, norm: 0.1, normalized: 0.1 }]);
+    expect(ps[0].normalized).toBeCloseTo(0.75, 10);
+    expect(ps[0].norm).toBeCloseTo(0.75, 10);
+  });
+
+  it('a pre-fix saved doc reopens with the knob where the saved value says', () => {
+    // a doc as the OLD setBlockParam left it: value edited, normalized stale
+    const stale = parseConvertedDoc({
+      v: 1,
+      name: 'Old Save',
+      sourceDevice: 'fm9',
+      targetDevice: 'fm3',
+      savedAt: 1,
+      preset: preset({
+        blocks: [
+          { key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params: [{ nativeName: 'bass', value: 7.5, min: 0, max: 10, normalized: 0.1 }] } as never
+        ]
+      })
+    })!;
+    const s = seedScratch(stale.preset, [], stale.targetDevice);
+    expect(buildParams(s.blocks[0].params)[0].norm).toBeCloseTo(0.75, 10);
+    const wire = JSON.parse(JSON.stringify(scratchToPreset(s))) as ReturnType<typeof scratchToPreset>;
+    expect((wire.blocks[0].params[0] as unknown as { normalized: number }).normalized).toBeCloseTo(0.75, 10);
+  });
+});
+
+// ── the gen-3 enum fraction (k/65534) is a gen-3 target convention ───────────────────────────────
+describe('enum wire fraction only on gen-3 targets', () => {
+  const enumParams = () => [
+    // the engine's own normalized (range-based, NOT k/65534) — what a non-gen-3 target must keep
+    { nativeName: 'mode', paramId: 7, value: 1, enumOptions: ['A', 'B', 'C'], normalized: 0.5, norm: 0.5 },
+    { nativeName: 'time', paramId: 8, value: 5, min: 0, max: 10, normalized: 0.1 } // stale ranged knob
+  ];
+  const seedFor = (dev: Parameters<typeof seedScratch>[2]) =>
+    seedScratch(
+      preset({ blocks: [{ key: 'amp1', family: 'amp', instance: 1, typeValue: 12, position: { row: 0, col: 0 }, params: enumParams() } as never] }),
+      [],
+      dev
+    );
+  const psOf = (s: ScratchState) => s.blocks[0].params as unknown as { value: number; normalized?: number; norm?: number }[];
+
+  it('an enum edit writes k/65534 on FM3 / FM9 / Axe-Fx III', () => {
+    for (const dev of ['fm3', 'fm9', 'axe-fx-iii'] as const) {
+      const p = psOf(setBlockParam(seedFor(dev), 'amp1', 0, 2))[0];
+      expect(p.value).toBe(2);
+      expect(p.normalized).toBeCloseTo(2 / 65534, 12);
+    }
+  });
+
+  it('an enum edit on AM4 / gen-2 / VP4 / gen-1 updates value only and keeps the engine normalized', () => {
+    for (const dev of ['am4', 'axe-fx-ii', 'vp4', 'axe-fx-gen1'] as const) {
+      const p = psOf(setBlockParam(seedFor(dev), 'amp1', 0, 2))[0];
+      expect(p.value).toBe(2);
+      expect(p.normalized).toBe(0.5);
+      expect(p.norm).toBe(0.5);
+    }
+  });
+
+  it('a ranged knob edit is device-independent (same knob mapping on every target)', () => {
+    for (const dev of ['fm3', 'am4', 'axe-fx-ii'] as const) {
+      expect(psOf(setBlockParam(seedFor(dev), 'amp1', 1, 7.5))[1].normalized).toBeCloseTo(0.75, 10);
+    }
+  });
+
+  it('load: the enum fraction is re-derived on gen-3 targets only; ranged params re-derive everywhere', () => {
+    expect(psOf(seedFor('fm9'))[0].normalized).toBeCloseTo(1 / 65534, 12);
+    expect(psOf(seedFor('am4'))[0].normalized).toBe(0.5); // engine value kept
+    for (const dev of ['fm9', 'am4']) expect(psOf(seedFor(dev as 'fm9' | 'am4'))[1].normalized).toBeCloseTo(0.5, 10);
+  });
+
+  it('normalizedForValue: undefined for an enum off gen-3, a number for knobs on any target', () => {
+    const en = { nativeName: 'm', value: 1, enumOptions: ['A', 'B'] };
+    expect(normalizedForValue(en, 1, 'fm3')).toBeCloseTo(1 / 65534, 12);
+    expect(normalizedForValue(en, 1, 'am4')).toBeUndefined();
+    expect(normalizedForValue({ nativeName: 'k', value: 5, min: 0, max: 10 }, 5, 'am4')).toBeCloseTo(0.5, 10);
+  });
+});
+
+// ── numeric-label enums in IR saved without `kind` ───────────────────────────────────────────────
+describe('numeric-label enums without kind', () => {
+  it('is an enum when value is exactly the raw ordinal behind normalized', () => {
+    expect(isEnumParam({ nativeName: 'a', value: 4, normalized: 4 / 65534, displayValue: '4' })).toBe(true);
+    expect(isEnumParam({ nativeName: 'a', value: 0, normalized: 0, displayValue: '0' })).toBe(true);
+  });
+
+  it('stays a knob otherwise: no normalized, a different fraction, a fractional value, a range, or kind float', () => {
+    expect(isEnumParam({ nativeName: 'a', value: 4, displayValue: '4' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, normalized: 0.5, displayValue: '4' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4.5, normalized: 4.5 / 65534, displayValue: '4.5' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, min: 0, max: 10, normalized: 4 / 65534, displayValue: '4' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, normalized: 4 / 65534, displayValue: '4', kind: 'float' })).toBe(false);
+    expect(isEnumParam({ nativeName: 'a', value: 4, normalized: 4 / 65534 })).toBe(false); // no displayValue
+  });
+
+  it('refuses a knob edit and is not offered as a knob', () => {
+    const s0 = seedScratch(
+      preset({
+        blocks: [
+          {
+            key: 'amp1',
+            family: 'amp',
+            instance: 1,
+            position: { row: 0, col: 0 },
+            params: [{ nativeName: 'bypassmode', value: 4, normalized: 4 / 65534, displayValue: '4' }]
+          } as never
+        ]
+      }),
+      [],
+      'fm3'
+    );
+    const s = setBlockParam(s0, 'amp1', 0, 0.3);
+    expect(s.blocks[0].params[0]).toEqual(s0.blocks[0].params[0]);
+    expect(buildParams(s.blocks[0].params)).toEqual([]);
+  });
+});
+
+// ── editor reads back what the scratch holds ─────────────────────────────────────────────────────
+describe('paramValueOf', () => {
+  const seedWith = (value: number, enumOptions: string[]) =>
+    seedScratch(
+      preset({
+        blocks: [{ key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params: [{ nativeName: 'mode', value, enumOptions }] } as never]
+      }),
+      [],
+      'fm3'
+    );
+
+  it('a refused edit leaves the stored (and so the displayed) value unchanged', () => {
+    // a one-option enum renders as a toggle that flips to ordinal 1 — outside the option list → refused
+    const s0 = seedWith(0, ['Off']);
+    expect(paramValueOf(setBlockParam(s0, 'amp1', 0, 1), 'amp1', 0)).toBe(0);
+    expect(paramValueOf(setBlockParam(s0, 'amp1', 0, 0.5), 'amp1', 0)).toBe(0);
+  });
+
+  it('an accepted edit is read back, and a missing block / index / state is undefined', () => {
+    const three = seedWith(0, ['A', 'B', 'C']);
+    expect(paramValueOf(setBlockParam(three, 'amp1', 0, 2), 'amp1', 0)).toBe(2);
+    expect(paramValueOf(three, 'nope', 0)).toBeUndefined();
+    expect(paramValueOf(three, 'amp1', 9)).toBeUndefined();
+    expect(paramValueOf(null, 'amp1', 0)).toBeUndefined();
+  });
+});
+
+// ── non-gen-3 enums follow the codec's range convention (k/(N-1)), not the gen-3 k/65534 ─────────
+describe('enum normalized on non-gen-3 targets', () => {
+  /** An enum the engine mapped onto an AM4-style range 0..3 (4 options): normalized = k/3. */
+  const rangedEnum = () => ({ nativeName: 'mode', paramId: 7, value: 1, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'], normalized: 1 / 3, norm: 1 / 3 });
+  const seedFor = (dev: Parameters<typeof seedScratch>[2], p: Record<string, unknown> = rangedEnum()) =>
+    seedScratch(
+      preset({ blocks: [{ key: 'amp1', family: 'amp', instance: 1, position: { row: 0, col: 0 }, params: [p] } as never] }),
+      [],
+      dev
+    );
+  const p0 = (s: ScratchState) => s.blocks[0].params[0] as unknown as { value: number; normalized?: number; norm?: number };
+
+  it('an edited enum recomputes normalized as normFromValue(value, range) on AM4 / gen-2 / VP4 / gen-1', () => {
+    for (const dev of ['am4', 'axe-fx-ii', 'vp4', 'axe-fx-gen1'] as const) {
+      const p = p0(setBlockParam(seedFor(dev), 'amp1', 0, 3));
+      expect(p.value).toBe(3);
+      expect(p.normalized).toBeCloseTo(1, 12); // 3/3, NOT the engine's stale 1/3 and NOT 3/65534
+      expect(p.norm).toBeCloseTo(1, 12);
+      expect(p0(setBlockParam(seedFor(dev), 'amp1', 0, 2)).normalized).toBeCloseTo(2 / 3, 12);
+    }
+  });
+
+  it('the same edit on a gen-3 target still writes k/65534', () => {
+    expect(p0(setBlockParam(seedFor('fm3'), 'amp1', 0, 3)).normalized).toBeCloseTo(3 / 65534, 12);
+  });
+
+  it('a range-less enum off gen-3 still keeps the engine normalized (nothing to compute)', () => {
+    const rangeless = { nativeName: 'mode', value: 1, enumOptions: ['A', 'B', 'C'], normalized: 0.5 };
+    expect(p0(setBlockParam(seedFor('am4', rangeless), 'amp1', 0, 2)).normalized).toBe(0.5);
+  });
+
+  it('on load a stale ranged-enum normalized is re-derived with the range off gen-3 (k/65534 only on gen-3)', () => {
+    const stale = { ...rangedEnum(), value: 2, normalized: 0.9, norm: 0.9 };
+    expect(p0(seedFor('am4', stale)).normalized).toBeCloseTo(2 / 3, 12);
+    expect(p0(seedFor('fm9', stale)).normalized).toBeCloseTo(2 / 65534, 12);
+  });
+
+  it('normalizedForValue: off gen-3 an enum uses its range; a range-less one is undefined', () => {
+    const en = { nativeName: 'm', value: 1, min: 0, max: 3, enumOptions: ['A', 'B', 'C', 'D'] };
+    expect(normalizedForValue(en, 3, 'am4')).toBeCloseTo(1, 12);
+    expect(normalizedForValue(en, 3, 'axe-fx-iii')).toBeCloseTo(3 / 65534, 12);
+    expect(normalizedForValue({ nativeName: 'm', value: 1, enumOptions: ['A', 'B'] }, 1, 'am4')).toBeUndefined();
   });
 });

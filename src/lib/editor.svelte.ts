@@ -655,6 +655,7 @@ class EditorStore {
     // warn if it isn't a model we have a live codec for
     try {
       this.detected = await forgefx.detect();
+      void library.retryStaleFiles(); // the server answered → imported files left pending at launch get their retry
       if (this.detected.connected && !this.detected.supported) this.showToast(`${this.detected.name} detected — not yet supported`, '#d6543f');
     } catch {
       /* detect failed — proceed; load() falls back to the gen-3 path */
@@ -791,7 +792,14 @@ class EditorStore {
       const s = await forgefx.localConfig();
       this.local = { ...this.local, available: true, configured: s.configured, root: s.root, exists: s.exists, lastSync: s.lastSync };
       if (s.configured && s.exists) void library.refreshLocal();
-    } catch { /* 404 = older engine → feature hidden (available stays false) */ }
+      // the server answered: imported files whose re-decode failed transiently at launch get their ONE retry
+      // (bounded inside the library — a single extra pass per session)
+      void library.retryStaleFiles();
+    } catch (e) {
+      // 404 = older engine → feature hidden (available stays false). An HTTP status means the server is up.
+      const status = (e as { status?: unknown })?.status;
+      if (typeof status === 'number' && status < 500) void library.retryStaleFiles(); // answered sanely (not a 5xx)
+    }
   };
   /** Set (or clear with null) the local root. Native picker in AxisPanel feeds this an absolute path. */
   setLocalRoot = async (root: string | null) => {
@@ -1389,6 +1397,7 @@ class EditorStore {
       this.sceneNames = grid.scenes ?? [];
       this.everLoaded = true;
       this.status = 'ready';
+      void library.retryStaleFiles(); // (re)connected: spends the one-per-session retry only if a pass is due
       this.fetchMeters(); // background: fill every block's level meter
       this.#invalidatePinned(); // preset changed → re-hydrate pinned custom-panel controls
       this.startLiveMeters(); // background: live audio meters (per-block monitor level → dB)

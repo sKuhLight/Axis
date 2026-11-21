@@ -12,6 +12,7 @@
 // open block's knobs mutate their NamedParam in place for live tracking and persist into the buffer.
 
 import { convertScratch } from './convertScratch.svelte';
+import { paramValueOf } from './convertScratch';
 import { scratchToLayout, keyAt, EMPTY_LAYOUT } from './convertScratchAdapter';
 import { gridLayoutFromScratch, effectKeyMap, isGridTarget, keyForGridCell } from './convertGridAdapter';
 import { connectOnLayout, disconnectOnLayout, moveOnLayout, removeAtOnLayout, bypassOnLayout } from './convertGridEdit';
@@ -405,9 +406,13 @@ class ConvertEditor {
     convertScratch.setParam(key, p.id, stored);
   };
   setEnum = (e: EnumParam, value: number) => {
-    e.value = value;
     const key = convertScratch.focusKey;
-    if (key) convertScratch.setParam(key, e.id, value);
+    if (!key) return;
+    convertScratch.setParam(key, e.id, value);
+    // Show what the scratch actually holds: a refused edit (not a whole ordinal of the option list — e.g. a
+    // toggle over a one-option enum) must not move the displayed value until the block is reopened.
+    const stored = paramValueOf(convertScratch.state, key, e.id);
+    if (stored != null) e.value = stored;
   };
   cabState = async (_eid: number): Promise<CabState> => null as unknown as CabState;
 
