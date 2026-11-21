@@ -653,7 +653,9 @@ describe('wiring (source pins)', () => {
   it('the Debug tab hosts the panel inside the Axis hub', () => {
     expect(axisPanel).toContain("import DiagnosticsPanel from './DiagnosticsPanel.svelte'");
     expect(axisPanel).toMatch(/editor\.axisTab === 'debug'\}[\s\S]{0,200}<DiagnosticsPanel \/>/);
-    expect(axisPanel).toContain("onclick={() => (editor.axisTab = 'debug')}>Debug</button>");
+    // the Debug entry is one of the settings tabs (bar button, or the ⋯ menu when it doesn't fit) and switches like the rest
+    expect(axisPanel).toContain("{ id: 'debug', label: 'Debug' }");
+    expect(axisPanel).toContain("else editor.axisTab = id;");
     expect(editorSrc).toMatch(/axisTab = \$state<[^>]*'debug'/);
     expect(editorSrc).toMatch(/openAxis = \(tab: [^)]*'debug'/);
   });

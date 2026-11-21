@@ -8,6 +8,9 @@
   import { isDirect } from './forgefx';
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
+  import { tick, untrack } from 'svelte';
+  import { computeTabOverflow, splitTabs, nextMenuIndex, toLayoutPx, menuAnchorPlacement } from './tabOverflow';
+  import { effectiveZoom, resolveMenuPlacement } from './workbench/svelte/contextMenu';
   import DiagnosticsPanel from './DiagnosticsPanel.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
@@ -112,6 +115,183 @@
     if (!c.paid && !confirm('The free plan keeps your most recent full backup in the cloud — this backup replaces the previous one there. (Your local versions and the local folder keep everything.) Continue?')) return;
     void editor.cloudFullBackup();
   }
+
+  // ── Tab bar: one row; the trailing tabs that don't fit collapse into a "⋯" menu ──
+  type TabId = typeof editor.axisTab;
+  const tabs = $derived<{ id: TabId; label: string }[]>([
+    { id: 'account', label: 'Account' },
+    ...(loc.available ? [{ id: 'storage' as const, label: 'Storage' }] : []),
+    { id: 'device', label: 'Connection' },
+    ...(editor.hasTelemetryControl ? [{ id: 'performance' as const, label: 'Performance' }] : []),
+    { id: 'privacy', label: 'Privacy' },
+    { id: 'about', label: 'About' },
+    { id: 'debug', label: 'Debug' }
+  ]);
+  /** Same behaviour as the old inline buttons: Connection goes through openAxis (loads the ports), the rest set the tab. */
+  const selectTab = (id: TabId) => { if (id === 'device') editor.openAxis('device'); else editor.axisTab = id; };
+
+  // Measurement: a hidden twin row (.tbmeasure) renders every tab at its natural width, so the real bar only
+  // ever contains the tabs that fit. Re-measured by ResizeObserver (card width, desktop card <-> .mob sheet,
+  // font load) and whenever the conditional tabs (Storage / Performance) appear or disappear.
+  // The card reserves its scrollbar gutter permanently (`scrollbar-gutter: stable`), so the bar's width — with the
+  // real scrollbar width, 0 for overlay scrollbars — is the same for short and tall tabs and the split never reshuffles.
+  let cardEl = $state<HTMLElement>();
+  let barEl = $state<HTMLElement>();
+  let measureEl = $state<HTMLElement>();
+  let measured = $state(false);
+  let avail = $state(0);
+  let gap = $state(0);
+  let moreW = $state(0);
+  let widthById = $state<Record<string, number>>({});
+
+  /** Everything is measured in LAYOUT px. With the UI-scale setting (a CSS `zoom` on <html>), Chromium reports
+   *  getBoundingClientRect() in zoomed (visual) px while offsetWidth / computed styles stay in layout px; mixing the
+   *  two overestimates the room at >100%. The card's visual/layout width ratio is the effective zoom (1 without
+   *  zoom), and every gBCR width is divided by it. */
+  const zoomOf = () => (cardEl ? effectiveZoom(cardEl.getBoundingClientRect().width, cardEl.offsetWidth) : 1);
+
+  function measureBar() {
+    if (!cardEl || !barEl || !measureEl) return;
+    const z = zoomOf();
+    const cs = getComputedStyle(barEl);
+    const inner = toLayoutPx(barEl.getBoundingClientRect().width, z) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    if (!(inner > 0)) return; // not laid out (yet) — keep the last good measurement
+    const next: Record<string, number> = {};
+    for (const el of measureEl.querySelectorAll<HTMLElement>('[data-m]')) next[el.dataset.m!] = Math.ceil(toLayoutPx(el.getBoundingClientRect().width, z));
+    const nAvail = Math.floor(inner);
+    const nGap = parseFloat(cs.columnGap) || 0;
+    const nMore = next.more ?? 0;
+    if (nAvail !== avail) avail = nAvail;
+    if (nGap !== gap) gap = nGap;
+    if (nMore !== moreW) moreW = nMore;
+    if (JSON.stringify(next) !== JSON.stringify(widthById)) widthById = next;
+    measured = true;
+  }
+  $effect(() => {
+    if (!barEl || !measureEl) return;
+    // The card is observed too: the bottom sheet grows upward when the content height changes, which moves the ⋯
+    // button (and so an open menu) without resizing the bar.
+    const ro = new ResizeObserver(() => { measureBar(); if (menuOpen) placeMenu(); });
+    ro.observe(barEl);
+    ro.observe(measureEl);
+    if (cardEl) ro.observe(cardEl);
+    untrack(measureBar); // synchronous first read; the observer then keeps it current
+    return () => ro.disconnect();
+  });
+  $effect(() => { void tabs.length; void mob; untrack(measureBar); });
+
+  // Until the first measurement every tab is shown (the effect above runs before the first paint).
+  const overflow = $derived(measured ? computeTabOverflow(tabs.map((t) => widthById[t.id] ?? 0), avail, moreW, gap) : { visible: tabs.length, hasMore: false });
+  const parts = $derived(splitTabs(tabs, overflow.visible, editor.axisTab));
+
+  // The ⋯ menu. It is `position: fixed` (placed from the ⋯ button's rect) so the card's `overflow-y: auto` can't clip
+  // it when the tab content is short, and it keeps working on the mobile sheet.
+  let menuOpen = $state(false);
+  let menuPos = $state<{ left: number; top: number } | null>(null);
+  let moreWrap = $state<HTMLElement>();
+  let moreBtn = $state<HTMLButtonElement>();
+  let menuEl = $state<HTMLElement>();
+  const activeLabel = $derived(parts.hidden.find((t) => t.id === editor.axisTab)?.label ?? '');
+  const menuItems = () => (menuEl ? [...menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : []);
+
+  /** Below the ⋯ button (above it when there is no room below, e.g. the bottom sheet), right edges aligned, clamped to
+   *  the viewport; fed through the shared zoom-aware placement (visual coords in, layout left/top out) so it also
+   *  lands correctly under the UI-scale zoom. */
+  function placeMenu() {
+    if (!menuOpen || !menuEl || !moreBtn) return;
+    const z = zoomOf();
+    const anchor = moreBtn.getBoundingClientRect();
+    const box = menuEl.getBoundingClientRect();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const p = resolveMenuPlacement(
+      menuAnchorPlacement(anchor, { width: box.width, height: box.height }, viewport, 4 * z),
+      viewport,
+      { width: box.width, height: box.height },
+      z
+    );
+    if (!menuPos || menuPos.left !== p.x || menuPos.top !== p.y) menuPos = { left: p.x, top: p.y };
+  }
+  async function openMenu(at: 'active' | 'first' | 'last' = 'active') {
+    menuOpen = true;
+    await tick();
+    placeMenu();
+    await tick(); // the menu is visibility:hidden until placed, and a hidden item can't take focus
+    const items = menuItems();
+    const ai = parts.hidden.findIndex((t) => t.id === editor.axisTab);
+    items[at === 'last' ? items.length - 1 : at === 'first' || ai < 0 ? 0 : ai]?.focus();
+  }
+  function closeMenu(refocus: boolean) {
+    if (!menuOpen) return;
+    menuOpen = false;
+    menuPos = null;
+    if (refocus) moreBtn?.focus();
+  }
+  const toggleMenu = () => (menuOpen ? closeMenu(true) : void openMenu());
+  function onMoreKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); void openMenu('first'); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); void openMenu('last'); }
+  }
+  function onMenuKey(e: KeyboardEvent) {
+    const items = menuItems();
+    const cur = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); items[nextMenuIndex(cur, e.key === 'ArrowDown' ? 1 : -1, items.length)]?.focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0]?.focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1]?.focus(); }
+    else if (e.key === 'Tab') closeMenu(true); // focus lands on ⋯, the default Tab then moves on from there
+  }
+  function pickFromMenu(id: TabId) { selectTab(id); closeMenu(true); }
+  // Escape closes only the menu (capture + stop, so the page-level Escape handler doesn't also act on it);
+  // a press outside the ⋯ button + menu closes it without stealing focus from whatever was clicked.
+  function onWinKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+  }
+  function onWinPointer(e: PointerEvent) {
+    if (moreWrap && !moreWrap.contains(e.target as Node)) closeMenu(false);
+  }
+  // The mobile sheet slides in (CSS animation on the card): a menu opened — or placed — mid-slide used the button's
+  // in-flight rect, so re-place once the slide has finished (or was cancelled).
+  function onCardAnimationEnd(e: AnimationEvent) {
+    if (e.target === e.currentTarget) placeMenu();
+  }
+  // Scrolling the card moves the ⋯ button away from a fixed menu, so a card scroll closes the menu.
+  const onCardScroll = () => closeMenu(false);
+  // Window/card listeners exist only while the menu is open; the fixed menu follows the ⋯ button on window resize.
+  $effect(() => {
+    if (!menuOpen) return;
+    const card = cardEl;
+    window.addEventListener('keydown', onWinKey, true);
+    window.addEventListener('pointerdown', onWinPointer, true);
+    window.addEventListener('resize', placeMenu);
+    card?.addEventListener('scroll', onCardScroll, { passive: true });
+    card?.addEventListener('animationend', onCardAnimationEnd);
+    card?.addEventListener('animationcancel', onCardAnimationEnd);
+    return () => {
+      window.removeEventListener('keydown', onWinKey, true);
+      window.removeEventListener('pointerdown', onWinPointer, true);
+      window.removeEventListener('resize', placeMenu);
+      card?.removeEventListener('scroll', onCardScroll);
+      card?.removeEventListener('animationend', onCardAnimationEnd);
+      card?.removeEventListener('animationcancel', onCardAnimationEnd);
+    };
+  });
+  // (Re)place when the menu mounts, the split moves the ⋯ button, or the menu's own content (hidden tabs) changes.
+  $effect(() => { void menuEl; void overflow.visible; void avail; void parts.hidden.length; untrack(placeMenu); });
+  // The menu can't outlive the dialog or the overflow, and a split change while it is open must not drop keyboard
+  // focus to <body> when the focused item (or the whole ⋯ button) disappears.
+  $effect(() => {
+    const open = editor.axisOpen;
+    const hasMore = overflow.hasMore;
+    void parts.hidden.map((t) => t.id).join(',');
+    untrack(() => {
+      if (!menuOpen) return;
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (!open || !hasMore) {
+        menuOpen = false;
+        menuPos = null;
+        if (open && lost) barEl?.querySelector<HTMLElement>('.tb.on')?.focus(); // the ⋯ is gone: land on the (now visible) active tab
+      } else if (lost) (menuItems()[0] ?? moreBtn)?.focus();
+    });
+  });
 </script>
 
 {#snippet disclosure()}
@@ -135,21 +315,37 @@
 {#if editor.axisOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="bg" class:mob role="presentation" onclick={close}>
-    <div class="card" class:mob role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+    <div class="card" class:mob role="dialog" tabindex="-1" bind:this={cardEl} onclick={(e) => e.stopPropagation()}>
       <button class="x" aria-label="Close" onclick={close}><Icon name="close" size={13} /></button>
 
-      <div class="tabbar">
-        <button class="tb" class:on={editor.axisTab === 'account'} onclick={() => (editor.axisTab = 'account')}>Account</button>
-        {#if loc.available}
-          <button class="tb" class:on={editor.axisTab === 'storage'} onclick={() => (editor.axisTab = 'storage')}>Storage</button>
+      <div class="tabbar" bind:this={barEl}>
+        {#each parts.shown as t (t.id)}
+          <button class="tb" class:on={editor.axisTab === t.id} aria-current={editor.axisTab === t.id ? 'true' : undefined} onclick={() => selectTab(t.id)}>{t.label}</button>
+        {/each}
+        {#if overflow.hasMore}
+          <div class="more" bind:this={moreWrap}>
+            <button class="tb more-btn" class:on={parts.activeHidden} bind:this={moreBtn} aria-label={parts.activeHidden ? `More tabs (${activeLabel} selected)` : 'More tabs'} title="More"
+                    aria-haspopup="menu" aria-expanded={menuOpen} onclick={toggleMenu} onkeydown={onMoreKey}>&#x22EF;</button>
+            {#if menuOpen}
+              <div class="menu" role="menu" aria-label="More tabs" tabindex="-1" bind:this={menuEl} onkeydown={onMenuKey}
+                   style:left={menuPos ? `${menuPos.left}px` : undefined} style:top={menuPos ? `${menuPos.top}px` : undefined} style:visibility={menuPos ? undefined : 'hidden'}>
+                {#each parts.hidden as t (t.id)}
+                  <button class="mi" class:on={editor.axisTab === t.id} role="menuitem" tabindex="-1" aria-current={editor.axisTab === t.id ? 'true' : undefined} onclick={() => pickFromMenu(t.id)}>
+                    <span>{t.label}</span>
+                    {#if editor.axisTab === t.id}<Icon name="check" size={13} />{/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/if}
-        <button class="tb" class:on={editor.axisTab === 'device'} onclick={() => editor.openAxis('device')}>Connection</button>
-        {#if editor.hasTelemetryControl}
-          <button class="tb" class:on={editor.axisTab === 'performance'} onclick={() => (editor.axisTab = 'performance')}>Performance</button>
-        {/if}
-        <button class="tb" class:on={editor.axisTab === 'privacy'} onclick={() => (editor.axisTab = 'privacy')}>Privacy</button>
-        <button class="tb" class:on={editor.axisTab === 'about'} onclick={() => (editor.axisTab = 'about')}>About</button>
-        <button class="tb" class:on={editor.axisTab === 'debug'} onclick={() => (editor.axisTab = 'debug')}>Debug</button>
+      </div>
+      <!-- Hidden twin of the bar: every tab (+ the ⋯ button) at natural width, measured to decide the split. Inert + aria-hidden: never focusable or announced. -->
+      <div class="tbclip" aria-hidden="true" inert>
+        <div class="tbmeasure" bind:this={measureEl}>
+          {#each tabs as t (t.id)}<button class="tb tbm" tabindex="-1" data-m={t.id}>{t.label}</button>{/each}
+          <button class="tb tbm more-btn" tabindex="-1" data-m="more">&#x22EF;</button>
+        </div>
       </div>
 
       {#if editor.axisTab === 'account'}
@@ -526,7 +722,7 @@
 
 <style>
   .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 350; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 12px 12px; }
-  .card { position: relative; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .card { position: relative; scrollbar-gutter: stable; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .bg.mob { align-items: flex-end; padding: 0; }
   .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
   .card::-webkit-scrollbar { width: 9px; }
@@ -535,11 +731,26 @@
   .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: var(--surface2); border: 1px solid var(--border2); color: var(--textdim); font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
   .x:hover { color: var(--text); border-color: var(--border3); }
 
-  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; overflow-x: auto; scrollbar-width: none; }
-  .tabbar::-webkit-scrollbar { display: none; }
-  .tb { flex: 1 0 auto; padding: 0 8px; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+  /* ONE row. Up to 7 tabs don't fit a 440px card (or a ~375px sheet), so the trailing ones that don't fit collapse
+     into the ⋯ menu (.more / .menu) instead of scrolling sideways behind a hidden scrollbar — the script measures a
+     hidden twin row (.tbclip > .tbmeasure) and renders only the tabs that fit. The right padding reserves the
+     absolutely positioned close button (.x: right 12 + 28 wide = 40px, plus a 12px gutter), so neither a tab nor
+     the ⋯ button can sit under it. */
+  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; }
+  .tb { flex: 1 0 auto; padding: 0 8px; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent; }
   .tb:hover { color: var(--text2); }
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .more-btn { padding: 0 10px; font-size: 16px; line-height: 1; }
+  .more { position: relative; flex: 0 0 auto; display: flex; }
+  /* position: fixed relies on .bg (its backdrop-filter makes it the containing block) having the viewport's box (inset 0) — placeMenu computes left/top in that space. */
+  .menu { position: fixed; z-index: 5; min-width: 156px; padding: 4px; display: flex; flex-direction: column; gap: 1px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+  .mi { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 34px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--textdim); font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; white-space: nowrap; cursor: pointer; }
+  .mi:hover, .mi:focus-visible { background: var(--accent-tint); color: var(--text); outline: none; }
+  .mi.on { color: var(--accent); }
+  /* hidden measuring twin: out of flow, zero-height + clipped so it never adds scrollable overflow to the card */
+  .tbclip { position: absolute; left: 0; top: 0; width: 100%; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; }
+  .tbmeasure { display: flex; gap: 2px; width: max-content; }
+  .tbm { flex: 0 0 auto; }
 
   .pad { padding: 18px 24px 24px; }
   .muted { font-size: 12px; color: var(--textdim); line-height: 1.5; margin: 6px 0 12px; }
