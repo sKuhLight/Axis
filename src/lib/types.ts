@@ -1016,11 +1016,34 @@ export interface CaptureStatus {
   resultAvailable: boolean;
 }
 
+/** What to do with unsaved edits on the device before the steps that switch presets: store them to the current
+ *  slot first, or accept that they are lost. Absent = the engine skips those steps when it finds edits. */
+export type CaptureUnsavedEdits = 'save' | 'discard';
+
 /** `POST /diagnostics/capture` body. `acknowledged` is a literal `true`: the call cannot be typed without it. */
 export interface CaptureStartRequest {
   acknowledged: true;
   steps?: CaptureStepName[];
   includeFullWalk?: boolean;
+  /** The user's answer to the unsaved-changes question (only sent when the pre-check found unsaved edits). */
+  unsavedEdits?: CaptureUnsavedEdits;
+  /** The preset the pre-check saw (sent together with `unsavedEdits`): the engine honours the decision only while the
+   *  device is still on it. */
+  preset?: number;
+}
+
+/** `GET /diagnostics/capture/preflight` — what the device looks like right before a run. */
+export interface CapturePreflight {
+  /** The preset the device is on (null when unknown). */
+  preset: number | null;
+  presetName?: string;
+  /** Does the edit buffer differ from the stored preset? `unknown` = the engine could not tell. */
+  editBuffer: 'clean' | 'dirty' | 'unknown';
+  reason?: string;
+  /** `older-firmware`: the device converted a preset saved under older firmware when loading it. */
+  likelyCause?: 'unsaved-edits' | 'older-firmware' | 'unknown';
+  /** The engine can store to the current slot and the current preset is known. */
+  canSave: boolean;
 }
 
 /** `GET /diagnostics/capture/result` — the redacted result bundle (`schema: 1`). */

@@ -9,6 +9,8 @@
 // (`diagnostics.svelte.ts`) and the panel (`DiagnosticsPanel.svelte`) are thin shells over these.
 
 import type {
+  CapturePreflight,
+  CaptureUnsavedEdits,
   CaptureUploadRequest,
   CaptureBundle,
   CaptureRunState,
@@ -133,9 +135,197 @@ export function buildStartRequest(inp: {
   confirmed: boolean;
   includeFullWalk: boolean;
   fullWalk: FullWalkAvailability;
+  /** The pre-check the user answered and the answer. The answer is only sent when the pre-check found unsaved edits
+   *  (so a stale choice can't ride along) and — for `save` — the engine said it can save. */
+  preflight?: CapturePreflight | null;
+  unsavedEdits?: CaptureUnsavedEdits | null;
 }): CaptureStartRequest | null {
   if (!inp.acknowledged || !inp.confirmed) return null;
-  return inp.includeFullWalk && inp.fullWalk.available ? { acknowledged: true, includeFullWalk: true } : { acknowledged: true };
+  const pre = inp.preflight;
+  const decision = inp.unsavedEdits && pre && pre.editBuffer !== 'clean' && (inp.unsavedEdits === 'discard' || pre.canSave) ? inp.unsavedEdits : null;
+  const preset = decision && pre && typeof pre.preset === 'number' && Number.isInteger(pre.preset) && pre.preset >= 0 ? pre.preset : null;
+  return {
+    acknowledged: true,
+    ...(inp.includeFullWalk && inp.fullWalk.available ? { includeFullWalk: true as const } : {}),
+    // the decision travels with the preset it was made for: the engine ignores it if the device has moved on since
+    ...(decision ? { unsavedEdits: decision, ...(preset !== null ? { preset } : {}) } : {})
+  };
+}
+
+// ── unsaved edits: ask before the steps that switch presets ─────────────────────────────────────────────────
+
+/** The steps a run will be asked for: the default staged run, plus the full walk when opted in. */
+export function plannedSteps(plan: { includeFullWalk: boolean }): CaptureStepName[] {
+  return [...DEFAULT_STEPS, ...(plan.includeFullWalk ? (['fullWalk'] as const) : [])];
+}
+
+/** The reload check and the full walk switch presets — which throws away unsaved edits. */
+export function willSwitchPresets(plan: { includeFullWalk: boolean }): boolean {
+  const s = plannedSteps(plan);
+  return s.includes('reloadProbe') || s.includes('fullWalk');
+}
+
+/** Ask about unsaved changes only when the pre-check says the edit buffer is not clean (dirty OR unknown) and a step is
+ *  going to switch presets. No pre-check (it failed) → no question: the engine then skips those steps as before. */
+export function needsUnsavedDecision(inp: { preflight: CapturePreflight | null; willSwitch: boolean }): boolean {
+  return !!inp.preflight && inp.willSwitch && inp.preflight.editBuffer !== 'clean';
+}
+
+/** Shown (in the confirmation dialog) when the pre-check failed and the run starts without a decision. */
+export const PREFLIGHT_FALLBACK_NOTE =
+  'Axis could not check the device for unsaved changes. If it has any, the reload check and the full walk are skipped so they are not lost.';
+
+/** `blocked`: the diagnostic cannot start now (409 busy, 503 no device, 501 not supported by this device) — say why and
+ *  stay on the form. `fallback`: the pre-check itself failed (old engine, network, …) — start without a decision and say so. */
+export function classifyPreflightError(status: number, body?: unknown): { kind: 'blocked' | 'fallback'; message: string } {
+  if (status === 409 || status === 503 || status === 501) return { kind: 'blocked', message: startErrorMessage(status, body) };
+  return { kind: 'fallback', message: PREFLIGHT_FALLBACK_NOTE };
+}
+
+export const OLDER_FIRMWARE_NOTE =
+  'This preset may have been saved under an older firmware; the device converted it when loading. Saving stores it in the current format.';
+
+const presetNumber = (n: number): string => String(n).padStart(3, '0');
+const presetName = (name: string | undefined): string => clip(name ?? '', 32);
+
+export interface UnsavedDialogModel {
+  title: string;
+  paragraphs: string[];
+  /** The engine's own explanation for what it saw (clipped), if any. */
+  reason: string | null;
+  /** The older-firmware explanation, when that is the likely cause. */
+  olderFirmware: string | null;
+  /** The save button — only when the engine can store to the current slot. */
+  save: { label: string; hint: string } | null;
+  /** The discard button always says what it costs. */
+  discard: { label: string; hint: string };
+}
+
+/** Wording of the unsaved-changes dialog (shown before the confirmation dialog). */
+export function unsavedDialogModel(pre: CapturePreflight, plan: { includeFullWalk: boolean }, fmt: (n: number) => string = presetNumber): UnsavedDialogModel {
+  const known = pre.preset !== null && pre.preset >= 0;
+  const name = presetName(pre.presetName);
+  const which = known ? `preset ${fmt(pre.preset as number)}${name ? ` ${name}` : ''}` : 'the current preset';
+  const unknown = pre.editBuffer === 'unknown';
+  const steps = plan.includeFullWalk ? 'The reload check and the full walk switch presets' : 'The reload check switches presets';
+  const paragraphs = [
+    unknown
+      ? `Axis could not tell whether ${which} has unsaved changes. ${steps}, and switching presets discards unsaved changes.`
+      : `${steps}, and switching presets discards unsaved changes on the device.`
+  ];
+  return {
+    title: `${unknown ? 'Possible unsaved changes on' : 'Unsaved changes on'} ${which}`,
+    paragraphs,
+    reason: pre.reason?.trim() ? clip(pre.reason, 200) : null,
+    olderFirmware: pre.likelyCause === 'older-firmware' ? OLDER_FIRMWARE_NOTE : null,
+    save: pre.canSave && known ? { label: `Save to preset ${fmt(pre.preset as number)}`, hint: 'Overwrites the stored preset with what is on the device now' } : null,
+    discard: { label: 'Discard changes', hint: 'Unsaved changes on the device are lost' }
+  };
+}
+
+/** One line for the confirmation dialog about the decision just taken. */
+export function unsavedDecisionText(choice: CaptureUnsavedEdits | null, pre: CapturePreflight | null, fmt: (n: number) => string = presetNumber): string | null {
+  if (!choice) return null;
+  const where = pre?.preset != null && pre.preset >= 0 ? `preset ${fmt(pre.preset)}` : 'the current preset';
+  return choice === 'save'
+    ? `Your unsaved changes will first be saved to ${where}, overwriting the stored preset.`
+    : `Your unsaved changes on ${where} will be lost when the diagnostic switches presets.`;
+}
+
+/** What the run did about the user's decision, read from the step results of the bundle (the status carries none). */
+export interface UnsavedOutcome {
+  decision: CaptureUnsavedEdits;
+  /** How it ended: `saved` / `discarded` as chosen; `save-failed` (no preset was switched); `preset-changed` (the device moved
+   *  on, the decision was not applied); `not-needed` (the device had nothing unsaved when the steps ran); `not-run`. */
+  kind: 'saved' | 'discarded' | 'save-failed' | 'preset-changed' | 'not-needed' | 'not-run';
+  title: string;
+  text: string;
+  tone: 'ok' | 'warn' | 'bad';
+}
+
+type StepLike = { name: string; status: string; result?: unknown; error?: string; note?: string };
+const asObj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+
+/** The engine's record of the decision in a step result: `result.unsavedEdits = { decision, outcome, save? }`. */
+const unsavedRecord = (s: StepLike): Record<string, unknown> | null => asObj(asObj(s.result)?.unsavedEdits);
+/** The save record (`slot`, `ok`, `acked`, `ms`): the one inside the decision record, else a top-level `save`. */
+function saveRecord(s: StepLike): Record<string, unknown> | null {
+  const o = asObj(s.result);
+  return asObj(unsavedRecord(s)?.save) ?? asObj(o?.save);
+}
+const wasDiscarded = (s: StepLike): boolean => asObj(s.result)?.discardedUnsavedEdits === true || unsavedRecord(s)?.outcome === 'discarded';
+
+/**
+ * The decision and what became of it: `chosen` is what the user picked in this session (null after a page reload — then
+ * the engine's record tells). Reads the steps that switch presets (reload check, full walk); the engine records
+ * `unsavedEdits: { decision, outcome: 'saved' | 'discarded' | 'save-failed' | 'preset-changed', save? }` there when
+ * it had to act on a decision. Null when there was no decision.
+ */
+export function unsavedEditsOutcome(steps: readonly StepLike[], chosen: CaptureUnsavedEdits | null, fmt: (n: number) => string = presetNumber): UnsavedOutcome | null {
+  const switching = steps.filter((s) => s.name === 'reloadProbe' || s.name === 'fullWalk');
+  const withRecord = switching.find((s) => typeof unsavedRecord(s)?.outcome === 'string') ?? switching.find((s) => unsavedRecord(s));
+  const rec = withRecord ? unsavedRecord(withRecord) : null;
+  const saveStep = switching.find((s) => saveRecord(s));
+  const save = saveStep ? saveRecord(saveStep) : null;
+  const discarded = switching.some(wasDiscarded);
+  const recDecision = rec?.decision === 'save' || rec?.decision === 'discard' ? rec.decision : null;
+  const decision = chosen ?? recDecision ?? (save ? 'save' : discarded ? 'discard' : null);
+  if (!decision) return null;
+  const stopped = switching.find((s) => s.status === 'failed' || s.status === 'skipped' || s.status === 'aborted');
+  const outcome = typeof rec?.outcome === 'string' ? rec.outcome : null;
+
+  const savedText = (): UnsavedOutcome => {
+    const slot = typeof save?.slot === 'number' ? `preset ${fmt(save.slot)}` : 'the current preset';
+    const ack = save?.acked ?? save?.ack ?? save?.acknowledged;
+    const confirmed = ack === false ? ', but the device did not confirm it' : ack === true ? ', and the device confirmed it' : '';
+    const ms = typeof save?.ms === 'number' && Number.isFinite(save.ms) ? ` (${Math.round(save.ms)} ms)` : '';
+    return { decision, kind: 'saved', title: 'Unsaved changes: saved first', text: `Your unsaved changes were saved to ${slot} before presets were switched${confirmed}${ms}.`, tone: ack === false ? 'warn' : 'ok' };
+  };
+  const discardedText = (): UnsavedOutcome => ({
+    decision,
+    kind: 'discarded',
+    title: 'Unsaved changes: discarded',
+    text: 'Your unsaved changes were discarded, as you chose, when the diagnostic switched presets.',
+    tone: 'ok'
+  });
+
+  if (outcome === 'saved') return savedText();
+  if (outcome === 'discarded') return discardedText();
+  if (outcome === 'save-failed' || (save && save.ok === false)) {
+    const failed = switching.find((s) => s.status === 'failed') ?? stopped;
+    const why = clip(String(failed?.error ?? save?.error ?? save?.reason ?? ''), 200);
+    return {
+      decision,
+      kind: 'save-failed',
+      title: 'Unsaved changes: not saved',
+      text: `Saving your unsaved changes did not work${why ? `: ${why}` : ''}. No preset was switched, so the changes are still on the device.`,
+      tone: 'bad'
+    };
+  }
+  if (outcome === 'preset-changed') {
+    return {
+      decision,
+      kind: 'preset-changed',
+      title: 'Unsaved changes: choice not applied',
+      text: 'The current preset changed after you decided, so your choice was not applied and the steps that switch presets were skipped. Nothing was changed on the device.',
+      tone: 'warn'
+    };
+  }
+  // no engine record of acting: an engine that only flags the result …
+  if (save) return savedText();
+  if (discarded) return discardedText();
+  // … or the device had nothing unsaved when the steps ran (so no decision was needed), or the steps did not run
+  if (switching.some((s) => s.status === 'ok')) {
+    return { decision, kind: 'not-needed', title: 'Unsaved changes: none found', text: 'The device had no unsaved changes when the steps that switch presets ran, so your choice was not needed.', tone: 'ok' };
+  }
+  const why = clip(stopped?.error || stopped?.note || '', 160);
+  return {
+    decision,
+    kind: 'not-run',
+    title: 'Unsaved changes: nothing done',
+    text: `You chose to ${decision === 'save' ? 'save' : 'discard'} your unsaved changes, but the steps that switch presets did not run${why ? `: ${why}` : ''}. Nothing was changed on the device.`,
+    tone: 'warn'
+  };
 }
 
 // ── status → view ───────────────────────────────────────────────────────────────────────────────────────────
@@ -339,7 +529,10 @@ const ENGINE_UNREACHABLE = 'Could not reach the Axis engine. Check that it is st
 export function startErrorMessage(status: number, body?: unknown): string {
   switch (status) {
     case 0: return ENGINE_UNREACHABLE;
-    case 400: return 'The engine did not accept the request because the disclaimer was not acknowledged. Tick the box and try again.';
+    case 400:
+      return field(body, 'error') === 'bad-unsaved-edits'
+        ? 'The engine did not accept your choice about unsaved changes. Start again and choose once more.'
+        : 'The engine did not accept the request because the disclaimer was not acknowledged. Tick the box and try again.';
     case 404: return 'This version of the engine does not include the device diagnostic. Update Axis to use it.';
     case 409: {
       const what = field(body, 'what');
