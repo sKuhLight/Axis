@@ -23,7 +23,7 @@ function publicDescriptors(value: object): Map<string, PropertyDescriptor> {
 describe('EditorStore runtime facade', () => {
   it('preserves the deliberate public member surface', () => {
     // Unique names count getter/setter pairs once; update deliberately when the public surface changes.
-    expect(publicDescriptors(editor).size).toBe(208);
+    expect(publicDescriptors(editor).size).toBe(210);
   });
 
   it('keeps every externally assigned accessor writable', () => {

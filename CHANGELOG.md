@@ -476,8 +476,10 @@ notes, so its changes are folded in here).
   presets. Plus an on-demand **"Send debug report"** with an optional contact field so
   we can follow up, and an automatic prompt after a device error.
 - **Delete account & data.** Permanently erase your account and all cloud data (GDPR).
+- **Support the project.** A Ko-fi link (About tab + status bar) — Axis is free &
+  open-source; contributions are entirely optional.
 - **Status bar.** A new bottom bar shows the parameter under your cursor on the left,
-  and legal / imprint links on the right.
+  and support / imprint links on the right.
 - **Legal links.** Registration shows the Terms & Privacy agreement; the app links to
   the Privacy Policy / Terms / Imprint at axisapp.live.
 

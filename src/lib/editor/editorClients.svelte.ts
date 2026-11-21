@@ -47,8 +47,10 @@ export const editorNotifications: Pick<Editor, 'toast' | 'showToast'> = editor;
 
 export const editorOnboarding: Pick<
   Editor,
+  | 'kofiNoticeOpen'
   | 'tourActive'
   | 'tourStep'
+  | 'dismissKofiNotice'
   | 'startTour'
   | 'tourNext'
   | 'tourPrev'

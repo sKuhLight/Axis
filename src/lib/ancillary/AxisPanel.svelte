@@ -24,7 +24,7 @@
   import DialogBody from '$lib/ui/DialogBody.svelte';
   import AppearanceSettings from '$lib/platform/AppearanceSettings.svelte';
   import { LEGAL, openExternal } from './legal';
-  import { COPYRIGHT } from './support';
+  import { KOFI_URL, COPYRIGHT } from './support';
 
   const mob = $derived(editorViewport.isMobile);
 
@@ -368,7 +368,8 @@
             <div class="logo sm">◈</div>
             <div><div class="h1">Axis</div><div class="sub">v{version} · beta</div></div>
           </div>
-          <p class="muted">Axis is a free, open-source editor for Fractal devices.</p>
+          <p class="muted">Axis is a free, open-source editor for Fractal devices. If it's useful to you, you can support ongoing development on Ko-fi — entirely optional, and it keeps the project going.</p>
+          <button class="kofi" onclick={() => openExternal(KOFI_URL)}>☕ Support development on Ko-fi</button>
           <div class="links">
             <button class="link" onclick={() => { close(); editorOnboarding.startTour(); }}>Replay app tour</button>
             <span class="dotsep"></span>
@@ -457,6 +458,8 @@
   .incl .no { color: var(--danger); font: 700 9px/1 'JetBrains Mono', monospace; margin-right: 7px; }
 
   /* about */
+  .kofi { width: 100%; height: 46px; margin-top: 6px; background: #13c3ff; color: var(--accentink); border: none; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; }
+  .kofi:hover { filter: brightness(1.08); }
   .links { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 18px; }
 
   /* connection & device tab */

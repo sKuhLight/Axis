@@ -509,7 +509,7 @@ validates the facade pattern at low risk.
 >   Only `toggleTuner` moved; the banner is now `// ── scene / rename / tempo actions ──`. The
 >   renames belong to M4c, scene + tempo to M4b.
 > - The first-run chain split: the slice owns consent + Faro and calls `host.onConsentResolved()`;
->   the tour stayed on `EditorStore` as onboarding.
+>   the Ko-fi notice and the tour stayed on `EditorStore` as onboarding.
 > - `monitorParams` / `loadMonitorParams` / `monitorsByPid` / `openBlockMonitors` stayed — that is
 >   the monitor *param table* (phantom-param suppression for the block editor), not live telemetry.
 >   So did the grid-read `meters` map and `meterFor`.

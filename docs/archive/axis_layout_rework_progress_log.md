@@ -60,7 +60,7 @@
 - Grid map/auto stepping, meter toggle, FC widgets, PB split panes: visually verified only
   via tests; browser smoke (Claude-in-Chrome on :5173) still pending.
 - T09/T10: nav entries dock/focus the right panels, placeholder styling, hint ticker,
-  legal links (imprint opens externally), theme entry opens the theme dialog.
+  legal links (Ko-fi/imprint open externally), theme entry opens the theme dialog.
 - T33: flyout still behaves identically in the old shell; docked modifier part
   targets from the ∿ badge; Clear chip; knob formats (ms=v*5, slope, signed offset).
 - auto-fit: top bar steps default→compact→mini as the window narrows; shed widgets

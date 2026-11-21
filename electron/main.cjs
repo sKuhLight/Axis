@@ -178,7 +178,7 @@ function createWindow() {
     logLine(`[ui:${LV[level] || level}] ${message}${src}`);
   });
   win.webContents.on('render-process-gone', (_e, d) => logLine(`[ui] render-process-gone: ${JSON.stringify(d)}`));
-  // open external links (GitHub, legal pages) in the system browser
+  // open external links (Ko-fi, GitHub) in the system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) shell.openExternal(url);
     return { action: 'deny' };

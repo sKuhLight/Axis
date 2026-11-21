@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/sKuhLight/Axis/actions/workflows/ci.yml/badge.svg)](https://github.com/sKuhLight/Axis/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-72a4f2?logo=ko-fi&logoColor=white)](https://ko-fi.com/R5R6223HMO)
 
 A fast, touch-friendly editor for **Fractal Audio** devices (FM3 first) — the visual front end for
 **[ForgeFX](https://github.com/sKuhLight/ForgeFX)**. Axis is a SvelteKit app that decodes and edits
@@ -84,6 +85,12 @@ npm run build      # -> build/  (static SPA; ForgeFX can serve it for a headless
 
 Dark, pro-audio. **Hanken Grotesk** (UI) + **JetBrains Mono** (technical). Accent cyan `#35c9d6`,
 amber `#f5a623`, coral `#d6543f` (bypass/destructive) on layered near-black.
+
+## Support
+
+Axis is free and open source. If it's useful to you, you can support development on Ko-fi:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/R5R6223HMO)
 
 ## License
 

@@ -1,13 +1,16 @@
 <script lang="ts">
   import { LEGAL, openExternal } from '$lib/ancillary/legal';
-  import { COPYRIGHT } from '$lib/ancillary/support';
+  import { KOFI_URL, COPYRIGHT } from '$lib/ancillary/support';
   import type { AxisWorkbenchWidgetProps } from './widgetProps';
   let { size }: AxisWorkbenchWidgetProps = $props();
+  const notMini = $derived(size !== 'mini');
   const expanded = $derived(size === 'default');
 </script>
 
 <div class="axis-widget legal" data-size={size}>
-  {#if expanded}<span class="cr">{COPYRIGHT}</span><span class="sep" aria-hidden="true"></span>{/if}<button class="lnk" type="button" onclick={() => openExternal(LEGAL.imprint)}>Imprint</button>
+  <button class="kofi" type="button" title="Support Axis development on Ko-fi" onclick={() => openExternal(KOFI_URL)}>☕{#if notMini}<span> Support on Ko-fi</span>{/if}</button>
+  {#if expanded}<span class="sep" aria-hidden="true"></span><span class="cr">{COPYRIGHT}</span>{/if}
+  <span class="sep" aria-hidden="true"></span><button class="lnk" type="button" onclick={() => openExternal(LEGAL.imprint)}>Imprint</button>
 </div>
 
 <style>
@@ -17,6 +20,17 @@
     background: transparent;
     color: var(--textdim);
     cursor: default;
+  }
+  .legal .kofi {
+    background: none;
+    color: var(--blue, #13c3ff);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .legal .kofi:hover {
+    filter: brightness(1.12);
   }
   .legal .lnk {
     background: none;
