@@ -535,9 +535,13 @@
   .x { position: absolute; top: 12px; right: 12px; z-index: 2; background: var(--surface2); border: 1px solid var(--border2); color: var(--textdim); font-size: 13px; cursor: pointer; border-radius: 8px; width: 28px; height: 28px; }
   .x:hover { color: var(--text); border-color: var(--border3); }
 
-  .tabbar { display: flex; gap: 2px; padding: 14px 52px 0 20px; overflow-x: auto; scrollbar-width: none; }
-  .tabbar::-webkit-scrollbar { display: none; }
-  .tb { flex: 1 0 auto; padding: 0 8px; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+  /* Up to 7 tabs don't fit one row in a 440px card (or a ~375px sheet), so the bar WRAPS instead of scrolling
+     sideways behind a hidden scrollbar — every tab is always visible and clickable. The right padding reserves the
+     absolutely positioned close button (.x: right 12 + 28 wide = 40px, plus a 12px gutter) on every row, so a tab
+     can never sit under it. Each tab carries its own baseline so the accent underline of the active tab reads as
+     belonging to ITS row when the bar wraps (row-gap keeps the rows apart). */
+  .tabbar { display: flex; flex-wrap: wrap; gap: 4px 2px; padding: 14px 52px 0 20px; }
+  .tb { flex: 1 0 auto; padding: 0 8px; height: 34px; border: none; background: transparent; color: var(--textdim); font-size: 12.5px; font-weight: 700; cursor: pointer; border-bottom: 2px solid var(--border); }
   .tb:hover { color: var(--text2); }
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
 
