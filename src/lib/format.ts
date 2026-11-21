@@ -57,6 +57,47 @@ export function withUnit(num: string, unit?: string): string {
   return unit === '%' ? num + unit : num + ' ' + unit;
 }
 
+// Catalog unit codes (the `unit` ForgeFX returns on /presets/:n/params and the codec's converter ranges)
+// → display symbol. An empty string is a code that names no unit: the unitless dials (`knob_0_10`,
+// `knob_0_20`, `numeric`), the stepper/selector markers (`count`, `enum`) and `unverified`, which only
+// says the catalog could not confirm a unit. Matching is exact and case-sensitive on purpose: the
+// lower-case keys are catalog codes, the cased ones (`dB`, `Hz`, `kHz`, `ct`) are the symbols themselves,
+// so mapping is idempotent and anything else (device-true tokens such as `dB/OCT` or `SECONDS`) is left
+// alone by catalogUnitSymbol().
+const CATALOG_UNIT_SYMBOLS: ReadonlyMap<string, string> = new Map([
+  ['percent', '%'], ['bipolar_percent', '%'],
+  ['semitones', 'st'],
+  ['db', 'dB'], ['dB', 'dB'],
+  ['hz', 'Hz'], ['Hz', 'Hz'],
+  ['khz', 'kHz'], ['kHz', 'kHz'],
+  ['ms', 'ms'],
+  ['seconds', 's'], ['sec', 's'],
+  ['ratio', ':1'],
+  ['cents', 'ct'], ['ct', 'ct'],
+  ['bpm', 'BPM'],
+  ['degrees', '°'], ['deg', '°'],
+  ['pf', 'pF'],
+  ['knob_0_10', ''], ['knob_0_20', ''], ['numeric', ''], ['count', ''], ['enum', ''], ['unverified', ''], ['', ''],
+]);
+
+/** The display symbol for a catalog unit code ('' when the code names no unit), for values decoded from a
+ *  preset (`/presets/:n/params`) or produced by the converter. Unknown codes render verbatim, so
+ *  device-true tokens (`dB/OCT`, `SECONDS`) keep working; feed the result to withUnit(). */
+export function catalogUnitSymbol(code?: string | null): string {
+  if (code == null) return '';
+  return CATALOG_UNIT_SYMBOLS.get(code) ?? code;
+}
+
+/** True for a decoded preset param (`/presets/:n/params`) whose `value` is NOT a display value but the raw
+ *  0..65534 model value, so a unit would mislabel it ("32767%"). The codec surfaces the raw value for a
+ *  param with no range row (`kind` absent) and for a 0..0 placeholder range row (`kind: 'float'`,
+ *  `value === raw`). A real ranged value equals its raw only at raw 0 (min 0), which is why raw 0 does not
+ *  count as a placeholder; no shipped range spans 0..65534. */
+export function isUnrangedParam(p: { kind?: string | null; value: number | null; raw?: number }): boolean {
+  if (p.kind == null) return true;
+  return p.kind !== 'enum' && p.value != null && p.raw != null && p.raw !== 0 && p.value === p.raw;
+}
+
 /** Full, readable value for the value bubble — device-true value at the current norm, unit folded in.
  *  Hz ≥ 1000 compacts to kHz (the ONLY conversion; new tokens like dB/OCT or SECONDS pass through
  *  verbatim). Uses withUnit() for spacing so every token renders consistently. */
