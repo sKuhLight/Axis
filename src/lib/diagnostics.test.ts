@@ -171,6 +171,9 @@ describe('diagView — status → view', () => {
   });
   it('isRunBusy marks exactly the views that own the device transport — a lost run no longer does', () => {
     expect(['idle', 'starting', 'running', 'cancelling', 'lost', 'finished'].map((x) => isRunBusy(x as never))).toEqual([false, true, true, true, false, false]);
+    // the pre-check holds the device too: busy whatever the view says
+    expect(['idle', 'running', 'lost', 'finished'].map((x) => isRunBusy(x as never, true))).toEqual([true, true, true, true]);
+    expect(isRunBusy('idle', false)).toBe(false);
     expect(isFinishedState('done') && isFinishedState('failed') && isFinishedState('cancelled')).toBe(true);
     expect(isFinishedState('running') || isFinishedState('idle') || isFinishedState(undefined)).toBe(false);
   });

@@ -7,7 +7,9 @@ import {
   PREFLIGHT_MAX_AGE_MS,
   buildStartRequest,
   classifyPreflightError,
+  STALE_CHECK_NOTE,
   isPreflightStale,
+  isStaleCheckError,
   needsUnsavedDecision,
   plannedSteps,
   startErrorMessage,
@@ -124,6 +126,18 @@ describe('unsavedEdits in the start body', () => {
   it('never saves from an edit buffer it could not read — discarding stays possible', () => {
     expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown', canSave: true }), unsavedEdits: 'save' })).toEqual({ acknowledged: true });
     expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown', canSave: false }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12 });
+  });
+  it('an out-of-date check (400 token-expired / bad-token / cannot-save) is worded as such and recognised for an automatic re-check', () => {
+    for (const error of ['token-expired', 'bad-token', 'cannot-save']) {
+      expect(startErrorMessage(400, { error }), error).toBe(STALE_CHECK_NOTE);
+      expect(isStaleCheckError(400, { error }), error).toBe(true);
+      expect(startErrorMessage(400, { error })).not.toMatch(/disclaimer/i);
+    }
+    expect(STALE_CHECK_NOTE).toBe('The device check is out of date — Axis checked again. Please choose again.');
+    // other errors are not that: a missing token, the disclaimer, other statuses
+    for (const [status, body] of [[400, { error: 'missing-token' }], [400, { error: 'not-acknowledged' }], [400, undefined], [409, { error: 'token-expired' }], [0, undefined]] as const) {
+      expect(isStaleCheckError(status, body)).toBe(false);
+    }
   });
   it('words a missing token (400 missing-token) and tells it apart from the other 400s', () => {
     expect(startErrorMessage(400, { error: 'missing-token' })).toMatch(/fresh check of the device/i);
@@ -321,8 +335,58 @@ describe('unsavedEditsOutcome — from the step results of the bundle', () => {
       'A save to the current preset was in progress when the run stopped — check it on the device.'
     );
   });
+  it('save-not-possible: nothing was saved and the reload check / full walk did not switch presets', () => {
+    const o = unsavedEditsOutcome([{ name: 'reloadProbe', status: 'failed', error: 'this device cannot save the edit buffer', result: { unsavedEdits: { decision: 'save', outcome: 'save-not-possible' } } }], 'save');
+    expect(o).toMatchObject({ kind: 'save-not-possible', tone: 'warn', title: 'Unsaved changes: could not save' });
+    expect(o!.text).toContain('this device cannot save the edit buffer');
+    expect(o!.text).toMatch(/nothing was saved/i);
+    expect(o!.text).toMatch(/did not switch presets/i);
+    expect(o!.text).toMatch(/still on the device/i);
+  });
+  describe('with both switching steps in the result, the most severe outcome surfaces', () => {
+    const step = (name: string, status: string, outcome: string, save?: unknown, decision = 'save') => ({
+      name,
+      status,
+      ...(status === 'failed' ? { error: `${name} failed` } : {}),
+      result: { unsavedEdits: { decision, outcome, ...(save ? { save } : {}) } }
+    });
+    it('a reload check that saved, then a full walk whose save did not match, shows the later problem', () => {
+      const o = unsavedEditsOutcome([step('reloadProbe', 'ok', 'saved', saved), step('fullWalk', 'failed', 'saved-check-failed', { slot: 12, ok: true, acked: true, ms: 90 })], 'save');
+      expect(o).toMatchObject({ kind: 'saved-check-failed', tone: 'warn' });
+      expect(o!.text).toMatch(/still differs from the stored copy/i);
+      expect(o!.text).toMatch(/Before that, the reload check had already saved your changes first\./);
+    });
+    it('a reload check that saved, then a full walk that found the edits changed, shows that', () => {
+      const o = unsavedEditsOutcome([step('reloadProbe', 'ok', 'saved', saved), step('fullWalk', 'skipped', 'edits-changed')], 'save');
+      expect(o).toMatchObject({ kind: 'edits-changed', tone: 'warn' });
+      expect(o!.text).toMatch(/Before that, the reload check had already saved/);
+    });
+    it('a discard followed by a failure keeps the failure, and mentions the discard', () => {
+      const o = unsavedEditsOutcome([step('reloadProbe', 'ok', 'discarded', undefined, 'discard'), step('fullWalk', 'failed', 'save-failed', undefined, 'discard')], 'discard');
+      expect(o).toMatchObject({ kind: 'save-failed', tone: 'bad' });
+      expect(o!.text).toMatch(/Before that, the reload check had already discarded your changes\./);
+    });
+    it('a problem in the first step stays when the later step is only fine or only skipped for another reason', () => {
+      const first = unsavedEditsOutcome([step('reloadProbe', 'failed', 'save-unconfirmed', { slot: 3, ok: true, acked: false }), step('fullWalk', 'ok', 'saved', saved)], 'save');
+      expect(first!.kind).toBe('save-unconfirmed');
+      const skipped = unsavedEditsOutcome([step('reloadProbe', 'ok', 'saved', saved), { name: 'fullWalk', status: 'skipped', note: 'full capture is not verified for this firmware' }], 'save');
+      expect(skipped).toMatchObject({ kind: 'saved', tone: 'ok' });
+      expect(skipped!.text).not.toMatch(/Before that/);
+    });
+    it('two equally bad steps: the one with the save record (the cause) wins over its consequence', () => {
+      const o = unsavedEditsOutcome(
+        [step('reloadProbe', 'failed', 'save-rejected', { slot: 12, ok: false, acked: false, error: 'refused' }), step('fullWalk', 'failed', 'save-failed')],
+        'save'
+      );
+      expect(o!.kind).toBe('save-rejected');
+    });
+    it('between two equally severe steps without records of that kind, the later one wins', () => {
+      const o = unsavedEditsOutcome([step('reloadProbe', 'skipped', 'preset-changed', undefined, 'discard'), step('fullWalk', 'skipped', 'edits-changed', undefined, 'discard')], 'discard');
+      expect(o!.kind).toBe('edits-changed');
+    });
+  });
   it('every outcome has a title and wording of its own', () => {
-    const kinds = ['saved', 'discarded', 'save-rejected', 'save-unconfirmed', 'saved-check-failed', 'edits-changed', 'preset-changed', 'save-failed'];
+    const kinds = ['saved', 'discarded', 'save-rejected', 'save-unconfirmed', 'saved-check-failed', 'save-not-possible', 'edits-changed', 'preset-changed', 'save-failed'];
     const texts = new Set<string>();
     for (const outcome of kinds) {
       const o = unsavedEditsOutcome([{ name: 'reloadProbe', status: outcome === 'saved' || outcome === 'discarded' ? 'ok' : 'failed', result: { unsavedEdits: { decision: outcome === 'discarded' ? 'discard' : 'save', outcome, save: { slot: 1, ok: true, acked: true } } } }], null);
@@ -357,6 +421,14 @@ describe('wiring (source pins)', () => {
     expect(panel).toContain('onclick={() => begin()}');
     expect(panel).toMatch(/buildStartRequest\(\{ acknowledged, confirmed: true, includeFullWalk: wantFullWalk, fullWalk, preflight, unsavedEdits: unsavedChoice \}\)/);
     expect(panel.indexOf("{#if dialog === 'unsaved'")).toBeLessThan(panel.indexOf("{#if dialog === 'confirm'"));
+  });
+  it('a start refused because the check is out of date re-runs the pre-check and asks again, without an error banner', () => {
+    expect(store).toContain('isStaleCheckError(status, body)');
+    expect(store).toMatch(/this\.#staleCheck = true;[^\n]*\n\s*this\.error = null;/);
+    expect(panel).toMatch(/\} else if \(d\.takeStaleCheck\(\)\) \{[\s\S]*?await begin\(STALE_CHECK_NOTE\);/);
+  });
+  it('the pre-check counts as busy, so the editor\'s polling pauses while the engine holds the device', () => {
+    expect(store).toContain('return isRunBusy(this.view, this.checking);');
   });
   it('an expired pre-check is repeated and asked again instead of being sent', () => {
     expect(panel).toMatch(/if \(preflight && isPreflightStale\(preflightAt, Date\.now\(\)\)\) \{\s*dialog = null;\s*await begin\(PREFLIGHT_STALE_NOTE\);\s*return;\s*\}/);

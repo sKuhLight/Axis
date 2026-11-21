@@ -20,6 +20,7 @@ import {
   isContactLost,
   isFinishedState,
   isRunBusy,
+  isStaleCheckError,
   platformGzip,
   pollDecision,
   resultErrorMessage,
@@ -56,8 +57,11 @@ class DiagnosticsStore {
   encoded = $state.raw<EncodedBundle | null>(null);
   /** POST start in flight. */
   starting = $state(false);
-  /** The pre-check (one device read of the edit buffer) is running. */
+  /** The pre-check (a few device reads of the edit buffer) is running — the engine holds the device, so it counts as busy. */
   checking = $state(false);
+  /** The last start was refused because the pre-check it relied on no longer fits (token expired / unknown, cannot save): the
+   *  panel checks again and asks again instead of showing an error. Read once with `takeStaleCheck`. */
+  #staleCheck = false;
   /** What the user decided about unsaved edits for the run that is showing (null = no question was asked), and the
    *  preset it was about — for the summary. */
   unsavedChoice = $state<CaptureUnsavedEdits | null>(null);
@@ -95,7 +99,7 @@ class DiagnosticsStore {
   }
   /** A run owns the device transport — the editor's background reads (poll / preset watch / save probe) sit out. */
   get running(): boolean {
-    return isRunBusy(this.view);
+    return isRunBusy(this.view, this.checking);
   }
 
   // ── status ──
@@ -212,11 +216,23 @@ class DiagnosticsStore {
       return true;
     } catch (e) {
       const { status, body } = errorInfo(e);
-      this.error = startErrorMessage(status, body);
+      if (isStaleCheckError(status, body)) {
+        this.#staleCheck = true; // the caller re-runs the pre-check and asks again
+        this.error = null;
+      } else {
+        this.error = startErrorMessage(status, body);
+      }
       return false;
     } finally {
       this.starting = false;
     }
+  };
+
+  /** Was the last start refused because the pre-check is out of date? (Reads and clears the flag.) */
+  takeStaleCheck = (): boolean => {
+    const was = this.#staleCheck;
+    this.#staleCheck = false;
+    return was;
   };
 
   cancel = async (): Promise<void> => {

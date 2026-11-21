@@ -29,6 +29,7 @@
     overallProgress,
     PREFLIGHT_STALE_NOTE,
     runSummary,
+    STALE_CHECK_NOTE,
     stepRows,
     unsavedDecisionText,
     unsavedDialogModel,
@@ -150,6 +151,9 @@
       acknowledged = false;
       wantFullWalk = false;
       uploadConsent = false;
+    } else if (d.takeStaleCheck()) {
+      // the engine says the check no longer fits (token expired / unknown, cannot save): check again, ask again
+      await begin(STALE_CHECK_NOTE);
     }
   }
   $effect(() => {
