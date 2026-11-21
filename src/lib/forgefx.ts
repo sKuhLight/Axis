@@ -38,6 +38,7 @@ import type {
   ConvertExportResponse,
   ConverterPreset,
   CaptureStatus,
+  CapturePreflight,
   CaptureStartRequest,
   CaptureStartResult,
   CaptureBundle,
@@ -430,6 +431,9 @@ export const forgefx = {
   // the caller can word them; see `diagnostics.ts`. Server-gated: 501 (not gen-3) / 404 (old server).
   /** Progress of the current run, or the last finished one. */
   diagnosticCaptureStatus: () => req<CaptureStatus>('/diagnostics/capture'),
+  /** Look at the device right before a run: current preset, and whether its edit buffer is clean / dirty / unknown
+   *  (one device read). 409 busy like a start, 503 no device; 404/501 on an engine that predates it. */
+  diagnosticCapturePreflight: () => req<CapturePreflight>('/diagnostics/capture/preflight'),
   /** Start a run. 202 `{ started, id }`; throws ForgeError 400 (not acknowledged) / 409 (busy) / 503 (no device) /
    *  501 (unsupported). `acknowledged: true` is required by the type — the UI only builds this request after the
    *  user ticked the backup disclaimer AND confirmed the second dialog (see `buildStartRequest`). */

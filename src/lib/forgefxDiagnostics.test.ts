@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { forgefx, ForgeError } from './forgefx';
-import { errorInfo, startErrorMessage, uploadErrorMessage } from './diagnostics';
+import { classifyPreflightError, errorInfo, startErrorMessage, uploadErrorMessage } from './diagnostics';
 
 // Minimal Response stand-in for the forgefx `req()` helper (ok/status + headers.get + json()).
 function res(status: number, body: unknown, ct = 'application/json') {
@@ -101,5 +101,34 @@ describe('forgefx device-diagnostics client', () => {
     fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
     const e = await forgefx.diagnosticCaptureStatus().catch((x: unknown) => x);
     expect(errorInfo(e).status).toBe(0);
+  });
+});
+
+describe('forgefx device-diagnostics client — pre-check and unsaved-edits decision', () => {
+  it('reads the pre-check with a plain GET', async () => {
+    const pre = { preset: 12, presetName: 'Test', editBuffer: 'dirty', likelyCause: 'older-firmware', canSave: true };
+    fetchMock.mockResolvedValueOnce(res(200, pre));
+    await expect(forgefx.diagnosticCapturePreflight()).resolves.toEqual(pre);
+    expect(lastCall()[0]).toBe('/api/diagnostics/capture/preflight');
+    expect(lastCall()[1].method).toBeUndefined();
+  });
+
+  it('sends the decision and its preset in the start body', async () => {
+    fetchMock.mockResolvedValueOnce(res(202, { started: true, id: 'r1' }));
+    await forgefx.startDiagnosticCapture({ acknowledged: true, unsavedEdits: 'save', preset: 12 });
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ acknowledged: true, unsavedEdits: 'save', preset: 12 });
+  });
+
+  it('keeps the 409 / 503 bodies of the pre-check so they can be worded', async () => {
+    fetchMock.mockResolvedValueOnce(res(409, { error: 'busy', what: 'capture' }));
+    const busy = await forgefx.diagnosticCapturePreflight().catch((x: unknown) => x);
+    expect(classifyPreflightError(errorInfo(busy).status, errorInfo(busy).body)).toMatchObject({ kind: 'blocked' });
+    fetchMock.mockResolvedValueOnce(res(503, { error: 'no-device' }));
+    const none = await forgefx.diagnosticCapturePreflight().catch((x: unknown) => x);
+    expect(classifyPreflightError(errorInfo(none).status, errorInfo(none).body).message).toMatch(/no device/i);
+    // an engine that predates the pre-check answers 404 → start without a decision
+    fetchMock.mockResolvedValueOnce(res(404, { error: 'not-found' }));
+    const old = await forgefx.diagnosticCapturePreflight().catch((x: unknown) => x);
+    expect(classifyPreflightError(errorInfo(old).status, errorInfo(old).body).kind).toBe('fallback');
   });
 });

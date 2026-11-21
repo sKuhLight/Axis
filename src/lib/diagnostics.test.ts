@@ -171,6 +171,9 @@ describe('diagView — status → view', () => {
   });
   it('isRunBusy marks exactly the views that own the device transport — a lost run no longer does', () => {
     expect(['idle', 'starting', 'running', 'cancelling', 'lost', 'finished'].map((x) => isRunBusy(x as never))).toEqual([false, true, true, true, false, false]);
+    // the pre-check holds the device too: busy whatever the view says
+    expect(['idle', 'running', 'lost', 'finished'].map((x) => isRunBusy(x as never, true))).toEqual([true, true, true, true]);
+    expect(isRunBusy('idle', false)).toBe(false);
     expect(isFinishedState('done') && isFinishedState('failed') && isFinishedState('cancelled')).toBe(true);
     expect(isFinishedState('running') || isFinishedState('idle') || isFinishedState(undefined)).toBe(false);
   });
@@ -554,27 +557,27 @@ describe('wiring (source pins)', () => {
   });
   it('talks to the engine only through the store — no request is hand-built in the component', () => {
     expect(panel).not.toMatch(/forgefx\.\w/);
-    expect(panel).toContain('d.start(request)');
+    expect(panel).toContain('d.start(request, ');
     expect(panel).toMatch(/const request = buildStartRequest\(\{ acknowledged, confirmed: true,/);
   });
   it('gates Start on the tick and shows the exact disclaimer and dialog title', () => {
-    expect(panel).toContain('disabled={!canStart}');
+    expect(panel).toMatch(/disabled=\{!canStart( \|\| d\.checking)?\}/);
     expect(panel).toContain('bind:checked={acknowledged}');
     expect(panel).toContain('{BACKUP_ACK_TEXT}');
     expect(panel).toContain('{CONFIRM_TITLE}');
-    // Start opens the dialog; only the dialog's own button runs the diagnostic
-    expect(panel).toMatch(/class="cta"[^>]*onclick=\{openConfirm\}/);
+    // Start runs the pre-check and opens the dialogs; only the confirmation dialog's own button runs the diagnostic
+    expect(panel).toMatch(/class="cta"[^>]*onclick=\{\(\) => begin\(\)\}/);
     expect(panel).toMatch(/class="dgo" onclick=\{runNow\}/);
   });
   it('the confirmation dialog is modal, focuses Cancel, closes on Escape and restores focus', () => {
     expect(panel).toContain('role="alertdialog"');
     expect(panel).toContain('aria-modal="true"');
     expect(panel).toContain('aria-labelledby="diag-confirm-title"');
-    expect(panel).toContain('cancelBtn?.focus()');
-    expect(panel).toMatch(/e\.key === 'Escape'[\s\S]{0,120}e\.stopPropagation\(\)[\s\S]{0,160}closeConfirm\(\)/);
+    expect(panel).toContain('cancelUnsaved : cancelConfirm)?.focus()');
+    expect(panel).toMatch(/e\.key === 'Escape'[\s\S]{0,120}e\.stopPropagation\(\)[\s\S]{0,160}closeDialog\(\)/);
     expect(panel).toContain("window.addEventListener('keydown', onKey, true)");
     expect(panel).toContain('startBtn?.focus()');
-    expect(panel).toMatch(/class="dcancel"[^>]*onclick=\{closeConfirm\}/);
+    expect(panel).toMatch(/class="dcancel"[^>]*bind:this=\{cancelConfirm\} onclick=\{closeDialog\}/);
   });
   it('the full-walk toggle is disabled with its reason when the gate is closed, and has its own warning', () => {
     expect(panel).toContain('disabled={!fullWalk.available}');
@@ -583,7 +586,7 @@ describe('wiring (source pins)', () => {
     expect(panel).toContain('{FULL_WALK_LABEL}');
   });
   it('every run needs a fresh acknowledgement', () => {
-    expect(panel).toMatch(/if \(await d\.start\(request\)\) \{\s*acknowledged = false;/);
+    expect(panel).toMatch(/if \(await d\.start\(request, [^\n]*\) \{\s*acknowledged = false;/);
     expect(panel).toMatch(/function runAgain\(\) \{\s*acknowledged = false;/);
   });
   it('upload needs the consent tick and shows the preview; local save is offered from the store', () => {

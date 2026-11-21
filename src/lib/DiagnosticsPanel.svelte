@@ -1,13 +1,15 @@
 <script lang="ts">
   // Settings → Debug → "Device diagnostics". A gated, staged diagnostic run against the connected device: what it does
-  // + a disclaimer + a mandatory backup checkbox, a second confirmation dialog (Cancel is the default), live per-step
+  // + a disclaimer + a mandatory backup checkbox, a pre-check of the device that asks what to do with unsaved edits
+  // (save / discard / cancel) before the second confirmation dialog (Cancel is the default), live per-step
   // progress with Cancel, a final summary, then "Save locally" and/or "Upload for analysis" (signed-in, with a preview of
   // exactly what is sent and an explicit consent tick). Every decision — what is offered, gating, wording, sizes, file
   // names — comes from the pure, unit-tested `diagnostics.ts`; the run itself is driven by the `diagnostics` store.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { editor } from './editor.svelte';
   import { diagnostics as d } from './diagnostics.svelte';
   import { isRemote } from './forgefx';
+  import type { CapturePreflight, CaptureUnsavedEdits } from './types';
   import {
     BACKUP_ACK_TEXT,
     CONFIRM_TITLE,
@@ -22,11 +24,20 @@
     diagnosticsAvailability,
     formatBytes,
     fullWalkAvailability,
+    isPreflightStale,
+    needsUnsavedDecision,
     overallProgress,
+    PREFLIGHT_STALE_NOTE,
     runSummary,
+    STALE_CHECK_NOTE,
     stepRows,
+    unsavedDecisionText,
+    unsavedDialogModel,
+    unsavedEditsOutcome,
+    unsavedSkipText,
     uploadPreconditions,
-    uploadPreview
+    uploadPreview,
+    willSwitchPresets
   } from './diagnostics';
 
   const view = $derived(d.view);
@@ -36,7 +47,6 @@
   // Form state. Each run needs a fresh acknowledgement: it is reset when a run starts and by "Run again".
   let acknowledged = $state(false);
   let wantFullWalk = $state(false);
-  let confirmOpen = $state(false);
   let uploadConsent = $state(false);
   // A full-walk tick can never outlive the full walk becoming unavailable (device switched, firmware changed).
   $effect(() => { if (!fullWalk.available) wantFullWalk = false; });
@@ -47,6 +57,8 @@
   const current = $derived(rows.find((r) => r.status === 'running') ?? null);
   const summary = $derived(d.status && d.finished ? runSummary(d.status, rows) : null);
   const preview = $derived(d.bundle && d.encoded ? uploadPreview(d.bundle, d.encoded) : null);
+  // What became of the user's unsaved-changes decision — read from the step results, so only once the bundle is here.
+  const unsavedOutcome = $derived(summary && d.bundle ? unsavedEditsOutcome(d.bundle.steps, d.unsavedChoice) : null);
   const signedIn = $derived(!!editor.cloud.user);
   const pre = $derived(
     uploadPreconditions({
@@ -73,38 +85,90 @@
   // Refresh the engine's view whenever the tab is opened (a run may be going from another window / before a reload).
   onMount(() => { if (editor.caps?.diagnosticCapture && !isRemote()) void d.refresh(); });
 
-  // ── second confirmation dialog: Cancel is the default; Escape cancels; Tab stays inside; focus is restored ──
-  let dlg = $state<HTMLElement | null>(null);
-  let cancelBtn = $state<HTMLButtonElement | null>(null);
+  // ── the dialogs before a run: [unsaved changes?] → confirm. Cancel is the default in both; Escape cancels the whole
+  //    flow; Tab stays inside; focus returns to Start ──
+  let dialog = $state<null | 'unsaved' | 'confirm'>(null);
+  let preflight = $state<CapturePreflight | null>(null); // what the pre-check found (null: it failed or was not made)
+  let preflightNote = $state<string | null>(null); // set when the pre-check failed and the run starts without a decision
+  let preflightAt = $state<number | null>(null); // when the pre-check came back — its token expires after about 15 minutes
+  let restartNote = $state<string | null>(null); // set when Axis had to check the device again before starting
+  let unsavedChoice = $state<CaptureUnsavedEdits | null>(null);
+  let unsavedSkipped = $state(false); // no known preset: the user carries on without the preset-switching steps
+  let dlgUnsaved = $state<HTMLElement | null>(null);
+  let cancelUnsaved = $state<HTMLButtonElement | null>(null);
+  let dlgConfirm = $state<HTMLElement | null>(null);
+  let cancelConfirm = $state<HTMLButtonElement | null>(null);
   let startBtn = $state<HTMLButtonElement | null>(null);
 
-  function openConfirm() {
-    if (canStart) confirmOpen = true;
+  const plan = $derived({ includeFullWalk: wantFullWalk && fullWalk.available });
+  const unsavedModel = $derived(preflight ? unsavedDialogModel(preflight, plan) : null);
+  const decisionText = $derived(unsavedDecisionText(unsavedChoice, preflight));
+  // the unsaved-changes dialog is (or was) part of this pass — the restart note then belongs to it, not to the confirmation
+  const askedUnsaved = $derived(needsUnsavedDecision({ preflight, willSwitch: willSwitchPresets(plan) }));
+
+  /** Start: look at the device first. Edits that the preset-switching steps would throw away get a question of
+   *  their own; a refusal (busy / no device) stays on the form; a failed pre-check starts without a decision. */
+  async function begin(notice: string | null = null) {
+    if (!canStart || d.checking) return;
+    preflight = null;
+    preflightNote = null;
+    preflightAt = null;
+    restartNote = notice;
+    unsavedChoice = null;
+    unsavedSkipped = false;
+    const r = await d.preflight();
+    if (r.kind === 'blocked') return; // d.error says why
+    if (r.kind === 'fallback') preflightNote = r.note;
+    else {
+      preflight = r.preflight;
+      preflightAt = Date.now();
+    }
+    dialog = askedUnsaved ? 'unsaved' : 'confirm';
   }
-  function closeConfirm() {
-    confirmOpen = false;
+  /** `skip`: the preset is unknown, so no choice can be applied — carry on without the preset-switching steps. */
+  function chooseUnsaved(choice: CaptureUnsavedEdits | 'skip') {
+    unsavedChoice = choice === 'skip' ? null : choice;
+    unsavedSkipped = choice === 'skip';
+    dialog = 'confirm';
+  }
+  function closeDialog() {
+    dialog = null;
+    unsavedChoice = null;
+    unsavedSkipped = false;
     queueMicrotask(() => startBtn?.focus());
   }
   async function runNow() {
-    const request = buildStartRequest({ acknowledged, confirmed: true, includeFullWalk: wantFullWalk, fullWalk });
-    confirmOpen = false;
+    // The pre-check's token expires: when the dialogs sat open for a long time, check the device again and ask again.
+    if (preflight && isPreflightStale(preflightAt, Date.now())) {
+      dialog = null;
+      await begin(PREFLIGHT_STALE_NOTE);
+      return;
+    }
+    const request = buildStartRequest({ acknowledged, confirmed: true, includeFullWalk: wantFullWalk, fullWalk, preflight, unsavedEdits: unsavedChoice });
+    dialog = null;
     if (!request) return;
-    if (await d.start(request)) {
+    if (await d.start(request, { number: preflight?.preset ?? null, name: preflight?.presetName })) {
       acknowledged = false;
       wantFullWalk = false;
       uploadConsent = false;
+    } else if (d.takeStaleCheck()) {
+      // the engine says the check no longer fits (token expired / unknown, cannot save): check again, ask again
+      await begin(STALE_CHECK_NOTE);
     }
   }
   $effect(() => {
-    if (!confirmOpen) return;
-    cancelBtn?.focus();
+    const which = dialog;
+    if (!which) return;
+    untrack(() => (which === 'unsaved' ? cancelUnsaved : cancelConfirm)?.focus());
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation(); // the page's own Escape handling must not also act
-        closeConfirm();
-      } else if (e.key === 'Tab' && dlg) {
-        const els = Array.from(dlg.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href]'));
+        closeDialog();
+      } else if (e.key === 'Tab') {
+        const root = which === 'unsaved' ? dlgUnsaved : dlgConfirm;
+        if (!root) return;
+        const els = Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href]'));
         const next = cycleFocusIndex(els.length, els.indexOf(document.activeElement as HTMLElement), e.shiftKey);
         if (next >= 0) {
           e.preventDefault();
@@ -182,8 +246,8 @@
         <div id="diag-fw-warn" class="box danger" role="note"><b>Extra warning: full walk</b><span>{FULL_WALK_WARNING}</span></div>
       {/if}
 
-      <button class="cta" bind:this={startBtn} disabled={!canStart} aria-describedby="diag-start-hint" onclick={openConfirm}>Start diagnostic…</button>
-      <p id="diag-start-hint" class="muted sm center">{acknowledged ? 'You will be asked to confirm once more.' : 'Tick the box above to enable the button.'}</p>
+      <button class="cta" bind:this={startBtn} disabled={!canStart || d.checking} aria-describedby="diag-start-hint" onclick={() => begin()}>{d.checking ? 'Checking the device…' : 'Start diagnostic…'}</button>
+      <p id="diag-start-hint" class="muted sm center">{d.checking ? 'Looking for unsaved changes on the device…' : acknowledged ? 'Axis checks the device first, then asks you to confirm.' : 'Tick the box above to enable the button.'}</p>
     {/if}
 
     {#if d.error}<p class="err" role="alert">{d.error}</p>{/if}
@@ -235,6 +299,13 @@
         {summary.counts.ok} done{summary.counts.failed ? ` · ${summary.counts.failed} failed` : ''}{summary.counts.aborted ? ` · ${summary.counts.aborted} aborted` : ''}{summary.counts.skipped ? ` · ${summary.counts.skipped} skipped` : ''}{summary.durationText ? ` · ${summary.durationText}` : ''}
       </span>
     </div>
+
+    {#if unsavedOutcome}
+      <div class="box {unsavedOutcome.tone}">
+        <b>{unsavedOutcome.title}</b>
+        <span>{unsavedOutcome.text}</span>
+      </div>
+    {/if}
 
     <ol class="steps" aria-label="Result per step">
       {#each rows as r (r.name)}
@@ -302,9 +373,50 @@
   {/if}
 </div>
 
-{#if confirmOpen}
+{#if dialog === 'unsaved' && unsavedModel}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="scrim" role="presentation" onclick={closeConfirm}>
+  <div class="scrim" role="presentation" onclick={closeDialog}>
+    <div
+      class="dlg"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="diag-unsaved-title"
+      aria-describedby="diag-unsaved-desc"
+      tabindex="-1"
+      bind:this={dlgUnsaved}
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h2 id="diag-unsaved-title">{unsavedModel.title}</h2>
+      <div id="diag-unsaved-desc" class="dd">
+        {#if restartNote}<p class="fw info">{restartNote}</p>{/if}
+        {#each unsavedModel.paragraphs as p (p)}<p>{p}</p>{/each}
+        {#if unsavedModel.olderFirmware}
+          <div class="fw info">
+            <p>{unsavedModel.olderFirmware}</p>
+            {#if unsavedModel.olderFirmwareAdvice}<p>{unsavedModel.olderFirmwareAdvice}</p>{/if}
+          </div>
+        {/if}
+        {#if unsavedModel.reason}<p class="why">Axis noticed: {unsavedModel.reason}</p>{/if}
+      </div>
+      <div class="dact col">
+        <button class="dcancel" bind:this={cancelUnsaved} onclick={closeDialog}>Cancel</button>
+        {#if unsavedModel.save}
+          <button class="dchoice" onclick={() => chooseUnsaved('save')}><span>{unsavedModel.save.label}</span><small>{unsavedModel.save.hint}</small></button>
+        {/if}
+        {#if unsavedModel.discard}
+          <button class="dchoice danger" onclick={() => chooseUnsaved('discard')}><span>{unsavedModel.discard.label}</span><small>{unsavedModel.discard.hint}</small></button>
+        {/if}
+        {#if unsavedModel.skip}
+          <button class="dchoice" onclick={() => chooseUnsaved('skip')}><span>{unsavedModel.skip.label}</span><small>{unsavedModel.skip.hint}</small></button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if dialog === 'confirm'}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="scrim" role="presentation" onclick={closeDialog}>
     <div
       class="dlg"
       role="alertdialog"
@@ -312,19 +424,31 @@
       aria-labelledby="diag-confirm-title"
       aria-describedby="diag-confirm-desc"
       tabindex="-1"
-      bind:this={dlg}
+      bind:this={dlgConfirm}
       onclick={(e) => e.stopPropagation()}
     >
       <h2 id="diag-confirm-title">{CONFIRM_TITLE}</h2>
       <div id="diag-confirm-desc" class="dd">
         <p>The diagnostic starts immediately and can take several minutes. Leave the device idle and do not use Axis or the device until it has finished.</p>
         <p>If the device stops responding, switch it off and on again.</p>
+        {#if restartNote && !askedUnsaved}
+          <p class="fw info">{restartNote}</p>
+        {/if}
+        {#if decisionText}
+          <p class="fw"><strong>Unsaved changes.</strong> {decisionText}</p>
+        {/if}
+        {#if unsavedSkipped}
+          <p class="fw info">{unsavedSkipText(plan)}</p>
+        {/if}
+        {#if preflightNote}
+          <p class="fw info">{preflightNote}</p>
+        {/if}
         {#if wantFullWalk && fullWalk.available}
           <p class="fw"><strong>Full walk is on.</strong> {FULL_WALK_WARNING}</p>
         {/if}
       </div>
       <div class="dact">
-        <button class="dcancel" bind:this={cancelBtn} onclick={closeConfirm}>Cancel</button>
+        <button class="dcancel" bind:this={cancelConfirm} onclick={closeDialog}>Cancel</button>
         <button class="dgo" onclick={runNow}>{wantFullWalk && fullWalk.available ? 'Run with full walk' : 'Run diagnostic'}</button>
       </div>
     </div>
@@ -420,7 +544,17 @@
   .dd { font-size: 12.5px; line-height: 1.55; color: var(--text2); }
   .dd p { margin: 0 0 8px; }
   .dd .fw { padding: 9px 11px; border: 1px solid var(--danger-border); background: var(--danger-tint); border-radius: 9px; font-size: 12px; }
+  .dd .fw.info { border-color: var(--accent-border); background: var(--accent-tint); }
+  .dd .fw p:last-child { margin-bottom: 0; }
+  .dd .why { font-size: 11.5px; color: var(--textdim); }
   .dact { display: flex; gap: 10px; margin-top: 14px; }
+  .dact.col { flex-direction: column; }
+  .dact.col button { flex: none; }
+  .dchoice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: auto !important; padding: 8px 12px; background: transparent; color: var(--text); border: 1px solid var(--border3); }
+  .dchoice small { font-size: 10.5px; font-weight: 600; color: var(--textdim); }
+  .dchoice:hover { border-color: var(--text2); }
+  .dchoice.danger { border-color: var(--danger-border); background: var(--danger-tint); }
+  .dchoice.danger small { color: var(--text2); }
   .dact button { flex: 1; height: 42px; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; }
   .dcancel { background: var(--accent); color: var(--accentink); border: 1px solid var(--accent); }
   .dgo { background: transparent; color: var(--text2); border: 1px solid var(--border3); }

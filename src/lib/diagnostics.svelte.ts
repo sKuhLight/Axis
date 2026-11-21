@@ -9,16 +9,18 @@
 // become a deep reactive proxy.
 
 import { forgefx, isRemote } from './forgefx';
-import type { CaptureBundle, CaptureStartRequest, CaptureStatus } from './types';
+import type { CaptureBundle, CapturePreflight, CaptureStartRequest, CaptureStatus, CaptureUnsavedEdits } from './types';
 import {
   bundleFileName,
   cancelErrorMessage,
+  classifyPreflightError,
   diagView,
   encodeBundle,
   errorInfo,
   isContactLost,
   isFinishedState,
   isRunBusy,
+  isStaleCheckError,
   platformGzip,
   pollDecision,
   resultErrorMessage,
@@ -39,6 +41,13 @@ const axisVersion = (): string | null => {
   return typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null;
 };
 
+/** What the pre-check said: a result, a refusal to start (409 busy / 503 no device — the message is in `error`), or a
+ *  failure of the pre-check itself (start without a decision, and say so). */
+export type PreflightResult =
+  | { kind: 'ok'; preflight: CapturePreflight }
+  | { kind: 'blocked' }
+  | { kind: 'fallback'; note: string };
+
 class DiagnosticsStore {
   /** The engine's view of the current / last run; null until first read (or when the engine has no diagnostic). */
   status = $state<CaptureStatus | null>(null);
@@ -48,6 +57,15 @@ class DiagnosticsStore {
   encoded = $state.raw<EncodedBundle | null>(null);
   /** POST start in flight. */
   starting = $state(false);
+  /** The pre-check (a few device reads of the edit buffer) is running — the engine holds the device, so it counts as busy. */
+  checking = $state(false);
+  /** The last start was refused because the pre-check it relied on no longer fits (token expired / unknown, cannot save): the
+   *  panel checks again and asks again instead of showing an error. Read once with `takeStaleCheck`. */
+  #staleCheck = false;
+  /** What the user decided about unsaved edits for the run that is showing (null = no question was asked), and the
+   *  preset it was about — for the summary. */
+  unsavedChoice = $state<CaptureUnsavedEdits | null>(null);
+  unsavedPreset = $state<{ number: number | null; name?: string } | null>(null);
   /** A cancel was requested and the run has not yet reported that it stopped. */
   cancelling = $state(false);
   loadingResult = $state(false);
@@ -81,7 +99,7 @@ class DiagnosticsStore {
   }
   /** A run owns the device transport — the editor's background reads (poll / preset watch / save probe) sit out. */
   get running(): boolean {
-    return isRunBusy(this.view);
+    return isRunBusy(this.view, this.checking);
   }
 
   // ── status ──
@@ -151,8 +169,30 @@ class DiagnosticsStore {
   };
 
   // ── run ──
-  /** Start a run. The request is built (and the two gates checked) by the caller via `buildStartRequest`. */
-  start = async (request: CaptureStartRequest): Promise<boolean> => {
+  /** Look at the device right before a run (current preset, edit buffer clean / dirty / unknown). Failures are sorted by
+   *  `classifyPreflightError`: a refusal sets `error`; anything else lets the run start without a decision. */
+  preflight = async (): Promise<PreflightResult> => {
+    if (this.checking) return { kind: 'blocked' };
+    this.checking = true;
+    this.error = null;
+    try {
+      return { kind: 'ok', preflight: await forgefx.diagnosticCapturePreflight() };
+    } catch (e) {
+      const { status, body } = errorInfo(e);
+      const c = classifyPreflightError(status, body);
+      if (c.kind === 'blocked') {
+        this.error = c.message;
+        return { kind: 'blocked' };
+      }
+      return { kind: 'fallback', note: c.message };
+    } finally {
+      this.checking = false;
+    }
+  };
+
+  /** Start a run. The request is built (and the two gates checked) by the caller via `buildStartRequest`; `about` is the
+   *  preset the unsaved-edits decision (if any) was about. */
+  start = async (request: CaptureStartRequest, about?: { number: number | null; name?: string }): Promise<boolean> => {
     if (this.starting || this.running) return false;
     this.starting = true;
     this.error = null;
@@ -167,6 +207,8 @@ class DiagnosticsStore {
       this.savedAs = null;
       this.dismissedId = null;
       this.cancelling = false;
+      this.unsavedChoice = request.unsavedEdits ?? null;
+      this.unsavedPreset = request.unsavedEdits && about ? about : null;
       this.includeFullWalk = !!request.includeFullWalk;
       this.status = { state: 'running', id: r.id, startedAt: new Date().toISOString(), resultAvailable: false };
       this.#pollOk();
@@ -174,11 +216,23 @@ class DiagnosticsStore {
       return true;
     } catch (e) {
       const { status, body } = errorInfo(e);
-      this.error = startErrorMessage(status, body);
+      if (isStaleCheckError(status, body)) {
+        this.#staleCheck = true; // the caller re-runs the pre-check and asks again
+        this.error = null;
+      } else {
+        this.error = startErrorMessage(status, body);
+      }
       return false;
     } finally {
       this.starting = false;
     }
+  };
+
+  /** Was the last start refused because the pre-check is out of date? (Reads and clears the flag.) */
+  takeStaleCheck = (): boolean => {
+    const was = this.#staleCheck;
+    this.#staleCheck = false;
+    return was;
   };
 
   cancel = async (): Promise<void> => {
