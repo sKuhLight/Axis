@@ -563,7 +563,7 @@ describe('wiring (source pins)', () => {
     expect(panel).toContain('{BACKUP_ACK_TEXT}');
     expect(panel).toContain('{CONFIRM_TITLE}');
     // Start runs the pre-check and opens the dialogs; only the confirmation dialog's own button runs the diagnostic
-    expect(panel).toMatch(/class="cta"[^>]*onclick=\{begin\}/);
+    expect(panel).toMatch(/class="cta"[^>]*onclick=\{\(\) => begin\(\)\}/);
     expect(panel).toMatch(/class="dgo" onclick=\{runNow\}/);
   });
   it('the confirmation dialog is modal, focuses Cancel, closes on Escape and restores focus', () => {

@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  OLDER_FIRMWARE_ADVICE,
   OLDER_FIRMWARE_NOTE,
   PREFLIGHT_FALLBACK_NOTE,
+  PREFLIGHT_MAX_AGE_MS,
   buildStartRequest,
   classifyPreflightError,
+  isPreflightStale,
   needsUnsavedDecision,
   plannedSteps,
   startErrorMessage,
   unsavedDecisionText,
   unsavedDialogModel,
   unsavedEditsOutcome,
+  unsavedSkipText,
   willSwitchPresets
 } from './diagnostics';
 import type { CapturePreflight } from './types';
@@ -50,6 +54,17 @@ describe('preflight failures', () => {
     expect(none.kind).toBe('blocked');
     expect(none.message).toMatch(/no device is connected/i);
   });
+  it('503 {error:"device"} (a dump failed) does not read as "no device"', () => {
+    const c = classifyPreflightError(503, { error: 'device', message: 'dump timed out\nafter 5 s' });
+    expect(c.kind).toBe('blocked');
+    expect(c.message).not.toMatch(/no device is connected/i);
+    expect(c.message).toMatch(/did not answer the check for unsaved changes/i);
+    expect(c.message).toContain('dump timed out after 5 s');
+    expect(c.message).toMatch(/switch the device off and on again/i);
+    expect(classifyPreflightError(503, { error: 'device' }).message).not.toMatch(/\(\)/);
+    expect(startErrorMessage(503, { error: 'no-device' })).toMatch(/no device is connected/i);
+    expect(startErrorMessage(503)).toMatch(/no device is connected/i);
+  });
   it('501 (not a gen-3 device) refuses too — the start would be refused the same way', () => {
     const c = classifyPreflightError(501, { error: 'unsupported', capability: 'diagnosticCapture' });
     expect(c.kind).toBe('blocked');
@@ -66,10 +81,22 @@ describe('preflight failures', () => {
   });
 });
 
+describe('the pre-check expires', () => {
+  it('goes stale shortly before the engine\'s ~15 minute token does', () => {
+    expect(PREFLIGHT_MAX_AGE_MS).toBeLessThan(15 * 60_000);
+    expect(PREFLIGHT_MAX_AGE_MS).toBeGreaterThan(10 * 60_000);
+    const t0 = 1_000_000;
+    expect(isPreflightStale(t0, t0)).toBe(false);
+    expect(isPreflightStale(t0, t0 + PREFLIGHT_MAX_AGE_MS)).toBe(false);
+    expect(isPreflightStale(t0, t0 + PREFLIGHT_MAX_AGE_MS + 1)).toBe(true);
+    expect(isPreflightStale(null, t0 + 10 * PREFLIGHT_MAX_AGE_MS)).toBe(false); // no pre-check, nothing to be stale
+  });
+});
+
 describe('unsavedEdits in the start body', () => {
   it('sends the decision, with the preset it was made for, only when the pre-check found unsaved edits', () => {
     expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'dirty' }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12 });
-    expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown' }), unsavedEdits: 'save' })).toEqual({ acknowledged: true, unsavedEdits: 'save', preset: 12 });
+    expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown' }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12 });
     // a stale choice (device now clean) or no pre-check never rides along
     expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'clean' }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true });
     expect(buildStartRequest({ ...base, preflight: null, unsavedEdits: 'discard' })).toEqual({ acknowledged: true });
@@ -79,11 +106,29 @@ describe('unsavedEdits in the start body', () => {
     expect(buildStartRequest({ ...base, preflight: pre({ canSave: false }), unsavedEdits: 'save' })).toEqual({ acknowledged: true });
     expect(buildStartRequest({ ...base, preflight: pre({ canSave: false }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12 });
   });
-  it('sends preset 0, and leaves the preset out when the pre-check did not know it (the engine then uses its last pre-check)', () => {
+  it('sends the pre-check token with the decision, and only with it', () => {
+    expect(buildStartRequest({ ...base, preflight: pre({ token: 'tok-1' }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12, token: 'tok-1' });
+    expect(buildStartRequest({ ...base, preflight: pre({ token: 'tok-1' }), unsavedEdits: 'save' })).toEqual({ acknowledged: true, unsavedEdits: 'save', preset: 12, token: 'tok-1' });
+    // a clean device or no decision: no token rides along
+    expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'clean', token: 'tok-1' }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true });
+    expect(buildStartRequest({ ...base, preflight: pre({ token: 'tok-1' }), unsavedEdits: null })).toEqual({ acknowledged: true });
+    // an engine that sends no token: none is made up
+    expect(buildStartRequest({ ...base, preflight: pre(), unsavedEdits: 'discard' })).not.toHaveProperty('token');
+  });
+  it('sends preset 0; with no known preset the engine cannot honour a decision, so none is sent', () => {
     expect(buildStartRequest({ ...base, preflight: pre({ preset: 0 }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 0 });
-    expect(buildStartRequest({ ...base, preflight: pre({ preset: null, canSave: false }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard' });
-    expect(buildStartRequest({ ...base, preflight: pre({ preset: 1.5 }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard' });
+    expect(buildStartRequest({ ...base, preflight: pre({ preset: null, canSave: false }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true });
+    expect(buildStartRequest({ ...base, preflight: pre({ preset: 1.5 }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true });
     expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'clean' }), unsavedEdits: 'discard' })).not.toHaveProperty('preset');
+  });
+  it('never saves from an edit buffer it could not read — discarding stays possible', () => {
+    expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown', canSave: true }), unsavedEdits: 'save' })).toEqual({ acknowledged: true });
+    expect(buildStartRequest({ ...base, preflight: pre({ editBuffer: 'unknown', canSave: false }), unsavedEdits: 'discard' })).toEqual({ acknowledged: true, unsavedEdits: 'discard', preset: 12 });
+  });
+  it('words a missing token (400 missing-token) and tells it apart from the other 400s', () => {
+    expect(startErrorMessage(400, { error: 'missing-token' })).toMatch(/fresh check of the device/i);
+    expect(startErrorMessage(400, { error: 'bad-steps' })).toMatch(/list of steps/i);
+    expect(startErrorMessage(400, { error: 'missing-token' })).not.toMatch(/disclaimer/i);
   });
   it('words a refused decision value (400 bad-unsaved-edits) apart from a missing acknowledgement', () => {
     expect(startErrorMessage(400, { error: 'bad-unsaved-edits' })).toMatch(/choice about unsaved changes/i);
@@ -110,18 +155,39 @@ describe('unsavedDialogModel', () => {
   });
   it('the discard button says that unsaved changes are lost', () => {
     const m = unsavedDialogModel(pre(), plan);
-    expect(m.discard.label).toBe('Discard changes');
-    expect(m.discard.hint).toMatch(/unsaved changes on the device are lost/i);
+    expect(m.discard?.label).toBe('Discard changes');
+    expect(m.discard?.hint).toMatch(/unsaved changes on the device are lost/i);
+    expect(m.skip).toBeNull();
   });
   it('mentions the full walk when it is part of the run', () => {
     expect(unsavedDialogModel(pre(), { includeFullWalk: true }).paragraphs[0]).toMatch(/reload check and the full walk switch presets/i);
   });
-  it('offers no save when the engine cannot save or the preset is unknown', () => {
-    expect(unsavedDialogModel(pre({ canSave: false }), plan).save).toBeNull();
-    const none = unsavedDialogModel(pre({ preset: null, presetName: undefined, canSave: true }), plan);
-    expect(none.save).toBeNull();
-    expect(none.title).toBe('Unsaved changes on the current preset');
+  it('offers no save when the engine cannot save', () => {
+    const m = unsavedDialogModel(pre({ canSave: false }), plan);
+    expect(m.save).toBeNull();
+    expect(m.discard).not.toBeNull();
     expect(unsavedDialogModel(pre({ presetName: undefined }), plan).title).toBe('Unsaved changes on preset 012');
+  });
+  it('an unknown edit buffer offers Discard and Cancel only — even if the engine claimed it could save', () => {
+    const m = unsavedDialogModel(pre({ editBuffer: 'unknown', canSave: true }), plan);
+    expect(m.save).toBeNull();
+    expect(m.discard).not.toBeNull();
+    expect(m.paragraphs.join(' ')).toMatch(/saving is not offered/i);
+  });
+  it('with no known preset neither Save nor Discard is offered: the steps are skipped and the user carries on or cancels', () => {
+    const m = unsavedDialogModel(pre({ preset: null, presetName: undefined, canSave: false }), plan);
+    expect(m.save).toBeNull();
+    expect(m.discard).toBeNull();
+    expect(m.skip).toEqual({ label: 'Continue without the reload check', hint: expect.stringMatching(/skipped/i) });
+    expect(m.title).toBe('Unsaved changes on the current preset');
+    expect(m.paragraphs[0]).toMatch(/could not tell which preset/i);
+    expect(m.paragraphs[0]).toMatch(/reload check will be skipped/i);
+    const full = unsavedDialogModel(pre({ preset: null, canSave: true }), { includeFullWalk: true });
+    expect(full.save).toBeNull();
+    expect(full.skip?.label).toBe('Continue without the reload check and full walk');
+    expect(full.paragraphs[0]).toMatch(/reload check and the full walk will be skipped/i);
+    expect(unsavedSkipText(plan)).toMatch(/reload check will be skipped/i);
+    expect(unsavedSkipText({ includeFullWalk: true })).toMatch(/reload check and the full walk will be skipped/i);
   });
   it('adds the older-firmware explanation when that is the likely cause', () => {
     const m = unsavedDialogModel(pre({ likelyCause: 'older-firmware' }), plan);
@@ -130,6 +196,14 @@ describe('unsavedDialogModel', () => {
       'This preset may have been saved under an older firmware; the device converted it when loading. Saving stores it in the current format.'
     );
     for (const likelyCause of ['unsaved-edits', 'unknown', undefined] as const) expect(unsavedDialogModel(pre({ likelyCause }), plan).olderFirmware).toBeNull();
+  });
+  it('tells what to pick when nothing was changed: Discard is safe, the preset is converted again on the next load', () => {
+    const m = unsavedDialogModel(pre({ likelyCause: 'older-firmware' }), plan);
+    expect(m.olderFirmwareAdvice).toBe(OLDER_FIRMWARE_ADVICE);
+    expect(OLDER_FIRMWARE_ADVICE).toMatch(/did not change anything, Discard is the safe choice/);
+    expect(OLDER_FIRMWARE_ADVICE).toMatch(/stored preset stays as it is and is converted again the next time it is loaded/);
+    expect(OLDER_FIRMWARE_ADVICE).toMatch(/Save rewrites it in the current format/);
+    expect(unsavedDialogModel(pre({ likelyCause: 'unknown' }), plan).olderFirmwareAdvice).toBeNull();
   });
   it('does not claim certainty when the edit buffer is unknown, and clips the engine reason and the name', () => {
     const m = unsavedDialogModel(pre({ editBuffer: 'unknown', reason: `could not compare\n${'x'.repeat(400)}`, presetName: 'N'.repeat(80) }), plan);
@@ -214,6 +288,49 @@ describe('unsavedEditsOutcome — from the step results of the bundle', () => {
   it('looks only at the steps that switch presets', () => {
     expect(unsavedEditsOutcome([ok('labelProbe', { save: saved })], null)).toBeNull();
   });
+  const failedStep = (outcome: string, save?: unknown, error = 'x') => [{ name: 'reloadProbe', status: 'failed', error, result: { unsavedEdits: { decision: 'save', outcome, ...(save ? { save } : {}) } } }];
+  it('save-rejected: the device refused — the stored preset is untouched and the changes are still on the device', () => {
+    const o = unsavedEditsOutcome(failedStep('save-rejected', { slot: 12, ok: false, acked: false, ms: 80, reason: 'rejected' }, 'the device refused the store'), 'save');
+    expect(o).toMatchObject({ kind: 'save-rejected', tone: 'bad', title: 'Unsaved changes: save refused' });
+    expect(o!.text).toContain('the device refused the store');
+    expect(o!.text).toMatch(/stored preset 012 was not changed/i);
+    expect(o!.text).toMatch(/still on the device/i);
+    expect(o!.text).toMatch(/no preset was switched/i);
+  });
+  it('save-unconfirmed: the device did not confirm — check the preset on the device', () => {
+    const o = unsavedEditsOutcome(failedStep('save-unconfirmed', { slot: 12, ok: true, acked: false, ms: 1500 }), 'save');
+    expect(o).toMatchObject({ kind: 'save-unconfirmed', tone: 'warn' });
+    expect(o!.text).toBe('The device did not confirm the save to preset 012. Check preset 012 on the device to see whether it was stored. No preset was switched.');
+  });
+  it('saved-check-failed: saved, but it still differs from the stored copy — no preset was switched', () => {
+    const o = unsavedEditsOutcome(failedStep('saved-check-failed', { slot: 7, ok: true, acked: true, ms: 200 }), 'save');
+    expect(o).toMatchObject({ kind: 'saved-check-failed', tone: 'warn' });
+    expect(o!.text).toBe('Your changes were saved to preset 007, but it still differs from the stored copy afterwards, so no preset was switched. Check preset 007 on the device.');
+  });
+  it('edits-changed: the unsaved changes moved on after the decision — nothing was saved or discarded', () => {
+    const o = unsavedEditsOutcome([{ name: 'reloadProbe', status: 'skipped', note: 'the unsaved changes changed', result: { unsavedEdits: { decision: 'discard', outcome: 'edits-changed' } } }], 'discard');
+    expect(o).toMatchObject({ kind: 'edits-changed', tone: 'warn' });
+    expect(o!.text).toBe('The unsaved changes changed after you decided, so nothing was saved or discarded and the steps that switch presets were skipped.');
+  });
+  it('a save still in progress when the run stopped: check it on the device', () => {
+    const o = unsavedEditsOutcome([{ name: 'reloadProbe', status: 'aborted', result: { save: { slot: 12, pending: true } } }], 'save');
+    expect(o).toMatchObject({ kind: 'save-pending', tone: 'bad' });
+    expect(o!.text).toBe('A save to preset 012 was in progress when the run stopped — check it on the device.');
+    // also when it sits inside the decision record, and without a known slot
+    expect(unsavedEditsOutcome([{ name: 'fullWalk', status: 'aborted', result: { unsavedEdits: { decision: 'save', outcome: null, save: { pending: true } } } }], null)!.text).toBe(
+      'A save to the current preset was in progress when the run stopped — check it on the device.'
+    );
+  });
+  it('every outcome has a title and wording of its own', () => {
+    const kinds = ['saved', 'discarded', 'save-rejected', 'save-unconfirmed', 'saved-check-failed', 'edits-changed', 'preset-changed', 'save-failed'];
+    const texts = new Set<string>();
+    for (const outcome of kinds) {
+      const o = unsavedEditsOutcome([{ name: 'reloadProbe', status: outcome === 'saved' || outcome === 'discarded' ? 'ok' : 'failed', result: { unsavedEdits: { decision: outcome === 'discarded' ? 'discard' : 'save', outcome, save: { slot: 1, ok: true, acked: true } } } }], null);
+      expect(o?.kind, outcome).toBe(outcome);
+      texts.add(o!.text);
+    }
+    expect(texts.size).toBe(kinds.length);
+  });
 });
 
 // ── wiring (source pins) ──
@@ -233,10 +350,27 @@ describe('wiring (source pins)', () => {
     expect(types).toMatch(/unsavedEdits\?: CaptureUnsavedEdits;/);
   });
   it('Start runs the pre-check; the unsaved dialog comes before the confirmation dialog; its choice goes into the request', () => {
-    expect(panel).toMatch(/const r = await d\.preflight\(\);[\s\S]*?dialog = needsUnsavedDecision\(\{ preflight, willSwitch: willSwitchPresets\(plan\) \}\) \? 'unsaved' : 'confirm';/);
-    expect(panel).toMatch(/function chooseUnsaved\(choice: CaptureUnsavedEdits\) \{\s*unsavedChoice = choice;\s*dialog = 'confirm';/);
+    expect(panel).toMatch(/const r = await d\.preflight\(\);[\s\S]*?dialog = askedUnsaved \? 'unsaved' : 'confirm';/);
+    expect(panel).toContain('const askedUnsaved = $derived(needsUnsavedDecision({ preflight, willSwitch: willSwitchPresets(plan) }));');
+    expect(panel).toMatch(/function chooseUnsaved\(choice: CaptureUnsavedEdits \| 'skip'\) \{\s*unsavedChoice = choice === 'skip' \? null : choice;\s*unsavedSkipped = choice === 'skip';\s*dialog = 'confirm';/);
+    // the click event must never be taken for the restart notice
+    expect(panel).toContain('onclick={() => begin()}');
     expect(panel).toMatch(/buildStartRequest\(\{ acknowledged, confirmed: true, includeFullWalk: wantFullWalk, fullWalk, preflight, unsavedEdits: unsavedChoice \}\)/);
     expect(panel.indexOf("{#if dialog === 'unsaved'")).toBeLessThan(panel.indexOf("{#if dialog === 'confirm'"));
+  });
+  it('an expired pre-check is repeated and asked again instead of being sent', () => {
+    expect(panel).toMatch(/if \(preflight && isPreflightStale\(preflightAt, Date\.now\(\)\)\) \{\s*dialog = null;\s*await begin\(PREFLIGHT_STALE_NOTE\);\s*return;\s*\}/);
+    expect(panel.indexOf('isPreflightStale(preflightAt')).toBeLessThan(panel.indexOf('const request = buildStartRequest('));
+    expect(panel).toContain('preflightAt = Date.now();');
+    expect(panel).toContain('{restartNote}');
+  });
+  it('the dialog adapts: Save / Discard only when offered, a skip button when the preset is unknown, the older-firmware advice', () => {
+    const dlg = panel.slice(panel.indexOf("{#if dialog === 'unsaved'"), panel.indexOf("{#if dialog === 'confirm'"));
+    expect(dlg).toMatch(/\{#if unsavedModel\.discard\}/);
+    expect(dlg).toMatch(/\{#if unsavedModel\.skip\}[\s\S]*?chooseUnsaved\('skip'\)/);
+    expect(dlg).toContain('{unsavedModel.olderFirmware}');
+    expect(dlg).toContain('{unsavedModel.olderFirmwareAdvice}');
+    expect(panel).toContain('{unsavedSkipText(plan)}');
   });
   it('a refused pre-check stays on the form; a failed one starts without a decision and says so', () => {
     expect(panel).toMatch(/if \(r\.kind === 'blocked'\) return;/);

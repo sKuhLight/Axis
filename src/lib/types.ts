@@ -1030,6 +1030,9 @@ export interface CaptureStartRequest {
   /** The preset the pre-check saw (sent together with `unsavedEdits`): the engine honours the decision only while the
    *  device is still on it. */
   preset?: number;
+  /** The pre-check's token (a hash of the preset and its edit buffer, valid for about 15 minutes), sent together with
+   *  `unsavedEdits`: the engine honours the decision only for the edits that were actually seen. */
+  token?: string;
 }
 
 /** `GET /diagnostics/capture/preflight` — what the device looks like right before a run. */
@@ -1042,8 +1045,10 @@ export interface CapturePreflight {
   reason?: string;
   /** `older-firmware`: the device converted a preset saved under older firmware when loading it. */
   likelyCause?: 'unsaved-edits' | 'older-firmware' | 'unknown';
-  /** The engine can store to the current slot and the current preset is known. */
+  /** The engine can store to the current slot, the preset is known and the edit buffer is known (never for `unknown`). */
   canSave: boolean;
+  /** Proves this pre-check to the start request (expires after about 15 minutes). */
+  token?: string;
 }
 
 /** `GET /diagnostics/capture/result` — the redacted result bundle (`schema: 1`). */
