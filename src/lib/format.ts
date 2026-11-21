@@ -88,6 +88,16 @@ export function catalogUnitSymbol(code?: string | null): string {
   return CATALOG_UNIT_SYMBOLS.get(code) ?? code;
 }
 
+/** True for a decoded preset param (`/presets/:n/params`) whose `value` is NOT a display value but the raw
+ *  0..65534 model value, so a unit would mislabel it ("32767%"). The codec surfaces the raw value for a
+ *  param with no range row (`kind` absent) and for a 0..0 placeholder range row (`kind: 'float'`,
+ *  `value === raw`). A real ranged value equals its raw only at raw 0 (min 0), which is why raw 0 does not
+ *  count as a placeholder; no shipped range spans 0..65534. */
+export function isUnrangedParam(p: { kind?: string | null; value: number | null; raw?: number }): boolean {
+  if (p.kind == null) return true;
+  return p.kind !== 'enum' && p.value != null && p.raw != null && p.raw !== 0 && p.value === p.raw;
+}
+
 /** Full, readable value for the value bubble — device-true value at the current norm, unit folded in.
  *  Hz ≥ 1000 compacts to kHz (the ONLY conversion; new tokens like dB/OCT or SECONDS pass through
  *  verbatim). Uses withUnit() for spacing so every token renders consistently. */

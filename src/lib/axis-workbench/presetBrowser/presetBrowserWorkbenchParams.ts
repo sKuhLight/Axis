@@ -7,7 +7,7 @@
 // param onto the FILTERS row. The docked runtime reaches the SAME decoded blocks the monolith uses
 // (library.paramsOf via the runtime host), so this is FULL param parity — not a summary-only fallback.
 
-import { catalogUnitSymbol, withUnit } from '../../format';
+import { catalogUnitSymbol, isUnrangedParam, withUnit } from '../../format';
 import type { AxisPbCond, AxisPbParamCond } from './presetBrowserWorkbenchQuery';
 import { cmp } from './presetBrowserWorkbenchQuery';
 import type { AxisPbDragPayload } from './presetBrowserWorkbenchFilters';
@@ -19,6 +19,7 @@ export interface DetailParam extends SpecDecodedParam {
   paramId: number;
   name: string; // catalog symbol, e.g. DISTORT_TYPE
   unit?: string;
+  raw?: number; // raw 0..65534 model value (only used to spot a 0..0 placeholder range, see isUnrangedParam)
 }
 
 export interface DetailBlock extends SpecDecodedBlock {
@@ -33,12 +34,13 @@ export function fmtNum(v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
-export function fmtVal(p: { value: number | null; enumLabel?: string | null; unit?: string }): string {
+export function fmtVal(p: { value: number | null; enumLabel?: string | null; unit?: string; kind?: string | null; raw?: number }): string {
   if (p.enumLabel != null) return p.enumLabel;
   if (p.value == null) return '—';
   // The catalog unit code ForgeFX returns (percent, knob_0_10, semitones …) → its symbol; codes that name
   // no unit drop out, unknown device-true tokens pass through verbatim (same mapping as the monolith).
-  return withUnit(fmtNum(p.value), catalogUnitSymbol(p.unit));
+  // A param without a range carries the raw 0..65534 value: shown bare, never as "32767%".
+  return withUnit(fmtNum(p.value), isUnrangedParam(p) ? '' : catalogUnitSymbol(p.unit));
 }
 
 // A block's params worth showing in the detail: skip zero/default noise; cap at 12 per block

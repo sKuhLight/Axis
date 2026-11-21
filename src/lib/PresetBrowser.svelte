@@ -13,7 +13,7 @@
   import { notifyMutation } from './syncBus';
   import { startCrossConvert, openConvertedInConverter } from './presetConvertSource';
   import { convert } from './convert.svelte';
-  import { catalogUnitSymbol, withUnit } from './format';
+  import { catalogUnitSymbol, isUnrangedParam, withUnit } from './format';
   import Icon, { type IconName } from './Icon.svelte';
   import MiniGrid from './MiniGrid.svelte';
   import type { LibEntry } from './library.svelte';
@@ -943,11 +943,12 @@
   // ===================== helpers =====================
   const pad = (n: number) => (n < 0 ? '—' : String(n).padStart(3, '0'));
   function fmtNum(v: number) { return Number.isInteger(v) ? String(v) : v.toFixed(1); }
-  function fmtVal(p: { value: number | null; enumLabel?: string; unit?: string }) {
+  function fmtVal(p: { value: number | null; enumLabel?: string; unit?: string; kind?: string; raw?: number }) {
     if (p.enumLabel != null) return p.enumLabel;
     if (p.value == null) return '—';
-    // catalog unit code → symbol (shared with the docked browser + converter); '%' attaches, no-unit codes drop
-    return withUnit(fmtNum(p.value), catalogUnitSymbol(p.unit));
+    // catalog unit code → symbol (shared with the docked browser + converter); '%' attaches, no-unit codes drop.
+    // A param without a range carries the raw 0..65534 value: shown bare, never as "32767%".
+    return withUnit(fmtNum(p.value), isUnrangedParam(p) ? '' : catalogUnitSymbol(p.unit));
   }
   // which params are highlighted in the detail (matched by an active block-param condition)
   function matchedKeys(e: LibEntry): Set<string> {

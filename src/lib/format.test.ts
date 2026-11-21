@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogUnitSymbol, fmtValue, withUnit, type DispRange } from './format';
+import { catalogUnitSymbol, fmtValue, isUnrangedParam, withUnit, type DispRange } from './format';
 
 // A ranged param whose linear taper lands exactly on `value` at norm 0.5 (min/max straddle it).
 // Lets each case declare the device-true value + unit token it should render.
@@ -129,5 +129,28 @@ describe('catalogUnitSymbol', () => {
     expect(withUnit('5', catalogUnitSymbol('knob_0_10'))).toBe('5');
     expect(withUnit('5', catalogUnitSymbol('knob_0_20'))).toBe('5');
     expect(withUnit('5', catalogUnitSymbol('numeric'))).toBe('5');
+  });
+});
+
+describe('isUnrangedParam', () => {
+  it('flags a param with no range row (kind absent): its value is the raw 0..65534 model value', () => {
+    expect(isUnrangedParam({ value: 32767 })).toBe(true);
+    expect(isUnrangedParam({ kind: undefined, value: 32767, raw: 32767 })).toBe(true);
+    expect(isUnrangedParam({ kind: null, value: 40000, raw: 40000 })).toBe(true);
+  });
+
+  it('flags a 0..0 placeholder range row (float kind, value === raw)', () => {
+    expect(isUnrangedParam({ kind: 'float', value: 32767, raw: 32767 })).toBe(true);
+  });
+
+  it('keeps a real ranged value: display value differs from the raw model value', () => {
+    expect(isUnrangedParam({ kind: 'float', value: 5, raw: 3277 })).toBe(false);
+    expect(isUnrangedParam({ kind: 'float', value: -12, raw: 20000 })).toBe(false);
+    // no raw to compare against: a ranged kind is trusted
+    expect(isUnrangedParam({ kind: 'float', value: 5 })).toBe(false);
+    // raw 0 at a range minimum of 0 is a legitimate 0, not a placeholder
+    expect(isUnrangedParam({ kind: 'float', value: 0, raw: 0 })).toBe(false);
+    // enum rows are never placeholders
+    expect(isUnrangedParam({ kind: 'enum', value: 3, raw: 3 })).toBe(false);
   });
 });
