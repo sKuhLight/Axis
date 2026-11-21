@@ -9,6 +9,7 @@
 // (`diagnostics.svelte.ts`) and the panel (`DiagnosticsPanel.svelte`) are thin shells over these.
 
 import type {
+  CaptureUploadRequest,
   CaptureBundle,
   CaptureRunState,
   CaptureStartRequest,
@@ -35,6 +36,16 @@ export const UPLOAD_CONSENT_TEXT =
   'I have reviewed what is uploaded and agree to send this diagnostic result to Axis for analysis.';
 /** The cloud's compressed upload ceiling (server answers 413 above it). */
 export const UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
+/** After this long an upload shows a "still uploading" note (large results take minutes; the engine's own worst case is ~9.5 min). */
+export const UPLOAD_SLOW_MS = 15_000;
+
+/** The engine accepts the client's version in this form only (it stamps it into the uploaded copy). */
+const AXIS_VERSION_RE = /^[0-9A-Za-z.+-]{1,32}$/;
+
+/** The `POST /diagnostics/capture/upload` body: the consent, plus the Axis version when it is a plausible one. */
+export function uploadRequestBody(axisVersion: string | null | undefined): CaptureUploadRequest {
+  return axisVersion && AXIS_VERSION_RE.test(axisVersion) ? { consent: true, axisVersion } : { consent: true };
+}
 
 // ── step catalogue ──────────────────────────────────────────────────────────────────────────────────────────
 
@@ -129,8 +140,9 @@ export function buildStartRequest(inp: {
 
 // ── status → view ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** What the panel shows: the setup form, a run being started / running / being cancelled, or a finished run's summary. */
-export type DiagView = 'idle' | 'starting' | 'running' | 'cancelling' | 'finished';
+/** What the panel shows: the setup form, a run being started / running / being cancelled, a run whose engine went
+ *  silent (`lost`), or a finished run's summary. */
+export type DiagView = 'idle' | 'starting' | 'running' | 'cancelling' | 'lost' | 'finished';
 
 export const isFinishedState = (s: CaptureRunState | undefined): boolean => s === 'done' || s === 'failed' || s === 'cancelled';
 
@@ -138,27 +150,38 @@ export const isFinishedState = (s: CaptureRunState | undefined): boolean => s ==
  * Map the engine's status (plus local transient flags) to a view. `dismissedId` is the id of a finished run the user already
  * moved on from ("Run again") — it then reads as idle until a different run appears.
  */
-export function diagView(inp: { status: CaptureStatus | null; starting: boolean; cancelling: boolean; dismissedId: string | null }): DiagView {
+export function diagView(inp: { status: CaptureStatus | null; starting: boolean; cancelling: boolean; dismissedId: string | null; lost?: boolean }): DiagView {
   if (inp.starting) return 'starting';
   const state = inp.status?.state;
-  if (state === 'running') return inp.cancelling ? 'cancelling' : 'running';
+  if (state === 'running') return inp.lost ? 'lost' : inp.cancelling ? 'cancelling' : 'running';
   if (isFinishedState(state)) return inp.dismissedId !== null && inp.dismissedId === (inp.status?.id ?? '') ? 'idle' : 'finished';
   return 'idle';
 }
 
-/** Anything that keeps the device transport busy: background device reads (poll / preset watch) must sit out. */
+/** Anything that keeps the device transport busy: background device reads (poll / preset watch) must sit out.
+ *  A `lost` run is not: the engine has been unreachable too long to keep the editor waiting on it. */
 export const isRunBusy = (view: DiagView): boolean => view === 'starting' || view === 'running' || view === 'cancelling';
 
 // ── polling ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const POLL_MS = 1000;
-export const POLL_MAX_FAILURES = 5;
+/** Backoff ceiling between failed polls. */
+export const POLL_MAX_DELAY_MS = 5000;
+/** The engine has been unreachable this long -> stop treating the run as busy (the editor resumes). */
+export const LOST_CONTACT_MS = 60_000;
 
-/** Keep polling while a run is going; back off after failed polls and give up after `POLL_MAX_FAILURES` in a row. */
+/**
+ * Keep polling for as long as a run is going - the status read is in-memory on the engine and never touches the
+ * device - backing off after failed polls up to `POLL_MAX_DELAY_MS`. Polling continues while contact is lost, so a
+ * returning engine is picked up on its own.
+ */
 export function pollDecision(inp: { state: CaptureRunState | undefined; failures: number }): { poll: boolean; delayMs: number } {
-  if (inp.state !== 'running' || inp.failures >= POLL_MAX_FAILURES) return { poll: false, delayMs: 0 };
-  return { poll: true, delayMs: Math.min(POLL_MS * (1 + inp.failures), 5000) };
+  if (inp.state !== 'running') return { poll: false, delayMs: 0 };
+  return { poll: true, delayMs: Math.min(POLL_MS * (1 + Math.max(0, inp.failures)), POLL_MAX_DELAY_MS) };
 }
+
+/** Has the engine been unreachable (consecutive failed polls) for longer than `LOST_CONTACT_MS`? `null` = reachable. */
+export const isContactLost = (unreachableMs: number | null): boolean => unreachableMs !== null && unreachableMs > LOST_CONTACT_MS;
 
 /** A finished run's bundle should be fetched once: results exist, and the one held (if any) is for another run. */
 export function shouldFetchResult(inp: { status: CaptureStatus | null; heldId: string | null; loading: boolean }): boolean {
@@ -239,7 +262,7 @@ export function abortReasonText(reason: string | undefined | null): string | nul
   if (!r) return null;
   if (r === 'cancelled') return 'You cancelled the run.';
   if (r === 'device-silent') return 'The device stopped answering, so the run was stopped. Switch the device off and on again before you carry on.';
-  if (r === 'query-bound') return 'A device query took longer than the safety limit, so the run was stopped.';
+  if (r === 'query-bound') return 'A query fell outside the safe limits of the scan, so Axis refused to send it and stopped the run. It was never sent to the device.';
   if (/^error:/i.test(r)) return `The run stopped because of an error: ${clip(r.replace(/^error:\s*/i, ''), 200)}`;
   return `The run stopped: ${clip(r, 200)}`;
 }
@@ -293,10 +316,11 @@ export function runSummary(status: CaptureStatus, rows: readonly StepRow[]): Run
 
 // ── errors → wording ────────────────────────────────────────────────────────────────────────────────────────
 
-/** HTTP status + parsed JSON body of a failed call. A network/timeout failure (no HTTP response) is status 0. */
-export function errorInfo(e: unknown): { status: number; body: unknown } {
-  const o = e as { status?: unknown; body?: unknown } | null;
-  return { status: typeof o?.status === 'number' ? o.status : 0, body: o?.body };
+/** HTTP status + parsed JSON body of a failed call. A network/timeout failure (no HTTP response) is status 0;
+ *  `timedOut` marks the client's own ceiling expiring (the request may still have been handled). */
+export function errorInfo(e: unknown): { status: number; body: unknown; timedOut: boolean } {
+  const o = e as { status?: unknown; body?: unknown; name?: unknown } | null;
+  return { status: typeof o?.status === 'number' ? o.status : 0, body: o?.body, timedOut: o?.name === 'TimeoutError' || o?.name === 'AbortError' };
 }
 
 const field = (body: unknown, key: string): unknown => (body && typeof body === 'object' ? (body as Record<string, unknown>)[key] : undefined);
@@ -341,31 +365,65 @@ export function cancelErrorMessage(status: number): string {
   return status === 0 ? `${ENGINE_UNREACHABLE} The run may still be going.` : `The cancel request failed (error ${status}). The run may still be going.`;
 }
 
-/** Wording for a failed upload (`POST /diagnostics/capture/upload`), per status — incl. the cloud's own status on a 502. */
-export function uploadErrorMessage(status: number, body?: unknown): string {
-  const sign = 'You are not signed in. Open the Account tab, sign in, then upload again.';
-  const rate = 'You have uploaded too many diagnostics recently. Please wait a while (up to an hour) and try again.';
+/** "in about 2 minutes" - a retry hint from the engine's `retryAfterSeconds` (null/absent -> "in a while"). */
+export function formatRetryAfter(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return 'in a while';
+  if (seconds < 90) {
+    const n = Math.max(1, Math.round(seconds));
+    return `in about ${n} second${n === 1 ? '' : 's'}`;
+  }
+  const m = Math.round(seconds / 60);
+  if (m < 90) return `in about ${m} minutes`;
+  const h = Math.round(seconds / 3600);
+  if (h < 48) return `in about ${h} hour${h === 1 ? '' : 's'}`;
+  return `in about ${Math.round(seconds / 86400)} days`;
+}
+
+/**
+ * Wording for a failed upload (`POST /diagnostics/capture/upload`), per status and error code: 400 not consented, 401
+ * not signed in (`reason: 'account-required'` = an anonymous session), 404 no result, 413 too large, 429 `rate-limited` /
+ * `quota-exceeded` with `retryAfterSeconds`, 503 `cloud-disabled`, 502 any other cloud error (with the cloud's own
+ * status - 0 meaning it could not be reached). `timedOut`: the client stopped waiting; the upload may have gone through.
+ */
+export function uploadErrorMessage(status: number, body?: unknown, opts: { timedOut?: boolean } = {}): string {
   const big = (bytes: number | null, limit: number | null): string =>
     bytes !== null && limit !== null
       ? `The result is too large to upload (${formatBytes(bytes)}, the limit is ${formatBytes(limit)}). Save it locally instead.`
       : 'The result is too large to upload. Save it locally instead.';
+  const rate = (): string => {
+    const when = formatRetryAfter(num(field(body, 'retryAfterSeconds')));
+    return field(body, 'error') === 'quota-exceeded'
+      ? `You have reached the upload limit for the last 30 days. You can upload again ${when}. You can still save the result locally.`
+      : `You have uploaded too many diagnostics recently. Try again ${when}.`;
+  };
+  const unreachable = 'The Axis cloud could not be reached. Check your internet connection and try again — repeating an upload is safe.';
   switch (status) {
-    case 0: return ENGINE_UNREACHABLE;
+    case 0:
+      return opts.timedOut
+        ? 'The upload is taking longer than expected, so Axis stopped waiting. It may still have gone through — trying again is safe, the cloud ignores duplicates.'
+        : ENGINE_UNREACHABLE;
     case 400: return 'The upload needs your consent. Tick the box and try again.';
-    case 401: return sign;
+    case 401:
+      return field(body, 'reason') === 'account-required'
+        ? 'This session is signed in anonymously. Sign in with a full Axis account from the Account tab, then upload again.'
+        : 'You are not signed in. Open the Account tab, sign in, then upload again.';
     case 404: return 'There is no finished diagnostic to upload. Run the diagnostic first.';
     case 413: return big(num(field(body, 'bytes')), num(field(body, 'limit')));
-    case 429: return rate;
+    case 429: return rate();
     case 502: {
       const cloudStatus = num(field(body, 'status'));
       const message = field(body, 'message');
       if (cloudStatus === 401 || cloudStatus === 403) return 'Your Axis cloud session has expired. Sign out and in again from the Account tab, then retry.';
       if (cloudStatus === 413) return big(null, null);
-      if (cloudStatus === 429) return rate;
+      if (cloudStatus === 429) return rate();
+      if (cloudStatus === 0) return unreachable;
       const detail = typeof message === 'string' && message.trim() ? `: ${clip(message, 160)}` : '';
       return `The Axis cloud did not accept the upload${cloudStatus !== null ? ` (error ${cloudStatus})` : ''}${detail}. Try again later, or save the result locally.`;
     }
-    case 503: return 'The Axis cloud is not reachable right now. Try again later, or save the result locally.';
+    case 503:
+      return field(body, 'error') === 'cloud-disabled' || field(body, 'error') === undefined
+        ? 'Cloud features are turned off in this build, so nothing can be uploaded. You can still save the result locally.'
+        : 'The Axis cloud is not reachable right now. Try again later, or save the result locally.';
     default: return `The upload failed (error ${status}). Try again later, or save the result locally.`;
   }
 }
@@ -414,7 +472,7 @@ export function uploadPreview(bundle: CaptureBundle, sizes: { jsonBytes: number;
   const versions = [app.forgefx ? `engine ${app.forgefx}` : '', app.codec ? `protocol ${app.codec}` : '', app.axis ? `Axis ${app.axis}` : ''].filter(Boolean).join(' · ');
   const statusCount = (s: CaptureStepStatus) => (bundle.steps ?? []).filter((x) => x.status === s).length;
   const stepBits = (['ok', 'failed', 'skipped', 'aborted'] as const).map((s) => [s, statusCount(s)] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${STATUS_TEXT[s].toLowerCase()}`);
-  const size = sizes.gzBytes !== null ? `${formatBytes(sizes.jsonBytes)} (about ${formatBytes(sizes.gzBytes)} compressed)` : formatBytes(sizes.jsonBytes);
+  const size = sizes.gzBytes !== null ? `about ${formatBytes(sizes.jsonBytes)} (about ${formatBytes(sizes.gzBytes)} compressed)` : `about ${formatBytes(sizes.jsonBytes)}`;
   const red = bundle.redaction ?? { presetNames: 0, dumpPayloadFrames: 0 };
   const rows: PreviewRow[] = [
     { label: 'Device', value: bundle.device?.modelName || 'unknown' },
@@ -425,7 +483,7 @@ export function uploadPreview(bundle: CaptureBundle, sizes: { jsonBytes: number;
     { label: 'Steps', value: `${(bundle.steps ?? []).length} ${(bundle.steps ?? []).length === 1 ? 'step' : 'steps'}${stepBits.length ? ` — ${stepBits.join(', ')}` : ''}` },
     { label: 'Wire log', value: `${(bundle.frames ?? []).length} frames with timestamps` },
     { label: 'Run log', value: `${(bundle.logs ?? []).length} ${(bundle.logs ?? []).length === 1 ? 'line' : 'lines'}` },
-    { label: 'Size', value: size },
+    { label: 'Size (estimate)', value: size },
     { label: 'Removed before upload', value: `${red.presetNames} preset/scene name answers blanked · ${red.dumpPayloadFrames} preset dump payloads cut down to their header` }
   ];
   return {

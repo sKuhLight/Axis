@@ -13,6 +13,8 @@ export interface AxisUpdateEvent {
 declare global {
   /** App version, injected at build time from package.json (see vite.config). */
   const __APP_VERSION__: string;
+  /** Version of the bundled ForgeFX engine package, injected at build time (empty when it can't be read). */
+  const __FORGEFX_VERSION__: string;
   interface Window {
     axisDesktop?: { isDesktop: boolean; version: string | null };
     /** Electron auto-update bridge (desktop builds only). */

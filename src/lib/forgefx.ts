@@ -41,6 +41,7 @@ import type {
   CaptureStartRequest,
   CaptureStartResult,
   CaptureBundle,
+  CaptureUploadRequest,
   CaptureUploadResult
 } from './types';
 import { checkSaveTarget, saveBlockedText } from './saveTarget';
@@ -440,9 +441,12 @@ export const forgefx = {
    *  The bundle carries the full wire log, so it can be several MB — a longer ceiling than the 12 s default. */
   diagnosticCaptureResult: () => req<CaptureBundle>('/diagnostics/capture/result', { signal: AbortSignal.timeout(120000) }),
   /** Hand the last bundle to the Axis cloud for analysis (needs a signed-in cloud session on the engine).
-   *  `consent: true` is required by the type — the UI sends it only after the explicit consent tick. */
-  uploadDiagnosticCapture: (consent: true) =>
-    req<CaptureUploadResult>('/diagnostics/capture/upload', { method: 'POST', body: JSON.stringify({ consent }), signal: AbortSignal.timeout(180000) }),
+   *  `consent: true` is required by the type — the UI sends it only after the explicit consent tick; `axisVersion`
+   *  is stamped into the uploaded copy. The engine's own worst case (reserve + storage upload with retries +
+   *  finalize + one re-upload) is about 9.5 minutes, so the ceiling sits just above it; the cloud de-duplicates, so
+   *  repeating an upload that timed out here is safe. */
+  uploadDiagnosticCapture: (request: CaptureUploadRequest) =>
+    req<CaptureUploadResult>('/diagnostics/capture/upload', { method: 'POST', body: JSON.stringify(request), signal: AbortSignal.timeout(660000) }),
 
   // ── device definitions / effect-definition profile cache (A4, AXIS-17/44 · META-22) ──
   // A per-device+firmware definition profile the server can build (self-describe walk), import from an

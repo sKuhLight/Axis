@@ -1171,15 +1171,22 @@ class EditorStore {
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
    *  into one lightweight refresh). */
-  #scheduleSceneReload = (settleMs = 250) => {
-    if (this.#eventReload) clearTimeout(this.#eventReload);
-    this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
-  };
+  #scheduleSceneReload = (settleMs = 250) => this.#scheduleReload(settleMs, () => this.#refreshScene());
   /** Debounce block-state reflection after channel changes; FM3-Edit waits a shorter settle window
    *  before re-reading the affected block. */
-  #scheduleBlockStateReload = (settleMs = 120) => {
+  #scheduleBlockStateReload = (settleMs = 120) => this.#scheduleReload(settleMs, () => this.#refreshScene());
+  /** The one debounce behind every event-driven device re-read (scene / block state / structural change): the
+   *  last schedule wins, so a burst coalesces. While a definitions walk/import or a diagnostic run owns the
+   *  transport the re-read waits instead — an edit-buffer dump + block reads in the middle of its query stream
+   *  has frozen an FM3 (FORGEFX-32) and would land in a diagnostic's wire log — and runs ONCE when it is over. */
+  #scheduleReload = (settleMs: number, run: () => Promise<void>) => {
     if (this.#eventReload) clearTimeout(this.#eventReload);
-    this.#eventReload = setTimeout(() => { void this.#refreshScene(); }, settleMs);
+    const fire = () => {
+      if (this.#walkActive()) { this.#eventReload = setTimeout(fire, 1000); return; }
+      this.#eventReload = null;
+      void run();
+    };
+    this.#eventReload = setTimeout(fire, settleMs);
   };
   /** Apply one live device event — from SSE (local) or the remote relay channel. Drives cross-UI sync:
    *  another window / the remote / the device itself changed something, so this UI follows. */
@@ -1220,11 +1227,10 @@ class EditorStore {
         // unit doesn't push — AM4 front-panel / AM4-Edit) — reload, debounced so a burst coalesces into
         // one refresh. Also re-read the open block's knobs: load() only refreshes the grid + blocks, so
         // without this a front-panel knob turn on the currently-open block would leave its arcs stale.
-        if (this.#eventReload) clearTimeout(this.#eventReload);
-        this.#eventReload = setTimeout(async () => {
+        this.#scheduleReload(250, async () => {
           await this.load();
           if (this.selKey) await this.#loadParams();
-        }, 250);
+        });
         break;
       }
       case 'config': if (e.origin !== CLIENT_ID) this.#applyConfig(e.id, e.data); break; // ignore our own echo

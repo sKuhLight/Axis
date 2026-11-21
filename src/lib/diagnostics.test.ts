@@ -6,7 +6,8 @@ import {
   CONFIRM_TITLE,
   DEFAULT_STEPS,
   FULL_WALK_LABEL,
-  POLL_MAX_FAILURES,
+  LOST_CONTACT_MS,
+  POLL_MAX_DELAY_MS,
   POLL_MS,
   UPLOAD_LIMIT_BYTES,
   abortReasonText,
@@ -21,7 +22,9 @@ import {
   errorInfo,
   formatBytes,
   formatDuration,
+  formatRetryAfter,
   fullWalkAvailability,
+  isContactLost,
   isFinishedState,
   isRunBusy,
   overallProgress,
@@ -36,6 +39,7 @@ import {
   uploadErrorMessage,
   uploadPreconditions,
   uploadPreview,
+  uploadRequestBody,
   withAxisVersion
 } from './diagnostics';
 import type { CaptureBundle, CaptureStatus } from './types';
@@ -136,7 +140,7 @@ describe('start gating — disclaimer tick + second confirmation', () => {
 });
 
 describe('diagView — status → view', () => {
-  const v = (s: CaptureStatus | null, o: { starting?: boolean; cancelling?: boolean; dismissedId?: string | null } = {}) =>
+  const v = (s: CaptureStatus | null, o: { starting?: boolean; cancelling?: boolean; dismissedId?: string | null; lost?: boolean } = {}) =>
     diagView({ status: s, starting: false, cancelling: false, dismissedId: null, ...o });
   it('maps engine states', () => {
     expect(v(null)).toBe('idle');
@@ -158,20 +162,35 @@ describe('diagView — status → view', () => {
     // a finished status without an id is dismissed by the empty id
     expect(v(status({ state: 'done' }), { dismissedId: '' })).toBe('idle');
   });
-  it('isRunBusy marks exactly the views that own the device transport', () => {
-    expect(['idle', 'starting', 'running', 'cancelling', 'finished'].map((x) => isRunBusy(x as never))).toEqual([false, true, true, true, false]);
+  it('a run whose engine went silent reads as lost, and only while it is running', () => {
+    expect(v(status({ state: 'running', id: 'r1' }), { lost: true })).toBe('lost');
+    expect(v(status({ state: 'running', id: 'r1' }), { lost: true, cancelling: true })).toBe('lost');
+    expect(v(status({ state: 'done', id: 'r1' }), { lost: true })).toBe('finished');
+    expect(v(null, { lost: true })).toBe('idle');
+    expect(v(status({ state: 'running', id: 'r1' }), { lost: false })).toBe('running');
+  });
+  it('isRunBusy marks exactly the views that own the device transport — a lost run no longer does', () => {
+    expect(['idle', 'starting', 'running', 'cancelling', 'lost', 'finished'].map((x) => isRunBusy(x as never))).toEqual([false, true, true, true, false, false]);
     expect(isFinishedState('done') && isFinishedState('failed') && isFinishedState('cancelled')).toBe(true);
     expect(isFinishedState('running') || isFinishedState('idle') || isFinishedState(undefined)).toBe(false);
   });
 });
 
 describe('polling', () => {
-  it('polls only while running, backs off after failures and gives up at the limit', () => {
+  it('polls while running and backs off after failures, capped at a few seconds — it never gives up on its own', () => {
     expect(pollDecision({ state: 'running', failures: 0 })).toEqual({ poll: true, delayMs: POLL_MS });
     expect(pollDecision({ state: 'running', failures: 2 }).delayMs).toBe(POLL_MS * 3);
-    expect(pollDecision({ state: 'running', failures: POLL_MAX_FAILURES - 1 }).poll).toBe(true);
-    expect(pollDecision({ state: 'running', failures: POLL_MAX_FAILURES }).poll).toBe(false);
+    for (const failures of [4, 5, 50, 5000]) expect(pollDecision({ state: 'running', failures })).toEqual({ poll: true, delayMs: POLL_MAX_DELAY_MS });
+    expect(POLL_MAX_DELAY_MS).toBeLessThanOrEqual(5000);
+    expect(pollDecision({ state: 'running', failures: -3 }).delayMs).toBe(POLL_MS);
     for (const state of ['idle', 'done', 'failed', 'cancelled', undefined] as const) expect(pollDecision({ state, failures: 0 }).poll).toBe(false);
+  });
+  it('declares contact lost once the engine has been unreachable for over a minute', () => {
+    expect(LOST_CONTACT_MS).toBe(60_000);
+    expect(isContactLost(null)).toBe(false);
+    expect(isContactLost(0)).toBe(false);
+    expect(isContactLost(LOST_CONTACT_MS)).toBe(false);
+    expect(isContactLost(LOST_CONTACT_MS + 1)).toBe(true);
   });
   it('fetches the result once per finished run that has one', () => {
     const done = status({ state: 'done', id: 'r1', resultAvailable: true });
@@ -250,7 +269,9 @@ describe('abortReasonText / runSummary', () => {
     expect(abortReasonText('  ')).toBeNull();
     expect(abortReasonText('cancelled')).toMatch(/cancelled/i);
     expect(abortReasonText('device-silent')).toMatch(/off and on again/i);
-    expect(abortReasonText('query-bound')).toMatch(/safety limit/i);
+    // a query outside the scan's bound is refused before it is sent — it is not a timeout
+    expect(abortReasonText('query-bound')).toMatch(/never sent to the device/i);
+    expect(abortReasonText('query-bound')).not.toMatch(/took longer|timed out/i);
     expect(abortReasonText('error: boom\n\tbang')).toBe('The run stopped because of an error: boom bang');
     expect(abortReasonText('something-new')).toBe('The run stopped: something-new');
     expect(abortReasonText(`error: ${'x'.repeat(500)}`)!.length).toBeLessThan(260);
@@ -294,9 +315,11 @@ describe('abortReasonText / runSummary', () => {
 
 describe('error wording per status code', () => {
   it('reads status + body off a ForgeError-shaped value; anything else is a network failure (0)', () => {
-    expect(errorInfo({ status: 409, body: { what: 'capture' } })).toEqual({ status: 409, body: { what: 'capture' } });
-    expect(errorInfo(new TypeError('fetch failed'))).toEqual({ status: 0, body: undefined });
-    expect(errorInfo(null)).toEqual({ status: 0, body: undefined });
+    expect(errorInfo({ status: 409, body: { what: 'capture' } })).toEqual({ status: 409, body: { what: 'capture' }, timedOut: false });
+    expect(errorInfo(new TypeError('fetch failed'))).toEqual({ status: 0, body: undefined, timedOut: false });
+    expect(errorInfo({ name: 'TimeoutError' })).toMatchObject({ status: 0, timedOut: true });
+    expect(errorInfo({ name: 'AbortError' }).timedOut).toBe(true);
+    expect(errorInfo(null)).toEqual({ status: 0, body: undefined, timedOut: false });
   });
   it('words a failed start', () => {
     expect(startErrorMessage(0)).toMatch(/could not reach/i);
@@ -318,12 +341,47 @@ describe('error wording per status code', () => {
   });
   it('words a failed upload for every documented status', () => {
     expect(uploadErrorMessage(0)).toMatch(/could not reach/i);
+    expect(uploadErrorMessage(0)).not.toMatch(/error 0/i);
     expect(uploadErrorMessage(400)).toMatch(/consent/i);
     expect(uploadErrorMessage(401)).toMatch(/not signed in/i);
     expect(uploadErrorMessage(404)).toMatch(/no finished diagnostic/i);
     expect(uploadErrorMessage(429)).toMatch(/too many diagnostics/i);
-    expect(uploadErrorMessage(503)).toMatch(/not reachable/i);
     expect(uploadErrorMessage(500)).toContain('500');
+  });
+  it('401 distinguishes an anonymous session (account-required) from being signed out', () => {
+    expect(uploadErrorMessage(401, { error: 'not-signed-in', reason: 'account-required' })).toMatch(/full Axis account/i);
+    expect(uploadErrorMessage(401, { error: 'not-signed-in', reason: 'account-required' })).not.toMatch(/not signed in/i);
+    expect(uploadErrorMessage(401, { error: 'not-signed-in' })).toMatch(/not signed in/i);
+  });
+  it('429 uses retryAfterSeconds, and a spent quota names the 30-day window', () => {
+    expect(uploadErrorMessage(429, { error: 'rate-limited', retryAfterSeconds: 600 })).toBe('You have uploaded too many diagnostics recently. Try again in about 10 minutes.');
+    expect(uploadErrorMessage(429, { error: 'rate-limited', retryAfterSeconds: null })).toContain('in a while');
+    const q = uploadErrorMessage(429, { error: 'quota-exceeded', retryAfterSeconds: 3 * 86400 });
+    expect(q).toMatch(/last 30 days/i);
+    expect(q).toContain('in about 3 days');
+    expect(q).toMatch(/save the result locally/i);
+    expect(uploadErrorMessage(429, { error: 'quota-exceeded' })).toMatch(/30 days.*in a while/i);
+  });
+  it('503 cloud-disabled says cloud features are off in this build; other 503 reads as unreachable', () => {
+    expect(uploadErrorMessage(503, { error: 'cloud-disabled' })).toMatch(/cloud features are turned off in this build/i);
+    expect(uploadErrorMessage(503)).toMatch(/cloud features are turned off/i);
+    expect(uploadErrorMessage(503, { error: 'unavailable' })).toMatch(/not reachable/i);
+  });
+  it('a client-side timeout says the upload may have gone through and that retrying is safe', () => {
+    const t = uploadErrorMessage(0, undefined, { timedOut: true });
+    expect(t).toMatch(/may still have gone through/i);
+    expect(t).toMatch(/trying again is safe/i);
+  });
+  it('formats retry hints', () => {
+    expect(formatRetryAfter(null)).toBe('in a while');
+    expect(formatRetryAfter(undefined)).toBe('in a while');
+    expect(formatRetryAfter(-1)).toBe('in a while');
+    expect(formatRetryAfter(0)).toBe('in about 1 second');
+    expect(formatRetryAfter(45)).toBe('in about 45 seconds');
+    expect(formatRetryAfter(600)).toBe('in about 10 minutes');
+    expect(formatRetryAfter(3600)).toBe('in about 60 minutes');
+    expect(formatRetryAfter(7200)).toBe('in about 2 hours');
+    expect(formatRetryAfter(3 * 86400)).toBe('in about 3 days');
   });
   it('413 names the size and the limit when the engine reports them', () => {
     expect(uploadErrorMessage(413, { error: 'too-large', bytes: 30 * 1024 * 1024, limit: 25 * 1024 * 1024 })).toBe(
@@ -341,6 +399,18 @@ describe('error wording per status code', () => {
     expect(other).toContain('error 500');
     expect(other).toContain('storage unavailable');
     expect(uploadErrorMessage(502)).toMatch(/did not accept the upload/i);
+    // the cloud itself could not be reached (status 0): no "(error 0)"
+    const unreachable = uploadErrorMessage(502, { error: 'cloud', status: 0, message: 'cloud unreachable' });
+    expect(unreachable).toMatch(/could not be reached/i);
+    expect(unreachable).not.toMatch(/error 0/i);
+  });
+});
+
+describe('uploadRequestBody — consent plus the Axis version', () => {
+  it('always carries the consent and adds the version only when the engine would accept it', () => {
+    expect(uploadRequestBody('0.9.24-beta')).toEqual({ consent: true, axisVersion: '0.9.24-beta' });
+    expect(uploadRequestBody('dev')).toEqual({ consent: true, axisVersion: 'dev' });
+    for (const bad of [null, undefined, '', 'has space', 'x'.repeat(33), 'C:\\path', '1.0/../x']) expect(uploadRequestBody(bad)).toEqual({ consent: true });
   });
 });
 
@@ -379,7 +449,7 @@ describe('uploadPreview — exactly what is uploaded, from the bundle', () => {
     expect(row('Software versions')).toBe('engine 1.2.3 · protocol 4.5.6 · Axis 0.9.9');
     expect(row('Wire log')).toBe('2 frames with timestamps');
     expect(row('Run log')).toBe('1 line');
-    expect(row('Size')).toBe('2.0 KB (about 512 B compressed)');
+    expect(row('Size (estimate)')).toBe('about 2.0 KB (about 512 B compressed)');
     expect(row('Steps')).toBe('5 steps — 3 done, 1 failed, 1 skipped');
     expect(row('Removed before upload')).toBe('3 preset/scene name answers blanked · 2 preset dump payloads cut down to their header');
     expect(p.notIncluded).toMatch(/preset or scene names/i);
@@ -393,7 +463,7 @@ describe('uploadPreview — exactly what is uploaded, from the bundle', () => {
     expect(row('Device')).toBe('unknown');
     expect(row('Firmware')).toBe('unknown');
     expect(row('Software versions')).toBe('unknown');
-    expect(row('Size')).toBe('100 B');
+    expect(row('Size (estimate)')).toBe('about 100 B');
     expect(row('Result')).toBe('failed (device-silent)');
     expect(row('Steps')).toBe('0 steps');
     // an abort reason that only repeats the state is not shown twice; singular wording for one item
@@ -471,6 +541,10 @@ describe('wiring (source pins)', () => {
   const axisPanel = read('./AxisPanel.svelte');
   const editorSrc = read('./editor.svelte.ts');
   const typesSrc = read('./types.ts');
+  const forgefxSrc = read('./forgefx.ts');
+  const directRuntime = read('./direct/runtime.ts');
+  const viteConfig = read('../../vite.config.ts');
+  const appDts = read('../app.d.ts');
 
   it('the panel decides everything through the pure helpers', () => {
     for (const fn of ['diagnosticsAvailability(', 'fullWalkAvailability(', 'canOpenConfirm(', 'buildStartRequest(', 'stepRows(', 'runSummary(', 'uploadPreconditions(', 'uploadPreview(', 'cycleFocusIndex(']) {
@@ -504,7 +578,7 @@ describe('wiring (source pins)', () => {
   });
   it('the full-walk toggle is disabled with its reason when the gate is closed, and has its own warning', () => {
     expect(panel).toContain('disabled={!fullWalk.available}');
-    expect(panel).toContain('{fullWalk.reason}');
+    expect(panel).toContain(': fullWalk.reason}');
     expect(panel).toContain('{FULL_WALK_WARNING}');
     expect(panel).toContain('{FULL_WALK_LABEL}');
   });
@@ -524,9 +598,53 @@ describe('wiring (source pins)', () => {
     expect(store).toMatch(/uploadPreconditions\(\{ \.\.\.ctx, hasResult: !!this\.bundle/);
     expect(store).toContain('bundle = $state.raw<CaptureBundle | null>(null)');
     expect(store).toContain('encoded = $state.raw<EncodedBundle | null>(null)');
-    expect(store).toContain('forgefx.uploadDiagnosticCapture(true)');
+    expect(store).toContain('forgefx.uploadDiagnosticCapture(uploadRequestBody(axisVersion()))');
+    expect(store).toContain('uploadErrorMessage(status, body, { timedOut })');
     expect(store).toContain('platformGzip()');
     expect(store).not.toMatch(/from '\.\/editor\.svelte'/); // the editor imports the store, not the other way round
+  });
+  it('lost contact: polling never gives up, but a run unreachable for over a minute stops counting as busy', () => {
+    expect(store).toContain('isContactLost(Date.now() - this.#failSince)');
+    expect(store).toContain('lost: this.lost');
+    expect(store).not.toContain('POLL_MAX_FAILURES');
+    // the status read is retried through the same scheduler after every failure
+    expect(store).toMatch(/#pollFailed\(\);\s*\}\s*this\.#schedule\(\);/);
+    expect(panel).toContain("view === 'lost'");
+    expect(panel).toContain('d.retryPolling()');
+  });
+  it('the upload shows a still-uploading note, the cloud reference next to the result id, and the dedup case', () => {
+    expect(store).toContain('UPLOAD_SLOW_MS');
+    expect(panel).toContain('d.uploadSlow');
+    expect(panel).toContain('{d.uploaded.captureId}');
+    expect(panel).toContain('{d.bundle.id}');
+    expect(panel).toContain('d.uploaded.deduped');
+    // the client's ceiling sits above the engine's worst case (~570 s: reserve + upload with retries + finalize + one re-upload)
+    const m = forgefxSrc.match(/uploadDiagnosticCapture:[\s\S]*?AbortSignal\.timeout\((\d+)\)/);
+    expect(Number(m?.[1])).toBeGreaterThanOrEqual(600_000);
+  });
+  it('accessibility: every aria-describedby id exists, and only one live region announces', () => {
+    const refs = [...panel.matchAll(/aria-describedby=(?:"([^"]+)"|\{([^}]+)\})/g)].flatMap((m) => (m[1] ?? m[2] ?? '').match(/diag-[\w-]+/g) ?? []);
+    expect(refs.length).toBeGreaterThan(0);
+    for (const id of new Set(refs)) expect(panel, id).toContain(`id="${id}"`);
+    expect(panel.match(/aria-live=/g)?.length).toBe(1);
+    expect(panel.match(/role="status"/g)?.length).toBe(1); // the sr-only announcer — the summary / upload boxes are not live regions
+    expect(panel).toMatch(/class="sr-only" role="status" aria-live="polite"/);
+  });
+  it('event-driven device re-reads wait while a diagnostic run or a definitions build owns the transport', () => {
+    expect(editorSrc).toMatch(/#scheduleReload = \(settleMs: number, run: \(\) => Promise<void>\) => \{[\s\S]*?if \(this\.#walkActive\(\)\) \{ this\.#eventReload = setTimeout\(fire, 1000\); return; \}/);
+    // the 'changed' (full reload), scene and block-state paths all go through it — none arms its own timer
+    const changed = editorSrc.slice(editorSrc.indexOf("case 'changed': {"), editorSrc.indexOf("case 'config':"));
+    expect(changed).toContain('this.#scheduleReload(250');
+    expect(changed).not.toContain('setTimeout');
+    expect(editorSrc).toMatch(/#scheduleSceneReload = \(settleMs = 250\) => this\.#scheduleReload\(/);
+    expect(editorSrc).toMatch(/#scheduleBlockStateReload = \(settleMs = 120\) => this\.#scheduleReload\(/);
+    expect(editorSrc.match(/this\.#eventReload = setTimeout\(/g)?.length).toBe(2); // fire(): the settle timer and the re-arm
+  });
+  it('the Browser Direct runtime hands the router its version stamps', () => {
+    expect(directRuntime).toMatch(/__FORGEFX_VERSION__/);
+    expect(directRuntime).toMatch(/rt\.createRouter\(\{ registry, store, local, cloud, versions \} satisfies RuntimeDeps\)/);
+    expect(viteConfig).toContain('__FORGEFX_VERSION__: JSON.stringify(forgefxVersion)');
+    expect(appDts).toContain('const __FORGEFX_VERSION__: string;');
   });
   it('the Debug tab hosts the panel inside the Axis hub', () => {
     expect(axisPanel).toContain("import DiagnosticsPanel from './DiagnosticsPanel.svelte'");

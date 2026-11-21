@@ -58,11 +58,15 @@
       gzBytes: d.encoded?.gzBytes ?? null
     })
   );
+  // The ONE announcer for run progress, the final summary and the upload result: the boxes below are not live
+  // regions themselves (that would read everything twice). Errors are separate role="alert" elements; the
+  // lost-contact box is an alert too, so it has no entry here.
   const liveText = $derived(
     view === 'starting' ? 'Starting the diagnostic'
     : view === 'cancelling' ? 'Cancelling the diagnostic'
     : view === 'running' ? (current ? `Running: ${current.label}` : 'Diagnostic running')
-    : summary ? summary.headline
+    : view === 'finished' && d.uploaded ? (d.uploaded.deduped ? 'This result had already been uploaded.' : 'Uploaded. Thank you.')
+    : summary ? [summary.headline, summary.detail, summary.restartAdvised ? 'Switch the device off and on again before you use it.' : null].filter(Boolean).join('. ')
     : ''
   );
 
@@ -170,13 +174,12 @@
       </label>
 
       <label class="ack minor" class:off={!fullWalk.available}>
-        <input type="checkbox" bind:checked={wantFullWalk} disabled={!fullWalk.available} aria-describedby="diag-fw-note" />
+        <input type="checkbox" bind:checked={wantFullWalk} disabled={!fullWalk.available} aria-describedby={wantFullWalk && fullWalk.available ? 'diag-fw-note diag-fw-warn' : 'diag-fw-note'} />
         <span>{FULL_WALK_LABEL}</span>
       </label>
-      {#if !fullWalk.available}
-        <p id="diag-fw-note" class="muted sm">{fullWalk.reason}</p>
-      {:else if wantFullWalk}
-        <div id="diag-fw-note" class="box danger" role="note"><b>Extra warning: full walk</b><span>{FULL_WALK_WARNING}</span></div>
+      <p id="diag-fw-note" class="muted sm">{fullWalk.available ? 'Off by default. It takes longer and changes the current preset temporarily — only turn it on if you were asked to.' : fullWalk.reason}</p>
+      {#if wantFullWalk && fullWalk.available}
+        <div id="diag-fw-warn" class="box danger" role="note"><b>Extra warning: full walk</b><span>{FULL_WALK_WARNING}</span></div>
       {/if}
 
       <button class="cta" bind:this={startBtn} disabled={!canStart} aria-describedby="diag-start-hint" onclick={openConfirm}>Start diagnostic…</button>
@@ -185,14 +188,21 @@
 
     {#if d.error}<p class="err" role="alert">{d.error}</p>{/if}
 
-  {:else if view === 'starting' || view === 'running' || view === 'cancelling'}
+  {:else if view === 'starting' || view === 'running' || view === 'cancelling' || view === 'lost'}
     <div class="runhead">
-      <span class="pulse" aria-hidden="true"></span>
+      <span class="pulse" class:still={view === 'lost'} aria-hidden="true"></span>
       <div>
-        <div class="rt">{view === 'starting' ? 'Starting…' : view === 'cancelling' ? 'Cancelling…' : 'Diagnostic running'}</div>
+        <div class="rt">{view === 'starting' ? 'Starting…' : view === 'cancelling' ? 'Cancelling…' : view === 'lost' ? 'Waiting for the engine' : 'Diagnostic running'}</div>
         <div class="rs">Leave the device idle and keep this window open. This can take a few minutes.</div>
       </div>
     </div>
+    {#if view === 'lost'}
+      <div class="box warn" role="alert">
+        <b>Lost contact with the Axis engine</b>
+        <span>It has not answered for over a minute. The diagnostic may still be running on the device. Axis keeps asking in the background and has stopped waiting, so the editor works again — but leave the device alone until you know the run has ended.</span>
+        <button class="link" onclick={() => d.retryPolling()}>Refresh</button>
+      </div>
+    {/if}
     <div class="bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={overall}>
       <div class="fill" style="width:{overall}%"></div>
     </div>
@@ -213,11 +223,11 @@
       {/each}
     </ol>
 
-    {#if d.error}<p class="err" role="alert">{d.error} <button class="link" onclick={() => d.retryPolling()}>Refresh</button></p>{/if}
-    <button class="ghost" disabled={view !== 'running'} onclick={() => d.cancel()}>{view === 'cancelling' ? 'Cancelling…' : 'Cancel run'}</button>
+    {#if d.error}<p class="err" role="alert">{d.error}</p>{/if}
+    <button class="ghost" disabled={view !== 'running' && view !== 'lost'} onclick={() => d.cancel()}>{view === 'cancelling' ? 'Cancelling…' : 'Cancel run'}</button>
 
   {:else if summary}
-    <div class="box {summary.tone}" role="status">
+    <div class="box {summary.tone}">
       <b>{summary.headline}</b>
       {#if summary.detail}<span>{summary.detail}</span>{/if}
       {#if summary.restartAdvised}<span><strong>Switch the device off and on again</strong> before you use it.</span>{/if}
@@ -253,9 +263,10 @@
 
       <div class="sec mt">UPLOAD FOR ANALYSIS</div>
       {#if d.uploaded}
-        <div class="box ok" role="status">
-          <b>Uploaded — thank you</b>
-          <span>Reference <span class="mono">{d.uploaded.captureId}</span> ({formatBytes(d.uploaded.bytes)}). Quote it if you contact us about this result.</span>
+        <div class="box ok">
+          <b>{d.uploaded.deduped ? 'Already uploaded' : 'Uploaded — thank you'}</b>
+          {#if d.uploaded.deduped}<span>The cloud already had this result, so nothing new was stored.</span>{/if}
+          <span>Cloud reference <span class="mono">{d.uploaded.captureId}</span> · Result ID <span class="mono">{d.bundle.id}</span> ({formatBytes(d.uploaded.bytes)}). Quote both if you contact us about this result.</span>
         </div>
       {:else}
         <p class="muted">Send the result to Axis so it can be used to support your device and firmware. This is exactly what is uploaded:</p>
@@ -282,6 +293,7 @@
           <span>{UPLOAD_CONSENT_TEXT}</span>
         </label>
         <button class="cta" disabled={!pre.ok} onclick={upload}>{d.uploading ? 'Uploading…' : 'Upload for analysis'}</button>
+        {#if d.uploading && d.uploadSlow}<p class="muted sm center">Still uploading — a large result can take a few minutes. Keep this window open; if it fails, trying again is safe.</p>{/if}
         {#if d.uploadError}<p class="err" role="alert">{d.uploadError}</p>{/if}
       {/if}
     {/if}
@@ -377,6 +389,7 @@
   .rt { font-size: 14px; font-weight: 700; color: var(--text); }
   .rs { font-size: 11.5px; color: var(--textdim); margin-top: 2px; }
   .pulse { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--accent); animation: dgPulse 1s ease-in-out infinite; }
+  .pulse.still { animation: none; background: var(--amber); }
   @keyframes dgPulse { 50% { opacity: 0.3; } }
   .bar { height: 6px; background: var(--track); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
   .bar.sm { height: 4px; margin-top: 7px; }

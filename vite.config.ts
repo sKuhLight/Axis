@@ -4,10 +4,18 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+// The bundled engine's own version (stamped into device-diagnostic bundles made by the in-page Browser Direct
+// runtime, which has no package.json to read). Empty when the package can't be read.
+let forgefxVersion = '';
+try {
+  forgefxVersion = String(JSON.parse(readFileSync(new URL('./node_modules/forgefx-server/package.json', import.meta.url), 'utf8')).version ?? '');
+} catch {
+  /* sibling engine not installed — the runtime then reports 'unknown' */
+}
 
 export default defineConfig({
   // expose the package version to the client (used by the in-app update checker)
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __FORGEFX_VERSION__: JSON.stringify(forgefxVersion) },
   resolve: {
     alias: {
       // Vite dev pre-bundling resolves lazy dynamic imports too. The real serial transport lives in the

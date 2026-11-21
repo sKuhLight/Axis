@@ -56,13 +56,14 @@ describe('forgefx device-diagnostics client', () => {
     expect(lastCall()[1].signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('uploads with {consent:true} to the upload route', async () => {
-    fetchMock.mockResolvedValueOnce(res(200, { ok: true, captureId: 'c1', bytes: 1234 }));
-    await expect(forgefx.uploadDiagnosticCapture(true)).resolves.toEqual({ ok: true, captureId: 'c1', bytes: 1234 });
+  it('uploads with the consent and the Axis version to the upload route', async () => {
+    fetchMock.mockResolvedValueOnce(res(200, { ok: true, captureId: 'c1', bytes: 1234, deduped: true }));
+    await expect(forgefx.uploadDiagnosticCapture({ consent: true, axisVersion: '0.9.24-beta' })).resolves.toEqual({ ok: true, captureId: 'c1', bytes: 1234, deduped: true });
     const [url, init] = lastCall();
     expect(url).toBe('/api/diagnostics/capture/upload');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ consent: true });
+    expect(JSON.parse(init.body as string)).toEqual({ consent: true, axisVersion: '0.9.24-beta' });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('keeps the JSON error body on ForgeError so the wording can use it (409 busy)', async () => {
@@ -77,10 +78,10 @@ describe('forgefx device-diagnostics client', () => {
 
   it('413 carries bytes and limit through to the message; 401 maps to the sign-in hint', async () => {
     fetchMock.mockResolvedValueOnce(res(413, { error: 'too-large', bytes: 40 * 1024 * 1024, limit: 25 * 1024 * 1024 }));
-    const e413 = await forgefx.uploadDiagnosticCapture(true).catch((x: unknown) => x);
+    const e413 = await forgefx.uploadDiagnosticCapture({ consent: true }).catch((x: unknown) => x);
     expect(uploadErrorMessage(errorInfo(e413).status, errorInfo(e413).body)).toContain('40.0 MB');
     fetchMock.mockResolvedValueOnce(res(401, { error: 'not-signed-in' }));
-    const e401 = await forgefx.uploadDiagnosticCapture(true).catch((x: unknown) => x);
+    const e401 = await forgefx.uploadDiagnosticCapture({ consent: true }).catch((x: unknown) => x);
     expect(errorInfo(e401).status).toBe(401);
     expect(uploadErrorMessage(401)).toMatch(/sign in/i);
   });

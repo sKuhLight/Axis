@@ -59,6 +59,16 @@ export function deviceDefsActions(inp: DeviceDefsInputs): DeviceDefAction[] {
   return out;
 }
 
+/** What a 409 from `POST /device/cache/build` means. The engine answers `{ error:'busy', what:'capture' }` while a device
+ *  diagnostic owns the device — nothing is building then, so it must not read as "already building". */
+export function buildConflictKind(body: unknown): 'diagnostic' | 'building' {
+  const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  return o.error === 'busy' && o.what === 'capture' ? 'diagnostic' : 'building';
+}
+
+/** Shown when reading the definitions is refused because a device diagnostic is running. */
+export const DIAGNOSTIC_RUNNING_MESSAGE = 'A device diagnostic is running. Wait until it has finished, then read the definitions again.';
+
 /** Terminal `cacheBuild` SSE phases — the build has stopped (successfully or not). Everything else is
  *  in-progress. Kept as data so both the store and its tests agree on the classification. */
 export const TERMINAL_BUILD_PHASES: ReadonlySet<string> = new Set(['done', 'error', 'cancelled', 'already-built']);

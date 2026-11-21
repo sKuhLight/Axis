@@ -16,16 +16,18 @@ import {
   diagView,
   encodeBundle,
   errorInfo,
+  isContactLost,
   isFinishedState,
   isRunBusy,
   platformGzip,
   pollDecision,
-  POLL_MAX_FAILURES,
   resultErrorMessage,
   shouldFetchResult,
   startErrorMessage,
   uploadErrorMessage,
   uploadPreconditions,
+  uploadRequestBody,
+  UPLOAD_SLOW_MS,
   withAxisVersion,
   type DiagView,
   type EncodedBundle
@@ -51,11 +53,16 @@ class DiagnosticsStore {
   loadingResult = $state(false);
   /** Whether the run that is showing was asked to include the full walk (so its step list can be planned up front). */
   includeFullWalk = $state(false);
-  /** Start / polling failure, shown in the panel. */
+  /** The engine has been unreachable for more than a minute while a run was going: the run no longer counts as
+   *  busy (the editor's background reads resume) and the panel offers Refresh. Cleared as soon as it answers. */
+  lost = $state(false);
+  /** Start / cancel failure, shown in the panel. */
   error = $state<string | null>(null);
   resultError = $state<string | null>(null);
   uploading = $state(false);
-  uploaded = $state<{ captureId: string; bytes: number } | null>(null);
+  /** The upload has been running for a while — show a "still uploading" note (large results take minutes). */
+  uploadSlow = $state(false);
+  uploaded = $state<{ captureId: string; bytes: number; deduped: boolean } | null>(null);
   uploadError = $state<string | null>(null);
   /** File name of the last local save (confirmation text). */
   savedAs = $state<string | null>(null);
@@ -63,11 +70,14 @@ class DiagnosticsStore {
   dismissedId = $state<string | null>(null);
 
   #timer: ReturnType<typeof setTimeout> | null = null;
+  #slowTimer: ReturnType<typeof setTimeout> | null = null;
   #failures = 0;
+  /** When the current streak of failed polls began (null = the last poll succeeded). */
+  #failSince: number | null = null;
   #resumed = false;
 
   get view(): DiagView {
-    return diagView({ status: this.status, starting: this.starting, cancelling: this.cancelling, dismissedId: this.dismissedId });
+    return diagView({ status: this.status, starting: this.starting, cancelling: this.cancelling, dismissedId: this.dismissedId, lost: this.lost });
   }
   /** A run owns the device transport — the editor's background reads (poll / preset watch / save probe) sit out. */
   get running(): boolean {
@@ -79,9 +89,9 @@ class DiagnosticsStore {
   refresh = async (): Promise<void> => {
     try {
       this.#adopt(await forgefx.diagnosticCaptureStatus());
-      this.#failures = 0;
+      this.#pollOk();
     } catch {
-      /* old engine (404) / not supported (501) / unreachable: the panel's availability check explains it */
+      this.#pollFailed(); // old engine (404) / not supported (501) / unreachable: the panel's availability check explains it
     }
     this.#schedule();
   };
@@ -100,36 +110,44 @@ class DiagnosticsStore {
     this.#maybeFetchResult();
   }
 
+  /** A poll got through: the engine is reachable, whatever it says. */
+  #pollOk(): void {
+    this.#failures = 0;
+    this.#failSince = null;
+    this.lost = false;
+  }
+
+  /** A poll failed. The status read is in-memory on the engine and never touches the device, so polling carries on
+   *  (backing off); but once the engine has been unreachable for over a minute the run stops counting as busy. */
+  #pollFailed(): void {
+    this.#failures++;
+    this.#failSince ??= Date.now();
+    this.lost = isContactLost(Date.now() - this.#failSince);
+  }
+
   #schedule(): void {
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
     const d = pollDecision({ state: this.status?.state, failures: this.#failures });
-    if (!d.poll) {
-      if (this.status?.state === 'running' && this.#failures >= POLL_MAX_FAILURES) {
-        this.error = 'Lost contact with the Axis engine while the diagnostic was running. Check that it is still running, then refresh.';
-      }
-      return;
-    }
-    this.#timer = setTimeout(this.#tick, d.delayMs);
+    if (d.poll) this.#timer = setTimeout(this.#tick, d.delayMs);
   }
 
   #tick = async (): Promise<void> => {
-    if (this.#timer) clearTimeout(this.#timer); // also reached directly (cancel): never leave a second chain pending
+    if (this.#timer) clearTimeout(this.#timer); // also reached directly (cancel / refresh): never leave a second chain pending
     this.#timer = null;
     try {
       this.#adopt(await forgefx.diagnosticCaptureStatus());
-      this.#failures = 0;
+      this.#pollOk();
     } catch {
-      this.#failures++;
+      this.#pollFailed();
     }
     this.#schedule();
   };
 
-  /** Try polling again after the "lost contact" error. */
+  /** "Refresh" after lost contact: ask again right now. */
   retryPolling = (): void => {
     this.error = null;
-    this.#failures = 0;
-    void this.refresh();
+    void this.#tick();
   };
 
   // ── run ──
@@ -151,7 +169,7 @@ class DiagnosticsStore {
       this.cancelling = false;
       this.includeFullWalk = !!request.includeFullWalk;
       this.status = { state: 'running', id: r.id, startedAt: new Date().toISOString(), resultAvailable: false };
-      this.#failures = 0;
+      this.#pollOk();
       this.#schedule();
       return true;
     } catch (e) {
@@ -164,7 +182,7 @@ class DiagnosticsStore {
   };
 
   cancel = async (): Promise<void> => {
-    if (this.view !== 'running') return;
+    if (this.view !== 'running' && this.view !== 'lost') return;
     this.cancelling = true;
     try {
       await forgefx.cancelDiagnosticCapture();
@@ -192,8 +210,10 @@ class DiagnosticsStore {
     this.loadingResult = true;
     this.resultError = null;
     try {
-      const b = await forgefx.diagnosticCaptureResult();
-      this.encoded = await encodeBundle(withAxisVersion(b, axisVersion()), platformGzip());
+      // The copy we keep carries the Axis version (the engine stamps the same one into the uploaded copy), so the
+      // preview, the local file and the upload all describe the same bundle.
+      const b = withAxisVersion(await forgefx.diagnosticCaptureResult(), axisVersion());
+      this.encoded = await encodeBundle(b, platformGzip());
       this.bundle = b;
     } catch (e) {
       this.resultError = resultErrorMessage(errorInfo(e).status);
@@ -226,17 +246,22 @@ class DiagnosticsStore {
       return false;
     }
     this.uploading = true;
+    this.uploadSlow = false;
     this.uploadError = null;
+    this.#slowTimer = setTimeout(() => { this.uploadSlow = true; }, UPLOAD_SLOW_MS);
     try {
-      const r = await forgefx.uploadDiagnosticCapture(true);
-      this.uploaded = { captureId: r.captureId, bytes: r.bytes };
+      const r = await forgefx.uploadDiagnosticCapture(uploadRequestBody(axisVersion()));
+      this.uploaded = { captureId: r.captureId, bytes: r.bytes, deduped: r.deduped === true };
       return true;
     } catch (e) {
-      const { status, body } = errorInfo(e);
-      this.uploadError = uploadErrorMessage(status, body);
+      const { status, body, timedOut } = errorInfo(e);
+      this.uploadError = uploadErrorMessage(status, body, { timedOut });
       return false;
     } finally {
+      if (this.#slowTimer) clearTimeout(this.#slowTimer);
+      this.#slowTimer = null;
       this.uploading = false;
+      this.uploadSlow = false;
     }
   };
 

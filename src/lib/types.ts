@@ -1045,5 +1045,10 @@ export interface CaptureBundle {
 /** `POST /diagnostics/capture` → 202. */
 export interface CaptureStartResult { started: true; id: string }
 
-/** `POST /diagnostics/capture/upload` → 200. */
-export interface CaptureUploadResult { ok: true; captureId: string; bytes: number }
+/** `POST /diagnostics/capture/upload` body. `consent` is a literal `true`; `axisVersion` is the client's own version,
+ *  which the engine stamps into the uploaded copy only. */
+export interface CaptureUploadRequest { consent: true; axisVersion?: string }
+
+/** `POST /diagnostics/capture/upload` → 200. `captureId` is the cloud's reference for the stored result;
+ *  `deduped` = the cloud already had this result (nothing new was stored). */
+export interface CaptureUploadResult { ok: true; captureId: string; bytes: number; deduped?: boolean }
