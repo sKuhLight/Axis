@@ -36,7 +36,12 @@ import type {
   ConverterDeviceId,
   ConvertResponse,
   ConvertExportResponse,
-  ConverterPreset
+  ConverterPreset,
+  CaptureStatus,
+  CaptureStartRequest,
+  CaptureStartResult,
+  CaptureBundle,
+  CaptureUploadResult
 } from './types';
 import { checkSaveTarget, saveBlockedText } from './saveTarget';
 
@@ -49,7 +54,9 @@ export const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toStri
 class ForgeError extends Error {
   constructor(
     public status: number,
-    message: string
+    message: string,
+    /** Parsed JSON error body when the server sent one (e.g. `{ error:'busy', what:'capture' }`). Additive. */
+    public body?: unknown
   ) {
     super(message);
     this.name = 'ForgeError';
@@ -141,9 +148,16 @@ async function relayReq<T>(path: string, method: string, init?: RequestInit): Pr
   }
   if (r.status < 200 || r.status >= 300) {
     reportFailure(path, method, r.status, `${method} ${path} → ${r.status}`); // self-filters to 5xx/0
-    throw new ForgeError(r.status, `${method} ${path} → ${r.status}`);
+    let body: unknown;
+    try { body = r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : undefined; } catch { /* non-JSON error body */ }
+    throw new ForgeError(r.status, `${method} ${path} → ${r.status}`, body);
   }
   return (r.contentType.includes('json') && typeof r.body === 'string' ? JSON.parse(r.body) : r.body) as T;
+}
+
+/** Best-effort JSON body of a failed response — undefined when absent or not JSON. */
+async function errorBody(res: Response): Promise<unknown> {
+  try { return (res.headers.get('content-type') ?? '').includes('json') ? await res.json() : undefined; } catch { return undefined; }
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -179,7 +193,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     reportFailure(path, method, res.status, `${method} ${path} → ${res.status}`);
-    throw new ForgeError(res.status, `${method} ${path} → ${res.status}`);
+    throw new ForgeError(res.status, `${method} ${path} → ${res.status}`, await errorBody(res));
   }
   const ct = res.headers.get('content-type') ?? '';
   return (ct.includes('json') ? res.json() : (res.arrayBuffer() as unknown)) as Promise<T>;
@@ -408,6 +422,27 @@ export const forgefx = {
     req<TelemetryConfig>('/telemetry/config', { method: 'PUT', body: JSON.stringify({ mode }) }),
   uploadDebugReport: (report: DebugReport) =>
     req<{ path: string; bytes: number; stored: number }>('/telemetry/report', { method: 'POST', body: JSON.stringify(report) }),
+
+  // ── device diagnostics (Settings → Debug) ──
+  // A gated probe run against the connected device that always ends in a redacted result bundle. Errors
+  // keep their JSON body on `ForgeError.body` (`{ error:'busy', what }`, `{ error:'too-large', limit }` …) so
+  // the caller can word them; see `diagnostics.ts`. Server-gated: 501 (not gen-3) / 404 (old server).
+  /** Progress of the current run, or the last finished one. */
+  diagnosticCaptureStatus: () => req<CaptureStatus>('/diagnostics/capture'),
+  /** Start a run. 202 `{ started, id }`; throws ForgeError 400 (not acknowledged) / 409 (busy) / 503 (no device) /
+   *  501 (unsupported). `acknowledged: true` is required by the type — the UI only builds this request after the
+   *  user ticked the backup disclaimer AND confirmed the second dialog (see `buildStartRequest`). */
+  startDiagnosticCapture: (request: CaptureStartRequest) =>
+    req<CaptureStartResult>('/diagnostics/capture', { method: 'POST', body: JSON.stringify(request) }),
+  /** Cancel the run (idempotent: fine when nothing is running). */
+  cancelDiagnosticCapture: () => req<{ ok: boolean }>('/diagnostics/capture/cancel', { method: 'POST' }),
+  /** The redacted bundle of the last finished/failed/cancelled run (404 `no-result` before the first one).
+   *  The bundle carries the full wire log, so it can be several MB — a longer ceiling than the 12 s default. */
+  diagnosticCaptureResult: () => req<CaptureBundle>('/diagnostics/capture/result', { signal: AbortSignal.timeout(120000) }),
+  /** Hand the last bundle to the Axis cloud for analysis (needs a signed-in cloud session on the engine).
+   *  `consent: true` is required by the type — the UI sends it only after the explicit consent tick. */
+  uploadDiagnosticCapture: (consent: true) =>
+    req<CaptureUploadResult>('/diagnostics/capture/upload', { method: 'POST', body: JSON.stringify({ consent }), signal: AbortSignal.timeout(180000) }),
 
   // ── device definitions / effect-definition profile cache (A4, AXIS-17/44 · META-22) ──
   // A per-device+firmware definition profile the server can build (self-describe walk), import from an
