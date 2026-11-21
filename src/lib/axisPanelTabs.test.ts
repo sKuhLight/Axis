@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 // Source pins for the settings dialog tab bar (AxisPanel.svelte is a runes component, not importable in this
-// node-only suite; the overflow arithmetic itself is covered by tabOverflow.test.ts). Regression: the bar was a
-// single `overflow-x: auto; scrollbar-width: none` row, so with up to 7 tabs in a 440px card the trailing ones
-// ("About" half hidden under the close button, "Debug" off-screen) were unreachable with a mouse. The bar now stays
-// on ONE row and the tabs that don't fit collapse into a "⋯" menu — never a hidden horizontal scroll.
+// node-only suite; the overflow / zoom / placement arithmetic is covered behaviourally by tabOverflow.test.ts).
+// Regression: the bar was a single `overflow-x: auto; scrollbar-width: none` row, so with up to 7 tabs in a 440px card
+// the trailing ones ("About" half hidden under the close button, "Debug" off-screen) were unreachable with a mouse.
+// The bar now stays on ONE row and the tabs that don't fit collapse into a "⋯" menu. These pins are deliberately
+// limited to invariants (no hidden scroll, every tab reachable, close button clear, twin inert, menu unclipped) rather
+// than exact source text, so a refactor that keeps the behaviour keeps the suite green.
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const panel = read('./AxisPanel.svelte');
 const editorSrc = read('./editor.svelte.ts');
@@ -39,104 +41,29 @@ function fn(name: string): string {
 describe('settings dialog tab bar (source pins)', () => {
   const tabbar = rule('.tabbar');
 
-  it('stays on one row: no wrapping and no hidden horizontal scroll', () => {
+  it('has no hidden horizontal scroll: one flex row, no scrolling overflow, no hidden scrollbar, no wrapping', () => {
     expect(tabbar).toMatch(/display:\s*flex/);
-    expect(tabbar).not.toMatch(/flex-wrap/);
     expect(tabbar).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll|hidden)/);
     expect(tabbar).not.toMatch(/scrollbar-width/);
+    expect(tabbar).not.toMatch(/flex-wrap/);
     expect(panel).not.toMatch(/\.tabbar::-webkit-scrollbar/);
-    // a tab never shrinks below its label, so a visible label is never clipped
-    const tb = rule('.tb');
-    expect(tb).toMatch(/flex:\s*1\s+0\s+auto/);
-    expect(tb).toMatch(/white-space:\s*nowrap/);
+    // a visible tab keeps its label whole
+    expect(rule('.tb')).toMatch(/white-space:\s*nowrap/);
   });
 
-  it('reserves room for the absolutely positioned close button, so neither a tab nor the ⋯ can sit under it', () => {
+  it('keeps the close button clear of the bar: reserved right padding exceeds the button footprint', () => {
     const x = rule('.x');
     expect(x).toMatch(/position:\s*absolute/);
     const footprint = px(x, 'right') + px(x, 'width'); // distance of the button's left edge from the card's right edge
     const reserved = px(tabbar, 'padding', 1); // padding shorthand: top right bottom left -> right is the 2nd value
     expect(reserved).toBeGreaterThan(footprint);
-    // the bar's content box (padding excluded) is what gets measured, so the reserved padding is part of the split
-    expect(fn('measureBar')).toMatch(/paddingRight/);
+    // close button precedes the tab bar in the DOM and is only positioned, never reordered (focus order unchanged)
+    expect(panel.indexOf('class="x"')).toBeGreaterThan(-1);
+    expect(panel.indexOf('class="x"')).toBeLessThan(panel.indexOf('<div class="tabbar"'));
+    expect(x).not.toMatch(/\border\s*:/);
   });
 
-  it('shows the ⋯ button only when something overflows, as an accessible menu button', () => {
-    expect(panel).toMatch(/\{#if overflow\.hasMore\}[\s\S]*?class="tb more-btn"/);
-    const btn = /<button class="tb more-btn" class:on=\{parts\.activeHidden\}[\s\S]*?<\/button>/.exec(panel);
-    expect(btn, '⋯ button markup').not.toBeNull();
-    expect(btn![0]).toContain('aria-haspopup="menu"');
-    expect(btn![0]).toContain('aria-expanded={menuOpen}');
-    expect(btn![0]).toMatch(/aria-label="[^"]+"/);
-    expect(btn![0]).toContain('onclick={toggleMenu}');
-    expect(btn![0]).toContain('onkeydown={onMoreKey}');
-    expect(btn![0]).toContain('&#x22EF;'); // ⋯ glyph (Icon.svelte has no dots/more icon)
-    // the ⋯ button takes the active look (accent + underline) from the same .tb.on rule as a real tab
-    expect(rule('.tb.on')).toMatch(/color:\s*var\(--accent\)/);
-    expect(rule('.tb.on')).toMatch(/border-bottom-color:\s*var\(--accent\)/);
-  });
-
-  it('the menu: role=menu with role=menuitem buttons, marks the active entry, sits above the dialog content', () => {
-    const start = panel.indexOf('<div class="menu" role="menu"');
-    expect(start, 'menu markup').toBeGreaterThan(-1);
-    const menu = panel.slice(start, panel.indexOf('{/each}', start));
-    expect(menu).toContain('onkeydown={onMenuKey}');
-    expect(menu).toMatch(/<button class="mi"[^\n]*role="menuitem"/);
-    expect(menu).toMatch(/aria-current=\{editor\.axisTab === t\.id \? 'true' : undefined\}/);
-    expect(menu).toMatch(/class:on=\{editor\.axisTab === t\.id\}/);
-    expect(menu).toContain('onclick={() => pickFromMenu(t.id)}');
-
-    const css = rule('.menu');
-    expect(css).toMatch(/position:\s*absolute/);
-    expect(css).toMatch(/right:\s*0\b/); // aligned to the ⋯ button's right edge
-    expect(css).toMatch(/top:\s*calc\(100%/); // opens below the button
-    expect(px(css, 'z-index')).toBeGreaterThan(px(rule('.x'), 'z-index'));
-    expect(css).toMatch(/var\(--surface2\)/);
-    expect(css).toMatch(/var\(--border2\)/);
-    expect(rule('.mi.on')).toMatch(/var\(--accent\)/);
-  });
-
-  it('menu behaviour: closes on selection, Escape and outside press; arrow keys move; focus returns to ⋯', () => {
-    expect(fn('pickFromMenu')).toMatch(/selectTab\(id\);\s*closeMenu\(true\)/);
-    // Escape: capture-phase on window + stopPropagation, so the page-level Escape handler does not also act
-    expect(panel).toMatch(/<svelte:window[^>]*onkeydowncapture=\{onWinKey\}/);
-    const esc = fn('onWinKey');
-    expect(esc).toContain("'Escape'");
-    expect(esc).toContain('e.stopPropagation()');
-    expect(esc).toContain('closeMenu(true)');
-    // outside press closes without stealing focus from what was clicked
-    expect(panel).toMatch(/<svelte:window[^>]*onpointerdowncapture=\{onWinPointer\}/);
-    expect(fn('onWinPointer')).toMatch(/!moreWrap\.contains\(/);
-    expect(fn('onWinPointer')).toContain('closeMenu(false)');
-    // focus goes back to the ⋯ button on keyboard/selection closes
-    expect(fn('closeMenu')).toMatch(/if \(refocus\) moreBtn\?\.focus\(\)/);
-    // ArrowUp/Down navigate the items (wrapping via the pure helper); the ⋯ button opens the menu with them too
-    const keys = fn('onMenuKey');
-    expect(keys).toContain('ArrowDown');
-    expect(keys).toContain('nextMenuIndex(');
-    expect(fn('onMoreKey')).toMatch(/ArrowDown[\s\S]*openMenu\('first'\)[\s\S]*ArrowUp[\s\S]*openMenu\('last'\)/);
-    // the menu cannot outlive the dialog or the overflow
-    expect(panel).toContain('$effect(() => { if (!editor.axisOpen || !overflow.hasMore) menuOpen = false; });');
-  });
-
-  it('measures with a ResizeObserver on the bar and a hidden, inert, zero-height twin row (re-measured on tab / viewport change)', () => {
-    expect(panel).toMatch(/new ResizeObserver\(/);
-    expect(panel).toMatch(/ro\.observe\(barEl\)/);
-    expect(panel).toMatch(/ro\.observe\(measureEl\)/);
-    expect(panel).toMatch(/\$effect\(\(\) => \{ void tabs\.length; void mob; /); // Storage/Performance appear + desktop <-> .mob
-    expect(panel).toContain('<div class="tbclip" aria-hidden="true" inert>');
-    expect(panel).toMatch(/\{#each tabs as t \(t\.id\)\}<button class="tb tbm" tabindex="-1" data-m=\{t\.id\}>/);
-    expect(panel).toMatch(/computeTabOverflow\(tabs\.map\(/);
-    const clip = rule('.tbclip');
-    expect(clip).toMatch(/position:\s*absolute/);
-    expect(clip).toMatch(/height:\s*0/);
-    expect(clip).toMatch(/overflow:\s*hidden/); // out of flow + clipped: adds no scrollable overflow to the card
-    expect(clip).toMatch(/visibility:\s*hidden/);
-    expect(clip).toMatch(/pointer-events:\s*none/);
-    expect(rule('.tbm')).toMatch(/flex:\s*0\s+0\s+auto/); // natural width, not the grown width
-  });
-
-  it('offers one entry per editor.axisTab value, in the documented order, keeping Connection on openAxis', () => {
+  it('offers one entry per editor.axisTab value, in the documented order', () => {
     const union = /axisTab = \$state<([^>]+)>\(/.exec(editorSrc);
     expect(union, 'axisTab union found in editor.svelte.ts').not.toBeNull();
     const values = [...union![1].matchAll(/'(\w+)'/g)].map((m) => m[1]);
@@ -144,27 +71,77 @@ describe('settings dialog tab bar (source pins)', () => {
 
     const start = panel.indexOf('const tabs = $derived<');
     expect(start).toBeGreaterThan(-1);
-    const block = panel.slice(start, panel.indexOf(']);', start));
-    const ids = [...block.matchAll(/id: '(\w+)'/g)].map((m) => m[1]);
+    const ids = [...panel.slice(start, panel.indexOf(']);', start)).matchAll(/id: '(\w+)'/g)].map((m) => m[1]);
     expect([...ids].sort()).toEqual([...values].sort());
     expect(ids).toEqual(['account', 'storage', 'device', 'performance', 'privacy', 'about', 'debug']);
-    // conditional tabs stay conditional
-    expect(block).toMatch(/loc\.available \? \[\{ id: 'storage'/);
-    expect(block).toMatch(/editor\.hasTelemetryControl \? \[\{ id: 'performance'/);
 
-    // the bar buttons and the menu entries switch tabs through the SAME function the old inline buttons mirrored
-    const sel = /const selectTab = [^\n]+/.exec(panel);
-    expect(sel, 'selectTab').not.toBeNull();
-    expect(sel![0]).toContain("if (id === 'device') editor.openAxis('device'); else editor.axisTab = id;");
-    expect(panel).toContain('onclick={() => selectTab(t.id)}>{t.label}</button>');
+    // switching keeps the old behaviour: Connection loads the ports through openAxis, the rest set the tab
+    const select = /const selectTab = [^\n]+/.exec(panel);
+    expect(select, 'selectTab').not.toBeNull();
+    expect(select![0]).toContain("openAxis('device')");
+    expect(select![0]).toContain('editor.axisTab = id');
   });
 
-  it('keeps the close button first in the focus order (it is only positioned, never reordered)', () => {
-    const x = panel.indexOf('class="x"');
-    expect(x).toBeGreaterThan(-1);
-    expect(x).toBeLessThan(panel.indexOf('<div class="tabbar"'));
-    expect(rule('.x')).not.toMatch(/\border\s*:/);
-    // the hidden measuring row comes after the real bar and is inert, so it never joins the focus order
-    expect(panel.indexOf('<div class="tabbar"')).toBeLessThan(panel.indexOf('<div class="tbclip"'));
+  it('measures in layout px: every getBoundingClientRect() width in measureBar goes through toLayoutPx (UI-scale zoom)', () => {
+    const body = fn('measureBar');
+    const rects = body.match(/getBoundingClientRect\(\)/g) ?? [];
+    expect(rects.length).toBeGreaterThan(0);
+    expect((body.match(/toLayoutPx\(/g) ?? []).length).toBe(rects.length);
+    // the zoom is calibrated from the card (visual vs layout width), not assumed
+    expect(panel).toMatch(/effectiveZoom\(cardEl\.getBoundingClientRect\(\)\.width, cardEl\.offsetWidth\)/);
+    // the scrollbar gutter is always reserved, so short and tall tabs give the bar the same width
+    expect(rule('.card')).toMatch(/scrollbar-gutter:\s*stable/);
+  });
+
+  it('the measuring twin is hidden, inert, out of flow and adds no scroll overflow', () => {
+    expect(panel).toMatch(/class="tbclip"[^>]*aria-hidden="true"[^>]*inert|class="tbclip"[^>]*inert[^>]*aria-hidden="true"/);
+    const clip = rule('.tbclip');
+    expect(clip).toMatch(/position:\s*absolute/);
+    expect(clip).toMatch(/height:\s*0/);
+    expect(clip).toMatch(/overflow:\s*hidden/);
+    expect(clip).toMatch(/visibility:\s*hidden/);
+    expect(clip).toMatch(/pointer-events:\s*none/);
+    // its buttons can never take focus, and it sits after the real bar
+    expect(panel).toMatch(/class="tb tbm"[^>]*tabindex="-1"/);
+    expect(panel.indexOf('<div class="tabbar"')).toBeLessThan(panel.indexOf('class="tbclip"'));
+    // natural (not grown) widths are what is measured
+    expect(rule('.tbm')).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(panel).toMatch(/new ResizeObserver\(/);
+  });
+
+  it('the ⋯ button and menu are accessible, and the active tab is announced consistently', () => {
+    expect(panel).toContain('aria-haspopup="menu"');
+    expect(panel).toMatch(/aria-expanded=\{menuOpen\}/);
+    expect(panel).toContain('role="menu"');
+    expect(panel).toContain('role="menuitem"');
+    // the ⋯ announces a hidden active tab, and bar tabs + menu items both carry aria-current
+    expect(panel).toMatch(/aria-label=\{[^\n]*selected/);
+    expect((panel.match(/aria-current=/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // keyboard: arrows move through the items, Escape closes, focus returns to the ⋯ button
+    expect(fn('onMenuKey')).toContain('ArrowDown');
+    expect(fn('onWinKey')).toContain("'Escape'");
+    expect(fn('closeMenu')).toMatch(/moreBtn\?\.focus\(\)/);
+  });
+
+  it('the menu cannot be clipped by the card and sits above the dialog content and the close button', () => {
+    const menu = rule('.menu');
+    // `position: absolute` inside the card's `overflow-y: auto` was cut off (and scrolled) on short tabs
+    expect(menu).toMatch(/position:\s*fixed/);
+    expect(menu).not.toMatch(/position:\s*absolute/);
+    expect(px(menu, 'z-index')).toBeGreaterThan(px(rule('.x'), 'z-index'));
+    // placed from the ⋯ button's rect through the shared zoom-aware helper
+    expect(fn('placeMenu')).toMatch(/resolveMenuPlacement\(/);
+    expect(fn('placeMenu')).toMatch(/zoomOf\(\)/);
+  });
+
+  it('window listeners are attached only while the menu is open, and a split change cannot strand focus', () => {
+    // no component-lifetime window handlers for the menu
+    expect(panel).not.toMatch(/<svelte:window/);
+    expect(panel).toContain("window.addEventListener('keydown'");
+    expect(panel).toContain("window.removeEventListener('keydown'");
+    expect(panel).toContain("window.addEventListener('pointerdown'");
+    expect(panel).toContain("window.removeEventListener('pointerdown'");
+    // a vanished focused item falls back to the first item / the ⋯ button instead of <body>
+    expect(panel).toMatch(/document\.activeElement === document\.body/);
   });
 });

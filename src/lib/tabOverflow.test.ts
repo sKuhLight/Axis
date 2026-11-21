@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeTabOverflow, nextMenuIndex, splitTabs } from './tabOverflow';
+import { computeTabOverflow, menuBelowRightEdge, nextMenuIndex, splitTabs, toLayoutPx } from './tabOverflow';
+import { effectiveZoom, resolveMenuPlacement } from './workbench/svelte/contextMenu';
 
-// Natural widths (px) in the settings dialog's order: Account, Storage, Connection, Performance, Privacy, About, Debug.
+// ILLUSTRATIVE natural widths (px) in the settings dialog's order: Account, Storage, Connection, Performance, Privacy,
+// About, Debug. Real label widths depend on the font, so these pin the ARITHMETIC of the split, not what a given
+// dialog width shows in the browser.
 const SEVEN = [67, 67, 88, 96, 67, 52, 52];
 const FIVE = [67, 88, 67, 52, 52]; // no Storage, no Performance
 const MORE = 33;
@@ -24,13 +27,13 @@ describe('computeTabOverflow', () => {
   });
 
   it('some overflow: the largest leading run that fits TOGETHER WITH the ⋯ button stays', () => {
-    // 7 tabs in a 440px card (366 usable, 357 with the scrollbar reserve):
-    // k=3 -> 222 + 3 gaps*2 + 33 = 261 fits; k=4 -> 318 + 4 gaps*2 + 33 = 359 does not fit 357 (or 358).
+    // With the illustrative widths above: k=3 -> 222 + 3 gaps*2 + 33 = 261 fits; k=4 -> 318 + 4 gaps*2 + 33 = 359
+    // does not fit 357 (or 358) but fits 359.
     expect(computeTabOverflow(SEVEN, 357, MORE, GAP)).toEqual({ visible: 3, hasMore: true });
     expect(computeTabOverflow(SEVEN, 358, MORE, GAP)).toEqual({ visible: 3, hasMore: true });
     // one more pixel and the 4th tab stays
     expect(computeTabOverflow(SEVEN, 359, MORE, GAP)).toEqual({ visible: 4, hasMore: true });
-    // ~375px sheet (301 usable - 9): 5 tabs keep 3, the rest are in the menu
+    // a narrower row: the 5-tab set keeps 3 (222 + 6 + 33 = 261 <= 292 < 315), the rest are in the menu
     expect(computeTabOverflow(FIVE, 292, MORE, GAP)).toEqual({ visible: 3, hasMore: true });
   });
 
@@ -131,5 +134,64 @@ describe('nextMenuIndex', () => {
     expect(nextMenuIndex(0, 1, 1)).toBe(0);
     expect(nextMenuIndex(0, -1, 1)).toBe(0);
     expect(nextMenuIndex(-1, 1, 0)).toBe(-1);
+  });
+});
+
+describe('toLayoutPx (UI-scale zoom)', () => {
+  it('is the identity without zoom', () => {
+    expect(toLayoutPx(440, 1)).toBe(440);
+  });
+
+  it('divides a zoomed (visual) getBoundingClientRect width back to layout px', () => {
+    expect(toLayoutPx(572, 1.3)).toBeCloseTo(440, 6); // 130% UI scale
+    expect(toLayoutPx(352, 0.8)).toBeCloseTo(440, 6); // 80% UI scale
+  });
+
+  it('treats a nonsensical zoom as 1 instead of dividing by it', () => {
+    for (const z of [0, -1, NaN, Infinity]) expect(toLayoutPx(100, z)).toBe(100);
+  });
+
+  it('with effectiveZoom: every zoom in the 80-130% range measures the same layout width as 100%', () => {
+    const layoutCard = 440; // offsetWidth of the card — layout px, unaffected by zoom
+    const layoutTab = 62.4;
+    for (const zoom of [0.8, 0.9, 1, 1.1, 1.25, 1.3]) {
+      const z = effectiveZoom(layoutCard * zoom, layoutCard); // what the component calibrates from the card
+      expect(z).toBeCloseTo(zoom, 9);
+      expect(toLayoutPx(layoutTab * zoom, z)).toBeCloseTo(layoutTab, 9);
+    }
+  });
+
+  it('without the conversion the room is over-estimated by the zoom factor (the bug it prevents)', () => {
+    const zoom = 1.3;
+    const barLayout = 366; // what offsetWidth / computed padding give
+    const barVisualRect = barLayout * zoom; // what getBoundingClientRect gives
+    expect(barVisualRect - barLayout).toBeGreaterThan(100); // ~110px too much room if mixed
+    expect(toLayoutPx(barVisualRect, zoom)).toBeCloseTo(barLayout, 9);
+  });
+});
+
+describe('menuBelowRightEdge', () => {
+  it('right edge aligned with the anchor, `gap` below it', () => {
+    expect(menuBelowRightEdge({ right: 386, bottom: 48 }, 156, 4)).toEqual({ x: 230, y: 52 });
+  });
+
+  it('through the shared zoom-aware placement the fixed menu lands on the anchor at any UI scale', () => {
+    const viewport = { width: 1600, height: 900 };
+    for (const zoom of [0.8, 1, 1.3]) {
+      const anchor = { right: 386 * zoom + 300, bottom: 48 * zoom + 60 }; // visual rect of the ⋯ button
+      const m = { width: 156 * zoom, height: 140 * zoom };
+      const p = resolveMenuPlacement(menuBelowRightEdge(anchor, m.width, 4 * zoom), viewport, m, zoom);
+      // layout left/top, re-multiplied by the zoom, equal the visual target
+      expect(p.x * zoom).toBeCloseTo(anchor.right - m.width, 6);
+      expect(p.y * zoom).toBeCloseTo(anchor.bottom + 4 * zoom, 6);
+    }
+  });
+
+  it('clamps into the viewport instead of opening off-screen (⋯ close to the left edge / bottom)', () => {
+    const viewport = { width: 400, height: 300 };
+    const m = { width: 156, height: 140 };
+    const p = resolveMenuPlacement(menuBelowRightEdge({ right: 53, bottom: 280 }, m.width, 4), viewport, m, 1);
+    expect(p.x).toBeGreaterThanOrEqual(8);
+    expect(p.y + m.height).toBeLessThanOrEqual(viewport.height - 8);
   });
 });

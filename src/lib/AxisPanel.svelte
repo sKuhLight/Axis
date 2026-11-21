@@ -9,7 +9,8 @@
   import { directBoot } from './direct.svelte';
   import Icon from './Icon.svelte';
   import { tick, untrack } from 'svelte';
-  import { computeTabOverflow, splitTabs, nextMenuIndex } from './tabOverflow';
+  import { computeTabOverflow, splitTabs, nextMenuIndex, toLayoutPx, menuBelowRightEdge } from './tabOverflow';
+  import { effectiveZoom, resolveMenuPlacement } from './workbench/svelte/contextMenu';
   import DiagnosticsPanel from './DiagnosticsPanel.svelte';
   import { LEGAL, openExternal } from './legal';
   import { KOFI_URL, COPYRIGHT } from './support';
@@ -132,7 +133,8 @@
   // Measurement: a hidden twin row (.tbmeasure) renders every tab at its natural width, so the real bar only
   // ever contains the tabs that fit. Re-measured by ResizeObserver (card width, desktop card <-> .mob sheet,
   // font load) and whenever the conditional tabs (Storage / Performance) appear or disappear.
-  const SCROLLBAR_RESERVE = 9; // the card's custom scrollbar width — reserved so a tall tab doesn't reshuffle the bar
+  // The card reserves its scrollbar gutter permanently (`scrollbar-gutter: stable`), so the bar's width — with the
+  // real scrollbar width, 0 for overlay scrollbars — is the same for short and tall tabs and the split never reshuffles.
   let cardEl = $state<HTMLElement>();
   let barEl = $state<HTMLElement>();
   let measureEl = $state<HTMLElement>();
@@ -142,16 +144,21 @@
   let moreW = $state(0);
   let widthById = $state<Record<string, number>>({});
 
+  /** Everything is measured in LAYOUT px. With the UI-scale setting (a CSS `zoom` on <html>), Chromium reports
+   *  getBoundingClientRect() in zoomed (visual) px while offsetWidth / computed styles stay in layout px; mixing the
+   *  two overestimates the room at >100%. The card's visual/layout width ratio is the effective zoom (1 without
+   *  zoom), and every gBCR width is divided by it. */
+  const zoomOf = () => (cardEl ? effectiveZoom(cardEl.getBoundingClientRect().width, cardEl.offsetWidth) : 1);
+
   function measureBar() {
     if (!cardEl || !barEl || !measureEl) return;
+    const z = zoomOf();
     const cs = getComputedStyle(barEl);
-    const inner = barEl.getBoundingClientRect().width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const inner = toLayoutPx(barEl.getBoundingClientRect().width, z) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     if (!(inner > 0)) return; // not laid out (yet) — keep the last good measurement
-    const cc = getComputedStyle(cardEl);
-    const sb = Math.max(0, cardEl.offsetWidth - cardEl.clientWidth - parseFloat(cc.borderLeftWidth) - parseFloat(cc.borderRightWidth));
     const next: Record<string, number> = {};
-    for (const el of measureEl.querySelectorAll<HTMLElement>('[data-m]')) next[el.dataset.m!] = Math.ceil(el.getBoundingClientRect().width);
-    const nAvail = Math.floor(inner - Math.max(0, SCROLLBAR_RESERVE - sb));
+    for (const el of measureEl.querySelectorAll<HTMLElement>('[data-m]')) next[el.dataset.m!] = Math.ceil(toLayoutPx(el.getBoundingClientRect().width, z));
+    const nAvail = Math.floor(inner);
     const nGap = parseFloat(cs.columnGap) || 0;
     const nMore = next.more ?? 0;
     if (nAvail !== avail) avail = nAvail;
@@ -174,15 +181,36 @@
   const overflow = $derived(measured ? computeTabOverflow(tabs.map((t) => widthById[t.id] ?? 0), avail, moreW, gap) : { visible: tabs.length, hasMore: false });
   const parts = $derived(splitTabs(tabs, overflow.visible, editor.axisTab));
 
-  // The ⋯ menu.
+  // The ⋯ menu. It is `position: fixed` (placed from the ⋯ button's rect) so the card's `overflow-y: auto` can't clip
+  // it when the tab content is short, and it keeps working on the mobile sheet.
   let menuOpen = $state(false);
+  let menuPos = $state<{ left: number; top: number } | null>(null);
   let moreWrap = $state<HTMLElement>();
   let moreBtn = $state<HTMLButtonElement>();
   let menuEl = $state<HTMLElement>();
+  const activeLabel = $derived(parts.hidden.find((t) => t.id === editor.axisTab)?.label ?? '');
   const menuItems = () => (menuEl ? [...menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : []);
+
+  /** Below the ⋯ button, right edges aligned, clamped to the viewport; fed through the shared zoom-aware placement
+   *  (visual coords in, layout left/top out) so it also lands correctly under the UI-scale zoom. */
+  function placeMenu() {
+    if (!menuOpen || !menuEl || !moreBtn) return;
+    const z = zoomOf();
+    const anchor = moreBtn.getBoundingClientRect();
+    const box = menuEl.getBoundingClientRect();
+    const p = resolveMenuPlacement(
+      menuBelowRightEdge(anchor, box.width, 4 * z),
+      { width: window.innerWidth, height: window.innerHeight },
+      { width: box.width, height: box.height },
+      z
+    );
+    if (!menuPos || menuPos.left !== p.x || menuPos.top !== p.y) menuPos = { left: p.x, top: p.y };
+  }
   async function openMenu(at: 'active' | 'first' | 'last' = 'active') {
     menuOpen = true;
     await tick();
+    placeMenu();
+    await tick(); // the menu is visibility:hidden until placed, and a hidden item can't take focus
     const items = menuItems();
     const ai = parts.hidden.findIndex((t) => t.id === editor.axisTab);
     items[at === 'last' ? items.length - 1 : at === 'first' || ai < 0 ? 0 : ai]?.focus();
@@ -190,6 +218,7 @@
   function closeMenu(refocus: boolean) {
     if (!menuOpen) return;
     menuOpen = false;
+    menuPos = null;
     if (refocus) moreBtn?.focus();
   }
   const toggleMenu = () => (menuOpen ? closeMenu(true) : void openMenu());
@@ -209,15 +238,45 @@
   // Escape closes only the menu (capture + stop, so the page-level Escape handler doesn't also act on it);
   // a press outside the ⋯ button + menu closes it without stealing focus from whatever was clicked.
   function onWinKey(e: KeyboardEvent) {
-    if (menuOpen && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
   }
   function onWinPointer(e: PointerEvent) {
-    if (menuOpen && moreWrap && !moreWrap.contains(e.target as Node)) closeMenu(false);
+    if (moreWrap && !moreWrap.contains(e.target as Node)) closeMenu(false);
   }
-  $effect(() => { if (!editor.axisOpen || !overflow.hasMore) menuOpen = false; });
+  // Window listeners exist only while the menu is open; the fixed menu follows the ⋯ button on resize / card scroll.
+  $effect(() => {
+    if (!menuOpen) return;
+    const card = cardEl;
+    window.addEventListener('keydown', onWinKey, true);
+    window.addEventListener('pointerdown', onWinPointer, true);
+    window.addEventListener('resize', placeMenu);
+    card?.addEventListener('scroll', placeMenu, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onWinKey, true);
+      window.removeEventListener('pointerdown', onWinPointer, true);
+      window.removeEventListener('resize', placeMenu);
+      card?.removeEventListener('scroll', placeMenu);
+    };
+  });
+  // (Re)place when the menu mounts or the split moves the ⋯ button.
+  $effect(() => { void menuEl; void overflow.visible; void avail; untrack(placeMenu); });
+  // The menu can't outlive the dialog or the overflow, and a split change while it is open must not drop keyboard
+  // focus to <body> when the focused item (or the whole ⋯ button) disappears.
+  $effect(() => {
+    const open = editor.axisOpen;
+    const hasMore = overflow.hasMore;
+    void parts.hidden.map((t) => t.id).join(',');
+    untrack(() => {
+      if (!menuOpen) return;
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (!open || !hasMore) {
+        menuOpen = false;
+        menuPos = null;
+        if (open && lost) barEl?.querySelector<HTMLElement>('.tb.on')?.focus(); // the ⋯ is gone: land on the (now visible) active tab
+      } else if (lost) (menuItems()[0] ?? moreBtn)?.focus();
+    });
+  });
 </script>
-
-<svelte:window onkeydowncapture={onWinKey} onpointerdowncapture={onWinPointer} />
 
 {#snippet disclosure()}
   <ul class="incl">
@@ -245,14 +304,15 @@
 
       <div class="tabbar" bind:this={barEl}>
         {#each parts.shown as t (t.id)}
-          <button class="tb" class:on={editor.axisTab === t.id} onclick={() => selectTab(t.id)}>{t.label}</button>
+          <button class="tb" class:on={editor.axisTab === t.id} aria-current={editor.axisTab === t.id ? 'true' : undefined} onclick={() => selectTab(t.id)}>{t.label}</button>
         {/each}
         {#if overflow.hasMore}
           <div class="more" bind:this={moreWrap}>
-            <button class="tb more-btn" class:on={parts.activeHidden} bind:this={moreBtn} aria-label="More tabs" title="More"
+            <button class="tb more-btn" class:on={parts.activeHidden} bind:this={moreBtn} aria-label={parts.activeHidden ? `More tabs (${activeLabel} selected)` : 'More tabs'} title="More"
                     aria-haspopup="menu" aria-expanded={menuOpen} onclick={toggleMenu} onkeydown={onMoreKey}>&#x22EF;</button>
             {#if menuOpen}
-              <div class="menu" role="menu" aria-label="More tabs" tabindex="-1" bind:this={menuEl} onkeydown={onMenuKey}>
+              <div class="menu" role="menu" aria-label="More tabs" tabindex="-1" bind:this={menuEl} onkeydown={onMenuKey}
+                   style:left={menuPos ? `${menuPos.left}px` : undefined} style:top={menuPos ? `${menuPos.top}px` : undefined} style:visibility={menuPos ? undefined : 'hidden'}>
                 {#each parts.hidden as t (t.id)}
                   <button class="mi" class:on={editor.axisTab === t.id} role="menuitem" tabindex="-1" aria-current={editor.axisTab === t.id ? 'true' : undefined} onclick={() => pickFromMenu(t.id)}>
                     <span>{t.label}</span>
@@ -646,7 +706,7 @@
 
 <style>
   .bg { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(3px); z-index: 350; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 12px 12px; }
-  .card { position: relative; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .card { position: relative; scrollbar-gutter: stable; width: 440px; max-width: calc(100% - 24px); max-height: 86vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6); color: var(--text); font-family: var(--font, 'Hanken Grotesk', system-ui, sans-serif); }
   .bg.mob { align-items: flex-end; padding: 0; }
   .card.mob { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; animation: axsSheet 0.28s cubic-bezier(0.2, 0.85, 0.25, 1); }
   .card::-webkit-scrollbar { width: 9px; }
@@ -666,7 +726,7 @@
   .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
   .more-btn { padding: 0 10px; font-size: 16px; line-height: 1; }
   .more { position: relative; flex: 0 0 auto; display: flex; }
-  .menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; min-width: 156px; padding: 4px; display: flex; flex-direction: column; gap: 1px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+  .menu { position: fixed; z-index: 5; min-width: 156px; padding: 4px; display: flex; flex-direction: column; gap: 1px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
   .mi { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 34px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--textdim); font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; white-space: nowrap; cursor: pointer; }
   .mi:hover, .mi:focus-visible { background: var(--accent-tint); color: var(--text); outline: none; }
   .mi.on { color: var(--accent); }

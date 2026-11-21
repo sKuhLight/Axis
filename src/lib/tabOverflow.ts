@@ -68,3 +68,25 @@ export function nextMenuIndex(current: number, delta: 1 | -1, count: number): nu
   if (current < 0 || current >= count) return delta === 1 ? 0 : count - 1;
   return (current + delta + count) % count;
 }
+
+/**
+ * Convert a width read from `getBoundingClientRect()` into LAYOUT px.
+ *
+ * The UI-scale setting puts a CSS `zoom` on <html>. On Chromium 128+ `getBoundingClientRect()` then reports zoomed
+ * (visual) px while `offsetWidth`, `clientWidth` and computed styles stay in layout px, so mixing them overestimates
+ * the room by the zoom factor. `zoom` is the effective zoom (visual width / layout width of a reference element —
+ * `effectiveZoom()` in workbench/svelte/contextMenu); 1 means "no zoom", and a nonsensical zoom (0, NaN, negative)
+ * is treated as 1 instead of dividing by it.
+ */
+export function toLayoutPx(visual: number, zoom: number): number {
+  return Number.isFinite(zoom) && zoom > 0 ? visual / zoom : visual;
+}
+
+/**
+ * Where a menu opens relative to its anchor button, in the SAME coordinate space as the anchor rect: its right edge
+ * aligned with the anchor's right edge, `gap` below the anchor's bottom. Feed the result (visual px) through
+ * `resolveMenuPlacement` to clamp it to the viewport and convert it to the layout px a `position: fixed` menu needs.
+ */
+export function menuBelowRightEdge(anchor: { right: number; bottom: number }, menuWidth: number, gap: number): { x: number; y: number } {
+  return { x: anchor.right - menuWidth, y: anchor.bottom + gap };
+}
