@@ -223,8 +223,8 @@
       </div>
     {/if}
 
-    <button class="save" title="Store the edit buffer to a preset" onclick={() => editor.openSave()}>
-      <span class="save-dot"></span>Save
+    <button class="save" title={editor.savePending ? 'Reading the current preset from the device…' : 'Store the edit buffer to a preset'} aria-busy={editor.savePending} onclick={() => editor.openSave()}>
+      <span class="save-dot"></span>{editor.savePending ? 'Reading…' : 'Save'}
     </button>
   </div>
 </header>

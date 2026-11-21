@@ -18,6 +18,8 @@ import type {
   ConvertResponse
 } from './types';
 import type { Severity } from './convertReport';
+import { normFromValue } from './format';
+import { enumOptionCount, isEnumParam, GEN3_WIRE_MAX } from './convertParams';
 
 // ── target topology ──────────────────────────────────────────────────────────────────────────────
 
@@ -153,7 +155,7 @@ export function seedScratch(
     instance: b.instance,
     typeName: b.typeName,
     typeValue: b.typeValue,
-    params: b.params.map((p) => ({ ...p })),
+    params: b.params.map((p) => reconcileNormalized(p, targetDevice)),
     position: normalizePosition(b.position, def.kind),
     channels: b.channels
   }));
@@ -345,6 +347,99 @@ export function canPlaceAt(state: ScratchState, row: number, col: number, except
   return !occ || occ.key === exceptKey;
 }
 
+// ── param value ↔ wire fraction ──────────────────────────────────────────────────────────────────
+// A converted param carries TWO views of one setting: `value` (what the knob shows — display units when
+// the converter attached a `min`/`max` range, otherwise the 0..1 knob position) and `normalized` (the 0..1
+// wire fraction the server writes: the `.syx` authoring prefers it over `value`, and a device write of a
+// continuous param is a 0..1 fraction). Anything that changes `value` MUST re-derive `normalized`, or the
+// edit is silently dropped from the export and the knob snaps back when the block is reopened.
+
+/** Read a finite numeric extra off a loosely-typed IR object (the wire may carry extras the IR interface
+ *  doesn't formally declare — e.g. a target `effectId`, a param `paramId`, `min`/`max`/`normalized`). */
+function numAttr(obj: Record<string, unknown>, key: string): number | undefined {
+  const v = obj[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** Targets whose `.syx` authoring uses the gen-3 preset-body value model (see `GEN3_WIRE_MAX`): the three
+ *  devices the export supports. Every other target (AM4, gen-2, VP4, gen-1) has no such authoring path —
+ *  export is gen-3 only and an apply writes enums as discrete ordinals — so the `k/65534` enum fraction is
+ *  meaningless there; an enum's `normalized` follows the codec's own range convention instead (see
+ *  `normalizedForValue`). */
+const GEN3_VALUE_MODEL_TARGETS: ReadonlySet<ConverterDeviceId> = new Set<ConverterDeviceId>(['axe-fx-iii', 'fm9', 'fm3']);
+
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** The display range the converter attached to a param, when it is usable for a knob sweep. */
+function rangeOf(o: Record<string, unknown>): { min: number; max: number; log: boolean } | undefined {
+  const min = numAttr(o, 'min');
+  const max = numAttr(o, 'max');
+  return min != null && max != null ? { min, max, log: o['log'] === true } : undefined;
+}
+
+/** The wire fraction (0..1) for `value` on this param — the inverse of what the knob does:
+ *  - enum params hold an ordinal. On a GEN-3 target its wire fraction is `ordinal / 65534` (the gen-3
+ *    preset-body value model, `GEN3_WIRE_MAX`: the authoring writes `raw = round(normalized * 65534)` and
+ *    the gen-3 lift stores `normalized = raw / 65534`, ordinals included), so the authoring reproduces the
+ *    exact ordinal. On any other target that convention does not apply: the enum's `normalized` follows the
+ *    codec's range convention, `normFromValue(value, range)` with the param's own `min`/`max` (for an AM4
+ *    target this is the codec's `k/(N-1)`); with no range there is nothing to compute → `undefined`
+ *    (leave `normalized` as the engine produced it);
+ *  - ranged params use the knob's own mapping (`normFromValue`: geometric for a log range with min > 0,
+ *    linear otherwise), so the knob and the wire agree — device-independent, same as the engine;
+ *  - range-less params keep the 0..1 knob semantics: the value IS the fraction. */
+export function normalizedForValue(p: ConverterParam, value: number, targetDevice: ConverterDeviceId): number | undefined {
+  const range = rangeOf(p as unknown as Record<string, unknown>);
+  if (isEnumParam(p)) {
+    if (GEN3_VALUE_MODEL_TARGETS.has(targetDevice)) return clamp01(value / GEN3_WIRE_MAX);
+    return range ? normFromValue(value, range) : undefined;
+  }
+  return range ? normFromValue(value, range) : clamp01(value);
+}
+
+/** A copy of `p` holding `normalized` — and the `norm` alias, if the IR carries one (it would otherwise
+ *  shadow `normalized` when the block is reopened). */
+function withNormalized(p: ConverterParam, normalized: number): ConverterParam {
+  const next: ConverterParam = { ...p, normalized };
+  if (typeof next['norm'] === 'number') next['norm'] = normalized;
+  return next;
+}
+
+/** A copy of `p` holding `value`, with `normalized` re-derived to match — or undefined when the edit is
+ *  refused. An enum only accepts a whole ordinal inside its option list; an enum with no option list has
+ *  no known valid ordinal at all, so it keeps its value (writing a fraction into a selector slot would
+ *  corrupt it). */
+function withParamValue(p: ConverterParam, value: number, targetDevice: ConverterDeviceId): ConverterParam | undefined {
+  if (isEnumParam(p)) {
+    const count = enumOptionCount(p);
+    if (!Number.isInteger(value) || value < 0 || value >= count) return undefined; // count 0 → always refused
+  }
+  const normalized = normalizedForValue(p, value, targetDevice);
+  const next: ConverterParam = { ...p, value };
+  return normalized === undefined ? next : withNormalized(next, normalized);
+}
+
+/** On load, `value` is authoritative for a param with a display range or enum options: recompute a
+ *  `normalized` that disagrees with it (a library doc saved by a build that updated `value` but left
+ *  `normalized` stale). Same formulas as the converter engine and the knob; a range-less param without
+ *  options has no scale to check `normalized` against, so it is left alone, as is a range-less enum on a
+ *  non-gen-3 target (no fraction convention to apply). Returns a copy either way. */
+function reconcileNormalized(p: ConverterParam, targetDevice: ConverterDeviceId): ConverterParam {
+  const stored = numAttr(p as unknown as Record<string, unknown>, 'normalized');
+  const checkable = enumOptionCount(p) > 0 || rangeOf(p as unknown as Record<string, unknown>) !== undefined;
+  if (stored == null || !checkable || !Number.isFinite(p.value)) return { ...p };
+  const derived = normalizedForValue(p, p.value, targetDevice);
+  if (derived === undefined || Math.abs(derived - stored) <= 1e-6) return { ...p };
+  return withNormalized(p, derived);
+}
+
+/** The stored `value` of one param of one block (by its index in the block's `params`), or undefined when
+ *  the block / index doesn't exist. The editor re-reads this after an edit so what it shows is what the
+ *  scratch actually holds — a refused edit (see {@link setBlockParam}) leaves the old value displayed. */
+export function paramValueOf(state: ScratchState | null, blockKey: string, paramIndex: number): number | undefined {
+  return state?.blocks.find((b) => b.key === blockKey)?.params[paramIndex]?.value;
+}
+
 // ── transitions (pure — each returns a new ScratchState) ─────────────────────────────────────────
 
 function patchBlocks(state: ScratchState, fn: (b: ScratchBlock) => ScratchBlock): ScratchState {
@@ -411,12 +506,16 @@ export function unplaceBlock(state: ScratchState, blockKey: string): ScratchStat
 }
 
 /** Set one param's value on a block (offline), addressed by its index in the block's `params` array —
- *  the convert surface maps a NamedParam id 1:1 to this index. No-op on an out-of-range index. */
+ *  the convert surface maps a NamedParam id 1:1 to this index. Re-derives the param's `normalized` wire
+ *  fraction alongside `value` (see {@link normalizedForValue}) so export / apply / reopen all see the edit.
+ *  No-op on an out-of-range index or a non-finite value, and on an enum edit that is not a whole ordinal
+ *  of the param's option list (an enum without options can't be edited). */
 export function setBlockParam(state: ScratchState, blockKey: string, paramIndex: number, value: number): ScratchState {
+  if (!Number.isFinite(value)) return state;
   return patchBlocks(state, (b) => {
     if (b.key !== blockKey) return b;
     if (paramIndex < 0 || paramIndex >= b.params.length) return b;
-    const params = b.params.map((p, i) => (i === paramIndex ? { ...p, value } : p));
+    const params = b.params.map((p, i) => (i === paramIndex ? (withParamValue(p, value, state.targetDevice) ?? p) : p));
     return { ...b, params };
   });
 }
@@ -570,25 +669,39 @@ export function buildLibraryDoc(
 
 /** One executable device op. Ordered place → set-type → set-param (a block must exist before its type
  *  is set, and its type before its params). Only emitted when the numeric device address is resolvable
- *  from the IR — see {@link buildApplyPlan}. */
+ *  from the IR — see {@link buildApplyPlan}.
+ *
+ *  `set-param` mirrors the server's unified param write: `continuous: true` → `value` is the 0..1 wire
+ *  fraction (a knob); `continuous: false` → `value` is the discrete ordinal (an enum / dropdown). */
 export type ApplyOp =
   | { kind: 'place'; blockKey: string; effectId: number; row: number; col: number }
   | { kind: 'set-type'; blockKey: string; effectId: number; value: number }
-  | { kind: 'set-param'; blockKey: string; effectId: number; paramId: number; value: number };
+  | { kind: 'set-param'; blockKey: string; effectId: number; paramId: number; value: number; continuous: boolean };
 
 export interface ApplyPlan {
   ops: ApplyOp[];
   /** Placed blocks whose device effect-id couldn't be resolved from the IR (can't be applied). */
   unresolvedBlocks: number;
-  /** Params carried in resolvable blocks but lacking a numeric paramId (can't be written). */
+  /** Params carried in resolvable blocks but lacking a numeric paramId, or a determinable wire value
+   *  (no `normalized` and no display range for a knob) — can't be written. */
   unresolvedParams: number;
 }
 
-/** Read a numeric extra attribute off a loosely-typed IR object (the wire may carry device addresses the
- *  IR interface doesn't formally declare — e.g. a target `effectId` or a param `paramId`). */
-function numAttr(obj: Record<string, unknown>, key: string): number | undefined {
-  const v = obj[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+/** What goes on the wire for one param, or undefined when it can't be determined. The server's contract
+ *  (`PUT /preset/blocks/:eid/params/:paramId`): a continuous write takes a 0..1 fraction (gen-3 clamp01,
+ *  AM4 SET_NORM), a discrete write takes the ordinal. So:
+ *  - enum params (labelled or not — see `isEnumParam`) → their raw ordinal, `continuous: false`;
+ *  - knobs → the wire fraction `normalized`, else derived from `value` + the display range with the knob's
+ *    own mapping. NEVER the display `value`: a 500 ms delay time would clamp to the maximum.
+ *  A knob with neither `normalized` nor a range has no known scale, so it is not guessed. */
+export function paramWriteOf(p: ConverterParam): { value: number; continuous: boolean } | undefined {
+  if (isEnumParam(p)) return Number.isInteger(p.value) && p.value >= 0 ? { value: p.value, continuous: false } : undefined;
+  const o = p as unknown as Record<string, unknown>;
+  const normalized = numAttr(o, 'normalized');
+  if (normalized != null) return { value: clamp01(normalized), continuous: true };
+  const range = rangeOf(o);
+  if (range && Number.isFinite(p.value)) return { value: normFromValue(p.value, range), continuous: true };
+  return undefined;
 }
 
 /** Resolve a block's device effect-id from the IR (extra `effectId` key), if present. */
@@ -622,11 +735,12 @@ export function buildApplyPlan(state: ScratchState): ApplyPlan {
     if (b.typeValue != null) types.push({ kind: 'set-type', blockKey: b.key, effectId: eid, value: b.typeValue });
     for (const p of b.params) {
       const pid = numAttr(p as unknown as Record<string, unknown>, 'paramId');
-      if (pid == null) {
+      const write = paramWriteOf(p);
+      if (pid == null || write == null) {
         unresolvedParams++;
         continue;
       }
-      params.push({ kind: 'set-param', blockKey: b.key, effectId: eid, paramId: pid, value: p.value });
+      params.push({ kind: 'set-param', blockKey: b.key, effectId: eid, paramId: pid, ...write });
     }
   }
 

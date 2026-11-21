@@ -1,15 +1,31 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { editor } from './editor.svelte';
+  import { checkSaveTarget, saveBlockedText, seedOnOpen, slotRangeWarning } from './saveTarget';
 
-  let target = $state(0);
+  // `null` = no slot chosen. Seeded from `editor.saveTarget` (set by `openSave` from a FRESH device read) ONLY
+  // on the closed → open transition: the poll replaces `editor.preset` every few seconds, so seeding on every
+  // re-evaluation would reset what the user typed (and could silently move the target). The reads inside the
+  // effect are untracked on purpose.
+  let target = $state<number | null>(null);
+  let wasOpen = false;
   $effect(() => {
-    if (editor.saveOpen) target = editor.saveTarget;
+    const open = editor.saveOpen;
+    const next = seedOnOpen({ wasOpen, value: untrack(() => target) }, open, () => untrack(() => editor.saveTarget));
+    wasOpen = next.wasOpen;
+    target = next.value;
   });
-  const maxSlot = $derived(Math.max(0, editor.presetCount - 1));
+  // Only a valid, explicit slot enables Save — with the current preset unknown there is nothing to default to.
+  const check = $derived(checkSaveTarget(target));
+  // The slot the device reported as current when the dialog was opened (null = unknown / unverified).
+  const cur = $derived(editor.saveCurrent);
+  const overwritingCurrent = $derived(check.ok && cur !== null && cur === check.slot);
+  const curName = $derived(cur !== null && editor.preset?.number === cur ? editor.preset.name : '');
+  // Advisory only: the reported slot count can be wrong for a device, so a higher slot is warned about, never blocked.
+  const rangeWarning = $derived(check.ok ? slotRangeWarning(check.slot, editor.caps?.presets?.count) : null);
   // Bank-letter devices (caps presets.addressing === 'bankLetter') address locations as A01..Z04.
   const bankCode = (n: number) => `${String.fromCharCode(65 + Math.floor(n / 4))}${String((n % 4) + 1).padStart(2, '0')}`;
   const pad = $derived((n: number) => (editor.bankLetterAddressing ? bankCode(n) : String(n).padStart(3, '0')));
-  const overwritingCurrent = $derived(editor.preset?.number === target);
   const mob = $derived(editor.isMobile);
   // Buffer loaded from a local Presets/ file → offer writing the edits back to that file too.
   const src = $derived(editor.bufferSource);
@@ -37,20 +53,31 @@
       {/if}
       <label class="field">
         <span class="lbl mono">SAVE TO</span>
-        <input class="num mono" type="number" min="0" max={maxSlot} bind:value={target} />
-        {#if editor.bankLetterAddressing}<span class="code mono">{bankCode(target)}</span>{/if}
+        <input class="num mono" type="number" min="0" placeholder="slot" bind:value={target} />
+        {#if editor.bankLetterAddressing && check.ok}<span class="code mono">{bankCode(check.slot)}</span>{/if}
       </label>
-      <p class="hint">
-        {#if overwritingCurrent}
-          Overwrites the current preset <b>{pad(target)}</b>{editor.preset?.name ? ` · ${editor.preset.name}` : ''}.
+      <p class="hint" class:warn={!check.ok}>
+        {#if !check.ok}
+          {saveBlockedText(check.reason, cur !== null)}
+        {:else if overwritingCurrent && editor.presetLiveQuery}
+          Overwrites the current preset <b>{pad(check.slot)}</b>{curName ? ` · ${curName}` : ''}.
+        {:else if overwritingCurrent}
+          Overwrites preset <b>{pad(check.slot)}</b> — the last one selected here. This device can't report its current preset, so verify it's the one you mean.
+        {:else if cur === null}
+          Writes to preset <b>{pad(check.slot)}</b>. The loaded preset is unknown — verify it's a slot you can overwrite.
         {:else}
-          Writes to preset <b>{pad(target)}</b> (not the one loaded — verify it's a slot you can overwrite).
+          Writes to preset <b>{pad(check.slot)}</b> (not the one loaded — verify it's a slot you can overwrite).
         {/if}
       </p>
+      {#if rangeWarning}<p class="hint warn">{rangeWarning}</p>{/if}
       <p class="beta mono">⚠ Destructive — overwrites this slot on the unit.</p>
       <div class="actions">
         <button class="btn cancel" onclick={() => (editor.saveOpen = false)}>Cancel</button>
-        <button class="btn save" onclick={() => editor.save(target)}>{src ? `Save to device ${pad(target)}` : `Save to ${pad(target)}`}</button>
+        <button
+          class="btn save"
+          disabled={!check.ok}
+          onclick={() => { if (check.ok) void editor.save(check.slot); }}
+        >{src ? 'Save to device' : 'Save to'} {check.ok ? pad(check.slot) : 'slot'}</button>
       </div>
     </div>
   </div>
@@ -156,6 +183,13 @@
   }
   .hint b {
     color: var(--text);
+  }
+  .hint.warn {
+    color: var(--amber);
+  }
+  .save:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .beta {
     font-size: 10px;

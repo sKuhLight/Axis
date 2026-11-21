@@ -284,7 +284,8 @@ async function runOp(op: ApplyOp): Promise<void> {
       await forgefx.setType(op.effectId, op.value);
       return;
     case 'set-param':
-      await forgefx.setParam(op.effectId, op.paramId, op.value);
+      // continuous → `value` is the 0..1 wire fraction; discrete (enum) → the ordinal (see ApplyOp).
+      await forgefx.setParam(op.effectId, op.paramId, op.value, op.continuous);
       return;
   }
 }

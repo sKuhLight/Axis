@@ -31,6 +31,10 @@ jobs:
         uses: ./Axis/.github/actions/build-stack
         with:
           use-lock: 'false'
+      # build-stack stamps pinned release-tag siblings with their tag version (release builds);
+      # keep that helper covered here (Node is set up by the action above).
+      - name: Version-stamp helper self-test
+        run: node Axis/.github/actions/build-stack/stamp-sibling-version.mjs --self-test
       - name: Axis typecheck, unit test + build
         working-directory: Axis
         run: |

@@ -16,7 +16,9 @@ export function createAxisPresetBrowserWorkbenchHost(): AxisPresetBrowserRuntime
     loadBytes: async (bytes) => {
       await forgefx.loadBytes(bytes);
     },
-    loadDeviceSlot: editor.selectPreset,
+    loadDeviceSlot: async (presetNumber) => {
+      await editor.selectPreset(presetNumber); // runtime contract is void; selectPreset now reports whether the switch was acked
+    },
     deviceEntryBytes: async (presetNumber) => {
       if (editor.isV2) {
         const backup = await forgefx.presetBackup(presetNumber);

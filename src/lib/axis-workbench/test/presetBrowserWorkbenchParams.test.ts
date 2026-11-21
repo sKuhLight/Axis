@@ -37,9 +37,63 @@ describe('Preset Browser detail params', () => {
     expect(fmtNum(7)).toBe('7');
     expect(fmtNum(7.25)).toBe('7.3');
     expect(fmtVal({ value: 7, enumLabel: null })).toBe('7');
-    expect(fmtVal({ value: 7, enumLabel: null, unit: 'dB' })).toBe('7 dB');
+    expect(fmtVal({ value: 7, kind: 'float', enumLabel: null, unit: 'dB' })).toBe('7 dB');
     expect(fmtVal({ value: null, enumLabel: 'Large Hall' })).toBe('Large Hall');
     expect(fmtVal({ value: null, enumLabel: null })).toBe('—');
+  });
+
+  it('shows unit symbols, never raw catalog codes (percent, knob_0_10, semitones, bipolar_percent …)', () => {
+    expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit: 'percent' })).toBe('5%');
+    expect(fmtVal({ value: -12, kind: 'float', enumLabel: null, unit: 'bipolar_percent' })).toBe('-12%');
+    expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit: 'knob_0_10' })).toBe('5');
+    expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit: 'knob_0_20' })).toBe('5');
+    expect(fmtVal({ value: 7, kind: 'float', enumLabel: null, unit: 'semitones' })).toBe('7 st');
+    expect(fmtVal({ value: 4, kind: 'float', enumLabel: null, unit: 'db' })).toBe('4 dB');
+    expect(fmtVal({ value: 440, kind: 'float', enumLabel: null, unit: 'hz' })).toBe('440 Hz');
+    expect(fmtVal({ value: 120, kind: 'float', enumLabel: null, unit: 'ms' })).toBe('120 ms');
+    expect(fmtVal({ value: 2, kind: 'float', enumLabel: null, unit: 'seconds' })).toBe('2 s');
+    expect(fmtVal({ value: 4, kind: 'float', enumLabel: null, unit: 'ratio' })).toBe('4 :1');
+    expect(fmtVal({ value: 45, kind: 'float', enumLabel: null, unit: 'degrees' })).toBe('45 °');
+    // the unitless / selector codes the listing already hid stay hidden
+    for (const unit of ['numeric', 'count', 'enum', 'unverified', '']) {
+      expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit })).toBe('5');
+    }
+    // unknown device-true tokens still render verbatim, and symbols are left alone
+    expect(fmtVal({ value: 12, kind: 'float', enumLabel: null, unit: 'dB/OCT' })).toBe('12 dB/OCT');
+    expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit: '%' })).toBe('5%');
+    // an enum label wins over any unit
+    expect(fmtVal({ value: 1, enumLabel: 'ON', unit: 'percent' })).toBe('ON');
+  });
+
+  it('renders an unranged value without a unit (the raw 0..65534 value must not read as "32767%")', () => {
+    // ranged: the unit stays
+    expect(fmtVal({ value: 5, kind: 'float', enumLabel: null, unit: 'percent' })).toBe('5%');
+    // no range row (kind absent): raw model value, bare
+    expect(fmtVal({ value: 32767, enumLabel: null, unit: 'percent' })).toBe('32767');
+    expect(fmtVal({ value: 32767, kind: undefined, raw: 32767, enumLabel: null, unit: 'percent' })).toBe('32767');
+    expect(fmtVal({ value: 1000, enumLabel: null, unit: 'ms' })).toBe('1000');
+    // 0..0 placeholder range row: float kind, value === raw
+    expect(fmtVal({ value: 32767, kind: 'float', raw: 32767, enumLabel: null, unit: 'percent' })).toBe('32767');
+    // a real ranged value keeps its unit even with raw known
+    expect(fmtVal({ value: 5, kind: 'float', raw: 3277, enumLabel: null, unit: 'percent' })).toBe('5%');
+  });
+
+  it('the detail cards render an unranged param bare next to a ranged one', () => {
+    const cards = buildDetailBlockCards(
+      [block({ params: [p({ paramId: 1, label: 'Mix', value: 5, unit: 'percent' }), p({ paramId: 2, label: 'Raw', kind: undefined, value: 32767, unit: 'percent' })] })],
+      [],
+      null
+    );
+    expect(cards[0]!.cells.map((c) => c.value)).toEqual(['5%', '32767']);
+  });
+
+  it('the detail cards carry the symbol, not the code', () => {
+    const cards = buildDetailBlockCards(
+      [block({ params: [p({ paramId: 1, label: 'Mix', value: 5, unit: 'percent' }), p({ paramId: 2, label: 'Drive', value: 6.5, unit: 'knob_0_10' })] })],
+      [],
+      null
+    );
+    expect(cards[0]!.cells.map((c) => c.value)).toEqual(['5%', '6.5']);
   });
 
   it('detailParams skips zero/default noise and caps at 12', () => {

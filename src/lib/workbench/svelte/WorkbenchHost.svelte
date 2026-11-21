@@ -459,7 +459,11 @@
        the left inset); respect the top + right insets. */
     height: calc(58px + var(--aw-safe-top, 0px));
     padding: var(--aw-safe-top, 0px) calc(12px + var(--aw-safe-right, 0px)) 0 12px;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    /* Design §8 (shell zone styles): top.left and top.right take their content
+       width and top.center absorbs the rest. The joint auto-fit pools the whole
+       bar width across tl+tc+tr, which only holds for this shape; equal 1fr side
+       columns capped each side at half the bar and clipped a full right zone. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
     border-bottom: 1px solid var(--aw-border);
     box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.025);
   }
@@ -468,7 +472,7 @@
      matter which zones are present. Without this, an omitted zone (empty +
      not editing) lets the remaining zones auto-flow into the wrong cells —
      e.g. an empty center collapses and top.right slides into the middle
-     `auto` column instead of the right `1fr` column. */
+     column instead of the right one. */
   .aw-topbar > :global([data-zone='top.left']) {
     grid-column: 1;
   }
@@ -669,9 +673,6 @@
     }
     :global(.aw-root.aw-editing .aw-workspace) {
       padding-top: 72px;
-    }
-    .aw-topbar {
-      grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
     }
     /* Only reserve hamburger space in side-nav mode (where the hamburger is
        rendered). In bottom-nav mode the drawer/hamburger are suppressed, so the

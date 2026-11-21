@@ -629,6 +629,10 @@ export interface DeviceCaps {
    *  FM3/FM9/Axe-Fx III; absent/false on units like the VP4. Gates the secondary "full capture"
    *  affordance — the default read-only build works regardless. */
   fullCapture?: boolean;
+  /** Device can run the in-product device diagnostic (`/diagnostics/capture*`): a gated probe run that
+   *  produces a redacted result bundle the user can save or upload for analysis. True for gen-3 devices
+   *  that self-describe. Absent on older servers → the Debug tab only explains why it is unavailable. */
+  diagnosticCapture?: boolean;
 }
 
 /** GET /device — identity + firmware + capabilities. */
@@ -666,7 +670,13 @@ export interface DeviceCacheMeta {
   /** How the profile was obtained: 'live' = A3 self-describe walk, 'editor-cache' = imported official
    *  editor file, 'cloud' = pulled shared profile. Absent on servers that don't stamp it. */
   source?: 'live' | 'editor-cache' | 'cloud' | (string & {});
+  /** The schema stamp the stored profile carries (null = none). Absent on servers that don't report it. */
+  schema?: number | null;
 }
+
+/** Why a stored definition profile can't be used: no schema stamp, an older one (derived under rules
+ *  that have since changed), or one newer than this build understands. */
+export type DeviceDefsStaleReason = 'missing' | 'outdated' | 'newer';
 
 /** POST /device/cache/import and /device/cache/cloud/pull success body. */
 export interface DeviceCacheImportResult {
@@ -685,12 +695,20 @@ export interface DeviceCacheImportResult {
 export interface DeviceCacheStatus {
   /** Opaque cache key (model+firmware) the server addresses this profile by. */
   key: string;
-  /** A persisted profile exists for the connected device+firmware. */
+  /** A persisted profile exists for the connected device+firmware — whether or not it is usable (see `stale`). */
   exists: boolean;
   /** A build is currently running. */
   building: boolean;
   progress?: { done: number; total: number; phase: string };
   meta?: DeviceCacheMeta;
+  /** The stored profile can't be used (its schema is missing/outdated/newer): the server doesn't apply
+   *  it, Axis runs on the bundled definitions, and the definitions must be re-read. Absent on servers
+   *  that predate the schema gate — treat as false. */
+  stale?: boolean;
+  /** Why the stored profile is stale — only present when `stale`. */
+  staleReason?: DeviceDefsStaleReason;
+  /** The schema the server writes and accepts. */
+  currentSchema?: number;
 }
 
 /** One editor-cache file discovered on disk (Node/Electron) — GET /device/cache/sources → candidates. */
@@ -719,6 +737,12 @@ export interface CloudCacheStatus {
   enabled?: boolean;
   available: boolean;
   meta?: { source?: string; recordCount?: number | null; createdAt?: string; contentHash?: string };
+  /** A shared profile exists but its schema can't be used by this server (so `available` is false). */
+  stale?: boolean;
+  staleReason?: DeviceDefsStaleReason;
+  /** The shared profile's schema stamp (null = none) and the schema this server accepts. */
+  schema?: number | null;
+  currentSchema?: number;
 }
 
 export interface Health {
@@ -844,6 +868,10 @@ export interface ConverterParam {
   nativeName: string;
   conceptKey?: string;
   value: number;
+  /** What the param is, when the codec reports it: `enum` = a discrete selector (`value` is the ordinal,
+   *  written discretely; `enumOptions` are attached where labels exist), `float` = a continuous knob,
+   *  `int` = a stepper. Absent on older IR — Axis then falls back to `enumOptions` / `displayValue` hints. */
+  kind?: 'enum' | 'float' | 'int';
   [k: string]: unknown;
 }
 
@@ -964,3 +992,91 @@ export interface PortList {
   profile?: { key: string; name: string; model: string };
   ports: ConnInfo[];
 }
+
+// ── Device diagnostics (in-product diagnostic capture · Settings → Debug) ──
+// Mirrors the ForgeFX `/diagnostics/capture*` contract. A run executes a fixed, staged set of probe
+// steps against the connected device and always ends in a redacted result bundle (success, failure or
+// cancel), which the user can save locally or upload for analysis.
+
+/** The probe steps of a run. `fullWalk` is opt-in and only runs for firmware where full capture is allowed. */
+export type CaptureStepName = 'info' | 'readonlyWalk' | 'labelProbe' | 'dumpHeaderProbe' | 'reloadProbe' | 'fullWalk';
+export type CaptureStepStatus = 'pending' | 'running' | 'ok' | 'failed' | 'aborted' | 'skipped';
+export type CaptureRunState = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/** `GET /diagnostics/capture` — progress of the current run, or of the last finished one. */
+export interface CaptureStatus {
+  state: CaptureRunState;
+  id?: string;
+  startedAt?: string;
+  endedAt?: string;
+  steps?: { name: CaptureStepName; status: CaptureStepStatus; progress?: { done: number; total: number }; note?: string }[];
+  /** Why the run stopped early, e.g. `cancelled`, `device-silent`, `query-bound`, `error: …`. */
+  abortReason?: string;
+  /** A result bundle exists (`GET /diagnostics/capture/result` answers 200). */
+  resultAvailable: boolean;
+}
+
+/** What to do with unsaved edits on the device before the steps that switch presets: store them to the current
+ *  slot first, or accept that they are lost. Absent = the engine skips those steps when it finds edits. */
+export type CaptureUnsavedEdits = 'save' | 'discard';
+
+/** `POST /diagnostics/capture` body. `acknowledged` is a literal `true`: the call cannot be typed without it. */
+export interface CaptureStartRequest {
+  acknowledged: true;
+  steps?: CaptureStepName[];
+  includeFullWalk?: boolean;
+  /** The user's answer to the unsaved-changes question (only sent when the pre-check found unsaved edits). */
+  unsavedEdits?: CaptureUnsavedEdits;
+  /** The preset the pre-check saw (sent together with `unsavedEdits`): the engine honours the decision only while the
+   *  device is still on it. */
+  preset?: number;
+  /** The pre-check's token (a hash of the preset and its edit buffer, valid for about 15 minutes), sent together with
+   *  `unsavedEdits`: the engine honours the decision only for the edits that were actually seen. */
+  token?: string;
+}
+
+/** `GET /diagnostics/capture/preflight` — what the device looks like right before a run. */
+export interface CapturePreflight {
+  /** The preset the device is on (null when unknown). */
+  preset: number | null;
+  presetName?: string;
+  /** Does the edit buffer differ from the stored preset? `unknown` = the engine could not tell. */
+  editBuffer: 'clean' | 'dirty' | 'unknown';
+  reason?: string;
+  /** `older-firmware`: the device converted a preset saved under older firmware when loading it. */
+  likelyCause?: 'unsaved-edits' | 'older-firmware' | 'unknown';
+  /** The engine can store to the current slot, the preset is known and the edit buffer is known (never for `unknown`). */
+  canSave: boolean;
+  /** Proves this pre-check to the start request (expires after about 15 minutes). */
+  token?: string;
+}
+
+/** `GET /diagnostics/capture/result` — the redacted result bundle (`schema: 1`). */
+export interface CaptureBundle {
+  schema: 1;
+  id: string;
+  createdAt: string;
+  endedAt: string;
+  state: 'done' | 'failed' | 'cancelled';
+  abortReason?: string;
+  /** Versions; `axis` is filled in by the client when it saves a copy locally. */
+  app: { forgefx: string; codec: string; axis?: string };
+  device: { model: number; modelName: string; firmware: string | null; transport: string };
+  steps: { name: CaptureStepName; status: CaptureStepStatus; startedAt?: string; endedAt?: string; result?: unknown; error?: string; note?: string }[];
+  /** Full wire log of the run (ms since start), already redacted by the engine. */
+  frames: { t: number; dir: 'TX' | 'RX'; hex: string }[];
+  logs: { t: number; level: 'debug' | 'info' | 'warn' | 'error'; msg: string }[];
+  /** How many frames had names / dump payloads removed before the bundle left the engine. */
+  redaction: { presetNames: number; dumpPayloadFrames: number };
+}
+
+/** `POST /diagnostics/capture` → 202. */
+export interface CaptureStartResult { started: true; id: string }
+
+/** `POST /diagnostics/capture/upload` body. `consent` is a literal `true`; `axisVersion` is the client's own version,
+ *  which the engine stamps into the uploaded copy only. */
+export interface CaptureUploadRequest { consent: true; axisVersion?: string }
+
+/** `POST /diagnostics/capture/upload` → 200. `captureId` is the cloud's reference for the stored result;
+ *  `deduped` = the cloud already had this result (nothing new was stored). */
+export interface CaptureUploadResult { ok: true; captureId: string; bytes: number; deduped?: boolean }

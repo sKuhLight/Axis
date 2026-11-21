@@ -16,6 +16,14 @@ description: >-
 # is the desired signal), so it calls this with use-lock 'false'. Tag-triggered
 # RELEASE builds call it with use-lock 'true' to pin the exact sibling refs
 # recorded in Axis/stack.lock.json — reproducible installers, stampable notes.
+#
+# Version stamping: siblings at a pinned RELEASE TAG (e.g. v0.5.0 / v0.8.0-beta)
+# get that tag's version written into their package.json before they are built —
+# their committed package.json versions are frozen/stale, and would otherwise
+# leak into diagnostics bundles (codec VERSION via gen-version.ts) and the UI's
+# engine version (vite reads ForgeFX/server/package.json). Non-tag refs (the
+# default-branch HEAD CI builds, SHAs) are left untouched. See
+# stamp-sibling-version.mjs next to this file.
 
 inputs:
   node-version:
@@ -122,6 +130,20 @@ runs:
           Axis/package-lock.json
           ForgeFX/server/package-lock.json
           forgefx-midi/package-lock.json
+
+    # Stamp pinned release-tag siblings with their tag version BEFORE they are built (after
+    # setup-node so the npm cache key is unaffected). The script path is workspace-relative like
+    # the Axis/stack.lock.json read above. No-op for '' / SHA refs.
+    - name: Stamp pinned siblings with their release tag version
+      shell: bash
+      env:
+        MIDI_REF: ${{ steps.refs.outputs.midi-ref }}
+        FORGEFX_REF: ${{ steps.refs.outputs.forgefx-ref }}
+      run: |
+        set -euo pipefail
+        STAMP="Axis/.github/actions/build-stack/stamp-sibling-version.mjs"
+        node "$STAMP" "$MIDI_REF" forgefx-midi forgefx-midi
+        node "$STAMP" "$FORGEFX_REF" ForgeFX/server ForgeFX
 
     # Build order: codec first (its exports point at dist/), then the server.
     - name: Build forgefx-midi (codec)

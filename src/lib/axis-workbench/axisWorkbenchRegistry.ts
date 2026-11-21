@@ -21,6 +21,7 @@ import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowse
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
 import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
+import { axisWidgetAvailable } from './widgets/widgetAvailability';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
@@ -79,9 +80,15 @@ AXIS_WORKBENCH_BLOCK_EDITOR_PANEL_TYPES.filter((type) => type !== 'axis.blockEdi
 );
 AXIS_WORKBENCH_WIDGET_TYPES.forEach((type) => registry.registerWidget({ type, component: AxisWorkbenchWidget }));
 
-// Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table
-// + keep-set. The generic layer stays widget-type agnostic.
-registry.registerWidgetSizing({ estWidth: axisWidgetEstWidth, isKeep: axisWidgetIsKeep });
+// Feed the generic auto-fit (workbench/core/widgetFit.ts) the Axis estW table,
+// keep-set and capability gates. The generic layer stays widget-type agnostic.
+// `isAvailable` reads editor runes; WidgetZone calls it inside $derived, so a
+// capability change (device connect / switch) re-runs the zone fit.
+registry.registerWidgetSizing({
+  estWidth: axisWidgetEstWidth,
+  isKeep: axisWidgetIsKeep,
+  isAvailable: (type) => axisWidgetAvailable(type, editor)
+});
 
 // Active-section tint (01-shell.md §9). ROUND 15: the seven page-bound nav entries
 // resolve their tint generically in NavigationHost (pageNavigationEntryActive — the

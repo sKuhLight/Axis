@@ -1,6 +1,8 @@
 <script lang="ts">
   // Device-definitions prompt (A4, AXIS-17/44 · META-22). Appears on connect when the device can
-  // self-describe but has no persisted definition profile for its firmware — offering, in order of
+  // self-describe but has no usable persisted definition profile for its firmware (none stored, or a
+  // stored one that is out of date — the server no longer applies it, so the copy asks to re-read it,
+  // and an earlier "Later" never hides that) — offering, in order of
   // preference: pull a shared cloud profile · import a discovered editor cache (Electron) · drag-drop an
   // effectDefinitions_*.cache anywhere on the card · read the definitions off the device (live SSE
   // progress) · locate an editor folder (Chromium). Dismissible per device+firmware. Clones the
@@ -104,11 +106,20 @@
       <div class="row top">
         <span class="ic">⧉</span>
         <div class="msg">
-          <b>Get definitions for this device?</b>
-          <span class="sub">Axis is using bundled definitions. Match them to your exact firmware for accurate model names, ranges &amp; parameters.</span>
+          {#if deviceDefs.stale}
+            <b>{deviceDefs.staleCopy.title}</b>
+            <span class="sub">{deviceDefs.staleCopy.sub}</span>
+          {:else}
+            <b>Get definitions for this device?</b>
+            <span class="sub">Axis is using bundled definitions. Match them to your exact firmware for accurate model names, ranges &amp; parameters.</span>
+          {/if}
         </div>
         <button class="later" onclick={() => deviceDefs.dismiss()} title="Keep using the bundled definitions">Later</button>
       </div>
+
+      {#if deviceDefs.cloudNote}
+        <div class="note">{deviceDefs.cloudNote}</div>
+      {/if}
 
       {#if deviceDefs.error}
         <div class="err">
@@ -336,6 +347,12 @@
     color: var(--text2);
   }
   .dropic { font-size: 15px; }
+  .note {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--textdim);
+    line-height: 1.35;
+  }
   .err {
     margin-top: 8px;
     font-size: 11.5px;

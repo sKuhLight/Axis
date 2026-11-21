@@ -22,6 +22,19 @@ describe('convertParams.buildParams', () => {
     expect(out[1].norm).toBeLessThanOrEqual(1);
   });
 
+  it('routes the unit through the shared catalog mapping: symbols pass, codes become symbols, no-unit codes drop', () => {
+    const out = buildParams([
+      p({ nativeName: 'mix', value: 5, min: 0, max: 100, unit: '%' }),
+      p({ nativeName: 'mix2', value: 5, min: 0, max: 100, unit: 'percent' }),
+      p({ nativeName: 'shift', value: 7, min: -24, max: 24, unit: 'semitones' }),
+      p({ nativeName: 'drive', value: 5, min: 0, max: 10, unit: 'knob_0_10' }),
+      p({ nativeName: 'level', value: 5, min: 0, max: 10, unit: 'numeric' }),
+      p({ nativeName: 'slope', value: 12, min: 6, max: 48, unit: 'dB/OCT' }),
+      p({ nativeName: 'bare', value: 5, min: 0, max: 10 }),
+    ]);
+    expect(out.map((x) => x.unit)).toEqual(['%', '%', 'st', undefined, undefined, 'dB/OCT', undefined]);
+  });
+
   it('degrades to a coarse knob (no min/max/norm) when the converter had no catalog data', () => {
     const out = buildParams([p({ nativeName: 'mystery', value: 42 })]);
     expect(out[0]).toMatchObject({ id: 0, name: 'mystery', value: 42 });

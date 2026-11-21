@@ -175,6 +175,18 @@ forgefx-midi siblings, set up Node, build codec (+ server)". `use-lock 'true'` p
 `stack.lock.json` (release + site builds); `use-lock 'false'` tracks default-branch HEAD (CI). It
 outputs the resolved refs and the actual checked-out SHAs for release stamping.
 
+**Sibling versions.** The siblings' committed `package.json` versions are frozen (codec `0.4.x`,
+ForgeFX `0.6.x`), so a pinned build would otherwise report versions that don't exist (the codec
+`VERSION` in diagnostics bundles, the UI's engine version read from `ForgeFX/server/package.json`).
+After the siblings are checked out — and before they are built — the action runs
+`stamp-sibling-version.mjs` (beside `action.yml`): when a sibling ref matches a release tag
+(`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$`) its `package.json` (+ lock root) version is set to
+the tag without the `v` (codec: repo root; ForgeFX: `server/`) and the change is logged in the step
+summary. Empty / SHA refs (the default-branch CI builds) are left untouched. Since every Axis
+workflow goes through this action, `release`, `deploy-remote`, `mobile-ota` and `ios-unsigned` all
+get it; `ci.yml` runs the script's `--self-test`. This does not change how Axis stamps its *own*
+version (see the caveat above).
+
 ---
 
 ## Correlation id + failure notifications
