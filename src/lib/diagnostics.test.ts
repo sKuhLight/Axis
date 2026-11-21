@@ -631,14 +631,15 @@ describe('wiring (source pins)', () => {
     expect(panel).toMatch(/class="sr-only" role="status" aria-live="polite"/);
   });
   it('event-driven device re-reads wait while a diagnostic run or a definitions build owns the transport', () => {
-    expect(editorSrc).toMatch(/#scheduleReload = \(settleMs: number, run: \(\) => Promise<void>\) => \{[\s\S]*?if \(this\.#walkActive\(\)\) \{ this\.#eventReload = setTimeout\(fire, 1000\); return; \}/);
-    // the 'changed' (full reload), scene and block-state paths all go through it — none arms its own timer
+    // one scheduler, told when the transport is owned by a walk / import / diagnostic run
+    expect(editorSrc).toContain('#reloads = new ReloadScheduler(() => this.#walkActive())');
+    // the 'changed' (full reload), scene and block-state paths all go through it, tagged with their kind — none arms its own timer
     const changed = editorSrc.slice(editorSrc.indexOf("case 'changed': {"), editorSrc.indexOf("case 'config':"));
-    expect(changed).toContain('this.#scheduleReload(250');
+    expect(changed).toContain("this.#reloads.schedule('changed', 250");
     expect(changed).not.toContain('setTimeout');
-    expect(editorSrc).toMatch(/#scheduleSceneReload = \(settleMs = 250\) => this\.#scheduleReload\(/);
-    expect(editorSrc).toMatch(/#scheduleBlockStateReload = \(settleMs = 120\) => this\.#scheduleReload\(/);
-    expect(editorSrc.match(/this\.#eventReload = setTimeout\(/g)?.length).toBe(2); // fire(): the settle timer and the re-arm
+    expect(editorSrc).toMatch(/#scheduleSceneReload = \(settleMs = 250\) => this\.#reloads\.schedule\('scene', settleMs,/);
+    expect(editorSrc).toMatch(/#scheduleBlockStateReload = \(settleMs = 120\) => this\.#reloads\.schedule\('blockState', settleMs,/);
+    expect(editorSrc).not.toContain('#eventReload');
   });
   it('the Browser Direct runtime hands the router its version stamps', () => {
     expect(directRuntime).toMatch(/__FORGEFX_VERSION__/);

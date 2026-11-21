@@ -7,6 +7,7 @@ import { library } from './library.svelte';
 import { cloud } from './cloud.svelte';
 import { deviceDefs } from './deviceDefs.svelte';
 import { diagnostics } from './diagnostics.svelte';
+import { ReloadScheduler } from './reloadScheduler';
 import { history } from './history.svelte';
 import { onMutation, notifyMutation } from './syncBus';
 import { layoutFromGrid, type Cell, type Layout } from './grid';
@@ -1142,7 +1143,12 @@ class EditorStore {
       /* SSE unsupported / offline — telemetry stays at last-known */
     }
   };
-  #eventReload: ReturnType<typeof setTimeout> | null = null;
+  /** The one debounce behind every event-driven device re-read (scene / block state / structural change): a burst
+   *  coalesces into one read, the STRONGEST pending kind wins (changed > scene > blockState), and while a
+   *  definitions walk/import or a diagnostic run owns the transport the read waits and runs once afterwards — an
+   *  edit-buffer dump + block reads in the middle of its query stream has frozen an FM3 (FORGEFX-32) and would
+   *  land in a diagnostic's wire log. See reloadScheduler.ts. */
+  #reloads = new ReloadScheduler(() => this.#walkActive());
   /** Reflect a scene change WITHOUT a full preset reload. A scene switch never changes the grid
    *  STRUCTURE (block placement/routing is preset-level) — only per-block bypass / active channel /
    *  channel-linked params. So re-apply just the cheap bypass+channel (one fn-0x13 read via
@@ -1171,23 +1177,10 @@ class EditorStore {
   };
   /** Debounce scene reflection (coalesces an app click + its SSE echo, or a fast footswitch sweep,
    *  into one lightweight refresh). */
-  #scheduleSceneReload = (settleMs = 250) => this.#scheduleReload(settleMs, () => this.#refreshScene());
+  #scheduleSceneReload = (settleMs = 250) => this.#reloads.schedule('scene', settleMs, () => this.#refreshScene());
   /** Debounce block-state reflection after channel changes; FM3-Edit waits a shorter settle window
    *  before re-reading the affected block. */
-  #scheduleBlockStateReload = (settleMs = 120) => this.#scheduleReload(settleMs, () => this.#refreshScene());
-  /** The one debounce behind every event-driven device re-read (scene / block state / structural change): the
-   *  last schedule wins, so a burst coalesces. While a definitions walk/import or a diagnostic run owns the
-   *  transport the re-read waits instead — an edit-buffer dump + block reads in the middle of its query stream
-   *  has frozen an FM3 (FORGEFX-32) and would land in a diagnostic's wire log — and runs ONCE when it is over. */
-  #scheduleReload = (settleMs: number, run: () => Promise<void>) => {
-    if (this.#eventReload) clearTimeout(this.#eventReload);
-    const fire = () => {
-      if (this.#walkActive()) { this.#eventReload = setTimeout(fire, 1000); return; }
-      this.#eventReload = null;
-      void run();
-    };
-    this.#eventReload = setTimeout(fire, settleMs);
-  };
+  #scheduleBlockStateReload = (settleMs = 120) => this.#reloads.schedule('blockState', settleMs, () => this.#refreshScene());
   /** Apply one live device event — from SSE (local) or the remote relay channel. Drives cross-UI sync:
    *  another window / the remote / the device itself changed something, so this UI follows. */
   applyDeviceEvent = (e: DeviceEvent) => {
@@ -1227,7 +1220,7 @@ class EditorStore {
         // unit doesn't push — AM4 front-panel / AM4-Edit) — reload, debounced so a burst coalesces into
         // one refresh. Also re-read the open block's knobs: load() only refreshes the grid + blocks, so
         // without this a front-panel knob turn on the currently-open block would leave its arcs stale.
-        this.#scheduleReload(250, async () => {
+        this.#reloads.schedule('changed', 250, async () => {
           await this.load();
           if (this.selKey) await this.#loadParams();
         });
