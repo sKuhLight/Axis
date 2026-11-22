@@ -13,10 +13,12 @@
 // device-class key only, so a tablet inherits the desktop board until it is changed on the tablet.
 //
 // Legacy keys of the previous editor are a ONE-TIME migration source: they are read only while the
-// family has no `axs.be1meta.<slug>` marked `migrated`. The first save of a board, a family seed or the
-// meta marks the family migrated, so from then on a legacy board can never come back (not after a
-// variant change, not for a profile saved on another device class only, not for a deleted profile
-// whose name is reused). Legacy keys are never deleted or written (they are the way back on a revert).
+// family has no `axs.be1meta.<slug>` marked `migrated`. Before the first write the editor carries every
+// profile's legacy board over to its desktop key (`carryLegacyBoards`); the first save of a board, a
+// family seed or the meta then marks the family migrated, so from then on a legacy board can never come
+// back (not after a variant change, not for a profile saved on another device class only, not for a
+// deleted profile whose name is reused). Legacy keys are never deleted or written (they are the way
+// back on a revert).
 
 import { BLOCK_LEVEL_KEYS, isDivider, normalizeBoard, pageItems, type BeBoard, type BeItem, type BeView } from './boardModel';
 import { parseStoredBoard, parseStoredMeta, type BePrefs } from './boardSchema';
@@ -32,11 +34,14 @@ export interface KeyValueStore {
 /** Monolith shell: narrower than this is a phone. */
 export const PHONE_MAX_W = 760;
 
-/** Device class of the running editor. A workbench profile's breakpoint wins; without one (monolith
- *  shell) the viewport decides: < 760 px phone, else desktop. */
-export function deviceClassFrom(input: { workbenchBreakpoint?: string | null; viewportWidth: number }): DeviceClass {
+/** Device class of the running editor. Inside the workbench the active profile's breakpoint decides, and
+ *  a profile without one counts as desktop (as in the workbench itself); in the monolith shell the
+ *  viewport decides: < 760 px phone, else desktop. Every phone / desktop decision of the editor (board
+ *  key, chrome, arrange) reads this one value. */
+export function deviceClassFrom(input: { inWorkbench?: boolean; workbenchBreakpoint?: string | null; viewportWidth: number }): DeviceClass {
   const bp = input.workbenchBreakpoint;
   if (bp === 'desktop' || bp === 'tablet' || bp === 'phone') return bp;
+  if (input.inWorkbench) return 'desktop';
   return input.viewportWidth < PHONE_MAX_W ? 'phone' : 'desktop';
 }
 
@@ -70,13 +75,15 @@ export interface BeMeta {
   prefs: Partial<Record<DeviceClass, BePrefs>>;
   /** The family's boards live under the new keys; legacy keys are no longer read. */
   migrated: boolean;
+  /** Arrange: tidy after every move / resize ("Auto-pack"); absent = off. */
+  autoPack?: boolean;
 }
 
 export const DEFAULT_PREFS: BePrefs = { nav: 'top', density: 'm' };
 
 const defaultMeta = (): BeMeta => ({ active: DEFAULT_PROFILE, names: [DEFAULT_PROFILE, BLANK_PROFILE], prefs: {}, migrated: false });
 
-function tidyMeta(m: { active: string; names: string[]; prefs?: Partial<Record<DeviceClass, BePrefs | undefined>>; migrated?: boolean }): BeMeta {
+function tidyMeta(m: { active: string; names: string[]; prefs?: Partial<Record<DeviceClass, BePrefs | undefined>>; migrated?: boolean; autoPack?: boolean }): BeMeta {
   const names = [DEFAULT_PROFILE, BLANK_PROFILE];
   for (const n of m.names) if (n && !names.includes(n)) names.push(n);
   const prefs: Partial<Record<DeviceClass, BePrefs>> = {};
@@ -84,7 +91,9 @@ function tidyMeta(m: { active: string; names: string[]; prefs?: Partial<Record<D
     const p = m.prefs?.[cls];
     if (p) prefs[cls] = { nav: p.nav, density: p.density };
   }
-  return { active: names.includes(m.active) ? m.active : DEFAULT_PROFILE, names, prefs, migrated: m.migrated === true };
+  const out: BeMeta = { active: names.includes(m.active) ? m.active : DEFAULT_PROFILE, names, prefs, migrated: m.migrated === true };
+  if (m.autoPack === true) out.autoPack = true;
+  return out;
 }
 
 /** Load a family's meta: the new key, else the previous editor's meta (not migrated), else defaults. */
@@ -179,6 +188,31 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
     return { board: norm(checkSig ? b : stamp(b)), source };
   }
   return { board: norm(stamp(input.seed)), source: 'seed' };
+}
+
+export interface CarryLegacyInput extends Omit<LoadBoardInput, 'profile' | 'deviceClass' | 'seed'> {
+  /** Every profile of the family (the meta's names). */
+  names: readonly string[];
+  /** Built-in seed per profile (as for loadBoard). */
+  seedFor: (profile: string) => BeBoard;
+}
+
+/** One-time hand-over of a family that still reads the previous editor's keys, run before its first
+ *  write (any write marks the family migrated, after which legacy keys are never read again): every
+ *  profile whose board would load from a legacy key — `axs.surface3.<slug>.<profile>`, or for `Default`
+ *  the pre-profile `axs.surface2.<slug>` — is written to its desktop key, so no profile loses its board.
+ *  Legacy keys are left as they are. Returns the profiles carried over; a no-op once migrated. */
+export function carryLegacyBoards(input: CarryLegacyInput): string[] {
+  const { storage, slug } = input;
+  if (isFamilyMigrated(storage, slug)) return [];
+  const carried: string[] = [];
+  for (const profile of input.names) {
+    const r = loadBoard({ ...input, profile, deviceClass: 'desktop', seed: input.seedFor(profile) });
+    if (r.source !== 'legacy' && r.source !== 'legacy-single') continue;
+    storage.set(boardKey(slug, profile, 'desktop'), JSON.stringify(r.board));
+    carried.push(profile);
+  }
+  return carried;
 }
 
 /** Save a board under the current device class only, and mark the family migrated (first save). */

@@ -11,11 +11,17 @@
   import { catFor } from './catalog';
   import type { Cell } from './grid';
 
+  // Collapsed until the user unfolds it when `defaultCollapsed` (the workbench Block Editor, whose grid
+  // panel sits right next to it); a stored fold state always wins.
+  let { defaultCollapsed = false }: { defaultCollapsed?: boolean } = $props();
+
   const COLLAPSE_KEY = 'axs.gridmap.collapsed';
   const ZOOM_KEY = 'axs.gridmap.zoom';
   const loadCollapsed = (): boolean => {
-    try { return localStorage.getItem(COLLAPSE_KEY) === '1'; }
-    catch { return false; }
+    try {
+      const v = localStorage.getItem(COLLAPSE_KEY);
+      return v === '1' ? true : v === '0' ? false : defaultCollapsed;
+    } catch { return defaultCollapsed; }
   };
   let collapsed = $state(loadCollapsed());
   const toggle = () => {

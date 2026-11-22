@@ -136,6 +136,20 @@ panels, and the nav context menu's edit-mode-only Delete. Every spec runs offlin
 browser-context level (page-level mocks still win), so a reachable ForgeFX can
 neither drive a device nor pop device prompts over the chrome.
 
+Block Editor rework specs are numbered from 40 (no clash with the specs above): **40-block-editor-board** —
+the v2 board against a mocked multi-page amp layout (`support/blockEditorMock.ts`): always fit at
+1366×768, several pages visible at 2560×720 with their tabs highlighted, tab click scrolls to the page,
+knob drag / click-to-type / arrow keys write the parameter (a click on a value and away writes nothing),
+select popover and switch, side navigation persisted across a reload, an arrange drag persisted across a
+reload, a later page kept active through Top/Side and S/M/L (control size persisted), boards of the
+previous editor (seeded `axs.surface3.*` keys) surviving the first change, the empty page's Arrange
+button, the phone width without Top/Side and Arrange, and the Setup screen on the same board.
+**42-block-editor-pin** — the board's own pin paths with real pointer input: a held knob dragged onto a
+custom panel is collected there, and the right-click pin menu lists the panels and pins to the picked one.
+Board selectors: `[data-be-board]` (`data-nav`), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
+`[data-be-key]` / `[data-be-view]` / `data-be-x|y`, `[data-be-tab]` (`data-visible`, `data-active`),
+`[data-be-nav]`, `[data-be-density]`, `[data-be-arrange]`, `[data-be-select-menu]`, `[data-be-empty]`.
+
 ## Ignore these generated artifacts
 
 Playwright writes `test-results/` and `playwright-report/` at the repo root.

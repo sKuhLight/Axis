@@ -2,7 +2,8 @@
   import { baseName } from './editor.svelte';
   import { getEditorSurface } from './editorSurface';
   import { catFor, shade } from './catalog';
-  import ControlSurface from './ControlSurface.svelte';
+  import BeSurface from './blockEditor/BeSurface.svelte';
+  import { trackDeviceClass } from './blockEditor/deviceClass.svelte';
   import GridMap from './GridMap.svelte';
   import { type EQBand } from './EQGraph.svelte';
   import { geqFreqs, shapeFromLabel } from './eq';
@@ -11,6 +12,15 @@
   const editor = getEditorSurface();
 
   let { embedded = false }: { embedded?: boolean } = $props();
+
+  // the editor's device class (workbench profile, else window width): phone chrome and the grid map's
+  // default fold follow it, the same value the board uses for its storage key
+  const dc = trackDeviceClass();
+  const isPhone = $derived(dc.current === 'phone');
+  // Grid map: folded by default in the workbench (every device class; its grid panel is right there) and
+  // on a phone in the monolith; unfolded by default only in the monolith on desktop / tablet. A stored
+  // fold state always wins.
+  const gridMapFolded = $derived(embedded || dc.current === 'phone');
 
   const sel = $derived(editor.selected);
   const cat = $derived(sel ? catFor(sel.pack, baseName(sel.display)) : null);
@@ -103,6 +113,7 @@
     class="ed"
     class:mob={editor.isMobile && !embedded}
     class:embedded
+    class:phone={isPhone}
     style="--c:{cat.accent}; {embedded ? '' : editor.isMobile ? '' : `height:${editor.editorH}px;`}"
     data-screen="Block Editor"
   >
@@ -138,10 +149,11 @@
         {#if !embedded}<button class="close" aria-label="Close" onclick={() => editor.closeEditor()}>✕</button>{/if}
       </header>
 
-      <!-- grid map navigator: hop between blocks / add / route without leaving the editor -->
-      <GridMap />
+      <!-- grid map navigator: hop between blocks / add / route without leaving the editor (default fold
+           above, so the board gets the height where space is short) -->
+      <GridMap defaultCollapsed={gridMapFolded} />
 
-      <!-- body: widget-grid control surface (pages, per-control views, arrange mode) -->
+      <!-- body: the block's control board (every page at once, always fitted; arrange mode) -->
       {#if editor.sheetState === 'nopack'}
         <div class="content scroll"><p class="hint">No parameter pack for <b>{cat.short}</b> yet — bypass/channel still work.</p></div>
       {:else if editor.sheetState === 'loading'}
@@ -149,7 +161,7 @@
       {:else if editor.sheetState === 'error'}
         <div class="content scroll"><p class="hint">Couldn't read this block.</p></div>
       {:else}
-        <ControlSurface
+        <BeSurface
           slug={sel.pack ?? sel.display ?? 'block'}
           accent={cat.accent}
           eqBands={isEQ ? eqBands : []}
@@ -414,5 +426,31 @@
     background: var(--surface);
     border-color: var(--danger-tint);
     color: var(--danger);
+  }
+
+  /* Workbench panel on a desktop / tablet device class: slimmer header + footer so the always-fit board
+     keeps the height (the panel is often only a few hundred px tall). Phones keep the full-size touch
+     targets. */
+  .ed.embedded:not(.phone) .head {
+    padding: 6px 12px;
+  }
+  .ed.embedded:not(.phone) .icon {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+  .ed.embedded:not(.phone) .typebtn {
+    height: 38px;
+  }
+  .ed.embedded:not(.phone) .ch-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .ed.embedded:not(.phone) .foot {
+    padding: 6px 12px;
+  }
+  .ed.embedded:not(.phone) .act {
+    height: 32px;
+    padding: 0 13px;
   }
 </style>

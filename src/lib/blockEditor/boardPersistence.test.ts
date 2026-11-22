@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   boardDiffersFromSeed,
   boardKey,
+  carryLegacyBoards,
   DEFAULT_PREFS,
   deviceClassFrom,
   isFamilyMigrated,
@@ -56,6 +57,12 @@ describe('deviceClassFrom', () => {
     expect(deviceClassFrom({ viewportWidth: 759 })).toBe('phone');
     expect(deviceClassFrom({ viewportWidth: 760 })).toBe('desktop');
     expect(deviceClassFrom({ workbenchBreakpoint: 'weird', viewportWidth: 1024 })).toBe('desktop');
+  });
+  it('inside the workbench a profile without a breakpoint is desktop, whatever the viewport', () => {
+    expect(deviceClassFrom({ inWorkbench: true, workbenchBreakpoint: null, viewportWidth: 390 })).toBe('desktop');
+    expect(deviceClassFrom({ inWorkbench: true, viewportWidth: 390 })).toBe('desktop');
+    // a phone profile at a desktop window size (e.g. a large UI scale, or a pinned preview) is a phone
+    expect(deviceClassFrom({ inWorkbench: true, workbenchBreakpoint: 'phone', viewportWidth: 1366 })).toBe('phone');
   });
 });
 
@@ -193,6 +200,55 @@ describe('saveBoard / saveUserSeed', () => {
     saveUserSeed(st, 'amp', mk('S', 'sig'));
     expect(st.writes).toEqual([seedKey('amp'), metaKey('amp')]);
     expect(JSON.parse(st.data[seedKey('amp')]!).variantSig).toBeUndefined();
+  });
+});
+
+describe('carryLegacyBoards', () => {
+  const family = () => ({
+    storage: memory({
+      [legacyMetaKey('amp')]: JSON.stringify({ active: 'Live', names: ['Default', 'Blank', 'Live', 'Studio'] }),
+      [legacyBoardKey('amp', 'Live')]: v1('Gig'),
+      [legacyBoardKey('amp', 'Studio')]: v1('Desk')
+    }),
+    legacy: memory({ [legacySingleKey('amp')]: v1('Old') })
+  });
+  // no device layout: the pre-profile Default board applies (it carries no variant fingerprint)
+  const input = (f: ReturnType<typeof family>) => ({
+    storage: f.storage,
+    legacyStorage: f.legacy,
+    slug: 'amp',
+    names: loadMeta(f.storage, 'amp').names,
+    catalogKeys: keys,
+    seedFor: () => mk('Seed'),
+    variantSig: ''
+  });
+
+  it('writes every legacy profile board (Default from the pre-profile key) to its desktop key', () => {
+    const f = family();
+    expect(carryLegacyBoards(input(f))).toEqual(['Default', 'Live', 'Studio']);
+    for (const [profile, page] of [['Default', 'Old'], ['Live', 'Gig'], ['Studio', 'Desk']] as const) {
+      expect(JSON.parse(f.storage.data[boardKey('amp', profile, 'desktop')]!).pageOrder).toEqual([page]);
+    }
+    expect(f.storage.data[boardKey('amp', 'Blank', 'desktop')]).toBeUndefined();
+    // legacy keys are neither written nor deleted
+    expect(f.storage.writes.some((k) => k.startsWith('axs.surface'))).toBe(false);
+    expect(f.storage.data[legacyBoardKey('amp', 'Live')]).toBeDefined();
+    // once migrated, every profile still loads its board, now from the new keys
+    markFamilyMigrated(f.storage, 'amp');
+    const r = loadBoard({ ...base, storage: f.storage, profile: 'Studio', deviceClass: 'desktop' });
+    expect(r.source).toBe('desktop');
+    expect(r.board.pageOrder).toEqual(['Desk']);
+  });
+
+  it('is a no-op for a migrated family and leaves boards already under the new keys alone', () => {
+    const f = family();
+    f.storage.set(boardKey('amp', 'Live', 'desktop'), JSON.stringify(mk('NewLive')));
+    expect(carryLegacyBoards(input(f))).toEqual(['Default', 'Studio']);
+    expect(JSON.parse(f.storage.data[boardKey('amp', 'Live', 'desktop')]!).pageOrder).toEqual(['NewLive']);
+    markFamilyMigrated(f.storage, 'amp');
+    const writes = f.storage.writes.length;
+    expect(carryLegacyBoards(input(f))).toEqual([]);
+    expect(f.storage.writes.length).toBe(writes);
   });
 });
 

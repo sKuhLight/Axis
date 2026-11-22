@@ -49,6 +49,9 @@ export interface PageLayoutInput {
   editMode: boolean;
   /** Arrange mode: the cell this page was frozen at when arranging began. */
   frozenCell?: number;
+  /** Arrange mode: empty rows kept below the content, so the tallest item can be dropped under it
+   *  (default 1). */
+  spareRows?: number;
 }
 
 export interface PageLayout {
@@ -95,7 +98,7 @@ export function layoutForPage(input: PageLayoutInput, list: readonly BeItem[]): 
   }
   if (input.editMode) {
     cols = Math.max(MAXC, bb.C);
-    rows = Math.max(bb.R + 1, Math.floor((A.Ha + g) / (c + g)));
+    rows = Math.max(bb.R + Math.max(1, input.spareRows ?? 1), Math.floor((A.Ha + g) / (c + g)));
   }
   const W = cols * (c + g) - g;
   const H = rows * (c + g) - g;

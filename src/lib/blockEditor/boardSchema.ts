@@ -23,6 +23,8 @@ const num = z.number();
 const optNum = num.nullish().transform((v) => v ?? undefined);
 /** Optional string that also tolerates `null`; any other bad value is dropped rather than failing. */
 const optStr = z.string().nullish().catch(undefined).transform((v) => v ?? undefined);
+/** Optional flag: `null` or any other bad value counts as absent instead of failing the whole object. */
+const optFlag = z.boolean().nullish().catch(undefined).transform((v) => v ?? undefined);
 
 // ── v1 (previous editor: no `v`, one control = one cell) ──
 export const surfaceWidgetV1Schema = z.object({
@@ -109,18 +111,26 @@ export const bePrefsSchema = z.object({
   nav: z.enum(['top', 'side']),
   density: z.enum(['s', 'm', 'l'])
 });
+/** One device class's prefs: a broken entry is dropped (that class falls back to the defaults). */
+const optPrefs = bePrefsSchema.nullish().catch(undefined).transform((v) => v ?? undefined);
+// Forgiving below the required `active` / `names`: one bad optional field must not drop the whole meta,
+// which would also forget `migrated` and re-open the previous editor's keys.
 export const beMetaSchema = z.object({
   active: z.string().min(1),
   names: z.array(z.string()),
   prefs: z
     .object({
-      desktop: bePrefsSchema.optional(),
-      tablet: bePrefsSchema.optional(),
-      phone: bePrefsSchema.optional()
+      desktop: optPrefs,
+      tablet: optPrefs,
+      phone: optPrefs
     })
-    .optional(),
+    .nullish()
+    .catch(undefined)
+    .transform((v) => v ?? undefined),
   /** Set once the family's boards live under the new keys; legacy keys are not read after that. */
-  migrated: z.boolean().optional()
+  migrated: optFlag,
+  /** Arrange: every move / resize is followed by a gravity tidy ("Auto-pack"). */
+  autoPack: optFlag
 });
 export type BePrefs = z.infer<typeof bePrefsSchema>;
 export type BeMetaStored = z.infer<typeof beMetaSchema>;

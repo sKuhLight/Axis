@@ -7,6 +7,8 @@
 import { fmtValue, normFromValue, paramUnit, paramValue, withUnit, type DispRange } from '../format';
 
 const MINUS = '−';
+/** Parameters without a range show (and take typed values) on a 0..10 scale. */
+const UNRANGED_SCALE = 10;
 
 /** Decimal places for a range span: narrow ranges get more precision. */
 function decimalsFor(span: number): number {
@@ -18,7 +20,7 @@ function decimalsFor(span: number): number {
 
 /** Device-style value for the knob centre, unit included (`7.00`, `−14.7 dB`, `1.000`, `1.2 kHz`). */
 export function formatCentre(p: DispRange): string {
-  if (p.min == null || p.max == null) return ((p.norm ?? 0) * 10).toFixed(2);
+  if (p.min == null || p.max == null) return ((p.norm ?? 0) * UNRANGED_SCALE).toFixed(2);
   const unit = paramUnit(p);
   if (unit === 'Hz') return fmtValue(p).replace(/^-/, MINUS);
   const v = paramValue(p);
@@ -50,7 +52,8 @@ const squash = (u: string): string => u.replace(/\s+/g, '').toLowerCase();
  *  is the parameter's own unit (case and spaces ignored: `-3,5 dB`, `63%`); for Hz parameters `Hz`,
  *  `k` and `kHz` are accepted, the latter two multiplying by 1000. Exponent notation (`1e3`) is not
  *  accepted — the `e3` is read as an unknown unit, so the input is rejected. Parameters without a
- *  range take the typed number as a percentage (as before). */
+ *  range read the number on the same 0..10 scale the knob centre shows (`formatCentre`), so the value
+ *  shown parses back to the value it came from. */
 export function parseTyped(p: DispRange, text: string): number | null {
   const s = text.trim().replace(/−/g, '-').replace(/\s+/g, '').replace(',', '.');
   const m = /^([+-]?(?:\d+\.?\d*|\.\d+))(.*)$/.exec(s);
@@ -62,6 +65,6 @@ export function parseTyped(p: DispRange, text: string): number | null {
   const hzExtra = p.unit === 'Hz' ? ['k', 'khz'] : [];
   if (suffix && suffix !== own && !hzExtra.includes(suffix)) return null;
   if (hzExtra.includes(suffix)) v *= 1000;
-  if (p.min == null || p.max == null) return Math.max(0, Math.min(1, v / 100));
+  if (p.min == null || p.max == null) return Math.max(0, Math.min(1, v / UNRANGED_SCALE));
   return normFromValue(Math.max(Math.min(p.min, p.max), Math.min(Math.max(p.min, p.max), v)), p);
 }

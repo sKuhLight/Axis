@@ -1,9 +1,9 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { bootCleanWorkbench } from './support/workbench';
 
-// AXIS-36 (Layer 3) — the ControlSurface "Default" board renders the editor-true DeviceLayout v2:
-// pages become tabs, and INSIDE a page controls flow left→right per row / rows top→bottom, with each
-// widget kind mapped to its surface view. Driven against a fully MOCKED backend (single Drive block
+// AXIS-36 (Layer 3) — the Block Editor "Default" board renders the editor-true DeviceLayout v2:
+// pages become tabs (and board sections), and INSIDE a page controls flow left→right per row / rows
+// top→bottom, with each widget kind mapped to its view. Driven against a fully MOCKED backend (single Drive block
 // whose params carry a v2 layout) so nothing touches the operator's live FM3 on :5056.
 
 const SHUNT_BASE = 1024;
@@ -110,28 +110,31 @@ async function bootWithLayout(page: Page): Promise<void> {
   await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
 }
 
-test.describe('ControlSurface device-layout board (AXIS-36)', () => {
+test.describe('Block Editor device-layout board (AXIS-36, board v2)', () => {
   test('renders the layout page as a tab with rows top→bottom and mapped widget views', async ({ page }) => {
     await bootWithLayout(page);
 
-    // Tap the Drive block → the embedded Block Editor mounts the ControlSurface for it.
+    // Tap the Drive block → the embedded Block Editor mounts the board for it.
     await page.locator('[data-idx="0,0"].cell.block').click();
-    await expect(page.locator('.boardwrap')).toBeVisible();
+    await expect(page.locator('[data-be-board]')).toBeVisible();
 
-    // The layout's single page becomes a tab named "Drive".
-    await expect(page.locator('.tab', { hasText: 'Drive' }).first()).toBeVisible();
+    // The layout's single page becomes a tab named "Drive" (and a board section of that name).
+    await expect(page.locator('[data-be-tab="Drive"]')).toBeVisible();
+    await expect(page.locator('section[data-be-page="Drive"]')).toBeVisible();
 
     // Row 0 knobs render with the layout's labels.
-    const gain = page.locator('.lbl', { hasText: 'Gain' }).first();
-    const tone = page.locator('.lbl', { hasText: 'Tone' }).first();
-    await expect(gain).toBeVisible();
-    await expect(tone).toBeVisible();
+    const gain = page.locator('[data-be-key="k0"][data-be-view="knob"]').first();
+    const tone = page.locator('[data-be-key="k1"][data-be-view="knob"]').first();
+    await expect(gain).toContainText('Gain');
+    await expect(tone).toContainText('Tone');
 
-    // Widget mapping: the multi-option enum (Mode) becomes a dropdown/select field; the slider (Level)
-    // renders as a horizontal slider row.
-    await expect(page.locator('.selfield')).toHaveCount(1);
-    const level = page.locator('.slbl', { hasText: 'Level' }).first();
+    // Widget mapping: the multi-option enum (Mode) becomes a dropdown/select field; the toggle (Bright)
+    // a switch; the slider (Level) renders as a horizontal slider row.
+    await expect(page.locator('[data-be-view="select"]')).toHaveCount(1);
+    await expect(page.locator('[data-be-key="e9"][data-be-view="switch"]')).toHaveCount(1);
+    const level = page.locator('[data-be-key="k5"][data-be-view="slider"]').first();
     await expect(level).toBeVisible();
+    await expect(level).toContainText('Level');
 
     // Rows flow top→bottom: the row-0 Gain knob sits above the row-1 Level slider.
     const gy = await gain.boundingBox();

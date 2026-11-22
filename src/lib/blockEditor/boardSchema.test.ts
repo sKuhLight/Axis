@@ -98,9 +98,23 @@ describe('parseStoredMeta', () => {
     const m = parseStoredMeta({ active: 'Mine', names: ['Mine'], prefs: { tablet: { nav: 'side', density: 'l' } } });
     expect(m?.prefs?.tablet).toEqual({ nav: 'side', density: 'l' });
   });
-  it('rejects malformed meta', () => {
+  it('rejects what is not a meta at all', () => {
     expect(parseStoredMeta('{"active":""}')).toBeNull();
-    expect(parseStoredMeta({ active: 'A', names: ['A'], prefs: { desktop: { nav: 'left', density: 'm' } } })).toBeNull();
+    expect(parseStoredMeta({ names: ['A'] })).toBeNull();
+    expect(parseStoredMeta({ active: 'A', names: 'A' })).toBeNull();
     expect(parseStoredMeta('oops')).toBeNull();
+  });
+  it('drops one bad optional field instead of the whole meta (keeps `migrated`)', () => {
+    // a broken prefs entry: that device class falls back to the defaults, the rest stays
+    const m = parseStoredMeta({ active: 'A', names: ['A'], migrated: true, prefs: { desktop: { nav: 'left', density: 'm' }, tablet: { nav: 'side', density: 's' } } });
+    expect(m).toMatchObject({ active: 'A', migrated: true });
+    expect(m?.prefs?.desktop).toBeUndefined();
+    expect(m?.prefs?.tablet).toEqual({ nav: 'side', density: 's' });
+    // null / garbage flags count as absent
+    expect(parseStoredMeta({ active: 'A', names: ['A'], migrated: true, autoPack: null })).toEqual({ active: 'A', names: ['A'], migrated: true });
+    expect(parseStoredMeta({ active: 'A', names: ['A'], migrated: true, autoPack: 'yes' })?.migrated).toBe(true);
+    expect(parseStoredMeta({ active: 'A', names: ['A'], migrated: null, autoPack: true })).toEqual({ active: 'A', names: ['A'], autoPack: true });
+    expect(parseStoredMeta({ active: 'A', names: ['A'], migrated: true, prefs: 7 })?.prefs).toBeUndefined();
+    expect(parseStoredMeta({ active: 'A', names: ['A'], migrated: true, prefs: null })?.migrated).toBe(true);
   });
 });
