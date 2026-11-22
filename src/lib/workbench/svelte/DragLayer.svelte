@@ -6,22 +6,31 @@
   const { controller, registry } = getWorkbenchContext();
   const drag = $derived($controller.drag);
   // Valid/invalid drop intent: while a drag is active, an accepting target is
-  // signalled either by an overlay `previewRect` (group-create, edge drop) or by
-  // an IN-FLOW insertion target (`zoneInsert`/`groupInsert` — V14 follow-up: the
-  // slot elements render inside the zone/group flow, not in this layer). Neither
-  // ⇒ nothing will accept the drop, so the drag reads as rejected (design
-  // language: danger-tinted, not-allowed cursor).
+  // signalled either by an overlay `previewRect` (the dwell Group frame, edge
+  // drop) or by an insertion target (`zoneInsert`/`groupInsert`, drawn as the
+  // insert line). Neither ⇒ nothing will accept the drop, so the drag reads as
+  // rejected (design language: danger-tinted, not-allowed cursor).
   // `previewRect` overlay is widget-only (list drags feed back via the in-flow
   // slot instead, like widget positional inserts; panel drags use the overlay).
   const previewRect = $derived(drag?.kind === 'widget' ? drag.previewRect : undefined);
+  const groupFrame = $derived(drag?.kind === 'widget' && drag.previewKind === 'group');
+  // Slice 4b: a widget insert is a thin LINE between the units (zone insert or
+  // a reorder inside the member's own group) — measured by the session, drawn
+  // here so no zone / panel overflow can clip it.
+  const insertLine = $derived(drag?.kind === 'widget' ? drag.insertLine : undefined);
   // Panel drags (tab drag / library drag-out) render the dock-drop overlay —
   // zones, landing shape, edge bars, page highlight, pointer card — instead of
   // the generic preview rect + chip. Until the session has measured the dock
   // (one tick after the lift) `dock` is absent and nothing is drawn for it.
   const dockModel = $derived(drag?.kind === 'panel' ? drag.dock : undefined);
   const panelDrag = $derived(drag?.kind === 'panel');
+  // Click-to-place (no button held) ends on a click anywhere, so there is no
+  // "rejected drop" frame or pointer chip: the highlights and the edit bar say
+  // what a click does.
+  const placing = $derived(!!drag && drag.kind !== 'list' && !!drag.placement);
   const invalid = $derived(
     !!drag &&
+      !placing &&
       (panelDrag
         ? !!dockModel?.invalid
         : !previewRect &&
@@ -94,15 +103,33 @@
       <DockDropOverlay model={dockModel} {zoom} />
     {/if}
     {#if previewRect}
+      <!-- Group frame (a dwell armed grouping with the unit inside it: a release
+           groups) or the workspace-edge new-panel region. -->
       <div
         class="aw-drop-preview"
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
-        class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
+        class:group={groupFrame}
+        data-group-frame={groupFrame ? '' : undefined}
         style="
           left:{previewRect.left / zoom}px;
           top:{previewRect.top / zoom}px;
           width:{previewRect.width / zoom}px;
           height:{previewRect.height / zoom}px;
+        "
+      >
+        {#if groupFrame}<span class="aw-group-frame-label">Group</span>{/if}
+      </div>
+    {/if}
+    {#if insertLine}
+      <div
+        class="aw-insert-line"
+        class:across-rows={insertLine.flow === 'vertical'}
+        data-insert-line
+        style="
+          left:{insertLine.rect.left / zoom}px;
+          top:{insertLine.rect.top / zoom}px;
+          width:{insertLine.rect.width / zoom}px;
+          height:{insertLine.rect.height / zoom}px;
         "
       ></div>
     {/if}
@@ -133,7 +160,7 @@
         use:mountClone={listGhost.ghostEl}
       ></div>
     {/if}
-    {#if !panelDrag}
+    {#if !panelDrag && !placing}
     <div
       class="aw-drag-ghost"
       class:invalid
@@ -232,9 +259,35 @@
     background: var(--aw-accent);
     box-shadow: 0 0 14px color-mix(in srgb, var(--aw-accent) 52%, transparent);
   }
+  /* Group frame (dwell armed, design halo): amber so it never reads as an
+     insert; the label badge sits on the top edge. */
   .aw-drop-preview.group {
-    border-style: solid;
-    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    border: 2px solid var(--aw-amber);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--aw-amber) 8%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--aw-amber) 35%, transparent);
+  }
+  .aw-group-frame-label {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--aw-amber);
+    color: var(--aw-accent-ink);
+    font: 700 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  /* The insert line (slice 4b): where a drop inserts, between two units. */
+  .aw-insert-line {
+    position: fixed;
+    border-radius: 2px;
+    background: var(--aw-accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--aw-accent) 65%, transparent);
+    animation: awPreviewIn 0.08s ease;
   }
   /* Full-size travelling widget ghost (design ghostStyle: fixed, half-opaque,
      scale 1.03, accent border, radius 11, padding 6px 8px, deep shadow). The

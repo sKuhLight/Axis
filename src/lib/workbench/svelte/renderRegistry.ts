@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 import type {
   CanonicalPanelSpec,
+  CanonicalWidgetSpec,
   JsonObject,
   NavigationEntryState,
   PanelInstance,
@@ -10,6 +11,7 @@ import type {
   WorkbenchPage
 } from '../core';
 import type { WorkbenchController } from './controller.svelte';
+import type { WorkbenchAddPaletteApi } from './addPalette';
 
 export type WorkbenchPanelComponent = Component<any>;
 export type WorkbenchWidgetComponent = Component<any>;
@@ -103,6 +105,23 @@ export interface WorkbenchPanelCatalogProvider {
 }
 
 /**
+ * App-provided widget catalog data (data only): the built-in widget types the
+ * Add palette always offers (core `buildWidgetCatalog`), and why a type cannot
+ * be used right now (greyed, listed last). Without a provider the palette lists
+ * hidden widgets and saved widget templates only.
+ */
+export interface WorkbenchWidgetCatalogProvider {
+  canonical: () => CanonicalWidgetSpec[];
+  /** Why a type is unavailable (e.g. the connected device lacks it), or null. Read inside reactive scope. */
+  unavailableReason?: (type: string) => string | null;
+}
+
+/** Props of the host's Add palette component (see {@link WorkbenchRenderRegistry.registerAddPalette}). */
+export interface WorkbenchAddPaletteProps {
+  api: WorkbenchAddPaletteApi;
+}
+
+/**
  * A hint about the active page, shown in a slim bar above the dock workspace
  * (edit and view mode) — e.g. "Preset Browser is on page Grid · Bring it here".
  * The optional action dispatches `commands()` as ONE batch; a hint without an
@@ -142,6 +161,8 @@ export class WorkbenchRenderRegistry {
   #panelCatalog: WorkbenchPanelCatalogProvider | null = null;
   #pageHints: WorkbenchPageHintProvider | null = null;
   #pageProtection: WorkbenchPageProtection | null = null;
+  #widgetCatalog: WorkbenchWidgetCatalogProvider | null = null;
+  #addPalette: Component<WorkbenchAddPaletteProps> | null = null;
   #lastActionResult: WorkbenchActionResult | null = null;
 
   constructor(
@@ -194,6 +215,33 @@ export class WorkbenchRenderRegistry {
   /** Instance types the catalog keeps out while docked. */
   get panelCatalogHiddenTypes(): readonly string[] {
     return this.#panelCatalog?.hiddenTypes ?? [];
+  }
+
+  registerWidgetCatalogProvider(provider: WorkbenchWidgetCatalogProvider): void {
+    this.#widgetCatalog = provider;
+  }
+
+  /** The app's built-in widget types ([] without a provider). Read inside reactive scope. */
+  canonicalWidgets(): CanonicalWidgetSpec[] {
+    return this.#widgetCatalog?.canonical() ?? [];
+  }
+
+  /** Why a widget type is unavailable right now (null without a provider). */
+  widgetUnavailableReason(type: string): string | null {
+    return this.#widgetCatalog?.unavailableReason?.(type) ?? null;
+  }
+
+  /**
+   * The Add palette slot: the host renders the palette (cards, previews) on
+   * top of the generic catalog, placement and highlights (`addPalette.ts`).
+   * Without one the edit bar keeps its Add menu.
+   */
+  registerAddPalette(component: Component<WorkbenchAddPaletteProps>): void {
+    this.#addPalette = component;
+  }
+
+  get addPalette(): Component<WorkbenchAddPaletteProps> | null {
+    return this.#addPalette;
   }
 
   registerPageHints(provider: WorkbenchPageHintProvider): void {

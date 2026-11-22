@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
    * Purpose-built Customize browser. The edit bar opens this in one of two
-   * views (PAGE › Manage pages and templates…, Add › Add panel… / Add widget… /
-   * Open library; R16 / AXIS-24 — reworked from the V13a panels/widgets split
+   * views (PAGE › Manage pages and templates…, the Add palette's footer "Manage:
+   * Pages & panels / Widgets" — or, for a host without an Add palette, Add › Add
+   * panel… / Add widget… / Open library; R16 / AXIS-24 — reworked from the V13a panels/widgets split
    * into a searchable, sectioned drawer that matches the design's library pattern):
    *
    *   - `view="pages"`   → PAGES manager: create / rename / delete (inline

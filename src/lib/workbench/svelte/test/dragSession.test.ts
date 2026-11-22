@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { beginPointerDrag } from '../dragSession';
+import { beginPointerDrag, sidewaysTouchDragGate } from '../dragSession';
 
 // The session core only needs `window` as an event bus, so a bare EventTarget stands in for it (node
 // environment, no DOM).
@@ -100,5 +100,43 @@ describe('beginPointerDrag', () => {
     fire('pointerup', 60, 60);
     expect(h.onCancel).not.toHaveBeenCalled();
     expect(h.onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('shouldActivate: a refused activation abandons the press silently (no drag, no tap, no cancel)', () => {
+    const handlers = { onActivate: vi.fn(), onMove: vi.fn(), onDrop: vi.fn(), onTap: vi.fn(), onCancel: vi.fn() };
+    const shouldActivate = vi.fn(() => false);
+    beginPointerDrag({ event: down(), shouldActivate, ...handlers });
+    fire('pointermove', 2, 2); // under the threshold: not asked yet
+    expect(shouldActivate).not.toHaveBeenCalled();
+    fire('pointermove', 2, 40);
+    expect(shouldActivate).toHaveBeenCalledWith({ x: 0, y: 0 }, { x: 2, y: 40 });
+    fire('pointermove', 80, 40);
+    fire('pointerup', 80, 40);
+    expect(handlers.onActivate).not.toHaveBeenCalled();
+    expect(handlers.onMove).not.toHaveBeenCalled();
+    expect(handlers.onDrop).not.toHaveBeenCalled();
+    expect(handlers.onTap).not.toHaveBeenCalled();
+    expect(handlers.onCancel).not.toHaveBeenCalled();
+  });
+
+  it('shouldActivate: an allowed activation drags as usual', () => {
+    const handlers = { onActivate: vi.fn(), onMove: vi.fn(), onDrop: vi.fn() };
+    beginPointerDrag({ event: down(), shouldActivate: () => true, ...handlers });
+    fire('pointermove', 40, 2);
+    fire('pointerup', 40, 2);
+    expect(handlers.onActivate).toHaveBeenCalledTimes(1);
+    expect(handlers.onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('sidewaysTouchDragGate: touch / pen drag only on a mostly sideways pull; a mouse has no gate', () => {
+    expect(sidewaysTouchDragGate('mouse')).toBeUndefined();
+    expect(sidewaysTouchDragGate(undefined)).toBeUndefined();
+    expect(sidewaysTouchDragGate('')).toBeUndefined();
+    const gate = sidewaysTouchDragGate('touch')!;
+    expect(gate({ x: 0, y: 0 }, { x: 12, y: 3 })).toBe(true);
+    expect(gate({ x: 0, y: 0 }, { x: -12, y: 3 })).toBe(true);
+    expect(gate({ x: 0, y: 0 }, { x: 3, y: 12 })).toBe(false); // a scroll swipe
+    expect(gate({ x: 0, y: 0 }, { x: 6, y: 6 })).toBe(false);
+    expect(sidewaysTouchDragGate('pen')!({ x: 0, y: 0 }, { x: 2, y: -9 })).toBe(false);
   });
 });

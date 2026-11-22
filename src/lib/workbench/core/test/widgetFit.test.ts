@@ -121,6 +121,35 @@ describe('fitZone (design overflow shedding)', () => {
   });
 });
 
+describe('fit reserve (slice 4b: edit-mode "+" buttons)', () => {
+  it('fitZoneSize takes the reserve off the width first', () => {
+    const ids = [d('a', 100), d('b', 100), d('c', 100)];
+    // default need = 300 + 2*12 = 324; two "+" buttons (26 + 12 each) reserve 76.
+    expect(fitZoneSize(ids, 324, 12)).toBe('default');
+    expect(fitZoneSize(ids, 324, 12, 76)).toBe('compact');
+    expect(fitZoneSize(ids, 400, 12, 76)).toBe('default');
+    expect(fitZoneSize(ids, 399, 12, 76)).toBe('compact');
+  });
+
+  it('a zero / negative reserve is the plain design fit', () => {
+    const ids = [d('preset', 250), d('save', 98)];
+    expect(fitZoneSize(ids, 360, 12, 0)).toBe('default');
+    expect(fitZoneSize(ids, 360, 12, -50)).toBe('default');
+  });
+
+  it('fitZone reserves before sizing AND before shedding', () => {
+    const ids = [d('preset', 250, true), d('a', 200), d('b', 200), d('c', 200)];
+    // Without a reserve avail 350 sheds only c (see above); a 90 px reserve
+    // leaves budget 350 - 90 - 44 = 216 → b sheds too.
+    expect([...fitZone(ids, 350, 12).overflow]).toEqual(['c']);
+    const reserved = fitZone(ids, 350, 12, 90);
+    expect(reserved.overflow.has('b')).toBe(true);
+    expect(reserved.overflow.has('c')).toBe(true);
+    expect(reserved.overflow.has('a')).toBe(false);
+    expect(fitZone(ids, 350 + 90, 12, 90).overflow).toEqual(fitZone(ids, 350, 12).overflow);
+  });
+});
+
 describe('fitWidgetInWidth (design per-panel mkW)', () => {
   it('fits default when estW <= availMinus24', () => {
     expect(fitWidgetInWidth(120, 120)).toBe('default');

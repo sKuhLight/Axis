@@ -14,6 +14,8 @@ import {
   type WorkbenchPage
 } from '../workbench/core';
 import type {
+  WorkbenchAddPageCard,
+  WorkbenchAddPageCards,
   WorkbenchAddPageItems,
   WorkbenchEditBarPagesExtension,
   WorkbenchMenuItem,
@@ -385,6 +387,49 @@ export function buildAxisAddPageItems(host: AxisPagesHost): WorkbenchAddPageItem
   };
 }
 
+/**
+ * The same "Add page" contributions as Add palette cards: each missing default
+ * page (with its spec dock for the mini-map; a click restores it at its seed
+ * position and opens it), "Restore default pages (n)", and a note naming the
+ * default pages that are already there.
+ */
+export function buildAxisAddPageCards(host: AxisPagesHost): WorkbenchAddPageCards {
+  const layout = host.getLayout();
+  const missing = listMissingAxisDefaultPages(layout);
+  if (!missing.length) return { leading: [], note: 'All default pages are there' };
+  const present = AXIS_SEED_PAGE_ORDER.filter((id) => !!layout?.pages?.[id]).map((id) => layout!.pages[id].label);
+  const leading = missing.map((page): WorkbenchAddPageCard => {
+    const spec = axisDefaultPageSpec(layout, page.pageId);
+    const titles: Record<string, string> = {};
+    for (const panel of spec?.panels ?? []) titles[panel.id] = panel.title ?? panel.type;
+    return {
+      id: `restore.${page.pageId}`,
+      label: page.label,
+      hint: 'Missing default page',
+      ...(spec ? { dock: spec.buildDock(), titles } : {}),
+      run: () => {
+        const commands = restoreAxisDefaultPagesCommands(host.getLayout(), { pageIds: [page.pageId] });
+        if (commands.length) host.dispatchMany([...commands, { type: 'page.activate', pageId: page.pageId }]);
+      }
+    };
+  });
+  return {
+    leading,
+    trailing: [
+      {
+        id: 'restoreAll',
+        label: `Restore default pages (${missing.length})`,
+        hint: 'Every missing default page, at its place',
+        run: () => {
+          const commands = restoreAxisDefaultPagesCommands(host.getLayout());
+          if (commands.length) host.dispatchMany(commands);
+        }
+      }
+    ],
+    ...(present.length ? { note: `Already there: ${present.join(', ')}` } : {})
+  };
+}
+
 /** "Reset to default" for a default page, "Clear page" for any other — always behind an inline confirm. */
 export function axisPageResetAction(host: AxisPagesHost, pageId: string): WorkbenchPageResetAction | null {
   const page = host.getLayout()?.pages?.[pageId];
@@ -410,6 +455,7 @@ export function axisPageResetAction(host: AxisPagesHost, pageId: string): Workbe
 export function createAxisPagesExtension(host: AxisPagesHost): WorkbenchEditBarPagesExtension {
   return {
     addPageItems: () => buildAxisAddPageItems(host),
+    addPageCards: () => buildAxisAddPageCards(host),
     reset: (pageId) => axisPageResetAction(host, pageId)
   };
 }

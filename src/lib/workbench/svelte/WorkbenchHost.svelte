@@ -5,6 +5,7 @@
   import NavigationHost from './NavigationHost.svelte';
   import EditBar from './EditBar.svelte';
   import DragLayer from './DragLayer.svelte';
+  import PlacementLayer from './PlacementLayer.svelte';
   import WorkbenchToasts from './WorkbenchToasts.svelte';
   import { previewFrameForClass, previewFrameLabel, selectVisibleWidgetsByZone, type ViewportClass } from '../core';
   import { shouldRenderRail, shouldRenderRailNav } from './navigation';
@@ -294,6 +295,7 @@
       <WidgetZone zone="floating" floating />
     {/if}
 
+    <PlacementLayer />
     <DragLayer />
     <WorkbenchToasts />
   </div>

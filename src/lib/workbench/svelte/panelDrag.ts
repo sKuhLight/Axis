@@ -175,6 +175,8 @@ export interface DockDropSessionOptions {
   onActivate?: () => void;
   /** A press that never became a drag. */
   onTap?: (event: PointerEvent) => void;
+  /** May the press become a drag once past the threshold (`dragSession.ts` `shouldActivate`)? */
+  shouldActivate?: (from: WorkbenchPointer, to: WorkbenchPointer) => boolean;
   /** Commit a drop on `target` (dispatch). */
   commit: (target: DockDropTarget) => DockDropCommitResult;
 }
@@ -253,6 +255,7 @@ export function beginDockDropSession(options: DockDropSessionOptions, deps: Dock
   beginPointerDrag({
     event,
     cancelOnEscape: true,
+    shouldActivate: options.shouldActivate,
     onActivate: () => {
       active = true;
       options.onActivate?.();

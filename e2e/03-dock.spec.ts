@@ -107,9 +107,10 @@ test.describe('Dock interactions', () => {
     await page.locator('.aw-context-menu').getByRole('menuitem', { name: /Remove from page/ }).click();
     await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(0);
 
-    // …but it is only parked: the catalog lists it as "not placed" and re-adds the same panel.
-    await editBarControl(page, 'add').click();
-    await openMenu(page).getByRole('menuitem', { name: 'Add panel…' }).click();
+    // …but it is only parked: the catalog (Library drawer, PAGE ▸ Manage pages and
+    // templates…) lists it as "not placed" and re-adds the same panel.
+    await editBarControl(page, 'page').click();
+    await openMenu(page).getByRole('menuitem', { name: 'Manage pages and templates…' }).click();
     const row = page.locator('[data-panel-catalog] [data-catalog-entry="instance:axis.setup"]');
     await expect(row).toHaveAttribute('data-catalog-status', 'not placed');
     await row.locator('.aw-lib-grab').click();

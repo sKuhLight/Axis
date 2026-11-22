@@ -7,7 +7,9 @@ import {
   widgetDropCommand,
   widgetDropIndex,
   widgetIndexForUnitIndex,
+  widgetOrderIndexForUnits,
   zoneAtPointer,
+  zoneUnitsFromWidgets,
   zoneUnitWidgetCounts
 } from '../drag';
 
@@ -166,6 +168,44 @@ describe('Workbench drag helpers', () => {
       expect(widgetIndexForUnitIndex([1, 3, 1], 99)).toBe(5);
       expect(widgetIndexForUnitIndex([1, 3, 1], -2)).toBe(0);
       expect(widgetIndexForUnitIndex([], 2)).toBe(0);
+    });
+
+    it('zoneUnitsFromWidgets: the units with their member ids, excluded ids left out', () => {
+      expect(zoneUnitsFromWidgets(zoneWidgets)).toEqual([{ widgetIds: ['a'] }, { widgetIds: ['g1', 'g2', 'g3'] }, { widgetIds: ['b'] }]);
+      expect(zoneUnitsFromWidgets(zoneWidgets, ['g1', 'g2', 'g3'])).toEqual([{ widgetIds: ['a'] }, { widgetIds: ['b'] }]);
+    });
+
+    it('widgetOrderIndexForUnits matches the count when every widget is rendered', () => {
+      const ordered = zoneWidgets.map((w) => w.id);
+      const units = zoneUnitsFromWidgets(zoneWidgets);
+      expect([0, 1, 2, 3].map((i) => widgetOrderIndexForUnits(ordered, units, i))).toEqual([0, 1, 4, 5]);
+      expect(widgetOrderIndexForUnits(ordered, units, 99)).toBe(5);
+      expect(widgetOrderIndexForUnits(ordered, units, -1)).toBe(0);
+    });
+
+    it('widgetOrderIndexForUnits resolves past a widget the zone does not render (gated off)', () => {
+      // Zone order: view · tuner · TEMPO (not rendered) · cpu · save. Rendered units: view · tuner · cpu · save.
+      const ordered = ['view', 'tuner', 'tempo', 'cpu', 'save'];
+      const units = [{ widgetIds: ['view'] }, { widgetIds: ['tuner'] }, { widgetIds: ['cpu'] }, { widgetIds: ['save'] }];
+      // Before cpu → before cpu (not before tempo, one slot early by counting: 2).
+      expect(widgetOrderIndexForUnits(ordered, units, 2)).toBe(3);
+      // Before save → 4 (counting says 3 = before cpu).
+      expect(widgetOrderIndexForUnits(ordered, units, 3)).toBe(4);
+      expect(widgetIndexForUnitIndex([1, 1, 1, 1], 3)).toBe(3);
+      // Past the last unit: one past its last member; before the first: its first.
+      expect(widgetOrderIndexForUnits(ordered, units, 4)).toBe(5);
+      expect(widgetOrderIndexForUnits(ordered, units, 0)).toBe(0);
+    });
+
+    it('widgetOrderIndexForUnits skips unknown members (moving / stale) and falls back to the end', () => {
+      // A group with its dragged member still in the DOM: the member is not in the order.
+      const ordered = ['a', 'g1', 'g3', 'b'];
+      const units = [{ widgetIds: ['a'] }, { widgetIds: ['g1', 'g2', 'g3'] }, { widgetIds: ['b'] }];
+      expect(widgetOrderIndexForUnits(ordered, units, 2)).toBe(3);
+      expect(widgetOrderIndexForUnits(ordered, [{ widgetIds: ['gone'] }, { widgetIds: ['b'] }], 0)).toBe(3);
+      expect(widgetOrderIndexForUnits(ordered, [{ widgetIds: ['a'] }, { widgetIds: ['gone'] }], 2)).toBe(1);
+      expect(widgetOrderIndexForUnits(ordered, [], 0)).toBe(4);
+      expect(widgetOrderIndexForUnits([], [], 0)).toBe(0);
     });
   });
 

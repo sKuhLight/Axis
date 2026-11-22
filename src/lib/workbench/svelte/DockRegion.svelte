@@ -13,7 +13,7 @@
     mobileInlineHidden?: boolean;
     overlay?: boolean;
   } = $props();
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
   // Pages: the dock rendered here is the ACTIVE page's — switching pages swaps
   // the whole region tree. During a panel drag it is the LIFTED page (the
   // dragged panel taken out), so its slot collapses and the rest fills in.
@@ -46,6 +46,17 @@
     return horizontalRegion ? `height:${px}px;` : `width:${px}px;`;
   });
   const bodyStyle = $derived(region === 'main' && collapsedExtent != null ? `bottom:auto; height:${collapsedExtent}px;` : '');
+
+  // Edit mode with a host Add palette: an empty region offers "+ Panel" — the
+  // palette on Panels with this region as its fixed target.
+  const canAdd = $derived($controller.editMode && !overlay && !!registry.addPalette);
+  const regionName = $derived(region === 'main' ? 'main region' : `${region} region`);
+  function openAdd() {
+    controller.openAddPalette({
+      filter: 'panels',
+      target: { kind: 'panel', to: { kind: 'region', region }, label: `Into the ${regionName}` }
+    });
+  }
 
   function toggleCollapse() {
     controller.dispatch({ type: 'region.collapse', region, collapsed: !state?.collapsed });
@@ -100,10 +111,21 @@
       {/if}
     {:else if emptyStrip}
       <div class="aw-region-empty-strip" class:vertical={sideRegion} data-empty-region={region}>
-        <span>{region}</span>
+        {#if canAdd && !$controller.drag}
+          <button class="aw-region-add" type="button" data-region-add={region} title={`Add a panel to the ${regionName}`} aria-label={`Add a panel to the ${regionName}`} onclick={openAdd}>
+            <span>+ Panel · {region}</span>
+          </button>
+        {:else}
+          <span>{region}</span>
+        {/if}
       </div>
     {:else}
-      <div class="aw-region-empty" data-empty-region={region}>Drop panels in {region}</div>
+      <div class="aw-region-empty" data-empty-region={region}>
+        <span>Drop panels in {region}</span>
+        {#if canAdd && !$controller.drag}
+          <button class="aw-region-add main" type="button" data-region-add={region} title={`Add a panel to the ${regionName}`} aria-label={`Add a panel to the ${regionName}`} onclick={openAdd}>+ Panel</button>
+        {/if}
+      </div>
     {/if}
   </section>
 {/if}
@@ -258,6 +280,8 @@
     inset: 8px;
     display: grid;
     place-items: center;
+    align-content: center;
+    gap: 12px;
     border: 1px dashed var(--aw-border-2);
     border-radius: 10px;
     color: var(--aw-text-faint);
@@ -265,6 +289,43 @@
     font: 700 9px/1 var(--aw-font-mono);
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+  /* "+ Panel" in an empty region (edit mode): fills a strip, a button in main. */
+  .aw-region-add {
+    border: 0;
+    background: transparent;
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 700 10px/1 var(--aw-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .aw-region-empty-strip .aw-region-add {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+  }
+  .aw-region-empty-strip.vertical .aw-region-add span {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+  .aw-region-add:hover,
+  .aw-region-add:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
+    outline: none;
+  }
+  .aw-region-add.main {
+    height: 32px;
+    padding: 0 16px;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 60%, transparent);
+    border-radius: 9px;
+    font: 700 12px/1 var(--aw-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: none;
   }
   /* Panel drags: the dock-drop overlay (zones, edge bars, landing shape) is the
      only target chrome; empty placeholders just brighten so they read as targets. */

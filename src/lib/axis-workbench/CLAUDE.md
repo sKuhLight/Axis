@@ -29,7 +29,24 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   components for panels/widgets/navigation; also `registerAction`, `registerWidgetSizing`,
   `registerNavigationState`, `registerPanelCatalogProvider` (canonical panels for the
   Library's panel catalog, `core/panelCatalog.ts`), `registerPageHints` (a hint bar above
-  the dock workspace) and `registerPageProtection` (pages that cannot be deleted).
+  the dock workspace), `registerPageProtection` (pages that cannot be deleted),
+  `registerWidgetCatalogProvider` (built-in widget types + why a type is unavailable, for
+  `core/widgetCatalog.ts`) and `registerAddPalette` (the host's Add palette component).
+- Add palette (edit mode): the workbench owns the catalog (`svelte/addCatalog.ts`), what a
+  card does (`svelte/addPalette.ts`: fixed context target → insert directly, else
+  click-to-place), click-to-place (`svelte/placement.ts` pure + `placementSession.ts`
+  DOM; highlights in `PlacementLayer.svelte`, the landing preview reuses the drag
+  overlay) and the page mini-map (`DockThumbnail.svelte`); the host renders the cards
+  (`AxisAddPalette.svelte` on `src/lib/PaletteShell.svelte`). Context "+" entries: widget
+  zones (`WIDGET_ZONE_ADD_BUTTON_PX`), tab bars, empty regions, the nav "+", the panel
+  menu's Split right / Split below. Without a registered palette the edit bar keeps its
+  Add menu.
+- Widget drags (edit mode, `svelte/widgetDragSession.ts`; pure rules in `widgetDrop.ts` +
+  `dwellTracker.ts`): a plain drop always INSERTS (thin insert line, drawn by the DragLayer);
+  resting 350 ms within 10 px on a foreign unit arms grouping (amber "Group" frame); a member
+  reorders directly inside its own group; the workspace edge opens a new custom panel. The
+  widget / group menus offer "Group with ▸" (`groupWithMenuItem`). Bar zones fit with the
+  edit chrome reserved (`zoneFit.ts`: "+" buttons, "+ Widget", 16 px edit gap).
 - Panels are never lost: `panel.remove` / `page.remove` / `page.setDock` PARK panels
   (they stay in `layout.panels`, docked on no page); `panel.close` is the only hard
   delete (Library: "Delete everywhere" for custom panels and keyless copies).

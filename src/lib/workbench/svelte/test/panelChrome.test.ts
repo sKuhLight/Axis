@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PanelInstance } from '../../core';
 import {
   MAXIMIZE_ESCAPE_OVERLAYS,
+  PANEL_SPLIT_BELOW_LABEL,
+  PANEL_SPLIT_RIGHT_LABEL,
   buildPanelMenuItems,
   collapsedStripLabel,
   shouldReleaseMaximize,
@@ -26,6 +28,29 @@ const pages = [
 ];
 
 describe('buildPanelMenuItems', () => {
+  it('offers Split right / Split below after Move to when the host can add (edit mode only)', () => {
+    const a = { ...actions(), splitRight: vi.fn(), splitBelow: vi.fn() };
+    const items = buildPanelMenuItems({ panel: panel(), editMode: true, maximized: false, pages, activePageId: 'page.grid', actions: a });
+    expect(items.map((item) => item.label)).toEqual([
+      'Move to',
+      PANEL_SPLIT_RIGHT_LABEL,
+      PANEL_SPLIT_BELOW_LABEL,
+      'Maximize Panel',
+      'Collapse Panel',
+      'Save To Library',
+      'Remove from page'
+    ]);
+    items.find((item) => item.id === 'split-right')!.run();
+    items.find((item) => item.id === 'split-below')!.run();
+    expect(a.splitRight).toHaveBeenCalledTimes(1);
+    expect(a.splitBelow).toHaveBeenCalledTimes(1);
+    // A locked panel can be split beside; view mode cannot split.
+    const locked = buildPanelMenuItems({ panel: panel({ locked: true }), editMode: true, maximized: false, pages, actions: a });
+    expect(locked.find((item) => item.id === 'split-right')?.disabled).toBe(false);
+    const view = buildPanelMenuItems({ panel: panel(), editMode: false, maximized: false, pages, actions: a });
+    expect(view.find((item) => item.id === 'split-below')?.disabled).toBe(true);
+  });
+
   it('orders Move to ▸ · Maximize · Collapse · Save · Remove from page and keeps every existing action', () => {
     const items = buildPanelMenuItems({ panel: panel(), editMode: true, maximized: false, pages, activePageId: 'page.grid', actions: actions() });
     expect(items.map((item) => item.label)).toEqual(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Remove from page']);

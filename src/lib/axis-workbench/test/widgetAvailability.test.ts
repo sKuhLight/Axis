@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { axisWidgetAvailable, type AxisWidgetCaps } from '../widgets/widgetAvailability';
+import { axisWidgetAvailable, axisWidgetUnavailableReason, type AxisWidgetCaps } from '../widgets/widgetAvailability';
 
 const ALL: AxisWidgetCaps = { sceneCount: 8, hasTuner: true, hasTempo: true, hasTelemetryControl: true };
 const NONE: AxisWidgetCaps = { sceneCount: 0, hasTuner: false, hasTempo: false, hasTelemetryControl: false };
@@ -27,6 +27,24 @@ describe('axisWidgetAvailable', () => {
   it('never gates ungated widget types', () => {
     for (const type of ['axis.preset', 'axis.save', 'axis.view', 'axis.cpu', 'axis.connection', 'custom.widget']) {
       expect(axisWidgetAvailable(type, NONE)).toBe(true);
+    }
+  });
+});
+
+describe('axisWidgetUnavailableReason', () => {
+  it('names the missing capability of each gated widget', () => {
+    expect(axisWidgetUnavailableReason('axis.scenes', NONE)).toBe('Needs a device with scenes');
+    expect(axisWidgetUnavailableReason('axis.tuner', NONE)).toBe('Needs a device with a tuner');
+    expect(axisWidgetUnavailableReason('axis.tempo', NONE)).toBe('Needs a device with tempo');
+    expect(axisWidgetUnavailableReason('axis.telemetry', NONE)).toBe('Needs telemetry control (newer server)');
+  });
+
+  it('is null whenever the widget can render (and agrees with axisWidgetAvailable)', () => {
+    for (const type of ['axis.scenes', 'axis.tuner', 'axis.tempo', 'axis.telemetry', 'axis.preset', 'custom.widget']) {
+      expect(axisWidgetUnavailableReason(type, ALL)).toBeNull();
+      for (const caps of [ALL, NONE]) {
+        expect(axisWidgetAvailable(type, caps)).toBe(axisWidgetUnavailableReason(type, caps) === null);
+      }
     }
   });
 });

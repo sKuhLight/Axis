@@ -4,8 +4,8 @@
   import { getWorkbenchContext } from './context';
   import {
     fitWidgetInWidth,
-    fitZone,
     selectVisibleWidgetsByZone,
+    widgetZoneLabel,
     type JsonObject,
     type WidgetFitDescriptor,
     type WidgetInstance,
@@ -13,6 +13,8 @@
   } from '../core';
   import { onMount } from 'svelte';
   import { labelFromWorkbenchType } from './library';
+  import { WIDGET_ZONE_ADD_BUTTON_PX } from './addCatalog';
+  import { fitWidgetZones, WIDGET_ZONE_EDIT_GAP_PX, WIDGET_ZONE_FIT_GROUP_EDIT_PAD_PX, type FitZoneInput } from './zoneFit';
 
   type WidgetUnit = { groupId?: string; widgetIds: string[] };
 
@@ -97,69 +99,62 @@
     return { key: unitKey(unit), estW, keep };
   }
 
-  // Descriptors across the whole fit group (or this zone alone). Group members
-  // fit jointly, so one decision + one overflow set drives every group zone.
-  const groupDescriptors = $derived.by<WidgetFitDescriptor[]>(() => {
+  // The zones fitted together (the whole fit group, or this zone alone), each
+  // with its unit descriptors — the edit-mode chrome is reserved per zone.
+  const fitZones = $derived.by<FitZoneInput[]>(() => {
     if (!fitEnabled) return [];
     const zones = fitGroup && fitGroup.length ? fitGroup : [zone];
-    const out: WidgetFitDescriptor[] = [];
-    for (const z of zones) {
+    return zones.map((z) => {
       const zoneWidgets = z === zone ? widgets : availableWidgets(selectVisibleWidgetsByZone($controller.document, z));
-      for (const unit of unitsForZone(zoneWidgets)) out.push(unitDescriptor(unit));
-    }
-    return out;
+      return { zone: z, units: unitsForZone(zoneWidgets).map(unitDescriptor) };
+    });
   });
 
   const availWidth = $derived(fitGroup && fitGroup.length ? groupWidth : zoneWidth);
 
+  // ── Add (edit mode, with a host Add palette) ─────────────────────────────
+  // A compact "+" at the zone's free end, or "+ Widget" filling an empty zone,
+  // opens the Add palette on Widgets with this zone as its fixed target: a
+  // card click inserts right here (no highlight step). While a drag / placement
+  // runs the "+" keeps its place but is invisible and inert.
+  const canAdd = $derived($controller.editMode && !floating && zone !== 'hidden' && !!registry.addPalette);
+
   // Joint fit + shedding (design `_fit` / `_overflow`, 01-shell §8). Overflow
-  // shedding only applies outside edit mode (design: overflowed widgets stay
-  // visible with a red dashed outline while editing).
+  // shedding only applies outside edit mode (design: units stay visible while
+  // editing). Slice 4b: while editing the fit reserves the "+" / "+ Widget"
+  // buttons and the wider edit gap, so a narrow bar (834 px) steps its units
+  // down instead of spilling, and empty zones collapse "+ Widget" to "+" when
+  // the label would cost the units a size.
   const fitResult = $derived.by(() => {
-    if (!fitEnabled || availWidth <= 0) return { size: 'default' as WidgetSize, overflow: new Set<string>() };
-    const result = fitZone(groupDescriptors, availWidth, fitGap);
-    if ($controller.editMode) return { size: result.size, overflow: new Set<string>() };
-    return result;
+    if (!fitEnabled || availWidth <= 0) return { size: 'default' as WidgetSize, overflow: new Set<string>(), emptyAdd: 'label' as const };
+    return fitWidgetZones({
+      zones: fitZones,
+      avail: availWidth,
+      gap: fitGap,
+      editing: $controller.editMode,
+      canAdd,
+      zoneChromePx: fitGroup && fitGroup.length ? WIDGET_ZONE_FIT_GROUP_EDIT_PAD_PX * 2 : 0
+    });
   });
   const zoneSize = $derived(fitResult.size);
   const overflowKeys = $derived(fitResult.overflow);
+  const emptyAddCompact = $derived(variant === 'bar' && fitResult.emptyAdd === 'compact');
 
   const renderedUnits = $derived(units.filter((unit) => !overflowKeys.has(unitKey(unit))));
   const overflowUnits = $derived(units.filter((unit) => overflowKeys.has(unitKey(unit))));
 
-  // ── In-flow drop gap (V14 follow-up; design shell `isGap` unit) ──────────
-  // While a widget drag targets this zone, a REAL dashed spacer element is
-  // spliced into the zone's flow at the live unit index — neighbours physically
-  // move apart so the preview shows the true post-drop layout (no overlay
-  // rect). Suppressed while the drag targets a group (design `!drag.overGroup`).
+  // ── Drop target (slice 4b) ───────────────────────────────────────────────
+  // A widget drag / placement inserting into this zone washes the zone; the
+  // insert LINE itself is drawn by the DragLayer (nothing is spliced into the
+  // flow — the units keep their places). A reorder inside a group is not a
+  // zone insert.
   const drag = $derived($controller.drag);
-  const dragIdSet = $derived(drag?.kind === 'widget' ? new Set(drag.widgetIds) : null);
-  // A unit is "lifted" when EVERY widget in it is being dragged (loose widget,
-  // or whole-group drag). It stays mounted (display:none via its own host) but
-  // must be skipped when mapping the visible slot index to a render position.
-  function unitLifted(unit: WidgetUnit): boolean {
-    return !!dragIdSet && unit.widgetIds.length > 0 && unit.widgetIds.every((id) => dragIdSet.has(id));
-  }
-  const zoneSlot = $derived.by(() => {
-    if (!drag || drag.kind !== 'widget' || drag.groupInsert || drag.zoneInsert?.zone !== zone) return null;
-    return {
-      index: drag.zoneInsert.index,
-      width: drag.size?.width ?? 120,
-      height: drag.size?.height ?? 38
-    };
-  });
-  // Position of the slot within `renderedUnits` (the slot index counts VISIBLE
-  // units only; design splices at `overIndex`, appending past the end).
-  const slotPos = $derived.by(() => {
-    if (!zoneSlot) return -1;
-    let visible = 0;
-    for (let i = 0; i < renderedUnits.length; i++) {
-      if (unitLifted(renderedUnits[i])) continue;
-      if (visible === zoneSlot.index) return i;
-      visible += 1;
-    }
-    return renderedUnits.length;
-  });
+  const dropTarget = $derived(drag?.kind === 'widget' && !drag.groupInsert && drag.zoneInsert?.zone === zone);
+  const dragging = $derived(drag?.kind === 'widget');
+  // Edit mode: the units of a flow zone move apart so the insert line sits
+  // clearly between them (the grid variant keeps its configured gap; the free
+  // canvas has no flow).
+  const editSpread = $derived($controller.editMode && !floating && variant !== 'grid');
 
   // Manual density is a ceiling; auto-fit shrinks below it (design mkW). The
   // WidgetHost caps `forcedSize` by the widget's own manual size, so returning
@@ -173,6 +168,14 @@
       return fitWidgetInWidth(est, zoneWidth - 24);
     }
     return undefined;
+  }
+
+  const zoneName = $derived(widgetZoneLabel($controller.activeLayout, zone));
+  function openAdd() {
+    controller.openAddPalette({
+      filter: 'widgets',
+      target: { kind: 'widget', zone, label: units.length ? `End of ${zoneName}` : `Into ${zoneName}` }
+    });
   }
 
   function unitKey(unit: WidgetUnit): string {
@@ -239,25 +242,18 @@
     class:floating
     class:panel={variant === 'panel'}
     class:grid={variant === 'grid'}
+    class:fit-group={!!fitGroup?.length}
     class:overflow-open={overflowOpen}
-    class:drop-target={!!zoneSlot}
+    class:drop-target={dropTarget}
     bind:this={zoneEl}
     data-zone={zone}
     style:--aw-zone-grid-columns={gridColumns}
     style:--aw-zone-grid-row-height={`${gridRowHeight}px`}
     style:--aw-zone-grid-gap={`${gridGap}px`}
+    style:gap={editSpread ? `${WIDGET_ZONE_EDIT_GAP_PX}px` : undefined}
+    style:padding-inline={$controller.editMode && fitGroup?.length ? `${WIDGET_ZONE_FIT_GROUP_EDIT_PAD_PX}px` : undefined}
   >
-    {#each renderedUnits as unit, unitPos (unit.groupId ?? unit.widgetIds[0])}
-      {#if slotPos === unitPos && zoneSlot}
-        <!-- In-flow drop gap (design `isGap`): a real flex child at the live
-             insert index — inserting it pushes the neighbouring units apart. -->
-        <span
-          class="aw-zone-slot"
-          data-drag-slot
-          aria-hidden="true"
-          style="width:{vertical ? '88%' : `${zoneSlot.width}px`}; height:{zoneSlot.height}px;"
-        ></span>
-      {/if}
+    {#each renderedUnits as unit (unit.groupId ?? unit.widgetIds[0])}
       {#if variant === 'grid'}
         <div class="aw-widget-grid-cell" style={gridCellStyle(unit)}>
           {#if unit.groupId}
@@ -280,13 +276,20 @@
         {/if}
       {/if}
     {/each}
-    {#if zoneSlot && slotPos >= renderedUnits.length}
-      <span
-        class="aw-zone-slot"
-        data-drag-slot
-        aria-hidden="true"
-        style="width:{vertical ? '88%' : `${zoneSlot.width}px`}; height:{zoneSlot.height}px;"
-      ></span>
+    {#if canAdd && units.length}
+      <!-- Hidden (but keeping its place, so nothing shifts) while a drag or a
+           placement runs. -->
+      <button
+        class="aw-zone-add"
+        class:stepped-aside={dragging}
+        type="button"
+        data-zone-add={zone}
+        style:width={`${WIDGET_ZONE_ADD_BUTTON_PX}px`}
+        title={`Add a widget to ${zoneName}`}
+        aria-label={`Add a widget to ${zoneName}`}
+        tabindex={dragging ? -1 : undefined}
+        onclick={openAdd}
+      >+</button>
     {/if}
     {#if overflowUnits.length}
       <button class="aw-overflow-chip" type="button" title="Hidden — not enough space" onclick={() => (overflowOpen = !overflowOpen)}>
@@ -309,10 +312,34 @@
         </div>
       {/if}
     {/if}
-    {#if !units.length && !zoneSlot && (variant !== 'bar' || $controller.editMode)}
+    {#if !units.length && canAdd}
+      <!-- Editing: an empty zone is one "+ Widget" button (the drag hint stays
+           as its second line in panel bodies). A tight bar collapses it to the
+           compact "+". During a drag it stays (inert) and lights up when the
+           drop would land here. -->
+      <button
+        class="aw-zone-empty aw-zone-add-empty"
+        class:body={variant !== 'bar'}
+        class:compact={emptyAddCompact}
+        class:ins={dropTarget}
+        class:stepped-aside={dragging}
+        type="button"
+        data-zone-add={zone}
+        style:width={emptyAddCompact ? `${WIDGET_ZONE_ADD_BUTTON_PX}px` : undefined}
+        title={`Add a widget to ${zoneName}`}
+        aria-label={`Add a widget to ${zoneName}`}
+        tabindex={dragging ? -1 : undefined}
+        onclick={openAdd}
+      >
+        {#if variant !== 'bar'}
+          <b>+ Widget</b>
+          <i>{emptyLabel ? `or ${emptyLabel.charAt(0).toLowerCase()}${emptyLabel.slice(1)}` : 'or drag widgets & params here'}</i>
+        {:else if emptyAddCompact}+{:else}+ Widget{/if}
+      </button>
+    {:else if !units.length && (variant !== 'bar' || $controller.editMode)}
       <!-- Design §2.2: empty custom panels always show the dashed drag hint;
            bar zones only surface it while editing. -->
-      <span class="aw-zone-empty" class:body={variant !== 'bar'}>
+      <span class="aw-zone-empty" class:body={variant !== 'bar'} class:ins={dropTarget}>
         {#if variant !== 'bar'}
           <b>Empty Panel</b>
           <i>{emptyLabel ?? 'drag widgets & params here'}</i>
@@ -350,6 +377,23 @@
      their own scroll/overflow. */
   :global(.aw-root.aw-editing) .aw-widget-zone:not(.panel):not(.grid) {
     overflow: visible;
+  }
+  /* Slice 4b (AXIS-66): the jointly fitted top-bar zones never spill over a
+     neighbour while editing. The fit already reserves the "+" buttons and the
+     edit gap; if a crowded bar still does not fit at mini, the zone clips and
+     scrolls sideways instead of wrapping or overlapping. Its inline padding
+     (set inline, reserved by the fit) keeps the units' dashed outlines inside;
+     `safe` alignment keeps the start reachable when it overflows. */
+  :global(.aw-root.aw-editing) .aw-widget-zone.fit-group {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  :global(.aw-root.aw-editing) .aw-widget-zone.fit-group[data-zone='top.right'] {
+    justify-content: safe flex-end;
+  }
+  :global(.aw-root.aw-editing) .aw-widget-zone.fit-group[data-zone='top.center'] {
+    justify-content: safe center;
   }
   .aw-widget-zone[data-zone='top.right'] {
     justify-content: flex-end;
@@ -459,25 +503,84 @@
     border-radius: 10px;
   }
   /* Hovered drop zone gets a faint accent wash (design `hl` background tint on
-     the drag-over zone) so the target strip reads at a glance. */
+     the drag-over zone) so the target strip reads at a glance. The insert line
+     itself is drawn by the DragLayer (slice 4b: no slot box in the flow). */
   .aw-widget-zone.drop-target {
     background: color-mix(in srgb, var(--aw-accent) 7%, transparent);
   }
-  /* In-flow drop gap (design shell `isGap`: ghost-sized, radius 9, 1.5px dashed
-     accent, accent fill at .10 alpha, flex:none). A real flex/grid child — its
-     presence is what opens the gap between units. */
-  .aw-zone-slot {
-    flex: none;
-    box-sizing: border-box;
-    border: 1.5px dashed var(--aw-accent);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
+  /* An empty zone the drop would land in lights up (design `.wempty.ins`). */
+  .aw-zone-empty.ins {
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    box-shadow: inset 0 0 0 2px var(--aw-accent);
   }
   :global(.aw-root.aw-dragging-widget) .aw-widget-zone.panel {
     outline-offset: -3px;
   }
   :global(.aw-root.aw-dragging-widget) .aw-widget-zone.grid {
     outline-offset: -3px;
+  }
+  /* Edit mode: the compact "+" at a zone's free end (width from
+     WIDGET_ZONE_ADD_BUTTON_PX) and the "+ Widget" button of an empty zone. */
+  .aw-zone-add {
+    flex: none;
+    align-self: center;
+    height: 26px;
+    padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 70%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 600 16px/1 var(--aw-font-ui);
+  }
+  .aw-zone-add:hover,
+  .aw-zone-add:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 20%, transparent);
+    outline: none;
+  }
+  .aw-widget-zone.grid .aw-zone-add {
+    align-self: start;
+  }
+  /* While a drag / placement runs the "+" buttons keep their place (nothing
+     shifts) but are invisible and inert — they are not drop targets. */
+  .aw-zone-add.stepped-aside {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .aw-zone-add-empty.stepped-aside {
+    pointer-events: none;
+  }
+  .aw-zone-add-empty {
+    flex: none;
+    cursor: pointer;
+    border-color: color-mix(in srgb, var(--aw-accent) 55%, var(--aw-border-2));
+    color: var(--aw-accent);
+    font: 700 11px/1 var(--aw-font-ui);
+    letter-spacing: 0.02em;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+  /* A tight bar collapses an empty zone's "+ Widget" to the compact "+". */
+  .aw-zone-add-empty.compact {
+    min-width: 0;
+    height: 26px;
+    padding: 0;
+    font: 600 16px/1 var(--aw-font-ui);
+  }
+  .aw-widget-zone.panel .aw-zone-add-empty,
+  .aw-widget-zone.grid .aw-zone-add-empty {
+    white-space: normal;
+  }
+  .aw-zone-add-empty:hover,
+  .aw-zone-add-empty:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 10%, transparent);
+    outline: none;
+  }
+  .aw-zone-add-empty.body b {
+    color: var(--aw-accent);
+    font: 700 13px/1 var(--aw-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: none;
   }
   .aw-overflow-chip {
     height: 30px;

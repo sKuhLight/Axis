@@ -8,7 +8,9 @@
  * palette a later slice brings.
  */
 import type { ViewportClass, WorkbenchCommand } from '../core';
+import type { WorkbenchAddPageCards } from './addCatalog';
 import type { WorkbenchMenuItem } from './contextMenu';
+import { placementStatusText } from './placement';
 import type { EditBarOverflowGroupId } from './editBarLayout';
 import { workbenchBackupTimestamp, type WorkbenchBackupEntry } from './layoutActions';
 
@@ -57,6 +59,11 @@ export interface WorkbenchEditBarPagesExtension {
   addPageItems: () => WorkbenchAddPageItems;
   /** The reset offered for a page, or null for none. */
   reset: (pageId: string) => WorkbenchPageResetAction | null;
+  /**
+   * The same contributions as cards for the Add palette (with a dock for the
+   * mini-map). Optional: without it the palette shows the generic page cards.
+   */
+  addPageCards?: () => WorkbenchAddPageCards;
 }
 
 /**
@@ -89,6 +96,8 @@ export const EDIT_BAR_STATUS_DRAG = 'Release on a highlighted target · anywhere
 export interface EditBarStatusInput {
   /** A drag is in flight. */
   dragging: boolean;
+  /** Click-to-place is in progress: what is being placed, and where the active spot puts it. */
+  placing?: { label: string; active?: string | null } | null;
   /** The latest layout-action feedback (save / apply / import / export / restore). */
   notice: { tone: 'ok' | 'error'; message: string } | null;
   /** The controller's last command result (kept across edit sessions). */
@@ -114,6 +123,7 @@ export function resolveEditBarStatus(input: EditBarStatusInput): EditBarStatus {
   const resultError =
     input.lastResult?.error && input.lastResult !== input.dismissedResult ? input.lastResult.error.message : null;
   const error = input.notice?.tone === 'error' ? input.notice.message : resultError;
+  if (input.placing) return { error, text: placementStatusText(input.placing.label, input.placing.active), tone: 'drag' };
   if (input.dragging) return { error, text: EDIT_BAR_STATUS_DRAG, tone: 'drag' };
   if (input.notice?.tone === 'ok') return { error, text: input.notice.message, tone: 'ok' };
   return { error, text: EDIT_BAR_STATUS_IDLE, tone: 'idle' };
@@ -358,7 +368,7 @@ export function buildProfileMenuItems(
   ];
 }
 
-// ── ADD (interim — a later slice replaces this menu with a palette) ──────────
+// ── ADD (the menu stays for hosts without an Add palette) ────────────────────
 
 export interface EditBarAddMenuInput {
   pageLabel?: string;
@@ -394,6 +404,8 @@ export interface EditBarMoreGroup {
   label: string;
   /** The group's full menu. */
   items: WorkbenchMenuItem[];
+  /** A group that is one action (Add + opening the palette): a plain row instead of a submenu. */
+  run?: () => void;
 }
 
 /** The More menu label of a collapsed group. */
@@ -416,12 +428,15 @@ export function editBarMoreLabel(
 /** One submenu per collapsed group, in the order given (scope order). */
 export function buildMoreMenuItems(groups: ReadonlyArray<EditBarMoreGroup>): WorkbenchMenuItem[] {
   return groups.map(
-    (group): WorkbenchMenuItem => ({
-      id: `more.${group.id}`,
-      kind: 'submenu',
-      label: group.label,
-      items: group.items,
-      run: noop
-    })
+    (group): WorkbenchMenuItem =>
+      group.run
+        ? { id: `more.${group.id}`, label: group.label, run: group.run }
+        : {
+            id: `more.${group.id}`,
+            kind: 'submenu',
+            label: group.label,
+            items: group.items,
+            run: noop
+          }
   );
 }

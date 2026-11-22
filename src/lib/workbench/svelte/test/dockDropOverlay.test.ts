@@ -91,6 +91,11 @@ describe('ghostPosition', () => {
 
 describe('describeDockDropTarget / landingLabelFor', () => {
   const g = geometry();
+  it('names the gesture that cancels: a release (drag) or a click (click-to-place)', () => {
+    expect(describeDockDropTarget(null, g)).toBe('Release here to cancel · layout stays as it was');
+    expect(describeDockDropTarget(null, g, 'click')).toBe('Click here to cancel · layout stays as it was');
+  });
+
   it('describes every kind', () => {
     expect(describeDockDropTarget(null, g)).toMatch(/cancel/i);
     expect(describeDockDropTarget({ kind: 'zone', stackId: 'stack.main', targetPanelId: 'grid', region: 'main', zone: 'right', small: false }, g)).toBe(

@@ -202,9 +202,16 @@ export function landingLabelFor(target: DockDropTarget): { long: string; short: 
   }
 }
 
-/** What a drop on `target` does, for the pointer card. */
-export function describeDockDropTarget(target: DockDropTarget | null, geometry: Pick<DockDropGeometry, 'stacks' | 'pages'>): string {
-  if (!target) return 'Release here to cancel · layout stays as it was';
+/**
+ * What a drop on `target` does, for the pointer card. `action` names the
+ * gesture that drops: a release (drag) or a click (click-to-place).
+ */
+export function describeDockDropTarget(
+  target: DockDropTarget | null,
+  geometry: Pick<DockDropGeometry, 'stacks' | 'pages'>,
+  action: 'release' | 'click' = 'release'
+): string {
+  if (!target) return `${action === 'click' ? 'Click' : 'Release'} here to cancel · layout stays as it was`;
   if (target.kind === 'page') {
     if (!target.accepts) return 'Already on this page';
     const label = geometry.pages.find((page) => page.pageId === target.pageId)?.label ?? target.pageId;
@@ -225,6 +232,8 @@ export interface DockDropOverlayInput {
   target: DockDropTarget | null;
   panelLabel: string;
   viewport: { width: number; height: number };
+  /** The dropping gesture (card wording): a release (drag, default) or a click (click-to-place). */
+  action?: 'release' | 'click';
 }
 
 /** Build the whole overlay for one pointer position. */
@@ -329,7 +338,7 @@ export function buildDockDropOverlay(input: DockDropOverlayInput): DockDropOverl
     if (found) page = { pageId: found.pageId, rect: found.rect, accepts: target.accepts };
   }
 
-  const hint = describeDockDropTarget(target, geometry);
+  const hint = describeDockDropTarget(target, geometry, input.action);
   const cardSize = { width: DOCK_CARD_WIDTH * zoom, height: DOCK_CARD_HEIGHT * zoom };
   const pad = 8 * zoom;
   const position = ghostPosition(
