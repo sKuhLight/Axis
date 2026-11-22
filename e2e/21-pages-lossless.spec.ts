@@ -434,8 +434,12 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await page.keyboard.press('Escape');
     await expect(openMenu(page)).toHaveCount(0);
     // Escape hands focus back to the nav entry (the rail expands on focus): drop it.
+    // Each attempt passes the pointer over the rail and off again, so a fresh pointerleave
+    // always fires (a retry that only re-moves to the same point produces no event at all).
     await expect(async () => {
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      const rail = await page.locator('.aw-rail').boundingBox();
+      if (rail) await page.mouse.move(rail.x + rail.width / 2, rail.y + rail.height / 2);
       await page.mouse.move(720, 20);
       await expect(page.locator('.aw-rail.aw-rail-expanded')).toHaveCount(0, { timeout: 1000 });
     }).toPass();
