@@ -1,5 +1,6 @@
 import type {
   DockAxis,
+  DockLayout,
   DockRegionId,
   FloatingRect,
   JsonObject,
@@ -70,7 +71,19 @@ export type DockTarget =
 
 export type WorkbenchCommand =
   | { type: 'panel.add'; panel: PanelInstance; region: DockRegionId; target?: DockTarget }
+  // panel.create adds a PARKED instance: it lives in `layout.panels` without
+  // being docked on any page (a later panel.move / page.add / page.setDock
+  // docks it). Rejects an existing id and a duplicate singleton like panel.add.
+  | { type: 'panel.create'; panel: PanelInstance }
+  // panel.close is the HARD delete: the instance leaves every page, its owned
+  // widgets move to `hidden`, and the instance is deleted. Locked panels are
+  // rejected — except a keyless copy of a single-instance panel (another panel
+  // of the same type carries the singleton key).
   | { type: 'panel.close'; panelId: string }
+  // panel.remove PARKS the panel: it leaves every page dock but the instance
+  // (state, title, owned widget zone + widgets) stays in `layout.panels`, so it
+  // can be docked again. Locked panels are rejected, like panel.close.
+  | { type: 'panel.remove'; panelId: string }
   // panel.move: `pageId` (optional) applies `to` to THAT page's dock instead of
   // the active page's; the active page stays as it is.
   | { type: 'panel.move'; panelId: string; to: DockTarget; pageId?: string }
@@ -119,12 +132,23 @@ export type WorkbenchCommand =
   //
   // page.add inserts the page (+ a navigation entry bound to it — either the
   // provided one or a default derived from the page id/label/icon) at `index`
-  // in both pageOrder and navigation order. It does NOT activate the page.
-  | { type: 'page.add'; page: WorkbenchPage; index?: number; navEntry?: NavigationEntryState }
-  // page.remove drops the page, its bound nav entries, and every panel
-  // instance docked on it. Removing the last page is rejected; removing the
-  // active page activates the nearest remaining page by order.
+  // in pageOrder and at `navIndex` (default: `index`) in navigation order. It
+  // does NOT activate the page. The page's dock may reference existing panels:
+  // parked ones get docked; a panel already docked on ANOTHER page stays there
+  // (the reference is dropped — a new page never takes a panel away).
+  // `navEntry: null` adds the page WITHOUT a navigation entry.
+  | { type: 'page.add'; page: WorkbenchPage; index?: number; navIndex?: number; navEntry?: NavigationEntryState | null }
+  // page.remove drops the page and its bound nav entries. Its panels are
+  // PARKED, never deleted (instances, state and owned widgets stay). Removing
+  // the last page is rejected; removing the active page activates the nearest
+  // remaining page by order.
   | { type: 'page.remove'; pageId: string }
+  // page.setDock replaces a page's dock (omitted = clear the page: the region
+  // sizes stay, every root empties).
+  // Panels on the page that the new dock does not reference are PARKED. The
+  // new dock may reference parked panels; references to missing panels and to
+  // panels docked on ANOTHER page are dropped (those stay where they are).
+  | { type: 'page.setDock'; pageId: string; dock?: DockLayout }
   // page.rename renames the page AND its bound navigation entries.
   | { type: 'page.rename'; pageId: string; label: string }
   // page.activate switches the rendered page. Excluded from layout history

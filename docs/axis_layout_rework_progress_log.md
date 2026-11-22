@@ -1939,3 +1939,88 @@ Branch `feature/ui-rework` (worktree `.wt-feature-ui-rework`). Design source: th
 - `npm run check`: 0 errors, 0 warnings.
 - `npm test`: 1818 passed (130 files; baseline 1666 / 122).
 - Chromium e2e, full suite: 86/86 (baseline 67).
+
+## ROUND 27 — Layout editor rework, slice 3: pages and panels are never lost (parent AXIS-67)
+
+Branch `feature/ui-rework` (worktree `.wt-feature-ui-rework`). Product decisions by the operator: park instead of delete, every page deletable (inline confirm, undoable), Restore default pages, Reset to default per page, a complete panel catalog. A panel still lives on at most one page; no schema version, no migration.
+
+### What changed
+- **Parking (generic core).**
+  - `page.remove` parks the page's panels (locked ones too) instead of deleting them; owned widget zones and widgets stay. Nav-entry cleanup and the nearest-page fallback are unchanged.
+  - New `panel.remove` (Remove from page): off every page dock, instance kept; missing / locked panels rejected (same rule as `panel.close`).
+  - New `panel.create`: a parked instance (duplicate id / singleton rejected like `panel.add`).
+  - New `page.setDock { pageId, dock? }`: replaces a page's dock (no dock = clear); panels it drops are parked.
+  - `page.add` takes `navIndex` (nav position independent of the page index).
+  - `page.add` / `page.setDock` never take a panel from another page: references to panels docked elsewhere are dropped (they stay where they are).
+  - `panel.close` stays the hard delete, unchanged.
+  - Selectors `selectPanelPlacement` (`docked` + pageId / `parked`) and `selectParkedPanels`.
+- **Panel catalog (`core/panelCatalog.ts`, pure).**
+  - `buildPanelCatalog(layout, { canonical, templates, hiddenTypes })`: every instance once (docked / parked), each canonical spec without an instance as `absent`, `multiple` specs always, then templates. Hidden types are kept out only while docked.
+  - `catalogAddCommands(doc, entry, target, { exact? })`: parked or elsewhere-docked → `panel.move`; on this page → activate (an exact drop moves it there); absent → fresh instance with its singleton key; `multiple` → a new instance; template → instantiation, with an existing singleton moved instead of copied. Cannot produce `duplicate-singleton`. `{ pageId }` targets use `panel.create` + `panel.move`.
+  - `instantiatePanelTemplateCommands` / `labelFromWorkbenchType` moved to `core/panelTemplates.ts`; `svelte/library.ts` re-exports them.
+- **Registry hooks (data only).** `registerPanelCatalogProvider({ canonical, hiddenTypes })`, `registerPageHints((layout, page) => PageHint[])`. Hints first rendered in the empty main placeholder; since the review fixes they are a bar above the workspace (see below). The button dispatches one batch.
+- **Edit-bar extension `pages` part** (`WorkbenchEditBarPagesExtension`): `addPageItems()` (host rows around the generic "Blank page") and `reset(pageId)` (label, prompt, confirm label, commands). The extension is also on the workbench context so the navigation uses the same rows.
+- **Axis.**
+  - `axisPanelCatalog.ts`: canonical specs from the roster + secondary page specs (deduped by singleton key), without the converter panels; "Custom Panel" is a `multiple` spec. Converter types are the catalog's hidden types.
+  - `axisDefaultPages.ts`: `listMissingAxisDefaultPages`, `restoreAxisDefaultPagesCommands` (seed position in page order and nav, original id / label / nav entry id; parked → docked, absent → `panel.create`, elsewhere → left there), `resetAxisPageCommands` (default page → spec dock, other panels parked; custom page → cleared), `axisPageHints` ("<Panel> is on page <Page> · Bring it here" → `panel.move` with `pageId`), and the edit-bar `pages` part.
+  - The Grid page dock follows the layout's preset (`settings.presetKind`, legacy `activePreset`) via `buildAxisPresetGridDock`; the default document (no preset) gets its own Signal Grid + Block Editor dock (`createAxisDefaultGridDock`, now shared with the default document).
+- **UI.**
+  - Panel header × and ⋯ menu "Close Panel" → "Remove from page" (title / aria-label), `panel.remove`, no confirm.
+  - PAGE menu: "Reset to default" (default pages) / "Clear page" (others) with inline confirm; Delete's prompt says the panels are kept.
+  - Add menu: "Add page ▸" submenu — missing default pages (restore at seed position + open), "Already there: …", Blank page, "Restore default pages (n)"; "All default pages are there" when nothing is missing.
+  - Nav "+": opens the same menu below the button (clamped, so it lifts above the bottom nav). The nav context menu shows Reset / Clear / Delete only in edit mode, each with an inline confirm.
+  - Library drawer, pages view: page delete asks inline; "Add Panel · To This Page" is the full catalog with status (on this page / on <page> / not placed / new), tap adds or moves, drag-out lands on the exact dock target; custom panel instances get "Delete everywhere" (inline confirm → `panel.close`); templates keep rename / export / delete in their own section.
+
+### Old stored documents (no migration)
+- Panels an old document lost (old `page.remove` / Close Panel) show as "not placed" canonical entries and are created fresh from their spec.
+- Deleted default pages show under Add page ▸ "Missing default pages" and come back with their nav entry id.
+
+### e2e
+- `02-edit-mode`: header button title / aria-label "Remove from page".
+- `03-dock`: Remove from page removes Setup's tab; the catalog lists it "not placed" and moves it back.
+- `19-edit-bar`: new delete prompt; Add page ▸ Blank page.
+- `20-dock-zones`: the Block Editor template drop now moves the existing panel (was: refused as duplicate).
+- New `21-pages-lossless.spec.ts` (11 tests; 14 after the review fixes below): delete confirm + catalog status + one-step undo; restore a deleted default page from Add page ▸ (seed position, `library` nav id, Grid keeps its edit); Restore default pages (2) with a custom page untouched; restore conflict hint + Bring it here; Reset to default parks a foreign panel + one-step undo; Clear page; Remove from page + catalog re-add (no duplicate); catalog drag-out to an exact spot; custom panel survives page delete with its widget + Delete everywhere; drawer page delete confirm; nav "+" menu and edit-mode-only Delete.
+
+### Review fixes (regression review + workbench-reviewer)
+- **`pageLayout.apply` no longer deletes (M1).** It now runs on `page.setDock` semantics (`reducer.ts` `mapStoredPageLayout`):
+  - a stored panel with a `singletonKey` is THE live instance with that key (created with the key when none exists); one docked on another page stays there and the result carries a warning ("1 panel stays on another page"), which the bar / Layouts drawer notice appends;
+  - a keyless stored panel reuses a keyless instance on the target page, or a parked one, with the same type + title + deep-equal state; only otherwise is a copy minted — applying the same layout twice creates nothing;
+  - the target's unused panels are parked (custom panels keep their widgets); one undo step, no confirm.
+  - The page-layout import keeps the snapshot's identity flags (`remintWorkbenchPage({ keepIdentity })`) so an imported layout maps its singletons too.
+- **Duplicated pages leave removable copies (M2).** A live remint (`page.duplicate`) clears `locked` and defaults `closable` like a template instance. The catalog marks KEYLESS copies of a single-instance type (a keyed canonical spec, or a type whose original carries a key) "Delete everywhere"; the original (the instance with the key or the canonical id) never is.
+- **Switching presets asks first (M3).** A DIFFERENT preset row gets the Reset-style inline confirm ("Switch to “Stage”? This replaces your layout. Undo brings it back."); the checked row stays a no-op. Carrying custom pages / custom or parked panels over to the new preset is out of scope — Undo is the way back.
+- **Convert page self-heal (W1).** `ensureAxisConvertPage` drops references to panels docked on other pages and lists the page in `pageOrder` when it creates it; the step and the whole normalization chain are idempotent over a deleted-Convert + tray-on-Grid document (`axisConvertPage.test.ts`).
+- **Catalog (m1, m2, m3, m6, m8).**
+  - A spec with a key falls back to its canonical id (a keyless `axis.presetBrowser` from old docs is the canonical instance); the nav add-or-focus action now mints its panel WITH the singleton key and finds a keyed instance under another id.
+  - Template whose singleton exists: its widgets are dropped (no pile-up per tap); when that instance cannot be placed (locked on another page) nothing is remapped and later panels land on the drop target.
+  - An exact drop onto the panel's own single-panel stack (by `tabStackId`) is a no-op instead of a refusal.
+  - Hidden types (converter panels) are never listed; parked custom panels with an empty widget zone are hidden (the seed `axis.customPanel` row is gone); the `multiple` row reads "New custom panel" (`CanonicalPanelSpec.label`).
+  - The unused `{ pageId }` catalog target and `retargetToPage` are removed.
+- **Locked panels (m5, superseded by the final round below).** First pass excluded locked, non-closable panels from the canonical list and kept locked panels from moving; the final round replaces that with one rule.
+- **Protected Convert page (m6).** New registry hook `registerPageProtection(page) → reason | null`; Axis returns "Used by the preset converter" for `axis.page.convert`. Delete is disabled with the reason in the PAGE menu, the nav context menu and the Library drawer.
+- **Hint bar (m7).** Page hints render as a slim bar above the dock workspace (outside `.aw-workspace`, so drag geometry is unchanged) — e.g. a restored Grid whose Block Editor lives elsewhere. The empty-main placeholder is plain again. (Visibility refined in the final round.)
+- **Mobile block flow (m4).** Only a block editor docked on the ACTIVE page counts; a parked one no longer resizes an empty bottom region.
+- **Nits.** Clear page (`page.setDock` without a dock) keeps the region sizes.
+- **Refused drops.** The catalog can no longer produce a reducer refusal (single instances move, never copy), so no refused library drop is reachable in e2e; the path is unit-tested (`libraryDrag.test.ts` `commitPanelDragOut`, `panelDrag.test.ts`).
+- **Tests added:** `pageLayouts` apply (singleton mapping, elsewhere stays + warning, create with key, parking, double apply, parked reuse), duplicate → delete, keyless canonical id, template widget / locked-remap cases, own-stack drop, Clear-page sizes, `page.setDock` input unmutated, restore with reordered pages and a custom page between seeds, nav-id collision, locked hint, hint outside main, mobile parked editor, nav action key, preset confirm; e2e: hint bar for Block Editor, Convert delete disabled, "New custom panel" / no seed row, preset Switch confirm (07, 19).
+
+### Final review round
+- **Locked = cannot leave the layout.** A locked panel has no ×, cannot be removed (parked) or hard-deleted, but it moves between docks and pages like any other:
+  - the panel menu's Move to ▸ is enabled for locked panels (Remove from page and Save To Library stay disabled); tab drags never checked the lock, and `panel.move` never rejected it;
+  - the catalog moves a locked instance that is docked on another page (`placeExisting`), a template's locked singleton moves too, and the restore hint keeps "Bring it here" for locked panels;
+  - Signal Grid is canonical again (offered only when absent); Axis Account is left out by id (its nav action opens it).
+- **`pageLayout.apply` reuse** prefers a keyless candidate already on the target page; a parked candidate is reused only when it owns no widgets — an empty stored custom panel can no longer swap the target's custom panel (with widgets) for an empty parked twin. Candidate state keys are computed once; an absent state equals `{}`; "N panels stay on other pages" counts distinct panels.
+- **Hint bar visibility:** always while editing; in view mode only while the page's main region is empty (`shouldShowPageHints`).
+- **Old locked copies:** `panel.close` accepts a locked panel that has no `singletonKey` while another panel of its type carries one (a copy from an older page duplicate); a lone locked panel stays protected. The catalog's copy rule matches (a locked copy is deletable only while its keyed original exists).
+- **Empty custom panels:** a parked custom panel with widgets, another title or a changed state is listed normally; the empty default ones (no widgets, default title, absent / `{}` / default-grid state, unlocked — `selectEmptyParkedCustomPanels`) collapse into one drawer row "Empty custom panels (n) · Delete all" with an inline confirm that hard-deletes them in one batch.
+- **Convert page hardening:** "Convert…" (ConvertDialog, preset-browser source) goes through `openAxisConvertPage`, which recreates a missing Convert page in the running session first (`panel.create` for missing panels + a nav-less `page.add` — `page.add` now accepts `navEntry: null`), then activates it.
+
+### Gates
+- `npm run check`: 0 errors, 0 warnings.
+- `npm test`: 1907 passed (134 files) (baseline 1818 / 130).
+- Chromium e2e, full suite: 100/100 (baseline 86; `21-pages-lossless` has 14 tests).
+
+### Open
+- Preset switch / Reset layout still replace the whole layout (custom pages, custom and parked panels are not carried over); both now ask first and Undo restores. Carrying content over is a later slice.
+- A locked keyless panel that is the only one of its type (its keyed original is gone) stays protected from Delete everywhere.

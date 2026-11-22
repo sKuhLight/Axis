@@ -41,6 +41,15 @@ describe('Axis LAYOUT menu items (edit bar)', () => {
     expect(reset.confirm?.prompt).toContain('“Default”');
   });
 
+  it('switching to a DIFFERENT preset asks inline first; the checked row has no confirm', () => {
+    const controller = createWorkbenchController(createAxisWorkbenchDefaultDocument());
+    expect(item(controller, 'axis.preset.stage').confirm).toEqual({
+      prompt: 'Switch to “Stage”? This replaces your layout. Undo brings it back.',
+      confirmLabel: 'Switch'
+    });
+    expect(item(controller, 'axis.preset.default').confirm).toBeUndefined();
+  });
+
   it('applies a preset from its row and re-checks the menu', () => {
     const controller = createWorkbenchController(createAxisWorkbenchDefaultDocument());
     item(controller, 'axis.preset.stage').run();

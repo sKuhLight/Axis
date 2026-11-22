@@ -17,8 +17,15 @@ test.describe('Layout presets', () => {
     // Default layout uses the side rail — no bottom-nav.
     await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
 
+    // Switching presets replaces the layout, so it asks inline first.
+    await openMenu(page).getByRole('menuitemradio', { name: 'Stage' }).click();
+    await expect(openMenu(page)).toContainText('Switch to “Stage”? This replaces your layout. Undo brings it back.');
+    await openMenu(page).getByRole('menuitem', { name: 'Cancel' }).click();
+    await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0); // nothing switched
+
     // Apply Stage → navigation moves into the bottom bar (V14c).
     await openMenu(page).getByRole('menuitemradio', { name: 'Stage' }).click();
+    await openMenu(page).getByRole('menuitem', { name: 'Switch', exact: true }).click();
     await expect(openMenu(page)).toHaveCount(0);
     await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(1);
     await expect(page.locator('[data-zone-shell="bottom-nav"]')).toHaveCount(1);
@@ -34,6 +41,7 @@ test.describe('Layout presets', () => {
 
     // Apply Default → the side rail navigation returns.
     await openMenu(page).getByRole('menuitemradio', { name: 'Default' }).click();
+    await openMenu(page).getByRole('menuitem', { name: 'Switch', exact: true }).click();
     await expect(page.locator('.aw-root.aw-nav-bottom')).toHaveCount(0);
     await expect(page.locator('.aw-rail nav.aw-nav')).toHaveCount(1);
   });

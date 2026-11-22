@@ -401,6 +401,19 @@ function buildGridPageDock(spec: AxisPresetSpec): DockLayout {
   return dock;
 }
 
+/**
+ * The Grid page dock a preset kind seeds (fresh node ids) — what "Restore
+ * default pages" / "Reset to default" rebuild the Grid page from. `rightW`
+ * overrides the preset's right-dock width (keep the layout's current one).
+ */
+export function buildAxisPresetGridDock(kind: AxisLayoutPresetKind, options: { rightW?: number } = {}): DockLayout {
+  const spec = PRESET_SPECS[kind] ?? PRESET_SPECS.default;
+  return buildGridPageDock({ ...spec, rightW: options.rightW ?? spec.rightW });
+}
+
+export const isAxisLayoutPresetKind = (value: unknown): value is AxisLayoutPresetKind =>
+  typeof value === 'string' && (AXIS_LAYOUT_PRESET_KINDS as readonly string[]).includes(value);
+
 export interface CreateAxisLayoutPresetOptions {
   /** Layout id to use. Defaults to a freshly minted `layout-*` id. */
   layoutId?: string;

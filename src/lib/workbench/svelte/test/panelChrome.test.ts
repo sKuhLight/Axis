@@ -15,7 +15,7 @@ const actions = (): PanelMenuActions => ({
   toggleMaximize: vi.fn(),
   toggleCollapse: vi.fn(),
   save: vi.fn(),
-  close: vi.fn()
+  remove: vi.fn()
 });
 
 const panel = (extra: Partial<PanelInstance> = {}): PanelInstance => ({ id: 'p', type: 't.panel', title: 'Block Editor', ...extra });
@@ -26,11 +26,13 @@ const pages = [
 ];
 
 describe('buildPanelMenuItems', () => {
-  it('orders Move to ▸ · Maximize · Collapse · Save · Close and keeps every existing action', () => {
+  it('orders Move to ▸ · Maximize · Collapse · Save · Remove from page and keeps every existing action', () => {
     const items = buildPanelMenuItems({ panel: panel(), editMode: true, maximized: false, pages, activePageId: 'page.grid', actions: actions() });
-    expect(items.map((item) => item.label)).toEqual(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Close Panel']);
+    expect(items.map((item) => item.label)).toEqual(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Remove from page']);
     expect(items[0].kind).toBe('submenu');
-    expect(items.find((item) => item.id === 'close')?.danger).toBe(true);
+    expect(items.find((item) => item.id === 'remove')?.danger).toBe(true);
+    // Removing parks the panel and Undo covers it: no inline confirm.
+    expect(items.find((item) => item.id === 'remove')?.confirm).toBeUndefined();
   });
 
   it('lists the docks, main, then every OTHER page in the Move to submenu', () => {
@@ -56,7 +58,7 @@ describe('buildPanelMenuItems', () => {
     const byId = Object.fromEntries(items.map((item) => [item.id, item]));
     expect(byId.move.disabled).toBe(true);
     expect(byId.save.disabled).toBe(true);
-    expect(byId.close.disabled).toBe(true);
+    expect(byId.remove.disabled).toBe(true);
     expect(byId.maximize.disabled).toBeFalsy();
     expect(byId.collapse.disabled).toBeFalsy();
   });
@@ -76,11 +78,12 @@ describe('buildPanelMenuItems', () => {
   });
 
   it('respects locked / not closable / not collapsible panels', () => {
+    // Locked = cannot leave the layout: it moves, but cannot be removed.
     const locked = buildPanelMenuItems({ panel: panel({ locked: true }), editMode: true, maximized: false, pages, actions: actions() });
-    expect(locked.find((item) => item.id === 'move')?.disabled).toBe(true);
-    expect(locked.find((item) => item.id === 'close')?.disabled).toBe(true);
+    expect(locked.find((item) => item.id === 'move')?.disabled).toBe(false);
+    expect(locked.find((item) => item.id === 'remove')?.disabled).toBe(true);
     const fixed = buildPanelMenuItems({ panel: panel({ closable: false, collapsible: false }), editMode: true, maximized: false, pages, actions: actions() });
-    expect(fixed.find((item) => item.id === 'close')?.disabled).toBe(true);
+    expect(fixed.find((item) => item.id === 'remove')?.disabled).toBe(true);
     expect(fixed.find((item) => item.id === 'collapse')?.disabled).toBe(true);
   });
 
@@ -91,7 +94,7 @@ describe('buildPanelMenuItems', () => {
     expect(a.toggleMaximize).toHaveBeenCalledTimes(1);
     expect(a.toggleCollapse).toHaveBeenCalledTimes(1);
     expect(a.save).toHaveBeenCalledTimes(1);
-    expect(a.close).toHaveBeenCalledTimes(1);
+    expect(a.remove).toHaveBeenCalledTimes(1);
   });
 });
 

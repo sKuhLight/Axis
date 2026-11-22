@@ -6,8 +6,8 @@ import {
   importPageLayoutPackage,
   PAGE_LAYOUT_PACKAGE_KIND
 } from '../layoutPackage';
-import type { WorkbenchDocument, WorkbenchPage, WorkbenchPageLayout } from '../schema';
-import { activeWorkbenchPage, panelIdsInPageDock, selectActiveLayout } from '../selectors';
+import type { PanelInstance, WorkbenchDocument, WorkbenchPage, WorkbenchPageLayout } from '../schema';
+import { activeWorkbenchPage, panelIdsInPageDock, selectActiveLayout, selectPanelPlacement } from '../selectors';
 
 const doc = (): WorkbenchDocument =>
   createEmptyWorkbenchDocument({
@@ -118,7 +118,7 @@ describe('pageLayout store', () => {
     expect(two.label).toBe('Two');
   });
 
-  it('replaces the target page dock, dropping its previous panels', () => {
+  it('replaces the target page dock: an identical instance is reused, the rest is PARKED (never deleted)', () => {
     let d = seeded();
     d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d) }).next;
     // Give page one a second panel, then apply the (one-panel) layout back onto it.
@@ -130,11 +130,179 @@ describe('pageLayout store', () => {
     expect(panelIdsInPageDock(layout(d).pages['page.one']).sort()).toEqual(['panel.a', 'panel.b']);
 
     const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' });
+    expect(r.success).toBe(true);
     const l = layout(r.next);
-    // Old panels gone from the layout entirely; exactly one (re-minted) remains on the page.
-    expect(l.panels['panel.a']).toBeUndefined();
-    expect(l.panels['panel.b']).toBeUndefined();
-    expect(panelIdsInPageDock(l.pages['page.one']).length).toBe(1);
+    // panel.a matches the stored panel (type + title + state) → reused, no copy.
+    expect(panelIdsInPageDock(l.pages['page.one'])).toEqual(['panel.a']);
+    // panel.b is parked: still in the roster, on no page.
+    expect(l.panels['panel.b']).toBeDefined();
+    expect(selectPanelPlacement(l, 'panel.b')).toEqual({ kind: 'parked' });
+    expect(Object.keys(l.panels).sort()).toEqual(['panel.a', 'panel.b']);
+  });
+});
+
+describe('pageLayout.apply never deletes or duplicates', () => {
+  const keyed = (id: string, extra: Partial<PanelInstance> = {}): PanelInstance => ({
+    id,
+    type: 'test.grid',
+    title: 'Grid',
+    singletonKey: 'grid',
+    locked: true,
+    closable: false,
+    ...extra
+  });
+
+  /** page one: [grid (keyed, locked), custom (owns a widget)]; page two empty; one stored layout of page one. */
+  function withGrid(): WorkbenchDocument {
+    let d = doc();
+    d = reduceWorkbenchDocument(d, { type: 'page.add', page: page('page.two', 'Two') }).next;
+    d = reduceWorkbenchDocument(d, { type: 'panel.add', panel: keyed('grid'), region: 'main' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d, 'pl.grid', 'Grid layout') }).next;
+    d = reduceWorkbenchDocument(d, { type: 'panel.add', panel: { id: 'custom', type: 'x.customPanel', title: 'Custom' }, region: 'right' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'zone.ensure', zone: { id: 'panel:custom', orientation: 'free' } }).next;
+    d = reduceWorkbenchDocument(d, {
+      type: 'widget.add',
+      widget: { id: 'w.custom', type: 'w', zone: 'panel:custom', order: 0, size: 'default' },
+      zone: 'panel:custom'
+    }).next;
+    return d;
+  }
+
+  it('maps a stored single-instance panel onto THE instance with that key (no keyless copy)', () => {
+    const r = reduceWorkbenchDocument(withGrid(), { type: 'pageLayout.apply', pageLayoutId: 'pl.grid' });
+    expect(r.success).toBe(true);
+    const l = layout(r.next);
+    expect(panelIdsInPageDock(l.pages['page.one'])).toEqual(['grid']);
+    expect(Object.values(l.panels).filter((p) => p.type === 'test.grid')).toHaveLength(1);
+    expect(l.panels.grid).toMatchObject({ singletonKey: 'grid', locked: true });
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('an instance docked on ANOTHER page stays there and is reported', () => {
+    let d = withGrid();
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.grid' });
+    expect(r.success).toBe(true);
+    const l = layout(r.next);
+    expect(panelIdsInPageDock(l.pages['page.one'])).toContain('grid');
+    expect(panelIdsInPageDock(l.pages['page.two'])).toEqual([]);
+    expect(r.warnings).toEqual(['1 panel stays on another page']);
+  });
+
+  it('creates the keyed instance when none exists', () => {
+    let d = withGrid();
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'page.remove', pageId: 'page.one' }).next; // grid parked
+    // Simulate an old document that lost it (locked: hard-delete via repair-free edit).
+    const lost = structuredClone(d);
+    delete layout(lost).panels.grid;
+    const r = reduceWorkbenchDocument(lost, { type: 'pageLayout.apply', pageLayoutId: 'pl.grid' });
+    expect(r.success).toBe(true);
+    const created = Object.values(layout(r.next).panels).filter((p) => p.singletonKey === 'grid');
+    expect(created).toHaveLength(1);
+    expect(panelIdsInPageDock(layout(r.next).pages['page.two'])).toEqual([created[0].id]);
+  });
+
+  it('parks the target page panels the new dock does not use; custom panels keep their widgets', () => {
+    const r = reduceWorkbenchDocument(withGrid(), { type: 'pageLayout.apply', pageLayoutId: 'pl.grid' });
+    const l = layout(r.next);
+    expect(selectPanelPlacement(l, 'custom')).toEqual({ kind: 'parked' });
+    expect(l.zones['panel:custom']).toBeDefined();
+    expect(l.widgets['w.custom'].zone).toBe('panel:custom');
+  });
+
+  it('applying the same layout twice creates nothing new (keyless panels are reused)', () => {
+    let d = seeded();
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d) }).next;
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' }).next;
+    const once = Object.keys(layout(d).panels).sort();
+    const docked = panelIdsInPageDock(layout(d).pages['page.two']);
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' }).next;
+    expect(Object.keys(layout(d).panels).sort()).toEqual(once);
+    expect(panelIdsInPageDock(layout(d).pages['page.two'])).toEqual(docked);
+    // Page one's panel.a (identical, but on another page) was never taken.
+    expect(panelIdsInPageDock(layout(d).pages['page.one'])).toEqual(['panel.a']);
+  });
+
+  it('a parked identical keyless panel is reused before a copy is minted', () => {
+    let d = seeded();
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d) }).next;
+    d = reduceWorkbenchDocument(d, { type: 'panel.remove', panelId: 'panel.a' }).next; // parked
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' });
+    expect(panelIdsInPageDock(layout(r.next).pages['page.two'])).toEqual(['panel.a']);
+    expect(Object.keys(layout(r.next).panels)).toEqual(['panel.a']);
+  });
+
+  it('prefers the target page\'s own custom panel over an empty parked twin (never swaps a panel with widgets for an empty one)', () => {
+    const custom = (id: string): PanelInstance => ({ id, type: 'x.customPanel', title: 'Custom Panel' });
+    let d = doc();
+    d = reduceWorkbenchDocument(d, { type: 'page.add', page: page('page.two', 'Two') }).next;
+    // Store a layout of page one holding one (empty) custom panel.
+    d = reduceWorkbenchDocument(d, { type: 'panel.add', panel: custom('c.stored'), region: 'main' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d, 'pl.c', 'Custom') }).next;
+    d = reduceWorkbenchDocument(d, { type: 'panel.remove', panelId: 'c.stored' }).next; // an EMPTY parked twin
+    // Page one now carries custom panel A WITH a widget.
+    d = reduceWorkbenchDocument(d, { type: 'panel.add', panel: custom('c.A'), region: 'main' }).next;
+    d = reduceWorkbenchDocument(d, { type: 'zone.ensure', zone: { id: 'panel:c.A', orientation: 'free' } }).next;
+    d = reduceWorkbenchDocument(d, {
+      type: 'widget.add',
+      widget: { id: 'w.A', type: 'w', zone: 'panel:c.A', order: 0, size: 'default' },
+      zone: 'panel:c.A'
+    }).next;
+    const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.c' });
+    const l = layout(r.next);
+    expect(panelIdsInPageDock(l.pages['page.one'])).toEqual(['c.A']);
+    expect(l.widgets['w.A'].zone).toBe('panel:c.A');
+    expect(selectPanelPlacement(l, 'c.stored')).toEqual({ kind: 'parked' });
+  });
+
+  it('a parked twin that carries widgets is never reused; an absent state equals {}', () => {
+    let d = seeded();
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(d) }).next;
+    d = reduceWorkbenchDocument(d, { type: 'panel.remove', panelId: 'panel.a' }).next; // parked...
+    d = reduceWorkbenchDocument(d, { type: 'zone.ensure', zone: { id: 'panel:panel.a', orientation: 'free' } }).next;
+    d = reduceWorkbenchDocument(d, {
+      type: 'widget.add',
+      widget: { id: 'w.a', type: 'w', zone: 'panel:panel.a', order: 0, size: 'default' },
+      zone: 'panel:panel.a'
+    }).next; // ...but carrying a widget
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' });
+    const docked = panelIdsInPageDock(layout(r.next).pages['page.two']);
+    expect(docked).toHaveLength(1);
+    expect(docked[0]).not.toBe('panel.a');
+
+    // state {} on the live twin matches the stored panel without a state.
+    let e = seeded();
+    e = reduceWorkbenchDocument(e, { type: 'pageLayout.save', pageLayout: pageLayoutFrom(e) }).next;
+    e = reduceWorkbenchDocument(e, { type: 'panel.close', panelId: 'panel.a' }).next;
+    e = reduceWorkbenchDocument(e, { type: 'panel.create', panel: { id: 'panel.z', type: 'test.panel', title: 'A', state: {} } }).next;
+    e = reduceWorkbenchDocument(e, { type: 'page.activate', pageId: 'page.two' }).next;
+    expect(panelIdsInPageDock(layout(reduceWorkbenchDocument(e, { type: 'pageLayout.apply', pageLayoutId: 'pl.1' }).next).pages['page.two'])).toEqual([
+      'panel.z'
+    ]);
+  });
+
+  it('counts a single-instance panel kept on another page once, even when the stored layout references it twice', () => {
+    let d = withGrid();
+    // A stored layout with two entries carrying the same key.
+    const stored = structuredClone(d.pageLayouts['pl.grid']);
+    stored.id = 'pl.twice';
+    stored.panels['grid.twin'] = { ...stored.panels.grid, id: 'grid.twin' };
+    stored.page.dock.root.right = { kind: 'tabs', id: 'tabs.twin', activePanelId: 'grid.twin', panelIds: ['grid.twin'] };
+    d = reduceWorkbenchDocument(d, { type: 'pageLayout.save', pageLayout: stored }).next;
+    d = reduceWorkbenchDocument(d, { type: 'page.activate', pageId: 'page.two' }).next;
+    expect(reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.twice' }).warnings).toEqual(['1 panel stays on another page']);
+  });
+
+  it('keeps the target page identity and is one undoable step (rejects an unknown target page)', () => {
+    let d = withGrid();
+    const r = reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.grid' });
+    expect(layout(r.next).pages['page.one'].label).toBe('One');
+    d = r.next;
+    expect(reduceWorkbenchDocument(d, { type: 'pageLayout.apply', pageLayoutId: 'pl.grid', pageId: 'nope' }).error?.code).toBe('missing-page');
   });
 });
 

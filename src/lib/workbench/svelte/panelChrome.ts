@@ -21,7 +21,8 @@ export interface PanelMenuActions {
   toggleMaximize: () => void;
   toggleCollapse: () => void;
   save: () => void;
-  close: () => void;
+  /** Remove from page: parks the panel (`panel.remove`); it stays in Add panel. */
+  remove: () => void;
 }
 
 export interface PanelMenuInput {
@@ -38,10 +39,16 @@ export interface PanelMenuInput {
 
 const noop = () => {};
 
+/** Label (and title / aria-label) of the panel header × and the ⋯ menu row. */
+export const PANEL_REMOVE_LABEL = 'Remove from page';
+
 /**
  * The panel ⋯ menu: Move to ▸ (docks, main, other pages) · Maximize/Restore ·
- * Collapse/Expand · Save To Library · Close Panel. Moving, saving and closing
- * are edit-mode actions; maximize and collapse work in both modes.
+ * Collapse/Expand · Save To Library · Remove from page. Moving, saving and
+ * removing are edit-mode actions; maximize and collapse work in both modes.
+ * Removing PARKS the panel (never deletes it) — Undo covers it, so no confirm.
+ * Locked = cannot LEAVE the layout: a locked panel can still be moved (Move to
+ * stays enabled), but not removed or saved as a template.
  */
 export function buildPanelMenuItems(input: PanelMenuInput): WorkbenchMenuItem[] {
   const { panel, editMode, actions } = input;
@@ -65,7 +72,7 @@ export function buildPanelMenuItems(input: PanelMenuInput): WorkbenchMenuItem[] 
     )
   ];
   return [
-    { id: 'move', kind: 'submenu', label: 'Move to', disabled: !editable, run: noop, items: moveItems },
+    { id: 'move', kind: 'submenu', label: 'Move to', disabled: !editMode, run: noop, items: moveItems },
     {
       id: 'maximize',
       label: input.maximized ? 'Restore Panel' : 'Maximize Panel',
@@ -83,12 +90,12 @@ export function buildPanelMenuItems(input: PanelMenuInput): WorkbenchMenuItem[] 
     },
     { id: 'save', label: 'Save To Library', separatorBefore: true, disabled: !editable, run: actions.save },
     {
-      id: 'close',
-      label: 'Close Panel',
+      id: 'remove',
+      label: PANEL_REMOVE_LABEL,
       danger: true,
       separatorBefore: true,
       disabled: !editable || panel.closable === false,
-      run: actions.close
+      run: actions.remove
     }
   ];
 }

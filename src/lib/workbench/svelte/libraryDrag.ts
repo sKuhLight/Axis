@@ -32,7 +32,7 @@ import {
 } from './drag';
 import { beginPointerDrag } from './dragSession';
 import { dockTargetFor } from './dockDropTarget';
-import { beginDockDropSession } from './panelDrag';
+import { beginDockDropSession, type DockDropCommitResult } from './panelDrag';
 
 /** A widget id no live widget can hold — marks the drag as a not-yet-created item. */
 const DRAG_OUT_WIDGET_ID = '__aw-drag-out__';
@@ -156,11 +156,19 @@ export function startPanelDragOut(options: PanelDragOutOptions): void {
     commit: (target) => {
       const to = dockTargetFor(target);
       if (!to || target.kind === 'page') return false;
-      const commands = commit({ region: target.region, target: to });
-      if (!commands || !commands.length) return false;
-      // A refused instantiation (e.g. a duplicate singleton) keeps the reducer's
-      // error on lastResult — the edit bar shows it — instead of "Drag cancelled".
-      return controller.dispatchMany(commands).success ? true : 'refused';
+      return commitPanelDragOut(controller, commit({ region: target.region, target: to }));
     }
   });
+}
+
+/**
+ * Dispatch a drag-out drop's commands as ONE batch. Nothing to run counts as
+ * cancelled (`false`); a batch the reducer refuses keeps its error on
+ * `lastResult` — the edit bar shows it — and reports `'refused'` (not "Drag
+ * cancelled"). The panel catalog cannot produce a refusal any more (single
+ * instances are moved, never copied), so this path is covered by unit tests.
+ */
+export function commitPanelDragOut(controller: WorkbenchController, commands: WorkbenchCommand[] | null): DockDropCommitResult {
+  if (!commands || !commands.length) return false;
+  return controller.dispatchMany(commands).success ? true : 'refused';
 }

@@ -162,6 +162,9 @@ export function axisActiveLayoutPresetKind(layout: WorkbenchLayout | undefined):
  * inline confirm. A row is checked only when its tab kind IS the active preset,
  * so none is checked on a tablet / mobile seed; the checked row is a no-op
  * (re-applying it silently would replace the layout — Reset is the explicit way).
+ * Switching to a DIFFERENT preset replaces the whole layout (custom pages,
+ * custom and parked panels are not carried over), so it asks inline first,
+ * like Reset; Undo brings the old layout back.
  */
 export function buildAxisLayoutMenuItems(controller: WorkbenchController): WorkbenchMenuItem[] {
   const active = axisActiveLayoutPresetKind(controller.activeLayout);
@@ -175,12 +178,17 @@ export function buildAxisLayoutMenuItems(controller: WorkbenchController): Workb
         label: axisLayoutPresetLabel(kind),
         checked: kind === active,
         className: 'axis-preset-tab',
-        run:
-          kind === active
-            ? noop
-            : () => {
+        ...(kind === active
+          ? { run: noop }
+          : {
+              confirm: {
+                prompt: `Switch to “${axisLayoutPresetLabel(kind)}”? This replaces your layout. Undo brings it back.`,
+                confirmLabel: 'Switch'
+              },
+              run: () => {
                 applyAxisLayoutPreset(controller, kind);
               }
+            })
       })
     ),
     {

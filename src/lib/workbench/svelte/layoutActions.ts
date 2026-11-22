@@ -113,13 +113,18 @@ export function savePageAsLayout(controller: WorkbenchController): WorkbenchLayo
     : fail(result.error?.message ?? 'Could not save the page layout.');
 }
 
-/** Apply a stored page layout ONTO the active page. */
+/**
+ * Apply a stored page layout ONTO the active page. Nothing is deleted: panels
+ * the layout does not use are parked, and a single-instance panel that lives on
+ * another page stays there — the notice says how many.
+ */
 export function applySavedPageLayout(controller: WorkbenchController, pageLayoutId: string): WorkbenchLayoutActionStatus {
   const entry = controller.document.pageLayouts?.[pageLayoutId];
   const activePage = selectActivePage(controller.document);
   const result = controller.applyPageLayout(pageLayoutId);
-  if (result.success) return ok(`Applied “${entry?.label ?? 'layout'}” to ${activePage?.label ?? 'this page'}.`);
-  return fail(result.error?.message ?? 'Could not apply layout.');
+  if (!result.success) return fail(result.error?.message ?? 'Could not apply layout.');
+  const applied = `Applied “${entry?.label ?? 'layout'}” to ${activePage?.label ?? 'this page'}.`;
+  return ok(result.warnings?.length ? `${applied} ${result.warnings.join(' · ')}.` : applied);
 }
 
 // ── Export ──────────────────────────────────────────────────────────────────

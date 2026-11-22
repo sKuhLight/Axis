@@ -4,7 +4,7 @@ import type {
   WorkbenchDocument,
   WorkbenchLayout
 } from '../workbench/core';
-import { activeWorkbenchPage, selectActiveLayout } from '../workbench/core';
+import { activeWorkbenchPage, panelIdsInPageDock, selectActiveLayout } from '../workbench/core';
 import { AXIS_MOBILE_BLOCK_EXPAND_RATIO } from './axisMobileBlockFlowConstants';
 
 /**
@@ -111,9 +111,15 @@ function findGridModeWidget(layout: WorkbenchLayout): GridModeWidgetRef | null {
   return { id: widget.id, zone: widget.zone, mode: readGridMode(widget.state?.mode) };
 }
 
-/** True when the active layout docks a block editor panel (so expanding is meaningful). */
+/**
+ * True when the ACTIVE page docks a block editor panel (so expanding is
+ * meaningful). A parked editor (removed from the page, or its page deleted)
+ * is in `layout.panels` but on no page — it must not count.
+ */
 function hasBlockEditorPanel(layout: WorkbenchLayout): boolean {
-  return Object.values(layout.panels ?? {}).some((p) => p?.type === AXIS_BLOCK_EDITOR_PANEL_TYPE);
+  const page = activeWorkbenchPage(layout);
+  if (!page) return false;
+  return panelIdsInPageDock(page).some((id) => layout.panels?.[id]?.type === AXIS_BLOCK_EDITOR_PANEL_TYPE);
 }
 
 function currentBottomSizePx(layout: WorkbenchLayout): number | null {

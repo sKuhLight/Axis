@@ -25,6 +25,9 @@ import { axisWidgetAvailable } from './widgets/widgetAvailability';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
+import { AXIS_PANEL_CATALOG_HIDDEN_TYPES, axisCanonicalPanels } from './axisPanelCatalog';
+import { axisPageHints } from './axisDefaultPages';
+import { AXIS_PAGE_CONVERT } from './axisWorkbenchPages';
 import { editor } from '../editor.svelte';
 import { axisWorkbenchController } from './axisWorkbenchStore.svelte';
 import {
@@ -100,6 +103,17 @@ registry.registerNavigationState({
   isActive: (entryId) =>
     isAxisNavigationEntryActive({ themeOpen: editor.themeOpen, accountOpen: editor.axisOpen }, entryId)
 });
+
+// Slice 3 — panels and pages are never lost. The Library's panel catalog lists
+// every instance (docked / parked) plus every canonical Axis panel that has no
+// instance (so a panel an old document lost can be added again); the converter
+// page's internal panels stay out while docked. Page hints: a restored default
+// page whose panel lives on another page shows "… is on page … · Bring it here".
+registry.registerPanelCatalogProvider({ canonical: axisCanonicalPanels, hiddenTypes: AXIS_PANEL_CATALOG_HIDDEN_TYPES });
+registry.registerPageHints(axisPageHints);
+// The converter page hosts the preset-convert flow (ConvertDialog activates it):
+// it cannot be deleted (Reset to default still rebuilds its dock).
+registry.registerPageProtection((page) => (page.id === AXIS_PAGE_CONVERT ? 'Used by the preset converter' : null));
 
 AXIS_WORKBENCH_NAVIGATION_IDS.forEach((id) =>
   registry.registerNavigation({ id, component: AxisWorkbenchNavigationEntry })

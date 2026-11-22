@@ -3,6 +3,7 @@ import type {
   DockNode,
   DockRegionId,
   NavigationEntryState,
+  PanelInstance,
   TabStackDockNode,
   WidgetGroup,
   WidgetInstance,
@@ -88,6 +89,30 @@ export function panelIdsInPageDock(page: WorkbenchPage): string[] {
 /** Panel ids docked anywhere in the layout — the union across ALL pages. */
 export function allPanelIdsInDock(layout: WorkbenchLayout): string[] {
   return orderedWorkbenchPages(layout).flatMap(panelIdsInPageDock);
+}
+
+/**
+ * Where a panel instance lives: docked on exactly one page, or PARKED (in the
+ * roster, on no page — after "Remove from page", a page delete, or
+ * `panel.create`). `undefined` for a panel the layout does not have.
+ */
+export type PanelPlacement = { kind: 'docked'; pageId: string } | { kind: 'parked' };
+
+export function selectPanelPlacement(layout: WorkbenchLayout | undefined, panelId: string): PanelPlacement | undefined {
+  if (!layout?.panels?.[panelId]) return undefined;
+  for (const page of orderedWorkbenchPages(layout)) {
+    if (panelIdsInPageDock(page).includes(panelId)) return { kind: 'docked', pageId: page.id };
+  }
+  return { kind: 'parked' };
+}
+
+/** Panel instances docked on no page, by title then id. */
+export function selectParkedPanels(layout: WorkbenchLayout | undefined): PanelInstance[] {
+  if (!layout) return [];
+  const docked = new Set(allPanelIdsInDock(layout));
+  return Object.values(layout.panels ?? {})
+    .filter((panel) => !docked.has(panel.id))
+    .sort((a, b) => (a.title ?? a.type).localeCompare(b.title ?? b.type) || a.id.localeCompare(b.id));
 }
 
 export function findTabStackById(node: DockNode | null, tabStackId: string): TabStackDockNode | undefined {

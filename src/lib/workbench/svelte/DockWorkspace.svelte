@@ -11,6 +11,7 @@
     type DockRegionId
   } from '../core';
   import { fullRegionHighlightRect, type WorkbenchRect } from './drag';
+  import { shouldShowPageHints, type WorkbenchPageHint } from './renderRegistry';
 
   const { controller, registry } = getWorkbenchContext();
   let mobileDock = $state<DockRegionId | null>(null);
@@ -24,6 +25,23 @@
   // Repair-safe read (unknown => fixed). Edit mode reverts to fixed so every
   // region stays reachable for rearranging (see contentMode.ts).
   const pagesMode = $derived(isPagesLayout(resolveLayoutContentMode(layout), $controller.editMode));
+
+  // Page hints (app provider, e.g. "Preset Browser is on page Grid · Bring it
+  // here"): a slim bar ABOVE the workspace — always while editing, in view mode
+  // only while the page's main region is empty (shouldShowPageHints). Outside
+  // `.aw-workspace`, so drag geometry (measured from the workspace) is
+  // unaffected. An action runs as ONE batch.
+  const pageHints = $derived.by<WorkbenchPageHint[]>(() => {
+    const page = $controller.activePage;
+    const hints = registry.pageHints(layout, page);
+    return shouldShowPageHints({ count: hints.length, editMode: $controller.editMode, mainEmpty: !page?.dock.root.main })
+      ? hints
+      : [];
+  });
+  function runPageHint(hint: WorkbenchPageHint) {
+    const commands = hint.commands?.() ?? [];
+    if (commands.length) controller.dispatchMany(commands);
+  }
 
   // T23: phone flag (matches the 760px CSS breakpoint) — gates bottom-sheet
   // swipe-to-close on the dock drawers. matchMedia keeps it observer-free.
@@ -122,6 +140,21 @@
     });
   }
 </script>
+
+{#if pageHints.length}
+  <div class="aw-page-hints" role="status" data-page-hints>
+    {#each pageHints as hint (hint.id)}
+      <p class="aw-page-hint" data-page-hint={hint.id}>
+        <span class="aw-page-hint-glyph" aria-hidden="true">ⓘ</span>
+        <span class="aw-page-hint-text">{hint.text}</span>
+        {#if hint.actionLabel && hint.commands}
+          <span class="aw-page-hint-sep" aria-hidden="true">{'·'}</span>
+          <button class="aw-page-hint-btn" type="button" data-page-hint-action onclick={() => runPageHint(hint)}>{hint.actionLabel}</button>
+        {/if}
+      </p>
+    {/each}
+  </div>
+{/if}
 
 <section
   class="aw-workspace"
@@ -227,6 +260,57 @@
     background:
       linear-gradient(rgba(255, 255, 255, 0.015), transparent 120px),
       var(--aw-bg);
+  }
+  .aw-page-hints {
+    flex: none;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--aw-accent) 24%, var(--aw-border));
+    background: color-mix(in srgb, var(--aw-accent) 7%, var(--aw-bg-2));
+  }
+  .aw-page-hint {
+    margin: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--aw-text-2);
+    font: 600 12px/1.4 var(--aw-font-ui);
+  }
+  .aw-page-hint-glyph {
+    flex: none;
+    color: var(--aw-accent);
+  }
+  .aw-page-hint-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .aw-page-hint-sep {
+    flex: none;
+    color: var(--aw-text-faint);
+  }
+  .aw-page-hint-btn {
+    flex: none;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid color-mix(in srgb, var(--aw-accent) 45%, var(--aw-border));
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--aw-accent) 12%, transparent);
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 700 11.5px/1 var(--aw-font-ui);
+  }
+  .aw-page-hint-btn:hover {
+    border-color: var(--aw-accent);
+  }
+  .aw-page-hint-btn:focus-visible {
+    outline: 2px solid var(--aw-accent);
+    outline-offset: 2px;
   }
   .aw-workspace-center {
     flex: 1;

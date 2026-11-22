@@ -7,6 +7,7 @@ export * from './ids';
 export * from './invariants';
 export * from './layoutPackage';
 export * from './migrations';
+export * from './panelCatalog';
 export * from './parameterSources';
 export * from './profiles';
 export * from './reducer';

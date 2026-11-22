@@ -179,7 +179,7 @@ test.describe('Edit bar · 1440×900', () => {
 
     await openEditBarMenu(page, 'page');
     await openMenu(page).getByRole('menuitem', { name: 'Delete page' }).click();
-    await expect(openMenu(page)).toContainText('Delete “Grid”? Undo brings it back.');
+    await expect(openMenu(page)).toContainText('Delete “Grid”? Its panels stay available in Add panel. Undo brings the page back.');
     await expect(gridNav).toHaveCount(1); // nothing deleted yet
     await openMenu(page).getByRole('menuitem', { name: 'Cancel' }).click();
     await expect(openMenu(page).getByRole('menuitem', { name: 'Delete page' })).toBeVisible();
@@ -278,6 +278,8 @@ test.describe('Edit bar · 1440×900', () => {
     // Presets apply from the menu; the layout shortcuts undo/redo them.
     await openEditBarMenu(page, 'layout');
     await openMenu(page).getByRole('menuitemradio', { name: 'Studio' }).click();
+    await expect(openMenu(page)).toContainText('Switch to “Studio”? This replaces your layout.');
+    await openMenu(page).getByRole('menuitem', { name: 'Switch', exact: true }).click();
     await expect(editBarControl(page, 'layout')).toContainText('Studio');
     await page.keyboard.press('Control+z');
     await expect(editBarControl(page, 'layout')).toContainText('Default');
@@ -357,7 +359,10 @@ test.describe('Edit bar · 1440×900', () => {
     expect(await menuInViewport(page)).toBe(true);
 
     const navCount = await page.locator('[data-nav-entry]').count();
+    // Add page is a submenu now: missing default pages (none here) · Blank page.
     await openMenu(page).getByRole('menuitem', { name: 'Add page' }).click();
+    await expect(openMenu(page)).toContainText('All default pages are there');
+    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
     await expect(page.locator('[data-nav-entry]')).toHaveCount(navCount + 1);
     await expect(editBarControl(page, 'page')).toContainText(/Page \d+/);
 

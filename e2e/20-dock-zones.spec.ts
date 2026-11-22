@@ -409,11 +409,12 @@ test.describe('Dock zones (slice 2)', () => {
     expect(rects.some((r) => near(r, info.land)), `landing ${fmt(info.land)} vs ${rects.map(fmt).join(' | ')}`).toBe(true);
   });
 
-  test('a refused library drop shows the reducer error instead of "Drag cancelled"', async ({ page }) => {
+  test('a singleton template dropped from the library moves the existing panel instead of being refused', async ({ page }) => {
     await editReady(page);
     await openEditBarMenu(page, 'page');
     await openMenu(page).getByRole('menuitem', { name: 'Manage pages and templates…' }).click();
-    // Block Editor is a singleton that is already docked: its template is refused.
+    // Block Editor is a singleton that is already docked: its template used to be
+    // refused as a duplicate; the catalog now moves the one instance to the drop.
     const grab = page.locator('.aw-lib-row.saved .aw-lib-grab').filter({ hasText: 'Block Editor' }).first();
     test.skip((await grab.count()) === 0, 'no Block Editor template in the library');
     await grab.scrollIntoViewIfNeeded();
@@ -427,8 +428,11 @@ test.describe('Dock zones (slice 2)', () => {
     await hover(page, { x: grid.x + grid.width * 0.9, y: grid.y + grid.height * 0.5 });
     await page.mouse.up();
 
-    await expect(page.locator('[data-editbar] [role="alert"]')).toContainText(/already exists/i);
+    await expect(page.locator('[data-editbar] [role="alert"]')).toHaveCount(0);
     await expect(page.getByText(/Drag cancelled/i)).toHaveCount(0);
+    // Still exactly one Block Editor, now beside the Signal Grid (moved out of the bottom dock).
+    await expect(page.locator('.aw-workspace .aw-pane-tab').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+    await expect(page.locator('.aw-tabstack[data-region="bottom"]')).toHaveCount(0);
   });
 
   test('an edge drop on an occupied region lands exactly on its outer half', async ({ page }) => {

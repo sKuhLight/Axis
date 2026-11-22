@@ -109,6 +109,18 @@ describe('decideAxisMobileBlockFlow — enter (phone, block opens)', () => {
   });
 });
 
+describe('decideAxisMobileBlockFlow — parked block editor', () => {
+  it('a PARKED block editor (removed from the page) does not count: tapping a block does nothing', () => {
+    const doc = docFromPreset('mobile');
+    const editorId = Object.values(activeLayout(doc).panels).find((p) => p.type === 'axis.blockEditor')!.id;
+    const parked = apply(doc, [{ type: 'panel.remove', panelId: editorId }]);
+    expect(activeLayout(parked).panels[editorId]).toBeDefined();
+    const { commands, memory } = decideAxisMobileBlockFlow(input({ doc: parked, blockOpen: true }), createAxisMobileBlockFlowMemory());
+    expect(commands).toEqual([]);
+    expect(memory.expanded).toBe(false);
+  });
+});
+
 describe('decideAxisMobileBlockFlow — leave (block minimized/closed)', () => {
   it('restores the prev bottom size + grid mode + grid zone', () => {
     const doc = docFromPreset('mobile');

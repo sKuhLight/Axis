@@ -42,7 +42,8 @@ test.describe('Edit mode', () => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
 
-    // In edit mode a closable panel gains a Close (×) mini-action in its header.
-    await expect(page.locator('.aw-pane-btn.danger[title="Close panel"]').first()).toBeVisible();
+    // In edit mode a removable panel gains a "Remove from page" (×) mini-action in its header.
+    await expect(page.locator('.aw-pane-btn.danger[title="Remove from page"]').first()).toBeVisible();
+    await expect(page.locator('.aw-pane-btn.danger[aria-label="Remove from page"]').first()).toBeVisible();
   });
 });

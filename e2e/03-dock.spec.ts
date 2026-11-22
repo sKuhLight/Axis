@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, exitEditMode, clickNav, collapseRail, regionTabs } from './support/workbench';
+import {
+  bootCleanWorkbench,
+  enterEditMode,
+  exitEditMode,
+  clickNav,
+  collapseRail,
+  editBarControl,
+  openMenu,
+  regionTabs
+} from './support/workbench';
 
 test.describe('Dock interactions', () => {
   test('drag a panel tab from bottom into the main region', async ({ page }) => {
@@ -64,7 +73,7 @@ test.describe('Dock interactions', () => {
     await expect(mainTabs.filter({ hasText: 'Block Editor' })).not.toHaveClass(/active/);
   });
 
-  test('collapse and close a panel from the pane header menu', async ({ page }) => {
+  test('collapse a panel and remove it from the page via the pane header menu; it comes back from the catalog', async ({ page }) => {
     await bootCleanWorkbench(page);
     await clickNav(page, 'setup');
     await enterEditMode(page);
@@ -73,8 +82,8 @@ test.describe('Dock interactions', () => {
     await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();
     const menu = page.locator('.aw-context-menu');
     await expect(menu).toBeVisible();
-    // Slice 2 menu: Move to ▸ · Maximize · Collapse · Save · Close (every old item kept).
-    await expect(menu.locator('.aw-menu-item')).toContainText(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Close Panel']);
+    // Move to ▸ · Maximize · Collapse · Save · Remove from page (Close Panel became the parking "Remove from page").
+    await expect(menu.locator('.aw-menu-item')).toContainText(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Remove from page']);
 
     // Move to ▸ drills into the docks, Main and the other pages.
     await menu.getByRole('menuitem', { name: /Move to/ }).click();
@@ -93,9 +102,19 @@ test.describe('Dock interactions', () => {
     await strip.click();
     await expect(strip).toHaveCount(0);
 
-    // Re-open and close the panel; Setup tab disappears from the main stack.
+    // Re-open and remove the panel; the Setup tab disappears from the main stack…
     await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();
-    await page.locator('.aw-context-menu').getByRole('menuitem', { name: /Close Panel/ }).click();
+    await page.locator('.aw-context-menu').getByRole('menuitem', { name: /Remove from page/ }).click();
     await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(0);
+
+    // …but it is only parked: the catalog lists it as "not placed" and re-adds the same panel.
+    await editBarControl(page, 'add').click();
+    await openMenu(page).getByRole('menuitem', { name: 'Add panel…' }).click();
+    const row = page.locator('[data-panel-catalog] [data-catalog-entry="instance:axis.setup"]');
+    await expect(row).toHaveAttribute('data-catalog-status', 'not placed');
+    await row.locator('.aw-lib-grab').click();
+    await expect(row).toHaveAttribute('data-catalog-status', 'on this page');
+    await page.locator('.aw-lib-drawer .aw-lib-close').click();
+    await expect(regionTabs(page, 'main').filter({ hasText: 'Setup' })).toHaveCount(1);
   });
 });

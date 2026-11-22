@@ -59,6 +59,20 @@ describe('save / apply', () => {
     expect(status).toEqual({ tone: 'ok', message: `Applied “${saved.label}” to ${controller.activePage!.label}.` });
   });
 
+  it('says how many single-instance panels stay on other pages', () => {
+    const controller = createWorkbenchController(docWithPanel());
+    const pageId = controller.activePage!.id;
+    controller.dispatch({ type: 'panel.add', panel: { id: 'solo', type: 't.solo', title: 'Solo', singletonKey: 'solo' }, region: 'right' });
+    savePageAsLayout(controller);
+    const saved = controller.pageLayouts[0];
+    const other = controller.addPage({ label: 'Other' })!;
+    expect(controller.activePage!.id).toBe(other);
+    const status = applySavedPageLayout(controller, saved.id);
+    expect(status.tone).toBe('ok');
+    expect(status.message).toContain('1 panel stays on another page.');
+    expect(controller.document.layouts[controller.activeLayout!.id].pages[pageId]).toBeDefined();
+  });
+
   it('reports a failed apply as an error', () => {
     const controller = createWorkbenchController(docWithPanel());
     expect(applySavedPageLayout(controller, 'nope').tone).toBe('error');

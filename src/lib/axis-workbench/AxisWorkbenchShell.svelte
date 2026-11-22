@@ -21,6 +21,7 @@
     seedAxisProfiles,
     setAxisProfileOverride
   } from './axisWorkbenchLayoutActions';
+  import { createAxisPagesExtension } from './axisDefaultPages';
   import { editor } from '../editor.svelte';
   import {
     createAxisMobileBlockFlowMemory,
@@ -40,9 +41,12 @@
     restore: axisWorkbenchRestoreBackup
   });
 
-  // Axis contributions to the generic edit bar: the LAYOUT presets (+ reset) and
-  // the PROFILE control (Auto · Desktop · Tablet · Mobile). Read on every
-  // controller change; the pure builders live in axisWorkbenchLayoutActions.ts.
+  // Axis contributions to the generic edit bar: the LAYOUT presets (+ reset),
+  // the PROFILE control (Auto · Desktop · Tablet · Mobile), and the PAGES part
+  // (missing default pages in every "Add page" menu, Reset to default / Clear
+  // page — shared with the nav "+" and context menu). Read on every controller
+  // change; the pure builders live in axisWorkbenchLayoutActions.ts and
+  // axisDefaultPages.ts.
   const profileState = () =>
     resolveAxisProfileSwitcherState(
       axisWorkbenchController.profileOverride,
@@ -64,7 +68,13 @@
           id,
           typeof window !== 'undefined' ? window.innerWidth : undefined
         )
-    }
+    },
+    pages: createAxisPagesExtension({
+      getLayout: () => axisWorkbenchController.activeLayout,
+      dispatchMany: (commands) => {
+        axisWorkbenchController.dispatchMany(commands);
+      }
+    })
   };
 
   onMount(() => {

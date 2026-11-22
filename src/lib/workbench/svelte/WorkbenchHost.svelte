@@ -185,7 +185,7 @@
   }
 </script>
 
-<WorkbenchProvider {controller} {registry}>
+<WorkbenchProvider {controller} {registry} {editBar}>
   <div class={viewportClass} class:aw-preview={!!previewFrame} style={viewportStyle}>
   {#if $controller.editMode}
     <!-- The edit bar: full window width, in normal flow ABOVE the app, so the app

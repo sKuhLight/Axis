@@ -89,11 +89,12 @@
   }
 
   async function activateConvertPage() {
-    const [{ axisWorkbenchController }, { AXIS_PAGE_CONVERT }] = await Promise.all([
+    const [{ axisWorkbenchController }, { openAxisConvertPage }] = await Promise.all([
       import('./axis-workbench/axisWorkbenchStore.svelte'),
       import('./axis-workbench/axisWorkbenchPages')
     ]);
-    axisWorkbenchController.activatePage(AXIS_PAGE_CONVERT);
+    // Recreates the convert page first when this session's layout lacks it.
+    openAxisConvertPage(axisWorkbenchController);
   }
 
   function openInGrid() {

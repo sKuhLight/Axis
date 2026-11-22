@@ -4,6 +4,8 @@ import {
   EDIT_BAR_STATUS_DRAG,
   EDIT_BAR_STATUS_IDLE,
   buildAddMenuItems,
+  buildAddPageMenuItems,
+  deletePagePrompt,
   buildLayoutMenuItems,
   buildMoreMenuItems,
   buildPageMenuItems,
@@ -95,9 +97,34 @@ describe('PAGE menu', () => {
   it('asks inline before deleting, and cannot delete the last page', () => {
     const del = byId(buildPageMenuItems(pageInput()), 'page.delete');
     expect(del.danger).toBe(true);
-    expect(del.confirm).toEqual({ prompt: 'Delete “Presets”? Undo brings it back.', confirmLabel: 'Delete' });
+    expect(del.confirm).toEqual({
+      prompt: 'Delete “Presets”? Its panels stay available in Add panel. Undo brings the page back.',
+      confirmLabel: 'Delete'
+    });
+    expect(deletePagePrompt('Presets')).toBe(del.confirm?.prompt);
     const single = byId(buildPageMenuItems(pageInput({ pages: [{ id: 'p2', label: 'Presets' }], canDelete: false })), 'page.delete');
     expect(single.disabled).toBe(true);
+  });
+
+  it('disables Delete of a host-protected page with the reason', () => {
+    const del = byId(buildPageMenuItems(pageInput({ protectedReason: 'Used by the preset converter' })), 'page.delete');
+    expect(del).toMatchObject({ disabled: true, hint: 'Used by the preset converter' });
+  });
+
+  it('offers the host reset (inline confirm) right before Delete', () => {
+    const run = vi.fn();
+    const items = buildPageMenuItems(
+      pageInput({ reset: { label: 'Reset to default', prompt: 'Reset “Presets”?', confirmLabel: 'Reset', run } })
+    );
+    const ids = items.map((item) => item.id);
+    expect(ids.indexOf('page.reset')).toBe(ids.indexOf('page.delete') - 1);
+    const reset = byId(items, 'page.reset');
+    expect(reset).toMatchObject({ label: 'Reset to default', danger: true, separatorBefore: true });
+    expect(reset.confirm).toEqual({ prompt: 'Reset “Presets”?', confirmLabel: 'Reset' });
+    reset.run();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(byId(items, 'page.delete').separatorBefore).toBe(false);
+    expect(byId(buildPageMenuItems(pageInput()), 'page.delete').separatorBefore).toBe(true);
   });
 
   it('shows only the page list when no page is active', () => {
@@ -203,13 +230,31 @@ describe('PROFILE, Add and More menus', () => {
     expect(select).toHaveBeenCalledWith('desk');
   });
 
-  it('lists the Add actions', () => {
-    const actions = { addPanel: vi.fn(), addCustomPanel: vi.fn(), addWidget: vi.fn(), addPage: vi.fn(), openLibrary: vi.fn() };
-    const items = buildAddMenuItems({ pageLabel: 'Grid', actions });
+  it('lists the Add actions; Add page is a submenu', () => {
+    const actions = { addPanel: vi.fn(), addCustomPanel: vi.fn(), addWidget: vi.fn(), openLibrary: vi.fn() };
+    const blank = vi.fn();
+    const addPageItems = buildAddPageMenuItems({ blank });
+    const items = buildAddMenuItems({ pageLabel: 'Grid', actions, addPageItems });
     expect(items[0]).toMatchObject({ kind: 'header', label: 'Add to Grid' });
     expect(labels(items.slice(1))).toEqual(['Add panel…', 'Add custom panel', 'Add widget…', 'Add page', 'Open library']);
+    expect(byId(items, 'add.page')).toMatchObject({ kind: 'submenu', items: addPageItems });
     items.slice(1).forEach((item) => item.run());
     Object.values(actions).forEach((fn) => expect(fn).toHaveBeenCalledTimes(1));
+    expect(blank).not.toHaveBeenCalled();
+  });
+
+  it('Add page: host rows around the generic Blank page row', () => {
+    const blank = vi.fn();
+    expect(buildAddPageMenuItems({ blank }).map((item) => [item.id, item.label, item.separatorBefore])).toEqual([
+      ['addPage.blank', 'Blank page', false]
+    ]);
+    const lead: WorkbenchMenuItem = { id: 'h', kind: 'header', label: 'Missing default pages', run: () => {} };
+    const trail: WorkbenchMenuItem = { id: 't', label: 'Restore default pages (2)', run: () => {} };
+    const items = buildAddPageMenuItems({ host: { leading: [lead], trailing: [trail] }, blank });
+    expect(items.map((item) => item.id)).toEqual(['h', 'addPage.blank', 't']);
+    expect(byId(items, 'addPage.blank').separatorBefore).toBe(true);
+    byId(items, 'addPage.blank').run();
+    expect(blank).toHaveBeenCalledTimes(1);
   });
 
   it('builds one submenu per collapsed group, carrying its full menu', () => {

@@ -3,7 +3,13 @@
   import { selectVisibleNavigationEntries, type WorkbenchCommand } from '../core';
   import { createFailedActionPanelCommand, createMissingActionPanelCommand } from './actions';
   import ContextMenu from './ContextMenu.svelte';
-  import { menuPositionFromPointer, type WorkbenchMenuItem, type WorkbenchMenuPosition } from './contextMenu';
+  import {
+    menuPositionBelowRect,
+    menuPositionFromPointer,
+    type WorkbenchMenuItem,
+    type WorkbenchMenuPosition
+  } from './contextMenu';
+  import { buildAddPageMenuItems, deletePagePrompt } from './editBarMenus';
   import {
     canDeleteNavigationPage,
     canHideNavigationEntry,
@@ -14,7 +20,7 @@
     pageNavigationEntryActive
   } from './navigation';
 
-  const { controller, registry } = getWorkbenchContext();
+  const { controller, registry, editBar } = getWorkbenchContext();
   const entries = $derived(selectVisibleNavigationEntries($controller.document));
   // Active-section tint (01-shell.md §9). Page-bound entries resolve generically
   // (their page is the layout's activePageId — pageNavigationEntryActive); all
@@ -67,6 +73,7 @@
     ];
     if (pageEntry && pageId) {
       const page = $controller.activeLayout?.pages[pageId];
+      const pageLabel = page?.label ?? menuEntry.label ?? pageId;
       items.push(
         {
           id: 'rename-page',
@@ -82,15 +89,35 @@
           id: 'duplicate-page',
           label: 'Duplicate Page',
           run: () => controller.duplicatePage(pageId)
-        },
-        {
+        }
+      );
+      // Destructive page actions only in edit mode, where Undo is visible —
+      // each behind an inline confirm.
+      if ($controller.editMode) {
+        const reset = editBar?.pages?.reset(pageId);
+        if (reset) {
+          items.push({
+            id: 'reset-page',
+            label: reset.label,
+            danger: true,
+            confirm: { prompt: reset.prompt, confirmLabel: reset.confirmLabel },
+            run: () => {
+              const commands = reset.commands();
+              if (commands.length) controller.dispatchMany(commands);
+            }
+          });
+        }
+        const protectedReason = registry.pageProtection(page);
+        items.push({
           id: 'delete-page',
           label: 'Delete Page',
           danger: true,
-          disabled: !canDeleteNavigationPage($controller.activeLayout),
+          hint: protectedReason ?? undefined,
+          disabled: !!protectedReason || !canDeleteNavigationPage($controller.activeLayout),
+          confirm: { prompt: deletePagePrompt(pageLabel), confirmLabel: 'Delete' },
           run: () => controller.removePage(pageId)
-        }
-      );
+        });
+      }
     }
     items.push(
       {
@@ -119,6 +146,24 @@
   function addPage(): void {
     const count = $controller.pages.length;
     controller.addPage({ label: `Page ${count + 1}` });
+  }
+
+  // The "+" opens the Add page menu (missing default pages from the host, Blank
+  // page, restore all) placed below the button — the same rows as the edit
+  // bar's Add ▸ Add page. Clamped into the viewport, so in bottom-nav mode it
+  // lifts above the bar instead of opening off-screen.
+  let addMenuOpen = $state(false);
+  let addMenuPosition = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
+  const addMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    void $controller;
+    if (!addMenuOpen) return [];
+    return buildAddPageMenuItems({ host: editBar?.pages?.addPageItems(), blank: addPage });
+  });
+
+  function openAddMenu(event: MouseEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    addMenuPosition = menuPositionBelowRect(rect, 4);
+    addMenuOpen = true;
   }
 
   async function runNavigation(entry: (typeof entries)[number]): Promise<void> {
@@ -186,13 +231,23 @@
     {/if}
   {/each}
   <!-- Pages: trailing "+" affordance (edit mode only, side rail and bottom nav)
-       adds an empty default page and activates it. -->
+       opens the Add page menu (missing default pages · Blank page · restore all). -->
   {#if $controller.editMode}
-    <button class="aw-nav-add-page" type="button" title="Add Page" aria-label="Add Page" data-nav-add-page onclick={addPage}>+</button>
+    <button
+      class="aw-nav-add-page"
+      type="button"
+      title="Add Page"
+      aria-label="Add Page"
+      aria-haspopup="menu"
+      aria-expanded={addMenuOpen}
+      data-nav-add-page
+      onclick={openAddMenu}
+    >+</button>
   {/if}
 </nav>
 
 <ContextMenu open={menuOpen} position={menuPosition} items={menuItems} label="Navigation actions" onClose={() => (menuOpen = false)} />
+<ContextMenu open={addMenuOpen} position={addMenuPosition} items={addMenuItems} label="Add page" onClose={() => (addMenuOpen = false)} />
 
 {#if renamingPageId}
   <!-- Inline page rename: floating input at the invoking menu position. -->

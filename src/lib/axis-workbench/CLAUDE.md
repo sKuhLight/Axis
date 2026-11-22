@@ -27,7 +27,13 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   profiles, widgetFit. All pure and unit-tested.
 - `svelte/renderRegistry.ts` — `WorkbenchRenderRegistry`: maps type strings to Svelte
   components for panels/widgets/navigation; also `registerAction`, `registerWidgetSizing`,
-  `registerNavigationState`.
+  `registerNavigationState`, `registerPanelCatalogProvider` (canonical panels for the
+  Library's panel catalog, `core/panelCatalog.ts`), `registerPageHints` (a hint bar above
+  the dock workspace) and `registerPageProtection` (pages that cannot be deleted).
+- Panels are never lost: `panel.remove` / `page.remove` / `page.setDock` PARK panels
+  (they stay in `layout.panels`, docked on no page); `panel.close` is the only hard
+  delete (Library: "Delete everywhere" for custom panels and keyless copies).
+  Locked = cannot LEAVE the layout (no remove / delete) — a locked panel still moves.
 - `svelte/controller.svelte.ts` — `createWorkbenchController(doc, { onChange })`: runes
   store with `dispatch` / `dispatchMany`, subscribable.
 - `svelte/` components — `WorkbenchHost.svelte`, `DockWorkspace`, `TabStack`, `PanelHost`,
@@ -54,7 +60,9 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
   the Axis theme and the `editBar` extension (LAYOUT presets + Reset, PROFILE options;
-  builders in `axisWorkbenchLayoutActions.ts`). `featureGate.ts` gates on
+  builders in `axisWorkbenchLayoutActions.ts`; the `pages` part — missing default pages,
+  Reset to default / Clear page — from `axisDefaultPages.ts`). `axisPanelCatalog.ts`
+  holds the canonical panel list. `featureGate.ts` gates on
   `VITE_AXIS_WORKBENCH === '1'`.
 - `panels/` — one component per panel type.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL

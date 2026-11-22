@@ -7,7 +7,7 @@
  * More from the SAME items, and keeps the interim Add menu easy to swap for the
  * palette a later slice brings.
  */
-import type { ViewportClass } from '../core';
+import type { ViewportClass, WorkbenchCommand } from '../core';
 import type { WorkbenchMenuItem } from './contextMenu';
 import type { EditBarOverflowGroupId } from './editBarLayout';
 import { workbenchBackupTimestamp, type WorkbenchBackupEntry } from './layoutActions';
@@ -28,6 +28,38 @@ export interface WorkbenchEditBarProfileOption {
 }
 
 /**
+ * A page-level reset the host offers (PAGE menu, nav context menu): e.g.
+ * "Reset to default" for a page the app seeds, "Clear page" for any other.
+ * Always behind an inline confirm; the commands run as ONE batch (one undo step).
+ */
+export interface WorkbenchPageResetAction {
+  label: string;
+  prompt: string;
+  confirmLabel: string;
+  commands: () => WorkbenchCommand[];
+}
+
+/** Rows the host adds around the generic "Blank page" row of every "Add page" menu. */
+export interface WorkbenchAddPageItems {
+  /** Listed before "Blank page" (e.g. a "Missing default pages" section). */
+  leading: WorkbenchMenuItem[];
+  /** Listed after it (e.g. "Restore default pages (n)"). */
+  trailing?: WorkbenchMenuItem[];
+}
+
+/**
+ * Host page contributions, shared by the edit bar (PAGE menu, Add ▸ Add page)
+ * and the navigation (the "+" menu, the entry context menu). Data-driven like
+ * the rest of the extension; functions are re-read on every document change.
+ */
+export interface WorkbenchEditBarPagesExtension {
+  /** Host rows of the "Add page" menu; each row's `run` performs its add. */
+  addPageItems: () => WorkbenchAddPageItems;
+  /** The reset offered for a page, or null for none. */
+  reset: (pageId: string) => WorkbenchPageResetAction | null;
+}
+
+/**
  * What a host contributes to the generic edit bar. Data-driven (not snippets) so
  * the bar can render each group wide, collapsed to a dropdown, or inside ⋯ More.
  * Functions are re-read whenever the workbench document changes.
@@ -45,6 +77,8 @@ export interface WorkbenchEditBarExtension {
     options: () => WorkbenchEditBarProfileOption[];
     select: (id: string | null) => void;
   };
+  /** Page rows: "Add page" contributions and per-page resets. */
+  pages?: WorkbenchEditBarPagesExtension;
 }
 
 export const EDIT_BAR_STATUS_IDLE = 'Drag a tab onto a panel to dock it · Add adds panels, widgets and pages';
@@ -95,6 +129,10 @@ export interface EditBarPageMenuInput {
   activePageId: string | undefined;
   /** False when the active page is the last one (it cannot be deleted). */
   canDelete: boolean;
+  /** Why the active page is protected from deletion (host), or null. Disables Delete with that reason. */
+  protectedReason?: string | null;
+  /** The host's reset for the active page ("Reset to default" / "Clear page"), if any. */
+  reset?: { label: string; prompt: string; confirmLabel: string; run(): void } | null;
   actions: {
     activate(pageId: string): void;
     /** Returns false when the name was rejected (the field stays open). */
@@ -152,19 +190,55 @@ export function buildPageMenuItems(input: EditBarPageMenuInput): WorkbenchMenuIt
       disabled: last,
       run: () => actions.move(active.id, index + 1)
     },
-    { id: 'page.manage', label: 'Manage pages and templates…', run: () => actions.manage() },
-    {
-      id: 'page.delete',
-      label: 'Delete page',
+    { id: 'page.manage', label: 'Manage pages and templates…', run: () => actions.manage() }
+  );
+  const reset = input.reset;
+  if (reset) {
+    items.push({
+      id: 'page.reset',
+      label: reset.label,
       danger: true,
       separatorBefore: true,
-      hint: input.canDelete ? undefined : 'last page',
-      disabled: !input.canDelete,
-      confirm: { prompt: `Delete “${active.label}”? Undo brings it back.`, confirmLabel: 'Delete' },
-      run: () => actions.remove(active.id)
-    }
-  );
+      confirm: { prompt: reset.prompt, confirmLabel: reset.confirmLabel },
+      run: () => reset.run()
+    });
+  }
+  const blockedBy = input.protectedReason ?? (input.canDelete ? null : 'last page');
+  items.push({
+    id: 'page.delete',
+    label: 'Delete page',
+    danger: true,
+    separatorBefore: !reset,
+    hint: blockedBy ?? undefined,
+    disabled: !!blockedBy,
+    confirm: { prompt: deletePagePrompt(active.label), confirmLabel: 'Delete' },
+    run: () => actions.remove(active.id)
+  });
   return items;
+}
+
+/** The inline confirm of every page delete (PAGE menu, nav context menu, Library drawer). */
+export function deletePagePrompt(label: string): string {
+  return `Delete “${label}”? Its panels stay available in Add panel. Undo brings the page back.`;
+}
+
+// ── ADD PAGE (Add ▸ Add page, the nav "+") ─────────────────────────────────
+
+export interface AddPageMenuInput {
+  /** Host rows around "Blank page" (missing default pages, restore all, …). */
+  host?: WorkbenchAddPageItems | null;
+  /** Add an empty page and open it. */
+  blank(): void;
+}
+
+export function buildAddPageMenuItems(input: AddPageMenuInput): WorkbenchMenuItem[] {
+  const leading = input.host?.leading ?? [];
+  const trailing = input.host?.trailing ?? [];
+  return [
+    ...leading,
+    { id: 'addPage.blank', label: 'Blank page', separatorBefore: leading.length > 0, run: () => input.blank() },
+    ...trailing
+  ];
 }
 
 // ── LAYOUT ──────────────────────────────────────────────────────────────────
@@ -294,9 +368,10 @@ export interface EditBarAddMenuInput {
     addCustomPanel(): void;
     /** Library drawer, widgets view. */
     addWidget(): void;
-    addPage(): void;
     openLibrary(): void;
   };
+  /** The "Add page ▸" submenu rows ({@link buildAddPageMenuItems}). */
+  addPageItems: WorkbenchMenuItem[];
 }
 
 export function buildAddMenuItems(input: EditBarAddMenuInput): WorkbenchMenuItem[] {
@@ -306,7 +381,7 @@ export function buildAddMenuItems(input: EditBarAddMenuInput): WorkbenchMenuItem
     { id: 'add.panel', label: 'Add panel…', run: () => actions.addPanel() },
     { id: 'add.customPanel', label: 'Add custom panel', run: () => actions.addCustomPanel() },
     { id: 'add.widget', label: 'Add widget…', run: () => actions.addWidget() },
-    { id: 'add.page', label: 'Add page', run: () => actions.addPage() },
+    { id: 'add.page', kind: 'submenu', label: 'Add page', items: input.addPageItems, run: noop },
     { id: 'add.library', label: 'Open library', separatorBefore: true, run: () => actions.openLibrary() }
   ];
 }

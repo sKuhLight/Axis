@@ -8,6 +8,7 @@
   import type { WorkbenchMenuItem } from './contextMenu';
   import {
     buildAddMenuItems,
+    buildAddPageMenuItems,
     buildLayoutMenuItems,
     buildMoreMenuItems,
     buildPageMenuItems,
@@ -50,7 +51,7 @@
    */
   let { extension }: { extension?: WorkbenchEditBarExtension } = $props();
 
-  const { controller } = getWorkbenchContext();
+  const { controller, registry } = getWorkbenchContext();
 
   type MenuId = EditBarOverflowGroupId | 'more';
 
@@ -292,11 +293,30 @@
     openMenu = id;
   }
 
+  // The host's reset for the active page ("Reset to default" / "Clear page"),
+  // run as ONE batch so Undo reverts it in one step.
+  function pageReset() {
+    const pageId = activePage?.id;
+    const reset = pageId ? extension?.pages?.reset(pageId) : null;
+    if (!reset) return null;
+    return {
+      label: reset.label,
+      prompt: reset.prompt,
+      confirmLabel: reset.confirmLabel,
+      run: () => {
+        const commands = reset.commands();
+        if (commands.length) controller.dispatchMany(commands);
+      }
+    };
+  }
+
   function pageItems(): WorkbenchMenuItem[] {
     return buildPageMenuItems({
       pages: pages.map((page) => ({ id: page.id, label: page.label })),
       activePageId: activePage?.id,
       canDelete: canDeleteNavigationPage($controller.activeLayout),
+      protectedReason: registry.pageProtection(activePage),
+      reset: pageReset(),
       actions: {
         activate: (pageId) => controller.activatePage(pageId),
         rename: (pageId, label) => controller.renamePage(pageId, label).success,
@@ -340,9 +360,11 @@
         addPanel: () => openLibrary('pages'),
         addCustomPanel,
         addWidget: () => openLibrary('widgets'),
-        addPage,
         openLibrary: () => openLibrary('pages')
-      }
+      },
+      // Add ▸ Add page: the host's rows (missing default pages, restore all)
+      // around the generic Blank page — the same menu the nav "+" opens.
+      addPageItems: buildAddPageMenuItems({ host: extension?.pages?.addPageItems(), blank: addPage })
     });
   }
 
@@ -463,7 +485,7 @@
       aria-haspopup="menu"
       aria-expanded={openMenu === 'page'}
       aria-label={`Page: ${pageLabel}`}
-      title="This page: switch, rename, duplicate, reorder, delete"
+      title="This page: switch, rename, duplicate, reorder, reset, delete"
       onclick={(e) => toggleMenu('page', e.currentTarget)}
     >
       <span class="k">Page</span>

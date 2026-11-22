@@ -16,6 +16,7 @@
   import { startPanelTabDrag } from './panelDrag';
   import {
     MAXIMIZE_ESCAPE_OVERLAYS,
+    PANEL_REMOVE_LABEL,
     buildPanelMenuItems,
     collapsedStripLabel,
     shouldReleaseMaximize,
@@ -191,10 +192,17 @@
         toggleMaximize: () => controller.toggleMaximizedPanel(panel.id),
         toggleCollapse: () => toggleCollapse(panel),
         save: () => savePanelTemplate(panel),
-        close: () => controller.dispatch({ type: 'panel.close', panelId: panel.id })
+        remove: () => removeFromPage(panel)
       }
     });
   });
+
+  // Remove from page PARKS the panel (`panel.remove`): it keeps its state and
+  // owned widgets and stays listed in the Library's panel catalog. Undo covers
+  // it, so there is no confirm.
+  function removeFromPage(panel: PanelInstance) {
+    controller.dispatch({ type: 'panel.remove', panelId: panel.id });
+  }
 
   function movePanelToPage(panel: PanelInstance, pageId: string) {
     const result = controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: 'main' }, pageId });
@@ -491,8 +499,10 @@
           <button
             class="aw-pane-btn danger"
             type="button"
-            title="Close panel"
-            onclick={() => controller.dispatch({ type: 'panel.close', panelId: activePanel.id })}
+            title={PANEL_REMOVE_LABEL}
+            aria-label={PANEL_REMOVE_LABEL}
+            data-pane-remove
+            onclick={() => removeFromPage(activePanel)}
           >×</button>
         {/if}
       </div>
