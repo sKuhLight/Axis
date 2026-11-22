@@ -70,7 +70,10 @@ export interface LayoutPlacement {
   col?: number;
   offsetX?: number;
   offsetY?: number;
-  positionExact?: boolean;
+  /** Exact position of the control in the editor layout data, as an `"x,y"` pixel string (top-left
+   *  corner in the source editor's page coordinates). Passed through by the server unchanged; not
+   *  consumed yet (a later slice converts it to grid cells). */
+  positionExact?: string;
 }
 
 /** One control on a device-authentic editor page: a display label + widget kind bound to a paramId. */

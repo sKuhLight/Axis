@@ -19,8 +19,9 @@ import { notifyMutation } from './syncBus';
 
 const DOC = 'surface'; // config/surface — the single doc holding the whole control-surface state
 const CACHE = 'axs.surface.doc'; // localStorage cache of that doc (offline / instant host load)
-// keys this module owns (everything the ControlSurface scattered): the global grid + per-slug meta + boards
-const OWNED = /^(axs\.surface2\.grid|axs\.surface3meta\.|axs\.surface3\.)/;
+// keys this module owns (everything the ControlSurface scattered): the global grid + per-slug meta + boards,
+// plus the Block Editor's `axs.be1.*` boards, `axs.be1meta.*` meta and `axs.be1seed.*` family seeds
+const OWNED = /^(axs\.surface2\.grid|axs\.surface3meta\.|axs\.surface3\.|axs\.be1(?:\.|meta\.|seed\.))/;
 
 function cacheLoad(): Record<string, string> {
   if (typeof localStorage === 'undefined') return {};

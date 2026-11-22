@@ -2024,3 +2024,28 @@ Branch `feature/ui-rework` (worktree `.wt-feature-ui-rework`). Product decisions
 ### Open
 - Preset switch / Reset layout still replace the whole layout (custom pages, custom and parked panels are not carried over); both now ask first and Undo restores. Carrying content over is a later slice.
 - A locked keyless panel that is the only one of its type (its keyed original is gone) stays protected from Delete everywhere.
+
+## ROUND BE-1 — Block editor rework, slice 1: board model v2, geometry, per-device-class persistence (AXIS-74, parent AXIS-73)
+
+Branch `feature/block-editor-rework` (worktree `.wt-feature-block-editor-rework`), cut from local `feature/ui-rework` @ `b2f8ce1`. Runs in parallel with the layout-editor slices on `feature/ui-rework`; rounds of this branch are numbered `BE-n` so they don't collide with that branch's rounds when the branches meet. Pure foundation modules only — no visible UI change; `ControlSurface.svelte` and `BlockEditor.svelte` still render exactly as before.
+
+### What changed
+- **New `src/lib/blockEditor/` (app layer, pure, node-env tests next to each module).**
+  - `boardModel.ts`: v2 board (`v: 2`, controls + horizontal/vertical dividers with optional label), cell units (knob 2×2, page max 24 cells = 12 knobs, `MAX_ROWS` 512), size table + S/M/L presets per view, and the board operations (fits / findFree / findNear, add / move across pages / resize / setView with free-spot fallback / rotate / remove, closeGaps, tidy, reflowPack, page add / rename / duplicate / move / delete). `normalizeBoard` (replaces the old reconcile): drops vanished keys (block-level `meter` / `wave` / `eq` / `bypass` are kept while the catalog is still loading), dedupes keys per page, clamps sizes and coordinates, resolves overlaps at the nearest free spot, deterministic ids. `migrateV1`: old boards (1 control = 1 cell) ×2, clamped to the new size limits, row-tagged pages re-laid row by row, wide pages wrapped.
+  - `boardGeometry.ts`: always-fit cell size (density Compact / Normal / Large = 32 / 40 / 50 px max, 20 px min, reference width = 24 cells so every page shares one scale), side navigation only from 560 px, reflow / overflow flags, visible-page detection (≥ 50 %).
+  - `catalog.ts` (same keys as today: `k<id>`, `e<id>`, `eq`, `bypass`, `meter`, `wave`), `valueFormat.ts` (centre value, typed-value parsing with unit check, coarse / fine steps), `boardSchema.ts` (Zod v4, forgiving where normalize can repair, prototype-safe page records), `deviceLayoutBoardV2.ts` (device-layout default + curated fallback in v2 units, page-qualified ids).
+  - `boardPersistence.ts`: keys `axs.be1.<slug>.<profile>.<deviceClass>`, `axs.be1meta.<slug>`, `axs.be1seed.<slug>`; device class from the workbench profile breakpoint, else viewport (< 760 px phone). Load chain: own class → desktop → legacy keys (one-time, only until the family is marked migrated by its first save) → family seed → seed; the Default profile still re-seeds on a device-layout variant change and stamps the variant on seeds. Saves write only the own device-class key; legacy keys are never written or deleted.
+- `surfaceStore.svelte.ts`: the new key prefixes are owned (cloud / remote sync); `types.ts`: `LayoutPlacement.positionExact` is a `"x,y"` string (was mistyped as boolean; not consumed yet); `deviceLayoutBoard.ts`: `resolveControl` exported for the v2 builder (behaviour unchanged).
+- The workbench document and its normalization chain are untouched (the boards live in the surface document).
+
+### Review fixes (Opus review + workbench-reviewer)
+- tidy no longer creates overlaps from staggered input; legacy keys are a one-time migration source (no resurrection after a variant switch, a phone-only profile, or a reused profile name); curated seeds get the variant stamp (edits survive reload); migration keeps row order instead of scattering grown controls; temporarily-missing block-level keys are kept; prototype page names (`constructor`, `toString`, `__proto__`) are safe; divider detection by kind value; cross-page moves drop the source row; coordinates capped; schema repairs instead of rejecting; deterministic ids; tighter owned-key regex; stricter typed-value parsing; load → save → load round-trip tests.
+
+### Gates
+- `npm run check`: 0 errors, 0 warnings.
+- `npm test`: 2048 passed (142 files); the slice adds 141 tests.
+- Chromium e2e, full suite (`PW_PORT=5197`): 98/100. The two failures are the first `01-boot` tests of the run timing out on `.aw-root` while the fresh worktree's dev server compiles cold (11 s vs the 10 s wait); `--repeat-each=3` passes every warm run in 2–4 s. No UI changed in this slice.
+
+### Open
+- Slice 2 must render only keys present in the catalog (kept block-level keys) and save only after the catalog is complete; the layout-status check (slice 3) must ignore keys the catalog doesn't list yet.
+- The cold-start boot timeout in a fresh worktree is a harness issue (first-test wait vs dev-server warm-up), not product behaviour.

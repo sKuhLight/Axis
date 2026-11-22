@@ -66,11 +66,11 @@ function viewForWidget(widget: string, base: BoardCtl): string {
   return base.views.includes(candidate) ? candidate : base.view;
 }
 
-type Resolved = { key: string; view: string } | 'gap';
+export type Resolved = { key: string; view: string } | 'gap';
 
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
- *  spacers, labels, and parameters the device did not surface as a knob/enum). */
-function resolveControl(ctl: LayoutControl, byKey: Map<string, BoardCtl>): Resolved {
+ *  spacers, labels, and parameters the device did not surface as a knob/enum). Shared with the v2 builder. */
+export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, BoardCtl>): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
   // A live param → its catalog entry (knob `k<id>` or enum `e<id>`), refined by the widget hint.
   if (ctl.paramId != null) {
