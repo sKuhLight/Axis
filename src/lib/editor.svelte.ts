@@ -598,32 +598,50 @@ class EditorStore {
     return this.status === 'ready' && this.hasLiveMonitors && !this.slowLink && !isRemote();
   }
   #liveMeterTimer: ReturnType<typeof setTimeout> | null = null;
+  // Token of the loop that is currently allowed to run (null = stopped). Kept separate from
+  // #liveMeterTimer: tick() clears the timer handle at the top of every iteration and only re-sets it
+  // after the awaited device read returns, so the handle alone is null for the WHOLE duration of every
+  // in-flight read — a guard on it would let a second start() stack a concurrent loop mid-read (every
+  // grid load restarts the meters), and would make stop() during a read a no-op. A token, unlike a
+  // plain flag, also retires a loop that was stopped and restarted while its read was still in flight.
+  #liveMeterLoop: object | null = null;
   startLiveMeters = () => {
-    if (this.#liveMeterTimer) return; // already running
+    if (this.#liveMeterLoop) return; // already running
+    const loop = {};
+    this.#liveMeterLoop = loop;
     const tick = async () => {
       this.#liveMeterTimer = null;
-      const eid = this.selected?.effectId;
-      const ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
-      if (ok) {
-        try {
-          const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
-          const next = { ...this.liveMeters };
-          next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
-          this.liveMeters = next;
-        } catch {
-          /* best-effort */
+      let ok = false;
+      try {
+        const eid = this.selected?.effectId;
+        ok = this.meteringOn && this.canMeterBlocks && eid != null && !this.inLibrary && !this.virtual;
+        if (ok && eid != null) {
+          try {
+            const rows = await forgefx.monitorsLive(eid); // single-block read (all of the open block's monitors)
+            if (this.#liveMeterLoop !== loop) return; // stopped mid-read — don't resurrect liveMeters after stop cleared it
+            const next = { ...this.liveMeters };
+            next[eid] = rows.filter((r) => r.effectId === eid); // every monitor this block reports (may be several)
+            this.liveMeters = next;
+          } catch {
+            /* best-effort */
+          }
+          // Looper: also fetch the live waveform + playhead + level for the open Looper block.
+          if (this.blockSlug === 'looper') {
+            try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
+          }
         }
-        // Looper: also fetch the live waveform + playhead + level for the open Looper block.
-        if (this.blockSlug === 'looper') {
-          try { this.looperWave = await forgefx.looper(eid); } catch { /* keep last */ }
-        }
+      } finally {
+        // Re-arm unless stopped (or superseded) mid-tick. In a finally so a throw from outside the inner
+        // try/catch blocks can't leave the token set with no timer pending — that would make every later
+        // startLiveMeters a no-op and kill the meters until reload.
+        // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
+        if (this.#liveMeterLoop === loop) this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
       }
-      // ~250 ms when active (snappier level/VU + playhead), 2 s idle heartbeat when metering is off.
-      this.#liveMeterTimer = setTimeout(tick, ok ? 250 : 2000);
     };
     tick();
   };
   stopLiveMeters = () => {
+    this.#liveMeterLoop = null;
     if (this.#liveMeterTimer) clearTimeout(this.#liveMeterTimer);
     this.#liveMeterTimer = null;
     this.liveMeters = {};
