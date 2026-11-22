@@ -20,7 +20,7 @@ import { createWorkbenchId } from './ids';
 import { createEmptyDockLayout } from './defaults';
 import { cloneWorkbenchDocument, normalizeRatios, repairWorkbenchDocument } from './invariants';
 import { remintWorkbenchPage } from './layoutPackage';
-import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInPageDock } from './selectors';
+import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInPageDock, selectActiveLayout } from './selectors';
 import type { DockTarget, WorkbenchCommand, WorkbenchCommandResult, WorkbenchErrorCode } from './commands';
 
 interface InsertResult {
@@ -885,8 +885,26 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
     case 'profile.activate': {
       const profile = next.profiles[command.profileId];
       if (!profile) return fail(doc, 'missing-profile', `Profile ${command.profileId} does not exist.`);
-      if (!next.layouts[profile.layoutId]) return fail(doc, 'missing-layout', `Layout ${profile.layoutId} does not exist.`);
+      const incoming = next.layouts[profile.layoutId];
+      if (!incoming) return fail(doc, 'missing-layout', `Layout ${profile.layoutId} does not exist.`);
+      // Carry the active PAGE across the profile switch. Every profile owns its own
+      // layout, and each layout remembers its own `activePageId` — so without this the
+      // viewport resolver (a window resize crossing 760/1366) silently moves the user
+      // from, say, the Preset Browser to whatever page that profile's layout was last
+      // left on. The page is the user's "where am I", not a per-device preference:
+      // chrome adapts to the width, the view must not.
+      //
+      // Deliberately applies to EVERY activation path — resize, ribbon pin, Auto, and
+      // the boot-time resolve — so the active page reads as one selection shared across
+      // profiles rather than three that drift apart. Do not "fix" this back to a
+      // resize-only carry.
+      //
+      // Layouts whose pages diverged (custom pages) keep their own page: only carry an
+      // id the incoming layout actually has, so `activePageId` never dangles.
+      const outgoing = selectActiveLayout(next);
+      const carriedPageId = outgoing?.activePageId;
       next.activeProfileId = command.profileId;
+      if (carriedPageId && incoming.pages?.[carriedPageId]) incoming.activePageId = carriedPageId;
       return ok(next);
     }
     case 'profile.rename': {

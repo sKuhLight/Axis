@@ -29,7 +29,10 @@ import {
  * configurable layout page. Seven predefined pages ship — Grid (today's default
  * layout), Preset Browser (full-size PB), Scenes, Live, Setup, Controllers, FC —
  * each renamable / deletable / reorderable. Theme + Axis Cloud stay ACTION entries
- * (no page). Pages are per device profile (desktop/tablet/phone), same seeds.
+ * (no page). Pages are per device profile (desktop/tablet/phone), same seeds — but
+ * the ACTIVE page is carried across a profile switch (see the reducer's
+ * `profile.activate`), so it reads as one page selection shared by all three
+ * profiles rather than three that drift apart on every window resize.
  */
 
 export const AXIS_PAGE_GRID = 'axis.page.grid';
