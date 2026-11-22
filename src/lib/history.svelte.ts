@@ -104,10 +104,15 @@ class HistoryStore {
 
   bindHost(h: HistoryHost) { this.#host = h; }
 
-  /** Switch the history context to another device+slot: flush the old doc, load the new one. */
+  /** Switch the history context to another device+slot: flush the old doc, load the new one. When this is
+   *  an in-session change of slot on the same device, the device replaced its edit buffer with the other
+   *  preset, so whatever the loaded changelog holds no longer describes the buffer: it is kept (readable in
+   *  the panel) behind a BARRIER, so undo can't replay it onto the freshly loaded preset. The first context
+   *  after launch gets no barrier — the changelog survives a restart and stays undoable. */
   switchTo = async (deviceShort: string, preset: number) => {
     const key = `${KEY_PREFIX}${deviceShort}:${preset}`;
     if (key === this.key) return;
+    const prev = this.key;
     this.endGesture();
     this.#flushPersist();
     this.key = key;
@@ -119,6 +124,12 @@ class HistoryStore {
     if (doc?.v === 1 && Array.isArray(doc.entries)) {
       this.entries = doc.entries;
       this.cursor = Math.max(0, Math.min(doc.cursor ?? doc.entries.length, doc.entries.length));
+    }
+    // Same device only: at startup the context can flip from a placeholder device name to the detected one
+    // for the SAME slot, which is not a buffer replacement.
+    const sameDevice = prev.startsWith(`${KEY_PREFIX}${deviceShort}:`);
+    if (sameDevice && this.entries.length && !this.entries[this.entries.length - 1].barrier) {
+      this.#push({ id: uid(), t: Date.now(), label: `Loaded preset ${String(preset).padStart(3, '0')}`, ops: [], undoable: false, barrier: true });
     }
   };
 
