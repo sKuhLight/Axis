@@ -208,7 +208,16 @@ class LibraryStore {
     // restore the heavy per-preset params from IndexedDB (async) so deep search works without a re-scan
     if (idb.available()) {
       // legacy / other-decode-version caches are dropped here (and re-decoded by the deep scan), never served
-      loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => { if (p) this.#paramsCache = p; });
+      loadParamsCache<Record<string, DecodedBlock[]>>(idb, IDB_PARAMS).then((p) => {
+        if (!p) return;
+        // Merge, don't replace: params hydrated before IndexedDB resolves must survive — in-memory is
+        // newer, so it wins over the persisted copy.
+        const hydratedEarly = Object.keys(this.#paramsCache).length > 0;
+        this.#paramsCache = { ...p, ...this.#paramsCache };
+        // Such an early hydration also persisted ITS cache over the stored blob, which then holds only the
+        // new entries — write the merged cache back so the older ones are not lost on disk either.
+        if (hydratedEarly) this.#persistParams();
+      });
       // read the raw-bytes blob (merging anything imported meanwhile); a failed read leaves the files pending
       void this.#bytes.load().then((ok) => (ok ? this.#redecodePending() : false));
     }
