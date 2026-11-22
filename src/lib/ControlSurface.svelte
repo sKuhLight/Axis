@@ -29,6 +29,8 @@
     type WorkbenchParameterSource
   } from './workbench';
   import { fullRegionHighlightRect, widgetDropIndex } from './workbench/svelte/drag';
+  import { effectiveZoom } from './workbench/svelte/contextMenu';
+  import { toLayoutPx } from './tabOverflow';
   import ContextMenu from './workbench/svelte/ContextMenu.svelte';
   import { longPress } from './axis-workbench/longPress';
   import { buildAxisPinMenuItems } from './axis-workbench/pinMenu';
@@ -170,6 +172,7 @@
   let editingKey = $state<string | null>(null);
   let editBuf = $state('');
   let openSelect = $state<string | null>(null);
+  let selMenuRect = $state<{ left: number; top: number; width: number } | null>(null);
   let renamingPage = $state<string | null>(null);
   // value bubble: a single fixed-position tooltip (escapes the editor's scroll clipping + stays on top)
   let tip = $state<{ id: number; cx: number; cy: number; edit: boolean } | null>(null);
@@ -1147,15 +1150,43 @@
     if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, '#35c9d6');
   }
 
-  // dropdown popover geometry
+  // dropdown popover geometry — measured from the actual trigger element (not grid math: the card
+  // centers its content, so a select field is usually shorter than its grid cell and sits away from the
+  // cell's edges, which left the menu opening well below the visible trigger).
+  function toggleSelectMenu(e: MouseEvent, id: string) {
+    if (openSelect === id) {
+      openSelect = null;
+      selMenuRect = null;
+      return;
+    }
+    if (!boardEl) return;
+    const board = boardEl.getBoundingClientRect();
+    const trigger = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // The menu is positioned in layout px inside the board; both rects are visual px, which differ by the
+    // UI-scale zoom (a no-op at 100%).
+    const z = effectiveZoom(board.width, boardEl.offsetWidth);
+    selMenuRect = {
+      left: toLayoutPx(trigger.left - board.left, z),
+      top: toLayoutPx(trigger.bottom - board.top, z) + 2,
+      width: Math.max(toLayoutPx(trigger.width, z), 160)
+    };
+    openSelect = id;
+  }
+  // The rect is captured once on open, so a reflow (the board resized, or its column count changed) would
+  // leave the open menu hanging where the trigger used to be — close it instead.
+  $effect(() => {
+    void cell;
+    void displayCols;
+    openSelect = null;
+    selMenuRect = null;
+  });
   const selMenu = $derived.by(() => {
-    if (!openSelect) return null;
+    if (!openSelect || !selMenuRect) return null;
     const w = find(openSelect);
     const c = w && catByKey.get(w.key);
     const e = c && enm(c.id);
     if (!w || !c || !e) return null;
-    const step = cell + GAP;
-    return { id: w.id, e, left: w.x * step, top: (w.y + w.h) * step + 2, width: Math.max(w.w * cell + (w.w - 1) * GAP, 160) };
+    return { id: w.id, e, ...selMenuRect };
   });
 
   // svg knob pointer transform
@@ -1437,7 +1468,7 @@
               {:else if c.kind === 'select'}
                 <div class="seltop">{c.label}</div>
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-                <div class="selfield" class:open={openSelect === w.id} onpointerdown={(e) => e.stopPropagation()} onclick={() => !editMode && (openSelect = openSelect === w.id ? null : w.id)}>
+                <div class="selfield" class:open={openSelect === w.id} onpointerdown={(e) => e.stopPropagation()} onclick={(e) => !editMode && toggleSelectMenu(e, w.id)}>
                   <span class="seltxt">{enm(c.id)?.options.find((o) => o.value === enm(c.id)?.value)?.label ?? '–'}</span>
                   <span class="caret">▾</span>
                 </div>
