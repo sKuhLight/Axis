@@ -604,6 +604,7 @@
 <ContextMenu
   open={openMenu !== null}
   anchor={menuAnchor}
+  boundary={barEl}
   items={menuItems}
   label={openMenu ? MENU_LABELS[openMenu] : 'Menu'}
   {touch}

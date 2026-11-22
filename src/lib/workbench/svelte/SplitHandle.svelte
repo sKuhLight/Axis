@@ -4,15 +4,22 @@
 
   let {
     split,
-    index
+    index,
+    inert = false
   }: {
     split: SplitDockNode;
     index: number;
+    /**
+     * A neighbour is a collapsed strip (fixed size): resizing would only change
+     * ratios invisibly (and add undo steps), so the handle takes no input.
+     */
+    inert?: boolean;
   } = $props();
 
   const { controller } = getWorkbenchContext();
 
   function down(e: PointerEvent) {
+    if (inert) return;
     e.preventDefault();
     const parent = (e.currentTarget as HTMLElement).parentElement;
     const rect = parent?.getBoundingClientRect();
@@ -48,6 +55,8 @@
   class="aw-split-handle"
   class:vertical={split.axis === 'horizontal'}
   class:horizontal={split.axis === 'vertical'}
+  class:inert
+  data-split-handle-inert={inert ? 'true' : undefined}
   role="separator"
   aria-orientation={split.axis === 'horizontal' ? 'vertical' : 'horizontal'}
   onpointerdown={down}
@@ -70,5 +79,9 @@
   }
   .aw-split-handle:hover {
     background: var(--aw-accent);
+  }
+  .aw-split-handle.inert {
+    pointer-events: none;
+    cursor: default;
   }
 </style>

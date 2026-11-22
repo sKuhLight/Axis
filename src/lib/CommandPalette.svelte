@@ -226,6 +226,8 @@
       e.preventDefault();
       pick(view.flat[hi]);
     } else if (e.key === 'Escape') {
+      // Consumed: later Escape handlers (app chain, workbench maximize) skip it.
+      e.preventDefault();
       editor.paletteOpen = false;
     }
   }

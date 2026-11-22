@@ -259,4 +259,24 @@ test.describe('Drop-target UX (AXIS-32)', () => {
       expect(w!.sw).toBeGreaterThanOrEqual(w!.tw - 2);
     }
   });
+
+  test('slice 2 — a collapsed strip keeps the tab bar jobs: a control drop collects there, a dwell expands it', async ({ page }) => {
+    await bootCleanWorkbench(page);
+    await enterEditMode(page);
+    await page.locator('[aria-label="Collapse Block Editor"]').click();
+    const strip = page.locator('.aw-tabstack[data-region="bottom"] [data-pane-strip]');
+    await expect(strip).toBeVisible();
+
+    // Spring: a control hovering the strip expands the stack after the dwell.
+    const sb = (await strip.boundingBox())!;
+    await paramDragOverAt(page, '.aw-tabstack[data-region="bottom"] [data-pane-strip]', GAIN, { x: sb.x + sb.width / 2, y: sb.y + sb.height / 2 });
+    await expect(strip).toHaveCount(0, { timeout: 2000 });
+
+    // Drop: on the strip, the control collects into THAT stack as a new tab.
+    await page.locator('[aria-label="Collapse Block Editor"]').click();
+    await expect(strip).toBeVisible();
+    await dropParamOnto(page, '.aw-tabstack[data-region="bottom"] [data-pane-strip]', GAIN);
+    await expect(regionTabs(page, 'bottom').filter({ hasText: 'Controls' })).toHaveCount(1);
+    await expect(regionTabs(page, 'bottom').filter({ hasText: 'Block Editor' })).toHaveCount(1);
+  });
 });

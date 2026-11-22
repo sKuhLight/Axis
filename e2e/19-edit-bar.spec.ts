@@ -445,6 +445,11 @@ test.describe('Edit bar · narrow windows', () => {
     const trigger = (await editBarControl(page, 'page').boundingBox())!;
     expect(chip.y).toBeGreaterThanOrEqual(trigger.y + trigger.height - 1);
     expect((await editBar(page).boundingBox())!.height).toBeLessThanOrEqual(100);
+    // The open menu follows the grown bar: it re-places below the second row
+    // instead of covering the error chip.
+    await expect
+      .poll(async () => (await openMenu(page).boundingBox())!.y)
+      .toBeGreaterThanOrEqual(chip.y + chip.height - 1);
   });
 
   for (const [w, h] of [

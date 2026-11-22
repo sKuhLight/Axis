@@ -1,6 +1,8 @@
 import {
   createEmptyWorkbenchPage,
   createWorkbenchId,
+  liftPanelFromPage,
+  panelIdsInPageDock,
   reduceWorkbenchDocument,
   repairWorkbenchDocument,
   resolveProfileForViewport,
@@ -8,7 +10,9 @@ import {
   selectActivePage,
   selectActiveProfile,
   selectOrderedPages,
+  selectPanelLocation,
   selectProfileOverride,
+  selectTabStackById,
   type BindingRef,
   type JsonObject,
   type WorkbenchCommand,
@@ -50,11 +54,42 @@ export interface WorkbenchCommandBatchResult {
   error?: WorkbenchCommandResult['error'];
 }
 
+/**
+ * The maximized panel survives a document change only while it is still docked
+ * on the (new) active page — a page switch or moving the panel to another page
+ * clears it — and is not collapsed (maximize and collapse are exclusive: a
+ * collapsed panel cannot be maximized, and collapsing restores). Pure so the
+ * rule is unit-tested.
+ */
+export function reconcileMaximizedPanel(
+  panelId: string | null,
+  page: WorkbenchPage | undefined,
+  panels?: Record<string, { collapsed?: boolean } | undefined>
+): string | null {
+  if (!panelId || !page) return null;
+  if (panels?.[panelId]?.collapsed) return null;
+  return panelIdsInPageDock(page).includes(panelId) ? panelId : null;
+}
+
 export class WorkbenchController {
   document: WorkbenchDocument;
   editMode = false;
   lastResult: WorkbenchCommandResult | null = null;
   drag: WorkbenchDragState | null = null;
+  /**
+   * The panel a panel drag has LIFTED out of the rendered dock (its slot
+   * collapses, the neighbours fill the space) while the drag is active.
+   * Transient view state: never persisted, never in layout history; cleared by
+   * `setDrag(null)`, leaving edit mode, and drag cancel.
+   */
+  liftedPanelId: string | null = null;
+  /**
+   * The panel whose stack covers the whole workspace (Maximize). Transient view
+   * state like `liftedPanelId`: not persisted, not in history; cleared when the
+   * panel leaves the active page (page switch / move away).
+   */
+  maximizedPanelId: string | null = null;
+  #renderedCache: { page: WorkbenchPage | undefined; lifted: string | null; result: WorkbenchPage | undefined } | null = null;
   #onChange?: (doc: WorkbenchDocument) => void;
   #bindingRegistry: WorkbenchBindingRegistry;
   #subscribers = new Set<(controller: WorkbenchController) => void>();
@@ -88,6 +123,23 @@ export class WorkbenchController {
     return selectActivePage(this.document);
   }
 
+  /**
+   * The page the dock renders: the active page, minus the lifted panel while a
+   * panel drag is active. The lift keeps single-child splits (same geometry as
+   * the reducer's removal, but the surviving neighbours keep their node ids, so
+   * they are not remounted when the drag starts or is cancelled). Memoized on
+   * (active page, lifted id) so every subscriber sees one stable object.
+   */
+  get renderedPage(): WorkbenchPage | undefined {
+    const page = this.activePage;
+    const lifted = this.liftedPanelId;
+    const cache = this.#renderedCache;
+    if (cache && cache.page === page && cache.lifted === lifted) return cache.result;
+    const result = page && lifted ? liftPanelFromPage(page, lifted, { preserveSplits: true, holdActive: true }) : page;
+    this.#renderedCache = { page, lifted, result };
+    return result;
+  }
+
   /** Pages of the active layout in canonical (pageOrder) order. */
   get pages(): WorkbenchPage[] {
     return selectOrderedPages(this.document);
@@ -110,18 +162,57 @@ export class WorkbenchController {
 
   setEditMode(editMode: boolean): void {
     this.editMode = editMode;
+    if (!editMode) {
+      this.drag = null;
+      this.liftedPanelId = null;
+    }
     this.#emit();
   }
 
   toggleEditMode(): void {
     this.editMode = !this.editMode;
-    if (!this.editMode) this.drag = null;
+    if (!this.editMode) {
+      this.drag = null;
+      this.liftedPanelId = null;
+    }
     this.#emit();
   }
 
+  /** Set (or clear) the drag state. Clearing it also drops any lifted panel. */
   setDrag(drag: WorkbenchDragState | null): void {
     this.drag = drag;
+    if (!drag) this.liftedPanelId = null;
     this.#emit();
+  }
+
+  /**
+   * Lift a panel out of the rendered dock for the duration of a panel drag
+   * (see {@link renderedPage}); `null` puts it back. Nothing is dispatched — a
+   * cancelled drag restores the layout simply by clearing the lift. Lifting
+   * also restores a maximized panel (the whole dock is the drop surface).
+   */
+  setLiftedPanel(panelId: string | null): void {
+    this.liftedPanelId = panelId;
+    if (panelId) this.maximizedPanelId = null;
+    this.#emit();
+  }
+
+  /** Maximize a panel's stack over the workspace (`null` restores). Activates the panel in its stack. */
+  setMaximizedPanel(panelId: string | null): void {
+    const next = reconcileMaximizedPanel(panelId, this.activePage, this.activeLayout?.panels);
+    if (next) {
+      const location = selectPanelLocation(this.document, next);
+      const stack = location ? selectTabStackById(this.document, location.tabStackId) : undefined;
+      // Activation is view state: panel.activate is excluded from layout history.
+      if (stack && stack.activePanelId !== next) this.dispatch({ type: 'panel.activate', panelId: next });
+    }
+    this.maximizedPanelId = next;
+    this.#emit();
+  }
+
+  /** Maximize `panelId`, or restore when it is the maximized one. */
+  toggleMaximizedPanel(panelId: string): void {
+    this.setMaximizedPanel(this.maximizedPanelId === panelId ? null : panelId);
   }
 
   updateDrag(patch: Partial<WorkbenchDragState>): void {
@@ -363,6 +454,10 @@ export class WorkbenchController {
   }
 
   #emit(): void {
+    // Transient view state follows the document: a maximized panel that is no
+    // longer on the active page (page switch, moved away, closed, undone) is
+    // restored before anyone renders.
+    if (this.maximizedPanelId) this.maximizedPanelId = reconcileMaximizedPanel(this.maximizedPanelId, this.activePage, this.activeLayout?.panels);
     this.#subscribers.forEach((run) => run(this));
   }
 }

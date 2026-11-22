@@ -28,6 +28,7 @@
     open,
     position,
     anchor = null,
+    boundary = null,
     items,
     label = 'Context menu',
     touch = false,
@@ -39,6 +40,12 @@
     position?: WorkbenchMenuPosition;
     /** Trigger element: the menu opens BELOW it, clamped inside the viewport (dropdowns). */
     anchor?: HTMLElement | null;
+    /**
+     * Anchored menus: an element (the bar holding the trigger) the menu must not
+     * cover — it opens below this element's bottom edge, and re-places whenever
+     * the element (or the anchor) changes size.
+     */
+    boundary?: HTMLElement | null;
     items: WorkbenchMenuItem[];
     label?: string;
     /** Touch presentation: 44px rows. */
@@ -196,6 +203,33 @@
     }
   }
 
+  /** The visual bottom edge the anchored menu must stay below (the boundary bar), if any. */
+  function boundaryFloor(): number | undefined {
+    return boundary && boundary.isConnected ? boundary.getBoundingClientRect().bottom : undefined;
+  }
+
+  /**
+   * Measure + place an anchored menu. A detached anchor (the trigger re-rendered
+   * away) keeps the last placement instead of jumping to (0,0).
+   */
+  function placeAnchored(anchorEl: HTMLElement) {
+    if (!menuEl || !anchorEl.isConnected) return;
+    const rect = menuEl.getBoundingClientRect();
+    const zoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const next = resolveAnchoredMenuPlacement(
+      anchorEl.getBoundingClientRect(),
+      viewport,
+      { width: rect.width, height: rect.height },
+      zoom,
+      4,
+      boundaryFloor()
+    );
+    left = next.x;
+    top = next.y;
+    maxHeight = next.maxHeight;
+  }
+
   $effect(() => {
     if (!open) return;
     // Re-place whenever the drill level or an inline row changes the menu size.
@@ -206,30 +240,25 @@
     // before the post-tick measure refines it.
     const preZoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
     if (anchorEl) {
-      const rect = anchorEl.getBoundingClientRect();
-      left = rect.left / preZoom;
-      top = (rect.bottom + 4) / preZoom;
+      if (anchorEl.isConnected) {
+        const rect = anchorEl.getBoundingClientRect();
+        const floor = boundaryFloor();
+        left = rect.left / preZoom;
+        top = (Math.max(rect.bottom, floor ?? rect.bottom) + 4) / preZoom;
+      }
     } else {
       left = (position?.x ?? 0) / preZoom;
       top = (position?.y ?? 0) / preZoom;
     }
     void tick().then(() => {
       if (!menuEl) return;
+      if (anchorEl) {
+        placeAnchored(anchorEl);
+        return;
+      }
       const rect = menuEl.getBoundingClientRect();
       const zoom = scrimEl ? effectiveZoom(scrimEl.getBoundingClientRect().width, scrimEl.offsetWidth) : 1;
       const viewport = { width: window.innerWidth, height: window.innerHeight };
-      if (anchorEl) {
-        const next = resolveAnchoredMenuPlacement(
-          anchorEl.getBoundingClientRect(),
-          viewport,
-          { width: rect.width, height: rect.height },
-          zoom
-        );
-        left = next.x;
-        top = next.y;
-        maxHeight = next.maxHeight;
-        return;
-      }
       const next = resolveMenuPlacement(
         position ?? { x: 0, y: 0 },
         viewport,
@@ -239,6 +268,30 @@
       left = next.x;
       top = next.y;
     });
+  });
+
+  // An anchored menu follows its anchor: when the anchor, the boundary bar, or
+  // any positioned ancestor of the anchor changes size (e.g. the edit bar grows
+  // a second row for an error chip), re-place on the next frame.
+  $effect(() => {
+    if (!open || !anchor || typeof ResizeObserver === 'undefined') return;
+    const anchorEl = anchor;
+    const observed = new Set<Element>([anchorEl]);
+    if (boundary) observed.add(boundary);
+    for (let el = anchorEl.offsetParent; el; el = el instanceof HTMLElement ? el.offsetParent : null) observed.add(el);
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => placeAnchored(anchorEl));
+    };
+    const observer = new ResizeObserver(schedule);
+    observed.forEach((el) => observer.observe(el));
+    window.addEventListener('resize', schedule);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', schedule);
+    };
   });
 </script>
 

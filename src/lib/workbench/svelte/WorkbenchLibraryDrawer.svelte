@@ -259,10 +259,11 @@
     startPanelDragOut({
       controller,
       event,
+      label: template.title,
       onActivate: onClose,
-      commit: ({ region }) => {
+      commit: ({ region, target }) => {
         const found = $controller.document.panelLibrary[template.id];
-        return found ? instantiatePanelTemplateCommands($controller.document, found, { region }) : null;
+        return found ? instantiatePanelTemplateCommands($controller.document, found, { region, target }) : null;
       }
     });
   }

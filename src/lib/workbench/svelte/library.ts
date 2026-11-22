@@ -2,6 +2,7 @@ import {
   selectActiveLayout,
   panelWidgetZoneId,
   type DockRegionId,
+  type DockTarget,
   type PanelInstance,
   type PanelTemplate,
   type WidgetGroup,
@@ -15,6 +16,12 @@ import {
 export interface InstantiatePanelTemplateOptions {
   region?: DockRegionId;
   index?: number;
+  /**
+   * Exact dock placement for the template's FIRST panel (a drag-out drop: zone
+   * split, tab at index, edge split). Further template panels tab onto the
+   * first. Without it the first panel appends to `region`.
+   */
+  target?: DockTarget;
 }
 
 export interface InstantiateWidgetTemplateOptions {
@@ -76,12 +83,18 @@ export function instantiatePanelTemplateCommands(
     if (!groupIdMap.has(group.id)) groupIdMap.set(group.id, uniqueId(group.id, usedGroupIds));
   }
 
-  const clonedPanels = panels.map((panel): PanelInstance => ({
-    ...clone(panel),
-    id: idMap.get(panel.id) ?? panel.id,
-    locked: false,
-    closable: panel.closable ?? true
-  }));
+  const clonedPanels = panels.map((panel): PanelInstance => {
+    const cloned: PanelInstance = {
+      ...clone(panel),
+      id: idMap.get(panel.id) ?? panel.id,
+      locked: false,
+      closable: panel.closable ?? true
+    };
+    // An instantiated panel always arrives expanded (a template saved from a
+    // collapsed strip must not land as a strip where the drop showed a panel).
+    delete cloned.collapsed;
+    return cloned;
+  });
   const firstPanelId = clonedPanels[0]?.id;
 
   const templateUsesPanelZone = (sourcePanelId: string): boolean =>
@@ -109,7 +122,7 @@ export function instantiatePanelTemplateCommands(
       region,
       target:
         index === 0
-          ? { kind: 'region', region, index: options.index }
+          ? options.target ?? { kind: 'region', region, index: options.index }
           : { kind: 'tab', targetPanelId: firstPanelId }
     });
   });

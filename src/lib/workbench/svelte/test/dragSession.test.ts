@@ -70,4 +70,35 @@ describe('beginPointerDrag', () => {
     fire('pointerup');
     expect(onDrop).not.toHaveBeenCalled();
   });
+
+  it('Escape cancels an active drag (when enabled) and consumes the key', () => {
+    const handlers = { onActivate: vi.fn(), onMove: vi.fn(), onDrop: vi.fn(), onTap: vi.fn(), onCancel: vi.fn() };
+    beginPointerDrag({ event: down(), cancelOnEscape: true, ...handlers });
+    // Before the threshold Escape is ignored.
+    window.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { key: 'Escape' }));
+    expect(handlers.onCancel).not.toHaveBeenCalled();
+    fire('pointermove', 60, 60);
+    const esc = Object.assign(new Event('keydown', { cancelable: true }), { key: 'Escape' });
+    window.dispatchEvent(esc);
+    expect(handlers.onCancel).toHaveBeenCalledWith('escape');
+    expect(esc.defaultPrevented).toBe(true);
+    fire('pointerup', 60, 60);
+    expect(handlers.onDrop).not.toHaveBeenCalled();
+  });
+
+  it('reports pointercancel as the cancel reason', () => {
+    const h = session();
+    fire('pointermove', 60, 60);
+    fire('pointercancel');
+    expect(h.onCancel).toHaveBeenCalledWith('pointercancel');
+  });
+
+  it('ignores Escape without cancelOnEscape', () => {
+    const h = session();
+    fire('pointermove', 60, 60);
+    window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }));
+    fire('pointerup', 60, 60);
+    expect(h.onCancel).not.toHaveBeenCalled();
+    expect(h.onDrop).toHaveBeenCalledTimes(1);
+  });
 });

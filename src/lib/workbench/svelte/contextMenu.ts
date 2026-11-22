@@ -307,20 +307,24 @@ const ANCHORED_MENU_MIN_HEIGHT = 120;
  * pointer menu it NEVER flips upward over its trigger: it opens below the
  * anchor, x is clamped inside the viewport (so a right-edge trigger shifts the
  * menu left), and the height is capped to the space left below — the menu
- * scrolls instead of covering the bar. Computed in visual space, then de-zoomed
- * like {@link resolveMenuPlacement}.
+ * scrolls instead of covering the bar. `floor` (visual px) is a y the menu never
+ * opens above: the bottom edge of the bar the trigger sits in, so a bar that
+ * grew a second row (e.g. an error chip) is never covered. Computed in visual
+ * space, then de-zoomed like {@link resolveMenuPlacement}.
  */
 export function resolveAnchoredMenuPlacement(
   anchor: { left: number; bottom: number },
   viewport: { width: number; height: number },
   menuSize: { width: number; height: number },
   zoom: number,
-  gap = 4
+  gap = 4,
+  floor?: number
 ): AnchoredMenuPlacement {
   const margin = 8;
   const factor = zoom > 0 ? zoom : 1;
   const x = Math.max(margin, Math.min(anchor.left, viewport.width - menuSize.width - margin));
-  const y = Math.max(margin, anchor.bottom + gap);
+  const below = typeof floor === 'number' && Number.isFinite(floor) ? Math.max(anchor.bottom, floor) : anchor.bottom;
+  const y = Math.max(margin, below + gap);
   const maxHeight = Math.max(ANCHORED_MENU_MIN_HEIGHT, viewport.height - y - margin);
   return { x: x / factor, y: y / factor, maxHeight: maxHeight / factor };
 }

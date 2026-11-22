@@ -3,9 +3,7 @@ import {
   anchoredWidgetIndex,
   defaultRegionBand,
   listReorderInsertIndex,
-  panelDropCommand,
   rectContainsPointer,
-  splitIntentFromRect,
   widgetDropCommand,
   widgetDropIndex,
   widgetIndexForUnitIndex,
@@ -14,32 +12,6 @@ import {
 } from '../drag';
 
 describe('Workbench drag helpers', () => {
-  it('maps panel drop intents to reducer commands', () => {
-    expect(panelDropCommand('panel.a', { kind: 'region', region: 'right' })).toEqual({
-      type: 'panel.move',
-      panelId: 'panel.a',
-      to: { kind: 'region', region: 'right' }
-    });
-    expect(panelDropCommand('panel.a', { kind: 'tab', tabStackId: 'tabs.main', index: 1 })).toEqual({
-      type: 'panel.move',
-      panelId: 'panel.a',
-      to: { kind: 'tab', tabStackId: 'tabs.main', index: 1 }
-    });
-  });
-
-  it('derives split intent from pointer position near panel edges', () => {
-    const rect = { left: 100, top: 100, width: 400, height: 300 };
-
-    expect(splitIntentFromRect({ x: 110, y: 220 }, rect, 'panel.b', 'main')).toEqual({
-      kind: 'split',
-      region: 'main',
-      targetPanelId: 'panel.b',
-      axis: 'horizontal',
-      position: 'before'
-    });
-    expect(splitIntentFromRect({ x: 300, y: 220 }, rect, 'panel.b', 'main')).toBeNull();
-  });
-
   describe('defaultRegionBand (T21 directive #1 full-region highlight)', () => {
     const ws = { left: 20, top: 40, width: 1000, height: 600 };
 

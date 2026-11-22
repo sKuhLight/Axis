@@ -38,6 +38,8 @@
   import { mobileBoot } from '$lib/mobile.svelte';
   import { notifyReady as otaNotifyReady, checkForUpdate as otaCheck } from '$lib/direct/ota';
   import { isAxisWorkbenchFeatureEnabled } from '$lib/axis-workbench/featureGate';
+  import { axisEditorCloseIsVisible } from '$lib/axis-workbench/axisEditorEscape';
+  import { axisWorkbenchController } from '$lib/axis-workbench/axisWorkbenchStore.svelte';
   import { pollIntervalsFor } from '$lib/pollIntervals';
 
   // In the remote web build, gate the app behind sign-in + relay-connect; start the editor only once the
@@ -96,6 +98,9 @@
         void history.redo();
       } else if (e.key === 'Escape') {
         if (editor.tourActive) return; // Tour.svelte owns Escape while the tour is up
+        // A branch that handles Escape marks it (preventDefault) so later Escape
+        // consumers (e.g. the workbench restoring a maximized panel) leave it be.
+        let handled = true;
         if (editor.tuner.active) editor.toggleTuner();
         else if (history.panelOpen) history.panelOpen = false;
         else if (editor.cabPickerOpen) editor.cabPickerOpen = false;
@@ -104,7 +109,17 @@
         else if (convert.open) convert.close();
         else if (editor.presetOpen) editor.presetOpen = false;
         else if (editor.linkFrom) editor.cancelLink(); // disarm tap-to-connect before closing the editor
-        else if (editor.editorOpen) editor.closeEditor();
+        else if (editor.editorOpen) {
+          editor.closeEditor();
+          // editorOpen stays true after the first block click; the workbench's
+          // tablet/desktop editor ignores it, so closing there is invisible and
+          // must not consume the key (axisEditorEscape.ts).
+          handled = axisEditorCloseIsVisible({
+            workbenchShell: workbenchEnabled,
+            profileBreakpoint: axisWorkbenchController.activeProfile?.breakpoint
+          });
+        } else handled = false;
+        if (handled) e.preventDefault();
       }
     };
     // Unsaved-changes guard, web mode only — in the desktop build the Electron main process owns the

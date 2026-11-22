@@ -114,14 +114,19 @@ attributes were added**:
 9. **09-custom-panel** — Add › "Add custom panel" inserts a custom panel with
    the empty-drop hint.
 
-Later specs (10–19) cover bottom-nav mode, pages, widget menus, the Customize
+Later specs (10–20) cover bottom-nav mode, pages, widget menus, the Customize
 drawers (opened from the edit bar's PAGE / Add / LAYOUT menus), the profile
 preview frame (the edit bar stays full width above it), parameter collect, grid
 routing, device layout, telemetry, and **19-edit-bar** — the edit bar's geometry
 (full width at the top, the app shifted by exactly its height, no overlap), its
 menus (inline delete confirm, rename field, duplicate, presets, saved layouts,
 import / export, backups, Add), and its overflow into ⋯ More at 1100 / 834 /
-390 px. Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
+390 px, and **20-dock-zones** — panel drags (the dragged panel is lifted out of
+the dock, five labelled zones on the hovered panel, the panel lands exactly on
+the highlighted rect, edges, empty region strips, small panels, nav pages,
+cancel, library drag-out, occupied and collapsed regions, tab bars at the
+workspace top), the panel menu's Move to ▸, maximize (incl. Escape priority
+behind app overlays) and collapse strips. Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
 browser-context level (page-level mocks still win), so a reachable ForgeFX can
 neither drive a device nor pop device prompts over the chrome.
 

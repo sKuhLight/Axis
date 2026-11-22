@@ -1,4 +1,5 @@
-import type { DockAxis, DockRegionId, DockTarget, FloatingRect, WorkbenchCommand, WidgetZoneId } from '../core';
+import type { DockRegionId, FloatingRect, WorkbenchCommand, WidgetZoneId } from '../core';
+import type { DockDropOverlayModel } from './dockDropOverlay';
 
 export interface WorkbenchPointer {
   x: number;
@@ -19,8 +20,14 @@ export type WorkbenchDragState =
       pointer: WorkbenchPointer;
       startedAt: WorkbenchPointer;
       targetLabel?: string;
-      previewRect?: WorkbenchRect;
-      previewKind?: 'region' | 'tab' | 'split';
+      /** Display name of the dragged panel (or library template). */
+      panelLabel?: string;
+      /**
+       * The dock-drop overlay for this pointer position (zones, landing shape,
+       * edge bars, page highlight, pointer card) — rendered by DragLayer via
+       * DockDropOverlay. Absent until the session has measured the dock.
+       */
+      dock?: DockDropOverlayModel;
     }
   | {
       kind: 'widget';
@@ -86,11 +93,6 @@ export type WorkbenchDragState =
 /** Shared pointer-move activation threshold (px) for every workbench drag. */
 export const DRAG_THRESHOLD = 5;
 
-export type PanelDropIntent =
-  | { kind: 'region'; region: DockRegionId; index?: number }
-  | { kind: 'tab'; tabStackId: string; index?: number }
-  | { kind: 'split'; region?: DockRegionId; targetPanelId?: string; axis: DockAxis; position: 'before' | 'after' };
-
 export interface WidgetDropIntent {
   zone: WidgetZoneId;
   index?: number;
@@ -99,41 +101,6 @@ export interface WidgetDropIntent {
 
 export function pointerDistance(a: WorkbenchPointer, b: WorkbenchPointer): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
-export function splitIntentFromRect(
-  pointer: WorkbenchPointer,
-  rect: WorkbenchRect,
-  targetPanelId: string,
-  region?: DockRegionId
-): Extract<PanelDropIntent, { kind: 'split' }> | null {
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const x = (pointer.x - rect.left) / rect.width;
-  const y = (pointer.y - rect.top) / rect.height;
-  const edge = 0.24;
-  if (x < edge) return { kind: 'split', region, targetPanelId, axis: 'horizontal', position: 'before' };
-  if (x > 1 - edge) return { kind: 'split', region, targetPanelId, axis: 'horizontal', position: 'after' };
-  if (y < edge) return { kind: 'split', region, targetPanelId, axis: 'vertical', position: 'before' };
-  if (y > 1 - edge) return { kind: 'split', region, targetPanelId, axis: 'vertical', position: 'after' };
-  return null;
-}
-
-export function panelDropCommand(panelId: string, intent: PanelDropIntent): WorkbenchCommand {
-  if (intent.kind === 'tab') return { type: 'panel.move', panelId, to: { kind: 'tab', tabStackId: intent.tabStackId, index: intent.index } };
-  if (intent.kind === 'split') {
-    return {
-      type: 'panel.move',
-      panelId,
-      to: {
-        kind: 'split',
-        region: intent.region,
-        targetPanelId: intent.targetPanelId,
-        axis: intent.axis,
-        position: intent.position
-      }
-    };
-  }
-  return { type: 'panel.move', panelId, to: { kind: 'region', region: intent.region, index: intent.index } };
 }
 
 export function widgetDropCommand(widgetIds: string[], intent: WidgetDropIntent): WorkbenchCommand {
@@ -263,12 +230,6 @@ export function zoneAtPointer(zones: { zone: WidgetZoneId; rect: WorkbenchRect }
   return found;
 }
 
-export function dockTargetLabel(intent: PanelDropIntent): string {
-  if (intent.kind === 'tab') return 'Tab panel';
-  if (intent.kind === 'split') return `Split ${intent.position}`;
-  return `Dock ${intent.region}`;
-}
-
 /**
  * Full-region drop-highlight rect for an edge (new-panel) drop, given the
  * workspace's own client rect (T21 directive #1: the "DOCK LEFT/RIGHT/…"
@@ -303,7 +264,7 @@ export function defaultRegionBand(region: DockRegionId, workspace: WorkbenchRect
  * docked region element (`.aw-workspace [data-region="…"]`) so the highlight
  * exactly wraps the region already on screen; falls back to `defaultRegionBand`
  * (a full-cross-axis band on the target edge) when that region has no panels
- * yet. Shared by the parameter-source edge drop (DockWorkspace) and the widget
+ * yet (an empty side region is only a slim edit-mode strip). Shared by the parameter-source edge drop (DockWorkspace) and the widget
  * new-panel edge drop (WidgetHost) so both read identically. Returns null only
  * when the workspace itself can't be measured.
  */
@@ -315,7 +276,9 @@ export function fullRegionHighlightRect(region: DockRegionId): WorkbenchRect | n
   if (ws.width <= 0 || ws.height <= 0) return null;
   const workspace: WorkbenchRect = { left: ws.left, top: ws.top, width: ws.width, height: ws.height };
   const regionEl = workspaceEl.querySelector<HTMLElement>(`[data-region="${region}"]`);
-  if (regionEl) {
+  // An EMPTY side region renders as a slim edit-mode strip: its rect is not the
+  // area a new panel will get, so fall back to the default band for it.
+  if (regionEl && !(region !== 'main' && regionEl.classList.contains('empty'))) {
     const r = regionEl.getBoundingClientRect();
     if (r.width > 8 && r.height > 8) return { left: r.left, top: r.top, width: r.width, height: r.height };
   }

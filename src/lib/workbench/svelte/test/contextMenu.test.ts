@@ -180,6 +180,15 @@ describe('resolveAnchoredMenuPlacement', () => {
     expect(placed.maxHeight).toBe(500 - 56 - 8);
   });
 
+  it('opens below a floor (the grown bar holding the trigger) instead of covering it', () => {
+    const placed = resolveAnchoredMenuPlacement({ left: 10, bottom: 52 }, { width: 390, height: 844 }, menu, 1, 4, 96);
+    expect(placed.y).toBe(100);
+    expect(placed.maxHeight).toBe(844 - 100 - 8);
+    // A floor above the anchor changes nothing; a non-finite one is ignored.
+    expect(resolveAnchoredMenuPlacement({ left: 10, bottom: 52 }, viewport, menu, 1, 4, 20).y).toBe(56);
+    expect(resolveAnchoredMenuPlacement({ left: 10, bottom: 52 }, viewport, menu, 1, 4, Number.NaN).y).toBe(56);
+  });
+
   it('de-zooms the visual placement like the pointer path', () => {
     const placed = resolveAnchoredMenuPlacement({ left: 200, bottom: 32 }, viewport, menu, 1.25);
     expect(placed.x).toBeCloseTo(200 / 1.25, 6);

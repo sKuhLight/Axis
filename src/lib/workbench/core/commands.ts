@@ -71,7 +71,9 @@ export type DockTarget =
 export type WorkbenchCommand =
   | { type: 'panel.add'; panel: PanelInstance; region: DockRegionId; target?: DockTarget }
   | { type: 'panel.close'; panelId: string }
-  | { type: 'panel.move'; panelId: string; to: DockTarget }
+  // panel.move: `pageId` (optional) applies `to` to THAT page's dock instead of
+  // the active page's; the active page stays as it is.
+  | { type: 'panel.move'; panelId: string; to: DockTarget; pageId?: string }
   | { type: 'panel.tab'; panelId: string; targetPanelId: string; index?: number }
   | { type: 'panel.activate'; panelId: string }
   | {

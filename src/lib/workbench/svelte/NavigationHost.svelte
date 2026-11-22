@@ -169,6 +169,7 @@
         class="aw-nav-entry"
         class:active={activeEntryId === entry.id}
         data-nav-entry={entry.id}
+        data-nav-page={isPageNavigationEntry(entry) ? entry.pageId : undefined}
         data-nav-active={activeEntryId === entry.id ? 'true' : undefined}
         data-fixed={entry.fixedSlot ?? 'none'}
         role="group"

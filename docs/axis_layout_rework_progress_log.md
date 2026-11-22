@@ -1892,3 +1892,50 @@ Design source: the UI-rework layout-editor prototype (variant D, edit bar above 
 ### Open (picked up in slice 2)
 - At 390 px the open PAGE menu partly covers the error row after a rejected rename. The menu should re-place when the bar height changes.
 - A menu whose trigger detaches without a resize keeps a stale anchor. Not reachable today.
+
+## ROUND 26 — Layout editor rework, slice 2: visible dock zones, lift-on-drag, edge docks, page drops, panel menu (parent AXIS-67)
+
+Branch `feature/ui-rework` (worktree `.wt-feature-ui-rework`). Design source: the layout-editor prototype (`startPanelDrag` / `_hit` / `_zoneRects` / `_minus` / `_ghostPos`, the drag overlay, the panel menu, maximize, collapse).
+
+### What changed
+- **Lift on drag (generic).**
+  - `core/dockTree.ts` holds the ONE removal (`removePanelFromNode`, `removePanelFromDock`, `liftPanelFromDock` / `liftPanelFromPage`). The reducer uses it; so does the preview.
+  - Controller: transient `liftedPanelId` (never persisted, never in history; cleared by `setDrag(null)`, leaving edit mode, cancel) and a memoized `renderedPage`. DockRegion / DockNode / TabStack render from it, so the dragged panel's slot collapses the moment the drag activates.
+  - The lift keeps one-child splits (`preserveSplits`): same geometry as the reducer's removal, but neighbours keep their node ids and are not remounted on drag start / cancel.
+- **Targets: `svelte/dockDropTarget.ts` (pure).** Nav pages first (current page refused) → 24px edge strips → stacks (tab bar = tab at index; collapsed or `< 200×150` = "Add as tab" only; else five zones, 8px inset, 25% bands, 6px gaps, rim = nearest band) → empty regions. `dockDropCommand` maps every target to ONE `panel.move`; `landingRect` is the exact post-drop rect (split = half the stack incl. the 4px handle, tab = whole stack / expanded rect of a collapsed one, empty region = its band, occupied region = outer half).
+- **Overlay: `DockDropOverlay.svelte` + `svelte/dockDropOverlay.ts` (pure model).** One opaque landing shape with its label + panel name; the other zones as faint dashed boxes clipped around it (`rectMinus`); four 8px edge bars (the active one replaced); nav page highlight (accent / danger "Already on this page"); a pointer card placed by `ghostPosition` so it never covers a label. Rendered from DragLayer with its zoom compensation. The old per-region `::after` drag labels are gone.
+- **Sessions: `svelte/panelDrag.ts`.** Measures the lifted DOM every move. Release over nothing or Escape cancels (toast "Drag cancelled"); one drop = one dispatch = one undo step. `dragSession.ts` gained `cancelOnEscape`.
+- **Drop on a nav page:** `panel.move` takes an optional `pageId` (the target page's dock, active page unchanged, `missing-page` on an unknown page). Toast "Moved <panel> to <page>". Nav entries carry `data-nav-page`.
+- **Panel menu / header (TabStack, model in `svelte/panelChrome.ts`):** Move to ▸ (docks, Main, one "Page: <label>" per other page) · Maximize/Restore · Collapse/Expand · Save To Library · Close Panel.
+  - Maximize: transient `maximizedPanelId`, header button ⤢/⤡, double-click a tab, Escape restores when no menu/drawer/drag owns the key. The stack's own DOM is lifted with `position: fixed` over the measured workspace (no remount). Cleared on page switch / when the panel leaves the page.
+  - Collapse: a stack whose active panel is collapsed is a 36px labelled strip (rotated in a horizontal split); siblings take the space (`svelte/dockLayout.ts` flex sizes). A fully collapsed side region shrinks to its strips; a collapsed main pins them to its top. Click (or right-click for the menu) on the strip.
+- **Library drag-out** uses the same targets and overlay (no lift, no pages); `instantiatePanelTemplateCommands` accepts `target`.
+- **Empty regions in edit mode** are slim labelled strips (44px side / 48px band) and drop targets; main keeps its placeholder; view mode unchanged. `fullRegionHighlightRect` falls back to the default band for an empty strip.
+- **ContextMenu (slice-1 leftovers):** `boundary` prop (the edit bar passes itself) — an anchored menu opens below the bar and re-places on anchor / bar / ancestor resize; a detached anchor keeps the last placement.
+
+### e2e
+- `03-dock`: test 3 follows the new menu (Move to ▸ submenu, collapse strip → expand → close).
+- `19-edit-bar`: @390 the open PAGE menu re-places below the error row.
+- New `20-dock-zones.spec.ts` (11 tests): lift, five zones + exact landing + one-step undo for all five zones, edge left, empty top strip, small panel, cancel by release, page drop + refused current page, Move to ▸ Right dock / page, double-click maximize + Escape, collapse strip, view-mode collapse/maximize, library drag-out; console-error checks.
+
+### Review fixes (regression review + workbench-reviewer)
+- **Escape priority:** a maximized panel restores only on an Escape nothing else consumed (bubble phase, no stopPropagation, deferred check of `defaultPrevented`). The app's Escape chain (`routes/+page.svelte`) and the command palette now call `preventDefault()` when they handle Escape.
+- **Collapsed regions:** every insert into a region clears `regions[r].collapsed`; the landing uses the expanded band; a user-collapsed strip is an edge target.
+- **Moves arrive expanded:** `panel.move` clears the moved panel's `collapsed`; template instances never carry it.
+- **Hit-testing:** a stack's tab bar beats the edge strips (stacks at the workspace edges); the topmost stack (drawer > inline) wins.
+- **Lift holds the stack:** dragging the active tab of a multi-tab stack keeps that stack's body empty (`holdActive`) — no neighbour panel mounts mid-drag. The dragged panel itself still unmounts / remounts.
+- **Maximize:** exclusive with collapse; double-click respects drawers; released when its inline owner unmounts or is not laid out.
+- **Robustness:** a drop always clears the drag + lift (try/finally, rethrow); a refused drop leaves the reducer's error on the edit-bar chip instead of "Drag cancelled".
+- **Collapsed strip:** parameter drops and spring-to-expand reach it; focus follows collapse / expand; split handles beside a strip are inert.
+- **Purity / tests:** `completeDockDropGeometry` (model-derived geometry) and `layoutDockWorkspace` (edit-mode flex mirror) are pure; a round-trip suite checks reducer + mirror == `landingRect`; the drag session is unit-tested with injected collaborators. Dead panel-intent helpers removed. e2e tolerance 1px.
+
+### Verification-review fixes
+- **Escape after a block was opened (desktop):** the app chain still calls `closeEditor()`, but marks the key handled only when that is visible — the legacy shell, or the workbench phone profile (`axis-workbench/axisEditorEscape.ts`, used by `routes/+page.svelte`). A maximized panel restores on the first Escape again.
+- **One Escape, two effects:** the maximize Escape snapshots open overlays (`MAXIMIZE_ESCAPE_OVERLAYS`, now incl. `[role="dialog"]`) in a window capture listener, before a dialog's own handler closes it; it restores only if nothing was open then and nothing called preventDefault.
+- **Held stack with a collapsed next tab:** a held stack is judged by its first remaining tab (the one the reducer activates), so it is already a strip during the drag when that tab is collapsed; round-trip test added.
+- **Rule documented:** moving a maximized panel to another stack releases the maximize (its owner unmounts).
+
+### Gates
+- `npm run check`: 0 errors, 0 warnings.
+- `npm test`: 1818 passed (130 files; baseline 1666 / 122).
+- Chromium e2e, full suite: 86/86 (baseline 67).

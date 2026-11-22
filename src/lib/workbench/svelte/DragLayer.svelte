@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getWorkbenchContext } from './context';
+  import DockDropOverlay from './DockDropOverlay.svelte';
   import type { WorkbenchCommand } from '../core';
 
   const { controller, registry } = getWorkbenchContext();
@@ -10,14 +11,22 @@
   // slot elements render inside the zone/group flow, not in this layer). Neither
   // ⇒ nothing will accept the drop, so the drag reads as rejected (design
   // language: danger-tinted, not-allowed cursor).
-  // `previewRect` overlay is panel/widget-only (list drags feed back via the
-  // in-flow slot instead, like widget positional inserts).
-  const previewRect = $derived(drag && drag.kind !== 'list' ? drag.previewRect : undefined);
+  // `previewRect` overlay is widget-only (list drags feed back via the in-flow
+  // slot instead, like widget positional inserts; panel drags use the overlay).
+  const previewRect = $derived(drag?.kind === 'widget' ? drag.previewRect : undefined);
+  // Panel drags (tab drag / library drag-out) render the dock-drop overlay —
+  // zones, landing shape, edge bars, page highlight, pointer card — instead of
+  // the generic preview rect + chip. Until the session has measured the dock
+  // (one tick after the lift) `dock` is absent and nothing is drawn for it.
+  const dockModel = $derived(drag?.kind === 'panel' ? drag.dock : undefined);
+  const panelDrag = $derived(drag?.kind === 'panel');
   const invalid = $derived(
     !!drag &&
-      !previewRect &&
-      !(drag.kind === 'widget' && (drag.zoneInsert || drag.groupInsert)) &&
-      !(drag.kind === 'list' && drag.listInsert)
+      (panelDrag
+        ? !!dockModel?.invalid
+        : !previewRect &&
+          !(drag.kind === 'widget' && (drag.zoneInsert || drag.groupInsert)) &&
+          !(drag.kind === 'list' && drag.listInsert))
   );
 
   // Generic list-reorder ghost: the primitive captured a static CLONE of the
@@ -81,11 +90,12 @@
 
 {#if drag}
   <div class="aw-drag-layer" class:invalid bind:this={layerEl}>
+    {#if dockModel}
+      <DockDropOverlay model={dockModel} {zoom} />
+    {/if}
     {#if previewRect}
       <div
         class="aw-drop-preview"
-        class:tab={drag.kind === 'panel' && drag.previewKind === 'tab'}
-        class:split={drag.kind === 'panel' && drag.previewKind === 'split'}
         class:insert={drag.kind === 'widget' && drag.previewKind === 'insert'}
         class:group={drag.kind === 'widget' && drag.previewKind === 'group'}
         style="
@@ -123,6 +133,7 @@
         use:mountClone={listGhost.ghostEl}
       ></div>
     {/if}
+    {#if !panelDrag}
     <div
       class="aw-drag-ghost"
       class:invalid
@@ -143,6 +154,7 @@
         <span class="aw-drag-target">{drag.targetLabel}</span>
       {/if}
     </div>
+    {/if}
   </div>
 {/if}
 
@@ -213,15 +225,6 @@
     box-shadow:
       inset 0 0 0 1px color-mix(in srgb, var(--aw-accent) 26%, transparent),
       0 0 24px color-mix(in srgb, var(--aw-accent) 18%, transparent);
-  }
-  .aw-drop-preview.tab {
-    border-style: solid;
-    border-radius: 0;
-    background: color-mix(in srgb, var(--aw-accent) 24%, transparent);
-  }
-  .aw-drop-preview.split {
-    border-style: solid;
-    border-radius: 0;
   }
   .aw-drop-preview.insert {
     border: 0;

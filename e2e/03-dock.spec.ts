@@ -73,11 +73,25 @@ test.describe('Dock interactions', () => {
     await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();
     const menu = page.locator('.aw-context-menu');
     await expect(menu).toBeVisible();
-    await expect(menu.locator('.aw-menu-item')).toContainText(['Collapse Panel', 'Close Panel']);
+    // Slice 2 menu: Move to ▸ · Maximize · Collapse · Save · Close (every old item kept).
+    await expect(menu.locator('.aw-menu-item')).toContainText(['Move to', 'Maximize Panel', 'Collapse Panel', 'Save To Library', 'Close Panel']);
 
-    // Collapse the active panel.
+    // Move to ▸ drills into the docks, Main and the other pages.
+    await menu.getByRole('menuitem', { name: /Move to/ }).click();
+    await expect(menu.getByRole('menuitem', { name: 'Right dock' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Main' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /^Page: / }).first()).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Back' }).click();
+
+    // Collapse the active panel: the stack becomes a slim labelled strip.
     await menu.getByRole('menuitem', { name: /Collapse Panel/ }).click();
     await expect(menu).toHaveCount(0);
+    const strip = page.locator('.aw-tabstack[data-region="main"] [data-pane-strip]');
+    await expect(strip).toBeVisible();
+    await expect(strip).toContainText('Setup');
+    // Clicking the strip expands it again.
+    await strip.click();
+    await expect(strip).toHaveCount(0);
 
     // Re-open and close the panel; Setup tab disappears from the main stack.
     await page.locator('.aw-pane-btn[title="Panel actions"]').first().click();

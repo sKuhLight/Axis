@@ -10,23 +10,19 @@
  *     so a cancelled drag never leaves an orphan widget/panel behind.
  *   - It reuses the SAME visual machinery as the in-layout drags: it drives
  *     `controller.drag` so the `.aw-root.aw-dragging-*` classes, the in-flow zone
- *     slot (WidgetZone `zoneInsert`), the region outlines (DockRegion) and the
- *     DragLayer target chip all light up. The travelling widget ghost is absent
- *     (no instance exists yet) — the chip carries the feedback.
- *   - Hit-testing mirrors WidgetHost.widgetDropAt / TabStack.panelDropIntentAt
- *     (elementFromPoint → closest('[data-zone]' / '[data-region]')), and the
- *     unit→widget index conversion delegates to the unit-tested helpers in
- *     `drag.ts`.
+ *     slot (WidgetZone `zoneInsert`) and the DragLayer chip light up for widgets;
+ *     panels run the tab drag's dock-drop session (`panelDrag.ts`: five zones,
+ *     tab bar, edges, empty regions, landing shape). The travelling widget ghost
+ *     is absent (no instance exists yet) — the chip carries the feedback.
+ *   - Widget hit-testing mirrors WidgetHost.widgetDropAt (elementFromPoint →
+ *     closest('[data-zone]')), and the unit→widget index conversion delegates to
+ *     the unit-tested helpers in `drag.ts`.
  *
  * The session lives on `window` listeners (independent of the drawer's Svelte
  * lifecycle) so the drawer can auto-collapse the instant the drag activates
  * (design closes `libOpen`) without tearing the drag down.
  */
-import {
-  selectVisibleWidgetsByZone,
-  type DockRegionId,
-  type WorkbenchCommand
-} from '../core';
+import { selectVisibleWidgetsByZone, type DockRegionId, type DockTarget, type WorkbenchCommand } from '../core';
 import type { WorkbenchController } from './controller.svelte';
 import {
   widgetDropIndex,
@@ -35,6 +31,8 @@ import {
   type WorkbenchRect
 } from './drag';
 import { beginPointerDrag } from './dragSession';
+import { dockTargetFor } from './dockDropTarget';
+import { beginDockDropSession } from './panelDrag';
 
 /** A widget id no live widget can hold — marks the drag as a not-yet-created item. */
 const DRAG_OUT_WIDGET_ID = '__aw-drag-out__';
@@ -73,15 +71,6 @@ function resolveWidgetDrop(
   const unitIndex = widgetDropIndex({ x, y }, zoneUnitEls(zoneEl).map(rectOf), orientation);
   const counts = zoneUnitWidgetCounts(selectVisibleWidgetsByZone(controller.document, zone));
   return { zone, unitIndex, widgetIndex: widgetIndexForUnitIndex(counts, unitIndex) };
-}
-
-/** Resolve the dock region + its rect under a pointer (region-level only). */
-function resolveRegionDrop(x: number, y: number): { region: DockRegionId; rect: WorkbenchRect } | null {
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  const regionEl = el?.closest<HTMLElement>('[data-region]');
-  const region = regionEl?.dataset.region as DockRegionId | undefined;
-  if (!region || !regionEl) return null;
-  return { region, rect: rectOf(regionEl) };
 }
 
 export interface WidgetDragOutOptions {
@@ -137,40 +126,41 @@ export interface PanelDragOutOptions {
   controller: WorkbenchController;
   event: PointerEvent;
   onActivate?: () => void;
-  /** Commands to run on a valid drop into a dock region. */
-  commit: (drop: { region: DockRegionId }) => WorkbenchCommand[] | null;
+  /** Template title for the pointer card / landing label. */
+  label?: string;
+  /**
+   * Commands to run on a valid drop. `target` is the exact dock placement (a
+   * zone split, a tab at an index, an edge / empty region); `region` is the
+   * region it lands in (kept for callers that only place by region).
+   */
+  commit: (drop: { region: DockRegionId; target: DockTarget }) => WorkbenchCommand[] | null;
 }
 
-/** Begin a panel drag-OUT (drop into a dock region). Tap fallback is the row's onclick. */
+/**
+ * Begin a panel drag-OUT. Same targets as a tab drag (five zones, tab bar,
+ * edges, empty regions — nav pages are skipped) and the same overlay, but
+ * nothing is lifted: the source is a template, instantiated only on drop.
+ * Tap fallback is the row's onclick.
+ */
 export function startPanelDragOut(options: PanelDragOutOptions): void {
   const { controller, event, commit } = options;
   if (!controller.editMode || event.button !== 0) return;
-  const startedAt = { x: event.clientX, y: event.clientY };
-
-  beginPointerDrag({
+  beginDockDropSession({
+    controller,
     event,
+    draggedPanelId: DRAG_OUT_PANEL_ID,
+    panelLabel: options.label ?? 'Panel',
+    lift: false,
+    pages: false,
     onActivate: options.onActivate,
-    onMove: (pointer) => {
-      const drop = resolveRegionDrop(pointer.x, pointer.y);
-      controller.setDrag({
-        kind: 'panel',
-        panelId: DRAG_OUT_PANEL_ID,
-        startedAt,
-        pointer,
-        targetLabel: drop ? `Dock ${drop.region}` : undefined,
-        previewRect: drop?.rect,
-        previewKind: drop ? 'region' : undefined
-      });
-    },
-    onDrop: (pointer) => {
-      const drop = resolveRegionDrop(pointer.x, pointer.y);
-      if (drop) {
-        const commands = commit({ region: drop.region });
-        if (commands && commands.length) controller.dispatchMany(commands);
-      }
-      controller.setDrag(null);
-    },
-    // An interrupted gesture (pointercancel) must not leave the drag ghost stuck on screen.
-    onCancel: () => controller.setDrag(null)
+    commit: (target) => {
+      const to = dockTargetFor(target);
+      if (!to || target.kind === 'page') return false;
+      const commands = commit({ region: target.region, target: to });
+      if (!commands || !commands.length) return false;
+      // A refused instantiation (e.g. a duplicate singleton) keeps the reducer's
+      // error on lastResult — the edit bar shows it — instead of "Drag cancelled".
+      return controller.dispatchMany(commands).success ? true : 'refused';
+    }
   });
 }

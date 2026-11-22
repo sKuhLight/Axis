@@ -21,6 +21,7 @@ import { createEmptyDockLayout } from './defaults';
 import { cloneWorkbenchDocument, normalizeRatios, repairWorkbenchDocument } from './invariants';
 import { remintWorkbenchPage } from './layoutPackage';
 import { activeWorkbenchPage, orderedWorkbenchPages, panelIdsInPageDock, selectActiveLayout } from './selectors';
+import { removePanelFromDock } from './dockTree';
 import type { DockTarget, WorkbenchCommand, WorkbenchCommandResult, WorkbenchErrorCode } from './commands';
 
 interface InsertResult {
@@ -76,53 +77,6 @@ const makeSplit = (axis: DockAxis, children: DockNode[]): SplitDockNode => ({
   children
 });
 
-function removePanelFromNode(node: DockNode | null, panelId: string): { node: DockNode | null; removed: boolean } {
-  if (!node) return { node, removed: false };
-  if (node.kind === 'tabs') {
-    if (!node.panelIds.includes(panelId)) return { node, removed: false };
-    const panelIds = node.panelIds.filter((id) => id !== panelId);
-    if (panelIds.length === 0) return { node: null, removed: true };
-    return {
-      removed: true,
-      node: {
-        ...node,
-        panelIds,
-        activePanelId: panelIds.includes(node.activePanelId) ? node.activePanelId : panelIds[0]
-      }
-    };
-  }
-
-  let removed = false;
-  const children = node.children
-    .map((child) => {
-      const result = removePanelFromNode(child, panelId);
-      removed = removed || result.removed;
-      return result.node;
-    })
-    .filter((child): child is DockNode => !!child);
-  if (!removed) return { node, removed: false };
-  if (children.length === 0) return { node: null, removed: true };
-  if (children.length === 1) return { node: children[0], removed: true };
-  return {
-    removed: true,
-    node: {
-      ...node,
-      children,
-      ratio: normalizeRatios(node.ratio, children.length)
-    }
-  };
-}
-
-function removePanelFromDock(dock: DockLayout, panelId: string): boolean {
-  let removed = false;
-  for (const region of Object.keys(dock.root) as DockRegionId[]) {
-    const result = removePanelFromNode(dock.root[region], panelId);
-    dock.root[region] = result.node;
-    removed = removed || result.removed;
-  }
-  return removed;
-}
-
 // A panel id may appear in at most one page's dock, but removal sweeps ALL
 // pages defensively so a move/close can never leave a stale reference behind.
 function removePanelFromAllPages(layout: WorkbenchLayout, panelId: string): boolean {
@@ -163,8 +117,18 @@ function findTabStackById(node: DockNode | null, tabStackId: string): TabStackDo
   return undefined;
 }
 
+/**
+ * A panel dropped into a region the user collapsed (region.collapse) would land
+ * invisibly inside the strip: every insert into a region expands it.
+ */
+function expandRegion(dock: DockLayout, region: DockRegionId): void {
+  const state = dock.regions[region];
+  if (state?.collapsed) state.collapsed = false;
+}
+
 function appendPanelToRegion(dock: DockLayout, panelId: string, region: DockRegionId, index?: number): InsertResult {
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
+  expandRegion(dock, region);
   const root = dock.root[region];
   if (!root) {
     dock.root[region] = makeTabStack(panelId);
@@ -186,9 +150,15 @@ function appendPanelToRegion(dock: DockLayout, panelId: string, region: DockRegi
 }
 
 function insertPanelIntoTab(dock: DockLayout, panelId: string, target: Extract<DockTarget, { kind: 'tab' }>): InsertResult {
-  const stack = findAcrossRegions(dock, (node) =>
-    target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined
-  );
+  let stack: TabStackDockNode | undefined;
+  for (const region of Object.keys(dock.root) as DockRegionId[]) {
+    const node = dock.root[region];
+    stack = target.tabStackId ? findTabStackById(node, target.tabStackId) : target.targetPanelId ? findTabStackByPanel(node, target.targetPanelId) : undefined;
+    if (stack) {
+      expandRegion(dock, region);
+      break;
+    }
+  }
   if (!stack) return { success: false, code: 'missing-target', message: 'Target tab stack was not found.' };
   const panelIds = stack.panelIds.filter((id) => id !== panelId);
   const index = Math.max(0, Math.min(target.index ?? panelIds.length, panelIds.length));
@@ -232,6 +202,7 @@ function insertPanelAsSplit(dock: DockLayout, panelId: string, target: Extract<D
       const result = splitNearTarget(dock.root[region], panelId, target.targetPanelId, target.axis, position);
       if (result.inserted) {
         dock.root[region] = result.node;
+        expandRegion(dock, region);
         return { success: true };
       }
     }
@@ -241,6 +212,7 @@ function insertPanelAsSplit(dock: DockLayout, panelId: string, target: Extract<D
   const region = target.region;
   if (!region) return { success: false, code: 'missing-target', message: 'Split target needs a region or target panel.' };
   if (!isDockRegionId(region)) return { success: false, code: 'invalid-region', message: `Invalid dock region: ${region}` };
+  expandRegion(dock, region);
   const root = dock.root[region];
   if (!root) {
     dock.root[region] = makeTabStack(panelId);
@@ -500,10 +472,18 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       return ok(next);
     }
     case 'panel.move': {
-      if (!dock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
+      // `pageId` targets ANOTHER page's dock (drop on a nav page / "Move to ▸
+      // Page"): the panel leaves wherever it is and `to` is applied to that
+      // page's dock. The active page does not change.
+      const targetDock = command.pageId ? layout.pages[command.pageId]?.dock : dock;
+      if (command.pageId && !targetDock) return fail(doc, 'missing-page', `Page ${command.pageId} does not exist.`);
+      if (!targetDock) return fail(doc, 'missing-page', 'The active Workbench page could not be found.');
       if (!layout.panels[command.panelId]) return fail(doc, 'missing-panel', `Panel ${command.panelId} does not exist.`);
       removePanelFromAllPages(layout, command.panelId);
-      const result = insertPanel(dock, command.panelId, command.to, 'main');
+      // A moved panel arrives expanded: the drop preview shows it at full size,
+      // so it must never land as a collapsed strip (old docs / strip menus).
+      delete layout.panels[command.panelId].collapsed;
+      const result = insertPanel(targetDock, command.panelId, command.to, 'main');
       return result.success ? ok(next) : fail(doc, result.code ?? 'invalid-command', result.message ?? 'Could not move panel.');
     }
     case 'panel.tab': {
