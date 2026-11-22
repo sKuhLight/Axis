@@ -29,7 +29,9 @@ import {
   type WorkbenchBindingRegistry,
   type WorkbenchBindingResult
 } from '../bindings';
+import type { WorkbenchAddPaletteRequest } from './addCatalog';
 import type { WorkbenchDragState } from './drag';
+import type { WorkbenchPlacementState } from './placement';
 import { LayoutHistory, type LayoutHistoryOptions } from './layoutHistory';
 
 export interface WorkbenchControllerOptions {
@@ -89,6 +91,17 @@ export class WorkbenchController {
    * panel leaves the active page (page switch / move away).
    */
   maximizedPanelId: string | null = null;
+  /**
+   * The open Add palette (filter + optional fixed target), or null. Transient
+   * view state: never persisted, never in history; cleared on leaving edit mode.
+   */
+  addPalette: WorkbenchAddPaletteRequest | null = null;
+  /**
+   * Click-to-place in progress (the highlighted spots, the keyboard spot), or
+   * null. Transient like `addPalette`; the session in `placementSession.ts`
+   * owns it and clears it when it ends.
+   */
+  placement: WorkbenchPlacementState | null = null;
   #renderedCache: { page: WorkbenchPage | undefined; lifted: string | null; result: WorkbenchPage | undefined } | null = null;
   #onChange?: (doc: WorkbenchDocument) => void;
   #bindingRegistry: WorkbenchBindingRegistry;
@@ -162,19 +175,40 @@ export class WorkbenchController {
 
   setEditMode(editMode: boolean): void {
     this.editMode = editMode;
-    if (!editMode) {
-      this.drag = null;
-      this.liftedPanelId = null;
-    }
+    if (!editMode) this.#clearEditTransients();
     this.#emit();
   }
 
   toggleEditMode(): void {
     this.editMode = !this.editMode;
-    if (!this.editMode) {
-      this.drag = null;
-      this.liftedPanelId = null;
-    }
+    if (!this.editMode) this.#clearEditTransients();
+    this.#emit();
+  }
+
+  /** Leaving edit mode drops every edit-only transient (drag, lift, palette, placement). */
+  #clearEditTransients(): void {
+    this.drag = null;
+    this.liftedPanelId = null;
+    this.addPalette = null;
+    this.placement = null;
+  }
+
+  /** Open the Add palette (edit mode only). */
+  openAddPalette(request: WorkbenchAddPaletteRequest): void {
+    if (!this.editMode) return;
+    this.addPalette = request;
+    this.#emit();
+  }
+
+  closeAddPalette(): void {
+    if (!this.addPalette) return;
+    this.addPalette = null;
+    this.#emit();
+  }
+
+  /** Set (or clear) the click-to-place state (placementSession.ts). */
+  setPlacement(placement: WorkbenchPlacementState | null): void {
+    this.placement = placement;
     this.#emit();
   }
 

@@ -5,12 +5,12 @@ import type { WorkbenchPointer, WorkbenchRect } from './drag';
  * `03-groups.md` §3). Kept framework-free and DOM-free so it is exhaustively
  * unit-testable — the Svelte hosts only feed it measured rects and a pointer.
  *
- * A group renders its members in a **horizontal flow** (dividers/placeholder
- * spliced between them). The drop lands *before* the member whose midpoint the
- * pointer has not yet crossed, or after the last member when the pointer is past
- * every midpoint. This mirrors `widgetDropIndex` but is scoped to a single
- * group's member rects and resolved against a **stable snapshot** so the
- * placeholder reflowing the members can never feed back and cause jitter (design
+ * A group renders its members in a **horizontal flow** (dividers between them).
+ * The drop lands *before* the member whose midpoint the pointer has not yet
+ * crossed, or after the last member when the pointer is past every midpoint.
+ * This mirrors `widgetDropIndex` but is scoped to a single group's member rects
+ * (the dragged member excluded). Slice 4b: used for a member reordering inside
+ * its OWN group; the insert line marks the spot, nothing reflows (design
  * `_gsnap`, 03-groups §3).
  */
 export function groupInsertIndex(
@@ -42,10 +42,9 @@ export function groupHitArea(moduleRect: WorkbenchRect, padX = 8, padY = 4): Wor
   };
 }
 
-// NOTE (V14 follow-up): the first pass painted an overlay placeholder rect from
-// here into DragLayer — it drew ON TOP of members without moving them apart. The
-// design instead splices a REAL spacer element into the group's / zone's flex
-// flow (AxisGroup `indStyle` span, shell `isGap` div) so neighbours physically
-// reflow. The overlay helper was removed; the in-flow slots in
-// WidgetGroupHost/WidgetZone are driven by `drag.groupInsert` /
-// `drag.zoneInsert` plus the index math above.
+// NOTE (V14 follow-up → slice 4b): the first pass painted an overlay rect from
+// here; V14 then spliced a widget-sized spacer into the group's / zone's flow.
+// Slice 4b replaces both with a thin insert LINE (`widgetDrop.ts`
+// `insertLineRect`, drawn by the DragLayer): nothing moves while dragging, and
+// only a member's OWN group takes a positional insert (reorder) — a foreign
+// group is grouped with by dwelling (`dwellTracker.ts`), never by a plain drop.

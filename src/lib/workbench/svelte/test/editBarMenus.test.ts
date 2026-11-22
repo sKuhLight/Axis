@@ -274,6 +274,14 @@ describe('PROFILE, Add and More menus', () => {
     ]);
     expect(more[0].items).toEqual([child]);
   });
+
+  it('a group that is one action (Add with a palette) is a plain row', () => {
+    const run = vi.fn();
+    const more = buildMoreMenuItems([{ id: 'add', label: 'Add…', items: [], run }]);
+    expect(more).toEqual([{ id: 'more.add', label: 'Add…', run }]);
+    more[0].run();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('status text / error chip', () => {
@@ -283,6 +291,26 @@ describe('status text / error chip', () => {
   it('shows the idle hint by default and the drag hint while dragging', () => {
     expect(resolveEditBarStatus(base)).toEqual({ error: null, text: EDIT_BAR_STATUS_IDLE, tone: 'idle' });
     expect(resolveEditBarStatus({ ...base, dragging: true })).toMatchObject({ text: EDIT_BAR_STATUS_DRAG, tone: 'drag' });
+  });
+
+  it('while placing, the line names the item and how to place it (over the drag hint)', () => {
+    const placing = { label: 'Preset Browser' };
+    expect(resolveEditBarStatus({ ...base, placing })).toEqual({
+      error: null,
+      text: 'Preset Browser · Click a highlight to place · Esc cancels',
+      tone: 'drag'
+    });
+    expect(resolveEditBarStatus({ ...base, placing, dragging: true }).text).toContain('Click a highlight to place');
+    expect(resolveEditBarStatus({ ...base, placing, lastResult: failed }).error).toBe('Page label cannot be empty.');
+  });
+
+  it('while placing with an active spot, the line says where it lands', () => {
+    expect(resolveEditBarStatus({ ...base, placing: { label: 'History', active: 'Split right · Signal Grid' } }).text).toBe(
+      'History → Split right · Signal Grid · Click or Enter places · Esc cancels'
+    );
+    expect(resolveEditBarStatus({ ...base, placing: { label: 'History', active: null } }).text).toBe(
+      'History · Click a highlight to place · Esc cancels'
+    );
   });
 
   it('an ok notice replaces the hint (but not the drag hint)', () => {

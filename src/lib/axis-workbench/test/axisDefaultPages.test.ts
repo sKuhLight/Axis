@@ -23,7 +23,9 @@ import {
   axisDefaultPageSpec,
   axisPageHints,
   axisPageResetAction,
+  buildAxisAddPageCards,
   buildAxisAddPageItems,
+  createAxisPagesExtension,
   isAxisDefaultPage,
   listMissingAxisDefaultPages,
   resetAxisPageCommands,
@@ -351,6 +353,34 @@ describe('Add page rows and page resets (edit bar / nav "+")', () => {
     // Restore all brings the rest.
     buildAxisAddPageItems(host(controller)).trailing![0].run();
     expect(listMissingAxisDefaultPages(layoutOf(controller))).toEqual([]);
+  });
+
+  it('Add palette page cards: missing pages with a mini-map dock, restore all, and a note', () => {
+    expect(buildAxisAddPageCards(host(fresh()))).toEqual({ leading: [], note: 'All default pages are there' });
+    const controller = fresh();
+    controller.removePage(AXIS_PAGE_PRESET_BROWSER);
+    controller.removePage(AXIS_PAGE_GRID);
+    const cards = buildAxisAddPageCards(host(controller));
+    expect(cards.leading.map((card) => card.label)).toEqual(['Grid', 'Preset Browser']);
+    expect(cards.leading[0].hint).toBe('Missing default page');
+    // The Grid card previews the default Grid dock: Signal Grid main + Block Editor bottom.
+    const grid = cards.leading[0];
+    expect(panelIdsInDockTree(grid.dock!.root.main)).toEqual(['axis.signalGrid']);
+    expect(panelIdsInDockTree(grid.dock!.root.bottom)).toEqual(['axis.blockEditor']);
+    expect(grid.titles?.['axis.signalGrid']).toBe('Signal Grid');
+    expect(cards.trailing?.map((card) => card.label)).toEqual(['Restore default pages (2)']);
+    expect(cards.note).toBe('Already there: Footswitches, Controllers, Scenes, Live, Setup');
+    // A card restores its page at its seed position and opens it; restore all brings the rest.
+    cards.leading[1].run();
+    expect(layoutOf(controller).activePageId).toBe(AXIS_PAGE_PRESET_BROWSER);
+    buildAxisAddPageCards(host(controller)).trailing![0].run();
+    expect(listMissingAxisDefaultPages(layoutOf(controller))).toEqual([]);
+    expect(layoutOf(controller).pageOrder.slice(0, 2)).toEqual([AXIS_PAGE_GRID, AXIS_PAGE_PRESET_BROWSER]);
+  });
+
+  it('the pages extension carries the palette cards next to the menu rows', () => {
+    const extension = createAxisPagesExtension(host(fresh()));
+    expect(extension.addPageCards?.().note).toBe('All default pages are there');
   });
 
   it('offers Reset to default on default pages and Clear page elsewhere', () => {

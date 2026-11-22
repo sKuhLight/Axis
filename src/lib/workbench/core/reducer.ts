@@ -943,6 +943,13 @@ export function reduceWorkbenchDocument(doc: WorkbenchDocument, command: Workben
       const groupId = command.groupId ?? createWorkbenchId('group');
       const existingGroup = layout.widgetGroups[groupId];
       if (existingGroup?.locked) return fail(doc, 'locked-widget-group', `Widget group ${groupId} is locked and cannot be changed.`);
+      // A member of another LOCKED group cannot leave it (that group would change).
+      for (const widgetId of widgetIds) {
+        const from = layout.widgets[widgetId].groupId;
+        if (from && from !== groupId && layout.widgetGroups[from]?.locked) {
+          return fail(doc, 'locked-widget-group', `Widget ${widgetId} is in the locked group ${from} and cannot be grouped elsewhere.`);
+        }
+      }
       const zone = command.zone ?? layout.widgets[widgetIds[0]].zone;
       // An explicit `memberOrder` (V14b positional insert / in-group reorder)
       // pins the member sequence verbatim, restricted to the ids actually being

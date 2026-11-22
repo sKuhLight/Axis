@@ -23,6 +23,9 @@ export interface PanelMenuActions {
   save: () => void;
   /** Remove from page: parks the panel (`panel.remove`); it stays in Add panel. */
   remove: () => void;
+  /** Split right / below: open the Add palette on Panels with that split as its target. */
+  splitRight?: () => void;
+  splitBelow?: () => void;
 }
 
 export interface PanelMenuInput {
@@ -42,10 +45,16 @@ const noop = () => {};
 /** Label (and title / aria-label) of the panel header × and the ⋯ menu row. */
 export const PANEL_REMOVE_LABEL = 'Remove from page';
 
+/** Labels of the split rows (they open the Add palette with a fixed split target). */
+export const PANEL_SPLIT_RIGHT_LABEL = 'Split right';
+export const PANEL_SPLIT_BELOW_LABEL = 'Split below';
+
 /**
- * The panel ⋯ menu: Move to ▸ (docks, main, other pages) · Maximize/Restore ·
- * Collapse/Expand · Save To Library · Remove from page. Moving, saving and
- * removing are edit-mode actions; maximize and collapse work in both modes.
+ * The panel ⋯ menu: Move to ▸ (docks, main, other pages) · Split right / Split
+ * below (when the host has an Add palette) · Maximize/Restore ·
+ * Collapse/Expand · Save To Library · Remove from page. Moving, splitting,
+ * saving and removing are edit-mode actions; maximize and collapse work in
+ * both modes.
  * Removing PARKS the panel (never deletes it) — Undo covers it, so no confirm.
  * Locked = cannot LEAVE the layout: a locked panel can still be moved (Move to
  * stays enabled), but not removed or saved as a template.
@@ -71,8 +80,16 @@ export function buildPanelMenuItems(input: PanelMenuInput): WorkbenchMenuItem[] 
       })
     )
   ];
+  const splitItems: WorkbenchMenuItem[] =
+    actions.splitRight && actions.splitBelow
+      ? [
+          { id: 'split-right', label: PANEL_SPLIT_RIGHT_LABEL, hint: '+ panel', disabled: !editMode, run: actions.splitRight },
+          { id: 'split-below', label: PANEL_SPLIT_BELOW_LABEL, hint: '+ panel', disabled: !editMode, run: actions.splitBelow }
+        ]
+      : [];
   return [
     { id: 'move', kind: 'submenu', label: 'Move to', disabled: !editMode, run: noop, items: moveItems },
+    ...splitItems,
     {
       id: 'maximize',
       label: input.maximized ? 'Restore Panel' : 'Maximize Panel',

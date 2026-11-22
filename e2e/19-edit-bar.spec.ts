@@ -83,7 +83,7 @@ const doneButtons = (page: Page) => page.getByRole('button', { name: 'Done', exa
 const PAGE_ITEMS = ['Rename page…', 'Duplicate page', 'Move left', 'Move right', 'Manage pages and templates…', 'Delete page'];
 const LAYOUT_ITEMS = ['Default', 'Stage', 'Studio', 'Compact', 'Reset layout', 'Save this page as layout', 'Saved layouts (0)', 'Import…', 'Export this page'];
 const PROFILE_ITEMS = ['Auto', 'Desktop', 'Tablet', 'Mobile'];
-const ADD_ITEMS = ['Add panel…', 'Add custom panel', 'Add widget…', 'Add page', 'Open library'];
+const addPalette = (page: Page) => page.locator('[role="dialog"][aria-label="Add to the layout"]');
 const allIn = (got: string[], want: string[]) => want.every((w) => got.includes(w));
 
 test.describe('Edit bar · 1440×900', () => {
@@ -350,24 +350,33 @@ test.describe('Edit bar · 1440×900', () => {
     await expect(editBar(page).locator('.aw-eb-status')).toContainText(/Restored backup \d+\./);
   });
 
-  test('Add menu: panel, custom panel, widget, page, library', async ({ page }) => {
+  test('Add + opens the Add palette (panels, pages, widgets); the drawers stay reachable from it', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
 
-    await openEditBarMenu(page, 'add');
-    expect(allIn(await menuLabels(page), ADD_ITEMS)).toBe(true);
-    expect(await menuInViewport(page)).toBe(true);
+    await expect(editBarControl(page, 'add')).toHaveAttribute('aria-haspopup', 'dialog');
+    await editBarControl(page, 'add').click();
+    await expect(addPalette(page)).toBeVisible();
+    await expect(editBarControl(page, 'add')).toHaveAttribute('aria-expanded', 'true');
+    await expect(addPalette(page).locator('.cat')).toHaveText(['All', 'Panels', 'Pages', 'Widgets']);
+    // "Add custom panel" is a card now.
+    await expect(addPalette(page).locator('[data-add-card][data-kind="panel"] .ap-title', { hasText: 'New custom panel' })).toHaveCount(1);
 
+    // Add page: the Blank page card, placed at a navigation gap (keyboard: Enter focuses the first gap, Enter places).
     const navCount = await page.locator('[data-nav-entry]').count();
-    // Add page is a submenu now: missing default pages (none here) · Blank page.
-    await openMenu(page).getByRole('menuitem', { name: 'Add page' }).click();
-    await expect(openMenu(page)).toContainText('All default pages are there');
-    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
+    await addPalette(page).locator('.cat', { hasText: 'Pages' }).click();
+    await expect(addPalette(page).locator('[data-page-note]')).toHaveText('All default pages are there');
+    await addPalette(page).locator('[data-add-card="page:blank"] .ap-card').click();
+    await expect(addPalette(page)).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
     await expect(page.locator('[data-nav-entry]')).toHaveCount(navCount + 1);
     await expect(editBarControl(page, 'page')).toContainText(/Page \d+/);
 
-    await openEditBarMenu(page, 'add');
-    await openMenu(page).getByRole('menuitem', { name: 'Open library' }).click();
+    // Management: the Library drawer opens from the palette's footer.
+    await editBarControl(page, 'add').click();
+    await addPalette(page).locator('[data-manage="pages"]').click();
+    await expect(addPalette(page)).toHaveCount(0);
     await expect(page.locator('.aw-lib-drawer')).toBeVisible();
     await expect(page.locator('.aw-lib-drawer')).toContainText('Add Panel · To This Page');
   });
@@ -395,10 +404,14 @@ test.describe('Edit bar · 1440×900', () => {
 
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    for (const id of ['page', 'layout', 'add']) {
+    for (const id of ['page', 'layout']) {
       await openEditBarMenu(page, id);
       await page.keyboard.press('Escape');
     }
+    await editBarControl(page, 'add').click();
+    await expect(addPalette(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(addPalette(page)).toHaveCount(0);
     await openEditBarMenu(page, 'layout');
     await openMenu(page).getByRole('menuitem', { name: /^Saved layouts/ }).click();
     await openMenu(page).getByRole('menuitem', { name: 'Manage layouts…' }).click();
@@ -507,7 +520,7 @@ test.describe('Edit bar · narrow windows', () => {
         ['page', /^Page: /, PAGE_ITEMS],
         ['layout', /^Layout: /, LAYOUT_ITEMS],
         ['profile', /^Profile: /, PROFILE_ITEMS],
-        ['add', /^Add$/, ADD_ITEMS]
+        ['add', /^Add…$/, []]
       ];
       for (const [group, label, items] of wanted) {
         const inMore = more.some((l) => label.test(l));
@@ -515,6 +528,13 @@ test.describe('Edit bar · narrow windows', () => {
         if (!inMore) continue;
         if ((await openMenu(page).count()) === 0) await openEditBarMenu(page, 'more');
         await openMenu(page).getByRole('menuitem', { name: label }).click();
+        if (group === 'add') {
+          // Add is one action: it opens the Add palette (a phone sheet here).
+          await expect(addPalette(page)).toBeVisible();
+          await page.keyboard.press('Escape');
+          await expect(addPalette(page)).toHaveCount(0);
+          continue;
+        }
         const got = await menuLabels(page);
         expect(got[0]).toBe('Back');
         expect(allIn(got, items)).toBe(true);

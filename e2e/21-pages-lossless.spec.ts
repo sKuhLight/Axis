@@ -2,6 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   WORKBENCH_DOC_KEY,
   addCustomPanel,
+  addPalette,
+  addPaletteCard,
+  openAddPalette,
   bootCleanWorkbench,
   collapseRail,
   editBarControl,
@@ -44,14 +47,30 @@ async function deleteActivePage(page: Page): Promise<void> {
   await expect(openMenu(page)).toHaveCount(0);
 }
 
+/** The Add palette on its Pages chip (edit bar Add +). */
 async function openAddPage(page: Page): Promise<void> {
-  await openEditBarMenu(page, 'add');
-  await openMenu(page).getByRole('menuitem', { name: 'Add page' }).click();
+  await openAddPalette(page);
+  await addPalette(page).locator('.cat', { hasText: 'Pages' }).click();
 }
 
+/** Click a page card of the open palette (missing default page, Restore default pages (n)). */
+async function choosePageCard(page: Page, title: string): Promise<void> {
+  await addPaletteCard(page, 'page', title).click();
+  await expect(addPalette(page)).toHaveCount(0);
+}
+
+/** A blank page at the end of the navigation, opened (the nav "+" → Blank page). */
+async function addBlankPage(page: Page): Promise<void> {
+  await collapseRail(page);
+  await page.locator('[data-nav-add-page]').click();
+  await expect(addPalette(page)).toBeVisible();
+  await choosePageCard(page, 'Blank page');
+}
+
+/** The panel catalog: the Library drawer (PAGE ▸ Manage pages and templates…). */
 async function openCatalog(page: Page): Promise<void> {
-  await openEditBarMenu(page, 'add');
-  await openMenu(page).getByRole('menuitem', { name: 'Add panel…' }).click();
+  await openEditBarMenu(page, 'page');
+  await openMenu(page).getByRole('menuitem', { name: 'Manage pages and templates…' }).click();
   await expect(page.locator('.aw-lib-drawer')).toBeVisible();
 }
 
@@ -115,10 +134,9 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await expect(page.locator('[data-nav-entry="library"]')).toHaveCount(0);
 
     await openAddPage(page);
-    await expect(openMenu(page)).toContainText('Missing default pages');
-    await expect(openMenu(page)).toContainText('Already there: Grid');
-    await openMenu(page).getByRole('menuitem', { name: 'Preset Browser', exact: true }).click();
-    await expect(openMenu(page)).toHaveCount(0);
+    await expect(addPalette(page).locator('[data-page-note]')).toContainText('Already there: Grid');
+    await expect(addPalette(page).locator('[data-add-card][data-kind="page"]').filter({ hasText: 'Preset Browser' }).locator('[data-status]')).toHaveText('Missing default page');
+    await choosePageCard(page, 'Preset Browser');
 
     // Restored second in the nav with its ORIGINAL entry id (so its glyph matches), and opened.
     await expect(page.locator('[data-nav-entry]').nth(1)).toHaveAttribute('data-nav-entry', 'library');
@@ -132,8 +150,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
 
   test('Restore default pages (n) brings back every missing page and leaves a custom page untouched', async ({ page }) => {
     await editReady(page);
-    await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
+    await addBlankPage(page);
     await addCustomPanel(page);
     const customLabel = (await editBarControl(page, 'page').locator('.v').textContent())!.trim();
     await expect(regionTabs(page, 'main').filter({ hasText: 'Custom Panel' })).toHaveCount(1);
@@ -145,7 +162,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await expect(page.locator('[data-nav-entry="setup"], [data-nav-entry="fc"]')).toHaveCount(0);
 
     await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Restore default pages (2)' }).click();
+    await choosePageCard(page, 'Restore default pages (2)');
     await expect(page.locator('[data-nav-entry="fc"]')).toHaveCount(1);
     await expect(page.locator('[data-nav-entry="setup"]')).toHaveCount(1);
     await expect(page.locator('[data-nav-entry]').nth(2)).toHaveAttribute('data-nav-entry', 'fc');
@@ -153,7 +170,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await activatePage(page, customLabel);
     await expect(regionTabs(page, 'main').filter({ hasText: 'Custom Panel' })).toHaveCount(1);
     await openAddPage(page);
-    await expect(openMenu(page)).toContainText('All default pages are there');
+    await expect(addPalette(page).locator('[data-page-note]')).toHaveText('All default pages are there');
   });
 
   test('restore conflict: a page whose panel lives on another page shows "Bring it here", and the button moves it', async ({ page }) => {
@@ -166,7 +183,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
 
     await deleteActivePage(page);
     await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Preset Browser', exact: true }).click();
+    await choosePageCard(page, 'Preset Browser');
     await expect(editBarControl(page, 'page')).toContainText('Preset Browser');
 
     const hint = page.locator('[data-page-hints] [data-page-hint]');
@@ -187,8 +204,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
   test('the hint bar also covers a panel outside main: Block Editor elsewhere → Bring it here docks it at the Grid bottom', async ({ page }) => {
     await editReady(page);
     // Block Editor moves to a custom page, then Grid is deleted and restored.
-    await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
+    await addBlankPage(page);
     const customLabel = (await editBarControl(page, 'page').locator('.v').textContent())!.trim();
     await activatePage(page, 'Grid');
     await stackOf(page, 'Block Editor').locator('.aw-pane-btn[title="Panel actions"]').click();
@@ -196,7 +212,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await openMenu(page).getByRole('menuitem', { name: `Page: ${customLabel}` }).click();
     await deleteActivePage(page);
     await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Grid', exact: true }).click();
+    await choosePageCard(page, 'Grid');
     await expect(editBarControl(page, 'page')).toContainText('Grid');
     await expect(regionTabs(page, 'main').filter({ hasText: 'Signal Grid' })).toHaveCount(1);
 
@@ -257,8 +273,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
 
   test('Clear page empties a custom page', async ({ page }) => {
     await editReady(page);
-    await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
+    await addBlankPage(page);
     await addCustomPanel(page);
     await expect(regionTabs(page, 'main')).toHaveCount(1);
 
@@ -326,17 +341,16 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
 
   test('a custom panel survives deleting its page (listed, re-addable, with its widgets); Delete everywhere removes it after a confirm', async ({ page }) => {
     await editReady(page);
-    await openAddPage(page);
-    await openMenu(page).getByRole('menuitem', { name: 'Blank page' }).click();
+    await addBlankPage(page);
     await addCustomPanel(page);
     const zone = page.locator('.aw-workspace [data-zone^="panel:"]');
     await expect(zone).toHaveCount(1);
     const zoneId = (await zone.getAttribute('data-zone'))!;
     const panelId = zoneId.slice('panel:'.length);
 
-    // Drop a hidden widget (Search) into the custom panel.
-    await openEditBarMenu(page, 'add');
-    await openMenu(page).getByRole('menuitem', { name: 'Add widget…' }).click();
+    // Drop a hidden widget (Search) into the custom panel (Widgets drawer, from the Add palette's footer).
+    await openAddPalette(page);
+    await addPalette(page).locator('[data-manage="widgets"]').click();
     const hidden = page.locator('.aw-lib-row.add.aw-lib-draggable').filter({ hasText: 'Search' }).first();
     await expect(hidden).toBeVisible();
     await hidden.hover(); // waits out the drawer's slide-in so the box is final
@@ -408,7 +422,7 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await expect(page.locator('[data-nav-entry="scenes"]')).toHaveCount(0);
   });
 
-  test('the nav "+" opens the page menu; the nav context menu offers Delete only in edit mode', async ({ page }) => {
+  test('the nav "+" opens the Add palette on Pages; the nav context menu offers Delete only in edit mode', async ({ page }) => {
     await bootCleanWorkbench(page);
     const scenes = page.locator('[data-nav-entry="scenes"]');
 
@@ -436,16 +450,17 @@ test.describe('Pages and panels are never lost (slice 3)', () => {
     await openMenu(page).getByRole('menuitem', { name: 'Delete', exact: true }).click();
     await expect(scenes).toHaveCount(0);
 
-    // "+" opens the Add page menu (not a blank page right away).
+    // "+" opens the Add palette on Pages (not a blank page right away).
     const navCount = await page.locator('[data-nav-entry]').count();
+    await collapseRail(page);
     await page.locator('[data-nav-add-page]').click();
-    const menu = page.locator('.aw-context-menu[aria-label="Add page"]');
-    await expect(menu).toBeVisible();
+    await expect(addPalette(page)).toBeVisible();
+    await expect(addPalette(page).locator('.cat.on')).toHaveText('Pages');
     await expect(page.locator('[data-nav-entry]')).toHaveCount(navCount);
-    await expect(menu).toContainText('Missing default pages');
-    await expect(menu.getByRole('menuitem', { name: 'Blank page' })).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Restore default pages (1)' })).toBeVisible();
-    await menu.getByRole('menuitem', { name: 'Scenes', exact: true }).click();
+    await expect(addPaletteCard(page, 'page', 'Scenes')).toBeVisible();
+    await expect(addPaletteCard(page, 'page', 'Blank page')).toBeVisible();
+    await expect(addPaletteCard(page, 'page', 'Restore default pages (1)')).toBeVisible();
+    await choosePageCard(page, 'Scenes');
     await expect(scenes).toHaveCount(1);
     await expect(page.locator('[data-nav-entry]').nth(4)).toHaveAttribute('data-nav-entry', 'scenes');
   });

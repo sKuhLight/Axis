@@ -607,3 +607,43 @@ describe('WorkbenchController — lift and maximize (transient view state)', () 
     expect(reconcileMaximizedPanel('grid', controller.activePage, { grid: {} })).toBe('grid');
   });
 });
+
+describe('WorkbenchController — Add palette and placement (transient view state)', () => {
+  const doc = () => createEmptyWorkbenchDocument({ profileId: 'profile.t', layoutId: 'layout.t' });
+  const placing = { kind: 'panel' as const, label: 'History', spots: [], activeSpotId: null, zone: 'center' as const, insert: null };
+
+  it('opens the palette only while editing; close is a no-op when closed', () => {
+    const controller = createWorkbenchController(doc());
+    controller.openAddPalette({ filter: 'all' });
+    expect(controller.addPalette).toBeNull();
+    controller.setEditMode(true);
+    let emits = 0;
+    const off = controller.subscribe(() => emits++);
+    emits = 0;
+    controller.openAddPalette({ filter: 'widgets', target: { kind: 'widget', zone: 'top.left', label: 'x' } });
+    expect(controller.addPalette).toMatchObject({ filter: 'widgets' });
+    controller.closeAddPalette();
+    expect(controller.addPalette).toBeNull();
+    controller.closeAddPalette();
+    expect(emits).toBe(2);
+    off();
+  });
+
+  it('leaving edit mode clears the palette and the placement; neither touches the document or history', () => {
+    const changes: WorkbenchDocument[] = [];
+    const controller = createWorkbenchController(doc(), { onChange: (d) => changes.push(d) });
+    controller.setEditMode(true);
+    controller.openAddPalette({ filter: 'all' });
+    controller.setPlacement(placing);
+    expect(controller.placement).toEqual(placing);
+    expect(changes).toHaveLength(0);
+    expect(controller.canUndoLayout).toBe(false);
+    controller.toggleEditMode();
+    expect(controller.addPalette).toBeNull();
+    expect(controller.placement).toBeNull();
+    controller.setEditMode(true);
+    controller.setPlacement(placing);
+    controller.setEditMode(false);
+    expect(controller.placement).toBeNull();
+  });
+});

@@ -21,6 +21,22 @@ describe('WorkbenchRenderRegistry', () => {
     expect(registry.navigation('missing.nav')).toBe(fallback);
   });
 
+  it('serves the widget catalog and the Add palette slot (empty without providers)', () => {
+    const registry = createWorkbenchRenderRegistry();
+    expect(registry.canonicalWidgets()).toEqual([]);
+    expect(registry.widgetUnavailableReason('w.any')).toBeNull();
+    expect(registry.addPalette).toBeNull();
+    registry.registerWidgetCatalogProvider({
+      canonical: () => [{ type: 'w.a', label: 'A' }],
+      unavailableReason: (type) => (type === 'w.b' ? 'No B' : null)
+    });
+    registry.registerAddPalette(specific);
+    expect(registry.canonicalWidgets().map((spec) => spec.type)).toEqual(['w.a']);
+    expect(registry.widgetUnavailableReason('w.b')).toBe('No B');
+    expect(registry.widgetUnavailableReason('w.a')).toBeNull();
+    expect(registry.addPalette).toBe(specific);
+  });
+
   it('serves the app panel catalog and page hints (empty without providers)', () => {
     const registry = createWorkbenchRenderRegistry();
     const controller = createWorkbenchController(createEmptyWorkbenchDocument({ profileId: 'profile.test', layoutId: 'layout.test' }));

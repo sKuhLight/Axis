@@ -484,6 +484,13 @@ describe('reduceWorkbenchDocument — widgets', () => {
     expect(changed.error?.code).toBe('locked-widget-group');
     expect(ungrouped.success).toBe(false);
     expect(ungrouped.error?.code).toBe('locked-widget-group');
+
+    // A member of the locked group cannot be grouped elsewhere either (it would
+    // sit in two groups: the locked one keeps its members).
+    const elsewhere = reduceWorkbenchDocument(next, { type: 'widget.group', widgetIds: ['widget.a', 'widget.c'] });
+    expect(elsewhere.success).toBe(false);
+    expect(elsewhere.error?.code).toBe('locked-widget-group');
+    expect(layout(elsewhere.next).widgets['widget.a'].groupId).toBe('group.a');
   });
 
   // Regression (V13g): dragging a single member out of a group via `widget.move`

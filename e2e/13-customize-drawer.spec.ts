@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, openEditBarMenu, openMenu } from './support/workbench';
+import { bootCleanWorkbench, editBarControl, enterEditMode, openEditBarMenu, openMenu } from './support/workbench';
 
 /**
  * ROUND 16 — Customize drawer rework (AXIS-24): the right-drawer views are now
@@ -7,8 +7,8 @@ import { bootCleanWorkbench, enterEditMode, openEditBarMenu, openMenu } from './
  * page-scoped (save the active page's dock into the shared store, apply a stored
  * layout back onto the active page). This spec exercises the search-filter and
  * the page-scoped save→apply round-trip end to end. The drawers open from the
- * edit bar: PAGE › "Manage pages and templates…", Add › "Add widget…",
- * LAYOUT › Saved layouts › "Manage layouts…".
+ * edit bar: PAGE › "Manage pages and templates…", the Add palette's footer
+ * "Manage: Widgets", LAYOUT › Saved layouts › "Manage layouts…".
  */
 
 type Page = import('@playwright/test').Page;
@@ -22,8 +22,9 @@ async function openPages(page: Page) {
 
 async function openWidgets(page: Page) {
   await enterEditMode(page);
-  await openEditBarMenu(page, 'add');
-  await openMenu(page).getByRole('menuitem', { name: 'Add widget…' }).click();
+  // The Add palette's footer keeps the Library drawers reachable as management.
+  await editBarControl(page, 'add').click();
+  await page.locator('[role="dialog"][aria-label="Add to the layout"] [data-manage="widgets"]').click();
   await expect(page.locator('.aw-lib-drawer')).toBeVisible();
 }
 

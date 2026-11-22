@@ -161,6 +161,12 @@
   });
 
   function openAddMenu(event: MouseEvent): void {
+    // With a host Add palette the "+" opens it on Pages, adding at the end of
+    // the navigation (missing default pages keep their seed position).
+    if (registry.addPalette) {
+      controller.openAddPalette({ filter: 'pages', target: { kind: 'page', label: 'End of the navigation' } });
+      return;
+    }
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     addMenuPosition = menuPositionBelowRect(rect, 4);
     addMenuOpen = true;
@@ -231,15 +237,16 @@
     {/if}
   {/each}
   <!-- Pages: trailing "+" affordance (edit mode only, side rail and bottom nav)
-       opens the Add page menu (missing default pages · Blank page · restore all). -->
+       opens the Add palette on Pages (without a host palette: the Add page menu —
+       missing default pages · Blank page · restore all). -->
   {#if $controller.editMode}
     <button
       class="aw-nav-add-page"
       type="button"
       title="Add Page"
       aria-label="Add Page"
-      aria-haspopup="menu"
-      aria-expanded={addMenuOpen}
+      aria-haspopup={registry.addPalette ? 'dialog' : 'menu'}
+      aria-expanded={registry.addPalette ? !!$controller.addPalette : addMenuOpen}
       data-nav-add-page
       onclick={openAddMenu}
     >+</button>

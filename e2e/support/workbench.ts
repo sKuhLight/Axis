@@ -146,14 +146,38 @@ export async function menuLabels(page: Page): Promise<string[]> {
     .evaluateAll((els) => els.map((el) => (el.querySelector('span:not([aria-hidden])')?.textContent ?? el.textContent ?? '').trim()));
 }
 
+/** The open Add palette (edit bar Add +, or a context "+"). */
+export function addPalette(page: Page) {
+  return page.locator('[role="dialog"][aria-label="Add to the layout"]');
+}
+
+/** Open the Add palette from the edit bar's Add +. */
+export async function openAddPalette(page: Page): Promise<void> {
+  await editBarControl(page, 'add').click();
+  await expect(addPalette(page)).toBeVisible();
+}
+
+/** A card of the open Add palette by its title (exact) and kind (panel | page | widget). */
+export function addPaletteCard(page: Page, kind: 'panel' | 'page' | 'widget', title: string) {
+  return addPalette(page)
+    .locator(`[data-add-card][data-kind="${kind}"]`)
+    .filter({ has: page.locator('.ap-title', { hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
+    .locator('.ap-card');
+}
+
 /**
- * Insert a custom panel into the active page's main region — the edit bar's
- * Add › "Add custom panel" (the old ribbon "＋ Panel" button). Expects edit mode.
+ * Insert a custom panel as a tab of the active page's main stack — the main tab
+ * bar's "+" tab opens the Add palette with that tab as its fixed target, and
+ * the "New custom panel" card inserts right there (an empty main region uses
+ * its "+ Panel"). Expects edit mode.
  */
 export async function addCustomPanel(page: Page): Promise<void> {
-  await openEditBarMenu(page, 'add');
-  await openMenu(page).getByRole('menuitem', { name: 'Add custom panel' }).click();
-  await expect(openMenu(page)).toHaveCount(0);
+  const tabAdd = page.locator('.aw-tabstack[data-region="main"] [data-tab-add]').first();
+  if (await tabAdd.count()) await tabAdd.click();
+  else await page.locator('[data-region-add="main"]').click();
+  await expect(addPalette(page)).toBeVisible();
+  await addPaletteCard(page, 'panel', 'New custom panel').click();
+  await expect(addPalette(page)).toHaveCount(0);
 }
 
 /** Tabs in a given dock region's tab stack. */

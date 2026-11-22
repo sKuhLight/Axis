@@ -38,6 +38,8 @@
     type WorkbenchLayoutActionStatus
   } from './layoutActions';
   import { layoutHistoryShortcut } from './layoutHistory';
+  import { createAddPaletteApi } from './addPalette';
+  import { placementActiveDescription } from './placement';
   import { instantiatePanelTemplateCommands } from './library';
   import { canDeleteNavigationPage } from './navigation';
 
@@ -111,6 +113,9 @@
   const barStatus = $derived(
     resolveEditBarStatus({
       dragging: !!$controller.drag,
+      placing: $controller.placement
+        ? { label: $controller.placement.label, active: placementActiveDescription($controller.placement) }
+        : null,
       notice,
       lastResult: $controller.lastResult,
       dismissedResult
@@ -368,6 +373,37 @@
     });
   }
 
+  // ── Add palette (host slot) ─────────────────────────────────────────────
+  // With a registered palette, Add opens it (the interim Add menu stays for
+  // hosts without one). The palette's API is rebuilt per request.
+  const AddPalette = registry.addPalette;
+  function openAddPalette() {
+    openMenu = null;
+    controller.openAddPalette({ filter: 'all' });
+  }
+  // The palette and the drawers / bar menus are exclusive: opening it (from
+  // the bar or any context "+") closes them.
+  const paletteOpen = $derived(!!$controller.addPalette);
+  $effect(() => {
+    if (!paletteOpen) return;
+    untrack(() => {
+      openMenu = null;
+      libraryView = null;
+      layoutsOpen = false;
+    });
+  });
+  let paletteCache: { request: object; api: ReturnType<typeof createAddPaletteApi> } | null = null;
+  const paletteApi = $derived.by(() => {
+    const request = $controller.addPalette;
+    if (!request || !AddPalette) return null;
+    if (paletteCache?.request === request) return paletteCache.api;
+    const api = untrack(() =>
+      createAddPaletteApi({ controller, registry, request, pages: extension?.pages, manage: (view) => openLibrary(view) })
+    );
+    paletteCache = { request, api };
+    return api;
+  });
+
   function groupItems(id: EditBarOverflowGroupId): WorkbenchMenuItem[] {
     switch (id) {
       case 'page':
@@ -387,7 +423,11 @@
     if (openMenu !== 'more') return groupItems(openMenu);
     const labels = { page: pageLabel, layout: layoutLabel, profile: profileLabel };
     return buildMoreMenuItems(
-      layout.overflow.map((id) => ({ id, label: editBarMoreLabel(id, labels), items: groupItems(id) }))
+      layout.overflow.map((id) =>
+        id === 'add' && AddPalette
+          ? { id, label: 'Add…', items: [], run: openAddPalette }
+          : { id, label: editBarMoreLabel(id, labels), items: groupItems(id) }
+      )
     );
   });
 
@@ -552,7 +592,23 @@
     {/if}
   {/if}
 
-  {#if !hidden.has('add')}
+  {#if !hidden.has('add') && AddPalette}
+    <span class="aw-eb-sep" aria-hidden="true"></span>
+    <button
+      class="aw-eb-dd aw-eb-add"
+      class:open={!!$controller.addPalette}
+      type="button"
+      data-eb="add"
+      aria-haspopup="dialog"
+      aria-expanded={!!$controller.addPalette}
+      aria-label="Add"
+      title="Add a panel, widget or page"
+      onclick={openAddPalette}
+    >
+      <span class="v">Add</span>
+      {@render plusIcon()}
+    </button>
+  {:else if !hidden.has('add')}
     <span class="aw-eb-sep" aria-hidden="true"></span>
     <button
       class="aw-eb-dd aw-eb-add"
@@ -583,6 +639,9 @@
     <span class="aw-eb-status" class:ok={barStatus.tone === 'ok'} role="status" title={statusText}>
       {statusText}
     </span>
+  {:else if $controller.placement}
+    <!-- No room for the status line: placing still announces where it lands. -->
+    <span class="aw-eb-sr" role="status">{statusText}</span>
   {/if}
 
   {#if layout.showMore}
@@ -633,6 +692,10 @@
   overlay
   onClose={() => (openMenu = null)}
 />
+
+{#if AddPalette && paletteApi}
+  <AddPalette api={paletteApi} />
+{/if}
 
 <WorkbenchLibraryDrawer
   open={libraryView !== null && $controller.editMode}
@@ -868,6 +931,16 @@
   .aw-eb-flex {
     flex: 1 1 0;
     min-width: 0;
+  }
+  /* Visually hidden, still announced (role="status"). */
+  .aw-eb-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .aw-eb-status {
     flex: 0 1 auto;

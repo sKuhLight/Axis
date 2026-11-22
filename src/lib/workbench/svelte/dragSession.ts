@@ -38,6 +38,25 @@ export interface PointerDragSession {
    * not crossed the threshold yet ignores Escape.
    */
   cancelOnEscape?: boolean;
+  /**
+   * Asked once, the moment the pointer crosses the threshold: may this press
+   * become a drag? `false` abandons the session silently (listeners torn down,
+   * nothing fires) — e.g. a touch swipe that is a native scroll
+   * (`sidewaysTouchDragGate`).
+   */
+  shouldActivate?: (from: WorkbenchPointer, to: WorkbenchPointer) => boolean;
+}
+
+/**
+ * Touch / pen presses on something that sits in a vertical scroller (the Add
+ * palette's card grid): only a mostly SIDEWAYS pull starts a drag; a vertical
+ * swipe stays the native scroll (pair it with `touch-action: pan-y`, so the
+ * browser leaves sideways moves to the page). A mouse press drags in any
+ * direction (no gate).
+ */
+export function sidewaysTouchDragGate(pointerType: string | undefined): ((from: WorkbenchPointer, to: WorkbenchPointer) => boolean) | undefined {
+  if (!pointerType || pointerType === 'mouse') return undefined;
+  return (from, to) => Math.abs(to.x - from.x) > Math.abs(to.y - from.y);
 }
 
 /**
@@ -56,6 +75,10 @@ export function beginPointerDrag(session: PointerDragSession): void {
     const pointer: WorkbenchPointer = { x: ev.clientX, y: ev.clientY };
     if (!dragging && pointerDistance(startedAt, pointer) < threshold) return;
     if (!dragging) {
+      if (session.shouldActivate && !session.shouldActivate(startedAt, pointer)) {
+        teardown();
+        return;
+      }
       dragging = true;
       session.onActivate?.();
     }

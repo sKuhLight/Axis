@@ -187,6 +187,12 @@
       pages: $controller.pages.map((page) => ({ id: page.id, label: page.label })),
       activePageId: layout?.activePageId,
       actions: {
+        ...(registry.addPalette
+          ? {
+              splitRight: () => openSplitPalette(panel, 'horizontal'),
+              splitBelow: () => openSplitPalette(panel, 'vertical')
+            }
+          : {}),
         moveToRegion: (target) => controller.dispatch({ type: 'panel.move', panelId: panel.id, to: { kind: 'region', region: target } }),
         moveToPage: (pageId) => movePanelToPage(panel, pageId),
         toggleMaximize: () => controller.toggleMaximizedPanel(panel.id),
@@ -196,6 +202,28 @@
       }
     });
   });
+
+  // Split right / below: the Add palette on Panels, its fixed target the split
+  // beside this panel — a card click inserts there directly.
+  function openSplitPalette(panel: PanelInstance, axis: 'horizontal' | 'vertical') {
+    const title = titleOf(panel, panel.id);
+    controller.openAddPalette({
+      filter: 'panels',
+      target: {
+        kind: 'panel',
+        to: { kind: 'split', targetPanelId: panel.id, axis, position: 'after' },
+        label: axis === 'horizontal' ? `Split right of ${title}` : `Split below ${title}`
+      }
+    });
+  }
+
+  // "+" tab (edit mode): the Add palette on Panels, adding a tab to this stack.
+  function openTabPalette() {
+    controller.openAddPalette({
+      filter: 'panels',
+      target: { kind: 'panel', to: { kind: 'tab', tabStackId: stack.id }, label: `New tab beside ${activeTitle}` }
+    });
+  }
 
   // Remove from page PARKS the panel (`panel.remove`): it keeps its state and
   // owned widgets and stays listed in the Library's panel catalog. Undo covers
@@ -454,6 +482,16 @@
           </button>
         {/if}
       {/each}
+      {#if $controller.editMode && registry.addPalette && !$controller.drag}
+        <button
+          class="aw-pane-add-tab"
+          type="button"
+          data-tab-add={stack.id}
+          title="Add a panel as a tab here"
+          aria-label={`Add a panel as a tab beside ${activeTitle}`}
+          onclick={openTabPalette}
+        >+</button>
+      {/if}
     </div>
     <span class="aw-pane-spacer"></span>
     {#if activePanel}
@@ -598,6 +636,28 @@
   .aw-pane-head.single .aw-pane-tab {
     color: var(--aw-text-2);
     background: color-mix(in srgb, var(--aw-surface) 80%, transparent);
+  }
+  /* Edit mode: the "+" tab ending every tab bar (opens the Add palette). Not
+     an `.aw-pane-tab`: the drop geometry measures only the real tab pills. */
+  .aw-pane-add-tab {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--aw-accent) 60%, transparent);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--aw-accent);
+    cursor: pointer;
+    font: 600 14px/1 var(--aw-font-ui);
+  }
+  .aw-pane-add-tab:hover,
+  .aw-pane-add-tab:focus-visible {
+    background: color-mix(in srgb, var(--aw-accent) 16%, transparent);
+    outline: none;
   }
   .aw-pane-spacer {
     flex: 1;

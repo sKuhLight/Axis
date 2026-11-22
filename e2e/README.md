@@ -84,11 +84,25 @@ attributes were added**:
 - Edit bar: `[data-editbar]` (role `toolbar`) with controls `[data-eb="undo|redo|page|layout|profile|add|more|done"]`,
   the `.aw-eb-tag` CUSTOMIZE tag, `.aw-eb-status` hint and the `[role="alert"]` error chip.
   Helpers in `support/workbench.ts`: `editBar`, `editBarControl`, `openEditBarMenu`,
-  `menuLabels`, `addCustomPanel` (Add › "Add custom panel").
+  `menuLabels`, `addPalette` / `openAddPalette` / `addPaletteCard`, `addCustomPanel`
+  (the main tab bar's "+" → Add palette → "New custom panel").
+- Add palette: `[role="dialog"][aria-label="Add to the layout"]`, chips `.cat`, target chip
+  `.target`, cards `[data-add-card="<kind>:<catalog key>"][data-kind]` (button `.ap-card`,
+  title `.ap-title`, status `[data-status]`, previews `[data-preview="live|static|panel|page"]`,
+  template menu `.ap-dots`), footer `[data-manage="pages|widgets"]`, page note `[data-page-note]`.
+  Context "+": `[data-zone-add="<zone>"]` (`.aw-zone-add` / "+ Widget"), `[data-tab-add]`,
+  `[data-region-add="<region>"]`, `[data-nav-add-page]`.
+  Click-to-place: `[data-placement="panel|widget|page"]`, spots `[data-place-spot]` (active:
+  `[data-active="true"]`).
+- Widget drags (slice 4b): the insert line `[data-insert-line]` and the dwell "Group" frame
+  `[data-group-frame]` (both in the DragLayer), the chip `.aw-drag-target` ("Insert · …",
+  "Group with …", "Reorder in group"), the zone wash `.aw-widget-zone.drop-target`, an empty
+  zone's lit "+ Widget" `.aw-zone-empty.ins` (an empty zone gets no line); the widget / group menu's "Group with" submenu
+  row (`menuitem` named /Group with/).
 - `.aw-viewport.aw-preview` (pinned-profile preview), `.aw-preview-label`
 - `.axis-gridbar .pill-chip` (Full/Map/Auto), `.axis-gridbar .block-size .step`
 - `.axis-preset-tab` (Default/Stage/Studio/Compact — radio rows in the edit bar's LAYOUT menu)
-- `.aw-zone-empty` (empty custom-panel hint)
+- `.aw-zone-empty` (empty-zone placeholder; with the Add palette it is the "+ Widget" button `.aw-zone-add-empty`)
 - Buttons by accessible text: `Customize` (the bottom-bar toggle; pressed while editing),
   `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
   `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
@@ -111,11 +125,12 @@ attributes were added**:
    bottom nav; Default → side rail; Reset layout asks inline first.
 8. **08-keyboard** — Escape closes an open context menu and restores focus to
    the opener (T18).
-9. **09-custom-panel** — Add › "Add custom panel" inserts a custom panel with
-   the empty-drop hint.
+9. **09-custom-panel** — the "New custom panel" card inserts a custom panel whose
+   empty body is a "+ Widget" button (with the drop hint) targeting it; a widget dragged
+   over it lights that button up, and a release inserts it there.
 
 Later specs (10–21) cover bottom-nav mode, pages, widget menus, the Customize
-drawers (opened from the edit bar's PAGE / Add / LAYOUT menus), the profile
+drawers (opened from the edit bar's PAGE / LAYOUT menus and the Add palette's footer), the profile
 preview frame (the edit bar stays full width above it), parameter collect, grid
 routing, device layout, telemetry, and **19-edit-bar** — the edit bar's geometry
 (full width at the top, the app shifted by exactly its height, no overlap), its
@@ -132,7 +147,20 @@ Library's panel catalog shows every panel's status and re-adds or moves it (tap
 or drag), deleted default pages come back from Add page ▸ / the nav "+" at their
 seed position with their nav entry, the "Bring it here" hint, Reset to default /
 Clear page with one-step undo, Remove from page, Delete everywhere for custom
-panels, and the nav context menu's edit-mode-only Delete. Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
+panels, and the nav context menu's edit-mode-only Delete, and **22-add-and-group** —
+the Add palette (Add + / context "+"): real widget previews, panel schematics, page
+mini-maps, chips and search, unsupported widgets greyed last with the reason, template
+⋯ menus, Escape consumed (never reaching the app's Escape chain), ↑↓ across the
+section rows, touch (a vertical swipe on a card scrolls, a sideways pull drags it out);
+click-to-place (a click marks every spot, a click places on release, a swipe or the second
+press of a double-click places nothing, Escape cancels, keyboard, the status line names the
+active spot, focus returns to the opener, the Customize toggle still works), drag from the
+palette, the context "+" entries inserting directly (a template at the zone's end), the
+panel menu's Split right, and (slice 4b) widget drags: the insert line instead of a slot box,
+a short release on a widget inserts beside it, resting 350 ms on a foreign widget / group
+shows the Group frame and a release groups (one undo step), a member reorders directly inside
+its own group, the widget menu's "Group with ▸", and the edit-mode top bar at 834 px staying
+one row (zones collapse: units step down, nothing spills). Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
 browser-context level (page-level mocks still win), so a reachable ForgeFX can
 neither drive a device nor pop device prompts over the chrome.
 

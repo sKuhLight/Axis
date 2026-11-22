@@ -3,6 +3,7 @@
   import { forgefx } from './forgefx';
   import { catFor, shade } from './catalog';
   import { categoryOf, packFor } from './blocks';
+  import PaletteShell, { type PaletteShellFilter } from './PaletteShell.svelte';
 
   const CAT_LABEL: Record<string, string> = { amp: 'Amp', cab: 'Cab', drive: 'Drive', eq: 'EQ', dynamics: 'Dynamics', mod: 'Mod', time: 'Time', pitch: 'Pitch', util: 'Util' };
   const catOf = (name: string) => categoryOf(packFor(name) ?? name);
@@ -16,7 +17,6 @@
   let query = $state('');
   let hi = $state(0);
   let realNames = $state(false);
-  let inputEl = $state<HTMLInputElement | null>(null);
   // effect ids already on the grid — placed instances are greyed out + non-pickable (no point re-placing)
   const placedEids = $derived(new Set(editor.layout.cells.map((c) => c.effectId)));
   const isPlaced = (r: { kind: string; page: number }) => r.kind === 'Block' && placedEids.has(r.page);
@@ -111,7 +111,6 @@
     cat = 'all';
     brand = 'all';
     loadBlockStore();
-    setTimeout(() => inputEl?.focus(), 0);
     if (retype) {
       const c = editor.selected;
       if (!c?.pack) return;
@@ -215,21 +214,15 @@
     editor.paletteOpen = false;
   }
 
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      hi = Math.min(view.flat.length - 1, hi + 1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      hi = Math.max(0, hi - 1);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      pick(view.flat[hi]);
-    } else if (e.key === 'Escape') {
-      // Consumed: later Escape handlers (app chain, workbench maximize) skip it.
-      e.preventDefault();
-      editor.paletteOpen = false;
-    }
+  // Filter chips: block categories (place), or brands (retype with real names).
+  const shellFilters = $derived.by<PaletteShellFilter[]>(() => {
+    if (!retype) return categories.map((c) => ({ id: c, label: c === 'all' ? 'All' : CAT_LABEL[c] ?? c }));
+    if (realNames && brands.length > 1) return brands.map((b) => ({ id: b, label: b === 'all' ? 'All' : b }));
+    return [];
+  });
+  function setFilter(id: string) {
+    if (retype) brand = id;
+    else cat = id;
   }
 
   function chipFor(r: { sub: string; kind: string }) {
@@ -239,162 +232,61 @@
   }
 </script>
 
-{#if editor.paletteOpen}
-  <div class="bg" class:mob={editor.isMobile} role="presentation" onclick={() => (editor.paletteOpen = false)}>
-    <div class="card" class:mob={editor.isMobile} role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-      <div class="search">
-        <svg width="19" height="19" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5.2" fill="none" style="stroke:var(--textfaint)" stroke-width="1.5" /><path d="M10.8 10.8 L14.5 14.5" style="stroke:var(--textfaint)" stroke-width="1.5" stroke-linecap="round" /></svg>
-        <input
-          bind:this={inputEl}
-          bind:value={query}
-          oninput={() => (hi = 0)}
-          onkeydown={onKey}
-          placeholder={retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
-        />
-        <span class="count mono">{results.length} result{results.length === 1 ? '' : 's'}</span>
-      </div>
+{#snippet realNamesToggle()}
+  {#if retype}
+    <label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>
+  {/if}
+{/snippet}
 
-      <div class="chips">
-        <span class="target">{retype ? '↻ Change type' : target ? `✛ Place in cell ${target.row + 1},${target.col + 1}` : 'Grid full'}</span>
-        {#if retype}
-          <label class="rn"><input type="checkbox" bind:checked={realNames} /> real names</label>
-        {/if}
-      </div>
-
-      {#if !retype}
-        <div class="cats scroll">
-          {#each categories as c (c)}
-            <button class="cat" class:on={cat === c} onclick={() => { cat = c; hi = 0; }}>{c === 'all' ? 'All' : CAT_LABEL[c] ?? c}</button>
-          {/each}
+<PaletteShell
+  open={editor.paletteOpen}
+  mobile={editor.isMobile}
+  bind:query
+  bind:hi
+  placeholder={retype ? 'Search types…' : 'Search amps, drives, delays, reverbs…'}
+  count={`${results.length} result${results.length === 1 ? '' : 's'}`}
+  target={retype ? '↻ Change type' : target ? `✛ Place in cell ${target.row + 1},${target.col + 1}` : 'Grid full'}
+  targetExtra={realNamesToggle}
+  filters={shellFilters}
+  filter={retype ? brand : cat}
+  onFilter={setFilter}
+  itemCount={view.flat.length}
+  onPick={(index) => pick(view.flat[index])}
+  onClose={() => (editor.paletteOpen = false)}
+  hints={['↑↓ Navigate', `⏎ ${retype ? 'Change' : 'Place'}`, ...(retype ? [] : ['★ Favorite']), 'Esc Close']}
+>
+  {#if loading}
+    <div class="empty">Loading…</div>
+  {:else if view.flat.length === 0}
+    <div class="empty">No matches for “{query}”.</div>
+  {:else}
+    {#each view.sections as s (s.label)}
+      {#if s.label}<div class="section mono">{s.label}</div>{/if}
+      {#each s.rows as r (`${r.key}#${r.fi}`)}
+        {@const cat = chipFor(r)}
+        <div class="rowwrap" class:hi={r.fi === hi} class:isplaced={isPlaced(r)}>
+          <button class="row" disabled={isPlaced(r)} onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
+            <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
+            <span class="rtext">
+              <span class="rname">{r.name}</span>
+              {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
+            </span>
+            {#if isPlaced(r)}<span class="placed" title="This instance is already on the grid">on grid</span>{/if}
+            <span class="kind">{r.kind}</span>
+            {#if r.fi === hi && !isPlaced(r)}<span class="ret mono">↵</span>{/if}
+          </button>
+          {#if retype}
+            <button class="star" class:on={isTypeFav(r.value)} title={isTypeFav(r.value) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleTypeFav(r.value)}>{isTypeFav(r.value) ? '★' : '☆'}</button>
+          {:else}
+            <button class="star" class:on={isFav(r.sub)} title={isFav(r.sub) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleFav(r.sub)}>{isFav(r.sub) ? '★' : '☆'}</button>
+          {/if}
         </div>
-      {:else if realNames && brands.length > 1}
-        <div class="cats scroll">
-          {#each brands as b (b)}
-            <button class="cat" class:on={brand === b} onclick={() => { brand = b; hi = 0; }}>{b === 'all' ? 'All' : b}</button>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="list scroll">
-        {#if loading}
-          <div class="empty">Loading…</div>
-        {:else if view.flat.length === 0}
-          <div class="empty">No matches for “{query}”.</div>
-        {:else}
-          {#each view.sections as s (s.label)}
-            {#if s.label}<div class="section mono">{s.label}</div>{/if}
-            {#each s.rows as r (`${r.key}#${r.fi}`)}
-              {@const cat = chipFor(r)}
-              <div class="rowwrap" class:hi={r.fi === hi} class:isplaced={isPlaced(r)}>
-                <button class="row" disabled={isPlaced(r)} onmouseenter={() => (hi = r.fi)} onclick={() => pick(r)}>
-                  <span class="chip" style="background:linear-gradient(180deg,{shade(cat.accent, 0.16)},{shade(cat.accent, -0.18)}); border-color:{shade(cat.accent, -0.3)};">{cat.glyph}</span>
-                  <span class="rtext">
-                    <span class="rname">{r.name}</span>
-                    {#if r.sub && r.sub !== r.name}<span class="rsub">{r.sub}</span>{/if}
-                  </span>
-                  {#if isPlaced(r)}<span class="placed" title="This instance is already on the grid">on grid</span>{/if}
-                  <span class="kind">{r.kind}</span>
-                  {#if r.fi === hi && !isPlaced(r)}<span class="ret mono">↵</span>{/if}
-                </button>
-                {#if retype}
-                  <button class="star" class:on={isTypeFav(r.value)} title={isTypeFav(r.value) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleTypeFav(r.value)}>{isTypeFav(r.value) ? '★' : '☆'}</button>
-                {:else}
-                  <button class="star" class:on={isFav(r.sub)} title={isFav(r.sub) ? 'Unfavorite' : 'Favorite'} aria-label="Favorite" onclick={() => toggleFav(r.sub)}>{isFav(r.sub) ? '★' : '☆'}</button>
-                {/if}
-              </div>
-            {/each}
-          {/each}
-        {/if}
-      </div>
-
-      <div class="foot mono">
-        <span>↑↓ Navigate</span><span>⏎ {retype ? 'Change' : 'Place'}</span>{#if !retype}<span>★ Favorite</span>{/if}<span>Esc Close</span>
-      </div>
-    </div>
-  </div>
-{/if}
+      {/each}
+    {/each}
+  {/if}
+</PaletteShell>
 
 <style>
-  .bg {
-    position: absolute;
-    inset: 0;
-    background: rgba(6, 6, 8, 0.66);
-    backdrop-filter: blur(3px);
-    z-index: 200;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 7vh 12px 12px;
-    animation: axsOverlay 0.12s ease;
-  }
-  .card {
-    width: 760px;
-    max-width: 100%;
-    max-height: 84vh;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 16px;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    animation: axsPalette 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  /* mobile: dock the palette to the bottom as a slide-up sheet */
-  .bg.mob {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .card.mob {
-    width: 100%;
-    max-width: 100%;
-    max-height: 88vh;
-    border-radius: 18px 18px 0 0;
-    border-bottom: 0;
-    padding-bottom: var(--axis-safe-bottom);
-    animation: axsSheet 0.26s cubic-bezier(0.2, 0.8, 0.3, 1);
-  }
-  .search {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    padding: 18px 20px;
-    border-bottom: 1px solid var(--surface2);
-  }
-  .search input {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 17px;
-    font-weight: 500;
-  }
-  .count {
-    font-size: 12px;
-    color: var(--textmuted);
-    white-space: nowrap;
-  }
-  .chips {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 16px;
-    border-bottom: 1px solid var(--surface2);
-    flex: none; /* never let the flex column shrink/clip this row (tall "All" list did) */
-  }
-  .target {
-    padding: 6px 11px;
-    background: var(--accent-tint);
-    border: 1px solid var(--accent-border);
-    border-radius: 7px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accentbright);
-    white-space: nowrap;
-  }
   .rn {
     margin-left: auto;
     font-size: 11px;
@@ -403,55 +295,6 @@
     align-items: center;
     gap: 5px;
     cursor: pointer;
-  }
-  .cats {
-    display: flex;
-    gap: 6px;
-    padding: 10px 16px;
-    overflow-x: auto;
-    border-bottom: 1px solid var(--surface2);
-    flex: none;
-  }
-  /* mobile: wrap categories onto multiple rows instead of a hidden horizontal scrollbar */
-  .card.mob .cats {
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
-  .cat {
-    flex: none;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--surface-3);
-    background: var(--panel-2);
-    color: var(--textdim);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    outline: none;
-  }
-  .cat:focus-visible {
-    border-color: var(--accent);
-  }
-  .cat.on {
-    background: rgba(53, 201, 214, 0.14);
-    border-color: var(--accent-border);
-    color: var(--accent);
-  }
-  .list {
-    flex: 1;
-    min-height: 140px;
-    overflow-y: auto;
-    padding: 8px 8px 10px;
-  }
-  .foot {
-    display: flex;
-    gap: 16px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--surface2);
-    font-size: 10px;
-    color: var(--text-faint);
-    flex: none;
   }
   .section {
     font: 600 10px/1 var(--font-mono);

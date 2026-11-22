@@ -13,6 +13,15 @@ export interface WorkbenchRect {
   height: number;
 }
 
+/** The flow an insert line sits in (the line itself runs across it). */
+export type InsertFlow = 'horizontal' | 'vertical';
+
+/** Where a widget drop inserts: a thin line between units (visual px; `widgetDrop.ts` `insertLineRect`). */
+export interface InsertLine {
+  rect: WorkbenchRect;
+  flow: InsertFlow;
+}
+
 export type WorkbenchDragState =
   | {
       kind: 'panel';
@@ -28,6 +37,8 @@ export type WorkbenchDragState =
        * DockDropOverlay. Absent until the session has measured the dock.
        */
       dock?: DockDropOverlayModel;
+      /** Click-to-place from the Add palette (no button held): the click is the drop. */
+      placement?: boolean;
     }
   | {
       kind: 'widget';
@@ -36,10 +47,9 @@ export type WorkbenchDragState =
       startedAt: WorkbenchPointer;
       targetLabel?: string;
       previewRect?: WorkbenchRect;
-      // Overlay previews (DragLayer rects): `group` = whole-target highlight for
-      // group CREATE; `zone` = workspace-edge new-panel region. Positional
-      // inserts do NOT use overlay rects — they render IN-FLOW via
-      // `zoneInsert`/`groupInsert` below so neighbours actually reflow.
+      // Overlay previews (DragLayer rects): `group` = the "Group" frame around
+      // the unit a dwell armed (slice 4b); `zone` = workspace-edge new-panel
+      // region. Positional inserts use `insertLine` instead.
       previewKind?: 'zone' | 'insert' | 'group';
       previewOrientation?: 'horizontal' | 'vertical';
       // Origin rect size + pointer grab offset, captured at drag start (design
@@ -47,14 +57,18 @@ export type WorkbenchDragState =
       // full-size drag ghost under the pointer. Visual (client-rect) px.
       size?: { width: number; height: number };
       grabOffset?: { x: number; y: number };
-      // IN-FLOW insertion targets (design `overZone/overIndex` and
-      // `overGroup/overGroupIndex`): the hovered zone splices a real dashed
-      // spacer element at `index` (UNIT index among visible units, dragged unit
-      // excluded); the hovered group splices the slot between members at
-      // `index`. Mutually exclusive — a group hover suppresses the zone gap
-      // (design `!drag.overGroup && !drag.overUnit`).
+      // Insertion targets (design `overZone/overIndex` and
+      // `overGroup/overGroupIndex`): the hovered zone (`index` = UNIT index
+      // among visible units, dragged unit excluded) or the dragged member's own
+      // group (`index` among its other members). Mutually exclusive. Slice 4b:
+      // nothing is spliced into the flow any more — the zone gets a drop wash,
+      // the group an accent border, and `insertLine` marks the spot.
       zoneInsert?: { zone: string; index: number };
       groupInsert?: { groupId: string; index: number };
+      /** The insert line (DragLayer) for `zoneInsert` / `groupInsert`. */
+      insertLine?: InsertLine;
+      /** Click-to-place from the Add palette (no button held): the click is the drop. */
+      placement?: boolean;
     }
   | {
       // Generic LIST-REORDER drag (design nav-reorder treatment, generalised):
@@ -183,6 +197,64 @@ export function widgetIndexForUnitIndex(unitWidgetCounts: number[], unitIndex: n
   const end = Math.max(0, Math.min(unitIndex, unitWidgetCounts.length));
   for (let i = 0; i < end; i++) widgets += unitWidgetCounts[i];
   return widgets;
+}
+
+/**
+ * A zone's units (member ids) from its ordered widget list — consecutive widgets
+ * sharing a `groupId` form one unit — with `excludeIds` left out. The
+ * document-side twin of the measured units (used when no DOM was measured).
+ */
+export function zoneUnitsFromWidgets(
+  widgets: { id: string; groupId?: string | null }[],
+  excludeIds: Iterable<string> = []
+): { widgetIds: string[] }[] {
+  const excluded = new Set(excludeIds);
+  const units: { widgetIds: string[] }[] = [];
+  const groupSlot = new Map<string, number>();
+  for (const widget of widgets) {
+    if (excluded.has(widget.id)) continue;
+    const slot = widget.groupId ? groupSlot.get(widget.groupId) : undefined;
+    if (slot != null) units[slot].widgetIds.push(widget.id);
+    else {
+      if (widget.groupId) groupSlot.set(widget.groupId, units.length);
+      units.push({ widgetIds: [widget.id] });
+    }
+  }
+  return units;
+}
+
+/**
+ * Convert a UNIT insertion index into the zone's WIDGET-order index from the
+ * units' member ids — not by counting: a zone may hold widgets it does not
+ * render (a type the host gates off, e.g. a device without it), so counting the
+ * rendered units would land one slot early past such a widget.
+ *
+ *   - before `units[i]`: the order index of its first member;
+ *   - past the last unit: one past the last member of `units[i - 1]`;
+ *   - a unit whose members are unknown is skipped (the next / previous one decides);
+ *   - no unit to anchor to: the end of the zone.
+ *
+ * `orderedIds` is the zone's widget order as the reducer splices into it (moving
+ * widgets already left out).
+ */
+export function widgetOrderIndexForUnits(
+  orderedIds: readonly string[],
+  units: ReadonlyArray<{ readonly widgetIds: readonly string[] }>,
+  unitIndex: number
+): number {
+  const position = new Map(orderedIds.map((id, index) => [id, index]));
+  const indices = (unit: { readonly widgetIds: readonly string[] }) =>
+    unit.widgetIds.map((id) => position.get(id)).filter((index): index is number => index != null);
+  const at = Math.max(0, Math.min(Math.trunc(unitIndex) || 0, units.length));
+  for (let i = at; i < units.length; i++) {
+    const found = indices(units[i]);
+    if (found.length) return Math.min(...found);
+  }
+  for (let i = at - 1; i >= 0; i--) {
+    const found = indices(units[i]);
+    if (found.length) return Math.max(...found) + 1;
+  }
+  return orderedIds.length;
 }
 
 /**

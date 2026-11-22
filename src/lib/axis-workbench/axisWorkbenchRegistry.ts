@@ -21,7 +21,9 @@ import AxisPresetBrowserPartPanel from './panels/preset-browser/AxisPresetBrowse
 import AxisWorkbenchNavigationEntry from './widgets/AxisWorkbenchNavigationEntry.svelte';
 import AxisWorkbenchWidget from './widgets/AxisWorkbenchWidget.svelte';
 import { axisWidgetEstWidth, axisWidgetIsKeep } from './widgets/widgetEstWidths';
-import { axisWidgetAvailable } from './widgets/widgetAvailability';
+import { axisWidgetAvailable, axisWidgetUnavailableReason } from './widgets/widgetAvailability';
+import AxisAddPalette from './AxisAddPalette.svelte';
+import { axisCanonicalWidgets } from './axisAddPalette';
 import { createAxisParameterSourceEdgeDropAction, createAxisPinSelectedParametersAction } from './axisParameterActions';
 import { createAxisNavigationPanelAction } from './axisWorkbenchNavigationActions';
 import { isAxisNavigationEntryActive } from './axisNavigationActiveState';
@@ -111,6 +113,15 @@ registry.registerNavigationState({
 // page whose panel lives on another page shows "… is on page … · Bring it here".
 registry.registerPanelCatalogProvider({ canonical: axisCanonicalPanels, hiddenTypes: AXIS_PANEL_CATALOG_HIDDEN_TYPES });
 registry.registerPageHints(axisPageHints);
+// Slice 4 — the Add palette: Axis renders the cards (live widget previews,
+// panel schematics, page mini-maps) on top of the generic catalog, placement
+// and highlights. Its widget part offers every built-in widget type; gated
+// types stay listed, greyed with the reason, at the end.
+registry.registerWidgetCatalogProvider({
+  canonical: axisCanonicalWidgets,
+  unavailableReason: (type) => axisWidgetUnavailableReason(type, editor)
+});
+registry.registerAddPalette(AxisAddPalette);
 // The converter page hosts the preset-convert flow (ConvertDialog activates it):
 // it cannot be deleted (Reset to default still rebuilds its dock).
 registry.registerPageProtection((page) => (page.id === AXIS_PAGE_CONVERT ? 'Used by the preset converter' : null));
