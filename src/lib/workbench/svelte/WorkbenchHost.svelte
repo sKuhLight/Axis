@@ -108,9 +108,11 @@
   // immediately on keyboard focus-within. State drives a class on the rail; the
   // width change is on an absolutely-positioned inner layer only.
   let railExpanded = $state(false);
+  let railHovering = $state(false);
   let railHoverTimer: ReturnType<typeof setTimeout> | null = null;
   const RAIL_HOVER_INTENT_MS = 150;
   function railEnter() {
+    railHovering = true;
     if (railHoverTimer) clearTimeout(railHoverTimer);
     railHoverTimer = setTimeout(() => {
       railExpanded = true;
@@ -118,20 +120,47 @@
     }, RAIL_HOVER_INTENT_MS);
   }
   function railLeave() {
+    railHovering = false;
     if (railHoverTimer) {
       clearTimeout(railHoverTimer);
       railHoverTimer = null;
     }
     railExpanded = false;
   }
+  // `:focus-visible` holds for keyboard focus, but not for focus a mouse click gave
+  // an entry — nor for focus the browser hands back when its tab/window regains
+  // focus (the event that used to reopen a collapsed rail by itself). A browser
+  // without the selector keeps the old behaviour (every focus counts).
+  function isFocusVisible(target: EventTarget | null): boolean {
+    try {
+      return !!(target as Element | null)?.matches?.(':focus-visible');
+    } catch {
+      return true;
+    }
+  }
   // Keyboard focus expands immediately (no intent delay) so tabbing into the
-  // rail reveals labels; blur collapses unless the pointer is still hovering.
-  function railFocusIn() {
+  // rail reveals labels. Pointer focus does not: hover already expands the rail,
+  // and a clicked entry that keeps focus must not reopen it on tab return.
+  function railFocusIn(event: FocusEvent) {
+    if (!isFocusVisible(event.target)) return;
     if (railHoverTimer) {
       clearTimeout(railHoverTimer);
       railHoverTimer = null;
     }
     railExpanded = true;
+  }
+  // Blur collapses unless the pointer is still hovering the rail: clicking from
+  // one entry to the next moves focus (focusout) while the pointer never left the
+  // rail, and since pointer focus no longer re-expands it, collapsing here would
+  // close it under the cursor. Only pointerleave (railLeave) may collapse a
+  // still-hovered rail.
+  function railFocusOut() {
+    if (railHovering) return;
+    if (railHoverTimer) {
+      clearTimeout(railHoverTimer);
+      railHoverTimer = null;
+    }
+    railExpanded = false;
   }
 </script>
 
@@ -169,7 +198,7 @@
       onpointerenter={railEnter}
       onpointerleave={railLeave}
       onfocusin={railFocusIn}
-      onfocusout={railLeave}
+      onfocusout={railFocusOut}
       use:focusTrap={{ enabled: showMobileDrawer && navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
       use:bottomSheetSwipe={{ enabled: isPhone, open: navDrawerOpen, onClose: () => (navDrawerOpen = false) }}
     >
