@@ -314,9 +314,14 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
+    // pointercancel (e.g. a touch scroll takeover) fires no pointerup — without this the listeners above
+    // stay live and every stray pointermove keeps writing values to the connected device. There is no
+    // final write on release, so cancelling is the same teardown.
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   }
 
   function paramWheel(event: WheelEvent) {

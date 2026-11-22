@@ -47,11 +47,15 @@
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       document.body.style.cursor = '';
     };
     document.body.style.cursor = horizontalRegion ? 'ns-resize' : 'ew-resize';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    // pointercancel fires no pointerup — without it the resize stays "live" and the cursor stuck.
+    // Nothing is committed on release (every move already resized), so cancelling is the same teardown.
+    window.addEventListener('pointercancel', onUp);
   }
 </script>
 

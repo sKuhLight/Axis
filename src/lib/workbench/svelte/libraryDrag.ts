@@ -127,7 +127,9 @@ export function startWidgetDragOut(options: WidgetDragOutOptions): void {
         if (commands && commands.length) controller.dispatchMany(commands);
       }
       controller.setDrag(null);
-    }
+    },
+    // An interrupted gesture (pointercancel) must not leave the drag ghost stuck on screen.
+    onCancel: () => controller.setDrag(null)
   });
 }
 
@@ -167,6 +169,8 @@ export function startPanelDragOut(options: PanelDragOutOptions): void {
         if (commands && commands.length) controller.dispatchMany(commands);
       }
       controller.setDrag(null);
-    }
+    },
+    // An interrupted gesture (pointercancel) must not leave the drag ghost stuck on screen.
+    onCancel: () => controller.setDrag(null)
   });
 }

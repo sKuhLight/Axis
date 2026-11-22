@@ -225,6 +225,7 @@
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
       if (!dragging) {
         // A tap on the grip (no drag) opens the group menu below the module.
         openMenuBelowGroup();
@@ -253,9 +254,18 @@
       }
     };
 
+    // pointercancel fires no pointerup — abort the drag without dropping the group anywhere.
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (dragging) controller.setDrag(null);
+    };
+
     e.preventDefault();
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   function moveByKey(e: KeyboardEvent) {
