@@ -3,28 +3,29 @@
   import DockWorkspace from './DockWorkspace.svelte';
   import WidgetZone from './WidgetZone.svelte';
   import NavigationHost from './NavigationHost.svelte';
-  import EditRibbon from './EditRibbon.svelte';
+  import EditBar from './EditBar.svelte';
   import DragLayer from './DragLayer.svelte';
   import WorkbenchToasts from './WorkbenchToasts.svelte';
-  import { previewFrameForClass, selectVisibleWidgetsByZone, type ViewportClass } from '../core';
+  import { previewFrameForClass, previewFrameLabel, selectVisibleWidgetsByZone, type ViewportClass } from '../core';
   import { shouldRenderRail, shouldRenderRailNav } from './navigation';
   import type { WorkbenchController } from './controller.svelte';
+  import type { WorkbenchEditBarExtension } from './editBarMenus';
   import type { WorkbenchRenderRegistry } from './renderRegistry';
   import { workbenchThemeStyle, workbenchTokenDefaultsCss, type WorkbenchTheme } from './theme';
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
-  import type { Snippet } from 'svelte';
 
   let {
     controller,
     registry,
     theme,
-    ribbonExtras
+    editBar
   }: {
     controller: WorkbenchController;
     registry: WorkbenchRenderRegistry;
     theme?: WorkbenchTheme;
-    ribbonExtras?: Snippet;
+    /** Host contributions to the edit bar (LAYOUT items, PROFILE control). */
+    editBar?: WorkbenchEditBarExtension;
   } = $props();
 
   const layout = $derived($controller.activeLayout);
@@ -45,7 +46,10 @@
     shouldRenderRail({ mode: navMode, hasRailWidgets, editMode: $controller.editMode })
   );
   const showRailNav = $derived(shouldRenderRailNav(navMode));
-  const rootClass = $derived(theme?.className ? `aw-root ${theme.className}` : 'aw-root');
+  // The theme class + tokens sit on `.aw-viewport` (the outermost shell element)
+  // so the edit bar — rendered above `.aw-root` — and the preview backdrop are
+  // themed too. `.aw-root` stays the app root class.
+  const viewportClass = $derived(theme?.className ? `aw-viewport ${theme.className}` : 'aw-viewport');
   // AXIS-27 (R17): while EDITING with a device profile PINNED (override set), the
   // whole editing surface shrinks to that profile's real device size — a
   // centered, letterboxed in-window preview frame (design `frameStyle`), no
@@ -54,14 +58,26 @@
   // frame is a real smaller viewport (never a transform/scale) so the shell's own
   // ResizeObserver re-resolves the profile against it and drags/menus keep their
   // 1:1 coordinates. Because the pin wins the resolver, measuring the frame never
-  // fights the pin.
+  // fights the pin. The edit bar stays full window width ABOVE the letterbox.
+  const previewOverrideId = $derived($controller.editMode ? $controller.profileOverride : undefined);
   const previewFrame = $derived.by(() => {
-    if (!$controller.editMode) return null;
-    const overrideId = $controller.profileOverride;
-    if (!overrideId) return null;
-    const breakpoint = ($controller.document.profiles[overrideId]?.breakpoint ?? 'desktop') as ViewportClass;
+    if (!previewOverrideId) return null;
+    const breakpoint = ($controller.document.profiles[previewOverrideId]?.breakpoint ?? 'desktop') as ViewportClass;
     return previewFrameForClass(breakpoint);
   });
+  // The frame is capped to the stage (the window minus the edit bar), so on a
+  // short window it renders smaller than the device size; the label then shows
+  // the size actually rendered. `frameSize` is measured by the root observer.
+  let frameSize = $state<{ width: number; height: number } | null>(null);
+  const previewLabel = $derived(
+    previewFrame && previewOverrideId
+      ? previewFrameLabel(
+          $controller.document.profiles[previewOverrideId]?.label ?? previewOverrideId,
+          previewFrame,
+          frameSize
+        )
+      : ''
+  );
   const previewVars = $derived(
     previewFrame
       ? `--aw-preview-w:${previewFrame.width}px; --aw-preview-h:${previewFrame.height}px; --aw-preview-radius:${previewFrame.radius}px;`
@@ -70,7 +86,9 @@
   // The `--aw-*` token defaults live once in theme.ts; inject them here (before
   // the host theme's overrides so the host still wins). This is the single
   // source of truth — the component no longer redeclares any hex literal.
-  const rootStyle = $derived([workbenchTokenDefaultsCss(), workbenchThemeStyle(theme)].filter(Boolean).join(' '));
+  const viewportStyle = $derived(
+    [workbenchTokenDefaultsCss(), workbenchThemeStyle(theme), previewVars].filter(Boolean).join('; ')
+  );
   let navDrawerOpen = $state(false);
   // The <760px hamburger drawer is a `side`-mode affordance only (design §9:
   // `railOverlay = (mobVP || isMobile) && navMode!=="bottom"`). In bottom mode the
@@ -96,6 +114,9 @@
     const resolve = () => {
       controller.resolveProfileForWidth(el.clientWidth);
       isPhone = el.clientWidth <= 760;
+      // Used (box-sizing-consistent) size, comparable with the frame's specified size.
+      const style = getComputedStyle(el);
+      frameSize = { width: parseFloat(style.width) || el.offsetWidth, height: parseFloat(style.height) || el.offsetHeight };
     };
     resolve();
     const observer = new ResizeObserver(resolve);
@@ -165,16 +186,24 @@
 </script>
 
 <WorkbenchProvider {controller} {registry}>
-  <div class="aw-viewport" class:aw-preview={!!previewFrame} style={previewVars}>
+  <div class={viewportClass} class:aw-preview={!!previewFrame} style={viewportStyle}>
+  {#if $controller.editMode}
+    <!-- The edit bar: full window width, in normal flow ABOVE the app, so the app
+         moves down by exactly its height and nothing overlaps. -->
+    <EditBar extension={editBar} />
+  {/if}
+  <div class="aw-stage">
+  {#if previewFrame}
+    <div class="aw-preview-label" aria-hidden="true">{previewLabel}</div>
+  {/if}
   <div
     bind:this={rootEl}
-    class={rootClass}
+    class="aw-root"
     class:aw-editing={$controller.editMode}
     class:aw-dragging-panel={$controller.drag?.kind === 'panel'}
     class:aw-dragging-widget={$controller.drag?.kind === 'widget'}
     class:aw-dragging-list={$controller.drag?.kind === 'list'}
     class:aw-nav-bottom={navMode === 'bottom'}
-    style={rootStyle}
   >
     {#if showMobileDrawer && navDrawerOpen}
       <button class="aw-mobile-nav-scrim" type="button" aria-label="Close navigation" onclick={() => (navDrawerOpen = false)}></button>
@@ -233,10 +262,12 @@
       <DockWorkspace />
 
       <footer class="aw-bottombar">
-        <!-- Directive 3: the collapsed Customize control is the bottom bar's
-             leftmost element in BOTH nav modes. Toggling opens the expanded
-             EditRibbon overlay. Icon-only below a narrow width (label hidden by
-             CSS) so it never forces the bar to overflow. -->
+        <!-- Directive 3: the Customize toggle is the bottom bar's leftmost element
+             in BOTH nav modes. It opens the edit bar above the app; while editing
+             it stays "Customize" and shows its pressed state (aria-pressed +
+             .active) — the one "Done" lives in the edit bar. Icon-only below a
+             narrow width (label hidden by CSS) so it never forces the bar to
+             overflow. -->
         <button
           class="aw-bottom-customize"
           class:active={$controller.editMode}
@@ -246,7 +277,7 @@
           onclick={() => controller.toggleEditMode()}
         >
           <span class="aw-bottom-customize-glyph" aria-hidden="true">◆</span>
-          <span class="aw-bottom-customize-label">{$controller.editMode ? 'Done' : 'Customize'}</span>
+          <span class="aw-bottom-customize-label">Customize</span>
         </button>
         {#if navMode === 'bottom'}
           <!-- Bottom-nav mode: nav row sits to the left of the bottom-zone widgets,
@@ -263,64 +294,96 @@
       <WidgetZone zone="floating" floating />
     {/if}
 
-    <EditRibbon extras={ribbonExtras} />
     <DragLayer />
     <WorkbenchToasts />
+  </div>
   </div>
   </div>
 </WorkbenchProvider>
 
 <style>
   /* The `--aw-*` token DEFAULTS are the single source of truth in theme.ts
-     (WORKBENCH_TOKEN_DEFAULTS) and are injected onto `.aw-root` via the inline
-     `style` attribute (see `rootStyle`). No hex literal is declared here — the
-     noHexColors guard enforces this file with no tolerance. */
+     (WORKBENCH_TOKEN_DEFAULTS) and are injected onto `.aw-viewport` via the
+     inline `style` attribute (see `viewportStyle`). No hex literal is declared
+     here — the noHexColors guard enforces this file with no tolerance. */
 
-  /* Directive 1: themed scrollbars for EVERY scrollable descendant under the
-     root (preset list, history, bottom bar, dock panels, drawers). One global
-     block so panels inherit it; tokens only — transparent track, border-token
+  /* Directive 1: themed scrollbars for EVERY scrollable descendant of the shell
+     (preset list, history, bottom bar, dock panels, drawers, edit-bar menus).
+     Scoped to `.aw-viewport` so the edit bar's drawers/menus — rendered above
+     `.aw-root` — get them too. Tokens only — transparent track, border-token
      thumb that mixes toward the accent on hover, ~8px thin. */
-  :global(.aw-root *) {
+  :global(.aw-viewport *) {
     scrollbar-width: thin;
     scrollbar-color: var(--aw-border-3) transparent;
   }
-  :global(.aw-root *::-webkit-scrollbar) {
+  :global(.aw-viewport *::-webkit-scrollbar) {
     width: 8px;
     height: 8px;
   }
-  :global(.aw-root *::-webkit-scrollbar-track) {
+  :global(.aw-viewport *::-webkit-scrollbar-track) {
     background: transparent;
   }
-  :global(.aw-root *::-webkit-scrollbar-thumb) {
+  :global(.aw-viewport *::-webkit-scrollbar-thumb) {
     border-radius: 8px;
     background: var(--aw-border-3);
     border: 2px solid transparent;
     background-clip: padding-box;
   }
-  :global(.aw-root *::-webkit-scrollbar-thumb:hover) {
+  :global(.aw-viewport *::-webkit-scrollbar-thumb:hover) {
     background: color-mix(in srgb, var(--aw-accent) 45%, var(--aw-border-3));
     background-clip: padding-box;
   }
-  :global(.aw-root *::-webkit-scrollbar-corner) {
+  :global(.aw-viewport *::-webkit-scrollbar-corner) {
     background: transparent;
   }
 
-  /* AXIS-27: the viewport wrapper is the fixed full-window surface. At rest it is
-     transparent and the root fills it (identical to the pre-R17 fixed root). In
-     PREVIEW it becomes a dark letterbox backdrop that centers a device-sized
-     frame (the root). */
+  /* The viewport wrapper is the fixed full-window surface: a column with the edit
+     bar (Customize mode only, normal flow) on top and the stage below. At rest
+     there is no bar and the stage — and the root inside it — fills the window
+     (identical to the pre-R17 fixed root). */
   .aw-viewport {
     position: fixed;
     inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    /* The bar, its menus and drawers render outside `.aw-root`: give them the
+       workbench text color and UI font rather than whatever the host body uses. */
+    color: var(--aw-text);
+    font-family: var(--aw-font-ui);
   }
+  .aw-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+  }
+  /* AXIS-27: in PREVIEW the stage becomes a dark letterbox backdrop that centers
+     a device-sized frame (the root); the edit bar above stays full window width.
+     Design shell backdrop: a near-black letterbox, darker than the app bg, kept
+     tokenized (no hex literal). */
   .aw-viewport.aw-preview {
+    background: color-mix(in srgb, black 66%, var(--aw-bg));
+  }
+  .aw-viewport.aw-preview .aw-stage {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Design shell backdrop: a near-black letterbox, darker than the app bg,
-       kept tokenized (no hex literal). */
-    background: color-mix(in srgb, black 66%, var(--aw-bg));
     padding: 2vmin;
+  }
+  .aw-preview-label {
+    position: absolute;
+    top: 12px;
+    left: calc(16px + var(--aw-safe-left, 0px));
+    max-width: calc(100% - 32px);
+    overflow: hidden;
+    color: var(--aw-text-muted);
+    font: 600 11px/1.3 var(--aw-font-mono);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
   }
 
   .aw-root {
@@ -334,19 +397,42 @@
     color: var(--aw-text);
     font-family: var(--aw-font-ui);
   }
+  /* While editing, the edit bar above already applies the top safe-area inset;
+     the app below must not apply it a second time. */
+  .aw-root.aw-editing {
+    --aw-safe-top: 0px;
+  }
+  /* While editing, the app is outlined (left, right, bottom — the bar's accent
+     line is its top edge): the thing being edited. A pointer-transparent overlay,
+     so no box changes size. */
+  .aw-root.aw-editing::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    border: 1px solid var(--aw-edit-outline);
+    border-top: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
   /* The pinned-profile preview canvas: a real, smaller viewport (no scale) —
      centered, letterboxed, device-rounded, with a lifted device shadow. Its own
      ResizeObserver re-resolves the profile against this width. */
   .aw-viewport.aw-preview .aw-root {
     position: relative;
     inset: auto;
+    flex: none;
     width: var(--aw-preview-w, 1024px);
     height: var(--aw-preview-h, 760px);
-    max-width: 96vw;
-    max-height: 96vh;
+    max-width: 100%;
+    max-height: 100%;
     border: 1px solid var(--aw-border-3);
     border-radius: var(--aw-preview-radius, 18px);
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  }
+  /* The frame has its own border; the edit outline goes all the way round. */
+  .aw-viewport.aw-preview .aw-root.aw-editing::after {
+    border-top: 1px solid var(--aw-edit-outline);
   }
 
   /* T18: keyboard focus ring for the shell's own chrome (hamburger + scrims).
@@ -467,10 +553,6 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  :global(.aw-root.aw-editing .aw-workspace) {
-    padding-top: 52px;
   }
 
   .aw-topbar,
@@ -699,9 +781,6 @@
     .aw-frame {
       flex: 1;
       order: 0;
-    }
-    :global(.aw-root.aw-editing .aw-workspace) {
-      padding-top: 72px;
     }
     /* Only reserve hamburger space in side-nav mode (where the hamburger is
        rendered). In bottom-nav mode the drawer/hamburger are suppressed, so the

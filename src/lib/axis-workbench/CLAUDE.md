@@ -31,7 +31,10 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `svelte/controller.svelte.ts` — `createWorkbenchController(doc, { onChange })`: runes
   store with `dispatch` / `dispatchMany`, subscribable.
 - `svelte/` components — `WorkbenchHost.svelte`, `DockWorkspace`, `TabStack`, `PanelHost`,
-  `WidgetZone`, `EditRibbon`, `DragLayer`, etc.
+  `WidgetZone`, `EditBar` (the full-width Customize bar above the app; overflow math
+  in `editBarLayout.ts`, menu models + host extension API in `editBarMenus.ts`),
+  `DragLayer`, etc. `layoutActions.ts` holds the save/apply/import/export/backup
+  actions shared by the edit bar and the Layouts drawer.
 - `context.ts` — `getWorkbenchContext()` returns `{ controller, registry, … }`.
 - `bindings.ts` — `WorkbenchBindingRegistry` resolves a `BindingRef.kind` to a live value.
 
@@ -50,7 +53,9 @@ doubt, start in `axis-workbench/` and promote later — never the reverse.
 - `axisWorkbenchBindings.ts` — binding kind `axis.paramControl`, resolved from the editor
   store.
 - `AxisWorkbenchShell.svelte` — seeds profiles, initializes, renders `WorkbenchHost` with
-  the Axis theme and ribbon extras. `featureGate.ts` gates on `VITE_AXIS_WORKBENCH === '1'`.
+  the Axis theme and the `editBar` extension (LAYOUT presets + Reset, PROFILE options;
+  builders in `axisWorkbenchLayoutActions.ts`). `featureGate.ts` gates on
+  `VITE_AXIS_WORKBENCH === '1'`.
 - `panels/` — one component per panel type.
 - `widgets/AxisWorkbenchWidget.svelte` — a SINGLE large switch component rendering ALL
   widget types via `kind = widget.type.replace(/^axis\./, '')` branches plus one

@@ -1,18 +1,38 @@
 import { test, expect } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode } from './support/workbench';
+import { bootCleanWorkbench, enterEditMode, openEditBarMenu, openMenu } from './support/workbench';
 
 /**
  * ROUND 16 — Customize drawer rework (AXIS-24): the right-drawer views are now
  * Pages / Widgets / Layouts, each with a search field, and the Layouts view is
  * page-scoped (save the active page's dock into the shared store, apply a stored
  * layout back onto the active page). This spec exercises the search-filter and
- * the page-scoped save→apply round-trip end to end.
+ * the page-scoped save→apply round-trip end to end. The drawers open from the
+ * edit bar: PAGE › "Manage pages and templates…", Add › "Add widget…",
+ * LAYOUT › Saved layouts › "Manage layouts…".
  */
 
-async function openPages(page: import('@playwright/test').Page) {
+type Page = import('@playwright/test').Page;
+
+async function openPages(page: Page) {
   await enterEditMode(page);
-  await page.getByRole('button', { name: /◳ Pages/ }).click();
+  await openEditBarMenu(page, 'page');
+  await openMenu(page).getByRole('menuitem', { name: 'Manage pages and templates…' }).click();
   await expect(page.locator('.aw-lib-drawer')).toBeVisible();
+}
+
+async function openWidgets(page: Page) {
+  await enterEditMode(page);
+  await openEditBarMenu(page, 'add');
+  await openMenu(page).getByRole('menuitem', { name: 'Add widget…' }).click();
+  await expect(page.locator('.aw-lib-drawer')).toBeVisible();
+}
+
+async function openLayouts(page: Page) {
+  await enterEditMode(page);
+  await openEditBarMenu(page, 'layout');
+  await openMenu(page).getByRole('menuitem', { name: /^Saved layouts/ }).click();
+  await openMenu(page).getByRole('menuitem', { name: 'Manage layouts…' }).click();
+  await expect(page.locator('.aw-layout-drawer')).toBeVisible();
 }
 
 test.describe('Customize drawer', () => {
@@ -89,9 +109,7 @@ test.describe('Customize drawer', () => {
 
   test('drag a hidden widget out of the drawer onto the layout', async ({ page }) => {
     await bootCleanWorkbench(page);
-    await enterEditMode(page);
-    await page.getByRole('button', { name: /⧉ Widgets/ }).click();
-    await expect(page.locator('.aw-lib-drawer')).toBeVisible();
+    await openWidgets(page);
 
     // Ensure a hidden widget exists: hide a placed one first.
     const placed = page.locator('.aw-lib-row.placed:not([disabled])');
@@ -125,9 +143,7 @@ test.describe('Customize drawer', () => {
 
   test('Layouts view saves the active page and applies it back', async ({ page }) => {
     await bootCleanWorkbench(page);
-    await enterEditMode(page);
-    await page.getByRole('button', { name: /⤓ Layouts/ }).click();
-    await expect(page.locator('.aw-layout-drawer')).toBeVisible();
+    await openLayouts(page);
 
     // No saved page layouts yet.
     await expect(page.locator('.aw-layout-empty')).toBeVisible();

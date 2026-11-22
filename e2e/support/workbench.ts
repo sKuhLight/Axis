@@ -40,13 +40,21 @@ const FIRST_RUN_SUPPRESS: Record<string, string> = {
  *      into `top`, `main` emptied, `bottom.sizePx≈737`). We intercept that one
  *      request and return a 404 so `getDoc` resolves null and the app falls back
  *      to `createAxisWorkbenchDefaultDocument()` — the same seed a truly fresh
- *      machine gets. (All other `/api` calls are left alone; the grid just shows
- *      its offline state, which the specs never depend on.)
+ *      machine gets. Every other `/api` call is aborted at the context level
+ *      (see below), so the grid shows its offline state, which the specs never
+ *      depend on.
  *
  * We also seed the first-run popup-suppression flags so no modal scrim covers
  * the chrome under test. Navigate, clean, reload, wait for the shell root.
  */
 export async function bootCleanWorkbench(page: Page): Promise<void> {
+  // Never reach a real device: a ForgeFX dev server on :5056 may be driving the
+  // operator's hardware for another session. Abort every backend `/api` call at
+  // the BROWSER-CONTEXT level. Playwright gives page-level routes precedence over
+  // context routes, so a spec's own page.route mocks (gridMock, 17, 18) and the
+  // workbench-config 404 below still answer their requests; everything else is
+  // aborted and the shell renders its no-device state.
+  await page.context().route('**/api/**', (route) => route.abort());
   // Force the backend config doc to look absent so the app seeds its default
   // layout locally instead of restoring the shared dev-session doc.
   await page.route('**/store/config/workbench', (route) =>
@@ -90,22 +98,62 @@ export async function collapseRail(page: Page): Promise<void> {
 /**
  * Enter edit mode via the in-bar Customize control and assert the editing
  * chrome is up. Round 9 folded Customize into the bottom bar (`.aw-bottom-customize`,
- * leftmost, both nav modes) — the old floating FAB is gone. The control toggles:
- * label "Customize" (title "Customize layout") at rest → "Done" (title "Finish
- * editing layout") while editing. We target the stable class so label visibility
- * (icon-only below 760px) never affects the selector.
+ * leftmost, both nav modes) — the old floating FAB is gone. The control is a
+ * toggle: it keeps its "Customize" label and shows its pressed state
+ * (`aria-pressed` + `.active`) while editing; the edit bar above the app carries
+ * the one "Done". We target the stable class so label visibility (icon-only below
+ * 760px) never affects the selector.
  */
 export async function enterEditMode(page: Page): Promise<void> {
   await collapseRail(page);
   await page.locator('.aw-bottom-customize').click();
   await expect(page.locator('.aw-root.aw-editing')).toHaveCount(1);
+  await expect(page.locator('[data-editbar]')).toBeVisible();
 }
 
-/** Exit edit mode via the same Customize control (now labelled "Done"). */
+/** Exit edit mode via the same (now pressed) Customize toggle. */
 export async function exitEditMode(page: Page): Promise<void> {
   await collapseRail(page);
   await page.locator('.aw-bottom-customize.active').click();
   await expect(page.locator('.aw-root.aw-editing')).toHaveCount(0);
+}
+
+/** The edit bar (Customize mode) — the full-width strip above the app. */
+export function editBar(page: Page) {
+  return page.locator('[data-editbar]');
+}
+
+/** An edit-bar control by its stable id (undo | redo | page | layout | profile | add | more | done). */
+export function editBarControl(page: Page, id: string) {
+  return page.locator(`[data-editbar] [data-eb="${id}"]`);
+}
+
+/** The open menu (edit-bar dropdown or context menu). */
+export function openMenu(page: Page) {
+  return page.locator('.aw-context-menu');
+}
+
+/** Open an edit-bar dropdown (page | layout | profile | add | more) and wait for its menu. */
+export async function openEditBarMenu(page: Page, id: string): Promise<void> {
+  await editBarControl(page, id).click();
+  await expect(openMenu(page)).toBeVisible();
+}
+
+/** Visible labels of the open menu's rows (headers excluded). */
+export async function menuLabels(page: Page): Promise<string[]> {
+  return openMenu(page)
+    .locator('[role="menuitem"], [role="menuitemradio"]')
+    .evaluateAll((els) => els.map((el) => (el.querySelector('span:not([aria-hidden])')?.textContent ?? el.textContent ?? '').trim()));
+}
+
+/**
+ * Insert a custom panel into the active page's main region — the edit bar's
+ * Add › "Add custom panel" (the old ribbon "＋ Panel" button). Expects edit mode.
+ */
+export async function addCustomPanel(page: Page): Promise<void> {
+  await openEditBarMenu(page, 'add');
+  await openMenu(page).getByRole('menuitem', { name: 'Add custom panel' }).click();
+  await expect(openMenu(page)).toHaveCount(0);
 }
 
 /** Tabs in a given dock region's tab stack. */

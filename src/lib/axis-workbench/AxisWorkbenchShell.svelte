@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import WorkbenchHost from '../workbench/svelte/WorkbenchHost.svelte';
-  import { registerWorkbenchBackupProvider } from '../workbench/svelte/WorkbenchLayoutDrawer.svelte';
-  import AxisLayoutPresetPicker from './AxisLayoutPresetPicker.svelte';
-  import AxisProfileSwitcher from './AxisProfileSwitcher.svelte';
+  import { registerWorkbenchBackupProvider } from '../workbench/svelte/layoutActions';
+  import type { WorkbenchEditBarExtension } from '../workbench/svelte/editBarMenus';
   import {
     axisWorkbenchController,
     axisWorkbenchInit,
@@ -12,7 +11,16 @@
   } from './axisWorkbenchStore.svelte';
   import { axisWorkbenchRegistry } from './axisWorkbenchRegistry';
   import { axisWorkbenchTheme } from './axisWorkbenchTheme';
-  import { seedAxisProfiles } from './axisWorkbenchLayoutActions';
+  import {
+    axisActiveLayoutPresetKind,
+    axisLayoutPresetLabel,
+    axisProfileSummaryLabel,
+    buildAxisLayoutMenuItems,
+    buildAxisProfileOptions,
+    resolveAxisProfileSwitcherState,
+    seedAxisProfiles,
+    setAxisProfileOverride
+  } from './axisWorkbenchLayoutActions';
   import { editor } from '../editor.svelte';
   import {
     createAxisMobileBlockFlowMemory,
@@ -24,14 +32,40 @@
   // profile switcher always has a layout to show. Idempotent.
   seedAxisProfiles(axisWorkbenchController);
 
-  // Bridge the Axis-side rolling backups into the generic Layouts drawer's
-  // "Backups" section (module-singleton seam exported by the drawer, same
-  // pattern as toasts.ts — least ceremony vs threading a prop through
-  // WorkbenchHost → EditRibbon for one optional integration). Idempotent.
+  // Bridge the Axis-side rolling backups into the generic "Backups" sections (the
+  // edit bar's LAYOUT menu and the Layouts drawer) — a module-singleton seam in
+  // layoutActions.ts, same pattern as toasts.ts. Idempotent.
   registerWorkbenchBackupProvider({
     list: axisWorkbenchListBackups,
     restore: axisWorkbenchRestoreBackup
   });
+
+  // Axis contributions to the generic edit bar: the LAYOUT presets (+ reset) and
+  // the PROFILE control (Auto · Desktop · Tablet · Mobile). Read on every
+  // controller change; the pure builders live in axisWorkbenchLayoutActions.ts.
+  const profileState = () =>
+    resolveAxisProfileSwitcherState(
+      axisWorkbenchController.profileOverride,
+      axisWorkbenchController.document.activeProfileId
+    );
+  const editBar: WorkbenchEditBarExtension = {
+    layout: {
+      label: () => axisLayoutPresetLabel(axisActiveLayoutPresetKind(axisWorkbenchController.activeLayout)),
+      items: () => buildAxisLayoutMenuItems(axisWorkbenchController)
+    },
+    profile: {
+      label: () => axisProfileSummaryLabel(profileState()),
+      options: () => buildAxisProfileOptions(profileState()),
+      // Live viewport width so clearing the pin (Auto) re-resolves against the
+      // real window instead of holding a stale profile id.
+      select: (id) =>
+        setAxisProfileOverride(
+          axisWorkbenchController,
+          id,
+          typeof window !== 'undefined' ? window.innerWidth : undefined
+        )
+    }
+  };
 
   onMount(() => {
     void axisWorkbenchInit();
@@ -69,14 +103,9 @@
   });
 </script>
 
-{#snippet ribbonExtras()}
-  <AxisProfileSwitcher />
-  <AxisLayoutPresetPicker />
-{/snippet}
-
 <WorkbenchHost
   controller={axisWorkbenchController}
   registry={axisWorkbenchRegistry}
   theme={axisWorkbenchTheme}
-  {ribbonExtras}
+  {editBar}
 />

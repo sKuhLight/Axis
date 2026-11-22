@@ -1,54 +1,23 @@
-<script lang="ts" module>
-  /**
-   * App-provided backup seam. The drawer is generic — it cannot know where (or
-   * whether) the host keeps document backups. A host that has them registers a
-   * provider here (module singleton, the same seam shape as toasts.ts) and the
-   * Layouts drawer grows a "Backups" section. Chosen over threading a prop from
-   * the host shell because the drawer is instantiated by EditRibbon inside the
-   * generic renderer — a prop would have to travel WorkbenchHost → EditRibbon →
-   * drawer for one optional integration.
-   *
-   * (V13a: moved here from WorkbenchLibraryDrawer — backups/restore now live in
-   * the Layouts view alongside saved-layout export and layout import.)
-   */
-  export interface WorkbenchBackupEntry {
-    /** 1-based generation slot (1 = newest). */
-    slot: number;
-    /** Host revision counter carried by the backup (0 when unknown). */
-    rev: number;
-    /** ISO timestamp of the backup's last change, when known. */
-    updatedAt: string | null;
-    /** Number of layouts inside the backup. */
-    layoutCount: number;
-  }
-
-  export interface WorkbenchBackupProvider {
-    list(): WorkbenchBackupEntry[];
-    /** Restore a generation; returns false when the slot is empty/unreadable. */
-    restore(slot: number): boolean;
-  }
-
-  let workbenchBackupProvider: WorkbenchBackupProvider | null = null;
-
-  export function registerWorkbenchBackupProvider(provider: WorkbenchBackupProvider | null): void {
-    workbenchBackupProvider = provider;
-  }
-</script>
-
 <script lang="ts">
-  import {
-    exportPageLayoutPackage,
-    importLayoutPackage,
-    importPageLayoutPackage,
-    importPanelPackage,
-    layoutPackageFilename,
-    selectActivePage,
-    type WorkbenchPageLayout
-  } from '../core';
+  // The save / apply / import / export / backup actions (and the app-provided
+  // backup seam) live in layoutActions.ts, shared with the edit bar's LAYOUT menu.
+  import { selectActivePage, type WorkbenchPageLayout } from '../core';
   import { getWorkbenchContext } from './context';
   import { focusTrap } from './focusTrap';
   import { bottomSheetSwipe } from './bottomSheet';
-  import { createPageLayoutSnapshot } from './layouts';
+  import {
+    applySavedPageLayout,
+    exportActivePageLayout,
+    exportSavedPageLayout,
+    importLayoutFile,
+    listWorkbenchBackups,
+    restoreWorkbenchBackup,
+    runWorkbenchExport,
+    savePageAsLayout,
+    workbenchBackupTimestamp,
+    type WorkbenchBackupEntry,
+    type WorkbenchLayoutActionStatus
+  } from './layoutActions';
 
   let { open, onClose }: { open: boolean; onClose: () => void } = $props();
 
@@ -67,7 +36,7 @@
 
   const { controller } = getWorkbenchContext();
   // R16 / AXIS-24: the Layouts drawer is PAGE-scoped now. The big per-profile
-  // layouts are the profiles (ribbon LAYOUT/PROFILE tabs); here we manage the
+  // layouts are the profiles (edit bar LAYOUT / PROFILE); here we manage the
   // ONE shared page-layout store — save the ACTIVE page's dock into it, apply a
   // stored layout ONTO the active page. Import/export uses the page-layout
   // package (older whole-layout / panel packages still import for compatibility).
@@ -83,31 +52,16 @@
   let renameDraft = $state('');
 
   // Inline status line (a parallel agent owns the toast surface — do NOT import
-  // toasts.ts here; each `setStatus` call marks where a toast could later
-  // replace the inline feedback).
-  let status = $state<{ tone: 'ok' | 'error'; message: string } | null>(null);
+  // toasts.ts here; each status a layout action returns is a toast candidate).
+  let status = $state<WorkbenchLayoutActionStatus | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
-  function setStatus(tone: 'ok' | 'error', message: string) {
-    status = { tone, message };
-  }
 
   function saveSnapshot() {
-    const index = $controller.pageLayouts.length + 1;
-    const pageLayout = createPageLayoutSnapshot($controller.document, {
-      label: activePage ? `${activePage.label} Layout ${index}` : `Page Layout ${index}`
-    });
-    if (!pageLayout) {
-      setStatus('error', 'No active page to save.'); // toast candidate
-      return;
-    }
-    const result = controller.savePageLayout(pageLayout);
-    if (result.success) setStatus('ok', `Saved “${pageLayout.label}”.`); // toast candidate
+    status = savePageAsLayout(controller);
   }
 
   function applyLayout(entry: WorkbenchPageLayout) {
-    const result = controller.applyPageLayout(entry.id);
-    if (result.success) setStatus('ok', `Applied “${entry.label}” to ${activePage?.label ?? 'this page'}.`); // toast candidate
-    else setStatus('error', result.error?.message ?? 'Could not apply layout.'); // toast candidate
+    status = applySavedPageLayout(controller, entry.id);
   }
 
   function startRename(layoutId: string, label: string) {
@@ -131,120 +85,43 @@
     if (event.key === 'Escape') cancelRename();
   }
 
-  function downloadJson(stem: string, data: unknown) {
-    if (typeof window === 'undefined') return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${stem}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function exportSavedLayout(pageLayoutId: string, label: string) {
-    const pkg = exportPageLayoutPackage($controller.document, pageLayoutId);
-    if (!pkg) {
-      setStatus('error', `Could not export "${label}".`); // toast candidate
-      return;
-    }
-    downloadJson(layoutPackageFilename(label, 'page-layout'), pkg);
-    setStatus('ok', `Exported "${label}".`); // toast candidate
+    status = runWorkbenchExport(exportSavedPageLayout($controller.document, pageLayoutId, label));
   }
 
   // Export the ACTIVE page directly as a page-layout package (snapshot without
   // storing it first).
   function exportCurrentPage() {
-    const snapshot = createPageLayoutSnapshot($controller.document, {
-      label: activePage?.label ?? 'Page Layout'
-    });
-    if (!snapshot) {
-      setStatus('error', 'No active page to export.'); // toast candidate
-      return;
-    }
-    const pkg = exportPageLayoutPackage({ pageLayouts: { [snapshot.id]: snapshot } }, snapshot.id);
-    if (!pkg) return;
-    downloadJson(layoutPackageFilename(snapshot.label, 'page-layout'), pkg);
-    setStatus('ok', `Exported “${snapshot.label}”.`); // toast candidate
+    status = runWorkbenchExport(exportActivePageLayout($controller.document));
   }
 
   // Import a page-layout package (primary) — ADDED to the shared store and NOT
   // auto-applied. Older whole-layout / panel packages still import for
-  // compatibility (a layout becomes a big layout; a panel lands in the panel
-  // library). Every id is re-minted upstream.
+  // compatibility (see layoutActions.applyLayoutImport).
   async function onImportFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = ''; // allow re-importing the same file
     if (!file) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(await file.text());
-    } catch {
-      setStatus('error', 'File is not valid JSON.'); // toast candidate
-      return;
-    }
-
-    const asPageLayout = importPageLayoutPackage(parsed);
-    if (asPageLayout.success) {
-      const result = controller.savePageLayout(asPageLayout.payload);
-      if (result.success) setStatus('ok', `Imported “${asPageLayout.payload.label}” — apply it below.`); // toast candidate
-      else setStatus('error', 'Imported page layout could not be saved.'); // toast candidate
-      return;
-    }
-
-    const asLayout = importLayoutPackage(parsed);
-    if (asLayout.success) {
-      const result = controller.dispatch({ type: 'layout.save', layout: asLayout.payload });
-      if (result.success) setStatus('ok', `Imported layout "${asLayout.payload.label}" — pick it as a profile layout.`); // toast candidate
-      else setStatus('error', 'Imported layout could not be saved.'); // toast candidate
-      return;
-    }
-
-    const asPanel = importPanelPackage(parsed);
-    if (asPanel.success) {
-      const result = controller.dispatch({ type: 'library.panel.save', template: asPanel.payload });
-      if (result.success) setStatus('ok', `Imported panel "${asPanel.payload.title}" — add it from Pages.`); // toast candidate
-      else setStatus('error', 'Imported panel could not be saved.'); // toast candidate
-      return;
-    }
-
-    // Report the most specific failure (page-layout parse is the primary path).
-    setStatus('error', asPageLayout.error.message); // toast candidate
+    status = await importLayoutFile(controller, file);
   }
 
-  // Backups (app-provided seam above): the list is re-read every time the
-  // drawer opens; restore is a two-step inline confirm.
+  // Backups (app-provided seam in layoutActions.ts): the list is re-read every
+  // time the drawer opens; restore is a two-step inline confirm.
   let backups = $state<WorkbenchBackupEntry[]>([]);
   let confirmBackupSlot = $state<number | null>(null);
   $effect(() => {
     if (!open) return;
-    backups = workbenchBackupProvider?.list() ?? [];
+    backups = listWorkbenchBackups();
     confirmBackupSlot = null;
     status = null;
     query = '';
   });
 
-  function backupTimestamp(entry: WorkbenchBackupEntry): string {
-    if (!entry.updatedAt) return 'Unknown time';
-    const parsed = new Date(entry.updatedAt);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
-  }
-
   function restoreBackup(entry: WorkbenchBackupEntry): void {
-    if (!workbenchBackupProvider) return;
-    let restored = false;
-    try {
-      restored = workbenchBackupProvider.restore(entry.slot);
-    } catch {
-      restored = false;
-    }
     confirmBackupSlot = null;
-    if (restored) setStatus('ok', `Restored backup ${entry.slot}.`); // toast candidate
-    else setStatus('error', `Backup ${entry.slot} could not be restored.`); // toast candidate
-    backups = workbenchBackupProvider.list();
+    status = restoreWorkbenchBackup(entry);
+    backups = listWorkbenchBackups();
   }
 </script>
 
@@ -297,7 +174,7 @@
       </div>
       <p class="aw-layout-hint">
         Layouts apply to the active page{#if activePage} — <strong>{activePage.label}</strong>{/if}. The big
-        pre-built layouts live under the ribbon’s Profile / Layout tabs.
+        pre-built layouts live in the edit bar’s Layout and Profile controls.
       </p>
       {#if status}
         <p class="aw-layout-status" class:error={status.tone === 'error'} role="status">{status.message}</p>
@@ -325,7 +202,7 @@
             {#each backups as entry (entry.slot)}
               <div class="aw-layout-row backup" title={`Backup generation ${entry.slot}`}>
                 <span class="aw-layout-ico">⧗</span>
-                <span>{backupTimestamp(entry)}</span>
+                <span>{workbenchBackupTimestamp(entry)}</span>
                 <i>{entry.layoutCount} {entry.layoutCount === 1 ? 'layout' : 'layouts'}</i>
                 {#if confirmBackupSlot === entry.slot}
                   <button class="aw-layout-save" type="button" onclick={() => restoreBackup(entry)}>Confirm</button>
@@ -397,7 +274,10 @@
   .aw-layout-scrim {
     position: fixed;
     inset: 0;
-    z-index: 130;
+    /* Shell-overlay band: the drawers open from the edit bar and must sit above
+       app chrome (nav sheet 230, dock drawer 180); edit-bar menus 239/240,
+       toasts 300 and the drag layer 1000 stay above. */
+    z-index: 237;
     border: 0;
     background: rgba(0, 0, 0, 0.4);
     animation: awLayoutIn 0.16s ease;
@@ -407,7 +287,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 131;
+    z-index: 238;
     width: 348px;
     max-width: 90vw;
     padding-right: var(--aw-safe-right, 0px);

@@ -79,18 +79,26 @@ attributes were added**:
 - `[data-tabstack]`, `[data-region="main|bottom|…"]`, `.aw-tabstack[data-region]`
 - `.aw-pane-tab`, `.aw-pane-btn[title="Panel actions"]`, `.aw-tabbody`
 - `[data-nav-entry="<id>"]`, `[data-nav-active="true"]`, `button.axis-nav-entry`
-- `.aw-context-menu`, `.aw-menu-item` (roles `menu`/`menuitem`)
+- `.aw-context-menu`, `.aw-menu-item` (roles `menu`/`menuitem`/`menuitemradio`;
+  drill-in submenus start with a `Back` row; inline fields are `input[data-menu-input]`)
+- Edit bar: `[data-editbar]` (role `toolbar`) with controls `[data-eb="undo|redo|page|layout|profile|add|more|done"]`,
+  the `.aw-eb-tag` CUSTOMIZE tag, `.aw-eb-status` hint and the `[role="alert"]` error chip.
+  Helpers in `support/workbench.ts`: `editBar`, `editBarControl`, `openEditBarMenu`,
+  `menuLabels`, `addCustomPanel` (Add › "Add custom panel").
+- `.aw-viewport.aw-preview` (pinned-profile preview), `.aw-preview-label`
 - `.axis-gridbar .pill-chip` (Full/Map/Auto), `.axis-gridbar .block-size .step`
-- `.axis-preset-tab` (Default/Stage/Studio/Compact)
+- `.axis-preset-tab` (Default/Stage/Studio/Compact — radio rows in the edit bar's LAYOUT menu)
 - `.aw-zone-empty` (empty custom-panel hint)
-- Buttons by accessible text: `Customize`, `Done`, `Map`, `Stage`, `＋ Panel`
+- Buttons by accessible text: `Customize` (the bottom-bar toggle; pressed while editing),
+  `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
+  `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
 
 ## Test inventory (9 files, 17 tests)
 
 1. **01-boot** — shell chrome renders; no console errors beyond the filtered
    ForgeFX/`/api` connection failures.
-2. **02-edit-mode** — Customize opens the EDIT LAYOUT ribbon; per-panel Close
-   chrome appears; Done exits.
+2. **02-edit-mode** — Customize opens the edit bar (CUSTOMIZE tag, Undo/Redo,
+   PAGE, LAYOUT, Add, Done); per-panel Close chrome appears; Done exits.
 3. **03-dock** — drag a panel tab between regions (manual pointer drag);
    tab switching; collapse + close from the pane header menu.
 4. **04-nav** — Setup docks a VirtualScreen panel + active tint, second click
@@ -99,12 +107,23 @@ attributes were added**:
    block-size stepper cycles M↔L.
 6. **06-persistence** — a rearrangement survives reload; a corrupt stored doc
    self-heals to defaults (no blank page).
-7. **07-layout-presets** — LAYOUT tabs visible; Stage → bottom nav; Default →
-   side rail.
+7. **07-layout-presets** — LAYOUT menu lists the presets as radio rows; Stage →
+   bottom nav; Default → side rail; Reset layout asks inline first.
 8. **08-keyboard** — Escape closes an open context menu and restores focus to
    the opener (T18).
-9. **09-custom-panel** — the "＋ Panel" edit action inserts a custom panel with
+9. **09-custom-panel** — Add › "Add custom panel" inserts a custom panel with
    the empty-drop hint.
+
+Later specs (10–19) cover bottom-nav mode, pages, widget menus, the Customize
+drawers (opened from the edit bar's PAGE / Add / LAYOUT menus), the profile
+preview frame (the edit bar stays full width above it), parameter collect, grid
+routing, device layout, telemetry, and **19-edit-bar** — the edit bar's geometry
+(full width at the top, the app shifted by exactly its height, no overlap), its
+menus (inline delete confirm, rename field, duplicate, presets, saved layouts,
+import / export, backups, Add), and its overflow into ⋯ More at 1100 / 834 /
+390 px. Every spec runs offline: `bootCleanWorkbench` aborts `/api/**` at the
+browser-context level (page-level mocks still win), so a reachable ForgeFX can
+neither drive a device nor pop device prompts over the chrome.
 
 ## Ignore these generated artifacts
 

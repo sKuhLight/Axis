@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootCleanWorkbench, enterEditMode, exitEditMode, regionTabs } from './support/workbench';
+import { addCustomPanel, bootCleanWorkbench, enterEditMode, exitEditMode, regionTabs } from './support/workbench';
 
 // ROUND 19 (AXIS-30): dragging parameter controls out of the Block Editor must
 // COLLECT them into one panel (no tab-per-param), render as recognizable,
@@ -65,7 +65,7 @@ test.describe('Parameter collect + tile (AXIS-30)', () => {
     await enterEditMode(page);
 
     // Insert one custom panel to collect into.
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
     const customTabs = regionTabs(page, 'main').filter({ hasText: 'Custom Panel' });
     await expect(customTabs).toHaveCount(1);
 
@@ -101,7 +101,7 @@ test.describe('Parameter collect + tile (AXIS-30)', () => {
   test('collected tiles arrange with the shared widget drag machinery', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
 
     await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
     await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 1, block: 'Amp 1', label: 'Master', color: '#d98a2b' }));
@@ -119,7 +119,7 @@ test.describe('Parameter collect state (AXIS-31)', () => {
   test('bug #2 — the edge-drop overlay clears when a drag ends over a panel', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
     await expect(page.locator('.custom-panel')).toBeVisible();
 
     const payload = paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' });
@@ -145,7 +145,7 @@ test.describe('Parameter collect state (AXIS-31)', () => {
   test('bug #3 — a resting pinned control shows no drag affordance and no dashed slot look', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
     await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 100, paramId: 0, block: 'Amp 1', label: 'Gain', color: '#d98a2b' }));
 
     const panel = page.locator('.custom-panel').first();
@@ -193,7 +193,7 @@ test.describe('Drop-target UX (AXIS-32)', () => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
     // Add a custom panel so the main stack has real tabs (Signal Grid + Custom Panel).
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
     await expect(regionTabs(page, 'main')).toHaveCount(2);
 
     // Drop a control onto the main stack's tab bar → a NEW "Controls" tab appears.
@@ -205,7 +205,7 @@ test.describe('Drop-target UX (AXIS-32)', () => {
   test('directive #3 — hovering an inactive tab during a drag springs it active', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
 
     const tabs = regionTabs(page, 'main');
     await expect(tabs).toHaveCount(2);
@@ -227,7 +227,7 @@ test.describe('Drop-target UX (AXIS-32)', () => {
   test('directive #4 — the customize dashed outline wraps the full tile at every size', async ({ page }) => {
     await bootCleanWorkbench(page);
     await enterEditMode(page);
-    await page.getByRole('button', { name: /＋ Panel/ }).click();
+    await addCustomPanel(page);
 
     await dropParamOnto(page, '.custom-panel', GAIN);
     await dropParamOnto(page, '.custom-panel', paramSourcePayload({ effectId: 200, paramId: 1, block: 'Drive 1', label: 'Level', color: '#d6543f' }));

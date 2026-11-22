@@ -4,7 +4,8 @@ import {
   isCapturedCommand,
   LayoutHistory,
   DEFAULT_LAYOUT_HISTORY_DEPTH,
-  DEFAULT_COALESCE_WINDOW_MS
+  DEFAULT_COALESCE_WINDOW_MS,
+  layoutHistoryShortcut
 } from '../layoutHistory';
 import type { WorkbenchCommand, WorkbenchDocument } from '../../core';
 
@@ -228,5 +229,42 @@ describe('LayoutHistory — ring', () => {
   it('exports sane defaults', () => {
     expect(DEFAULT_LAYOUT_HISTORY_DEPTH).toBeGreaterThanOrEqual(50);
     expect(DEFAULT_COALESCE_WINDOW_MS).toBeGreaterThan(0);
+  });
+});
+
+describe('layoutHistoryShortcut', () => {
+  const key = (k: string, mods: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}, target?: object | null) => ({
+    key: k,
+    ctrlKey: !!mods.ctrl,
+    metaKey: !!mods.meta,
+    shiftKey: !!mods.shift,
+    target: (target ?? { tagName: 'BUTTON' }) as never
+  });
+
+  it('Ctrl/Cmd+Z undoes', () => {
+    expect(layoutHistoryShortcut(key('z', { ctrl: true }))).toBe('undo');
+    expect(layoutHistoryShortcut(key('z', { meta: true }))).toBe('undo');
+  });
+
+  it('Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y redo', () => {
+    expect(layoutHistoryShortcut(key('Z', { ctrl: true, shift: true }))).toBe('redo');
+    expect(layoutHistoryShortcut(key('z', { meta: true, shift: true }))).toBe('redo');
+    expect(layoutHistoryShortcut(key('y', { ctrl: true }))).toBe('redo');
+    expect(layoutHistoryShortcut(key('Y', { meta: true }))).toBe('redo');
+  });
+
+  it('does nothing without a modifier or for other keys', () => {
+    expect(layoutHistoryShortcut(key('z'))).toBeNull();
+    expect(layoutHistoryShortcut(key('z', { shift: true }))).toBeNull();
+    expect(layoutHistoryShortcut(key('y'))).toBeNull();
+    expect(layoutHistoryShortcut(key('x', { ctrl: true }))).toBeNull();
+  });
+
+  it('is ignored inside INPUT, TEXTAREA and contentEditable (text undo wins)', () => {
+    expect(layoutHistoryShortcut(key('z', { ctrl: true }, { tagName: 'INPUT' }))).toBeNull();
+    expect(layoutHistoryShortcut(key('z', { ctrl: true }, { tagName: 'TEXTAREA' }))).toBeNull();
+    expect(layoutHistoryShortcut(key('y', { ctrl: true }, { tagName: 'DIV', isContentEditable: true }))).toBeNull();
+    // No target at all (e.g. window) still counts.
+    expect(layoutHistoryShortcut({ key: 'z', ctrlKey: true, metaKey: false, shiftKey: false, target: null })).toBe('undo');
   });
 });

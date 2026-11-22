@@ -1833,3 +1833,62 @@ new spec passes chromium + firefox in isolation; full-suite result recorded at c
 firefox 06-persistence = AXIS-28, unrelated). Version bump to 0.8.20-beta + commit are the main session's.
 NEVER wrote a param value to the live FM3; dev servers on :5173/:5056 left running.
 - **Committed+pushed** ROUND 24 on `layout-rework` (v0.8.20-beta) — chain complete: codec 753ba45 (v0.3.13) → ForgeFX a4030c6 (v0.6.6-beta, dev :5056 runs this branch) → Axis. Operator sees editor-true Default boards on next block open.
+
+## ROUND 25 — Layout editor rework, slice 1: edit bar at the top of the window (AXIS-68, parent AXIS-67)
+
+Branch `feature/ui-rework` (worktree `.wt-feature-ui-rework`, branched from `fix/pr93-bugfixes`).
+Design source: the UI-rework layout-editor prototype (variant D, edit bar above the whole app).
+
+### What changed
+- **Edit bar replaces the ribbon overlay.**
+  - `EditRibbon.svelte` → `EditBar.svelte`: one 36 px row across the full window, rendered in flow above the rail and top bar.
+  - The app moves down by exactly the bar height and gets a 1 px accent outline (left/right/bottom).
+  - Contents, left to right: CUSTOMIZE tag, Undo/Redo, PAGE ▾, LAYOUT ▾, profile control, Add ▾, status or error chip, ⋯ More, Done.
+  - The separate Pages / ＋ Panel / Widgets / Layouts buttons are gone; their functions live in the menus.
+  - The drawers stay reachable through "Manage pages and templates…", "Add widget…" and "Manage layouts…".
+- **Overflow:** `editBarLayout.ts` (pure).
+  - Width estimates per group, collapse order: status, tag, profile → dropdown, add, profile, layout, page.
+  - Touch presentation at ≤ 760 px: 44 px controls, at most two rows, and the error chip takes the second row.
+- **Menus as data:** `editBarMenus.ts`.
+  - Host extension `editBar` (layout items + profile options) replaces the `ribbonExtras` snippet.
+  - Axis supplies presets and Reset layout from `axisWorkbenchLayoutActions.ts`. The active kind is read from `settings.presetKind`, so the tablet/mobile seeds reset to themselves.
+  - Applying or resetting a preset removes the replaced layout in the same undo step, unless another profile uses it.
+  - Clicking the checked preset is a no-op.
+- **ContextMenu:** drill-in submenus, radio rows, headers, inline confirm, inline input, anchored placement and an overlay z-band (239/240).
+  - The activation and Escape logic is a pure state machine in `contextMenu.ts`.
+  - Existing flat menus behave as before.
+- **Shared layout actions:** `layoutActions.ts` holds save / apply / import (3 package kinds) / export / backups, used by both the bar and the Layouts drawer.
+- **Shell (`WorkbenchHost.svelte`):**
+  - Tokens and the theme class move to `.aw-viewport`. A new `.aw-stage` holds `.aw-root`.
+  - The preview letterbox lives in the stage, and its label shows the rendered frame size.
+  - The workspace padding hacks are removed, and the top safe-area inset is applied once.
+- **Floating widgets:** `core/floating.ts` `resolveFloatingHeal` means entering or leaving Customize never persists a floating move; edit mode only clamps for display.
+- **Shortcuts:** the undo/redo predicate is extracted as `layoutHistoryShortcut()`.
+- **Removed:** `AxisProfileSwitcher.svelte` and `AxisLayoutPresetPicker.svelte` (folded into the extension).
+
+### e2e
+- `bootCleanWorkbench` now aborts every `/api/**` call at browser-context level, so specs never reach a real device. Page-level mocks (16/17/18, workbench config 404) still win.
+- Specs 02/07/09/13/14/15 and the README are adapted.
+- New spec `19-edit-bar.spec.ts` (16 tests):
+  - geometry and shift
+  - menus
+  - delete confirm with undo
+  - rename and duplicate
+  - presets
+  - export/import round-trip
+  - backup restore
+  - Add menu
+  - profile
+  - no console errors
+  - touch rename error
+  - 1100/834/390 widths
+
+### Gates
+- `npm run check`: 0 errors, 0 warnings.
+- `npm test`: 1666 passed (122 files; baseline 1576 / 118).
+- Chromium e2e, full suite: 67/67.
+- Firefox e2e: not run. The Playwright firefox build is not installed on this machine.
+
+### Open (picked up in slice 2)
+- At 390 px the open PAGE menu partly covers the error row after a rejected rename. The menu should re-place when the bar height changes.
+- A menu whose trigger detaches without a resize keeps a stale anchor. Not reachable today.

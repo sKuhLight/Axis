@@ -4,15 +4,15 @@
     capWidgetSize,
     clampFloatingPosition,
     createCustomPanelFromWidgetsCommands,
-    healFloatingRect,
     raiseFloatingOrder,
+    resolveFloatingHeal,
     selectVisibleWidgetsByZone,
     type DockRegionId,
     type WidgetInstance,
     type WidgetSize,
     type WorkbenchCommand
   } from '../core';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import ContextMenu from './ContextMenu.svelte';
   import {
     menuPositionBelowRect,
@@ -445,6 +445,19 @@
   let hostEl = $state<HTMLElement | null>(null);
   const isFloating = $derived(widget.zone === 'floating');
 
+  // Display-only clamp while editing (see `resolveFloatingHeal`): entering
+  // Customize shrinks the stage, and that transition must never move or persist
+  // a stored position. Valid only for the stored x/y it was computed from.
+  let viewClamp = $state<{ x: number; y: number; fromX: number; fromY: number } | null>(null);
+  const displayRect = $derived.by(() => {
+    const rect = widget.floatingRect;
+    if (!rect) return null;
+    if (viewClamp && viewClamp.fromX === rect.x && viewClamp.fromY === rect.y) {
+      return { ...rect, x: viewClamp.x, y: viewClamp.y };
+    }
+    return rect;
+  });
+
   // Container = the floating zone element (inset:0 over the root); its client
   // box is the clamp viewport. Falls back to the widget's parent.
   function floatingViewport(): { width: number; height: number } {
@@ -473,7 +486,8 @@
     e.stopPropagation();
     raiseFloating();
 
-    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    // Start from where the floater is SHOWN (a display clamp may be in effect).
+    const origin = displayRect ?? { x: 0, y: 0 };
     const startedAt = { x: e.clientX, y: e.clientY };
     let dragging = false;
     let pending: { x: number; y: number } = { x: origin.x, y: origin.y };
@@ -533,12 +547,16 @@
 
   // Self-heal: on mount and on viewport/zone resize, re-clamp a persisted
   // position so a floater saved offscreen (e.g. after the window shrank)
-  // reappears with a grabbable strip in view.
+  // reappears with a grabbable strip in view. While editing the clamp is
+  // display-only (never dispatched): the edit-mode transition itself (edit bar,
+  // preview frame) must not rewrite stored positions. Leaving edit mode re-heals
+  // against the full stage.
   function healFloatingIntoView() {
-    if (!isFloating || !widget.floatingRect || !hostEl) return;
-    const healed = healFloatingRect(widget.floatingRect, floatingSize(), floatingViewport());
-    if (!healed) return;
-    controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', floatingRect: healed });
+    const rect = widget.floatingRect;
+    if (!isFloating || !rect || !hostEl) return;
+    const { persist, view } = resolveFloatingHeal(rect, floatingSize(), floatingViewport(), controller.editMode);
+    viewClamp = view ? { ...view, fromX: rect.x, fromY: rect.y } : null;
+    if (persist) controller.dispatch({ type: 'widget.move', widgetIds: [widget.id], zone: 'floating', floatingRect: persist });
   }
 
   // Keyboard reposition for the floating grip: arrows nudge by a step (Shift =
@@ -550,7 +568,7 @@
     const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
     if (!dx && !dy) return;
     e.preventDefault();
-    const origin = widget.floatingRect ?? { x: 0, y: 0 };
+    const origin = displayRect ?? { x: 0, y: 0 };
     const next = clampFloatingPosition({ x: origin.x + dx, y: origin.y + dy }, floatingSize(), floatingViewport());
     controller.dispatch({
       type: 'widget.move',
@@ -569,6 +587,17 @@
   const lifted = $derived(
     !isFloating && $controller.drag?.kind === 'widget' && $controller.drag.widgetIds.includes(widget.id)
   );
+
+  // Entering / leaving edit mode re-runs the heal for the new stage: display-only
+  // while editing, and leaving drops the display clamp (the stored position is
+  // shown again; it is only persisted if it is out of view of the full stage).
+  const editing = $derived($controller.editMode);
+  $effect(() => {
+    void editing;
+    if (!untrack(() => isFloating)) return;
+    const raf = requestAnimationFrame(healFloatingIntoView);
+    return () => cancelAnimationFrame(raf);
+  });
 
   onMount(() => {
     if (!isFloating) return;
@@ -594,7 +623,7 @@
   data-widget-type={widget.type}
   data-size={size}
   role="group"
-  style={isFloating && widget.floatingRect ? `left:${widget.floatingRect.x}px; top:${widget.floatingRect.y}px; z-index:${50 + widget.order};` : ''}
+  style={isFloating && displayRect ? `left:${displayRect.x}px; top:${displayRect.y}px; z-index:${50 + widget.order};` : ''}
   onpointerdowncapture={isFloating ? () => raiseFloating() : undefined}
   oncontextmenu={openMenu}
 >

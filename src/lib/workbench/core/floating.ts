@@ -84,6 +84,33 @@ export function healFloatingRect(
   return { ...rect, x: clamped.x, y: clamped.y };
 }
 
+export interface FloatingHealResolution {
+  /** A healed rect to PERSIST (dispatch), or null. */
+  persist: FloatingRect | null;
+  /** A display-only position to RENDER instead of the stored one, or null. */
+  view: { x: number; y: number } | null;
+}
+
+/**
+ * Decide what a floater's self-heal does. Outside edit mode an out-of-view rect
+ * is healed and persisted (the window shrank). While EDITING it is only clamped
+ * for display: entering Customize shrinks the stage (the edit bar takes the top
+ * of the window; a pinned profile previews in a device frame), and that mode
+ * transition must never rewrite — or persist — a stored floater position. The
+ * stored position comes back once editing ends.
+ */
+export function resolveFloatingHeal(
+  rect: FloatingRect,
+  size: FloatingSize,
+  viewport: FloatingViewport,
+  editing: boolean,
+  minVisible: number = FLOATING_MIN_VISIBLE
+): FloatingHealResolution {
+  const healed = healFloatingRect(rect, size, viewport, minVisible);
+  if (!healed) return { persist: null, view: null };
+  return editing ? { persist: null, view: { x: healed.x, y: healed.y } } : { persist: healed, view: null };
+}
+
 /**
  * The z-order of floating widgets is their `order` field (higher = on top),
  * deterministic and persisted. This resolves the next order value that raises

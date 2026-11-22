@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * Purpose-built Customize browser. The Edit ribbon opens this in one of two
-   * views (R16 / AXIS-24 — reworked from the V13a panels/widgets split into a
-   * searchable, sectioned drawer that matches the design's library pattern):
+   * Purpose-built Customize browser. The edit bar opens this in one of two
+   * views (PAGE › Manage pages and templates…, Add › Add panel… / Add widget… /
+   * Open library; R16 / AXIS-24 — reworked from the V13a panels/widgets split
+   * into a searchable, sectioned drawer that matches the design's library pattern):
    *
    *   - `view="pages"`   → PAGES manager: create / rename / delete / reorder /
    *     jump-to the layout's pages (each page is its own dock arrangement), plus
@@ -14,7 +15,7 @@
    *
    * Both views carry a search field that filters every section at once. Saved
    * page LAYOUTS, backups and import/export live in WorkbenchLayoutDrawer (the
-   * "Layouts" ribbon button). Placement stays contextual — click-to-add drops
+   * edit bar’s LAYOUT › Saved layouts › Manage layouts…). Placement stays contextual — click-to-add drops
    * into a sane default zone/region; the drag layer covers exact placement.
    */
   import {
@@ -37,6 +38,7 @@
     instantiateWidgetTemplateCommands,
     labelFromWorkbenchType
   } from './library';
+  import { downloadWorkbenchJson } from './layoutActions';
   import { startPanelDragOut, startWidgetDragOut } from './libraryDrag';
   import { startListReorder } from './listReorderDrag';
 
@@ -128,26 +130,13 @@
     query = '';
   });
 
-  function downloadJson(stem: string, data: unknown) {
-    if (typeof window === 'undefined') return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${stem}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function exportPanelTemplate(templateId: string, title: string) {
     const pkg = exportPanelPackage($controller.document, templateId);
     if (!pkg) {
       setStatus('error', `Could not export "${title}".`); // toast candidate
       return;
     }
-    downloadJson(layoutPackageFilename(title, 'panel'), pkg);
+    downloadWorkbenchJson({ stem: layoutPackageFilename(title, 'panel'), data: pkg });
     setStatus('ok', `Exported "${title}".`); // toast candidate
   }
 
@@ -559,7 +548,10 @@
   .aw-lib-scrim {
     position: fixed;
     inset: 0;
-    z-index: 130;
+    /* Shell-overlay band: the drawers open from the edit bar and must sit above
+       app chrome (nav sheet 230, dock drawer 180); edit-bar menus 239/240,
+       toasts 300 and the drag layer 1000 stay above. */
+    z-index: 237;
     border: 0;
     background: rgba(0, 0, 0, 0.4);
     animation: awLibIn 0.16s ease;
@@ -569,7 +561,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 131;
+    z-index: 238;
     width: 348px;
     max-width: 90vw;
     /* T21: right-edge drawer clears the landscape right + vertical insets. */
