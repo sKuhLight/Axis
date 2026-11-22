@@ -430,8 +430,9 @@ class LibraryStore {
     return { ok, failed };
   }
 
-  /** Open a directory picker and import every .syx within (one level). Returns count, or null if the
-   *  picker is unsupported / cancelled. Uses the directory <input> so it works in Electron + Chromium. */
+  /** Open a directory picker and import every .syx within (one level). Returns the import count — `{ ok: 0,
+   *  failed: 0 }` when the chosen folder held no files — or null if the picker was cancelled. Uses the
+   *  directory <input> so it works in Electron + Chromium. */
   async importFolder(): Promise<{ ok: number; failed: number } | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -441,11 +442,14 @@ class LibraryStore {
       input.multiple = true;
       input.onchange = async () => {
         const list = Array.from(input.files ?? []);
-        if (!list.length) return resolve(null);
+        if (!list.length) return resolve({ ok: 0, failed: 0 }); // an empty folder is a result, not a cancel
         // derive a short folder name from the common top directory of the selection
         const folder = (list[0].webkitRelativePath?.split('/')[0]) || 'Folder';
         resolve(await this.importFiles(list, folder));
       };
+      // Browsers fire `cancel`, not `change`, when the picker is dismissed — without this the promise
+      // never settles and the caller's await hangs forever. Harmless if `onchange` also resolves.
+      input.addEventListener('cancel', () => resolve(null));
       input.click();
     });
   }
