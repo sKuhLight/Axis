@@ -13,7 +13,12 @@
 //     class or the remote revision changes. A reload of the same family keeps the page the user is on;
 //   - every load also resolves the active profile's seed (the family's "default for this type" board,
 //     else the device layout / curated fallback; Blank: an empty board) — the layout status compares
-//     against it, and "Reset this page" / "Reset all pages" go back to it;
+//     against it, and "Reset this page" / the whole-layout reset ("Reset to device layout", or "Reset all
+//     pages" with a saved default) go back to it;
+//   - a stored Default board that is still exactly the device default as earlier versions built it (rows
+//     only, `previousSeed`, built only when such a board is found) loads as the current device default
+//     (positions), without a write — not while a "default for this type" is saved, not when the stored
+//     board holds a control the catalog does not list yet, never for copies;
 //   - while arranging, every committed change is one undo step (the board it replaced, capped); Undo saves
 //     once. The stack is cleared when Arrange starts or ends, on a profile switch and on every (re)load.
 // Covered by beState.runes.test.ts.
@@ -33,6 +38,7 @@ import {
   DEFAULT_PROFILE,
   DEVICE_CLASSES,
   hasUserSeed,
+  isFamilyMigrated,
   loadBoard,
   loadMeta,
   loadSeed,
@@ -64,6 +70,9 @@ export interface BeSource {
   variantSig: string;
   /** The device-authentic default board (device layout, else the curated fallback). */
   deviceSeed: () => BeBoard;
+  /** The device default as earlier versions built it (rows only), or null when it equals `deviceSeed`
+   *  by construction (no device layout). A stored Default board still equal to it follows `deviceSeed`. */
+  previousSeed?: () => BeBoard | null;
   /** Remote revision of the surface document (bumped by a host↔remote push). */
   rev: number;
 }
@@ -181,14 +190,16 @@ export class BeState {
       catalogKeys: src.catalog.map((c) => c.key),
       seed: this.#seedFor(profile),
       variantSig: src.variantSig,
-      viewsByKey: viewsByKey(src.catalog)
+      viewsByKey: viewsByKey(src.catalog),
+      // built only when a stored Default board has to be compared with it
+      previousSeed: profile === DEFAULT_PROFILE ? src.previousSeed : null
     });
   }
 
   /** Before any write: hand a not-yet-migrated family's legacy boards over to the new keys. */
   #carryLegacy(): void {
     const src = this.#src;
-    if (!src) return;
+    if (!src || isFamilyMigrated(this.#storage, src.slug)) return; // the usual case: nothing to carry, nothing built
     carryLegacyBoards({
       storage: this.#storage,
       legacyStorage: this.#legacy,
@@ -197,7 +208,8 @@ export class BeState {
       catalogKeys: src.catalog.map((c) => c.key),
       seedFor: (profile) => this.#seedFor(profile),
       variantSig: src.variantSig,
-      viewsByKey: viewsByKey(src.catalog)
+      viewsByKey: viewsByKey(src.catalog),
+      previousSeed: src.previousSeed
     });
   }
 

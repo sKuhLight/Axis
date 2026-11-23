@@ -50,7 +50,7 @@
   import { findGroups, flatMatches, itemIdOn, jumpPage, pagesOf, type FindFilter } from './findControls';
   import { beLayer } from './overlayLayer';
   import type { BeBlockChrome } from './headerModel';
-  import { buildMoreMenu, canArrangeOn } from './moreMenu';
+  import { buildMoreMenu, builtInName, canArrangeOn, resetAllToast } from './moreMenu';
   import { buildControlMenu, placePinTargets, VIEW_NAME, type PinPanelPlace } from './controlMenu';
   import { isForeignOverlay } from './arrangeModel';
   import {
@@ -81,7 +81,7 @@
   } from './boardModel';
   import { boardDiffersFromSeed, pageDiffersFromSeed } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
-  import { buildCuratedBoardV2, buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
+  import { buildCuratedBoardV2, buildDeviceLayoutBoardV2, hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
   import {
     edgeDropArgs,
     editorTabTarget,
@@ -202,8 +202,15 @@
   function deviceSeed(): BoardModel {
     return buildDeviceLayoutBoardV2(editor.blockLayout, catalog) ?? buildCuratedBoardV2(catalog, new Set(idealIds(editor.params)));
   }
+  /** The built-in seed comes from the device layout (else the curated fallback; the ⋯ wording follows). */
+  const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog));
+  /** The device default as earlier versions built it (rows only): a stored Default board still equal to
+   *  it follows the positioned default (boardPersistence `previousSeed`; built only when needed). */
+  function previousSeed(): BoardModel | null {
+    return buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { rowFlowOnly: true });
+  }
   $effect(() => {
-    const src = { slug, deviceClass, catalog, variantSig, deviceSeed, rev: surfRev() };
+    const src = { slug, deviceClass, catalog, variantSig, deviceSeed, previousSeed, rev: surfRev() };
     if (status !== 'ready') return; // the parameters of another block / channel may still be in place
     untrack(() => {
       // a (re)load can swap the board under the scroll position: keep its stored page active until the
@@ -685,6 +692,7 @@
             pageInSeed,
             hasBoard: !!board,
             hasUserSeed: be.userSeed,
+            hasDeviceLayout,
             typeName: saveName,
             block: block ? { isCab: block.isCab, canRetype: !!block.pack, gridMapShown: block.gridMapShown } : null
           },
@@ -701,12 +709,12 @@
             resetAll: () => {
               holdActive(400);
               be.resetAll();
-              editor.showToast('All pages reset', 'var(--accent)');
+              editor.showToast(resetAllToast(be.profile, be.userSeed, hasDeviceLayout), 'var(--accent)');
             },
             resetDevice: () => {
               holdActive(400);
               be.resetToDevice();
-              editor.showToast('Reset to the device layout', 'var(--accent)');
+              editor.showToast(`Reset to ${builtInName(hasDeviceLayout)}`, 'var(--accent)');
             },
             newCopy: addProfile,
             deleteCopy: deleteProfile,
@@ -716,7 +724,7 @@
             },
             forgetDefault: () => {
               be.forgetDefault();
-              editor.showToast(`${saveName} starts from the device layout again`, 'var(--accent)');
+              editor.showToast(`${saveName} starts from ${builtInName(hasDeviceLayout)} again`, 'var(--accent)');
             },
             changeType: () => block?.onType(),
             gridMap: (show) => block?.onGridMap(show),

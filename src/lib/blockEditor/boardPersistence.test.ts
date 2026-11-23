@@ -26,6 +26,9 @@ import {
   type KeyValueStore
 } from './boardPersistence';
 import type { BeBoard } from './boardModel';
+import { buildCatalog } from './catalog';
+import { buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
+import type { DeviceLayout } from '../types';
 
 const memory = (init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string>; writes: string[] } => {
   const data = { ...init };
@@ -180,6 +183,99 @@ describe('variantSig re-seed rule', () => {
     expect(loadBoard({ ...base, storage: st, profile: 'Mine', deviceClass: 'desktop' }).source).toBe('desktop');
     expect(loadBoard({ ...base, seed: mk('Seed'), storage: st, profile: 'Default', deviceClass: 'desktop' }).source).toBe('desktop');
     expect(loadBoard({ ...base, variantSig: '', storage: st, profile: 'Default', deviceClass: 'desktop' }).source).toBe('desktop');
+  });
+});
+
+describe('device positions: the previous (rows-only) default', () => {
+  // the device default as built now (positions, a section divider) and as earlier versions built it
+  const cat = buildCatalog({ params: [0, 1, 2, 3].map((id) => ({ id, name: `P${id}` })), enums: [] });
+  const ckeys = cat.map((c) => c.key);
+  const at = (x: number, y: number) => ({ positionExact: `${x},${y}` });
+  const k = (id: number, placement?: object) => ({ label: `P${id}`, paramName: `P${id}`, paramId: id, widget: 'knob' as const, rawWidget: 'knob', ...(placement ? { placement } : {}) });
+  const layout: DeviceLayout = {
+    family: 'AMP',
+    variantName: 'Plexi',
+    pages: [
+      {
+        name: 'Amp',
+        rows: [
+          // one knob line on a 92 px slot with an empty slot before the last knob
+          { section: 'parameters', controls: [k(0, at(305, 50)), k(1, at(397, 50)), k(2, at(489, 50)), k(3, at(673, 50))] },
+          { section: 'mixer', controls: [] }
+        ]
+      }
+    ]
+  };
+  const now = buildDeviceLayoutBoardV2(layout, cat)!;
+  const before = buildDeviceLayoutBoardV2(layout, cat, { rowFlowOnly: true })!;
+  const input = (st: KeyValueStore, extra: object = {}) => ({ storage: st, slug: 'amp', profile: 'Default', deviceClass: 'desktop' as const, catalogKeys: ckeys, seed: now, previousSeed: before, ...extra });
+
+  it('the two defaults differ (positions keep the empty slot, rows close it)', () => {
+    expect(boardDiffersFromSeed(before, now)).toBe(true);
+    expect(now.boards.Amp!.find((i) => 'key' in i && i.key === 'k3')).toMatchObject({ x: 8, y: 0 });
+    expect(before.boards.Amp!.find((i) => 'key' in i && i.key === 'k3')).toMatchObject({ x: 6, y: 0 });
+  });
+
+  it('no stored board: the positioned default, unchanged (no dot)', () => {
+    const st = memory();
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('seed');
+    expect(boardDiffersFromSeed(r.board, loadSeed(input(st)).board, new Set(ckeys))).toBe(false);
+    expect(st.writes).toEqual([]);
+  });
+
+  it('a stored board that is still exactly the previous default follows the new one (page kept, nothing written)', () => {
+    const stored = { ...before, page: 'Amp' };
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(stored) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('seed');
+    expect(boardDiffersFromSeed(r.board, now)).toBe(false);
+    expect(r.board.page).toBe('Amp');
+    expect(st.writes).toEqual([]);
+  });
+
+  it('a stored board the user changed keeps its content', () => {
+    const edited: BeBoard = { ...before, boards: { Amp: before.boards.Amp!.map((i) => ('key' in i && i.key === 'k3' ? { ...i, x: 20 } : i)) } };
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(edited) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(r.board.boards.Amp!.find((i) => 'key' in i && i.key === 'k3')).toMatchObject({ x: 20 });
+    expect(boardDiffersFromSeed(r.board, now)).toBe(true); // custom, as before
+  });
+
+  it('only for Default (never a copy), and only when the previous default really differs from the new one', () => {
+    const st = memory({ [boardKey('amp', 'Mine', 'desktop')]: JSON.stringify(before) });
+    expect(loadBoard(input(st, { profile: 'Mine' })).source).toBe('desktop');
+    const same = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(now) });
+    expect(loadBoard(input(same, { previousSeed: now })).source).toBe('desktop');
+    expect(loadBoard(input(same, { previousSeed: null })).source).toBe('desktop');
+  });
+
+  it('not while the family has a saved "default for this type" (that one is the reference)', () => {
+    const { variantSig: _sig, ...userSeed } = before;
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(before), [seedKey('amp')]: JSON.stringify(userSeed) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(boardDiffersFromSeed(r.board, before)).toBe(false); // still the stored board
+    expect(boardDiffersFromSeed(r.board, loadSeed(input(st)).board, new Set(ckeys))).toBe(false); // no dot either
+  });
+
+  it('not when the stored board holds a control the catalog does not list right now (a meter added by the user)', () => {
+    const withMeter: BeBoard = { ...before, boards: { Amp: [...before.boards.Amp!, { id: 'm', key: 'meter', view: 'meter', x: 20, y: 0, w: 2, h: 4 }] } };
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(withMeter) });
+    const r = loadBoard(input(st));
+    expect(r.source).toBe('desktop');
+    expect(r.board.boards.Amp!.some((i) => 'key' in i && i.key === 'meter')).toBe(true);
+  });
+
+  it('the previous default is built only when a stored Default board has to be compared with it', () => {
+    let built = 0;
+    const lazy = () => (built++, before);
+    loadBoard(input(memory(), { previousSeed: lazy }));
+    expect(built).toBe(0); // nothing stored: the seed, nothing to compare
+    const st = memory({ [boardKey('amp', 'Default', 'desktop')]: JSON.stringify(before) });
+    expect(loadBoard(input(st, { previousSeed: lazy })).source).toBe('seed');
+    expect(built).toBe(1);
   });
 });
 

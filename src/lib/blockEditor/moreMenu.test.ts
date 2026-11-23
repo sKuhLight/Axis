@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkbenchMenuItem } from '../workbench';
-import { buildMoreMenu, canArrangeOn, isCopyProfile, navChoiceShown, type MoreMenuActions, type MoreMenuState } from './moreMenu';
+import { buildMoreMenu, builtInName, canArrangeOn, isCopyProfile, navChoiceShown, resetAllToast, seedIsDevice, type MoreMenuActions, type MoreMenuState } from './moreMenu';
 
 const actions = (): MoreMenuActions & Record<string, ReturnType<typeof vi.fn>> =>
   ({
@@ -34,6 +34,7 @@ const state = (over: Partial<MoreMenuState> = {}): MoreMenuState => ({
   pageInSeed: true,
   hasBoard: true,
   hasUserSeed: false,
+  hasDeviceLayout: true,
   typeName: 'Amp',
   block: { isCab: false, canRetype: true, gridMapShown: true },
   ...over
@@ -173,6 +174,45 @@ describe('buildMoreMenu', () => {
     byId(items, 'forget-default').run();
     expect(a.forgetDefault).toHaveBeenCalled();
     expect(ids(buildMoreMenu(state(), a))).not.toContain('reset-device');
+  });
+
+  it('F10: with the device layout as the seed the whole-layout reset reads "Reset to device layout"', () => {
+    const a = actions();
+    // Default (and a copy) without a saved default: one row, worded after the device layout
+    for (const profile of ['Default', 'Mine']) {
+      const items = buildMoreMenu(state({ profiles: ['Default', 'Blank', 'Mine'], profile, custom: true }), a);
+      expect(byId(items, 'reset-all')).toMatchObject({ label: 'Reset to device layout', disabled: false, confirm: { prompt: 'Reset every page to the device layout?' } });
+      expect(ids(items)).not.toContain('reset-device'); // no second row saying the same
+    }
+    byId(buildMoreMenu(state({ custom: true }), a), 'reset-all').run();
+    expect(a.resetAll).toHaveBeenCalled();
+    // unchanged: nothing to reset
+    expect(byId(buildMoreMenu(state(), a), 'reset-all')).toMatchObject({ label: 'Reset to device layout', disabled: true });
+    // a saved default is the seed: "Reset all pages" goes back to it, "Reset to device layout" stays reachable
+    const saved = buildMoreMenu(state({ hasUserSeed: true, custom: true }), a);
+    expect(byId(saved, 'reset-all').label).toBe('Reset all pages');
+    expect(byId(saved, 'reset-device').label).toBe('Reset to device layout');
+    expect(seedIsDevice('Default', false)).toBe(true);
+    expect(seedIsDevice('Default', true)).toBe(false);
+    expect(seedIsDevice('Blank', false)).toBe(false);
+    // the toast says what happened, worded like the row
+    expect(resetAllToast('Default', false)).toBe('Reset to the device layout');
+    expect(resetAllToast('Default', true)).toBe('All pages reset to your saved default');
+    expect(resetAllToast('Blank', false)).toBe('All pages cleared');
+  });
+
+  it('without a device layout (curated fallback, virtual screens without one): "Reset all pages" and "the default layout"', () => {
+    const items = buildMoreMenu(state({ hasDeviceLayout: false, custom: true, pageCustom: true, page: 'Main' }), actions());
+    expect(byId(items, 'reset-all')).toMatchObject({ label: 'Reset all pages', confirm: { prompt: 'Reset every page to the default layout?' } });
+    expect(byId(items, 'reset-page').confirm?.prompt).toBe('Reset “Main” to the default layout?');
+    expect(byId(items, 'profile:Default').hint).toBe('built-in');
+    // with a saved default the extra row names the default layout too
+    const saved = buildMoreMenu(state({ hasDeviceLayout: false, hasUserSeed: true, custom: true }), actions());
+    expect(byId(saved, 'reset-device')).toMatchObject({ label: 'Reset to default layout', confirm: { prompt: 'Replace this layout with the default layout?' } });
+    expect(seedIsDevice('Default', false, false)).toBe(false);
+    expect(resetAllToast('Default', false, false)).toBe('All pages reset to the default layout');
+    expect(builtInName(false)).toBe('the default layout');
+    expect(builtInName(true)).toBe('the device layout');
   });
 
   it('cab: "Choose cab…"; no palette to open disables it; grid map label follows its state', () => {

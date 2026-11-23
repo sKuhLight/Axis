@@ -148,6 +148,11 @@ export interface LoadBoardInput {
   /** Current device-layout variant; defaults to `seed.variantSig`. */
   variantSig?: string;
   viewsByKey?: ReadonlyMap<string, readonly BeView[]>;
+  /** `Default` only: the built-in seed as earlier versions built it (the device layout by rows only,
+   *  before positions and dividers were used), or a function building it — called only when a stored
+   *  Default board has to be compared with it. A stored board that is still exactly that board was never
+   *  changed by the user, so it follows the current built-in seed instead (nothing is written). */
+  previousSeed?: BeBoard | null | (() => BeBoard | null);
 }
 
 /** Load a board. Chain: own device-class key → desktop key → (only while the family is not migrated:)
@@ -155,7 +160,14 @@ export interface LoadBoardInput {
  *  seed (not for `Blank`) → `seed`.
  *  For `Default`, a stored board seeded from a different, non-empty device-layout variant is skipped,
  *  so a block type change re-seeds it; a `Default` board taken from a seed adopts the current variant
- *  so it survives its first save. Every result is schema-checked and normalized; block-level controls
+ *  so it survives its first save. A stored `Default` board that is still exactly `previousSeed` (the
+ *  device layout as earlier versions laid it out, by rows only) was never changed by the user: it loads
+ *  as the current built-in seed instead (source `seed`, nothing written), so the device positions show
+ *  and the layout is not reported as changed — but only while the family has no saved "default for this
+ *  type" (that one is the reference then) and only when every control of the stored board is in the
+ *  catalog right now (a board that also holds a not-yet-listed meter / EQ graph / waveform is not known
+ *  to be untouched). Any other stored board keeps its content. Copies are never upgraded.
+ *  Every result is schema-checked and normalized; block-level controls
  *  (`meter`, `wave`, `eq`, `bypass`) are kept even while the catalog does not list them yet, because
  *  their data can arrive after the parameters — the renderer draws only keys present in the catalog. */
 export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: BoardSource } {
@@ -169,6 +181,27 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
   };
   const isDefault = profile === DEFAULT_PROFILE;
   const stale = (b: BeBoard) => isDefault && !!sig && b.variantSig !== sig;
+  // a stored Default board that is still exactly the previous built-in seed follows the current one
+  // (worked out only when a stored Default board is found)
+  const stamp = (b: BeBoard): BeBoard => (isDefault && sig ? { ...b, variantSig: sig } : b);
+  let upgrade: { prevShape: string; current: BeBoard } | null | undefined;
+  const upgradeInfo = () => {
+    if (upgrade !== undefined) return upgrade;
+    upgrade = null;
+    const prevRaw = typeof input.previousSeed === 'function' ? input.previousSeed() : input.previousSeed;
+    if (!isDefault || !prevRaw || hasUserSeed(storage, slug)) return upgrade;
+    const prevShape = boardShape(norm(stamp(prevRaw)), keys);
+    const current = norm(stamp(input.seed));
+    if (boardShape(current, keys) !== prevShape) upgrade = { prevShape, current };
+    return upgrade;
+  };
+  const untouched = (b: BeBoard): boolean => {
+    if (!isDefault || !input.previousSeed) return false;
+    // every stored control must be one the catalog lists now (kept, not drawn controls make it unknown)
+    if (!b.pageOrder.every((pg) => pageItems(b, pg).every((it) => isDivider(it) || keys.has(it.key)))) return false;
+    const u = upgradeInfo();
+    return !!u && boardShape(b, keys) === u.prevShape;
+  };
 
   const chain: [BoardSource, KeyValueStore, string][] = [];
   if (deviceClass !== 'desktop') chain.push(['own', storage, boardKey(slug, profile, deviceClass)]);
@@ -184,7 +217,12 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
   for (const [source, st, key] of chain) {
     const b = read(st, key);
     if (!b || stale(b)) continue;
-    return { board: norm(b), source };
+    const board = norm(b);
+    if (untouched(board)) {
+      const current = upgrade!.current;
+      return { board: current.pageOrder.includes(board.page) ? { ...current, page: board.page } : current, source: 'seed' };
+    }
+    return { board, source };
   }
   return loadSeed({ ...input, catalogKeys: keys });
 }

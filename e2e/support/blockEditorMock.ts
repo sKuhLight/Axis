@@ -121,6 +121,64 @@ export const AMP_PARAMS = {
   }
 };
 
+// ── the same amp with device positions (`positioned: true`) ──
+// The Authentic page as the device editor lays it out: one line with exact pixel positions (top-left
+// corners, a 92 px knob slot), an empty slot after Drive and another before Master, section titles over
+// the gain, tone and output groups, and below them a "mixer" section without positions (Input Trim, and
+// Level and Balance moved over from Preamp). The Dynamics page has three rows, so the block's rows-only
+// default is 6 rows high: the height budget the positioned page has to fit (it does, exactly, with its
+// title line and the mixer divider). Expected cells (a knob slot = 2 cells): the titles on line 0, Drive
+// (0,1), Bass / Mid / Treble / Presence (4|6|8|10, 1), Master (14,1), Bright (16,1), the "Mixer" divider
+// on line 3, Input Trim / Level / Balance (0|2|4, 4).
+
+const at = <T extends object>(c: T, x: number, y: number) => ({ ...c, placement: { positionExact: `${x},${y}` } });
+const title = (text: string, x: number, y: number) => ({ label: text, paramName: null, paramId: null, widget: 'label', rawWidget: 'sectionLabel', placement: { positionExact: `${x},${y}` } });
+/** x of the k-th knob slot of the positioned Authentic page. */
+const slotX = (k: number) => 305 + 92 * k;
+
+export const AMP_PARAMS_POSITIONED = {
+  ...AMP_PARAMS,
+  // the device editor's short labels (the long parameter names do not fit a small tile)
+  named: AMP_PARAMS.named.map((p) => (p.id === 5 ? { ...p, name: 'Master' } : p)),
+  enums: AMP_PARAMS.enums.map((e) => (e.id === 10 ? { ...e, name: 'Bright' } : e)),
+  layout: {
+    ...AMP_PARAMS.layout,
+    pages: [
+      {
+        name: 'Authentic',
+        rows: [
+          {
+            section: 'parameters',
+            controls: [
+              title('GAIN', slotX(0), 29),
+              at(ctl('Drive', 0, 'knob'), slotX(0), 50),
+              title('TONE', slotX(2), 29),
+              at(ctl('Bass', 1, 'knob'), slotX(2), 50),
+              at(ctl('Mid', 2, 'knob'), slotX(3), 50),
+              at(ctl('Treble', 3, 'knob'), slotX(4), 50),
+              at(ctl('Presence', 4, 'knob'), slotX(5), 50),
+              title('OUTPUT', slotX(7), 29),
+              at(ctl('Master', 5, 'knob'), slotX(7), 50),
+              at(ctl('Bright', 10, 'toggle'), slotX(8), 50)
+            ]
+          },
+          { section: 'mixer', controls: [ctl('Input Trim', 6, 'knob'), ctl('Level', 7, 'knob'), ctl('Balance', 8, 'knob')] }
+        ]
+      },
+      {
+        name: 'Preamp',
+        rows: [row(ctl('Input Select', 11, 'dropdown', 'dropdown1'), ctl('Bypass Mode', 12, 'dropdown', 'dropdown1')), row(ctl('Depth', 9, 'slider')), row(ctl('Bypass', 31, 'button', 'btnBypass'))]
+      },
+      ...AMP_PARAMS.layout.pages.slice(2, 4),
+      {
+        name: 'Dynamics',
+        rows: [row(ctl('Comp', 21, 'knob'), ctl('Threshold', 22, 'knob')), row(ctl('Ratio', 23, 'knob'), ctl('Attack', 24, 'knob')), row(ctl('Release', 25, 'knob'))]
+      },
+      ...AMP_PARAMS.layout.pages.slice(5)
+    ]
+  }
+};
+
 export interface ParamWrite {
   pid: number;
   value: number;
@@ -144,6 +202,9 @@ export interface BlockEditorMockOptions {
   /** Three more blocks beside the amp: a cab at (0,1) (`CAB_EID`), a block without a parameter pack
    *  at (0,2) (`NOPACK_EID`) and a block whose parameters fail to read at (0,3) (`ERROR_EID`). */
   extraBlocks?: boolean;
+  /** Serve the amp's layout with device positions (`AMP_PARAMS_POSITIONED`): an Authentic page with exact
+   *  pixel positions, section titles and a mixer section. */
+  positioned?: boolean;
 }
 
 export const CAB_EID = 101;
@@ -214,7 +275,7 @@ export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptio
       if (path === `/preset/blocks/${ERROR_EID}/params`) return json(route, { error: 'unknown block' }, 404); // 4xx: a read error without the failure reporter
     }
     if (path === '/ports') return json(route, { chosen: null, override: null, profileOverride: null, ports: [] });
-    if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, AMP_PARAMS);
+    if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, opts.positioned ? AMP_PARAMS_POSITIONED : AMP_PARAMS);
     const w = new RegExp(`^/preset/blocks/${AMP_EID}/params/(\\d+)$`).exec(path);
     if (w && req.method() === 'PUT') {
       const body = req.postDataJSON() as { value: number; continuous: boolean };

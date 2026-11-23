@@ -65,14 +65,17 @@ export interface LayoutCrossBlock {
   paramId: number | null;
 }
 
-/** Fine placement metadata from the editor grid (stored, not yet rendered — later polish pass). */
+/** Fine placement metadata from the device editor's page (the Block Editor's default board converts it to
+ *  cells, see blockEditor/layoutPlacement.ts). Passed through by the server unchanged, so every field is
+ *  read defensively. */
 export interface LayoutPlacement {
+  /** Zero-based column (one knob slot) within the control's row. */
   col?: number;
+  /** Pixel nudge from the column slot. */
   offsetX?: number;
   offsetY?: number;
-  /** Exact position of the control in the editor layout data, as an `"x,y"` pixel string (top-left
-   *  corner in the source editor's page coordinates). Passed through by the server unchanged; not
-   *  consumed yet (a later slice converts it to grid cells). */
+  /** Exact position of the control, as an `"x,y"` pixel string (top-left corner in the device editor's
+   *  page coordinates). Not a boolean. */
   positionExact?: string;
 }
 
@@ -90,7 +93,8 @@ export interface LayoutControl {
 }
 /** One row of a layout page: controls flow left→right; rows flow top→bottom within the page. */
 export interface LayoutRow {
-  /** Editor section tag (e.g. `parameters`, `mixer`) — informational. */
+  /** Editor section tag (e.g. `parameters`, `mixer`); a change between rows starts a labelled divider on
+   *  the default board. */
   section?: string;
   controls: LayoutControl[];
 }

@@ -35,6 +35,9 @@ export interface MoreMenuState {
   hasBoard: boolean;
   /** A "default for this type" is saved for the block family. */
   hasUserSeed: boolean;
+  /** The built-in seed comes from the device layout (false: the curated fallback of a block or screen
+   *  without one — the rows then speak of "the default layout"). */
+  hasDeviceLayout: boolean;
   /** Name in "Save as default for …" (the block family, or the screen). */
   typeName: string;
   /** Rows that only a grid block has (change type, grid map, remove); absent on virtual screens. */
@@ -69,6 +72,21 @@ export const canArrangeOn = (cls: DeviceClass): boolean => cls !== 'phone';
 /** The Top / Side choice is offered where the side list can take effect, or when it is the stored choice. */
 export const navChoiceShown = (s: Pick<MoreMenuState, 'nav' | 'sideFits'>): boolean => s.sideFits || s.nav === 'side';
 
+/** The profile's seed is the device layout (not Blank, no saved "default for this type", and the block has
+ *  a device layout): its whole-layout reset is "Reset to device layout" (F10). */
+export const seedIsDevice = (profile: string, hasUserSeed: boolean, hasDeviceLayout = true): boolean =>
+  profile !== BLANK_PROFILE && !hasUserSeed && hasDeviceLayout;
+
+/** How the rows and toasts name the built-in seed. */
+export const builtInName = (hasDeviceLayout: boolean): string => (hasDeviceLayout ? 'the device layout' : 'the default layout');
+
+/** Toast after the whole-layout reset, worded like its row. */
+export function resetAllToast(profile: string, hasUserSeed: boolean, hasDeviceLayout = true): string {
+  if (profile === BLANK_PROFILE) return 'All pages cleared';
+  if (seedIsDevice(profile, hasUserSeed, hasDeviceLayout)) return 'Reset to the device layout';
+  return hasUserSeed ? 'All pages reset to your saved default' : 'All pages reset to the default layout';
+}
+
 const cls = (id: string, extra = ''): string => `be-mi be-mi-${id}${extra ? ' ' + extra : ''}`;
 
 /** Build the ⋯ menu. Every row carries a stable `be-mi-<id>` class (e2e / styling hooks). */
@@ -83,7 +101,7 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
   // without a board (no pack, reading, error) nothing below can take effect
   const off = !s.hasBoard;
   const blank = s.profile === BLANK_PROFILE;
-  const seedName = s.hasUserSeed ? 'your saved default' : 'the device layout';
+  const seedName = s.hasUserSeed ? 'your saved default' : builtInName(s.hasDeviceLayout);
 
   if (canArrangeOn(s.deviceClass)) {
     push({
@@ -131,7 +149,7 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
       id: `profile:${name}`,
       kind: 'radio',
       label: name,
-      hint: name === DEFAULT_PROFILE ? (s.hasUserSeed ? 'yours' : 'device') : name === BLANK_PROFILE ? 'empty' : undefined,
+      hint: name === DEFAULT_PROFILE ? (s.hasUserSeed ? 'yours' : s.hasDeviceLayout ? 'device' : 'built-in') : name === BLANK_PROFILE ? 'empty' : undefined,
       checked: name === s.profile,
       disabled: off,
       className: cls('profile'),
@@ -152,9 +170,12 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
     confirm: { prompt: pagePrompt, confirmLabel: blank || !s.pageInSeed ? 'Clear' : 'Reset' },
     run: () => a.resetPage()
   });
+  // the whole layout back to its seed: with the device layout as the seed (the Default profile, F10) the
+  // row says so; with a saved default it resets to that one and "Reset to device layout" follows; without
+  // a device layout (curated fallback) it stays "Reset all pages"
   out.push({
     id: 'reset-all',
-    label: blank ? 'Clear all pages' : 'Reset all pages',
+    label: blank ? 'Clear all pages' : seedIsDevice(s.profile, s.hasUserSeed, s.hasDeviceLayout) ? 'Reset to device layout' : 'Reset all pages',
     disabled: off || !s.custom,
     className: cls('reset-all'),
     confirm: blank ? { prompt: 'Clear every page?', confirmLabel: 'Clear' } : { prompt: `Reset every page to ${seedName}?`, confirmLabel: 'Reset' },
@@ -163,10 +184,10 @@ export function buildMoreMenu(s: MoreMenuState, a: MoreMenuActions): WorkbenchMe
   if (s.hasUserSeed && !blank) {
     out.push({
       id: 'reset-device',
-      label: 'Reset to device layout',
+      label: s.hasDeviceLayout ? 'Reset to device layout' : 'Reset to default layout',
       disabled: off,
       className: cls('reset-device'),
-      confirm: { prompt: 'Replace this layout with the device layout?', confirmLabel: 'Reset' },
+      confirm: { prompt: `Replace this layout with ${builtInName(s.hasDeviceLayout)}?`, confirmLabel: 'Reset' },
       run: () => a.resetDevice()
     });
   }

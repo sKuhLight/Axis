@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCuratedBoardV2, buildDeviceLayoutBoardV2, GAP_CELLS } from './deviceLayoutBoardV2';
+import { buildCuratedBoardV2, buildDeviceLayoutBoardV2, GAP_CELLS, hasDeviceLayoutBoard } from './deviceLayoutBoardV2';
 import { buildCatalog } from './catalog';
 import { bbox, MAXC, normalizeBoard, type BeItem } from './boardModel';
 import { layoutVariantSig } from '../deviceLayoutBoard';
@@ -116,6 +116,81 @@ describe('buildDeviceLayoutBoardV2', () => {
   it('is already normal (normalizeBoard changes nothing)', () => {
     const b = buildDeviceLayoutBoardV2(lay, catalog)!;
     expect(normalizeBoard(b, catalog.map((c) => c.key))).toEqual(b);
+  });
+
+  // a page with exact positions (pixels, top-left), a section title and a mixer section without positions
+  const at = (x: number, y: number) => ({ placement: { positionExact: `${x},${y}` } });
+  const ampPage = {
+    name: 'Amp',
+    rows: [
+      {
+        section: 'parameters',
+        controls: [
+          ctl('label', null, 'GAIN', { rawWidget: 'sectionLabel', ...at(305, 29) }),
+          ctl('knob', 0, 'Threshold', at(305, 50)),
+          ctl('knob', 1, 'Ratio', at(397, 50)),
+          ctl('toggle', 9, 'Mode', at(305, 210)),
+          ctl('knob', 5, 'Level', at(397, 210))
+        ]
+      },
+      { section: 'mixer', controls: [ctl('dropdown', 4, 'Impedance'), ctl('button', 6, 'Bypass', { rawWidget: 'btnBypass' })] }
+    ]
+  };
+  // a page of four single-control rows: 8 rows high by rows, so the block's height budget is 8
+  const tallPage = { name: 'Tall', rows: [0, 1, 5].map((id) => ({ controls: [ctl('knob', id, 'K')] })).concat([{ controls: [ctl('dropdown', 4, 'Impedance')] }]) };
+  const positioned = layout([ampPage, tallPage]);
+
+  it('uses exact positions: knob slot = 2 cells, a title line above, the mixer section below a divider', () => {
+    const modes: string[] = [];
+    const b = buildDeviceLayoutBoardV2(positioned, catalog, { onPage: (p, m) => modes.push(`${p}:${m}`) })!;
+    expect(modes).toEqual(['Amp:positioned', 'Tall:rows']);
+    expect(b.pageOrder).toEqual(['Amp', 'Tall', 'More']);
+    const A = b.boards.Amp!;
+    expect(A.find((i) => 'kind' in i && i.kind === 'hdiv' && i.label === 'GAIN')).toMatchObject({ x: 0, y: 0, w: 4 });
+    expect(find(A, 'k0')).toMatchObject({ x: 0, y: 1 });
+    expect(find(A, 'k1')).toMatchObject({ x: 2, y: 1 });
+    expect(find(A, 'e9')).toMatchObject({ x: 0, y: 3, view: 'switch' });
+    expect(find(A, 'k5')).toMatchObject({ x: 2, y: 3 });
+    expect(A.find((i) => 'kind' in i && i.label === 'Mixer')).toMatchObject({ kind: 'hdiv', x: 0, y: 5, h: 1 });
+    expect(find(A, 'e4')).toMatchObject({ x: 0, y: 6, view: 'select' });
+    expect(find(A, 'bypass')).toMatchObject({ x: 2, y: 6, view: 'action' });
+    expect(b.boards.More!.map((i) => ('key' in i ? i.key : ''))).toEqual(['meter']);
+    expect(b.variantSig).toBe(layoutVariantSig(positioned));
+    const keys = catalog.map((c) => c.key);
+    expect(normalizeBoard(b, keys)).toEqual(b);
+    expect(buildDeviceLayoutBoardV2(positioned, catalog)).toEqual(b);
+  });
+
+  it('height budget: no page gets taller than the tallest page of the rows-only default (one cell size for all)', () => {
+    const tallest = (b: ReturnType<typeof buildDeviceLayoutBoardV2>) => Math.max(...b!.pageOrder.map((p) => bbox(b!.boards[p]!).R));
+    // without the tall page the budget is 4 (the rows-only Amp page and the meter on "More")
+    const alone = layout([ampPage]);
+    const modes: string[] = [];
+    const b = buildDeviceLayoutBoardV2(alone, catalog, { onPage: (p, m) => modes.push(`${p}:${m}`) })!;
+    const old = buildDeviceLayoutBoardV2(alone, catalog, { rowFlowOnly: true })!;
+    expect(tallest(old)).toBe(4);
+    expect(tallest(b)).toBeLessThanOrEqual(4);
+    // the positioned page (7 rows with its title line and divider, 6 / 6 without) gave way to plain rows
+    expect(modes).toEqual(['Amp:rows-plain']);
+    expect(b.boards.Amp!.some((i) => 'kind' in i)).toBe(false);
+    // with the tall page the full positioned page fits
+    expect(tallest(buildDeviceLayoutBoardV2(positioned, catalog)!)).toBe(8);
+  });
+
+  it('rowFlowOnly builds the previous default: rows only, no positions, no dividers', () => {
+    const b = buildDeviceLayoutBoardV2(positioned, catalog, { rowFlowOnly: true })!;
+    const A = b.boards.Amp!;
+    expect(A.some((i) => 'kind' in i)).toBe(false);
+    expect(find(A, 'k0')).toMatchObject({ x: GAP_CELLS, y: 0, row: 0 }); // the title was a gap
+    expect(find(A, 'e4')).toMatchObject({ x: 0, y: 2, row: 1 });
+    // without placement data and sections both builds agree
+    expect(buildDeviceLayoutBoardV2(lay, catalog, { rowFlowOnly: true })).toEqual(buildDeviceLayoutBoardV2(lay, catalog));
+  });
+
+  it('hasDeviceLayoutBoard: a layout with a control the catalog shows', () => {
+    expect(hasDeviceLayoutBoard(positioned, catalog)).toBe(true);
+    expect(hasDeviceLayoutBoard(layout([{ name: 'X', rows: [{ controls: [ctl('spacer', null), ctl('knob', 77, 'Gone')] }] }]), catalog)).toBe(false);
+    expect(hasDeviceLayoutBoard(null, catalog)).toBe(false);
   });
 });
 

@@ -147,7 +147,7 @@ test.describe('Block Editor header (slice 3)', () => {
     await expect(after.locator('.be-mi-delete-copy')).toHaveCount(0);
   });
 
-  test('the amber dot shows a changed layout and goes away after "Reset all pages"', async ({ page }) => {
+  test('the amber dot shows a changed layout and goes away after "Reset to device layout"', async ({ page }) => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
     await expect(page.locator('[data-be-more]')).toHaveAttribute('data-custom', 'false');

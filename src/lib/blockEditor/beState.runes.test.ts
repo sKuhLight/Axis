@@ -520,3 +520,67 @@ describe('BeState Arrange undo', () => {
     expect(st.editMode).toBe(true); // same family: arranging goes on
   });
 });
+
+describe('BeState: the device default with positions (slice 6)', () => {
+  // the device default as earlier versions built it (rows only) and as it is built now (positions: the
+  // knobs one slot apart, a section divider)
+  const cat = catalog();
+  const before = seedFrom(cat);
+  const now = (): BeBoard => {
+    const b = seedFrom(cat);
+    return { ...b, boards: { ...b.boards, One: [...b.boards.One!.map((i) => ({ ...i, x: i.x * 2, y: 1 })), { id: 'w0.div0', kind: 'hdiv', x: 0, y: 0, w: 10, h: 1, label: 'Tone' }] } };
+  };
+  const withPositions = (over: Partial<BeSource> = {}) => src({ catalog: cat, deviceSeed: now, previousSeed: () => before, ...over });
+
+  it('no stored board: the positioned default, no dot, nothing written', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(withPositions());
+    expect(st.source).toBe('seed');
+    expect(find(st.board, 'One', 'w0.div0')).toMatchObject({ label: 'Tone' });
+    expect(boardDiffersFromSeed(st.board!, st.seed!)).toBe(false);
+    expect(m.writes).toEqual([]);
+  });
+
+  it('a stored board that is still the previous default shows the positions (no dot, no write); an edited one keeps its content', () => {
+    const m = memStore();
+    m.data.set(boardKey('Amp', 'Default', 'desktop'), JSON.stringify({ ...before, page: 'Two' }));
+    const st = new BeState(m.store);
+    st.sync(withPositions());
+    expect(st.source).toBe('seed');
+    expect(st.board!.page).toBe('Two');
+    expect(find(st.board, 'One', 'w0.k1')).toMatchObject({ x: 4, y: 1 });
+    expect(boardDiffersFromSeed(st.board!, st.seed!)).toBe(false);
+    expect(m.writes).toEqual([]);
+
+    const edited = { ...before, boards: { ...before.boards, One: before.boards.One!.map((i) => (i.id === 'w0.k2' ? { ...i, y: 6 } : i)) } };
+    const m2 = memStore();
+    m2.data.set(boardKey('Amp', 'Default', 'desktop'), JSON.stringify(edited));
+    const st2 = new BeState(m2.store);
+    st2.sync(withPositions());
+    expect(st2.source).toBe('desktop');
+    expect(find(st2.board, 'One', 'w0.k2')).toMatchObject({ x: 4, y: 6 });
+    expect(boardDiffersFromSeed(st2.board!, st2.seed!)).toBe(true);
+    // "Reset to device layout" (the whole-layout reset of the Default profile) brings the positions back
+    st2.resetAll();
+    expect(find(st2.board, 'One', 'w0.k2')).toMatchObject({ x: 8, y: 1 });
+    expect(boardDiffersFromSeed(st2.board!, st2.seed!)).toBe(false);
+  });
+
+  it('the previous default is built only when a stored Default board is compared with it (never on a save)', () => {
+    let built = 0;
+    const m = memStore();
+    const st = new BeState(m.store);
+    const source = withPositions({ previousSeed: () => (built++, before) });
+    st.sync(source);
+    expect(built).toBe(0); // nothing stored
+    const r = moveItem(st.board!, 'w0.k0', 'One', 0, 6);
+    st.commit(r.board); // the first save carries legacy boards over: none stored, nothing built
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 8).board); // migrated: no carry-over at all
+    expect(built).toBe(0);
+    const st2 = new BeState(m.store);
+    st2.sync(source); // a stored (edited) Default board: compared once
+    expect(built).toBe(1);
+    expect(st2.source).toBe('desktop');
+  });
+});

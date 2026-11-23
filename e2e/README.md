@@ -177,7 +177,7 @@ these steps go through the header's ⋯ menu).
 pick writes the channel (mocked `POST …/channel`), the Engaged segment writes bypass / engage while Mute and
 Scene Ignore stay "coming soon" toasts, Top / Side via ⋯ kept after a reload (the side list has no heading and
 no counts), reset this page / new copy / profile switch / delete copy, the amber "custom" dot appearing after a
-change and leaving after "Reset all pages", save as default for the type, the type chip and "Change type…"
+change and leaving after the whole-layout reset ("Reset to device layout" for the Default profile), save as default for the type, the type chip and "Change type…"
 opening the model palette, the search popover jumping to a control with "Show all" / Enter opening the flat
 results (and ending Arrange), one header row at the default 1440 px panel and two at 1100 px, the grid map
 shown / hidden via ⋯, "Remove block from grid" with its inline confirm, and the Setup screen's compact row
@@ -225,7 +225,14 @@ divider / empty grid / a control, a control menu opened over the library stackin
 Add page bringing the page back into view, Ctrl+Z during a drag or resize doing nothing, a held arrow key
 (synthetic auto-repeats) being one step and one save, Ctrl+Z in Arrange never reaching the preset history
 while outside Arrange it does (a recorded switch write is undone), and Delete / Backspace in the text fields
-keeping the selected tile. Helpers `selectTile` / `openLibrary` /
+keeping the selected tile. **17-device-layout** (slice 6) also covers the device positions: with the mock option
+`positioned` (`AMP_PARAMS_POSITIONED`: an Authentic page with one line of exact pixel positions, three section
+titles and a mixer section without positions; a three-row Dynamics page makes the rows-only default 6 rows
+high, the height budget) the controls land in the device's cells (a knob slot = 2 cells, one line, the empty
+slots kept as gaps), the titles and the mixer section show as labelled dividers, nothing overlaps, the page
+is exactly as tall as the budget and fits at 1366×768 without the amber dot, and "Reset to device layout"
+puts an arranged control back (kept after a reload); its own Drive page is its block's tallest, so the
+parameters → mixer change only starts a new line there (no divider row: height budget). Helpers `selectTile` / `openLibrary` /
 `arrangeAdd` / `countBoardSaves` / `boardSaves` live in `support/blockEditorMock.ts`. Arrange selectors:
 `[data-be-arrange-bar]` (`touch` class on the tablet), its parts `[data-be-ab="<part>"]` (`remove`, `pin`,
 `swipe`, `label`, `rotate`, `undo`, `add`, `hdiv`, `vdiv`, `close-gaps`, `tidy`, `autopack`, `page`, `more`),

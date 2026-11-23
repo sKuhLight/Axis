@@ -1,22 +1,29 @@
 // Default Block Editor board (v2, cell units) from the server's device layout.
 //
-// Same resolution rules as the v1 builder in ../deviceLayoutBoard.ts (shared `resolveControl`): pages
-// become pages, controls flow left→right inside a layout row, rows flow top→bottom, every item carries
-// its source `row` so a narrow reflow keeps rows together, and catalog entries the layout never mentions
-// go to a trailing "More" page. Sizes come from BE_SPEC (one knob = 2×2), a page is at most 24 cells
-// wide, and a gap in the layout (spacer, label, unknown parameter) advances one knob slot (2 cells).
-// Exact positions from the layout data are not used yet. Pure (deviceLayoutBoardV2.test.ts).
+// Pages become pages; inside a page the controls take the device editor's positions where the layout
+// gives them (exact pixel positions, columns, nudges) and otherwise flow left→right inside a layout row,
+// rows top→bottom; section changes and section titles become labelled dividers (layoutPlacement.ts has
+// the rules). Catalog entries the layout never mentions go to a trailing "More" page. Sizes come from
+// BE_SPEC (one knob = 2×2) and a page is at most 24 cells wide. Same control resolution as the v1
+// builder in ../deviceLayoutBoard.ts (shared `resolveControl`).
+//
+// Height budget: all pages of a board share one cell size (always fit), so a taller page would shrink
+// the controls of every page. No page of the new default may be taller than the tallest page of the
+// previous rows-only default; a page over it drops inserted title lines, then section-divider lines,
+// then its positions, and last falls back to its rows-only layout (`fitLayoutPage`).
+//
+// `rowFlowOnly` builds the board as it was before positions were used (rows only, no dividers): it sets
+// the height budget, and the persistence layer recognises a stored board that is still exactly that
+// previous default.
+// Pure (deviceLayoutBoardV2.test.ts).
 
 import { layoutVariantSig, resolveControl } from '../deviceLayoutBoard';
-import type { DeviceLayout } from '../types';
-import { BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeView } from './boardModel';
+import type { DeviceLayout, LayoutPage } from '../types';
+import { bbox, BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeItem, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
+import { fitLayoutPage, GAP_CELLS, itemId, measureLayoutPitch, pageEntries, pitchSamples, type PageMode } from './layoutPlacement';
 
-/** Cells a gap in a layout row advances: one knob slot. */
-export const GAP_CELLS = BE_SPEC.knob.w;
-
-/** Deterministic, page-qualified item id (a key may sit on several pages). */
-export const itemId = (pageIndex: number, key: string): string => `w${pageIndex}.${key}`;
+export { GAP_CELLS, itemId };
 
 const sizeFor = (view: BeView): { w: number; h: number } => ({ w: Math.min(BE_SPEC[view].w, MAXC), h: BE_SPEC[view].h });
 
@@ -40,9 +47,61 @@ function packSequential(ctls: readonly BeCtl[], pageIndex: number): BeControl[] 
   return out;
 }
 
+/** The previous default of one page: rows only (no placement data, no dividers), a gap = one knob slot. */
+function rowFlowPage(pg: LayoutPage, byKey: ReadonlyMap<string, BeCtl>, pageIndex: number): BeControl[] {
+  const items: BeControl[] = [];
+  const seen = new Set<string>();
+  let gridY = 0;
+  (pg.rows ?? []).forEach((row, rowIndex) => {
+    let x = 0;
+    let rowH = 1;
+    let placed = false;
+    for (const ctl of row.controls ?? []) {
+      const r = resolveControl(ctl, byKey);
+      const base = r === 'gap' ? undefined : byKey.get(r.key);
+      if (r === 'gap' || !base || seen.has(r.key)) {
+        x += GAP_CELLS; // keep the slot so neighbours stay aligned
+        continue;
+      }
+      const view: BeView = isBeView(r.view) && base.views.includes(r.view) ? r.view : base.view;
+      const { w, h } = sizeFor(view);
+      if (x + w > MAXC) {
+        gridY += rowH; // wrap onto a new line, still the same layout row
+        x = 0;
+        rowH = 1;
+      }
+      seen.add(r.key);
+      items.push({ id: itemId(pageIndex, r.key), key: r.key, view, x, y: gridY, w, h, row: rowIndex });
+      x += w;
+      rowH = Math.max(rowH, h);
+      placed = true;
+    }
+    if (placed) gridY += rowH;
+  });
+  return items;
+}
+
+export interface DeviceLayoutBoardOptions {
+  /** Build the previous default (rows only, no positions, no dividers). */
+  rowFlowOnly?: boolean;
+  /** Told how every page was laid out (diagnostics and tests). */
+  onPage?: (page: string, mode: PageMode) => void;
+}
+
+/** True when the device layout has a control the catalog can show (the default board then comes from
+ *  it; otherwise the curated fallback is used). */
+export function hasDeviceLayoutBoard(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[]): boolean {
+  if (!layout?.pages?.length) return false;
+  const byKey = new Map(catalog.map((c) => [c.key, c]));
+  return layout.pages.some((pg) => !!pg && (pg.rows ?? []).some((r) => (r?.controls ?? []).some((c) => !!c && resolveControl(c, byKey) !== 'gap')));
+}
+
+/** Height of the tallest page of a board (cells). */
+const tallestPage = (b: BeBoard | null): number => (b ? Math.max(0, ...b.pageOrder.map((p) => (b.boards[p]!.length ? bbox(b.boards[p]!).R : 0))) : 0);
+
 /** Board from a device layout, or null when it has no renderable control (the caller then uses the
  *  curated board). */
-export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[]): BeBoard | null {
+export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], opts: DeviceLayoutBoardOptions = {}): BeBoard | null {
   if (!layout?.pages?.length) return null;
   const byKey = new Map(catalog.map((c) => [c.key, c]));
 
@@ -55,46 +114,29 @@ export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined
     return name;
   };
 
-  const boards: Record<string, BeControl[]> = {};
+  const pages = layout.pages.filter((pg): pg is LayoutPage => !!pg && typeof pg === 'object');
+  const entries = opts.rowFlowOnly ? [] : pages.map((pg) => pageEntries(pg.rows, byKey));
+  const layoutPitch = opts.rowFlowOnly ? null : measureLayoutPitch(entries.map(pitchSamples));
+  // the previous default's tallest page: no page may get taller (one cell size for every page)
+  const budget = opts.rowFlowOnly ? 0 : tallestPage(buildDeviceLayoutBoardV2(layout, catalog, { rowFlowOnly: true }));
+
+  const boards: Record<string, BeItem[]> = {};
   const pageOrder: string[] = [];
-  for (const pg of layout.pages) {
-    const items: BeControl[] = [];
-    const seen = new Set<string>();
-    let gridY = 0;
-    (pg.rows ?? []).forEach((row, rowIndex) => {
-      let x = 0;
-      let rowH = 1;
-      let placed = false;
-      for (const ctl of row.controls ?? []) {
-        const r = resolveControl(ctl, byKey);
-        const base = r === 'gap' ? undefined : byKey.get(r.key);
-        if (r === 'gap' || !base || seen.has(r.key)) {
-          x += GAP_CELLS; // keep the slot so neighbours stay aligned
-          continue;
-        }
-        const view: BeView = isBeView(r.view) && base.views.includes(r.view) ? r.view : base.view;
-        const { w, h } = sizeFor(view);
-        if (x + w > MAXC) {
-          gridY += rowH; // wrap onto a new line, still the same layout row
-          x = 0;
-          rowH = 1;
-        }
-        seen.add(r.key);
-        items.push({ id: itemId(pageOrder.length, r.key), key: r.key, view, x, y: gridY, w, h, row: rowIndex });
-        x += w;
-        rowH = Math.max(rowH, h);
-        placed = true;
-      }
-      if (placed) gridY += rowH;
-    });
-    if (!items.length) continue;
+  pages.forEach((pg, i) => {
+    const pageIndex = pageOrder.length;
+    let items: BeItem[];
+    let mode: PageMode = 'rows-only';
+    if (opts.rowFlowOnly) items = rowFlowPage(pg, byKey, pageIndex);
+    else ({ items, mode } = fitLayoutPage(entries[i]!, { pageIndex, layoutPitch }, budget, () => rowFlowPage(pg, byKey, pageIndex)));
+    if (!items.some((it) => 'key' in it)) return;
     const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
     boards[name] = items;
     pageOrder.push(name);
-  }
+    opts.onPage?.(name, mode);
+  });
   if (!pageOrder.length) return null;
 
-  const placedKeys = new Set(pageOrder.flatMap((p) => boards[p]!.map((it) => it.key)));
+  const placedKeys = new Set(pageOrder.flatMap((p) => boards[p]!.flatMap((it) => ('key' in it ? [it.key] : []))));
   const rest = catalog.filter((c) => !placedKeys.has(c.key));
   if (rest.length) {
     const name = uniqName('More');
