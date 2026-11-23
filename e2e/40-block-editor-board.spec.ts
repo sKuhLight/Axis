@@ -166,8 +166,8 @@ test.describe('Block Editor board (slice 2)', () => {
     const drive = grid.locator('[data-be-key="k0"]');
     await expect(drive).toHaveAttribute('data-be-x', '0');
     await expect(drive).toHaveAttribute('data-be-y', '0');
-    // grab the tile body inside its first cell, clear of the arrange chrome (✕ top-left, view / pin /
-    // swipe / resize buttons on the top and bottom rows): the item's grab cell is (0, 0), so the
+    // grab the tile body inside its first cell, clear of the arrange chrome (✕ top-left, view / resize
+    // buttons on the top and bottom rows): the item's grab cell is (0, 0), so the
     // pointer's cell is where its top-left corner lands
     const t = (await drive.boundingBox())!;
     const grabX = t.x + step / 2;

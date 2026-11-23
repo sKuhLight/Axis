@@ -186,10 +186,26 @@ panel stays maximized), Tab passes through the header without opening the popove
 and two-row Tab order), page tab and Arrange while the flat results show, ⚡ pin from the popover, Unused
 carried into "Show all", a cab chip opening the cab picker, no-pack / read-error states with a usable header,
 and "Clear this page" on a page outside the default layout (mock option `extraBlocks`).
-**42-block-editor-pin** — the board's own pin paths with real pointer input: a held knob dragged onto a
-custom panel is collected there, and the right-click pin menu lists the panels and pins to the picked one.
+**42-block-editor-pin** — everything done to one control outside Arrange, with real pointer input: a held knob
+dragged onto a custom panel is collected there; ⚡ appears on hover (invisible = no press) and a click pins to the
+default target (a new custom panel); one-row tiles have no hover actions (a 2×1 button toggles where ⚡ would
+sit; the 6×1 slider); a ⚡ press-drag onto a custom panel collects the control with no hold; the control menu's
+"Pin to ▸" tells same-named panels apart by where they are, lists "New tab beside the editor" and "New custom
+panel" (a panel pick pins into that panel, "New tab" adds a Controls tab right after the Block Editor); the
+long-press with synthetic touch / pen pointers (a still touch hold opens the menu; the pen's hold-drag reaches
+a panel without the menu interrupting it; in Arrange on the tablet profile a touch hold opens no menu and a
+slow drag still moves the tile); ∿ opens the modifier flyout (Escape closes it and a maximized panel stays
+maximized; an overlay on top — the Ctrl+K palette — gets the first Escape; the control menu takes over from
+the flyout) and, with the modifier panel docked (seeded into the stored workbench document at the next load),
+targets the panel instead; View ▸ knob → fader, Size ▸ Large without overlaps, Move to page ▸ (a page already
+holding the control is disabled) and Remove from page — each saved once (board writes counted in the stored
+surface document) and kept after a reload; Move to page ▸ onto an earlier page keeps a later active page at
+the start of the board; Grid swipe control on / off; Shift+F10 and the ContextMenu key on a focused tile
+(Escape returns focus); a right-click in an open value field opens no menu; the phone menu without layout rows
+(touch rows); and the control menu in Arrange (the tile's pin / swipe badges are gone).
 Board selectors: `[data-be-board]` (`data-nav`), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
-`[data-be-key]` / `[data-be-view]` / `data-be-x|y`, `[data-be-tab]` (`data-visible`, `data-active`; header tabs
+`[data-be-key]` / `[data-be-view]` / `data-be-x|y|w|h`, `[data-be-pin]` / `[data-be-mod]` (hover actions),
+`[data-be-tab]` (`data-visible`, `data-active`; header tabs
 and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, `[data-be-empty]`,
 `[data-be-arrange-done]`. Header selectors: `[data-be-head]` (`data-be-head-rows`), `[data-be-chip]`,
 `[data-be-type]`, `[data-be-channel-toggle]` / `[data-be-channel]`, `[data-be-engaged]`, `[data-be-mute]`,
@@ -197,7 +213,9 @@ and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, 
 `[data-be-find]` / `[data-be-find-row]` / `[data-be-find-all]`, `[data-be-results]` / `[data-be-results-close]`.
 ⋯ rows carry `be-mi-<id>` classes (`arrange`, `nav-top|side`, `size-s|m|l`, `profile`, `reset-page`,
 `reset-all`, `new-copy`, `delete-copy`, `save-default`, `change-type`, `grid-map`, `remove`, …); helpers
-`openMore` / `pickMore` / `pickProfile` / `checkedProfile` live in `support/blockEditorMock.ts`.
+`openMore` / `pickMore` / `pickProfile` / `checkedProfile` live in `support/blockEditorMock.ts`. The control
+menu (`role="menu"` named "Control options") has `be-ci-<id>` rows (`head`, `pin` → `pin-panel` / `pin-tab` /
+`pin-new`, `modifier`, `view` → `view-opt`, `size` → `size-opt`, `move` → `move-opt`, `swipe` (`on`), `remove`).
 
 ## Ignore these generated artifacts
 

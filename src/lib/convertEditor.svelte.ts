@@ -445,6 +445,8 @@ class ConvertEditor {
   adjustSwipe = (_cell: Cell, _deltaNorm: number) => {};
   isSwipeControl = (_paramId: number): boolean => false;
   toggleSwipeControl = (_p: NamedParam) => {};
+  /** Offline: no swipe controls are kept. */
+  readonly canSwipeControl = false;
 
   // ── device-mirror — no device attached offline ──
   get detected(): DetectResult | null {

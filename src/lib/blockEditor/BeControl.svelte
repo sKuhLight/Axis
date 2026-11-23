@@ -7,7 +7,28 @@
   import { getBeHost } from './beHost';
   import { isDivider, type BeItem, type BeRect } from './boardModel';
   import type { BeCtl } from './catalog';
-  import { dialSize, fitFont, fitValueText, isFlatMeter, labelPx, meterFill, meterTag, meterText, meterTone, pxOf } from './boardView';
+  import {
+    ctlHeightPx,
+    dialSize,
+    DRAG_START_PX,
+    faderHandlePx,
+    fitFont,
+    fitValueText,
+    hoverActionPx,
+    hoverActionsFit,
+    isFlatMeter,
+    labelPx,
+    meterFill,
+    meterTag,
+    meterText,
+    meterTone,
+    NUM_WIDE_PX,
+    numFontMax,
+    pxOf,
+    stepPx,
+    switchPx,
+    tileContentBox
+  } from './boardView';
   import { formatCentre, formatFull } from './valueFormat';
 
   let {
@@ -58,10 +79,10 @@
   const vf = $derived(Math.max(9, Math.min(22, Math.round(dial * 0.2))));
   /** Value inside the dial: the unit gives way when the dial is too small for it. */
   const dialVal = $derived(fitValueText(centre, dial * 0.56, vf));
-  const ctlH = $derived(Math.max(22, Math.min(36, Math.round(c * 0.72))));
+  const ctlH = $derived(ctlHeightPx(c));
   /** Number view: steppers beside the value on a wide tile, under it on a narrow one. */
-  const numWide = $derived(pxW >= 110);
-  const numVal = $derived(fitValueText(centre, numWide ? pxW - 2 * Math.max(18, Math.min(28, Math.round(c * 0.55))) - 20 : pxW - 8, Math.max(11, Math.min(30, Math.round(Math.min(pxW * 0.2, pxH * 0.36)))), 9));
+  const numWide = $derived(pxW >= NUM_WIDE_PX);
+  const numVal = $derived(fitValueText(centre, numWide ? pxW - 2 * Math.max(18, Math.min(28, Math.round(c * 0.55))) - 20 : pxW - 8, numFontMax(pxW, pxH), 9));
   const nf = $derived(numVal.font);
   const showLabel = $derived(pos.h >= 2);
   /** On / off pills drop their LED when the tile is narrow. */
@@ -74,12 +95,19 @@
   const selCaret = $derived(pxW >= 72);
   // tile padding 2×3, border 2×1, field padding 2×6 (2×4 without the caret), caret 9 + margin 3
   const selFont = $derived(fitFont(optLabel, pxW - (selCaret ? 32 : 16), lf + 0.5));
-  const stepSz = $derived(Math.max(16, Math.min(28, Math.round(c * 0.55))));
-  const swW = $derived(Math.max(30, Math.min(54, Math.round(c * 1.05))));
-  const swH = $derived(Math.max(18, Math.min(30, Math.round(c * 0.6))));
+  const stepSz = $derived(stepPx(c));
+  const swW = $derived(switchPx(c).w);
+  const swH = $derived(switchPx(c).h);
   const knob = $derived(swH - 8);
   const flatMeter = $derived(view === 'meter' && isFlatMeter(pos.w, pos.h));
   const bars = $derived(host.mons.length ? host.mons : [null]);
+
+  // hover actions (normal mode, pointer devices): ⚡ pin · ∿ modifier, sized from the cell; left out where
+  // they would cover the control (one-row tiles, small pills / fields — the control menu has both there)
+  const tact = $derived(hoverActionPx(c));
+  const actFits = $derived(hoverActionsFit(view, pos.h, pxW, pxH, tact, tileContentBox(view, { pxW, pxH, c, lf, showLabel })));
+  const showPin = $derived(!ed && !!ctl && !host.isPhone && actFits && host.canPin && host.pinnable(ctl));
+  const showMod = $derived(!ed && ctl?.kind === 'cont' && !host.isPhone && actFits);
 
   // arrange chrome: button size from the cell; one row on tiles too short for two
   const cb = $derived(Math.max(14, Math.min(18, Math.round(c * 0.6))));
@@ -123,6 +151,8 @@
   data-be-view={view}
   data-be-x={pos.x}
   data-be-y={pos.y}
+  data-be-w={pos.w}
+  data-be-h={pos.h}
   style:grid-column={standalone ? null : `${pos.x + 1} / span ${pos.w}`}
   style:grid-row={standalone ? null : `${pos.y + 1} / span ${pos.h}`}
   style:width={standalone ? `${pxW}px` : null}
@@ -130,14 +160,19 @@
   style:touch-action={touchAction}
   style:--lf="{lf}px"
   oncontextmenu={(e) => {
-    if (!ed && ctl) host.pinMenu(e, ctl);
+    if (ctl && !div && tileEl) host.ctxMenu(e, item, ctl, tileEl);
+  }}
+  onkeydown={(e) => {
+    if (ctl && !div && tileEl) host.ctxKey(e, item, ctl, tileEl);
   }}
   onpointerdowncapture={(e) => {
     if (!ed && ctl) host.pinArm(e, ctl);
   }}
   use:longPress={{
+    // a slow arrange move or value drag past the drag threshold is never also a long-press
+    moveTolerance: DRAG_START_PX,
     onLongPress: (d) => {
-      if (!ed && ctl) host.pinLongPress(ctl, d);
+      if (ctl && !div) host.ctxLongPress(item, ctl, d);
     }
   }}
   onpointerdown={(e) => tileEl && host.tileDown(e, item, ctl, page, tileEl)}
@@ -157,10 +192,6 @@
       </div>
     {/if}
   {:else if ctl}
-    {#if !ed && ctl.kind === 'cont'}
-      <button class="be-tact" type="button" onpointerdown={stop} onclick={() => host.openMod(ctl)} title="Edit modifier" aria-label="Edit modifier for {label}">∿</button>
-    {/if}
-
     {#if ctl.kind === 'cont' && view === 'knob'}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
@@ -213,7 +244,7 @@
         onkeydown={(e) => host.valueKey(e, ctl, item.id)}
       >
         <div class="be-vfill" style:height="{pct}%"></div>
-        <div class="be-vhandle" style:bottom="calc({pct}% - 6px)" style:width="{Math.max(18, Math.min(28, Math.round(c * 0.62)))}px"></div>
+        <div class="be-vhandle" style:bottom="calc({pct}% - 6px)" style:width="{faderHandlePx(c)}px"></div>
       </div>
       <div class="be-lbl">{label}</div>
     {:else if ctl.kind === 'cont' && view === 'slider'}
@@ -340,6 +371,25 @@
       </div>
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
     {/if}
+
+    <!-- hover actions: ⚡ pin (click = default target, press-drag = pin drag at once) · ∿ modifier -->
+    {#if showPin}
+      <button
+        class="be-tact pin"
+        type="button"
+        data-be-pin
+        style:--tact="{tact}px"
+        title="Pin as a quick control — click, or drag it onto a panel"
+        aria-label="Pin {label}"
+        onpointerdown={(e) => host.pinPress(e, ctl)}
+        onclick={() => host.pinClick(ctl)}
+      >
+        <svg width={Math.round(tact * 0.56)} height={Math.round(tact * 0.56)} viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 1 L3 9.2 H7.4 L6.4 15 L13 6.6 H8.6 Z" fill="currentColor" /></svg>
+      </button>
+    {/if}
+    {#if showMod}
+      <button class="be-tact mod" type="button" data-be-mod style:--tact="{tact}px" onpointerdown={stop} onclick={() => host.openMod(ctl)} title="Edit modifier" aria-label="Edit modifier for {label}">∿</button>
+    {/if}
   {/if}
 
   {#if ed}
@@ -349,12 +399,6 @@
       {#if pxW >= 50}<span class="be-dims">{item.w}×{item.h}</span>{/if}
       {#if ctl && ctl.views.length > 1}
         <button class="be-vcyc" type="button" title="Change control type ({view})" aria-label="Change control type" onpointerdown={stop} onclick={() => host.cycleView(item.id)}>{VIEW_ICON[view] ?? '◇'}{#if pxW >= 120}<span class="be-vcyc-t">{view}</span>{/if}</button>
-      {/if}
-      {#if ctl && host.canPin && host.pinnable(ctl)}
-        <button class="be-pinb" type="button" title="Pin to a Workbench custom panel" aria-label="Pin {label} to a custom panel" onpointerdown={stop} onclick={() => host.pinToWorkbench(ctl)}>⌖</button>
-      {/if}
-      {#if ctl?.kind === 'cont'}
-        <button class="be-swipe" class:on={host.isSwipe(ctl.id)} type="button" title="Map to grid swipe control (adjust from the Signal Grid tile)" aria-label="Grid swipe control" onpointerdown={stop} onclick={() => host.toggleSwipe(ctl)}>⚡</button>
       {/if}
       <button class="be-rsz" type="button" aria-label="Resize" title="Drag to resize" onpointerdown={(e) => tileEl && host.resizeDown(e, item.id, tileEl)}>
         <svg width="10" height="10" viewBox="0 0 13 13" aria-hidden="true"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -449,34 +493,58 @@
     white-space: nowrap;
   }
 
-  /* ── hover quick action (modifier) ── */
+  /* ── hover actions: ⚡ pin (top left) · ∿ modifier (top right) ── */
   .be-tact {
     position: absolute;
     top: 2px;
-    right: 2px;
     z-index: 7;
-    width: 18px;
-    height: 18px;
+    width: var(--tact, 18px);
+    height: var(--tact, 18px);
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 5px;
-    font-size: 11px;
+    font-size: calc(var(--tact, 18px) * 0.6);
     line-height: 1;
     cursor: pointer;
     background: var(--surface);
     border: 1px solid var(--border2);
     color: var(--textdim);
     opacity: 0;
-    transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+    /* an invisible action takes no press: a touch in the tile's corner never pins by accident */
+    pointer-events: none;
+    transition: opacity 0.12s, color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .be-tact.pin {
+    left: 2px;
+    cursor: grab;
+    touch-action: none;
+  }
+  .be-tact.mod {
+    right: 2px;
   }
   .be-tile:hover .be-tact,
   .be-tile:focus-within .be-tact {
     opacity: 1;
+    pointer-events: auto;
   }
-  .be-tact:hover {
+  /* hover actions are for pointer devices: on a touch-only screen the control menu (long-press) carries
+     pin and modifier */
+  @media (hover: none) {
+    .be-tact {
+      display: none;
+    }
+  }
+  .be-tact:hover,
+  .be-tact:focus-visible {
     color: var(--amber);
     border-color: var(--amber-border);
+    background: var(--amber-tint);
+  }
+  .be-tact:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   /* ── knob ── */
@@ -1025,9 +1093,9 @@
     inset: 2px;
     z-index: 8;
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
+    grid-template-columns: auto 1fr auto;
     grid-template-rows: auto 1fr auto;
-    grid-template-areas: 'x d d v' '. . . .' 'p s . r';
+    grid-template-areas: 'x d v' '. . .' '. . r';
     gap: 2px;
     pointer-events: none;
   }
@@ -1035,9 +1103,9 @@
     align-self: center;
   }
   .be-cbar.short {
-    grid-template-columns: auto auto auto 1fr auto auto;
+    grid-template-columns: auto 1fr auto auto;
     grid-template-rows: 1fr;
-    grid-template-areas: 'x p s d v r';
+    grid-template-areas: 'x d v r';
     align-items: center;
   }
   .be-cbar > * {
@@ -1059,8 +1127,6 @@
   }
   .be-x,
   .be-vcyc,
-  .be-swipe,
-  .be-pinb,
   .be-rsz {
     height: var(--cb);
     min-width: var(--cb);
@@ -1089,22 +1155,6 @@
   }
   .be-vcyc-t {
     font: 700 8.5px/1 var(--font-mono);
-  }
-  .be-pinb {
-    grid-area: p;
-    background: var(--accent-tint);
-    border: 1px solid var(--accent-border);
-    color: var(--accentbright);
-  }
-  .be-swipe {
-    grid-area: s;
-    background: var(--amber-tint);
-    border: 1px solid var(--amber-border);
-    color: var(--textfaint);
-  }
-  .be-swipe.on {
-    border-color: var(--amber);
-    color: var(--amber);
   }
   .be-rsz {
     grid-area: r;

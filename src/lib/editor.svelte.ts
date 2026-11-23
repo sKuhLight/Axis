@@ -422,6 +422,10 @@ class EditorStore {
   // ── swipe controls ──
   swipeFor = (slug: string): SwipeCtrl[] => this.swipeControls[slug] ?? [];
   isSwipeControl = (paramId: number) => this.swipeFor(this.familyKey).some((c) => c.id === paramId);
+  /** toggleSwipeControl needs a block family to keep the assignment under. */
+  get canSwipeControl(): boolean {
+    return !!this.familyKey;
+  }
   toggleSwipeControl = (p: NamedParam) => {
     if (p.id == null) return;
     const fam = this.familyKey;

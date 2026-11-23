@@ -19,6 +19,7 @@ import {
   migrateV1,
   moveItem,
   movePage,
+  moveToPage,
   normalizeBoard,
   reflowPack,
   removeItem,
@@ -29,6 +30,7 @@ import {
   sequentialIdGen,
   setDividerLabel,
   setView,
+  sizeItem,
   tidy,
   wrapWidePage,
   type BeBoard,
@@ -667,5 +669,63 @@ describe('resetPageFrom', () => {
     expect(ids).not.toContain('a1');
     expect(ids).toContain('a2');
     expect(new Set([...ids, ...r.board.boards.B!.map((i) => i.id)]).size).toBe(3);
+  });
+});
+
+describe('sizeItem (control menu Size)', () => {
+  it('takes a preset in place when it fits', () => {
+    const b = board({ A: [knob('a', 'k1', 0, 0), knob('b', 'k2', 6, 0)] });
+    const r = sizeItem(b, 'a', 4, 4);
+    expect(r).toMatchObject({ ok: true });
+    expect(r.moved).toBeUndefined();
+    expect(locate(r.board, 'a')!.item).toMatchObject({ x: 0, y: 0, w: 4, h: 4 });
+    expect(sizeItem(b, 'a', 2, 2).board).toBe(b); // unchanged size: same reference
+  });
+  it('moves to the nearest free spot when the size does not fit in place', () => {
+    const b = board({ A: [knob('a', 'k1', 0, 0), knob('b', 'k2', 2, 0), knob('c', 'k3', 8, 0)] });
+    const r = sizeItem(b, 'a', 4, 4); // 4×4 at 0,0 hits b
+    expect(r).toMatchObject({ ok: true, moved: true });
+    const a = locate(r.board, 'a')!.item;
+    expect(a).toMatchObject({ w: 4, h: 4, x: 4, y: 0 }); // same line, to the right
+    expect(overlapFree(r.board.boards.A!)).toBe(true);
+  });
+  it('at the right edge it finds room without leaving the page', () => {
+    const b = board({ A: [knob('a', 'k1', 22, 0)] });
+    const r = sizeItem(b, 'a', 4, 4);
+    expect(r.moved).toBe(true);
+    const a = locate(r.board, 'a')!.item;
+    expect(a.x + a.w).toBeLessThanOrEqual(MAXC);
+    expect(overlapFree(r.board.boards.A!)).toBe(true);
+  });
+  it('clamps to the view limits and fails only for an unknown item', () => {
+    const b = board({ A: [knob('a', 'k1', 0, 0)] });
+    expect(locate(sizeItem(b, 'a', 99, 99).board, 'a')!.item).toMatchObject({ w: BE_SPEC.knob.maxW, h: BE_SPEC.knob.maxH });
+    expect(sizeItem(b, 'zz', 3, 3)).toMatchObject({ ok: false, reason: 'missing' });
+    for (const p of BE_PRESETS.fader) {
+      const f = board({ A: [{ ...knob('f', 'k1', 0, 0), view: 'fader', w: 2, h: 4 }] });
+      expect(locate(sizeItem(f, 'f', p.w, p.h).board, 'f')!.item).toMatchObject({ w: p.w, h: p.h });
+    }
+  });
+});
+
+describe('moveToPage (control menu Move to page)', () => {
+  const b = board({ A: [knob('a', 'k1', 0, 0), knob('b', 'k2', 2, 0)], B: [knob('c', 'k1', 0, 0), knob('d', 'k3', 2, 0)], C: [] });
+  it('moves to the first free spot of the other page', () => {
+    const r = moveToPage(b, 'b', 'B');
+    expect(r.ok).toBe(true);
+    expect(locate(r.board, 'b')).toMatchObject({ page: 'B', item: { x: 4, y: 0 } });
+    expect(r.board.boards.A!.map((i) => i.id)).toEqual(['a']);
+    expect(r.board.page).toBe(b.page); // the active page stays
+    expect(locate(moveToPage(b, 'b', 'C').board, 'b')).toMatchObject({ page: 'C', item: { x: 0, y: 0 } });
+  });
+  it('refuses a page that already holds the control; its own page is a no-op', () => {
+    expect(moveToPage(b, 'a', 'B')).toMatchObject({ ok: false, reason: 'duplicate' });
+    expect(moveToPage(b, 'a', 'A').board).toBe(b);
+    expect(moveToPage(b, 'a', 'Nope')).toMatchObject({ ok: false, reason: 'missing' });
+  });
+  it('a full page takes it below its content', () => {
+    const row = Array.from({ length: 12 }, (_, i) => knob(`f${i}`, `k${100 + i}`, i * 2, 0));
+    const full = board({ A: [knob('a', 'k1', 0, 0)], F: row });
+    expect(locate(moveToPage(full, 'a', 'F').board, 'a')).toMatchObject({ page: 'F', item: { x: 0, y: 2 } });
   });
 });

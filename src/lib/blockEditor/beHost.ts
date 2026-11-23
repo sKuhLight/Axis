@@ -45,7 +45,6 @@ export interface BeHost {
   knob(id: number): NamedParam | undefined;
   enm(id: number): EnumParam | undefined;
   loopOn(action: string): boolean;
-  isSwipe(id: number): boolean;
 
   // ── value gestures ──
   tileDown(e: PointerEvent, item: BeItem, ctl: BeCtl | undefined, page: string, tile: HTMLElement): void;
@@ -65,19 +64,24 @@ export interface BeHost {
   hover(ctl: BeCtl): void;
   unhover(): void;
 
-  // ── modifier + pin ──
+  // ── modifier + pin (hover actions ∿ / ⚡ and the 380 ms hold-to-drag on the tile body) ──
   openMod(ctl: BeCtl): void;
   pinArm(e: PointerEvent, ctl: BeCtl): void;
-  pinMenu(e: MouseEvent, ctl: BeCtl): void;
-  pinLongPress(ctl: BeCtl, at: { x: number; y: number }): void;
+  /** Press on ⚡: a few px of movement start the pin drag right away. */
+  pinPress(e: PointerEvent, ctl: BeCtl): void;
+  /** Click (or Enter) on ⚡: pin to the default target. */
+  pinClick(ctl: BeCtl): void;
   pinnable(ctl: BeCtl | undefined): boolean;
 
-  // ── arrange (interim) ──
+  // ── control menu (right-click, long-press, Shift+F10 / the ContextMenu key on a focused tile) ──
+  ctxMenu(e: MouseEvent, item: BeItem, ctl: BeCtl, tile: HTMLElement): void;
+  ctxLongPress(item: BeItem, ctl: BeCtl, at: { x: number; y: number }): void;
+  ctxKey(e: KeyboardEvent, item: BeItem, ctl: BeCtl, tile: HTMLElement): void;
+
+  // ── arrange (interim; pin and the grid swipe control moved to the control menu in slice 4) ──
   remove(id: string): void;
   cycleView(id: string): void;
   resizeDown(e: PointerEvent, id: string, tile: HTMLElement): void;
-  toggleSwipe(ctl: BeCtl): void;
-  pinToWorkbench(ctl: BeCtl): void;
 }
 
 const KEY = Symbol('axis.blockEditor.host');

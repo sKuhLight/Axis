@@ -99,6 +99,9 @@ export interface EditorSurface {
   adjustSwipe: (cell: Cell, deltaNorm: number) => void;
   isSwipeControl: (paramId: number) => boolean;
   toggleSwipeControl: (p: NamedParam) => void;
+  /** Swipe controls can be kept for the selected block (a live block family); without it a toggle does
+   *  nothing. Absent = no. */
+  readonly canSwipeControl?: boolean;
 
   // ── device-mirror ──
   detected: DetectResult | null;

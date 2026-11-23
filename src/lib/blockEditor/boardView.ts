@@ -217,6 +217,73 @@ export function dialSize(pxW: number, pxH: number, label: number): number {
   return Math.max(22, Math.min(220, Math.round(Math.min(pxW - 6, pxH - label - 6))));
 }
 
+/** Height of a pill, select field or fader / slider value control for a cell size. */
+export const ctlHeightPx = (c: number): number => Math.max(22, Math.min(36, Math.round(c * 0.72)));
+/** Number view: stepper button size. */
+export const stepPx = (c: number): number => Math.max(16, Math.min(28, Math.round(c * 0.55)));
+/** Switch view: the switch's width and height. */
+export const switchPx = (c: number): { w: number; h: number } => ({
+  w: Math.max(30, Math.min(54, Math.round(c * 1.05))),
+  h: Math.max(18, Math.min(30, Math.round(c * 0.6)))
+});
+/** Fader view: the handle's width. */
+export const faderHandlePx = (c: number): number => Math.max(18, Math.min(28, Math.round(c * 0.62)));
+/** Number view: steppers beside the value from this tile width, under it below. */
+export const NUM_WIDE_PX = 110;
+/** Number view: the largest value font a tile allows (the text may still shrink to fit). */
+export const numFontMax = (pxW: number, pxH: number): number => Math.max(11, Math.min(30, Math.round(Math.min(pxW * 0.2, pxH * 0.36))));
+/** Size (px) of a hover action (⚡ / ∿) for a cell size. */
+export const hoverActionPx = (c: number): number => Math.max(16, Math.min(20, Math.round(c * 0.46)));
+
+/** Fader value read-out width is estimated for this many characters, whatever the value: the hover
+ *  actions must not come and go while the value changes. */
+const FADER_VALUE_CHARS = 6;
+/** A hover action sits 2 px inside the tile's 1 px border, with 1 px of air under it. */
+const HOVER_ACTION_INSET = 4;
+
+/** The size of what a tile shows (its control, and the label under it when there is one), centred in the
+ *  tile. Mirrors the layout of BeControl; a view without hover actions just fills the tile. */
+export function tileContentBox(view: string, d: { pxW: number; pxH: number; c: number; lf: number; showLabel: boolean }): { w: number; h: number } {
+  const label = d.showLabel ? Math.ceil(d.lf * 1.15) + 2 : 0; // the label row (line-height 1.15) + the 2 px gap
+  switch (view) {
+    case 'knob': {
+      const dial = dialSize(d.pxW, d.pxH, d.lf);
+      return { w: dial, h: dial + label };
+    }
+    case 'fader':
+      return { w: Math.max(faderHandlePx(d.c), Math.ceil(FADER_VALUE_CHARS * d.lf * MONO_EM) + 8), h: d.pxH };
+    case 'slider':
+      return { w: d.pxW, h: d.lf + 4 }; // one row: label · track · value button (2 px padding)
+    case 'number': {
+      const nf = numFontMax(d.pxW, d.pxH);
+      const st = stepPx(d.c);
+      return d.pxW >= NUM_WIDE_PX ? { w: d.pxW, h: Math.max(st, nf) + label } : { w: 2 * st + 6, h: nf + 2 + st + label };
+    }
+    case 'switch': {
+      const s = switchPx(d.c);
+      return { w: s.w, h: s.h + label };
+    }
+    case 'button':
+    case 'select':
+    case 'action':
+      return { w: d.pxW, h: ctlHeightPx(d.c) + label };
+    default:
+      return { w: d.pxW, h: d.pxH };
+  }
+}
+
+/** Whether the hover actions (⚡ top left, ∿ top right, `act` px each) fit a tile without covering its
+ *  control. A one-row tile never has room (its control fills the height: a slider, a one-row button,
+ *  switch, select or number) — those use the control menu. A knob leaves the corners of its dial's square
+ *  free. Every other view centres its content (`box`): the actions need a free strip above it or free
+ *  room beside it. */
+export function hoverActionsFit(view: string, h: number, pxW: number, pxH: number, act: number, box: { w: number; h: number }): boolean {
+  if (h < 2) return false;
+  if (view === 'knob') return true;
+  const need = act + HOVER_ACTION_INSET;
+  return (pxH - box.h) / 2 >= need || (pxW - box.w) / 2 >= need;
+}
+
 /** Average glyph width of the monospace value font, as a fraction of the font size. */
 const MONO_EM = 0.62;
 

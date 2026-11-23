@@ -357,7 +357,7 @@ export interface BeOpResult {
   board: BeBoard;
   ok: boolean;
   reason?: BeOpFailure;
-  /** setView only: the item had to move to the next free spot to fit the new view. */
+  /** setView / sizeItem: the item had to move to a free spot to fit its new view or size. */
   moved?: boolean;
 }
 
@@ -444,6 +444,34 @@ export function setView(board: BeBoard, id: string, view: BeView): BeOpResult {
   if (fits(list, it.x, it.y, sp.w, sp.h, id)) return ok(replaceItem(board, f.page, id, { ...it, view, w: sp.w, h: sp.h }));
   const p = findFree(list, sp.w, sp.h, id);
   return ok(replaceItem(board, f.page, id, { ...it, view, w: sp.w, h: sp.h, x: p.x, y: p.y }), { moved: true });
+}
+
+/** Give an item a new size (a size preset of the control menu), clamped to its view's limits. When the new
+ *  size does not fit where the item sits, it moves to the nearest free spot on the same page
+ *  (`moved: true`) instead of being refused (as setView does for a new view). */
+export function sizeItem(board: BeBoard, id: string, w: number, h: number): BeOpResult {
+  const f = locate(board, id);
+  if (!f) return fail(board, 'missing');
+  const it = f.item;
+  const s = clampSize(BE_SPEC[isDivider(it) ? it.kind : it.view], w, h);
+  if (s.w === it.w && s.h === it.h) return ok(board);
+  const list = pageItems(board, f.page);
+  if (fits(list, it.x, it.y, s.w, s.h, id)) return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h }));
+  const p = findNear(list, s.w, s.h, it.x, it.y, id);
+  return ok(replaceItem(board, f.page, id, { ...it, w: s.w, h: s.h, x: p.x, y: p.y }), { moved: true });
+}
+
+/** Move an item to the first free spot of another page ("Move to page"). Refuses a parameter that already
+ *  sits on that page; the item's own page is a no-op. */
+export function moveToPage(board: BeBoard, id: string, toPage: string): BeOpResult {
+  const f = locate(board, id);
+  if (!f || !hasPage(board, toPage)) return fail(board, 'missing');
+  if (toPage === f.page) return ok(board);
+  const it = f.item;
+  const target = pageItems(board, toPage);
+  if (isControl(it) && hasKey(target, it.key)) return fail(board, 'duplicate');
+  const p = findFree(target, it.w, it.h);
+  return moveItem(board, id, toPage, p.x, p.y);
 }
 
 /** Turn a horizontal divider into a vertical one (and back), swapping width and height. */

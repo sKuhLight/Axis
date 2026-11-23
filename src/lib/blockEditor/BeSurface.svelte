@@ -3,7 +3,8 @@
   // Engaged | Mute | Scene Ignore, the ⋯ menu — or, without a block, the compact row of the virtual-effect
   // screens), the side page list, and the board of a block's controls with every page at once (top strip
   // or side stack), always fitted to the panel; plus the interim arrange bar and "Add control" tray,
-  // value bubble, select popover, flat search results, modifier flyout and the workbench pin paths.
+  // value bubble, select popover, flat search results, modifier flyout, the control menu (right-click /
+  // long-press / Shift+F10) and the workbench pin paths (⚡ click / press-drag, 380 ms hold-drag).
   // All device reads / writes go through getEditorSurface() (live editor or offline convert buffer);
   // boards persist per block family, profile and device class (BeState → boardPersistence).
   import { untrack, type Snippet } from 'svelte';
@@ -23,26 +24,41 @@
     getOptionalWorkbenchContext,
     menuPositionFromPointer,
     panelWidgetZoneId,
+    selectActiveLayout,
+    selectActivePage,
+    selectPanelLocation,
+    selectPanelPlacement,
     selectVisibleWidgetsByZone,
     serializeWorkbenchParameterSource,
+    type WorkbenchDocument,
     type WorkbenchMenuItem,
     type WorkbenchMenuPosition,
     type WorkbenchParameterSource
   } from '../workbench';
-  import ContextMenu from '../workbench/svelte/ContextMenu.svelte';
   import { buildAxisPinMenuItems } from '../axis-workbench/pinMenu';
   import type { AxisPinTarget } from '../axis-workbench/pinTargets';
   import { axisBlockEditorModifierController } from '../axis-workbench/blockEditor/blockEditorModifierController';
   import BeBoard from './BeBoard.svelte';
+  import BeContextMenu from './BeContextMenu.svelte';
   import BeControl from './BeControl.svelte';
   import BeFind from './BeFind.svelte';
   import BeHeader from './BeHeader.svelte';
   import BeMoreMenu from './BeMoreMenu.svelte';
   import BePageNav from './BePageNav.svelte';
-  import { findGroups, flatMatches, itemIdOn, jumpPage, type FindFilter } from './findControls';
+  import { findGroups, flatMatches, itemIdOn, jumpPage, pagesOf, type FindFilter } from './findControls';
   import { beLayer } from './overlayLayer';
   import type { BeBlockChrome } from './headerModel';
-  import { buildMoreMenu } from './moreMenu';
+  import { buildMoreMenu, canArrangeOn } from './moreMenu';
+  import { buildControlMenu, placePinTargets, type PinPanelPlace } from './controlMenu';
+  import {
+    ESCAPE_OVERLAYS,
+    flyoutTakesEscape,
+    isControlMenuKey,
+    isEchoContextMenu,
+    isEditableTarget,
+    longPressOpensMenu,
+    menuAtTile
+  } from './controlMenuInput';
   import { setBeHost, type BeGhost, type BeHost } from './beHost';
   import { BeState } from './beState.svelte';
   import { trackDeviceClass } from './deviceClass.svelte';
@@ -55,20 +71,34 @@
     locate,
     MAXC,
     moveItem,
+    moveToPage,
     pageItems,
     removeItem as removeItemOp,
     renamePage as renamePageOp,
     resizeItem,
     setView,
+    sizeItem,
     tidy,
     type BeBoard as BoardModel,
     type BeControl as BeControlItem,
-    type BeItem
+    type BeItem,
+    type BeOpResult,
+    type BeView
   } from './boardModel';
   import { boardDiffersFromSeed, pageDiffersFromSeed } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
   import { buildCuratedBoardV2, buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
-  import { exceedsPinHold, PIN_HOLD_MS, resolvePinTarget, type PinTarget } from './pinDrag';
+  import {
+    edgeDropArgs,
+    editorTabTarget,
+    exceedsPinHold,
+    PIN_HOLD_MS,
+    PIN_PRESS_DRAG,
+    pinActionArgs,
+    resolvePinTarget,
+    type PinTabTarget,
+    type PinTarget
+  } from './pinDrag';
   import {
     activeAfterScroll,
     dragNorm,
@@ -548,6 +578,7 @@
       rz = null;
     }
     if (pinDrag) pinDrag = null;
+    pinPressAt = null;
     cancelPinHold();
   }
 
@@ -556,6 +587,16 @@
       if (pinDrag) {
         e.preventDefault();
         pinDrag = { ...pinDrag, x: e.clientX, y: e.clientY, target: resolvePinTarget(e.clientX, e.clientY) };
+        return;
+      }
+      if (pinPressAt) {
+        // a press on ⚡: a few px of movement start the pin drag at once (no hold)
+        e.preventDefault();
+        if (exceedsPinHold(pinPressAt.x, pinPressAt.y, e.clientX, e.clientY, PIN_PRESS_DRAG)) {
+          const c = pinPressAt.c;
+          pinPressAt = null;
+          beginPinDrag(c, e.clientX, e.clientY);
+        }
         return;
       }
       if (pinHold && exceedsPinHold(pinHold.x, pinHold.y, e.clientX, e.clientY)) cancelPinHold(); // early movement = value adjust
@@ -606,6 +647,7 @@
         suppressNextClick();
         return;
       }
+      pinPressAt = null; // a ⚡ press that never moved: its click pins to the default target
       cancelPinHold(); // a press that never became a drag must clear the pending hold timer
       if (mv) {
         const m = mv;
@@ -754,7 +796,7 @@
       editingId = null;
       flashId = null;
       modOpen = false;
-      closePinMenu();
+      closeCtx();
       cancelGestures();
     });
   });
@@ -846,13 +888,14 @@
     if (tip && !adjusting) tip = null;
   }
 
-  // ── modifier (∿): the docked modifier panel when one is mounted, else the flyout ──
+  // ── modifier (∿ on hover, "Edit modifier…" in the control menu): the docked modifier panel when one is
+  //    mounted (same controller as before), else the flyout ──
   let modOpen = $state(false);
   let modLabel = $state('');
   let modTargetEid = $state<number | null>(null);
   let modTargetParam = $state<number | null>(null);
   function openMod(c: BeCtl) {
-    if (be.editMode) return;
+    if (c.kind !== 'cont') return;
     const targetEid = editor.selected?.effectId ?? null;
     const blockName = editor.selected?.display ?? 'Block';
     if (axisBlockEditorModifierController.modPartMounted) {
@@ -865,6 +908,25 @@
     modTargetEid = targetEid;
     modOpen = true;
   }
+  // Escape closes the flyout when nothing else took it. On the document in the bubble phase: after every
+  // element that handles its own Escape (a menu, a field, a popover — they stop it or mark it handled), and
+  // before the app's window Escape chain (close the editor in the monolith, restore a maximized panel),
+  // which then never sees it. Focus usually stays on the ∿ button or the menu's opener, outside the flyout,
+  // so the flyout cannot listen on itself. Another overlay open on top (a palette, a dialog) keeps the key.
+  $effect(() => {
+    if (!modOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const flyout = document.querySelector('[data-screen-label="Modifier Editor"].flyout');
+      const target = e.target instanceof Node ? e.target : null;
+      const overlayOpen = Array.from(document.querySelectorAll(ESCAPE_OVERLAYS)).some((el) => !flyout?.contains(el));
+      if (!flyoutTakesEscape({ key: e.key, defaultPrevented: e.defaultPrevented, inFlyout: !!target && !!flyout?.contains(target), overlayOpen })) return;
+      e.preventDefault();
+      e.stopPropagation();
+      modOpen = false;
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 
   // ── looper transport (record/play/overdub/reverse/half latch; stop/undo are momentary) ──
   const LOOP_MOMENTARY = new Set(['stop', 'undo']);
@@ -896,19 +958,32 @@
     }
     return `<svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 100" transform="rotate(135 16 16)"/><circle cx="16" cy="16" r="2.4" fill="currentColor"/></svg>`;
   }
+  /** Pin a control through the workbench pin action. No target = the default (⚡ click): a new custom panel
+   *  named after the control, as the arrange ⌖ of the previous editor did (pinActionArgs). */
   async function pinControlToWorkbench(c: BeCtl, target?: AxisPinTarget) {
     if (!workbenchCanPin || !workbench || !pinnable(c)) return;
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
       source: 'menu',
-      args: { paramId: c.id, title: c.label, ...(target?.panelId ? { panelId: target.panelId } : {}) }
+      args: pinActionArgs(c, target)
     });
     if (result.success) editor.showToast(`Pinned ${c.label}${target?.panelId ? ` to ${target.label}` : ''}`, 'var(--accent)');
   }
+  /** "New tab" beside the editor (control menu): the same action as a pin drag released on a tab bar. */
+  function pinControlToTab(c: BeCtl, tab: PinTabTarget) {
+    const source = parameterSourceForControl(c);
+    if (!workbench || !source) return;
+    const args = edgeDropArgs(serializeWorkbenchParameterSource(source), tab);
+    void workbench.registry.runActionResult(AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION, { controller: workbench.controller, source: 'menu', args }).then((res) => {
+      if (res.success) editor.showToast(`Pinned ${c.label} to a new tab`, 'var(--accent)');
+    });
+  }
 
-  // hold-to-drag pin (mouse / pen): a still hold arms a pointer drag onto a panel, tab bar or dock edge
+  // hold-to-drag pin (mouse / pen): a still hold arms a pointer drag onto a panel, tab bar or dock edge;
+  // a press on the tile's ⚡ starts the same drag after a few px of movement (no hold)
   let pinHold: { c: BeCtl; x: number; y: number } | null = null;
   let pinHoldTimer: ReturnType<typeof setTimeout> | null = null;
+  let pinPressAt: { c: BeCtl; x: number; y: number } | null = null;
   let pinDrag = $state<{ c: BeCtl; source: WorkbenchParameterSource; x: number; y: number; target: PinTarget | null } | null>(null);
   let pinLayerEl = $state<HTMLElement | null>(null);
   // the fixed layer's px are layout px under an ancestor zoom while pointer coords are visual
@@ -925,7 +1000,9 @@
     if (pinHoldTimer) clearTimeout(pinHoldTimer);
     pinHoldTimer = setTimeout(() => {
       pinHoldTimer = null;
-      if (pinHold && !pinDrag) startPinDrag();
+      const h = pinHold;
+      pinHold = null;
+      if (h && !pinDrag) beginPinDrag(h.c, h.x, h.y);
     }, PIN_HOLD_MS);
   }
   function cancelPinHold() {
@@ -935,6 +1012,15 @@
     }
     pinHold = null;
   }
+  /** Press on a tile's ⚡ (any pointer): the tile's value drag and hold never start; movement past
+   *  PIN_PRESS_DRAG begins the pin drag, a release without it leaves the click (pinClick) to pin. */
+  function pinPress(e: PointerEvent, c: BeCtl) {
+    e.stopPropagation();
+    if (!workbenchCanPin || !pinnable(c) || e.button !== 0) return;
+    e.preventDefault(); // no focus ring / text selection; the click still follows
+    cancelPinHold(); // armed by the tile's capture handler
+    pinPressAt = { c, x: e.clientX, y: e.clientY };
+  }
   // no timer outlives the editor (a hold that crosses a block switch must not fire on a gone instance)
   $effect(() => () => {
     cancelPinHold();
@@ -943,21 +1029,16 @@
     if (flashItemTimer) clearTimeout(flashItemTimer);
     flashItemTimer = null;
   });
-  function startPinDrag() {
-    if (!pinHold) return;
-    const c = pinHold.c;
+  function beginPinDrag(c: BeCtl, x: number, y: number) {
     const source = parameterSourceForControl(c);
-    if (!source) {
-      pinHold = null;
-      return;
-    }
-    // the same press armed a value adjust + bubble: drop them (nothing was written yet)
+    if (!source) return;
+    // the same press may have armed a value adjust + bubble: drop them (nothing was written yet)
     vd = null;
     tk = null;
     adjusting = false;
     if (tip) tip = null;
-    pinDrag = { c, source, x: pinHold.x, y: pinHold.y, target: resolvePinTarget(pinHold.x, pinHold.y) };
-    pinHold = null;
+    ctxMenu = null;
+    pinDrag = { c, source, x, y, target: resolvePinTarget(x, y) };
   }
   function dropPin(pin: { c: BeCtl; source: WorkbenchParameterSource; target: PinTarget | null }) {
     const { c, source, target } = pin;
@@ -972,11 +1053,7 @@
       }
       return;
     }
-    const serialized = serializeWorkbenchParameterSource(source);
-    const args =
-      target.kind === 'tab'
-        ? { source: serialized, tabStackId: target.tabStackId, index: target.index, ...(target.region ? { region: target.region } : {}) }
-        : { source: serialized, region: target.region };
+    const args = edgeDropArgs(serializeWorkbenchParameterSource(source), target);
     void workbench.registry.runActionResult(AXIS_PARAMETER_SOURCE_EDGE_DROP_ACTION, { controller: workbench.controller, source: 'host', args }).then((res) => {
       if (res.success) editor.showToast(`Pinned ${c.label}`, 'var(--accent)');
     });
@@ -993,24 +1070,152 @@
     setTimeout(() => window.removeEventListener('click', swallow, true), 350);
   }
 
-  // touch / right-click pin menu
-  let pinMenuOpen = $state(false);
-  let pinMenuPos = $state<WorkbenchMenuPosition>({ x: 0, y: 0 });
-  let pinMenuCtl = $state<BeCtl | null>(null);
-  const pinMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
-    if (!pinMenuOpen || !workbench || !pinMenuCtl) return [];
-    const c = pinMenuCtl;
-    return buildAxisPinMenuItems(workbench.controller.document, (target) => void pinControlToWorkbench(c, target));
+  // ── control menu: right-click, long-press (touch), Shift+F10 / the ContextMenu key on a focused tile ──
+  let ctxMenu = $state<{ itemId: string; key: string; pos: WorkbenchMenuPosition; tab: PinTabTarget | null } | null>(null);
+  /** When the last menu opened: the contextmenu event a long-press or the menu key also fires is ignored. */
+  let ctxOpenedAt = 0;
+  const ctxItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    const m = ctxMenu;
+    const c = m ? catByKey.get(m.key) : undefined;
+    return m && c ? controlMenuItems(c, m.itemId, m.tab) : [];
   });
-  function openPinMenuAt(c: BeCtl, pos: WorkbenchMenuPosition) {
-    if (!workbenchCanPin || !pinnable(c)) return;
-    pinMenuCtl = c;
-    pinMenuPos = pos;
-    pinMenuOpen = true;
+  function controlMenuItems(c: BeCtl, itemId: string, tab: PinTabTarget | null): WorkbenchMenuItem[] {
+    const b = be.board;
+    const f = b ? locate(b, itemId) : null;
+    const it = f && !isDivider(f.item) ? f.item : null;
+    const canPinIt = workbenchCanPin && !!workbench && pinnable(c);
+    return buildControlMenu(
+      {
+        ctl: c,
+        item: it ? { id: it.id, view: it.view, w: it.w, h: it.h } : null,
+        page: f?.page ?? '',
+        pageOrder: b?.pageOrder ?? [],
+        pagesWithKey: new Set(pagesOf(b, c.key)),
+        canLayout: canArrangeOn(deviceClass),
+        pinTargets: canPinIt && workbench ? pinTargetsFor(workbench.controller.document, c) : null,
+        newTab: canPinIt && !!tab,
+        canSwipe: c.kind === 'cont' && knobById.has(c.id),
+        swipe: c.kind === 'cont' && editor.isSwipeControl(c.id),
+        swipeSupported: !!editor.canSwipeControl
+      },
+      {
+        pinNewTab: () => {
+          if (tab) pinControlToTab(c, tab);
+        },
+        modifier: () => openMod(c),
+        view: (v) => menuView(itemId, v),
+        size: (w, h) => menuSize(itemId, w, h),
+        move: (pg) => menuMove(itemId, c, pg),
+        swipe: () => toggleSwipe(c),
+        remove: () => menuRemove(itemId, c)
+      }
+    );
   }
-  function closePinMenu() {
-    pinMenuOpen = false;
-    pinMenuCtl = null;
+  /** "Pin to ▸" targets: the workbench's custom panels (each told apart by where it is) and a new one. */
+  function pinTargetsFor(doc: WorkbenchDocument, c: BeCtl): WorkbenchMenuItem[] {
+    return placePinTargets(
+      buildAxisPinMenuItems(doc, (target) => void pinControlToWorkbench(c, target)),
+      (panelId) => pinPanelPlace(doc, panelId)
+    );
+  }
+  function pinPanelPlace(doc: WorkbenchDocument, panelId: string): PinPanelPlace {
+    const layout = selectActiveLayout(doc);
+    const at = selectPanelPlacement(layout, panelId);
+    if (!at || at.kind === 'parked') return { kind: 'parked' };
+    if (at.pageId === selectActivePage(doc)?.id) return { kind: 'here', region: selectPanelLocation(doc, panelId)?.region };
+    return { kind: 'page', page: layout?.pages[at.pageId]?.label || at.pageId };
+  }
+  function openCtx(item: BeItem, c: BeCtl, pos: WorkbenchMenuPosition): boolean {
+    if (isDivider(item)) return false;
+    const tab = workbenchCanPin && pinnable(c) ? editorTabTarget(rootEl) : null;
+    if (!controlMenuItems(c, item.id, tab).length) return false; // nothing to offer (e.g. a meter on a phone)
+    cancelGestures();
+    sel = null;
+    moreOpen = false;
+    modOpen = false; // the menu takes over from an open modifier flyout (and its Escape)
+    ctxOpenedAt = Date.now();
+    ctxMenu = { itemId: item.id, key: c.key, pos, tab };
+    return true;
+  }
+  /** Long-press (touch / pen): the menu only on a still press that started nothing else — never while
+   *  arranging, during the pen's hold-drag or a ⚡ press, or once a value drag moved. */
+  function ctxHold(item: BeItem, c: BeCtl, at: WorkbenchMenuPosition) {
+    if (!longPressOpensMenu({ editMode: be.editMode, pinDrag: !!pinDrag, pinPress: !!pinPressAt, arrange: !!mv || !!rz, valueMoved: !!vd?.moved })) return;
+    openCtx(item, c, at);
+  }
+  // a menu whose rows are gone (the control left the catalog, the board reloaded) closes for good
+  $effect(() => {
+    if (ctxMenu && ctxItems.length === 0) ctxMenu = null;
+  });
+  /** The menu at a tile (keyboard, or a contextmenu event without pointer coordinates). */
+  function tilePos(tile: HTMLElement): WorkbenchMenuPosition {
+    const r = tile.getBoundingClientRect();
+    return { x: r.left + Math.min(16, r.width / 2), y: r.bottom - 4 };
+  }
+  function ctxContext(e: MouseEvent, item: BeItem, c: BeCtl, tile: HTMLElement) {
+    if (isDivider(item) || isEditableTarget(e.target as HTMLElement | null)) return; // a value field keeps the browser menu
+    e.preventDefault();
+    if (isEchoContextMenu(!!ctxMenu, ctxOpenedAt, Date.now())) return; // the long-press / menu key already opened it
+    openCtx(item, c, menuAtTile(e) ? tilePos(tile) : menuPositionFromPointer(e));
+  }
+  function ctxKey(e: KeyboardEvent, item: BeItem, c: BeCtl, tile: HTMLElement) {
+    if (!isControlMenuKey(e) || isEditableTarget(e.target as HTMLElement | null)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openCtx(item, c, tilePos(tile));
+  }
+  function closeCtx() {
+    ctxMenu = null;
+  }
+
+  // the menu's board changes: one save each (BeState.commit). The active page stays in view: a change on
+  // another page can move the sections (a page grows or shrinks, the shared cell size changes), so the
+  // active page is held and scrolled back into place once the board has redrawn.
+  function commitMenuOp(r: BeOpResult, tidyOn: string[]): boolean {
+    if (!r.ok) return false;
+    if (r.board === be.board) return true;
+    holdActive(500);
+    be.commit(be.autoPack && tidyOn.length ? tidyPages(r.board, tidyOn) : r.board);
+    const pg = be.board?.page;
+    if (pg) scrollSoon(pg, false, 500);
+    return true;
+  }
+  function menuView(id: string, view: BeView) {
+    const b = be.board;
+    if (!b) return;
+    const r = drawnOp(b, (d) => setView(d, id, view));
+    if (commitMenuOp(r, []) && r.moved) editor.showToast('Moved to the next free spot to fit', 'var(--textdim)');
+  }
+  function menuSize(id: string, w: number, h: number) {
+    const b = be.board;
+    const f = b && locate(b, id);
+    if (!b || !f) return;
+    const r = drawnOp(b, (d) => sizeItem(d, id, w, h));
+    if (commitMenuOp(r, [f.page]) && r.moved) editor.showToast('Moved to the nearest free spot to fit', 'var(--textdim)');
+  }
+  function menuMove(id: string, c: BeCtl, page: string) {
+    const b = be.board;
+    const f = b && locate(b, id);
+    if (!b || !f) return;
+    const r = drawnOp(b, (d) => moveToPage(d, id, page));
+    if (commitMenuOp(r, [f.page, page])) editor.showToast(`Moved ${c.label} to ${page}`, 'var(--accent)');
+    else if (r.reason === 'duplicate') editor.showToast(`${c.label} is already on ${page}`, 'var(--danger)');
+  }
+  function menuRemove(id: string, c: BeCtl) {
+    const b = be.board;
+    const f = b && locate(b, id);
+    if (!b || !f) return;
+    // one click and no undo outside Arrange (slice 5 brings it): the toast says how to get it back
+    if (commitMenuOp(removeItemOp(b, id), [])) editor.showToast(`Removed ${c.label} from ${f.page} — Arrange → Add brings it back`, 'var(--textdim)');
+  }
+  function toggleSwipe(c: BeCtl) {
+    const p = knobById.get(c.id);
+    if (!p) return;
+    const was = editor.isSwipeControl(c.id);
+    editor.toggleSwipeControl(p);
+    const now = editor.isSwipeControl(c.id);
+    if (now === was) return; // the surface kept nothing (no block family): no toast that claims otherwise
+    editor.showToast(now ? `${c.label} is now a grid swipe control` : `${c.label} is no longer a grid swipe control`, 'var(--amber)');
   }
   async function pinPageToWorkbench() {
     const b = be.board;
@@ -1082,7 +1287,6 @@
     knob: (id) => knobById.get(id),
     enm: (id) => enumById.get(id),
     loopOn: (a) => !!loopLatch[a],
-    isSwipe: (id) => editor.isSwipeControl(id),
     tileDown,
     trackDown,
     valueKey,
@@ -1113,21 +1317,15 @@
     unhover: clearParamHelp,
     openMod,
     pinArm,
-    pinMenu: (e, c) => {
-      if (!workbenchCanPin || !pinnable(c)) return;
-      e.preventDefault();
-      openPinMenuAt(c, menuPositionFromPointer(e));
-    },
-    pinLongPress: (c, at) => openPinMenuAt(c, at),
+    pinPress,
+    pinClick: (c) => void pinControlToWorkbench(c),
     pinnable,
+    ctxMenu: ctxContext,
+    ctxLongPress: ctxHold,
+    ctxKey,
     remove: removeTile,
     cycleView,
-    resizeDown,
-    toggleSwipe: (c) => {
-      const p = knobById.get(c.id);
-      if (p) editor.toggleSwipeControl(p);
-    },
-    pinToWorkbench: (c) => void pinControlToWorkbench(c)
+    resizeDown
   };
   setBeHost(host);
 
@@ -1313,13 +1511,12 @@
     <!-- modifier editor flyout (opened from a control's ∿ badge) -->
     <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
 
-    <!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to the hold-drag -->
-    {#if workbenchCanPin}
-      <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
-    {/if}
+    <!-- control menu: right-click, long-press (touch), Shift+F10 / the ContextMenu key on a focused tile -->
+    <BeContextMenu open={!!ctxMenu && ctxItems.length > 0} items={ctxItems} position={ctxMenu?.pos ?? { x: 0, y: 0 }} touch={isPhone} onClose={closeCtx} />
   </div>
 
-  <!-- hold-to-drag pin overlay: inert, so elementFromPoint reaches the real drop zones -->
+  <!-- pin-drag overlay (380 ms hold on a tile, or a press-drag on ⚡): inert, so elementFromPoint reaches
+       the real drop zones -->
   <div class="be-layer" use:beLayer={'drag'}>
     {#if pinDrag}
       <div class="be-pinlayer" bind:this={pinLayerEl}>
@@ -1339,7 +1536,7 @@
           {#if pinDrag.target}
             <span class="be-pintarget">{pinDrag.target.label}</span>
           {:else}
-            <span class="be-pintarget reject">⊘ hold &amp; drag to a panel</span>
+            <span class="be-pintarget reject">⊘ drop on a panel, tab bar or dock edge</span>
           {/if}
         </div>
       </div>

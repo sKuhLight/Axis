@@ -1,5 +1,5 @@
 // Stacking bands of the Block Editor's floating parts. Everything that floats over the app (⋯ menu,
-// "Find a control…" popover, select popover, value bubble, modifier flyout, pin menu) lives in ONE fixed
+// "Find a control…" popover, select popover, value bubble, modifier flyout, control menu) lives in ONE fixed
 // layer in the OVERLAY band; the hold-to-drag pin chip in the DRAG band. In the workbench the layer is
 // moved to the shell's outermost element, so it stacks with the shell's own chrome and is not trapped in
 // a panel's stacking context (a maximized tab stack is a fixed z-50 context, under the dock openers):

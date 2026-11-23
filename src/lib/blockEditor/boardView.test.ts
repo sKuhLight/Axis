@@ -11,9 +11,12 @@ import {
   fitValueText,
   grabCell,
   highlightedPages,
+  hoverActionPx,
+  hoverActionsFit,
   isFlatMeter,
   isPinnableKind,
   keySteps,
+  labelPx,
   layoutBoardPages,
   meterFill,
   meterTag,
@@ -22,6 +25,7 @@ import {
   nextView,
   onDrawnItems,
   pagePinIds,
+  pxOf,
   resizeBy,
   scrollTargetFor,
   sectionExtents,
@@ -34,6 +38,7 @@ import {
   STRIP_PAD_LEFT,
   STRIP_PAD_RIGHT,
   stripChrome,
+  tileContentBox,
   visiblePages,
   waveBars,
   wheelToStrip
@@ -434,5 +439,45 @@ describe('arrange helpers', () => {
     expect(pagePinIds(items, cat)).toEqual([1, 2]);
     expect(isPinnableKind({ id: 3, kind: 'toggle' })).toBe(true);
     expect(isPinnableKind({ id: -1, kind: 'cont' })).toBe(false);
+  });
+});
+
+describe('hover actions (⚡ / ∿) only where they leave the control free', () => {
+  // a tile of w × h cells at cell size c (gap 4), as BeControl measures it
+  const fits = (view: string, w: number, h: number, c: number) => {
+    const pxW = pxOf(w, c, 4);
+    const pxH = pxOf(h, c, 4);
+    const box = tileContentBox(view, { pxW, pxH, c, lf: labelPx(c), showLabel: h >= 2 });
+    return hoverActionsFit(view, h, pxW, pxH, hoverActionPx(c), box);
+  };
+  it('never on a one-row tile: its control fills the height', () => {
+    for (const v of ['slider', 'button', 'switch', 'select', 'number']) expect(fits(v, 2, 1, 50)).toBe(false);
+    expect(fits('slider', 6, 1, 40)).toBe(false);
+    expect(fits('button', 4, 1, 50)).toBe(false);
+  });
+  it('a knob keeps the corners of its dial free', () => {
+    expect(fits('knob', 2, 2, 32)).toBe(true);
+    expect(fits('knob', 4, 4, 50)).toBe(true);
+  });
+  it('a full-width pill or field needs a free strip above it', () => {
+    expect(fits('button', 2, 2, 40)).toBe(false);
+    expect(fits('select', 2, 2, 40)).toBe(false);
+    expect(fits('button', 2, 2, 50)).toBe(true);
+    expect(fits('select', 4, 2, 50)).toBe(true);
+  });
+  it('a narrow control leaves room beside it; a fader needs a wide tile', () => {
+    expect(fits('switch', 2, 2, 40)).toBe(true);
+    expect(fits('fader', 1, 4, 40)).toBe(false);
+    expect(fits('fader', 2, 4, 40)).toBe(false);
+    expect(fits('fader', 3, 4, 40)).toBe(true);
+  });
+  it('a two-row slider shows them above its row; a small number tile does not', () => {
+    expect(fits('slider', 6, 2, 40)).toBe(true);
+    expect(fits('number', 2, 2, 40)).toBe(false);
+  });
+  it('the content box mirrors the tile layout', () => {
+    expect(tileContentBox('switch', { pxW: 84, pxH: 84, c: 40, lf: 11, showLabel: true })).toEqual({ w: 42, h: 24 + 15 });
+    expect(tileContentBox('button', { pxW: 84, pxH: 40, c: 40, lf: 11, showLabel: false })).toEqual({ w: 84, h: 29 });
+    expect(tileContentBox('meter', { pxW: 84, pxH: 172, c: 40, lf: 11, showLabel: true })).toEqual({ w: 84, h: 172 });
   });
 });
