@@ -124,6 +124,21 @@ export function scrollTargetFor(sections: readonly BeSection[], page: string, vi
 
 export { visiblePages };
 
+/** How far into a page's section the viewport starts (px along the scroll axis; negative before it), or
+ *  null for an unknown page. With `scrollAtOffset` it keeps a page where it is on screen across a change
+ *  that moves or resizes the sections (an arrange edit on another page). */
+export function offsetInPage(sections: readonly BeSection[], page: string, pos: number): number | null {
+  const s = sections.find((x) => x.page === page);
+  return s ? pos - s.start : null;
+}
+
+/** The scroll position that starts the viewport `offset` px into a page's section (never below 0), or
+ *  null for an unknown page. */
+export function scrollAtOffset(sections: readonly BeSection[], page: string, offset: number): number | null {
+  const s = sections.find((x) => x.page === page);
+  return s ? Math.max(0, s.start + offset) : null;
+}
+
 /** What the board's scroll offset is anchored to: navigation, board size and the cells of every page.
  *  A change means the offset no longer points at the same page (the board re-anchors the active one). */
 export function anchorKey(nav: BeNav, bodyW: number, bodyH: number, layouts: Readonly<Record<string, Pick<PageLayout, 'c'>>>): string {
@@ -197,12 +212,6 @@ export function dragNorm(norm: number, dy: number, fine: boolean): number {
 
 /** Number view steppers move 2 % per click (as before). */
 export const NUDGE_STEP = 0.02;
-
-/** Next view in a control's view list (wraps). */
-export function nextView<T extends string>(views: readonly T[], current: T): T {
-  const i = views.indexOf(current);
-  return views[(i + 1) % views.length] ?? current;
-}
 
 // ── tile sizes ───────────────────────────────────────────────────────────────────────────────────
 
@@ -362,7 +371,7 @@ export function waveBars(wave: readonly number[] | null | undefined, n: number):
   return out;
 }
 
-// ── arrange (interim) ────────────────────────────────────────────────────────────────────────────
+// ── arrange ──────────────────────────────────────────────────────────────────────────────────────
 
 export interface GridHit {
   /** Grid rectangle in visual px (getBoundingClientRect). */

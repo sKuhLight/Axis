@@ -282,3 +282,62 @@ export async function checkedProfile(page: Page): Promise<string> {
   await expect(menu).toHaveCount(0);
   return label;
 }
+
+// ── board saves ──
+
+/** Count the board saves of this page load (a change of any `axs.be1.<…>` board in the stored surface
+ *  document). Call before booting; read with `boardSaves`. */
+export async function countBoardSaves(page: Page) {
+  await page.addInitScript(() => {
+    const boardsOf = (raw: string | null) => {
+      try {
+        const d = JSON.parse(raw ?? '{}') as Record<string, string>;
+        return Object.keys(d)
+          .filter((k) => k.startsWith('axs.be1.'))
+          .sort()
+          .map((k) => `${k}=${d[k]}`)
+          .join('\n');
+      } catch {
+        return '';
+      }
+    };
+    const w = window as unknown as { __beSaves: number };
+    w.__beSaves = 0;
+    let last = boardsOf(window.localStorage.getItem('axs.surface.doc'));
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
+      if (k === 'axs.surface.doc') {
+        const now = boardsOf(v);
+        if (now !== last) w.__beSaves++;
+        last = now;
+      }
+      return set.call(this, k, v);
+    };
+  });
+}
+
+/** The board saves counted since `countBoardSaves` (this page load). */
+export const boardSaves = (page: Page) => page.evaluate(() => (window as unknown as { __beSaves: number }).__beSaves);
+
+// ── Arrange (the bar's parts carry `data-be-ab="<part>"`, the library rows `data-be-lib-row="<key>"`) ──
+
+/** Select a tile while arranging (a click on its body). */
+export async function selectTile(page: Page, key: string, scope = page.locator('body')) {
+  const t = scope.locator(`[data-be-key="${key}"]`).first();
+  await t.click();
+  await expect(t).toHaveClass(/\bsel\b/);
+}
+
+/** Open the "Add" library from the arrange bar (if it is not open) and return it. */
+export async function openLibrary(page: Page) {
+  const lib = page.locator('[data-be-library]');
+  if (!(await lib.isVisible())) await page.locator('[data-be-ab="add"]').click();
+  await expect(lib).toBeVisible();
+  return lib;
+}
+
+/** Arrange: add a control from the library to the current page (a click = the first free spot). */
+export async function arrangeAdd(page: Page, key: string) {
+  const lib = await openLibrary(page);
+  await lib.locator(`[data-be-lib-row="${key}"]`).click();
+}

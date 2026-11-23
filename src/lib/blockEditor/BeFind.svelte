@@ -9,7 +9,7 @@
   // anchored-menu placement (zoom-safe), and follows the field when the panel resizes.
   import { effectiveZoom, resolveAnchoredMenuPlacement } from '../workbench';
   import type { FindFilter, FindGroup, FindRow } from './findControls';
-  import { KIND_NAME } from './findControls';
+  import { KIND_ICON, KIND_NAME } from './findControls';
   import { beLayer } from './overlayLayer';
 
   let {
@@ -61,7 +61,6 @@
   let pos = $state<{ left: number; top: number; width: number; maxH: number } | null>(null);
 
   const count = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
-  const ICON: Record<string, string> = { cont: '◉', toggle: '⊙', select: '▾', eq: '∿', action: '⏻', meter: '▊', wave: '⌇' };
   const POP_W = 400;
 
   /** Place the popover under the header, right-aligned to the field (visual px → layout px). */
@@ -276,7 +275,7 @@
               {@const val = preview(r.key)}
               <div class="be-frow" data-be-find-row={r.key}>
                 <button class="be-fmain" type="button" title={r.pages.length ? `Jump to ${r.label}` : `${r.label} is on no page — Show all to use it`} onclick={() => jump(r)}>
-                  <span class="be-fic" aria-hidden="true">{ICON[r.kind] ?? '◉'}</span>
+                  <span class="be-fic" aria-hidden="true">{KIND_ICON[r.kind]}</span>
                   <span class="be-ftxt">
                     <span class="be-fname">{r.label}</span>
                     <span class="be-fmeta">{KIND_NAME[r.kind]}{val ? ` · ${val}` : ''}{r.pages.length ? '' : ' · not on a page'}</span>

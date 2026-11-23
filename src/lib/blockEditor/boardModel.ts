@@ -379,7 +379,8 @@ export function locate(board: BeBoard, id: string): { page: string; item: BeItem
   return null;
 }
 
-function writePage(board: BeBoard, page: string, list: BeItem[]): BeBoard {
+/** The board with one page's item list replaced. */
+export function writePage(board: BeBoard, page: string, list: BeItem[]): BeBoard {
   return { ...board, boards: { ...board.boards, [page]: list } };
 }
 function replaceItem(board: BeBoard, page: string, id: string, next: BeItem): BeBoard {

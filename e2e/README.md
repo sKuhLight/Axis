@@ -169,7 +169,7 @@ the v2 board against a mocked multi-page amp layout (`support/blockEditorMock.ts
 1366×768, several pages visible at 2560×720 with their tabs highlighted, tab click scrolls to the page,
 knob drag / click-to-type / arrow keys write the parameter (a click on a value and away writes nothing),
 select popover and switch, side navigation persisted across a reload, an arrange drag persisted across a
-reload, a later page kept active through Top/Side and S/M/L (control size persisted), boards of the
+reload (the moved tile selected), a later page kept active through Top/Side and S/M/L (control size persisted), boards of the
 previous editor (seeded `axs.surface3.*` keys) surviving the first change, the empty page's Arrange
 button, the phone width without Top/Side and Arrange, and the Setup screen on the same board (since slice 3
 these steps go through the header's ⋯ menu).
@@ -203,6 +203,38 @@ surface document) and kept after a reload; Move to page ▸ onto an earlier page
 the start of the board; Grid swipe control on / off; Shift+F10 and the ContextMenu key on a focused tile
 (Escape returns focus); a right-click in an open value field opens no menu; the phone menu without layout rows
 (touch rows); and the control menu in Arrange (the tile's pin / swipe badges are gone).
+**43-block-editor-arrange** — Arrange with real pointer input: a drag to a free spot (teal preview) kept after a
+reload; a collision refused (red preview, nothing moves, nothing to undo); the corner handle resizing the
+selection (w×h follows, one undo step for the gesture); a drag onto another page of the strip (2560 px, the
+active page stays) and a page that already holds the control showing red; arrows / Shift+arrows / Delete on the
+selection and Ctrl+Z walking back each step; a click on empty grid clearing the selection; the selection bar's
+View / Size / ⚡ Pin / ⇆ swipe control / ✕ Remove; a divider added at the first free spot, labelled inline, rotated
+and kept after a reload (drawn as a labelled line outside Arrange); Close gaps and Tidy up; Undo by button and
+Ctrl+Z with one board save each, cleared when Arrange ends, and Ctrl+Z outside Arrange leaving the board alone;
+Page ▾ rename (and a double-click on the tab), duplicate (fresh ids), move, delete with its inline confirm (undo
+brings it back), the last page not deletable, "Pin page as panel" into a new custom panel; the Add library (a
+click = first free spot, a drag = exact spot with the teal preview and the library faded, red onto another
+control, a control already on the page pointed at instead of added twice); Escape closing the library and the
+page menu before ending Arrange (a maximized panel stays maximized); the one-row bar at the default panel
+height with a usable board; the tablet profile (40 px targets, the ⋯ overflow, the empty page's Arrange opening
+the library); no Arrange on the phone; a layout profile switch while arranging (fresh undo, each profile keeps
+its board); and the Setup screen's compact row arranging the same way; review round: Escape with the library
+open and the board focused (library first, then Arrange, the panel stays maximized), Escape during a library
+drag (drag cancelled, nothing added), a divider label kept on its own divider when the focus moves to another
+divider / empty grid / a control, a control menu opened over the library stacking above it, undoing Duplicate /
+Add page bringing the page back into view, Ctrl+Z during a drag or resize doing nothing, a held arrow key
+(synthetic auto-repeats) being one step and one save, Ctrl+Z in Arrange never reaching the preset history
+while outside Arrange it does (a recorded switch write is undone), and Delete / Backspace in the text fields
+keeping the selected tile. Helpers `selectTile` / `openLibrary` /
+`arrangeAdd` / `countBoardSaves` / `boardSaves` live in `support/blockEditorMock.ts`. Arrange selectors:
+`[data-be-arrange-bar]` (`touch` class on the tablet), its parts `[data-be-ab="<part>"]` (`remove`, `pin`,
+`swipe`, `label`, `rotate`, `undo`, `add`, `hdiv`, `vdiv`, `close-gaps`, `tidy`, `autopack`, `page`, `more`),
+`[data-be-ab-view="<view>"]`, `[data-be-ab-size="S|M|L"]`, `[data-be-arrange-done]`; on a tile the `sel` class,
+`[data-be-dims]` and `[data-be-resize]`; the drop preview `.be-ghost` (`.bad` when refused); the library
+`[data-be-library]` with `[data-be-lib-row="<key>"]` (`data-on-page`), `[data-be-lib-input]`,
+`[data-be-lib-close]`; the Page ▾ menu (`role="menu"` named "Page options") with `be-pm-<id>` rows (`rename`,
+`duplicate`, `pin`, `earlier`, `later`, `delete`, `add`) and the bar's ⋯ ("More arrange tools") with `be-ab-<id>`
+rows.
 Board selectors: `[data-be-board]` (`data-nav`), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
 `[data-be-key]` / `[data-be-view]` / `data-be-x|y|w|h`, `[data-be-pin]` / `[data-be-mod]` (hover actions),
 `[data-be-tab]` (`data-visible`, `data-active`; header tabs

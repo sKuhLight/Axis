@@ -11,7 +11,22 @@
   import { isDivider, type BeItem } from './boardModel';
   import type { BeCtl } from './catalog';
   import { untrack } from 'svelte';
-  import { anchorKey, scrollTargetFor, sectionExtents, SPINE_GAP, SPINE_W, STRIP_PAD_FIRST, STRIP_PAD_LEFT, STRIP_PAD_RIGHT, visiblePages, wheelToStrip, autoScrollDelta, type BoardPage } from './boardView';
+  import {
+    anchorKey,
+    autoScrollDelta,
+    offsetInPage,
+    scrollAtOffset,
+    scrollTargetFor,
+    sectionExtents,
+    SPINE_GAP,
+    SPINE_W,
+    STRIP_PAD_FIRST,
+    STRIP_PAD_LEFT,
+    STRIP_PAD_RIGHT,
+    visiblePages,
+    wheelToStrip,
+    type BoardPage
+  } from './boardView';
   import { effectiveZoom } from '../workbench';
   import type { BeGhost } from './beHost';
 
@@ -97,6 +112,41 @@
       if (nav === 'top') el.scrollLeft = t;
       else el.scrollTop = t;
     }
+  }
+
+  /** Keep a page where it is on screen across the change that follows (an arrange edit can move or resize
+   *  the sections): its offset into the viewport now is restored once the board has redrawn. */
+  export function holdPage(page: string): void {
+    if (!el) return;
+    const off = offsetInPage(sections, page, nav === 'top' ? el.scrollLeft : el.scrollTop);
+    if (off == null) return;
+    requestAnimationFrame(() => {
+      if (!el) return;
+      const t = scrollAtOffset(sections, page, off);
+      if (t == null) return;
+      if (nav === 'top') el.scrollLeft = t;
+      else el.scrollTop = t;
+    });
+  }
+
+  /** Scroll an item into view inside the board (only as far as needed). */
+  export function revealItem(id: string): void {
+    if (!el) return;
+    const tile = el.querySelector<HTMLElement>(`[data-be-item="${CSS.escape(id)}"]`);
+    if (!tile) return;
+    const b = el.getBoundingClientRect();
+    const t = tile.getBoundingClientRect();
+    const z = effectiveZoom(b.width, el.offsetWidth) || 1;
+    const pad = 8 * z;
+    if (t.left < b.left + pad) el.scrollLeft -= (b.left + pad - t.left) / z;
+    else if (t.right > b.right - pad) el.scrollLeft += Math.min(t.left - b.left - pad, t.right - b.right + pad) / z;
+    if (t.top < b.top + pad) el.scrollTop -= (b.top + pad - t.top) / z;
+    else if (t.bottom > b.bottom - pad) el.scrollTop += Math.min(t.top - b.top - pad, t.bottom - b.bottom + pad) / z;
+  }
+
+  /** Arrange: give the board the keyboard focus (arrows / Delete reach the selection). */
+  export function focusBoard(): void {
+    el?.focus({ preventScroll: true });
   }
 
   /** Scroll a little while an arrange drag nears an edge of the board. */
@@ -204,7 +254,7 @@
   const allFit = $derived(!anyOverflowY);
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_tabindex -->
 <div
   bind:this={el}
   class="be-board"
@@ -218,6 +268,8 @@
   class:snapfit={allFit}
   data-be-board
   data-nav={nav}
+  tabindex={editMode ? -1 : undefined}
+  aria-label={editMode ? 'Arrange board: arrows move the selection, Shift+arrows resize it, Delete removes it' : undefined}
   onscroll={() => {
     onScroll();
     report();
@@ -283,7 +335,7 @@
               <div class="be-ghost" class:bad={!ghost.valid} style:grid-column="{ghost.x + 1} / span {ghost.w}" style:grid-row="{ghost.y + 1} / span {ghost.h}"></div>
             {/if}
           </div>
-          {#if !p.items.length}<div class="be-empty arr">Empty page — add controls below</div>{/if}
+          {#if !p.items.length}<div class="be-empty arr">Empty page — “+ Control” adds one, or drag one in from the library</div>{/if}
           {/if}
         </div>
       </section>
@@ -304,6 +356,9 @@
   }
   .be-board::-webkit-scrollbar {
     display: none;
+  }
+  .be-board:focus {
+    outline: none;
   }
   .be-board.top {
     display: flex;

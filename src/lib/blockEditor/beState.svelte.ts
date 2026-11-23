@@ -1,5 +1,6 @@
 // Per-editor Block Editor state (runes): the board being shown, the family's meta (layout profiles,
-// per-device-class navigation / control size, auto-pack), and the interim arrange state.
+// per-device-class navigation / control size, auto-pack), and the Arrange state (the frozen cell and the
+// undo stack).
 //
 // Persistence goes through boardPersistence with an injected key/value store (in the app: the
 // config/surface document via surfaceStore). Rules:
@@ -12,9 +13,12 @@
 //     class or the remote revision changes. A reload of the same family keeps the page the user is on;
 //   - every load also resolves the active profile's seed (the family's "default for this type" board,
 //     else the device layout / curated fallback; Blank: an empty board) — the layout status compares
-//     against it, and "Reset this page" / "Reset all pages" go back to it.
+//     against it, and "Reset this page" / "Reset all pages" go back to it;
+//   - while arranging, every committed change is one undo step (the board it replaced, capped); Undo saves
+//     once. The stack is cleared when Arrange starts or ends, on a profile switch and on every (re)load.
 // Covered by beState.runes.test.ts.
 
+import { popUndo, pushUndo, restoreBoard } from './arrangeHistory';
 import {
   BLOCK_LEVEL_KEYS,
   normalizeBoard,
@@ -84,9 +88,12 @@ export class BeState {
   userSeed = $state(false);
   /** Bumped when a load should bring the stored current page into view (new family / profile). */
   loads = $state(0);
-  /** Arrange mode (interim) and the cell size frozen while arranging. */
+  /** Arrange mode and the cell size frozen while arranging. */
   editMode = $state(false);
   frozenCell = $state<number | null>(null);
+  /** Arrange undo: the boards replaced by the changes made while arranging (newest last). Replaced, never
+   *  mutated (raw state). */
+  undoStack = $state.raw<BeBoard[]>([]);
 
   #storage: BeStorage;
   #legacy?: KeyValueStore;
@@ -116,6 +123,9 @@ export class BeState {
   get autoPack(): boolean {
     return this.meta.autoPack === true;
   }
+  get canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
 
   /** Bring the state in line with its source. Loads (never saves) when the inputs changed; returns true
    *  when it (re)loaded. */
@@ -135,6 +145,7 @@ export class BeState {
     this.board = board;
     this.source = source;
     this.#refreshSeed();
+    this.clearUndo(); // the stored boards belong to what was shown before the load
     if (!sameFamily) this.setEditMode(false);
     return true;
   }
@@ -207,21 +218,42 @@ export class BeState {
 
   // ── board ──
 
-  /** A user change: show it and save it. The same reference is a no-op. */
+  /** A user change: show it and save it (while arranging also one undo step). The same reference is a
+   *  no-op. */
   commit(next: BeBoard): void {
     if (!this.#src || next === this.board) return;
+    if (this.editMode && this.board) this.undoStack = pushUndo(this.undoStack, this.board);
     this.board = next;
     this.#save(next);
   }
 
-  /** Show a board without saving (live preview during a gesture; `commit` saves at the end). */
+  /** Show a board without saving (live preview during a gesture; `flush` saves at the end). */
   preview(next: BeBoard): void {
     if (this.#src) this.board = next;
   }
 
-  /** Save what is shown (end of a previewed gesture). */
-  flush(): void {
-    if (this.board) this.#save(this.board);
+  /** Save what is shown (end of a previewed gesture). `before` = the board the gesture started from: while
+   *  arranging it becomes one undo step. */
+  flush(before?: BeBoard): void {
+    if (!this.board) return;
+    if (before && this.editMode && before !== this.board) this.undoStack = pushUndo(this.undoStack, before);
+    this.#save(this.board);
+  }
+
+  /** Arrange undo: put back the board the last change replaced (on the page the user is on now when it
+   *  still exists) and save it once. False when there is nothing to undo. */
+  undo(): boolean {
+    const { stack, entry } = popUndo(this.undoStack);
+    if (!entry || !this.#src) return false;
+    this.undoStack = stack;
+    const next = restoreBoard(entry, this.board?.page ?? entry.page);
+    this.board = next;
+    this.#save(next);
+    return true;
+  }
+
+  clearUndo(): void {
+    if (this.undoStack.length) this.undoStack = [];
   }
 
   /** Switch the current page (navigation only, not saved). */
@@ -249,9 +281,11 @@ export class BeState {
 
   // ── arrange ──
 
+  /** Start / end arranging (a fresh undo stack either way). */
   setEditMode(on: boolean, cell: number | null = null): void {
     this.editMode = on;
     this.frozenCell = on ? cell : null;
+    this.clearUndo();
   }
 
   /** Forget the frozen cell (navigation or control size changed while arranging). */
@@ -270,6 +304,7 @@ export class BeState {
     this.board = board;
     this.source = source;
     this.#refreshSeed();
+    this.clearUndo();
     this.loads++;
   }
 
@@ -285,6 +320,7 @@ export class BeState {
     this.source = 'own';
     this.#save(copy);
     this.#refreshSeed();
+    this.clearUndo();
     return name;
   }
 
@@ -300,6 +336,7 @@ export class BeState {
       this.board = board;
       this.source = source;
       this.#refreshSeed();
+      this.clearUndo();
       this.loads++;
     }
   }
@@ -352,6 +389,7 @@ export class BeState {
       if (keep && board.pageOrder.includes(keep)) board = board.page === keep ? board : { ...board, page: keep };
       this.board = board;
       this.source = source;
+      this.clearUndo();
     }
     this.#refreshSeed();
   }

@@ -2,7 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WorkbenchMenuItem } from '../workbench';
 import { BE_PRESETS } from './boardModel';
 import { CONT_VIEWS, TOG_VIEWS } from './catalog';
-import { buildControlMenu, placePinTargets, sizeChoices, VIEW_NAME, type ControlMenuActions, type ControlMenuState, type PinPanelPlace } from './controlMenu';
+import {
+  buildControlMenu,
+  placePinTargets,
+  rowClass,
+  sizeChoices,
+  sizeSubmenu,
+  swipeRow,
+  VIEW_NAME,
+  viewSubmenu,
+  type ControlMenuActions,
+  type ControlMenuState,
+  type PinPanelPlace
+} from './controlMenu';
 
 const actions = (): ControlMenuActions & Record<string, ReturnType<typeof vi.fn>> =>
   ({
@@ -203,6 +215,35 @@ describe('sizeChoices', () => {
       ['M', 2, 2, false],
       [null, 3, 3, true]
     ]);
+  });
+});
+
+describe('shared rows (the control menu and the Arrange bar’s ⋯)', () => {
+  it('View ▸ / Size ▸ / the swipe row carry the given class prefix and run their picks', () => {
+    const c = rowClass('be-ab');
+    expect(c('swipe', 'on')).toBe('be-ab be-ab-swipe on');
+    const view = vi.fn();
+    const v = viewSubmenu('knob', CONT_VIEWS, view, c);
+    expect(v).toMatchObject({ id: 'view', kind: 'submenu', hint: 'Knob', className: 'be-ab be-ab-view' });
+    v.items!.find((r) => r.id === 'view.knob')!.run();
+    v.items!.find((r) => r.id === 'view.fader')!.run();
+    expect(view.mock.calls).toEqual([['fader']]);
+    expect(v.items!.every((r) => r.className === 'be-ab be-ab-view-opt')).toBe(true);
+    const size = vi.fn();
+    const z = sizeSubmenu('knob', 2, 2, size, rowClass('be-ci'));
+    expect(z.items!.map((r) => [r.label, r.checked])).toEqual([
+      ['Small', true],
+      ['Medium', false],
+      ['Large', false]
+    ]);
+    z.items!.find((r) => r.id === 'size.L')!.run();
+    z.items!.find((r) => r.id === 'size.S')!.run();
+    expect(size.mock.calls).toEqual([[4, 4]]);
+    const toggle = vi.fn();
+    const s = swipeRow(true, toggle, c);
+    expect(s).toMatchObject({ hint: 'on', className: 'be-ab be-ab-swipe on' });
+    s.run();
+    expect(toggle).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -33,6 +33,11 @@ export interface BeHost {
   readonly openSelectId: string | null;
   /** Item being moved in arrange mode. */
   readonly dragId: string | null;
+  /** Arrange: the selected item (outline, w×h, corner handle) and the one being resized at its corner. */
+  readonly selectedId: string | null;
+  readonly resizingId: string | null;
+  /** Arrange on a touch device class (tablet): ≥ 40 px targets. */
+  readonly touchArrange: boolean;
   /** A workbench with the pin action is around. */
   readonly canPin: boolean;
   readonly eqBands: EQBand[];
@@ -78,9 +83,7 @@ export interface BeHost {
   ctxLongPress(item: BeItem, ctl: BeCtl, at: { x: number; y: number }): void;
   ctxKey(e: KeyboardEvent, item: BeItem, ctl: BeCtl, tile: HTMLElement): void;
 
-  // ── arrange (interim; pin and the grid swipe control moved to the control menu in slice 4) ──
-  remove(id: string): void;
-  cycleView(id: string): void;
+  // ── arrange (a press on a tile selects and moves it — tileDown —; the corner handle resizes it) ──
   resizeDown(e: PointerEvent, id: string, tile: HTMLElement): void;
 }
 

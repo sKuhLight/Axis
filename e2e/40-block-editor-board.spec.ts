@@ -3,10 +3,11 @@ import { bootBlockEditorMock, checkedProfile, openAmpEditor, openMore, pickMore,
 import { clickNav } from './support/workbench';
 
 // Block Editor rework, slice 2 (AXIS-75): the board shows every page at once (top strip / side stack),
-// always fitted to the panel, with value gestures on every view and the interim arrange mode on the
-// v2 board model. Driven against a fully mocked backend (support/blockEditorMock.ts) — no device.
+// always fitted to the panel, with value gestures on every view and an arrange drag on the v2 board
+// model. Driven against a fully mocked backend (support/blockEditorMock.ts) — no device.
 // Since slice 3 (AXIS-76) Top / Side, control size, layout profiles and Arrange live in the header's ⋯
-// menu (spec 41 covers the header itself); the assertions here are unchanged.
+// menu (spec 41 covers the header itself); the assertions here are unchanged. Arrange itself (the bar,
+// the library, the page menu, undo, keys) is spec 43's since slice 5 (AXIS-78).
 
 const board = (page: Page) => page.locator('[data-be-board]');
 const tile = (page: Page, key: string) => page.locator(`[data-be-key="${key}"]`).first();
@@ -166,9 +167,9 @@ test.describe('Block Editor board (slice 2)', () => {
     const drive = grid.locator('[data-be-key="k0"]');
     await expect(drive).toHaveAttribute('data-be-x', '0');
     await expect(drive).toHaveAttribute('data-be-y', '0');
-    // grab the tile body inside its first cell, clear of the arrange chrome (✕ top-left, view / resize
-    // buttons on the top and bottom rows): the item's grab cell is (0, 0), so the
-    // pointer's cell is where its top-left corner lands
+    // grab the tile body inside its first cell, clear of the corner resize handle (bottom right; the
+    // per-tile ✕ / view badges are gone since slice 5): the item's grab cell is (0, 0), so the pointer's
+    // cell is where its top-left corner lands
     const t = (await drive.boundingBox())!;
     const grabX = t.x + step / 2;
     const grabY = t.y + t.height / 2 - 6;
@@ -182,6 +183,7 @@ test.describe('Block Editor board (slice 2)', () => {
     await page.mouse.up();
     await expect(drive).toHaveAttribute('data-be-x', '20');
     await expect(drive).toHaveAttribute('data-be-y', '0');
+    await expect(drive).toHaveClass(/\bsel\b/); // the moved tile is the selection (its tools in the arrange bar)
 
     await page.reload();
     await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();

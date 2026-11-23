@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootBlockEditorMock, checkedProfile, openAmpEditor, openMore, pickMore, pickProfile, profileRow } from './support/blockEditorMock';
+import { arrangeAdd, bootBlockEditorMock, checkedProfile, openAmpEditor, openMore, pickMore, pickProfile, profileRow, selectTile } from './support/blockEditorMock';
 import { clickNav } from './support/workbench';
 
 // Block Editor rework, slice 3 (AXIS-76): the header — type chip (glyph · type · channel letter that
@@ -12,11 +12,12 @@ const board = (page: Page) => page.locator('[data-be-board]');
 const tile = (page: Page, key: string) => page.locator(`[data-be-key="${key}"]`).first();
 const dot = (page: Page) => page.locator('[data-be-more-dot]');
 
-/** Arrange (via ⋯), remove a control by its tile's ✕, finish arranging. */
+/** Arrange (via ⋯), select a control and remove it with the arrange bar's ✕, finish arranging. */
 async function removeInArrange(page: Page, key: string) {
   await pickMore(page, 'arrange');
   await expect(page.locator('[data-be-arrange-done]')).toBeVisible();
-  await tile(page, key).locator('.be-x').click();
+  await selectTile(page, key);
+  await page.locator('[data-be-ab="remove"]').click();
   await expect(page.locator(`[data-be-key="${key}"]`)).toHaveCount(0);
   await page.locator('[data-be-arrange-done]').click();
   await expect(page.locator('[data-be-arrange-done]')).toHaveCount(0);
@@ -527,7 +528,7 @@ test.describe('Block Editor header (slice 3): review fixes', () => {
     await openAmpEditor(page);
     await pickMore(page, 'arrange');
     await page.getByRole('button', { name: 'Add page' }).first().click();
-    await page.locator('[data-be-add="k0"]').click(); // Drive onto the new page
+    await arrangeAdd(page, 'k0'); // Drive onto the new page (library click = first free spot)
     await page.locator('[data-be-arrange-done]').click();
     const menu = await openMore(page);
     const row = menu.locator('.be-mi-reset-page');

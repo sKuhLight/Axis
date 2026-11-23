@@ -1,7 +1,7 @@
 <script lang="ts">
   // One Block Editor tile: a control in its view (knob, fader, slider, number, button, switch, select,
   // eq, action, meter, wave) or a divider. Sized from its cells; everything it does goes through the
-  // BeHost the surface provides (values, gestures, pin, arrange chrome).
+  // BeHost the surface provides (values, gestures, pin, arrange selection).
   import EQGraph from '../EQGraph.svelte';
   import { longPress } from '../axis-workbench/longPress';
   import { getBeHost } from './beHost';
@@ -109,10 +109,9 @@
   const showPin = $derived(!ed && !!ctl && !host.isPhone && actFits && host.canPin && host.pinnable(ctl));
   const showMod = $derived(!ed && ctl?.kind === 'cont' && !host.isPhone && actFits);
 
-  // arrange chrome: button size from the cell; one row on tiles too short for two
-  const cb = $derived(Math.max(14, Math.min(18, Math.round(c * 0.6))));
-  const cbShort = $derived(pxH < 2 * cb + 10);
-  const VIEW_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇', hdiv: '―', vdiv: '│' };
+  // arrange: the selected tile is outlined, shows its w×h and its corner handle (the bar holds its tools)
+  const selected = $derived(ed && host.selectedId === item.id);
+  const dims = $derived(selected || (ed && host.resizingId === item.id));
 
   const valueDrag = $derived(ctl?.kind === 'cont' && (view === 'knob' || view === 'number'));
   const touchAction = $derived(ed || valueDrag ? 'none' : 'manipulation');
@@ -141,6 +140,7 @@
   bind:this={tileEl}
   class="be-tile"
   class:edit={ed}
+  class:sel={selected}
   class:div={!!div}
   class:eq={view === 'eq'}
   class:standalone
@@ -394,16 +394,19 @@
 
   {#if ed}
     <div class="be-chrome"></div>
-    <div class="be-cbar" class:short={cbShort} style:--cb="{cb}px">
-      <button class="be-x" type="button" title="Remove" aria-label="Remove {div ? 'divider' : label}" onpointerdown={stop} onclick={() => host.remove(item.id)}>✕</button>
-      {#if pxW >= 50}<span class="be-dims">{item.w}×{item.h}</span>{/if}
-      {#if ctl && ctl.views.length > 1}
-        <button class="be-vcyc" type="button" title="Change control type ({view})" aria-label="Change control type" onpointerdown={stop} onclick={() => host.cycleView(item.id)}>{VIEW_ICON[view] ?? '◇'}{#if pxW >= 120}<span class="be-vcyc-t">{view}</span>{/if}</button>
-      {/if}
-      <button class="be-rsz" type="button" aria-label="Resize" title="Drag to resize" onpointerdown={(e) => tileEl && host.resizeDown(e, item.id, tileEl)}>
-        <svg width="10" height="10" viewBox="0 0 13 13" aria-hidden="true"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke-width="1.6" stroke-linecap="round" /></svg>
-      </button>
-    </div>
+    {#if dims}<span class="be-dims" data-be-dims>{item.w}×{item.h}</span>{/if}
+    <button
+      class="be-rsz"
+      class:touch={host.touchArrange}
+      type="button"
+      tabindex="-1"
+      aria-label="Resize {div ? 'divider' : label}"
+      title="Drag to resize"
+      data-be-resize
+      onpointerdown={(e) => tileEl && host.resizeDown(e, item.id, tileEl)}
+    >
+      <svg width="11" height="11" viewBox="0 0 13 13" aria-hidden="true"><path d="M12 5 L5 12 M12 9 L9 12 M12 1 L1 12" stroke-width="1.6" stroke-linecap="round" /></svg>
+    </button>
   {/if}
 </div>
 
@@ -468,9 +471,12 @@
   .be-tile.dragging {
     opacity: 0.3;
   }
-  /* in arrange mode the whole tile is grabbable; only the chrome buttons stay interactive */
-  .be-tile.edit > :not(.be-cbar) {
+  /* in arrange mode the whole tile is grabbable; only the corner handle stays interactive */
+  .be-tile.edit > :not(.be-rsz) {
     pointer-events: none;
+  }
+  .be-tile.sel {
+    z-index: 2;
   }
   /* ── labels ── */
   .be-lbl {
@@ -1075,7 +1081,7 @@
     background: var(--border2);
   }
 
-  /* ── arrange chrome (interim) ── */
+  /* ── arrange: outline, the selection (w×h + corner handle) ── */
   .be-chrome {
     position: absolute;
     inset: 0;
@@ -1085,86 +1091,62 @@
     background: color-mix(in srgb, var(--bg) 35%, transparent);
     pointer-events: none;
   }
+  .be-tile.sel .be-chrome {
+    border: 1.5px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
   .be-tile.dragging .be-chrome {
     border: 2px dashed var(--accent);
   }
-  .be-cbar {
-    position: absolute;
-    inset: 2px;
-    z-index: 8;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas: 'x d v' '. . .' '. . r';
-    gap: 2px;
-    pointer-events: none;
-  }
-  .be-cbar.short .be-dims {
-    align-self: center;
-  }
-  .be-cbar.short {
-    grid-template-columns: auto 1fr auto auto;
-    grid-template-rows: 1fr;
-    grid-template-areas: 'x d v r';
-    align-items: center;
-  }
-  .be-cbar > * {
-    pointer-events: auto;
-  }
   .be-dims {
-    grid-area: d;
-    justify-self: center;
-    align-self: start;
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    z-index: 8;
+    transform: translateX(-50%);
     white-space: nowrap;
-    overflow: hidden;
-    max-width: 100%;
-    padding: 2px 4px;
+    padding: 2px 5px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--bg) 70%, transparent);
-    font: 700 8px/1 var(--font-mono);
-    color: var(--textmuted);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    border: 1px solid var(--accent-border);
+    font: 700 9px/1 var(--font-mono);
+    color: var(--accentbright);
     pointer-events: none;
   }
-  .be-x,
-  .be-vcyc,
+  /* the corner handle: on the selected tile (and under the pointer); invisible handles take no press */
   .be-rsz {
-    height: var(--cb);
-    min-width: var(--cb);
-    padding: 0;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 8;
+    width: 20px;
+    height: 20px;
+    padding: 3px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    border-radius: 5px;
-    font-size: calc(var(--cb) * 0.58);
-    line-height: 1;
-    cursor: pointer;
-  }
-  .be-x {
-    grid-area: x;
-    background: var(--danger-tint);
-    border: 1px solid var(--danger-border);
-    color: var(--danger);
-  }
-  .be-vcyc {
-    grid-area: v;
-    padding: 0 3px;
-    background: var(--accent-tint);
-    border: 1px solid var(--accent-border);
-    color: var(--accentbright);
-  }
-  .be-vcyc-t {
-    font: 700 8.5px/1 var(--font-mono);
-  }
-  .be-rsz {
-    grid-area: r;
     align-items: flex-end;
     justify-content: flex-end;
-    padding: 2px;
     background: transparent;
     border: 0;
     cursor: nwse-resize;
     touch-action: none;
+    visibility: hidden;
+    pointer-events: auto;
+  }
+  /* touch (tablet): a 40 px target that reaches past the tile's corner, so it covers little of the tile */
+  .be-rsz.touch {
+    right: -14px;
+    bottom: -14px;
+    width: 40px;
+    height: 40px;
+    padding: 17px;
+  }
+  .be-tile.sel .be-rsz {
+    visibility: visible;
+  }
+  @media (hover: hover) {
+    .be-tile.edit:hover .be-rsz {
+      visibility: visible;
+    }
   }
   .be-rsz path {
     stroke: var(--accent);

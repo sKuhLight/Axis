@@ -22,11 +22,12 @@ import {
   meterTag,
   meterText,
   meterTone,
-  nextView,
+  offsetInPage,
   onDrawnItems,
   pagePinIds,
   pxOf,
   resizeBy,
+  scrollAtOffset,
   scrollTargetFor,
   sectionExtents,
   sharedCell,
@@ -161,6 +162,27 @@ describe('scrollTargetFor', () => {
   });
 });
 
+describe('keeping a page in place across an arrange edit', () => {
+  it('restores the viewport offset into the page after the sections moved', () => {
+    const before = [
+      { page: 'A', start: 0, size: 600 },
+      { page: 'B', start: 600, size: 400 }
+    ];
+    // the viewport starts 120 px into B; A grows by 80 px (an item dropped onto it in the side stack)
+    const off = offsetInPage(before, 'B', 720);
+    expect(off).toBe(120);
+    const after = [
+      { page: 'A', start: 0, size: 680 },
+      { page: 'B', start: 680, size: 400 }
+    ];
+    expect(scrollAtOffset(after, 'B', off!)).toBe(800);
+    // a viewport that started before the page (the first page, clamped scroll) never goes below 0
+    expect(scrollAtOffset(after, 'A', -30)).toBe(0);
+    expect(offsetInPage(before, 'Nope', 0)).toBeNull();
+    expect(scrollAtOffset(after, 'Nope', 0)).toBeNull();
+  });
+});
+
 describe('visible and active pages', () => {
   const s = [
     { page: 'A', start: 0, size: 500 },
@@ -229,12 +251,6 @@ describe('value keys and drags', () => {
     expect(dragNorm(0.5, 20, true)).toBeCloseTo(0.51, 6);
     expect(dragNorm(0.5, -200, false)).toBe(0);
     expect(dragNorm(0.9, 200, false)).toBe(1);
-  });
-
-  it('cycles views', () => {
-    expect(nextView(['knob', 'fader', 'slider', 'number'], 'knob')).toBe('fader');
-    expect(nextView(['knob', 'fader', 'slider', 'number'], 'number')).toBe('knob');
-    expect(nextView(['select'], 'select')).toBe('select');
   });
 });
 

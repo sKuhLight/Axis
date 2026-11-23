@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootBlockEditorMock, openAmpEditor, pickMore } from './support/blockEditorMock';
+import { arrangeAdd, boardSaves, bootBlockEditorMock, countBoardSaves, openAmpEditor, pickMore } from './support/blockEditorMock';
 import { addCustomPanel, enterEditMode, exitEditMode, regionTabs, WORKBENCH_DOC_KEY } from './support/workbench';
 
 // Block Editor rework: everything done to ONE control outside Arrange (slice 4, AXIS-77) with real pointer
@@ -51,38 +51,6 @@ async function reloadEditor(page: Page) {
   await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
   await openAmpEditor(page);
 }
-
-/** Count the board saves of this page load (a change of any `axs.be1.<…>` board in the stored surface
- *  document). Call before booting; read with `boardSaves`. */
-async function countBoardSaves(page: Page) {
-  await page.addInitScript(() => {
-    const boardsOf = (raw: string | null) => {
-      try {
-        const d = JSON.parse(raw ?? '{}') as Record<string, string>;
-        return Object.keys(d)
-          .filter((k) => k.startsWith('axs.be1.'))
-          .sort()
-          .map((k) => `${k}=${d[k]}`)
-          .join('\n');
-      } catch {
-        return '';
-      }
-    };
-    const w = window as unknown as { __beSaves: number };
-    w.__beSaves = 0;
-    let last = boardsOf(window.localStorage.getItem('axs.surface.doc'));
-    const set = Storage.prototype.setItem;
-    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
-      if (k === 'axs.surface.doc') {
-        const now = boardsOf(v);
-        if (now !== last) w.__beSaves++;
-        last = now;
-      }
-      return set.call(this, k, v);
-    };
-  });
-}
-const boardSaves = (page: Page) => page.evaluate(() => (window as unknown as { __beSaves: number }).__beSaves);
 
 /** A synthetic pointer event of another pointer type (Playwright's mouse is always 'mouse'), sent to the
  *  element under (x, y) like the browser would. */
@@ -321,7 +289,7 @@ test.describe('Block Editor long-press (touch / pen)', () => {
     const g = (await grid.boundingBox())!;
     const drive = grid.locator('[data-be-key="k0"]');
     await expect(drive).toHaveAttribute('data-be-x', '0');
-    // the tile body inside its first cell, clear of the arrange chrome (as in spec 40)
+    // the tile body inside its first cell, clear of the corner resize handle (as in spec 40)
     const t = (await drive.boundingBox())!;
     const x = t.x + step / 2;
     const y = t.y + t.height / 2 - 6;
@@ -487,7 +455,7 @@ test.describe('Block Editor control menu (layout)', () => {
     // Bass also goes onto Preamp (Arrange → Add), so Preamp refuses it
     await page.locator('[data-be-tab="Preamp"]').click();
     await pickMore(page, 'arrange');
-    await page.locator('[data-be-add="k1"]').click();
+    await arrangeAdd(page, 'k1');
     await expect(onPage(page, 'Preamp', 'k1')).toHaveCount(1);
     await page.locator('[data-be-arrange-done]').click();
     await page.locator('[data-be-tab="Authentic"]').click();

@@ -41,8 +41,15 @@
     node.select();
   }
   function renameKey(e: KeyboardEvent & { currentTarget: HTMLInputElement }) {
-    if (e.key === 'Enter') e.currentTarget.blur();
-    else if (e.key === 'Escape') onCancelRename();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      // the field's own Escape: Arrange (and the app's Escape chain) never see it
+      e.preventDefault();
+      e.stopPropagation();
+      onCancelRename();
+    }
   }
   const title = (pg: string) => (editMode ? `${pg} · double-click to rename` : `Show ${pg}`);
 </script>

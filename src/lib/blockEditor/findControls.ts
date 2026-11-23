@@ -42,6 +42,17 @@ export const KIND_NAME: Readonly<Record<BeKind, string>> = {
   wave: 'Waveform'
 };
 
+/** The glyph of a row's kind (the Find popover and the "Add" library). */
+export const KIND_ICON: Readonly<Record<BeKind, string>> = {
+  cont: '◉',
+  toggle: '⊙',
+  select: '▾',
+  eq: '∿',
+  action: '⏻',
+  meter: '▊',
+  wave: '⌇'
+};
+
 const groupOf = (kind: BeKind): FindGroup['id'] => (kind === 'cont' || kind === 'toggle' || kind === 'select' ? kind : 'other');
 
 /** Case-insensitive label match; an empty query matches everything. */

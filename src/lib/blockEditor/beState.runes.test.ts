@@ -4,6 +4,7 @@ import { BeState, emptyBoard, type BeSource, type BeStorage } from './beState.sv
 import { boardDiffersFromSeed, boardKey, legacyBoardKey, legacyMetaKey, legacySingleKey, metaKey, seedKey, type KeyValueStore } from './boardPersistence';
 import { buildCatalog, type BeCtl } from './catalog';
 import { addControl, moveItem, type BeBoard } from './boardModel';
+import { UNDO_CAP } from './arrangeHistory';
 
 function memStore() {
   const data = new Map<string, string>();
@@ -437,5 +438,85 @@ describe('BeState layout status, resets and the default for the type', () => {
     again.sync(src());
     expect(again.profile).toBe('Live');
     expect(again.board!.pageOrder).toEqual(['Gig']);
+  });
+});
+
+describe('BeState Arrange undo', () => {
+  const arranging = (m = memStore()) => {
+    const st = new BeState(m.store);
+    st.sync(src());
+    st.setEditMode(true, 40);
+    return { st, m };
+  };
+  const writesOfBoard = (m: ReturnType<typeof memStore>) => m.writes.filter((k) => k === boardKey('Amp', 'Default', 'desktop')).length;
+
+  it('every committed change while arranging is one undo step; undo puts it back and saves once', () => {
+    const { st, m } = arranging();
+    const start = st.board!;
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.commit(moveItem(st.board!, 'w0.k1', 'One', 4, 4).board);
+    expect(st.undoStack).toHaveLength(2);
+    expect(st.canUndo).toBe(true);
+    const saves = writesOfBoard(m);
+    expect(st.undo()).toBe(true);
+    expect(writesOfBoard(m)).toBe(saves + 1);
+    expect(find(st.board, 'One', 'w0.k1')).toMatchObject({ x: 2, y: 0 });
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ x: 0, y: 4 });
+    st.undo();
+    expect(st.board).toEqual(start);
+    expect(st.canUndo).toBe(false);
+    expect(st.undo()).toBe(false);
+    // the undone board is what a new editor loads
+    const again = new BeState(m.store);
+    again.sync(src());
+    expect(find(again.board, 'One', 'w0.k0')).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it('undo keeps the page the user is on when the restored board has it', () => {
+    const { st } = arranging();
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.setPage('Two');
+    st.undo();
+    expect(st.board!.page).toBe('Two');
+  });
+
+  it('changes outside Arrange are not undoable; the stack is capped', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    expect(st.canUndo).toBe(false);
+    st.setEditMode(true, 40);
+    for (let i = 0; i < UNDO_CAP + 5; i++) st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4 + ((i + 1) % 2) * 2).board);
+    expect(st.undoStack).toHaveLength(UNDO_CAP);
+  });
+
+  it('a previewed gesture (corner resize) is one step: flush(before)', () => {
+    const { st } = arranging();
+    const before = st.board!;
+    const mid = moveItem(before, 'w0.k0', 'One', 0, 3).board;
+    st.preview(mid);
+    st.preview(moveItem(mid, 'w0.k0', 'One', 0, 5).board);
+    st.flush(before);
+    expect(st.undoStack).toEqual([before]);
+    st.flush(); // a flush without a start board adds no step
+    expect(st.undoStack).toHaveLength(1);
+  });
+
+  it('is cleared when Arrange ends or starts, on a profile switch and on a reload', () => {
+    const { st } = arranging();
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.setEditMode(false);
+    expect(st.canUndo).toBe(false);
+    st.setEditMode(true, 40);
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 6).board);
+    st.setProfile('Blank');
+    expect(st.canUndo).toBe(false);
+    st.setProfile('Default');
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 8).board);
+    expect(st.canUndo).toBe(true);
+    st.sync(src({ rev: 1 }));
+    expect(st.canUndo).toBe(false);
+    expect(st.editMode).toBe(true); // same family: arranging goes on
   });
 });

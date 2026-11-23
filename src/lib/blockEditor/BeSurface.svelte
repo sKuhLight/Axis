@@ -2,9 +2,10 @@
   // Block Editor surface (board model v2): the header (type chip, page tabs, "Find a control…",
   // Engaged | Mute | Scene Ignore, the ⋯ menu — or, without a block, the compact row of the virtual-effect
   // screens), the side page list, and the board of a block's controls with every page at once (top strip
-  // or side stack), always fitted to the panel; plus the interim arrange bar and "Add control" tray,
-  // value bubble, select popover, flat search results, modifier flyout, the control menu (right-click /
-  // long-press / Shift+F10) and the workbench pin paths (⚡ click / press-drag, 380 ms hold-drag).
+  // or side stack), always fitted to the panel; Arrange (the arrange bar, the "Add" library, the page
+  // menu — beArrange.svelte.ts drives selection, gestures, keys and undo), value bubble, select popover,
+  // flat search results, modifier flyout, the control menu (right-click / long-press / Shift+F10) and the
+  // workbench pin paths (⚡ click / press-drag, 380 ms hold-drag).
   // All device reads / writes go through getEditorSurface() (live editor or offline convert buffer);
   // boards persist per block family, profile and device class (BeState → boardPersistence).
   import { untrack, type Snippet } from 'svelte';
@@ -38,18 +39,20 @@
   import { buildAxisPinMenuItems } from '../axis-workbench/pinMenu';
   import type { AxisPinTarget } from '../axis-workbench/pinTargets';
   import { axisBlockEditorModifierController } from '../axis-workbench/blockEditor/blockEditorModifierController';
+  import BeArrangeBar from './BeArrangeBar.svelte';
   import BeBoard from './BeBoard.svelte';
-  import BeContextMenu from './BeContextMenu.svelte';
   import BeControl from './BeControl.svelte';
   import BeFind from './BeFind.svelte';
   import BeHeader from './BeHeader.svelte';
-  import BeMoreMenu from './BeMoreMenu.svelte';
+  import BeLibrary from './BeLibrary.svelte';
+  import BeMenu from './BeMenu.svelte';
   import BePageNav from './BePageNav.svelte';
   import { findGroups, flatMatches, itemIdOn, jumpPage, pagesOf, type FindFilter } from './findControls';
   import { beLayer } from './overlayLayer';
   import type { BeBlockChrome } from './headerModel';
   import { buildMoreMenu, canArrangeOn } from './moreMenu';
-  import { buildControlMenu, placePinTargets, type PinPanelPlace } from './controlMenu';
+  import { buildControlMenu, placePinTargets, VIEW_NAME, type PinPanelPlace } from './controlMenu';
+  import { isForeignOverlay } from './arrangeModel';
   import {
     ESCAPE_OVERLAYS,
     flyoutTakesEscape,
@@ -59,30 +62,21 @@
     longPressOpensMenu,
     menuAtTile
   } from './controlMenuInput';
-  import { setBeHost, type BeGhost, type BeHost } from './beHost';
+  import { setBeHost, type BeHost } from './beHost';
+  import { BeArrange, type ArrangeTone } from './beArrange.svelte';
+  import { arrangeSelection, buildBarOverflow, type BarActions, type BarPart } from './arrangeBar';
+  import { buildPageMenu } from './pageMenu';
   import { BeState } from './beState.svelte';
   import { trackDeviceClass } from './deviceClass.svelte';
   import { effectiveNav, SIDE_NAV_MIN_W, type BeDensity, type BeNav } from './boardGeometry';
   import {
-    addControl,
-    addPage as addPageOp,
     BE_SPEC,
     isDivider,
     locate,
-    MAXC,
-    moveItem,
-    moveToPage,
     pageItems,
-    removeItem as removeItemOp,
-    renamePage as renamePageOp,
-    resizeItem,
-    setView,
-    sizeItem,
-    tidy,
     type BeBoard as BoardModel,
     type BeControl as BeControlItem,
     type BeItem,
-    type BeOpResult,
     type BeView
   } from './boardModel';
   import { boardDiffersFromSeed, pageDiffersFromSeed } from './boardPersistence';
@@ -102,18 +96,12 @@
   import {
     activeAfterScroll,
     dragNorm,
-    DRAG_START_PX,
-    dropCell,
-    grabCell,
     highlightedPages,
     isPinnableKind,
     keySteps,
     layoutBoardPages,
-    nextView,
     NUDGE_STEP,
-    onDrawnItems,
     pagePinIds,
-    resizeBy,
     sharedCell,
     waveBars,
     type BoardPage
@@ -312,7 +300,36 @@
     lastNav = n;
   });
 
-  // ── arrange mode (interim) ──
+  // ── Arrange: selection, gestures, keys and undo in beArrange.svelte.ts; the bar, library and page menu
+  //    in their own components ──
+  const TONE: Record<ArrangeTone, string> = { ok: 'var(--accent)', info: 'var(--textdim)', bad: 'var(--danger)' };
+  const arr = new BeArrange({
+    be,
+    root: () => rootEl,
+    layer: () => layerEl,
+    isDrawn: (it) => isDrawn(it),
+    ctl: (key) => catByKey.get(key),
+    autoScroll: (x, y) => boardRef?.autoScroll(x, y),
+    holdPage: () => {
+      const pg = be.board?.page;
+      holdActive(600);
+      if (pg) boardRef?.holdPage(pg);
+    },
+    showPage: (pg) => scrollSoon(pg, true, 800),
+    setPage: (pg) => be.setPage(pg),
+    focusBoard: () => boardRef?.focusBoard(),
+    reveal: (id) => boardRef?.revealItem(id),
+    toast: (text, tone) => editor.showToast(text, TONE[tone]),
+    leave: () => setEdit(false)
+  });
+  // the window listeners of Arrange (pointer gestures, Ctrl/⌘+Z, the arrow keys' release) live only while
+  // arranging — every editor instance (VirtualScreen too) has its own
+  $effect(() => {
+    if (!be.editMode) return;
+    return arr.attach();
+  });
+  /** The editor's one floating layer (overlayLayer.ts): its menus and the library live in it. */
+  let layerEl = $state<HTMLElement | null>(null);
   function setEdit(on: boolean) {
     if (on) resultsOpen = false; // arranging needs the board
     if (on === be.editMode) return;
@@ -320,12 +337,30 @@
     const pg = be.board?.page;
     if (pg) scrollSoon(pg, false, 400);
     be.setEditMode(on, on ? liveCell() : null);
-    drag = null;
-    mv = null;
-    rz = null;
+    arr.reset();
+    barMenu = null;
+    renamingPage = null;
     editingId = null;
     sel = null;
   }
+  // The cell is frozen while arranging (a drag never sees the grid change under it); a new panel width
+  // (maximize, a split resize) freezes it again at the new fitted size between gestures — a width change
+  // during a drag or resize is picked up when the gesture ends (the effect re-runs on its end).
+  let frozenW = 0;
+  $effect(() => {
+    const on = be.editMode;
+    const w = bodyW;
+    const gesture = !!arr.drag || !!arr.resizing;
+    untrack(() => {
+      if (!on) {
+        frozenW = 0;
+        return;
+      }
+      if (gesture || arr.busy) return;
+      if (frozenW && w && w !== frozenW) be.refreeze(liveCell());
+      frozenW = w;
+    });
+  });
   // arrange is a desktop affordance (never on the phone layout); a search ends it
   $effect(() => {
     if (isPhone && be.editMode) untrack(() => setEdit(false));
@@ -452,22 +487,10 @@
   type ValueDrag = { pid: number; itemId: string; sx: number; sy: number; ly: number; n: number; moved: boolean; clickVal: boolean; ctl: BeCtl };
   let vd: ValueDrag | null = null;
   let tk: { pid: number; rect: DOMRect; vertical: boolean } | null = null;
-  let mv: { id: string; fromPage: string; w: number; h: number; grab: { cx: number; cy: number }; sx: number; sy: number; started: boolean } | null = null;
-  let rz: { id: string; sx: number; sy: number; ow: number; oh: number; step: number; z: number; before: BoardModel; changed: boolean } | null = null;
-  let drag = $state<{ id: string; target: BeGhost | null } | null>(null);
 
   function tileDown(e: PointerEvent, item: BeItem, ctl: BeCtl | undefined, page: string, tile: HTMLElement) {
     if (be.editMode) {
-      if (!page || e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const grid = tile.closest<HTMLElement>('[data-be-grid]');
-      if (!grid) return;
-      const c = Number(grid.dataset.c);
-      const g = Number(grid.dataset.g);
-      const gr = grid.getBoundingClientRect();
-      const z = effectiveZoom(gr.width, grid.offsetWidth);
-      mv = { id: item.id, fromPage: page, w: item.w, h: item.h, grab: grabCell(e.clientX, e.clientY, tile.getBoundingClientRect(), z, c + g, item), sx: e.clientX, sy: e.clientY, started: false };
+      arr.tileDown(e, item, page, tile);
       return;
     }
     if (!ctl || ctl.kind !== 'cont' || isDivider(item) || (item.view !== 'knob' && item.view !== 'number')) return;
@@ -514,69 +537,14 @@
     setNorm(ctl.id, stepNorm(p, steps, e.shiftKey));
   }
 
-  // ── arrange gestures (interim) ──
-  function dropTargetAt(px: number, py: number): BeGhost | null {
-    const m = mv;
-    const b = be.board;
-    if (!m || !b || !rootEl || typeof document === 'undefined') return null;
-    let grid: HTMLElement | null = null;
-    for (const el of document.elementsFromPoint(px, py)) {
-      const g = el.closest<HTMLElement>('[data-be-grid]');
-      if (g && rootEl.contains(g)) {
-        grid = g;
-        break;
-      }
-    }
-    if (!grid) return null;
-    const d = grid.dataset;
-    const page = d.page ?? '';
-    const r = grid.getBoundingClientRect();
-    const hit = { left: r.left, top: r.top, zoom: effectiveZoom(r.width, grid.offsetWidth), c: Number(d.c), g: Number(d.g), cols: Number(d.cols), rows: Number(d.rows) };
-    const { x, y } = dropCell(px, py, hit, m, m.grab);
-    return { page, x, y, w: m.w, h: m.h, valid: drawnOp(b, (d) => moveItem(d, m.id, page, x, y)).ok };
-  }
   /** Items drawn right now: dividers, and controls whose key the catalog lists. */
   const isDrawn = (it: BeItem): boolean => isDivider(it) || catByKey.has(it.key);
-  /** Arrange operations see only drawn items: a kept, not-drawn control blocks no cells. */
-  function drawnOp<R extends { board: BoardModel; ok: boolean }>(b: BoardModel, op: (d: BoardModel) => R): R {
-    return onDrawnItems(b, isDrawn, op);
-  }
-  /** Gravity-tidy the given pages (Auto-pack). */
-  function tidyPages(b: BoardModel, pgs: string[]): BoardModel {
-    return drawnOp(b, (d) => {
-      let out = d;
-      for (const pg of new Set(pgs)) {
-        const list = pageItems(out, pg);
-        const t = tidy(list);
-        if (t !== list) out = { ...out, boards: { ...out.boards, [pg]: t } };
-      }
-      return { board: out, ok: true };
-    }).board;
-  }
-  function resizeDown(e: PointerEvent, id: string, tile: HTMLElement) {
-    const b = be.board;
-    if (!be.editMode || !b || e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const f = locate(b, id);
-    const grid = tile.closest<HTMLElement>('[data-be-grid]');
-    if (!f || !grid) return;
-    const r = grid.getBoundingClientRect();
-    rz = { id, sx: e.clientX, sy: e.clientY, ow: f.item.w, oh: f.item.h, step: Number(grid.dataset.c) + Number(grid.dataset.g), z: effectiveZoom(r.width, grid.offsetWidth), before: b, changed: false };
-  }
   function cancelGestures() {
     vd = null;
     tk = null;
     adjusting = false;
     if (tip) tip = null;
-    if (mv) {
-      mv = null;
-      drag = null;
-    }
-    if (rz) {
-      if (rz.changed) be.preview(rz.before);
-      rz = null;
-    }
+    arr.cancel();
     if (pinDrag) pinDrag = null;
     pinPressAt = null;
     cancelPinHold();
@@ -600,30 +568,6 @@
         return;
       }
       if (pinHold && exceedsPinHold(pinHold.x, pinHold.y, e.clientX, e.clientY)) cancelPinHold(); // early movement = value adjust
-      if (mv) {
-        if (!mv.started) {
-          if (Math.abs(e.clientX - mv.sx) + Math.abs(e.clientY - mv.sy) < DRAG_START_PX) return;
-          mv.started = true;
-        }
-        e.preventDefault();
-        drag = { id: mv.id, target: dropTargetAt(e.clientX, e.clientY) };
-        boardRef?.autoScroll(e.clientX, e.clientY);
-        return;
-      }
-      if (rz) {
-        e.preventDefault();
-        const b = be.board;
-        const f = b && locate(b, rz.id);
-        if (!b || !f) return;
-        const s = resizeBy({ w: rz.ow, h: rz.oh }, e.clientX - rz.sx, e.clientY - rz.sy, rz.step, rz.z);
-        const id = rz.id;
-        const r = drawnOp(b, (d) => resizeItem(d, id, Math.min(s.w, MAXC - f.item.x), s.h));
-        if (r.ok && r.board !== b) {
-          be.preview(r.board);
-          rz.changed = true;
-        }
-        return;
-      }
       if (tk) {
         e.preventDefault();
         trackMove(e);
@@ -649,28 +593,6 @@
       }
       pinPressAt = null; // a ⚡ press that never moved: its click pins to the default target
       cancelPinHold(); // a press that never became a drag must clear the pending hold timer
-      if (mv) {
-        const m = mv;
-        const t = drag?.target;
-        mv = null;
-        drag = null;
-        const b = be.board;
-        if (m.started && t?.valid && b) {
-          const r = drawnOp(b, (d) => moveItem(d, m.id, t.page, t.x, t.y));
-          if (r.ok) be.commit(be.autoPack ? tidyPages(r.board, [m.fromPage, t.page]) : r.board);
-        }
-      }
-      if (rz) {
-        const r = rz;
-        rz = null;
-        const b = be.board;
-        if (r.changed && b) {
-          const f = locate(b, r.id);
-          const next = be.autoPack && f ? tidyPages(b, [f.page]) : b;
-          if (next !== b) be.commit(next);
-          else be.flush();
-        }
-      }
       tk = null;
       if (vd) {
         const v = vd;
@@ -690,73 +612,14 @@
     };
   });
 
-  // ── arrange actions (interim) ──
-  function commitOp(r: { board: BoardModel; ok: boolean }) {
-    if (r.ok) be.commit(r.board);
-  }
-  function removeTile(id: string) {
-    const b = be.board;
-    if (b) commitOp(removeItemOp(b, id));
-  }
-  function cycleView(id: string) {
-    const b = be.board;
-    const f = b && locate(b, id);
-    if (!b || !f || isDivider(f.item)) return;
-    const c = catByKey.get(f.item.key);
-    if (!c || c.views.length < 2) return;
-    const view = nextView(c.views, f.item.view);
-    const r = drawnOp(b, (d) => setView(d, id, view));
-    commitOp(r);
-    if (r.ok && r.moved) editor.showToast('Moved to the next free spot to fit', 'var(--textdim)');
-  }
-  function tidyUp() {
-    const b = be.board;
-    if (!b) return;
-    be.commit(tidyPages(b, [b.page]));
-    editor.showToast('Board tidied', 'var(--accent)');
-  }
-  function addPage() {
-    const b = be.board;
-    if (!b) return;
-    const r = addPageOp(b);
-    be.commit(r.board);
-    scrollSoon(r.page, true, 800);
-  }
+  // ── pages: rename (double-click on a tab / list entry while arranging, or Page ▾) and "+" ──
   let renamingPage = $state<string | null>(null);
   function renamePage(from: string, raw: string) {
     renamingPage = null;
-    const b = be.board;
-    if (!b) return;
-    const r = renamePageOp(b, from, raw);
-    if (r.ok) be.commit(r.board);
-    else if (r.reason === 'duplicate') editor.showToast(`A page called “${raw.trim()}” already exists`, 'var(--danger)');
+    arr.renamePage(from, raw);
   }
-  function focusEl(node: HTMLInputElement) {
-    node.focus();
-    node.select();
-  }
-  const onPageKeys = $derived(new Set(board ? pageItems(board, board.page).flatMap((it) => (isDivider(it) ? [] : [it.key])) : []));
-  const tray = $derived(catalog.filter((c) => !onPageKeys.has(c.key)));
-  const TRAY_ICON: Record<string, string> = { knob: '◉', fader: '⇕', slider: '⇔', number: '#', button: '⏻', switch: '⊙', select: '▾', eq: '∿', action: '⏼', meter: '▊', wave: '⌇' };
-  let trayEl = $state<HTMLElement | null>(null);
-  // one row of chips: a vertical wheel scrolls it sideways
-  $effect(() => {
-    const node = trayEl;
-    if (!node) return;
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaX) >= Math.abs(e.deltaY) || node.scrollWidth <= node.clientWidth + 1) return;
-      e.preventDefault();
-      node.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-    };
-    node.addEventListener('wheel', onWheel, { passive: false });
-    return () => node.removeEventListener('wheel', onWheel);
-  });
-  function trayAdd(c: BeCtl) {
-    const b = be.board;
-    if (!b) return;
-    const r = drawnOp(b, (d) => addControl(d, b.page, { key: c.key, view: c.view }));
-    if (r.ok) be.commit(be.autoPack ? tidyPages(r.board, [b.page]) : r.board);
-    else editor.showToast('No room for that control here', 'var(--danger)');
+  function addPage() {
+    arr.addPage();
   }
 
   // ── layout profiles (Default = device-authentic, Blank, custom copies) and the layout status ──
@@ -791,6 +654,7 @@
       resultsOpen = false;
       findOpen = false;
       moreOpen = false;
+      barMenu = null;
       renamingPage = null;
       sel = null;
       editingId = null;
@@ -913,16 +777,24 @@
   // before the app's window Escape chain (close the editor in the monolith, restore a maximized panel),
   // which then never sees it. Focus usually stays on the ∿ button or the menu's opener, outside the flyout,
   // so the flyout cannot listen on itself. Another overlay open on top (a palette, a dialog) keeps the key.
+  // While arranging the same listener then gives Escape to Arrange (close the library, cancel a drag,
+  // leave Arrange — beArrange.escape) and the arrows / Delete to the selection; the flyout goes first.
   $effect(() => {
-    if (!modOpen) return;
+    if (!modOpen && !be.editMode) return;
     const onKey = (e: KeyboardEvent) => {
-      const flyout = document.querySelector('[data-screen-label="Modifier Editor"].flyout');
-      const target = e.target instanceof Node ? e.target : null;
-      const overlayOpen = Array.from(document.querySelectorAll(ESCAPE_OVERLAYS)).some((el) => !flyout?.contains(el));
-      if (!flyoutTakesEscape({ key: e.key, defaultPrevented: e.defaultPrevented, inFlyout: !!target && !!flyout?.contains(target), overlayOpen })) return;
-      e.preventDefault();
-      e.stopPropagation();
-      modOpen = false;
+      if (modOpen && e.key === 'Escape') {
+        const flyout = document.querySelector('[data-screen-label="Modifier Editor"].flyout');
+        const target = e.target instanceof Node ? e.target : null;
+        const overlayOpen = Array.from(document.querySelectorAll(ESCAPE_OVERLAYS)).some((el) => !flyout?.contains(el) && isForeignOverlay(el, rootEl, layerEl));
+        if (flyoutTakesEscape({ key: e.key, defaultPrevented: e.defaultPrevented, inFlyout: !!target && !!flyout?.contains(target), overlayOpen })) {
+          e.preventDefault();
+          e.stopPropagation();
+          modOpen = false;
+          return;
+        }
+      }
+      if (!be.editMode || arr.escape(e)) return;
+      arr.keydown(e);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -1103,11 +975,11 @@
           if (tab) pinControlToTab(c, tab);
         },
         modifier: () => openMod(c),
-        view: (v) => menuView(itemId, v),
-        size: (w, h) => menuSize(itemId, w, h),
-        move: (pg) => menuMove(itemId, c, pg),
+        view: (v) => arr.view(v, itemId),
+        size: (w, h) => arr.size(w, h, itemId),
+        move: (pg) => arr.moveTo(itemId, pg),
         swipe: () => toggleSwipe(c),
-        remove: () => menuRemove(itemId, c)
+        remove: () => arr.remove(itemId)
       }
     );
   }
@@ -1140,7 +1012,7 @@
   /** Long-press (touch / pen): the menu only on a still press that started nothing else — never while
    *  arranging, during the pen's hold-drag or a ⚡ press, or once a value drag moved. */
   function ctxHold(item: BeItem, c: BeCtl, at: WorkbenchMenuPosition) {
-    if (!longPressOpensMenu({ editMode: be.editMode, pinDrag: !!pinDrag, pinPress: !!pinPressAt, arrange: !!mv || !!rz, valueMoved: !!vd?.moved })) return;
+    if (!longPressOpensMenu({ editMode: be.editMode, pinDrag: !!pinDrag, pinPress: !!pinPressAt, arrange: arr.busy, valueMoved: !!vd?.moved })) return;
     openCtx(item, c, at);
   }
   // a menu whose rows are gone (the control left the catalog, the board reloaded) closes for good
@@ -1168,46 +1040,9 @@
     ctxMenu = null;
   }
 
-  // the menu's board changes: one save each (BeState.commit). The active page stays in view: a change on
-  // another page can move the sections (a page grows or shrinks, the shared cell size changes), so the
-  // active page is held and scrolled back into place once the board has redrawn.
-  function commitMenuOp(r: BeOpResult, tidyOn: string[]): boolean {
-    if (!r.ok) return false;
-    if (r.board === be.board) return true;
-    holdActive(500);
-    be.commit(be.autoPack && tidyOn.length ? tidyPages(r.board, tidyOn) : r.board);
-    const pg = be.board?.page;
-    if (pg) scrollSoon(pg, false, 500);
-    return true;
-  }
-  function menuView(id: string, view: BeView) {
-    const b = be.board;
-    if (!b) return;
-    const r = drawnOp(b, (d) => setView(d, id, view));
-    if (commitMenuOp(r, []) && r.moved) editor.showToast('Moved to the next free spot to fit', 'var(--textdim)');
-  }
-  function menuSize(id: string, w: number, h: number) {
-    const b = be.board;
-    const f = b && locate(b, id);
-    if (!b || !f) return;
-    const r = drawnOp(b, (d) => sizeItem(d, id, w, h));
-    if (commitMenuOp(r, [f.page]) && r.moved) editor.showToast('Moved to the nearest free spot to fit', 'var(--textdim)');
-  }
-  function menuMove(id: string, c: BeCtl, page: string) {
-    const b = be.board;
-    const f = b && locate(b, id);
-    if (!b || !f) return;
-    const r = drawnOp(b, (d) => moveToPage(d, id, page));
-    if (commitMenuOp(r, [f.page, page])) editor.showToast(`Moved ${c.label} to ${page}`, 'var(--accent)');
-    else if (r.reason === 'duplicate') editor.showToast(`${c.label} is already on ${page}`, 'var(--danger)');
-  }
-  function menuRemove(id: string, c: BeCtl) {
-    const b = be.board;
-    const f = b && locate(b, id);
-    if (!b || !f) return;
-    // one click and no undo outside Arrange (slice 5 brings it): the toast says how to get it back
-    if (commitMenuOp(removeItemOp(b, id), [])) editor.showToast(`Removed ${c.label} from ${f.page} — Arrange → Add brings it back`, 'var(--textdim)');
-  }
+  // the menu's board changes (View / Size / Move / Remove) go through the Arrange controller in both modes:
+  // one save each (BeState.commit; an undo step only while arranging), Auto-packed where it applies, the
+  // active page kept where it is on screen.
   function toggleSwipe(c: BeCtl) {
     const p = knobById.get(c.id);
     if (!p) return;
@@ -1217,18 +1052,100 @@
     if (now === was) return; // the surface kept nothing (no block family): no toast that claims otherwise
     editor.showToast(now ? `${c.label} is now a grid swipe control` : `${c.label} is no longer a grid swipe control`, 'var(--amber)');
   }
-  async function pinPageToWorkbench() {
-    const b = be.board;
-    if (!workbenchCanPin || !workbench || !b) return;
-    const paramIds = pagePinIds(pages.find((p) => p.page === b.page)?.items ?? [], catByKey);
+  /** Pinnable parameter ids of a page (drawn controls only). */
+  const pagePins = (page: string): number[] => pagePinIds(pages.find((p) => p.page === page)?.items ?? [], catByKey);
+  /** "Pin page as panel" (Page ▾): the page's controls into a new workbench custom panel — the action the
+   *  previous editor's "Pin page" button used. */
+  async function pinPageToWorkbench(page: string) {
+    if (!workbenchCanPin || !workbench) return;
+    const paramIds = pagePins(page);
     if (!paramIds.length) return;
-    const block = editor.selected?.display ?? 'Block';
+    const block = editor.selected?.display ?? (typeName || 'Block');
     const result = await workbench.registry.runActionResult(AXIS_PIN_SELECTED_PARAMETERS_ACTION, {
       controller: workbench.controller,
       source: 'host',
-      args: { paramIds, title: `${block} Controls` }
+      args: { paramIds, title: `${block} · ${page}` }
     });
-    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls`, 'var(--accent)');
+    if (result.success) editor.showToast(`Pinned ${paramIds.length} controls of ${page} as a panel`, 'var(--accent)');
+  }
+
+  // ── the arrange bar: the selection's tools, the page menu, the "Add" library ──
+  const arrSel = $derived.by(() => {
+    const id = arr.sel;
+    const b = board;
+    if (!be.editMode || !id || !b) return null;
+    const it = locate(b, id)?.item ?? null;
+    const c = it && !isDivider(it) ? catByKey.get(it.key) : undefined;
+    const cont = !!c && c.kind === 'cont' && knobById.has(c.id);
+    return arrangeSelection({
+      item: it,
+      ctl: c,
+      canPin: workbenchCanPin && !!workbench && pinnable(c),
+      canSwipe: cont && !!editor.canSwipeControl,
+      swipe: cont && !!c && editor.isSwipeControl(c.id)
+    });
+  });
+  function selCtl(): BeCtl | undefined {
+    return arrSel?.kind === 'control' ? catByKey.get(arrSel.key) : undefined;
+  }
+  const barActions: BarActions = {
+    view: (v) => arr.view(v),
+    size: (w, h) => arr.size(w, h),
+    pin: () => {
+      const c = selCtl();
+      if (c) void pinControlToWorkbench(c);
+    },
+    swipe: () => {
+      const c = selCtl();
+      if (c) toggleSwipe(c);
+    },
+    remove: () => arr.remove(),
+    label: (id, text) => arr.label(id, text),
+    rotate: () => arr.rotate(),
+    undo: () => arr.undo(),
+    add: () => (arr.libOpen = !arr.libOpen),
+    divider: (kind) => arr.addDivider(kind),
+    closeGaps: () => arr.closeGaps(),
+    tidy: () => arr.tidyUp(),
+    autoPack: (on) => be.setAutoPack(on)
+  };
+  const pageMenuItems = $derived.by<WorkbenchMenuItem[]>(() => {
+    const b = board;
+    if (!be.editMode || !b) return [];
+    const page = b.page;
+    return buildPageMenu(
+      { page, pageOrder: b.pageOrder, nav, canPin: workbenchCanPin && !!workbench, pinCount: pagePins(page).length },
+      {
+        rename: (name) => arr.renamePage(page, name),
+        duplicate: () => arr.duplicatePage(page),
+        pin: () => void pinPageToWorkbench(page),
+        move: (delta) => arr.movePage(delta, page),
+        remove: () => arr.deletePage(page),
+        add: () => arr.addPage()
+      }
+    );
+  });
+  // the bar's Page ▾ / ⋯ menus (rendered in the overlay layer below)
+  let barMenu = $state<'page' | 'more' | null>(null);
+  let barPageAnchor = $state<HTMLElement | null>(null);
+  let barMoreAnchor = $state<HTMLElement | null>(null);
+  let barOverflow = $state<BarPart[]>([]);
+  const barMoreItems = $derived(
+    barMenu === 'more' && be.editMode ? buildBarOverflow(barOverflow, { sel: arrSel, canUndo: be.canUndo, autoPack: be.autoPack, pageItems: pageMenuItems, page: board?.page ?? '' }, barActions) : []
+  );
+  let libQuery = $state('');
+  let libFilter = $state<FindFilter>('all');
+  let libAnchor = $state<HTMLElement | null>(null);
+  let barEl = $state<HTMLElement | null>(null);
+  const libGroups = $derived(arr.libOpen && be.editMode ? findGroups(catalog, board, libQuery, libFilter) : []);
+  function libMeta(key: string): string {
+    const c = catByKey.get(key);
+    return c ? `${VIEW_NAME[c.view]} ${c.w}×${c.h}` : '';
+  }
+  /** The empty page's "Arrange": start arranging with the library open (something to add). */
+  function arrangeAndAdd() {
+    setEdit(true);
+    arr.libOpen = true;
   }
 
   // ── the tiles' host ──
@@ -1258,7 +1175,16 @@
       return sel?.id ?? null;
     },
     get dragId() {
-      return drag?.id ?? null;
+      return arr.drag?.id ?? null;
+    },
+    get selectedId() {
+      return be.editMode ? arr.sel : null;
+    },
+    get resizingId() {
+      return arr.resizing;
+    },
+    get touchArrange() {
+      return deviceClass === 'tablet';
     },
     get canPin() {
       return workbenchCanPin;
@@ -1323,9 +1249,7 @@
     ctxMenu: ctxContext,
     ctxLongPress: ctxHold,
     ctxKey,
-    remove: removeTile,
-    cycleView,
-    resizeDown
+    resizeDown: (e, id, tile) => arr.resizeDown(e, id, tile)
   };
   setBeHost(host);
 
@@ -1397,19 +1321,23 @@
     </div>
   {:else}
     {#if be.editMode}
-      <div class="be-arrbar">
-        <span class="be-abtag">✥ ARRANGE</span>
-        {#if !isPhone}<span class="be-abnote">a page is 12 controls wide · drag tiles to any free spot · ⌟ resizes</span>{/if}
-        <span class="be-absp"></span>
-        {#if workbenchCanPin}
-          <button class="be-abbtn" type="button" title="Pin this page to a Workbench custom panel" onclick={pinPageToWorkbench}>⌖ Pin page</button>
-        {/if}
-        <button class="be-abbtn" class:on={be.autoPack} type="button" data-be-autopack aria-pressed={be.autoPack} title="Tidy the page after every move or resize" onclick={() => be.setAutoPack(!be.autoPack)}>
-          {be.autoPack ? '⊞ Auto-pack' : '⊡ Free'}
-        </button>
-        <button class="be-abbtn" type="button" onclick={tidyUp}>⤢ Tidy up</button>
-        <button class="be-abbtn done" type="button" data-be-arrange-done title="Finish arranging" onclick={() => setEdit(false)}>✓ Done</button>
-      </div>
+      <BeArrangeBar
+        sel={arrSel}
+        canUndo={be.canUndo}
+        autoPack={be.autoPack}
+        page={board?.page ?? ''}
+        touch={deviceClass === 'tablet'}
+        libOpen={arr.libOpen}
+        labelFocus={arr.labelFocus}
+        actions={barActions}
+        onDone={() => setEdit(false)}
+        bind:menu={barMenu}
+        bind:pageAnchor={barPageAnchor}
+        bind:moreAnchor={barMoreAnchor}
+        bind:overflow={barOverflow}
+        bind:libAnchor
+        bind:barEl
+      />
     {/if}
 
     <div class="be-body" class:side={nav === 'side'}>
@@ -1439,8 +1367,8 @@
         {active}
         {flashPage}
         catalog={catByKey}
-        ghost={drag?.target ?? null}
-        dragging={!!drag}
+        ghost={arr.drag?.target ?? null}
+        dragging={!!arr.drag}
         canArrange={!isPhone}
         onMeasure={(w, h) => {
           bodyW = w;
@@ -1450,25 +1378,12 @@
         onScroll={onBoardScroll}
         onBackgroundDown={() => {
           if (tip && !adjusting) tip = null;
+          if (be.editMode) arr.select(null); // a press on empty grid clears the selection
         }}
-        onArrange={() => setEdit(true)}
+        onArrange={arrangeAndAdd}
       />
     </div>
 
-    {#if be.editMode}
-      <div class="be-tray">
-        <span class="be-traytag" title="Tap a control to drop it into the first free slot of this page">ADD</span>
-        <div class="be-trayrow" bind:this={trayEl}>
-          {#each tray as t (t.key)}
-            <button class="be-traychip" type="button" data-be-add={t.key} title="Add {t.label} to {board?.page ?? 'this page'}" onclick={() => trayAdd(t)}>
-              <span class="be-tcic">{TRAY_ICON[t.view] ?? '＋'}</span>
-              <span class="be-tctxt"><span class="be-tcname">{t.label}</span><span class="be-tcmeta">{t.kind} · {t.w}×{t.h}</span></span>
-            </button>
-          {/each}
-          {#if tray.length === 0}<div class="be-trayempty">All controls are on this page.</div>{/if}
-        </div>
-      </div>
-    {/if}
   {/if}
 </div>
 
@@ -1476,9 +1391,33 @@
      workbench both move to the shell root (overlayLayer.ts). Inside a layer the parts order themselves
      with small local z-indexes. -->
 <div class="be-layer-src">
-  <div class="be-layer" use:beLayer={'overlay'}>
+  <div class="be-layer" bind:this={layerEl} use:beLayer={'overlay'}>
+    <!-- the "Add" library of Arrange (the menus below stack above it) -->
+    {#if be.editMode}
+      <BeLibrary
+        open={arr.libOpen}
+        anchor={libAnchor}
+        floor={barEl}
+        groups={libGroups}
+        page={board?.page ?? ''}
+        bind:query={libQuery}
+        bind:filter={libFilter}
+        touch={deviceClass === 'tablet'}
+        fading={!!arr.drag && arr.drag.id == null}
+        meta={libMeta}
+        onAdd={(key) => arr.add(key)}
+        onPress={(e, key) => arr.libPress(e, key)}
+        onEscape={() => arr.libraryEscape() === 'library'}
+        onClose={() => (arr.libOpen = false)}
+      />
+    {/if}
+
     <!-- ⋯ menu: arrange · navigation · control size · layout · block (opens under the trigger) -->
-    <BeMoreMenu open={moreOpen} items={moreItems} anchor={moreAnchor} touch={isPhone} onClose={() => (moreOpen = false)} />
+    <BeMenu open={moreOpen} items={moreItems} anchor={moreAnchor} touch={isPhone} label="Block and layout options" onClose={() => (moreOpen = false)} />
+
+    <!-- the arrange bar's Page ▾ and ⋯ (the tools that did not fit the row) -->
+    <BeMenu open={barMenu === 'page'} items={pageMenuItems} anchor={barPageAnchor} touch={deviceClass === 'tablet'} label="Page options" onClose={() => (barMenu = null)} />
+    <BeMenu open={barMenu === 'more'} items={barMoreItems} anchor={barMoreAnchor} touch={deviceClass === 'tablet'} label="More arrange tools" onClose={() => (barMenu = null)} />
 
     <!-- value bubble: full value with unit, above the other floating parts -->
     {#if tip}
@@ -1512,7 +1451,7 @@
     <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
 
     <!-- control menu: right-click, long-press (touch), Shift+F10 / the ContextMenu key on a focused tile -->
-    <BeContextMenu open={!!ctxMenu && ctxItems.length > 0} items={ctxItems} position={ctxMenu?.pos ?? { x: 0, y: 0 }} touch={isPhone} onClose={closeCtx} />
+    <BeMenu open={!!ctxMenu && ctxItems.length > 0} items={ctxItems} position={ctxMenu?.pos ?? { x: 0, y: 0 }} touch={isPhone} label="Control options" onClose={closeCtx} />
   </div>
 
   <!-- pin-drag overlay (380 ms hold on a tile, or a press-drag on ⚡): inert, so elementFromPoint reaches
@@ -1607,27 +1546,6 @@
     color: var(--textdim);
   }
 
-  /* ── arrange bar + tray (interim) ── */
-  .be-arrbar {
-    flex: none;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 12px;
-    background: color-mix(in srgb, var(--accent) 5%, var(--bg2));
-    border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
-  }
-  .be-abtag {
-    font: 700 9.5px/1 var(--font-mono);
-    letter-spacing: 0.14em;
-    color: var(--accentbright);
-  }
-  .be-abnote {
-    font: 500 11px/1.3 var(--font-ui);
-    color: var(--textdim);
-  }
   .be-absp {
     flex: 1;
   }
@@ -1640,93 +1558,6 @@
     border: 1px solid var(--border2);
     color: var(--text2);
     font: 600 12px/1 var(--font-ui);
-  }
-  .be-abbtn.on {
-    background: var(--accent-tint);
-    border-color: var(--accent);
-    color: var(--accentbright);
-  }
-  .be-abbtn.done {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accentink);
-    font-weight: 700;
-  }
-  .be-tray {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
-    border-top: 1px solid var(--surface2);
-    background: linear-gradient(180deg, var(--bg2), var(--bg));
-  }
-  .be-traytag {
-    flex: none;
-    font: 700 9.5px/1 var(--font-mono);
-    letter-spacing: 0.12em;
-    color: var(--textfaint);
-  }
-  .be-trayrow {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .be-trayrow::-webkit-scrollbar {
-    display: none;
-  }
-  .be-traychip {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 10px 0 5px;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 9px;
-    cursor: pointer;
-  }
-  .be-traychip:hover {
-    border-color: var(--accent);
-  }
-  .be-tcic {
-    width: 24px;
-    height: 24px;
-    flex: none;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: var(--accentbright);
-    border: 1px solid var(--accent-border);
-  }
-  .be-tctxt {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    line-height: 1.15;
-    text-align: left;
-  }
-  .be-tcname {
-    font: 600 12px/1.15 var(--font-ui);
-    color: var(--text);
-    white-space: nowrap;
-  }
-  .be-tcmeta {
-    font: 500 8.5px/1 var(--font-mono);
-    color: var(--textfaint);
-  }
-  .be-trayempty {
-    display: flex;
-    align-items: center;
-    height: 34px;
-    color: var(--textfaint);
-    font-size: 12px;
   }
 
   /* ── search results ── */

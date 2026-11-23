@@ -84,8 +84,67 @@ export interface ControlMenuActions {
   remove(): void;
 }
 
-const cls = (id: string, extra = ''): string => `be-ci be-ci-${id}${extra ? ' ' + extra : ''}`;
+/** A menu's row classes: `<prefix> <prefix>-<id>` (+ extra) — the hooks of the row icons and the e2e. */
+export type RowClass = (id: string, extra?: string) => string;
+export const rowClass =
+  (prefix: string): RowClass =>
+  (id, extra = '') =>
+    `${prefix} ${prefix}-${id}${extra ? ' ' + extra : ''}`;
+
+const cls = rowClass('be-ci');
 const noop = () => {};
+
+// ── rows shared with the Arrange bar's "⋯" (arrangeBar.ts) ──
+
+/** "View ▸": the views of a control's kind as radio rows (the current one does nothing). */
+export function viewSubmenu(view: BeView, views: readonly BeView[], pick: (v: BeView) => void, c: RowClass): WorkbenchMenuItem {
+  return {
+    id: 'view',
+    kind: 'submenu',
+    label: 'View',
+    hint: VIEW_NAME[view],
+    className: c('view'),
+    run: noop,
+    items: views.map((v) => ({
+      id: `view.${v}`,
+      kind: 'radio' as const,
+      label: VIEW_NAME[v],
+      checked: v === view,
+      className: c('view-opt'),
+      run: () => {
+        if (v !== view) pick(v);
+      }
+    }))
+  };
+}
+
+/** "Size ▸": S / M / L of the current view as radio rows, plus "Custom" when the size is none of them. */
+export function sizeSubmenu(view: BeView, w: number, h: number, pick: (w: number, h: number) => void, c: RowClass): WorkbenchMenuItem {
+  return {
+    id: 'size',
+    kind: 'submenu',
+    label: 'Size',
+    hint: `${w}×${h}`,
+    className: c('size'),
+    run: noop,
+    items: sizeChoices(view, w, h).map((z) => ({
+      id: `size.${z.label ?? 'custom'}`,
+      kind: 'radio' as const,
+      label: z.label ? SIZE_NAME[z.label] : 'Custom',
+      hint: `${z.w}×${z.h}`,
+      checked: z.checked,
+      className: c('size-opt'),
+      run: () => {
+        if (!z.checked) pick(z.w, z.h);
+      }
+    }))
+  };
+}
+
+/** "Grid swipe control": its own icon ⇆ (F2: ⚡ means "pin"), on / off, amber while assigned. */
+export function swipeRow(on: boolean, toggle: () => void, c: RowClass): WorkbenchMenuItem {
+  return { id: 'swipe', label: 'Grid swipe control', hint: on ? 'on' : 'off', className: c('swipe', on ? 'on' : ''), run: () => toggle() };
+}
 
 /** Build the control menu. Every row carries a stable `be-ci-<id>` class (icons, e2e hooks). Empty when the
  *  menu would offer nothing to do (e.g. a meter on a phone): the caller does not open it then. */
@@ -116,46 +175,8 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
 
   // ── layout ──
   if (layout && it) {
-    if (s.ctl.views.length > 1) {
-      push({
-        id: 'view',
-        kind: 'submenu',
-        label: 'View',
-        hint: VIEW_NAME[it.view],
-        className: cls('view'),
-        run: noop,
-        items: s.ctl.views.map((v) => ({
-          id: `view.${v}`,
-          kind: 'radio' as const,
-          label: VIEW_NAME[v],
-          checked: v === it.view,
-          className: cls('view-opt'),
-          run: () => {
-            if (v !== it.view) a.view(v);
-          }
-        }))
-      });
-    }
-    const sizes = sizeChoices(it.view, it.w, it.h);
-    push({
-      id: 'size',
-      kind: 'submenu',
-      label: 'Size',
-      hint: `${it.w}×${it.h}`,
-      className: cls('size'),
-      run: noop,
-      items: sizes.map((z) => ({
-        id: `size.${z.label ?? 'custom'}`,
-        kind: 'radio' as const,
-        label: z.label ? SIZE_NAME[z.label] : 'Custom',
-        hint: `${z.w}×${z.h}`,
-        checked: z.checked,
-        className: cls('size-opt'),
-        run: () => {
-          if (!z.checked) a.size(z.w, z.h);
-        }
-      }))
-    });
+    if (s.ctl.views.length > 1) push(viewSubmenu(it.view, s.ctl.views, (v) => a.view(v), cls));
+    push(sizeSubmenu(it.view, it.w, it.h, (w, h) => a.size(w, h), cls));
     const others = s.pageOrder.filter((pg) => pg !== s.page);
     push({
       id: 'move',
@@ -173,9 +194,7 @@ export function buildControlMenu(s: ControlMenuState, a: ControlMenuActions): Wo
   section();
 
   // ── grid swipe control (F2: its own icon, not ⚡) ──
-  if (s.ctl.kind === 'cont' && s.canSwipe && s.swipeSupported) {
-    push({ id: 'swipe', label: 'Grid swipe control', hint: s.swipe ? 'on' : 'off', className: cls('swipe', s.swipe ? 'on' : ''), run: () => a.swipe() });
-  }
+  if (s.ctl.kind === 'cont' && s.canSwipe && s.swipeSupported) push(swipeRow(s.swipe, () => a.swipe(), cls));
   section();
 
   if (layout && it) push({ id: 'remove', label: 'Remove from page', danger: true, className: cls('remove'), run: () => a.remove() });
