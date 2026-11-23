@@ -348,6 +348,8 @@ modCurve(){ const m=this.getMod(this.state.modParam);
 
 Compared against: `src/lib/axis-workbench/panels/AxisBlockEditorPanel.svelte`, `src/lib/axis-workbench/axisWorkbenchRegistry.ts`, `src/lib/BlockEditor.svelte`, `src/lib/ControlSurface.svelte`, `src/lib/ModifierFlyout.svelte`, `src/lib/EQGraph.svelte`.
 
+> **Note (Block Editor rework, slice 7):** `ControlSurface.svelte` is gone — superseded by `src/lib/blockEditor/` (`BeSurface` and its parts). The `ControlSurface` references below describe the code this checklist was written against.
+
 ### P0 — structural gaps
 
 - [ ] **No `be-part="modifier"` equivalent registered** *(confirmed)* — `axisWorkbenchRegistry.ts` registers no `axis.modifier` (or `axis.blockEditor.modifier`) panel; modifier editing exists only as `ModifierFlyout.svelte` inside the editor. Implement a dockable Modifier panel per §3: pane-filling wrap style, empty state, header (dot/title/sub/Clear), and the §1 ownership rule — when the panel is mounted, the editor's ∿ badge must **target the panel** (shared `modParam`/`modBlock` equivalent on the controller) instead of opening the flyout, with the `"∿ {param} → Modifier panel"` toast.

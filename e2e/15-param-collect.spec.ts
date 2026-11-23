@@ -7,7 +7,7 @@ import { addCustomPanel, bootCleanWorkbench, enterEditMode, exitEditMode, region
 
 const PARAM_MIME = 'application/x-workbench-parameter-source+json';
 
-/** A serialized WorkbenchParameterSource, as ControlSurface emits on drag. */
+/** A serialized WorkbenchParameterSource, as an HTML5 parameter drag carries it. */
 function paramSourcePayload(opts: {
   effectId: number;
   paramId: number;

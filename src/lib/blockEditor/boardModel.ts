@@ -350,6 +350,136 @@ export function reflowPack(list: readonly BeItem[], cols: number): BeReflow {
   return { pos, rows };
 }
 
+// ── phone re-wrap ────────────────────────────────────────────────────────────────────────────────
+
+/** Width of a page on the phone layout, in cells: four 2×2 knobs side by side at most. */
+export const PHONE_COLS = 8;
+
+/** Re-wrap a page for the phone layout (`cols` cells wide; the board itself is not changed — the result
+ *  is display positions only, like `reflowPack`). Row-faithful:
+ *  - The page is cut into bands of vertically overlapping items (its visual rows, in reading order); a
+ *    horizontal divider joins the next line with content under it, and a band holding a divider runs on
+ *    through the lines that follow it without a gap, up to an empty line or the next divider line — so a
+ *    title stays over every row of the group it heads.
+ *  - A band wider than `cols` is cut into chunks at the widest column no item straddles, and the chunks
+ *    go one under the other, each keeping its 2D arrangement (a row of twelve knobs → three rows of four;
+ *    a fader beside two knob rows stays beside them). Inner gaps stay, a leading indent goes.
+ *  - Items wider than `cols` take `cols` (an EQ graph, a long slider, a full-width divider); a horizontal
+ *    divider then runs to the right edge of its chunk wherever the line is free, so section rules span the
+ *    phone page. A vertical divider is kept only between items of its chunk (at a chunk edge it separates
+ *    nothing and is left out of `pos`).
+ *  - Nothing overlaps: an item whose spot is taken (only after a hard cut through chained items) goes to
+ *    the nearest free spot on its line or below.
+ *  Pure and deterministic (stable sorts by y, x, list order). */
+export function phoneWrap(list: readonly BeItem[], cols: number = PHONE_COLS): BeReflow {
+  const C = Math.max(1, Math.floor(cols));
+  const items = list
+    .map((it, i) => ({ it, i, x: Math.max(0, it.x), y: Math.max(0, it.y), w: Math.max(1, Math.min(it.w, C)), h: Math.max(1, it.h) }))
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
+  type Cell = (typeof items)[number];
+  const isH = (c: Cell) => isDivider(c.it) && c.it.kind === 'hdiv';
+  const isV = (c: Cell) => isDivider(c.it) && c.it.kind === 'vdiv';
+
+  // 1) bands. A horizontal divider heads the next line with content under it (empty lines between them
+  //    stay inside the band) — unless that line holds a divider of its own. A band that holds a divider
+  //    (a titled group) then runs on through every following line that starts right where the band ends,
+  //    up to an empty line or the next divider line: a title stays over all the rows of its group, and the
+  //    next section's rows never land under it.
+  const hLines = new Set(items.filter(isH).map((c) => c.y));
+  const headed = (c: Cell): number => {
+    const next = items.find((o) => o.y >= c.y + c.h);
+    return next && !hLines.has(next.y) ? next.y + 1 : c.y + c.h + 1;
+  };
+  const bands: { top: number; bottom: number; reach: number; titled: boolean; cells: Cell[] }[] = [];
+  for (const c of items) {
+    const reach = isH(c) ? headed(c) : c.y + c.h;
+    const last = bands[bands.length - 1];
+    if (last && (c.y < last.reach || (last.titled && c.y === last.bottom && !hLines.has(c.y)))) {
+      last.cells.push(c);
+      last.bottom = Math.max(last.bottom, c.y + c.h);
+      last.reach = Math.max(last.reach, reach);
+      last.titled ||= isH(c);
+    } else bands.push({ top: c.y, bottom: c.y + c.h, reach, titled: isH(c), cells: [c] });
+  }
+
+  // 2) chunks per band, placed one under the other
+  const pos: Record<string, BeRect> = {};
+  const placed: BeRect[] = [];
+  const free = (x: number, y: number, w: number, h: number): boolean =>
+    x >= 0 && y >= 0 && x + w <= C && !placed.some((p) => overlaps({ x, y, w, h }, p));
+  /** Put an item at (x, y), or — when that is taken — at the nearest free spot on its line to the right,
+   *  then on the lines below (a free line always exists below everything placed). */
+  const place = (id: string, x: number, y: number, w: number, h: number): void => {
+    let spot = { x, y };
+    if (!free(x, y, w, h)) {
+      search: for (let yy = y; ; yy++) {
+        for (let xx = yy === y ? x : 0; xx <= C - w; xx++) {
+          if (free(xx, yy, w, h)) {
+            spot = { x: xx, y: yy };
+            break search;
+          }
+        }
+      }
+    }
+    const r = { x: spot.x, y: spot.y, w, h };
+    pos[id] = r;
+    placed.push(r);
+  };
+  const straddles = (c: Cell, cut: number) => c.x < cut && c.x + c.w > cut;
+
+  let cursor = 0;
+  let prevBottom: number | null = null;
+  for (const band of bands) {
+    if (prevBottom != null) cursor += Math.max(0, band.top - prevBottom); // empty lines between bands stay
+    prevBottom = band.bottom;
+    let rest = band.cells.slice().sort((a, b) => a.x - b.x || a.y - b.y || a.i - b.i);
+    while (rest.length) {
+      const start = Math.min(...rest.map((c) => c.x));
+      const right = Math.max(...rest.map((c) => c.x + c.w));
+      let cut = right;
+      if (right - start > C) {
+        cut = -1;
+        for (let k = start + C; k > start; k--) {
+          if (!rest.some((c) => straddles(c, k))) {
+            cut = k;
+            break;
+          }
+        }
+        if (cut < 0) {
+          // items chained edge to edge across every column: cut hard, straddlers start the next chunk
+          cut = start + C;
+          rest = rest.map((c) => (straddles(c, cut) ? { ...c, x: cut } : c));
+        }
+      }
+      let chunk = rest.filter((c) => c.x < cut);
+      rest = rest.filter((c) => c.x >= cut);
+      // a vertical divider at the edge of its chunk separates nothing
+      chunk = chunk.filter((v) => !isV(v) || (chunk.some((c) => !isV(c) && c.x + c.w <= v.x) && chunk.some((c) => !isV(c) && c.x >= v.x + v.w)));
+      if (!chunk.length) continue;
+      const ox = Math.min(...chunk.map((c) => c.x));
+      const oy = Math.min(...chunk.map((c) => c.y));
+      const ordered = chunk.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
+      const at = (c: Cell): BeRect => ({ x: c.x - ox, y: cursor + c.y - oy, w: c.w, h: c.h });
+      for (const c of ordered) {
+        if (isH(c)) continue;
+        const r = at(c);
+        place(c.it.id, r.x, r.y, r.w, r.h);
+      }
+      // horizontal dividers last: each runs to the right while its line is free (up to the next divider)
+      const dividers = ordered.filter(isH);
+      for (const c of dividers) {
+        const r = at(c);
+        const others = dividers.filter((d) => d !== c).map(at);
+        const open = (x: number) => free(x, r.y, 1, 1) && !others.some((o) => overlaps({ x, y: r.y, w: 1, h: 1 }, o));
+        if (free(r.x, r.y, r.w, 1)) while (r.x + r.w < C && open(r.x + r.w)) r.w++;
+        place(c.it.id, r.x, r.y, r.w, 1);
+      }
+      cursor = Math.max(cursor, ...placed.map((p) => p.y + p.h));
+    }
+  }
+  return { pos, rows: Math.max(1, ...placed.map((p) => p.y + p.h)) };
+}
+
 // ── board helpers ────────────────────────────────────────────────────────────────────────────────
 
 export type BeOpFailure = 'missing' | 'bounds' | 'collision' | 'duplicate' | 'invalid' | 'last-page';

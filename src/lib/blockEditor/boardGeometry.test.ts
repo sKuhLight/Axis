@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { availableArea, CMIN, DENSITY, effectiveNav, layoutForPage, PAD_X, SEC_HEAD, visiblePages, type PageLayoutInput } from './boardGeometry';
-import type { BeControl, BeItem } from './boardModel';
+import { availableArea, CMIN, DENSITY, effectiveNav, layoutForPage, PAD_X, PHONE_PAD_X, phoneCell, SEC_HEAD, visiblePages, type PageLayoutInput } from './boardGeometry';
+import { PHONE_COLS, type BeControl, type BeItem } from './boardModel';
 
 const knobs = (cols: number, rows: number): BeItem[] => {
   const out: BeControl[] = [];
@@ -132,6 +132,55 @@ describe('layoutForPage across viewports', () => {
     const unfrozen = layoutForPage(input(375, 320, { editMode: true }), fullPage);
     expect(unfrozen.c).toBe(CMIN);
     expect(unfrozen.reflow).toBe(false);
+  });
+});
+
+describe('phone layout (8 cells wide, cell = width / 8)', () => {
+  const row12 = knobs(12, 1); // one 12-knob row
+  const phone = (bodyW: number, extra: Partial<PageLayoutInput> = {}) => input(bodyW, 600, { nav: 'side', phone: true, ...extra });
+  const knobPx = (c: number, g: number) => 2 * c + g;
+
+  it('re-wraps every page to 8 cells: a 12-knob row becomes three rows of four', () => {
+    const L = layoutForPage(phone(390), row12);
+    expect(L.phone).toBe(true);
+    expect(L.reflow).toBe(false); // not the side navigation's "compact view"
+    expect(L.cols).toBe(PHONE_COLS);
+    expect(L.rows).toBe(6);
+    expect(L.pos).toBeDefined();
+    const lines = new Map<number, number>();
+    for (const p of Object.values(L.pos!)) lines.set(p.y, (lines.get(p.y) ?? 0) + 1);
+    expect([...lines.values()]).toEqual([4, 4, 4]);
+  });
+
+  it('the cell is the available width / 8 within the minimum and the control size', () => {
+    // 390: (390 − 16 − 7·4) / 8 = 43 → capped at Normal's 40 → an 84 px knob
+    expect(phoneCell(390, 'm')).toBe(40);
+    expect(knobPx(phoneCell(390, 'm'), DENSITY.m.gap)).toBe(84);
+    // 360: (360 − 16 − 28) / 8 = 39 → an 82 px knob
+    expect(phoneCell(360, 'm')).toBe(39);
+    expect(knobPx(phoneCell(360, 'm'), DENSITY.m.gap)).toBeGreaterThanOrEqual(80);
+    expect(phoneCell(360, 'l')).toBe(Math.floor((360 - 2 * PHONE_PAD_X - 7 * DENSITY.l.gap) / 8));
+    expect(phoneCell(390, 's')).toBe(DENSITY.s.cmax);
+    expect(phoneCell(160, 'm')).toBe(CMIN); // a very narrow board keeps the minimum cell (and scrolls sideways)
+    expect(layoutForPage(phone(160), row12).overflowX).toBe(true);
+    // a phone profile in a wide window: normal knobs, still eight cells
+    const wide = layoutForPage(phone(1200), row12);
+    expect(wide.c).toBe(DENSITY.m.cmax);
+    expect(wide.W).toBe(8 * (40 + 4) - 4);
+    expect(wide.overflowX).toBe(false);
+  });
+
+  it('the height does not shrink the cell: a tall page scrolls', () => {
+    const tall = layoutForPage(input(390, 300, { nav: 'side', phone: true }), knobs(12, 4));
+    expect(tall.c).toBe(40);
+    expect(tall.rows).toBe(24);
+    expect(tall.overflowY).toBe(true);
+  });
+
+  it('never applies while arranging (arrange is not offered on the phone anyway)', () => {
+    const L = layoutForPage(phone(390, { editMode: true, frozenCell: 30 }), row12);
+    expect(L.phone).toBeUndefined();
+    expect(L.cols).toBe(24);
   });
 });
 

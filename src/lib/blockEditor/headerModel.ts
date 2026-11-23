@@ -13,6 +13,9 @@ export const SEARCH_FIELD_MIN_W = 640;
 export const HEADER_NARROW_W = 720;
 /** Below this "Engaged" / "Bypassed" read "On" / "Byp" and the chip drops its sub line. */
 export const HEADER_TINY_W = 470;
+/** Below this (a 360 px phone) the state segments and the chip tighten further, so chip · state · ⋯ keep
+ *  sharing row one with their 40 px targets. */
+export const HEADER_XS_W = 380;
 
 /** Widths (px) of the header parts on one row, at their widest (BeHeader's CSS): the chip at its cap
  *  (a long cab summary), the search field, the state group reading "Bypassed | Mute | Scene Ignore",
@@ -73,12 +76,13 @@ export interface HeaderFit {
   searchField: boolean;
   narrow: boolean;
   tiny: boolean;
+  xs: boolean;
 }
 
 /** What fits at an editor width (an unmeasured editor gets the full look). */
 export function headerFit(width: number): HeaderFit {
   const w = width > 0 ? width : Infinity;
-  return { searchField: w >= SEARCH_FIELD_MIN_W, narrow: w < HEADER_NARROW_W, tiny: w < HEADER_TINY_W };
+  return { searchField: w >= SEARCH_FIELD_MIN_W, narrow: w < HEADER_NARROW_W, tiny: w < HEADER_TINY_W, xs: w < HEADER_XS_W };
 }
 
 /** Labels of the Engaged | Mute | Scene Ignore segments at an editor width. */

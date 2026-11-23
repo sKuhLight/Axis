@@ -3,10 +3,13 @@
 // The reference width is ONE full page of 24 cells, so the cell size (and therefore the knob size) is
 // the same on every page; the height still fits per page. Density caps the cell size. Below the minimum
 // cell the top navigation (pages side by side) scrolls sideways, the side navigation (pages stacked)
-// reflows the page into fewer columns. In arrange mode the cell is frozen per page while dragging.
+// reflows the page into fewer columns. In arrange mode the cell is frozen per page while dragging. On the
+// phone layout every page is re-wrapped to PHONE_COLS (8) cells — at most four knobs a row — and the cell
+// is the available width / 8 (within the minimum cell and the control size's maximum); pages stack and
+// scroll vertically.
 // Pure numbers in, numbers out — no DOM (boardGeometry.test.ts).
 
-import { bbox, MAXC, reflowPack, type BeItem, type BeRect } from './boardModel';
+import { bbox, MAXC, PHONE_COLS, phoneWrap, reflowPack, type BeItem, type BeRect } from './boardModel';
 
 export type BeNav = 'top' | 'side';
 export type BeDensity = 's' | 'm' | 'l';
@@ -26,6 +29,12 @@ export const PAD_Y = 10;
 export const SEC_HEAD = 28;
 /** Narrowest editor that may use the side navigation; below it the top navigation is forced. */
 export const SIDE_NAV_MIN_W = 560;
+/** Phone layout: horizontal padding of a page (the page takes the whole width). */
+export const PHONE_PAD_X = 8;
+/** Phone layout: room after the last page, so its last row can scroll clear of what floats over the
+ *  board's bottom-right corner (the workbench's dock opener, 40 px high and 64 px above the workspace
+ *  bottom, and the dock's collapse button). */
+export const PHONE_END_PAD = 112;
 
 /** The navigation actually used: side only when the editor is at least 560 px wide. */
 export function effectiveNav(nav: BeNav, width: number): BeNav {
@@ -52,6 +61,9 @@ export interface PageLayoutInput {
   /** Arrange mode: empty rows kept below the content, so the tallest item can be dropped under it
    *  (default 1). */
   spareRows?: number;
+  /** Phone layout (device class `phone`, never while arranging): the page re-wrapped to PHONE_COLS cells,
+   *  the cell from the width alone. */
+  phone?: boolean;
 }
 
 export interface PageLayout {
@@ -66,16 +78,37 @@ export interface PageLayout {
   H: number;
   /** Side navigation below the minimum cell: the page is shown re-packed (`pos`). */
   reflow: boolean;
+  /** Phone layout: the page is shown re-wrapped to PHONE_COLS cells (`pos`; reading it writes nothing). */
+  phone?: boolean;
   pos?: Record<string, BeRect>;
   overflowX: boolean;
   overflowY: boolean;
 }
 
+/** Width left for a page on the phone layout. */
+export const phoneAreaW = (bodyW: number): number => Math.max(120, (bodyW || 390) - PHONE_PAD_X * 2);
+
+/** Phone layout cell: the available width shared by PHONE_COLS cells (so a 2×2 knob is a quarter of the
+ *  page), never below the minimum cell nor above the control size's maximum (a phone profile in a wide
+ *  window keeps normal-sized knobs; the page is then narrower than the board). */
+export function phoneCell(bodyW: number, density: BeDensity): number {
+  const d = DENSITY[density] ?? DENSITY.m;
+  const fit = Math.floor((phoneAreaW(bodyW) - (PHONE_COLS - 1) * d.gap) / PHONE_COLS);
+  return Math.max(CMIN, Math.min(d.cmax, fit));
+}
+
 export function layoutForPage(input: PageLayoutInput, list: readonly BeItem[]): PageLayout {
   const d = DENSITY[input.density] ?? DENSITY.m;
   const g = d.gap;
-  const bb = bbox(list);
   const A = availableArea(input.bodyW, input.bodyH, input.nav);
+  if (input.phone && !input.editMode) {
+    const c = phoneCell(input.bodyW, input.density);
+    const r = phoneWrap(list, PHONE_COLS);
+    const W = PHONE_COLS * (c + g) - g;
+    const H = r.rows * (c + g) - g;
+    return { c, g, cols: PHONE_COLS, rows: r.rows, W, H, reflow: false, phone: true, pos: r.pos, overflowX: W > phoneAreaW(input.bodyW) + 1, overflowY: H > A.Ha + 1 };
+  }
+  const bb = bbox(list);
   const strip = input.nav === 'top';
   const ref = (A.Wa - (MAXC - 1) * g) / MAXC;
   const fh = (A.Ha - (bb.R - 1) * g) / bb.R;

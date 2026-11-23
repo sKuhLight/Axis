@@ -8,28 +8,40 @@
   import { isDivider, type BeItem, type BeRect } from './boardModel';
   import type { BeCtl } from './catalog';
   import {
+    centredPartHit,
     ctlHeightPx,
+    touchCtlHeight,
     dialSize,
     DRAG_START_PX,
     faderHandlePx,
+    faderValueHit,
     fitFont,
     fitValueText,
     hoverActionPx,
     hoverActionsFit,
     isFlatMeter,
     labelPx,
+    labelRowPx,
     meterFill,
     meterTag,
     meterText,
     meterTone,
+    monoTextPx,
+    numberHits,
     NUM_WIDE_PX,
     numFontMax,
     pxOf,
+    sliderValueHit,
+    STANDALONE_EDGE,
     stepPx,
     switchPx,
-    tileContentBox
+    TILE_EDGE,
+    tileContentBox,
+    type HitInset,
+    type HitTile
   } from './boardView';
   import { formatCentre, formatFull } from './valueFormat';
+  import { tileTouchAction } from './touchGesture';
 
   let {
     item,
@@ -79,7 +91,12 @@
   const vf = $derived(Math.max(9, Math.min(22, Math.round(dial * 0.2))));
   /** Value inside the dial: the unit gives way when the dial is too small for it. */
   const dialVal = $derived(fitValueText(centre, dial * 0.56, vf));
-  const ctlH = $derived(ctlHeightPx(c));
+  /** Phone and tablet (search results too): ≥ 40 px touch targets — controls grow where the tile has the
+   *  room, invisible hit margins make up the rest (boardView `touchHit`). */
+  const touchUi = $derived(host.touchTargets);
+  /** The tile's edge strip (border + padding): wider on a search-result tile. */
+  const edge = $derived(standalone ? STANDALONE_EDGE : TILE_EDGE);
+  const ctlH = $derived(touchUi ? touchCtlHeight(c, pxH, pos.h >= 2 ? labelRowPx(lf) : 0, edge) : ctlHeightPx(c));
   /** Number view: steppers beside the value on a wide tile, under it on a narrow one. */
   const numWide = $derived(pxW >= NUM_WIDE_PX);
   const numVal = $derived(fitValueText(centre, numWide ? pxW - 2 * Math.max(18, Math.min(28, Math.round(c * 0.55))) - 20 : pxW - 8, numFontMax(pxW, pxH), 9));
@@ -99,13 +116,24 @@
   const swW = $derived(switchPx(c).w);
   const swH = $derived(switchPx(c).h);
   const knob = $derived(swH - 8);
+
+  // touch: the hit margins of the parts smaller than 40 px (a `::before` of the part; boardView.ts keeps
+  // each margin on its own side of the neighbouring parts)
+  const hitTile = $derived<HitTile>({ pxW, pxH, c, g, lf, showLabel: pos.h >= 2, edge });
+  const numHit = $derived(touchUi && ctl?.kind === 'cont' && view === 'number' ? numberHits(hitTile, { st: stepSz, nf, valueW: monoTextPx(numVal.text, nf), wide: numWide }) : null);
+  const switchHit = $derived(touchUi && view === 'switch' ? centredPartHit(hitTile, swW, swH) : null);
+  const ctlHit = $derived(touchUi ? centredPartHit(hitTile, pxW - 2 * edge, ctlH) : null);
+  /** Fader / slider value read-outs: text in the value font plus their 2 × 4 px padding, 2 × 2 px tall. */
+  const fvalHit = $derived(touchUi && view === 'fader' ? faderValueHit(hitTile, monoTextPx(centre, lf) + 8, lf + 4) : null);
+  const svalHit = $derived(touchUi && view === 'slider' ? sliderValueHit(hitTile, monoTextPx(centre, lf) + 8, lf + 4) : null);
+  const hitStyle = (h: HitInset | null | undefined): string | undefined => (h ? `--ht:${h.top}px;--hr:${h.right}px;--hb:${h.bottom}px;--hl:${h.left}px` : undefined);
   const flatMeter = $derived(view === 'meter' && isFlatMeter(pos.w, pos.h));
   const bars = $derived(host.mons.length ? host.mons : [null]);
 
   // hover actions (normal mode, pointer devices): ⚡ pin · ∿ modifier, sized from the cell; left out where
   // they would cover the control (one-row tiles, small pills / fields — the control menu has both there)
   const tact = $derived(hoverActionPx(c));
-  const actFits = $derived(hoverActionsFit(view, pos.h, pxW, pxH, tact, tileContentBox(view, { pxW, pxH, c, lf, showLabel })));
+  const actFits = $derived(hoverActionsFit(view, pos.h, pxW, pxH, tact, tileContentBox(view, { pxW, pxH, c, lf, showLabel, ctlH })));
   const showPin = $derived(!ed && !!ctl && !host.isPhone && actFits && host.canPin && host.pinnable(ctl));
   const showMod = $derived(!ed && ctl?.kind === 'cont' && !host.isPhone && actFits);
 
@@ -113,9 +141,22 @@
   const selected = $derived(ed && host.selectedId === item.id);
   const dims = $derived(selected || (ed && host.resizingId === item.id));
 
-  const valueDrag = $derived(ctl?.kind === 'cont' && (view === 'knob' || view === 'number'));
-  const touchAction = $derived(ed || valueDrag ? 'none' : 'manipulation');
+  // touch: a value control leaves the board's scroll axis to the browser (a swipe along it scrolls) and
+  // takes the other one for its value; Arrange takes every gesture (touchGesture.ts). The flat search
+  // results scroll vertically.
+  const touchAction = $derived(tileTouchAction({ editMode: ed, kind: ctl?.kind, view, scroll: standalone ? 'y' : host.scrollAxis }));
   const NWAVE = 110;
+  /** Looper transport: action, symbol, accessible name. Stop and Undo are momentary, the rest latch. */
+  const LOOP_BUTTONS: readonly [string, string, string][] = [
+    ['record', 'REC', 'Record'],
+    ['play', '▶', 'Play'],
+    ['stop', '■', 'Stop'],
+    ['overdub', 'DUB', 'Overdub'],
+    ['undo', '↺', 'Undo'],
+    ['reverse', 'REV', 'Reverse'],
+    ['half', '½', 'Half speed']
+  ];
+  const LOOP_LATCHING: ReadonlySet<string> = new Set(['record', 'play', 'overdub', 'reverse', 'half']);
 
   function focusSelect(node: HTMLInputElement) {
     node.focus();
@@ -144,6 +185,7 @@
   class:div={!!div}
   class:eq={view === 'eq'}
   class:standalone
+  class:touch={touchUi}
   class:dragging={host.dragId === item.id}
   class:flash={!standalone && host.flashId === item.id}
   data-be-item={item.id}
@@ -181,12 +223,12 @@
 >
   {#if div}
     {#if div.kind === 'hdiv'}
-      <div class="be-hdiv">
+      <div class="be-hdiv" role="separator" aria-label={div.label || undefined}>
         {#if div.label}<span class="be-divlbl">{div.label}</span>{/if}
         <span class="be-hline"></span>
       </div>
     {:else}
-      <div class="be-vdiv">
+      <div class="be-vdiv" role="separator" aria-orientation="vertical" aria-label={div.label || undefined}>
         {#if div.label}<span class="be-divlbl vert">{div.label}</span>{/if}
         <span class="be-vline"></span>
       </div>
@@ -206,8 +248,8 @@
         style:width="{dial}px"
         style:height="{dial}px"
         onkeydown={(e) => host.valueKey(e, ctl, item.id)}
-        onmouseenter={(e) => host.tipShow(e.currentTarget, ctl)}
-        onmouseleave={() => host.tipHide()}
+        onpointerenter={(e) => e.pointerType === 'mouse' && host.tipShow(e.currentTarget, ctl)}
+        onpointerleave={() => host.tipHide()}
         ondblclick={() => host.startType(item.id, ctl)}
       >
         <svg width={dial} height={dial} viewBox="0 0 64 64" aria-hidden="true">
@@ -227,7 +269,18 @@
       {#if editing}
         <input class="be-vin" style:width="{Math.max(44, pxW - 8)}px" value={host.editBuf} aria-label="Value" use:focusSelect oninput={(e) => (host.editBuf = e.currentTarget.value)} onkeydown={onInputKey} onblur={() => host.commitType(item.id, ctl)} onpointerdown={stop} />
       {:else}
-        <button class="be-fval" type="button" data-be-value title="{full} · click to type" onpointerdown={stop} onclick={() => host.startType(item.id, ctl)}>{centre}</button>
+        <button
+          class="be-fval"
+          class:be-hit={!!fvalHit}
+          type="button"
+          data-be-value
+          title="{full} · click to type"
+          aria-label="{label}: {full} — type a value"
+          style={hitStyle(fvalHit?.hit)}
+          style:min-height={fvalHit ? `${fvalHit.minH}px` : null}
+          onpointerdown={stop}
+          onclick={() => host.startType(item.id, ctl)}>{centre}</button
+        >
       {/if}
       <div
         class="be-vtrack"
@@ -268,7 +321,17 @@
         {#if editing}
           <input class="be-vin" style:width="56px" value={host.editBuf} aria-label="Value" use:focusSelect oninput={(e) => (host.editBuf = e.currentTarget.value)} onkeydown={onInputKey} onblur={() => host.commitType(item.id, ctl)} onpointerdown={stop} />
         {:else}
-          <button class="be-sval" type="button" data-be-value title="{full} · click to type" onpointerdown={stop} onclick={() => host.startType(item.id, ctl)}>{centre}</button>
+          <button
+            class="be-sval"
+            class:be-hit={!!svalHit}
+            type="button"
+            data-be-value
+            title="{full} · click to type"
+            aria-label="{label}: {full} — type a value"
+            style={hitStyle(svalHit)}
+            onpointerdown={stop}
+            onclick={() => host.startType(item.id, ctl)}>{centre}</button
+          >
         {/if}
       </div>
     {:else if ctl.kind === 'cont'}
@@ -280,8 +343,10 @@
           <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
           <div
             class="be-nval"
+            class:be-hit={!!numHit}
+            style={hitStyle(numHit?.value)}
             data-be-value
-            role="slider"
+            role="spinbutton"
             tabindex="0"
             aria-label={label}
             aria-valuemin="0"
@@ -296,7 +361,17 @@
         {/if}
       {/snippet}
       {#snippet stepper(dir: number)}
-        <button class="be-step" type="button" style:width="{stepSz}px" style:height="{stepSz}px" aria-label="{dir < 0 ? 'Decrease' : 'Increase'} {label}" onpointerdown={stop} onclick={() => host.nudge(ctl, dir)}>{dir < 0 ? '−' : '+'}</button>
+        <button
+          class="be-step"
+          class:be-hit={!!numHit}
+          type="button"
+          style={hitStyle(dir < 0 ? numHit?.minus : numHit?.plus)}
+          style:width="{stepSz}px"
+          style:height="{stepSz}px"
+          aria-label="{dir < 0 ? 'Decrease' : 'Increase'} {label}"
+          onpointerdown={stop}
+          onclick={() => host.nudge(ctl, dir)}>{dir < 0 ? '−' : '+'}</button
+        >
       {/snippet}
       {#if numWide}
         <div class="be-numrow">{@render stepper(-1)}{@render numValue()}{@render stepper(1)}</div>
@@ -306,17 +381,58 @@
       {/if}
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
     {:else if ctl.kind === 'toggle' && view === 'switch'}
-      <button class="be-switch" class:on={togOn} type="button" role="switch" aria-checked={togOn} aria-label={label} title="{label}: {optLabel}" style:width="{swW}px" style:height="{swH}px" onclick={() => !ed && host.toggle(ctl)}>
+      <button
+        class="be-switch"
+        class:on={togOn}
+        class:be-hit={!!switchHit}
+        type="button"
+        role="switch"
+        aria-checked={togOn}
+        aria-label={label}
+        title="{label}: {optLabel}"
+        style={hitStyle(switchHit)}
+        style:width="{swW}px"
+        style:height="{swH}px"
+        onclick={() => !ed && host.toggle(ctl)}
+      >
         <span class="be-snob" style:width="{knob}px" style:height="{knob}px" style:left="{togOn ? swW - knob - 5 : 3}px"></span>
       </button>
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
     {:else if ctl.kind === 'toggle'}
-      <button class="be-pill" class:on={togOn} type="button" aria-pressed={togOn} aria-label={label} title="{label}: {optLabel}" style:height="{ctlH}px" style:font-size="{pillFont}px" onclick={() => !ed && host.toggle(ctl)}>
+      <button
+        class="be-pill"
+        class:on={togOn}
+        class:be-hit={!!ctlHit}
+        type="button"
+        aria-pressed={togOn}
+        aria-label={label}
+        title="{label}: {optLabel}"
+        style={hitStyle(ctlHit)}
+        style:height="{ctlH}px"
+        style:font-size="{pillFont}px"
+        onclick={() => !ed && host.toggle(ctl)}
+      >
         {#if pillLed}<span class="be-led"></span>{/if}<span class="be-pilltxt">{pillText}</span>
       </button>
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
     {:else if ctl.kind === 'select'}
-      <button class="be-field" class:open={host.openSelectId === item.id} class:narrow={!selCaret} type="button" aria-haspopup="listbox" aria-label="{label}: {optLabel}" title="{label}: {optLabel}" style:height="{ctlH}px" style:font-size="{selFont}px" onclick={(e) => !ed && host.openSelect(e, item.id, ctl)}>
+      <button
+        class="be-field"
+        class:open={host.openSelectId === item.id}
+        class:narrow={!selCaret}
+        class:be-hit={!!ctlHit}
+        style={hitStyle(ctlHit)}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={host.openSelectId === item.id}
+        aria-controls={host.openSelectId === item.id ? host.selectMenuId : undefined}
+        aria-label="{label}: {optLabel}"
+        title="{label}: {optLabel}"
+        style:height="{ctlH}px"
+        style:font-size="{selFont}px"
+        onclick={(e) => !ed && host.openSelect(e, item.id, ctl)}
+      >
         <span class="be-fieldtxt">{optLabel}</span>{#if selCaret}<span class="be-caret" aria-hidden="true">▾</span>{/if}
       </button>
       {#if showLabel}<div class="be-lbl">{label}</div>{/if}
@@ -326,7 +442,18 @@
         <EQGraph bands={host.eqBands} gainRange={host.eqGainRange} accent={host.accent} onSet={(pp, n) => host.eqSet(pp, n)} />
       </div>
     {:else if ctl.kind === 'action'}
-      <button class="be-pill action" class:byp={host.bypassed} type="button" aria-pressed={!host.bypassed} title={label} style:height="{ctlH}px" style:font-size="{pillFont}px" onclick={() => !ed && host.bypass()}>
+      <button
+        class="be-pill action"
+        class:byp={host.bypassed}
+        class:be-hit={!!ctlHit}
+        type="button"
+        aria-pressed={!host.bypassed}
+        title={label}
+        style={hitStyle(ctlHit)}
+        style:height="{ctlH}px"
+        style:font-size="{pillFont}px"
+        onclick={() => !ed && host.bypass()}
+      >
         {#if pillLed}<span class="be-led"></span>{/if}<span class="be-pilltxt">{pillText}</span>
       </button>
     {:else if ctl.kind === 'meter'}
@@ -364,8 +491,18 @@
           <div class="be-wavelvl"><div class="be-wavelvlfill" style:width="{Math.round(host.waveLevel * 100)}%"></div></div>
         {/if}
         <div class="be-loopbtns">
-          {#each [['record', 'REC'], ['play', '▶'], ['stop', '■'], ['overdub', 'DUB'], ['undo', '↺'], ['reverse', 'REV'], ['half', '½']] as [act, sym] (act)}
-            <button class="be-loopbtn" class:on={host.loopOn(act)} class:rec={act === 'record'} type="button" onpointerdown={stop} onclick={() => host.loop(act)}>{sym}</button>
+          {#each LOOP_BUTTONS as [act, sym, name] (act)}
+            <button
+              class="be-loopbtn"
+              class:on={host.loopOn(act)}
+              class:rec={act === 'record'}
+              type="button"
+              aria-label={name}
+              title={name}
+              aria-pressed={LOOP_LATCHING.has(act) ? host.loopOn(act) : undefined}
+              onpointerdown={stop}
+              onclick={() => host.loop(act)}>{sym}</button
+            >
           {/each}
         </div>
       </div>
@@ -441,6 +578,9 @@
     gap: 2px;
     padding: 3px;
     user-select: none;
+    /* iOS Safari: a long-press (the control menu) selects no text and shows no callout */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
     border: 1px solid transparent;
     transition: opacity 0.15s, background 0.12s;
   }
@@ -569,6 +709,17 @@
   .be-htrack:focus-visible,
   .be-nval:focus-visible {
     outline: 2px solid var(--accent);
+  }
+  /* keyboard focus ring on every operable part of a tile */
+  .be-fval:focus-visible,
+  .be-sval:focus-visible,
+  .be-step:focus-visible,
+  .be-pill:focus-visible,
+  .be-switch:focus-visible,
+  .be-field:focus-visible,
+  .be-loopbtn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .be-arc-bg {
     stroke: var(--border);
@@ -794,6 +945,25 @@
   .be-pill.action.byp .be-led {
     background: var(--danger);
     box-shadow: 0 0 7px var(--danger);
+  }
+  /* phone / tablet: a part smaller than 40 px reaches 40 px through an invisible hit margin of its own,
+     sized per side from the room there (boardView.ts touchHit: never over a neighbouring operable part).
+     Above the board's other tiles, so a margin also takes the gap and the neighbour's edge strip. */
+  .be-hit {
+    position: relative;
+  }
+  .be-hit::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: calc(-1 * var(--ht, 0px));
+    right: calc(-1 * var(--hr, 0px));
+    bottom: calc(-1 * var(--hb, 0px));
+    left: calc(-1 * var(--hl, 0px));
+  }
+  /* the pill's margin must not be clipped (its text ellipsises on its own) */
+  .be-pill.be-hit {
+    overflow: visible;
   }
   .be-switch {
     position: relative;
@@ -1029,6 +1199,21 @@
   }
   .be-loopbtn:hover {
     border-color: var(--accent);
+  }
+  /* phone / tablet: 40 px tall; at least 36 px wide (the row wraps below that), the 4 px gap shared
+     between neighbours as a 2 px hit margin each side → 40 px */
+  .be-tile.touch .be-loopbtn {
+    position: relative;
+    min-width: 36px;
+    min-height: 40px;
+  }
+  .be-tile.touch .be-loopbtn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -2px;
+    right: -2px;
   }
   .be-loopbtn.on {
     background: var(--accent);

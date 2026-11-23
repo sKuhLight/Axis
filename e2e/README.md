@@ -53,6 +53,9 @@ npx playwright install firefox    # optional `firefox` project
   `PW_FIREFOX_PATH=/path/to/firefox` to point at a custom Playwright-compatible
   Firefox build, but the normal path is `npx playwright install firefox`.
 
+`44-block-editor-touch` drives touch through the Chrome DevTools Protocol (`Input.dispatchTouchEvent`), so it
+runs on `chromium` only and skips itself on the `firefox` project (`test.skip(({ browserName }) => …)`).
+
 Both projects pin the viewport to **1440×900**. This is load-bearing: the
 workbench viewport-profile resolver (T14) treats widths `<1366` as the *tablet*
 profile, whose seeded layout differs from the desktop default these tests
@@ -107,7 +110,7 @@ attributes were added**:
   `Done` (exactly one, in the edit bar), `Undo layout change`, `Redo layout change`,
   `Auto` / `Desktop` / `Tablet` / `Mobile` (profile control), `Map`
 
-## Test inventory (9 files, 17 tests)
+## Test inventory (27 spec files, 233 tests on `chromium`; the first nine below)
 
 1. **01-boot** — shell chrome renders; no console errors beyond the filtered
    ForgeFX/`/api` connection failures.
@@ -232,7 +235,33 @@ high, the height budget) the controls land in the device's cells (a knob slot = 
 slots kept as gaps), the titles and the mixer section show as labelled dividers, nothing overlaps, the page
 is exactly as tall as the budget and fits at 1366×768 without the amber dot, and "Reset to device layout"
 puts an arranged control back (kept after a reload); its own Drive page is its block's tallest, so the
-parameters → mixer change only starts a new line there (no divider row: height budget). Helpers `selectTile` / `openLibrary` /
+parameters → mixer change only starts a new line there (no divider row: height budget).
+**44-block-editor-touch** (Chromium only) — touch through Chromium's input pipeline (CDP
+`Input.dispatchTouchEvent`, so the tiles' `touch-action` — `pan-x pinch-zoom` / `pan-y pinch-zoom` — decides what
+the browser pans; `hasTouch` profiles; not a physical device): on the tablet profile (1100×800) a sideways swipe
+over a knob scrolls the Top strip and writes nothing while a vertical drag changes the value; in the Side
+navigation (F11) a vertical swipe scrolls the pages and writes nothing while a sideways drag changes it; a swipe
+along the strip from a fader track writes nothing, a tap on the track sets the tapped value; a `pointercancel`
+ends a value drag; two fingers (two CDP touch points): a second finger on another knob neither writes nor flips
+the first finger's value to an extreme, and lifting it does not end the first finger's drag; a long-press opens
+the control menu (the finger's release does not close it again, and a quick tap on a menu row right after the
+release still goes through); at 1024×768 Arrange hides the grid map strip and maximizes the panel so at least
+three knob rows fit, Done restores it (a panel the user maximized stays maximized); Arrange with a touch drag
+(the resize handle a 40 px target) stores a board of the tablet's own while the desktop board stays as it was.
+The phone layout at 390×844 and 360×780: every page grid of the board `data-cols="8"` with at most four knobs a
+visual row and each knob tile at least 80 px wide (84 px at 390, 82 px at 360) — also for the positioned device
+page (mock option `positioned`: every title over its group), the pages stacked (`data-nav="side"`, `phone`
+class) and scrolling vertically under a swipe that writes nothing, scrolled to the end the last row clear of
+the dock opener and the collapse button over the board's corner, a sideways drag changing a value, the header
+tabs paging, no Arrange, a long-press menu without layout rows; a 12-knob row of a desktop board the phone
+inherits and of a phone board of its own both show as three rows of four; reading the phone view writes no
+board (`countBoardSaves` stays 0, the stored board keeps its 24-cell row); a Find jump scrolls a control lower
+down a tall phone page into view, and a shorter board (the on-screen keyboard) keeps the scroll position. Also
+every control view's role / value and the select's keyboard listbox (Enter opens on the current option — after
+a pick, reopened, on the picked one, which holds the list's one tab stop —, arrows walk with a focus ring,
+Enter picks, Escape back to the field without restoring a maximized panel, Tab closes it and moves on from the
+field).
+Helpers `selectTile` / `openLibrary` /
 `arrangeAdd` / `countBoardSaves` / `boardSaves` live in `support/blockEditorMock.ts`. Arrange selectors:
 `[data-be-arrange-bar]` (`touch` class on the tablet), its parts `[data-be-ab="<part>"]` (`remove`, `pin`,
 `swipe`, `label`, `rotate`, `undo`, `add`, `hdiv`, `vdiv`, `close-gaps`, `tidy`, `autopack`, `page`, `more`),
@@ -242,7 +271,7 @@ parameters → mixer change only starts a new line there (no divider row: height
 `[data-be-lib-close]`; the Page ▾ menu (`role="menu"` named "Page options") with `be-pm-<id>` rows (`rename`,
 `duplicate`, `pin`, `earlier`, `later`, `delete`, `add`) and the bar's ⋯ ("More arrange tools") with `be-ab-<id>`
 rows.
-Board selectors: `[data-be-board]` (`data-nav`), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
+Board selectors: `[data-be-board]` (`data-nav`; `phone` class on the phone layout), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
 `[data-be-key]` / `[data-be-view]` / `data-be-x|y|w|h`, `[data-be-pin]` / `[data-be-mod]` (hover actions),
 `[data-be-tab]` (`data-visible`, `data-active`; header tabs
 and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, `[data-be-empty]`,

@@ -76,7 +76,7 @@ npm run build      # -> build/  (static SPA; ForgeFX can serve it for a headless
 
 - `src/lib/forgefx.ts` — typed ForgeFX API client (device, blocks, preset/grid, params, cab, telemetry)
 - `src/lib/editor.svelte.ts` — central runes store (grid, params, telemetry, device auto-detect)
-- `src/lib/ControlSurface.svelte` — the widget-grid control surface (pages, per-control views, arrange)
+- `src/lib/blockEditor/` — the Block Editor board (pages, per-control views, arrange, touch and the phone layout)
 - `src/lib/SignalGrid.svelte` · `BlockEditor.svelte` · `CabPicker.svelte` · `EQGraph.svelte` — UI
 - `src/routes/+page.svelte` — app shell: tool rail · top bar · Signal Grid · editor
 - `electron/` — desktop shell (starts the bundled ForgeFX in-process, opens the window)

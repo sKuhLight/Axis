@@ -145,7 +145,7 @@ class EditorStore {
   /** Looper page telemetry for the open Looper block: waveform envelope (0..1) + playhead + level. */
   looperWave = $state<{ wave: number[]; position: number | null; level: number | null } | null>(null);
   sheetState = $state<'loading' | 'ready' | 'error' | 'nopack'>('loading');
-  /** Device-authentic editor pages for the open block/virtual effect (seeds the ControlSurface Default layout). */
+  /** Device-authentic editor pages for the open block/virtual effect (seeds the Block Editor's Default layout). */
   blockLayout = $state<DeviceLayout | null>(null);
   /** Active virtual effect (Setup=1, Controllers=2, Modifier=3, FC=199) when a rail screen is open, else null. */
   virtual = $state<{ eid: number; slug: string; name: string } | null>(null);
@@ -355,7 +355,7 @@ class EditorStore {
   get selected(): Cell | null {
     if (this.virtual) {
       // virtual effects (Setup/Controllers/Modifier/FC) aren't on the grid — synthesize a cell so the
-      // same param/load/write machinery (and the ControlSurface) work unchanged.
+      // same param/load/write machinery (and the Block Editor board) work unchanged.
       const v = this.virtual;
       return { row: -1, col: -1, kind: 'block', effectId: v.eid, display: v.name, pack: v.slug, color: '#35c9d6', fromRows: [] };
     }
@@ -1548,7 +1548,7 @@ class EditorStore {
       this.blockType = r.type ?? null;
       this.blockSlug = r.slug ?? null;
       if (this.blockSlug !== 'looper') this.looperWave = null; // clear stale waveform when leaving the looper
-      this.blockLayout = r.layout ?? null; // device-authentic pages seed the ControlSurface Default layout
+      this.blockLayout = r.layout ?? null; // device-authentic pages seed the Block Editor's Default layout
       // refresh this block's meter values from the freshly-read params (accurate fill on open)
       if (c.effectId != null) {
         const fallback = this.params[0];
@@ -2242,7 +2242,7 @@ export const editor = new EditorStore();
 export { baseName, packFor };
 
 // Compile-time guard: the live singleton MUST satisfy the data-source seam consumed by the
-// editor-backed grid components (SignalGrid / GridMap / BlockEditor / ControlSurface / EQGraph /
+// editor-backed grid components (SignalGrid / GridMap / BlockEditor / BeSurface / EQGraph /
 // CabPicker). If this stops typechecking, reconcile EditorSurface to the singleton's real signatures
 // (the interface is a subset the singleton satisfies) — never the reverse.
 export const _editorSatisfiesSurface: EditorSurface = editor;

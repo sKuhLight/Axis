@@ -3,17 +3,21 @@
   //   top  — pages side by side in a horizontal strip, the page name on a vertical spine in front of each;
   //          a vertical wheel scrolls sideways, no snapping.
   //   side — pages stacked, each at least one board high, snapping page by page; the name as a rule.
+  //   phone — (device class `phone`) pages stacked like `side` but each only as tall as its content and
+  //          without snapping: the page re-wrapped to 8 cells (at most four knobs a row) reads on like a
+  //          document; the header tabs navigate.
   // Scrollbars are hidden; a mouse / pen drag on empty board area pans (touch scrolls natively). The
   // pages at least half in view are reported up (tab highlight, active page).
   import BeControl from './BeControl.svelte';
   import type { BeNav, PageLayout } from './boardGeometry';
-  import { PAD_X, PAD_Y } from './boardGeometry';
+  import { PAD_X, PAD_Y, PHONE_END_PAD, PHONE_PAD_X, SEC_HEAD } from './boardGeometry';
   import { isDivider, type BeItem } from './boardModel';
   import type { BeCtl } from './catalog';
   import { untrack } from 'svelte';
   import {
     anchorKey,
     autoScrollDelta,
+    itemScrollTarget,
     offsetInPage,
     scrollAtOffset,
     scrollTargetFor,
@@ -42,6 +46,7 @@
     ghost = null,
     dragging = false,
     canArrange = true,
+    phone = false,
     onMeasure,
     onVisible,
     onScroll,
@@ -63,6 +68,8 @@
     dragging?: boolean;
     /** The empty-page hint offers "Arrange" (not on the phone layout). */
     canArrange?: boolean;
+    /** Phone layout: stacked pages (`nav` is 'side') of their own height, no snapping. */
+    phone?: boolean;
     onMeasure: (w: number, h: number) => void;
     onVisible: (pages: string[]) => void;
     onScroll: () => void;
@@ -81,7 +88,7 @@
   const secInputs = $derived(
     pages.map((p) => ({ page: p.page, W: emptyHint(p) ? EMPTY_PAGE_W : (layouts[p.page]?.W ?? 0), H: layouts[p.page]?.H ?? 0 }))
   );
-  const sections = $derived(sectionExtents(nav, secInputs, bodyH));
+  const sections = $derived(sectionExtents(nav, secInputs, bodyH, phone && nav === 'side'));
   const sizeOf = $derived(new Map(sections.map((s) => [s.page, s.size])));
   const anyOverflowX = $derived(Object.values(layouts).some((L) => L.overflowX));
   const anyOverflowY = $derived(Object.values(layouts).some((L) => L.overflowY));
@@ -111,6 +118,26 @@
     } catch {
       if (nav === 'top') el.scrollLeft = t;
       else el.scrollTop = t;
+    }
+  }
+
+  /** Bring an item into view (a "Find a control…" jump): stacked pages scroll to the item itself (a phone
+   *  page is tall), the strip to its page. */
+  export function scrollToItem(page: string, id: string, smooth: boolean): void {
+    const L = layouts[page];
+    const it = pages.find((p) => p.page === page)?.items.find((x) => x.id === id);
+    const pos = L?.pos ? L.pos[id] : it;
+    if (!el || nav !== 'side' || !L || !pos) {
+      scrollToPage(page, smooth);
+      return;
+    }
+    const st = L.c + L.g;
+    const t = itemScrollTarget(sections, page, PAD_Y + SEC_HEAD + pos.y * st, pos.h * st - L.g, el.clientHeight);
+    if (t == null) return;
+    try {
+      el.scrollTo({ top: t, behavior: smooth ? 'smooth' : 'auto' });
+    } catch {
+      el.scrollTop = t;
     }
   }
 
@@ -147,6 +174,11 @@
   /** Arrange: give the board the keyboard focus (arrows / Delete reach the selection). */
   export function focusBoard(): void {
     el?.focus({ preventScroll: true });
+  }
+
+  /** The board's height right now (layout px; read from the DOM, not the last measure). */
+  export function clientHeight(): number {
+    return el?.clientHeight ?? 0;
   }
 
   /** Scroll a little while an arrange drag nears an edge of the board. */
@@ -187,7 +219,9 @@
   let anchor = '';
   $effect(() => {
     void sections;
-    const key = anchorKey(nav, bodyW, bodyH, layouts);
+    // the phone's stacked pages do not depend on the board height (the on-screen keyboard, the grid map
+    // folding): a height change keeps the scroll position instead of jumping to the page start
+    const key = anchorKey(nav, bodyW, phone ? 0 : bodyH, layouts);
     untrack(() => {
       if (positioned && anchor && key !== anchor && !pan && !dragging) scrollToPage(active, false);
       anchor = key;
@@ -264,7 +298,8 @@
   class:grab={scrollable}
   class:ovx={anyOverflowX}
   class:ovy={anyOverflowY}
-  class:snap={nav === 'side' && !dragging && !panning}
+  class:phone
+  class:snap={nav === 'side' && !phone && !dragging && !panning}
   class:snapfit={allFit}
   data-be-board
   data-nav={nav}
@@ -288,7 +323,7 @@
         aria-label={p.page}
         style:width={nav === 'top' ? `${sizeOf.get(p.page) ?? 0}px` : null}
         style:height={nav === 'side' ? `${sizeOf.get(p.page) ?? 0}px` : null}
-        style:padding={nav === 'top' ? `${PAD_Y}px ${STRIP_PAD_RIGHT}px ${PAD_Y}px ${i === 0 ? STRIP_PAD_FIRST : STRIP_PAD_LEFT}px` : `${PAD_Y}px ${PAD_X}px`}
+        style:padding={nav === 'top' ? `${PAD_Y}px ${STRIP_PAD_RIGHT}px ${PAD_Y}px ${i === 0 ? STRIP_PAD_FIRST : STRIP_PAD_LEFT}px` : `${PAD_Y}px ${phone ? PHONE_PAD_X : PAD_X}px`}
       >
         {#if nav === 'top'}
           <div class="be-spine" style:width="{SPINE_W}px" style:margin-right="{SPINE_GAP}px">
@@ -341,6 +376,10 @@
       </section>
     {/if}
   {/each}
+  {#if phone && nav === 'side'}
+    <!-- phone: the last row can scroll clear of the dock opener / collapse button over the corner -->
+    <div class="be-endpad" style:height="{PHONE_END_PAD}px" aria-hidden="true"></div>
+  {/if}
 </div>
 {#if anyReflow && !editMode}
   <div class="be-reflow">COMPACT VIEW · WIDEN FOR FULL LAYOUT</div>
@@ -477,6 +516,10 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+  /* phone layout: the 8-cell page sits in the middle of the width (a capped cell leaves a little room) */
+  .be-board.phone .be-inner {
+    align-items: center;
   }
   /* an empty page centres its hint in the page area */
   .be-inner.empty {

@@ -96,18 +96,21 @@ export interface SectionInput {
 }
 
 /** Size of one page section along the scroll axis: in the strip its full width (padding + spine + grid),
- *  in the side navigation its height (at least one board height, so the pages snap one by one). */
-export function sectionSize(nav: BeNav, sec: SectionInput, index: number, bodyH: number): number {
+ *  in the side navigation its height (at least one board height, so the pages snap one by one). On the
+ *  phone layout (`natural`) a stacked page is just as tall as its content: the pages read one after the
+ *  other like a document (no snapping). */
+export function sectionSize(nav: BeNav, sec: SectionInput, index: number, bodyH: number, natural = false): number {
   if (nav === 'top') return stripChrome(index === 0) + sec.W;
-  return Math.max(bodyH, PAD_Y * 2 + SEC_HEAD + sec.H);
+  const own = PAD_Y * 2 + SEC_HEAD + sec.H;
+  return natural ? own : Math.max(bodyH, own);
 }
 
 /** Offsets and sizes of every section along the scroll axis, in page order. */
-export function sectionExtents(nav: BeNav, sections: readonly SectionInput[], bodyH: number): BeSection[] {
+export function sectionExtents(nav: BeNav, sections: readonly SectionInput[], bodyH: number, natural = false): BeSection[] {
   const out: BeSection[] = [];
   let start = 0;
   sections.forEach((s, i) => {
-    const size = sectionSize(nav, s, i, bodyH);
+    const size = sectionSize(nav, s, i, bodyH, natural);
     out.push({ page: s.page, start, size });
     start += size;
   });
@@ -123,6 +126,18 @@ export function scrollTargetFor(sections: readonly BeSection[], page: string, vi
 }
 
 export { visiblePages };
+
+/** Stacked pages (side navigation, phone layout): the scroll position that shows an item — `top` px into
+ *  its page's section, `height` px tall — in a viewport `viewport` px high. While the item is in view
+ *  with its page at the start of the board, the page start (its name stays in view); else the item near
+ *  the top, under a heading's height of room. Clamped to the scroll range; null for an unknown page. */
+export function itemScrollTarget(sections: readonly BeSection[], page: string, top: number, height: number, viewport: number): number | null {
+  const s = sections.find((x) => x.page === page);
+  if (!s) return null;
+  const total = sections.reduce((n, x) => Math.max(n, x.start + x.size), 0);
+  const want = top + height <= viewport ? s.start : s.start + top - SEC_HEAD;
+  return Math.max(0, Math.min(want, total - viewport));
+}
 
 /** How far into a page's section the viewport starts (px along the scroll axis; negative before it), or
  *  null for an unknown page. With `scrollAtOffset` it keeps a page where it is on screen across a change
@@ -228,6 +243,138 @@ export function dialSize(pxW: number, pxH: number, label: number): number {
 
 /** Height of a pill, select field or fader / slider value control for a cell size. */
 export const ctlHeightPx = (c: number): number => Math.max(22, Math.min(36, Math.round(c * 0.72)));
+/** Height of a tile's label row under its control: the label (line-height 1.15) and the 2 px gap above it. */
+export const labelRowPx = (lf: number): number => Math.ceil(lf * 1.15) + 2;
+/** Smallest touch target on the phone and the tablet (px). */
+export const TOUCH_TARGET_PX = 40;
+/** The edge strip of a grid tile (1 px border + 3 px padding) that holds no control; a search-result tile
+ *  (standalone) has a wider one (1 + 6). */
+export const TILE_EDGE = 4;
+export const STANDALONE_EDGE = 7;
+/** Touch device classes: a pill, select field or action is at least TOUCH_TARGET_PX tall wherever its tile
+ *  has the room (the tile's edge strips, the label row under it); a one-row tile keeps what fits and its
+ *  hit margin (touchHit) makes up the rest. */
+export function touchCtlHeight(c: number, pxH: number, labelRow: number, edge: number = TILE_EDGE): number {
+  return Math.max(ctlHeightPx(c), Math.min(TOUCH_TARGET_PX, pxH - 2 * edge - labelRow));
+}
+
+// ── touch targets: invisible hit margins ─────────────────────────────────────────────────────────
+// On the phone and the tablet a part smaller than TOUCH_TARGET_PX (a stepper, a switch, a value button, a
+// one-row pill) gets an invisible hit margin (a `::before` of the part) that grows it to 40 px. A margin
+// only uses the room on its side: never over a neighbouring operable part of the same tile (the number
+// value over its steppers, the fader track under its value button), at most into the gap to the next tile
+// and that tile's edge strip — never over its control.
+
+/** Hit margin per side (px) that grows a part `size` px across to TOUCH_TARGET_PX: half of what it lacks
+ *  (0 for a part that big). */
+export const touchHitInset = (size: number): number => Math.max(0, Math.ceil((TOUCH_TARGET_PX - size) / 2));
+
+export interface HitInset {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** What one axis lacks of TOUCH_TARGET_PX, split between its two sides (touchHitInset each); a side with
+ *  less room than its share passes the rest to the other side. Never more than a side's room. */
+function splitHit(size: number, roomA: number, roomB: number): [number, number] {
+  const need = Math.max(0, TOUCH_TARGET_PX - size);
+  const ra = Math.max(0, Math.floor(roomA));
+  const rb = Math.max(0, Math.floor(roomB));
+  const b = Math.min(rb, need - Math.min(ra, touchHitInset(size)));
+  return [Math.min(ra, need - b), b];
+}
+
+/** Hit margins (px per side) of a `w`×`h` px part within the room each side has. */
+export function touchHit(w: number, h: number, room: HitInset): HitInset {
+  const [left, right] = splitHit(w, room.left, room.right);
+  const [top, bottom] = splitHit(h, room.top, room.bottom);
+  return { top, right, bottom, left };
+}
+
+/** A tile as the hit margins see it: its size, cell gap, label font and edge strip. */
+export interface HitTile {
+  pxW: number;
+  pxH: number;
+  c: number;
+  g: number;
+  lf: number;
+  showLabel: boolean;
+  /** TILE_EDGE, or STANDALONE_EDGE for a search-result tile. */
+  edge?: number;
+}
+const edgeOf = (t: HitTile): number => t.edge ?? TILE_EDGE;
+/** Room beyond the tile's outer edge: the gap and the neighbour's edge strip. */
+const outside = (t: HitTile): number => t.g + edgeOf(t);
+const labelRowOf = (t: HitTile): number => (t.showLabel ? labelRowPx(t.lf) : 0);
+
+/** A part centred in its tile with the label row under it (a switch; a pill, select field or action that
+ *  fills the tile's width). */
+export function centredPartHit(t: HitTile, w: number, h: number): HitInset {
+  const label = labelRowOf(t);
+  const v = (t.pxH - h - label) / 2;
+  const x = (t.pxW - w) / 2 + outside(t);
+  return touchHit(w, h, { top: v + outside(t), right: x, bottom: v + label + outside(t), left: x });
+}
+
+/** Gap between the number view's steppers and its value (`.be-numrow`). */
+export const NUM_ROW_GAP = 6;
+
+/** Number view: the hit margins of the − and + steppers and of the value (`st` px steppers, the value
+ *  `nf` px high and `valueW` px wide). Narrow (steppers in a row under the value): a stepper's margin never
+ *  reaches up over the value nor across the gap past the other stepper's half; the value's never down over
+ *  the steppers. Wide (steppers beside the value): each side stops halfway across the gap to the value. */
+export function numberHits(t: HitTile, d: { st: number; nf: number; valueW: number; wide: boolean }): { minus: HitInset; plus: HitInset; value: HitInset } {
+  const label = labelRowOf(t);
+  const out = outside(t);
+  const half = NUM_ROW_GAP / 2;
+  if (!d.wide) {
+    const rowW = 2 * d.st + NUM_ROW_GAP;
+    const v = (t.pxH - (d.nf + 2 + d.st + label)) / 2; // the value, the 2 px gap, the steppers, the label
+    const sideOut = (t.pxW - rowW) / 2 + out;
+    const below = v + label + out;
+    const valueSide = (t.pxW - d.valueW) / 2 + out;
+    return {
+      minus: touchHit(d.st, d.st, { top: 1, right: half, bottom: below, left: sideOut }),
+      plus: touchHit(d.st, d.st, { top: 1, right: sideOut, bottom: below, left: half }),
+      value: touchHit(d.valueW, d.nf, { top: v + out, right: valueSide, bottom: 1, left: valueSide })
+    };
+  }
+  const rowW = 2 * d.st + 2 * NUM_ROW_GAP + d.valueW;
+  const rowH = Math.max(d.st, d.nf);
+  const v = (t.pxH - rowH - label) / 2;
+  const sideOut = (t.pxW - rowW) / 2 + out;
+  const sv = (rowH - d.st) / 2;
+  const vv = (rowH - d.nf) / 2;
+  return {
+    minus: touchHit(d.st, d.st, { top: v + sv + out, right: half, bottom: v + sv + label + out, left: sideOut }),
+    plus: touchHit(d.st, d.st, { top: v + sv + out, right: sideOut, bottom: v + sv + label + out, left: half }),
+    value: touchHit(d.valueW, d.nf, { top: v + vv + out, right: half, bottom: v + vv + label + out, left: half })
+  };
+}
+
+/** Space between the fader's value button and its track: the tile's 2 px gap and the track's 3 px margin. */
+const FADER_VALUE_GAP = 5;
+
+/** Fader view: the value button at the top of the column (`w`×`h` px) over the track, whose taps set the
+ *  value. Its margin never reaches down over the track, so on touch the button itself grows (`minH`) until
+ *  the room above makes up the rest. */
+export function faderValueHit(t: HitTile, w: number, h: number): { minH: number; hit: HitInset } {
+  const room: HitInset = { top: edgeOf(t) + outside(t), right: (t.pxW - w) / 2 + outside(t), bottom: Math.floor(FADER_VALUE_GAP / 2), left: (t.pxW - w) / 2 + outside(t) };
+  const minH = Math.max(h, TOUCH_TARGET_PX - Math.floor(room.top) - room.bottom);
+  return { minH, hit: touchHit(w, minH, room) };
+}
+
+/** Slider view: the value button at the right end of the row (label · track · value; 10 px gaps, 4 px row
+ *  padding). Its margin stops halfway to the track. */
+export function sliderValueHit(t: HitTile, w: number, h: number): HitInset {
+  const v = (t.pxH - h) / 2 + outside(t);
+  return touchHit(w, h, { top: v, right: 4 + outside(t), bottom: v, left: 5 });
+}
+
+/** Width estimate of a value read-out in the monospace value font (padding not included). */
+export const monoTextPx = (text: string, font: number): number => Math.ceil(text.length * MONO_EM * font);
 /** Number view: stepper button size. */
 export const stepPx = (c: number): number => Math.max(16, Math.min(28, Math.round(c * 0.55)));
 /** Switch view: the switch's width and height. */
@@ -251,9 +398,11 @@ const FADER_VALUE_CHARS = 6;
 const HOVER_ACTION_INSET = 4;
 
 /** The size of what a tile shows (its control, and the label under it when there is one), centred in the
- *  tile. Mirrors the layout of BeControl; a view without hover actions just fills the tile. */
-export function tileContentBox(view: string, d: { pxW: number; pxH: number; c: number; lf: number; showLabel: boolean }): { w: number; h: number } {
-  const label = d.showLabel ? Math.ceil(d.lf * 1.15) + 2 : 0; // the label row (line-height 1.15) + the 2 px gap
+ *  tile. Mirrors the layout of BeControl; a view without hover actions just fills the tile. `ctlH` is the
+ *  rendered height of a pill / select field / action (touchCtlHeight on the phone and the tablet; default
+ *  ctlHeightPx). */
+export function tileContentBox(view: string, d: { pxW: number; pxH: number; c: number; lf: number; showLabel: boolean; ctlH?: number }): { w: number; h: number } {
+  const label = d.showLabel ? labelRowPx(d.lf) : 0;
   switch (view) {
     case 'knob': {
       const dial = dialSize(d.pxW, d.pxH, d.lf);
@@ -275,7 +424,7 @@ export function tileContentBox(view: string, d: { pxW: number; pxH: number; c: n
     case 'button':
     case 'select':
     case 'action':
-      return { w: d.pxW, h: ctlHeightPx(d.c) + label };
+      return { w: d.pxW, h: (d.ctlH ?? ctlHeightPx(d.c)) + label };
     default:
       return { w: d.pxW, h: d.pxH };
   }
@@ -438,6 +587,25 @@ export function onDrawnItems<R extends { board: BeBoard; ok: boolean }>(board: B
   const boards = { ...r.board.boards };
   for (const pg of Object.keys(hidden)) if (hasOwn(boards, pg)) boards[pg] = [...(boards[pg] ?? []), ...hidden[pg]!];
   return { ...r, board: { ...r.board, boards } };
+}
+
+/** Knob rows (2 cells + gap each) a tablet board should show while arranging. */
+export const ARRANGE_MIN_ROWS = 3;
+
+/** Tablet: entering Arrange in a board too short for ARRANGE_MIN_ROWS knob rows of the arrange cell `c`
+ *  (and the board padding) asks for the hosting panel to be maximized. Never on another device class,
+ *  without a panel to maximize, or when that panel is maximized already. */
+export function arrangeWantsMaximize(d: { deviceClass: string; bodyH: number; c: number; g: number; hasPanel: boolean; maximized: boolean }): boolean {
+  if (d.deviceClass !== 'tablet' || !d.hasPanel || d.maximized || d.bodyH <= 0 || d.c <= 0) return false;
+  return d.bodyH < ARRANGE_MIN_ROWS * (2 * d.c + d.g) + 2 * PAD_Y;
+}
+
+/** Scroll position of a list `viewH` px high that shows a row at `top` (px into the list), `h` px high:
+ *  unchanged while the row is in view, else scrolled just far enough (the row's top first). */
+export function revealScroll(scrollTop: number, viewH: number, top: number, h: number): number {
+  if (top < scrollTop) return Math.max(0, top);
+  if (top + h > scrollTop + viewH) return Math.max(0, Math.min(top, top + h - viewH));
+  return scrollTop;
 }
 
 /** Pixel distance that turns a press into a drag. */

@@ -27,32 +27,33 @@ fractal-midi  ──►  ForgeFX  ──►  Axis
 - **ForgeFX** attaches the family's layout to `GET /preset/blocks/:eid/params` as an optional
   `layout` field, alongside the live `named`/`enums`/`type` values. *(See the ForgeFX repo's
   `docs/LAYOUTS.md`.)*
-- **Axis** is meant to consume that served layout as the **Default** layout profile for a block
-  family, with the user able to switch between Default, a Blank canvas, and their own custom
-  profiles.
+- **Axis** consumes that served layout as the **Default** layout profile for a block family; the
+  user switches between Default, a Blank canvas, and their own custom profiles (see "What ships
+  today" below).
 
-## What ships today — the Control Surface
+## What ships today — the Block Editor board
 
-**Implemented.** The block editor body is a **widget-grid Control Surface**
-([`src/lib/ControlSurface.svelte`](../src/lib/ControlSurface.svelte)): controls are tiles (knob,
-fader, slider, number, switch, select, EQ, action) you can arrange, resize, and retype, organized
-into **pages/tabs**.
+**Implemented.** The block editor body is the **Block Editor board**
+([`src/lib/blockEditor/`](../src/lib/blockEditor/), mounted by `BlockEditor.svelte` and the
+virtual-effect screens): controls are tiles (knob, fader, slider, number, button, switch, select, EQ
+graph, bypass action, meter, looper wave) and labelled dividers on a free grid of cells (a knob is 2×2,
+a page at most 24 cells wide), organized into **pages**. Every page shows at once — side by side (top
+tabs) or stacked (side list) — always fitted to the panel; **Arrange** moves, resizes, retypes and adds
+controls. On a phone every page is shown re-wrapped to 8 cells (at most four knobs a row) and the pages
+scroll vertically; reading that view never changes the stored board.
 
-Today those tabs are built **client-side** from the flat parameter list ForgeFX returns
-([`src/lib/layouts.ts`](../src/lib/layouts.ts)):
+The **Default** layout profile is seeded from the served `layout` (device pages, rows and, where they
+hold up, the device editor's exact control positions, section titles and dividers); without a served
+layout a curated fallback (from [`src/lib/layouts.ts`](../src/lib/layouts.ts)) is used. **Blank** and
+user **copies** sit beside it, plus a per-family "default for this type". Boards persist per block
+family, layout profile and **device class** (desktop / tablet / phone, each inheriting the desktop
+board until it changes something) in the `config/surface` document (cloud and remote sync included).
+Boards of the previous editor (`axs.surface3.*`, `axs.surface2.*`) are read and migrated, never written
+or deleted.
 
-- **Ideal** *(built-in)* — a heuristic pick of the most musician-facing knobs.
-- **Advanced** *(built-in)* — the remaining knobs plus all discrete selectors.
-- **EQ** *(built-in, amp only)* — the amp's graphic-EQ band params.
-- **Custom tabs** — any number of user-created tabs, each a named set of param ids.
+## Axis-Layouts (layout profiles)
 
-Custom tabs and swipe-control assignments are **persisted client-side** (`localStorage`), keyed by
-**block-family slug + device-true paramId**, so a custom Amp view applies to every amp. This is the
-layout machinery in place now; it does **not** yet read the served `layout` field.
-
-## What's being built — Axis-Layouts (layout profiles)
-
-**Planned / In-progress.** The **Axis-Layouts** system generalizes the per-family tabs above into
+**Implemented.** The **Axis-Layouts** system generalizes the previous editor's per-family tabs into
 named, switchable **layout profiles** per context (per block family, and per virtual-effect screen):
 
 - **Default** — *device-authentic*, seeded from the `layout` ForgeFX serves (the `*_LAYOUTS` pages,
@@ -62,15 +63,14 @@ named, switchable **layout profiles** per context (per block family, and per vir
 - **Custom / duplicated** — user-created profiles (including duplicates of Default or another
   profile), switchable and persisted.
 
-> **Status note.** As of this writing, the served `layout` field is **not yet consumed** by the
-> editor store ([`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts)) and the API client's
-> `BlockParams` type does **not** yet carry it — wiring the served layout through and adding the
-> profile switcher (Default/Blank/custom) is the in-progress work. The existing built-in
-> Ideal/Advanced/EQ tabs plus user custom tabs are the shipped predecessor of this system.
+> **Status note.** The served `layout` is consumed (`BlockParams.layout` →
+> [`src/lib/editor.svelte.ts`](../src/lib/editor.svelte.ts) `blockLayout` → the Default profile),
+> and the profile switcher (Default / Blank / copies) lives in the Block Editor's ⋯ menu — see
+> "What ships today" above.
 
 ## Virtual-effect screens — Setup / Controllers / Modifier / FC
 
-**Planned / In-progress.** ForgeFX exposes the device's non-audio editor sections on the same
+**Implemented (Setup, Controllers).** ForgeFX exposes the device's non-audio editor sections on the same
 `(effectId, paramId)` path as audio blocks, addressed by a reserved effect id:
 
 | Effect id | Screen |
@@ -80,21 +80,22 @@ named, switchable **layout profiles** per context (per block family, and per vir
 | `3` | Modifier |
 | `199` | Foot Controller (FC) |
 
-The design points the **same Control Surface** at one of these effect ids — i.e. "Setup" is the
-block editor pointed at effect id `1` — and renders it with the Default layout profile seeded from
-the served layout, just like an audio block.
+The **same Block Editor board** is pointed at one of these effect ids — i.e. "Setup" is the block
+editor pointed at effect id `1` — and renders it with the Default layout profile seeded from the
+served layout, just like an audio block.
 
-> **Status note.** The tool rail ([`src/lib/ToolRail.svelte`](../src/lib/ToolRail.svelte)) currently
-> implements only the **Build** (grid) screen; the Controllers / Footswitches / Scenes / Perform /
-> Sets / Settings rail items are **stubs** that announce "coming soon." Wiring these screens to the
-> virtual-effect endpoints (effect id `1`/`2`/`3`/`199`) is in progress. See the broader
-> [ROADMAP](ROADMAP.md) for sequencing — the Setup screen is the nearest of these, since the GLOBAL
-> block is reachable through the existing param path.
+> **Status note.** The tool rail ([`src/lib/ToolRail.svelte`](../src/lib/ToolRail.svelte)) opens the
+> virtual effects the device advertises (`caps.virtualEffects`; Settings → Setup `1`, Controllers
+> `2`) through `editor.openVirtual`, and
+> [`src/lib/VirtualScreen.svelte`](../src/lib/VirtualScreen.svelte) mounts the Block Editor board
+> (`BeSurface`) for them — Arrange, layout profiles and the search included. Footswitches (`199`) opens
+> the dedicated FC editor (`FcEditor.svelte`) instead. The Scenes / Perform / Sets rail items are still
+> stubs that announce "coming soon"; see the broader [ROADMAP](ROADMAP.md) for sequencing.
 
 ## Multi-device
 
 **Implemented (device selection).** Axis auto-detects the attached unit; ForgeFX selects the matching
 `DeviceProfile`, so the served layouts and virtual-effect resolution already correspond to the
 connected device (FM3/FM9/Axe-Fx III) with no client changes. Each device supplies its own family
-layouts; the gen-3 units share the virtual effect ids. Rendering those served layouts as layout
-profiles is the **Planned / In-progress** half above.
+layouts; the gen-3 units share the virtual effect ids, and the served layouts render as layout
+profiles (see "Axis-Layouts" above).

@@ -11,15 +11,15 @@
 // - Remote: the cache is empty; `surfInit()` (awaited in hydrateRemoteConfig, after the relay is live) pulls
 //   `config/surface` from the host over the relay so the remote shows the EXACT same boards/quick-actions.
 //
-// The public surfGet/surfSet/surfRemove keep the string key/value shape the ControlSurface already used, so
-// migrating it is a mechanical getItem→surfGet swap.
+// The public surfGet/surfSet/surfRemove keep the string key/value shape the previous editor used (the Block
+// Editor's boardPersistence reads and writes through them too).
 import { forgefx, isRemote } from './forgefx';
 import { isRemoteBuild } from './cloudBrowser';
 import { notifyMutation } from './syncBus';
 
 const DOC = 'surface'; // config/surface — the single doc holding the whole control-surface state
 const CACHE = 'axs.surface.doc'; // localStorage cache of that doc (offline / instant host load)
-// keys this module owns (everything the ControlSurface scattered): the global grid + per-slug meta + boards,
+// keys this module owns: the previous editor's global grid + per-slug meta + boards (read for migration only),
 // plus the Block Editor's `axs.be1.*` boards, `axs.be1meta.*` meta and `axs.be1seed.*` family seeds
 const OWNED = /^(axs\.surface2\.grid|axs\.surface3meta\.|axs\.surface3\.|axs\.be1(?:\.|meta\.|seed\.))/;
 

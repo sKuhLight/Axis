@@ -116,6 +116,9 @@ export class BeArrange {
   #g: MoveGesture | LibGesture | null = null;
   #rz: ResizeGesture | null = null;
   #key: KeyStep | null = null;
+  /** The pointer that owns the running drag / resize: another finger's moves, release and cancel never
+   *  reach it, and its presses start nothing meanwhile. */
+  #pid: number | null = null;
 
   constructor(env: ArrangeEnv) {
     this.#env = env;
@@ -371,9 +374,14 @@ export class BeArrange {
     this.#env.focusBoard();
   }
 
+  /** Another pointer owns a running gesture. */
+  #otherPointer(e: PointerEvent): boolean {
+    return (!!this.#g || !!this.#rz) && this.#pid != null && e.pointerId !== this.#pid;
+  }
+
   /** Press on a tile: select it and arm a move. */
   tileDown(e: PointerEvent, item: BeItem, page: string, tile: HTMLElement): void {
-    if (!page || e.button !== 0) return;
+    if (!page || e.button !== 0 || this.#otherPointer(e)) return;
     e.preventDefault();
     e.stopPropagation();
     const grid = tile.closest<HTMLElement>('[data-be-grid]');
@@ -385,11 +393,12 @@ export class BeArrange {
     const gr = grid.getBoundingClientRect();
     const z = effectiveZoom(gr.width, grid.offsetWidth);
     this.#g = { kind: 'move', id: item.id, fromPage: page, w: item.w, h: item.h, grab: grabCell(e.clientX, e.clientY, tile.getBoundingClientRect(), z, c + g, item), sx: e.clientX, sy: e.clientY, started: false };
+    this.#pid = e.pointerId;
   }
 
   /** Press on the corner handle of a tile: resize it. */
   resizeDown(e: PointerEvent, id: string, tile: HTMLElement): void {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || this.#otherPointer(e)) return;
     this.#endKeyStep();
     const be = this.#env.be;
     const f = be.board ? locate(be.board, id) : null;
@@ -402,6 +411,7 @@ export class BeArrange {
     if (!b) return;
     const r = grid.getBoundingClientRect();
     this.#rz = { id, sx: e.clientX, sy: e.clientY, ow: f.item.w, oh: f.item.h, step: Number(grid.dataset.c) + Number(grid.dataset.g), z: effectiveZoom(r.width, grid.offsetWidth), before: b, changed: false };
+    this.#pid = e.pointerId;
     this.resizing = id;
   }
 
@@ -409,9 +419,10 @@ export class BeArrange {
    *  that follows a drag is swallowed; a plain click adds at the first free spot). */
   libPress(e: PointerEvent, key: string): void {
     const c = this.#env.ctl(key);
-    if (!c || e.button !== 0) return;
+    if (!c || e.button !== 0 || this.#otherPointer(e)) return;
     this.#endKeyStep();
     this.#g = { kind: 'lib', key, view: c.view, w: c.w, h: c.h, grab: libraryGrab(c.w, c.h), sx: e.clientX, sy: e.clientY, started: false };
+    this.#pid = e.pointerId;
   }
 
   /** The drop preview under the pointer: the grid of the editor below it, the cell, and whether the drop
@@ -443,6 +454,7 @@ export class BeArrange {
   }
 
   #onMove = (e: PointerEvent): void => {
+    if (this.#pid != null && e.pointerId !== this.#pid) return; // another finger
     const m = this.#g;
     if (m) {
       if (!m.started) {
@@ -471,7 +483,9 @@ export class BeArrange {
     }
   };
 
-  #onUp = (): void => {
+  #onUp = (e: PointerEvent): void => {
+    if (this.#pid != null && e.pointerId !== this.#pid) return; // another finger lifted: the gesture goes on
+    this.#pid = null;
     const m = this.#g;
     if (m) {
       const t = this.drag?.target ?? null;
@@ -509,6 +523,7 @@ export class BeArrange {
   /** Stop every pointer gesture (pointercancel, Escape, a block switch); a resize preview goes back. */
   cancel(): void {
     this.#g = null;
+    this.#pid = null;
     if (this.drag) this.drag = null;
     if (this.#rz) {
       if (this.#rz.changed) this.#env.be.preview(this.#rz.before);
@@ -646,7 +661,10 @@ export class BeArrange {
   /** Install the window listeners (pointer gestures, Ctrl/⌘+Z, the arrow keys' release); returns their
    *  removal (which also closes a held key's step). */
   attach(): () => void {
-    const cancel = () => this.cancel();
+    // the browser took a pointer: only that pointer's gesture ends
+    const cancel = (e: PointerEvent) => {
+      if (this.#pid == null || e.pointerId === this.#pid) this.cancel();
+    };
     window.addEventListener('pointermove', this.#onMove, { passive: false });
     window.addEventListener('pointerup', this.#onUp);
     window.addEventListener('pointercancel', cancel);

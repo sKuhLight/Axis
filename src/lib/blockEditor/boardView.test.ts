@@ -2,6 +2,25 @@ import { describe, it, expect } from 'vitest';
 import {
   activeAfterScroll,
   anchorKey,
+  ARRANGE_MIN_ROWS,
+  arrangeWantsMaximize,
+  centredPartHit,
+  ctlHeightPx,
+  faderValueHit,
+  labelRowPx,
+  monoTextPx,
+  numberHits,
+  numFontMax,
+  revealScroll,
+  sliderValueHit,
+  STANDALONE_EDGE,
+  stepPx,
+  switchPx,
+  TILE_EDGE,
+  touchHit,
+  touchHitInset,
+  type HitInset,
+  type HitTile,
   autoScrollDelta,
   AUTOSCROLL_STEP,
   dialSize,
@@ -27,6 +46,9 @@ import {
   pagePinIds,
   pxOf,
   resizeBy,
+  itemScrollTarget,
+  touchCtlHeight,
+  TOUCH_TARGET_PX,
   scrollAtOffset,
   scrollTargetFor,
   sectionExtents,
@@ -146,6 +168,33 @@ describe('sectionExtents', () => {
     expect(s[1]).toEqual({ page: 'B', start: 400, size: PAD_Y * 2 + SEC_HEAD + 500 });
     expect(s[2]!.start).toBe(400 + PAD_Y * 2 + SEC_HEAD + 500);
   });
+
+  it('phone layout: stacked sections only as tall as their pages', () => {
+    const s = sectionExtents('side', secs, 400, true);
+    const own = (H: number) => PAD_Y * 2 + SEC_HEAD + H;
+    expect(s.map((x) => x.size)).toEqual([own(100), own(500), own(50)]);
+    expect(s[1]!.start).toBe(own(100));
+    // the strip is unaffected
+    expect(sectionExtents('top', secs, 400, true)).toEqual(sectionExtents('top', secs, 400));
+  });
+});
+
+describe('layoutBoardPages on the phone layout', () => {
+  it('every page re-wrapped to 8 cells with one cell from the width; reading it changes no item', () => {
+    const pages = [
+      { page: 'A', items: knobs(12, 1) },
+      { page: 'B', items: knobs(3, 2, 'b') }
+    ];
+    const before = JSON.stringify(pages);
+    const L = layoutBoardPages(pages, { bodyW: 360, bodyH: 500, nav: 'side', density: 'm', editMode: false, phone: true });
+    expect(L.A!.cols).toBe(8);
+    expect(L.B!.cols).toBe(8);
+    expect(L.A!.c).toBe(L.B!.c);
+    expect(L.A!.rows).toBe(6);
+    expect(L.B!.rows).toBe(4); // two rows of three stay two rows
+    expect(sharedCell(L)).toBe(L.A!.c);
+    expect(JSON.stringify(pages)).toBe(before);
+  });
 });
 
 describe('scrollTargetFor', () => {
@@ -159,6 +208,175 @@ describe('scrollTargetFor', () => {
     expect(scrollTargetFor(s, 'B', 600)).toBe(500);
     expect(scrollTargetFor(s, 'C', 600)).toBe(700); // total 1300 − viewport 600
     expect(scrollTargetFor(s, 'Nope', 600)).toBeNull();
+  });
+});
+
+describe('touchCtlHeight (phone / tablet targets)', () => {
+  it('a pill / field is 40 px tall where its tile has the room, else what fits (never below the normal size)', () => {
+    expect(TOUCH_TARGET_PX).toBe(40);
+    expect(touchCtlHeight(40, 84, 14)).toBe(40); // a 2×2 tile on the phone
+    expect(touchCtlHeight(40, 40, 0)).toBe(32); // a one-row tile: what fits
+    expect(touchCtlHeight(20, 20, 0)).toBe(22); // never below the normal control height
+    expect(touchCtlHeight(50, 200, 14)).toBe(40); // a large cell: the normal 36 px grows to 40
+  });
+  it('a search-result tile has the wider edge strip', () => {
+    expect(TILE_EDGE).toBe(4);
+    expect(touchCtlHeight(40, 40, 0, STANDALONE_EDGE)).toBe(29); // 40 − 2 × 7 = 26 < the normal 29
+    expect(touchCtlHeight(40, 84, 16, STANDALONE_EDGE)).toBe(40);
+  });
+  it('the label row is shared with the content box', () => {
+    expect(labelRowPx(11)).toBe(15);
+    expect(labelRowPx(10)).toBe(14);
+    expect(labelRowPx(12)).toBe(16);
+  });
+});
+
+describe('touch hit margins (≥ 40 px targets on the phone / tablet)', () => {
+  const size = (w: number, h: number, m: HitInset) => ({ w: w + m.left + m.right, h: h + m.top + m.bottom });
+  /** A grid tile of w × h cells at cell c (gap 4), as BeControl measures it. */
+  const tileAt = (w: number, h: number, c: number, extra: Partial<HitTile> = {}): HitTile => ({ pxW: pxOf(w, c, 4), pxH: pxOf(h, c, 4), c, g: 4, lf: labelPx(c), showLabel: h >= 2, ...extra });
+  /** The cells the phone (390 / 360), the tablet (1024: about 35) and Compact (32) use. */
+  const CELLS = [40, 39, 35, 32];
+
+  it('touchHitInset: half of what a part lacks, per side; nothing for a part that big', () => {
+    expect(touchHitInset(22)).toBe(9);
+    expect(touchHitInset(33)).toBe(4);
+    expect(touchHitInset(40)).toBe(0);
+    expect(touchHitInset(56)).toBe(0);
+  });
+  it('touchHit splits the missing size; a side short of room passes the rest to the other side', () => {
+    expect(touchHit(22, 22, { top: 50, right: 50, bottom: 50, left: 50 })).toEqual({ top: 9, right: 9, bottom: 9, left: 9 });
+    expect(touchHit(22, 22, { top: 1, right: 3, bottom: 50, left: 50 })).toEqual({ top: 1, right: 3, bottom: 17, left: 15 });
+    expect(touchHit(40, 50, { top: 9, right: 9, bottom: 9, left: 9 })).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    // no room anywhere: it stays what it is
+    expect(touchHit(20, 20, { top: 0, right: 0, bottom: 0, left: 0 })).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it('number steppers and value reach 40 px without covering each other (2×2 tile at every touch cell)', () => {
+    for (const c of CELLS) {
+      const t = tileAt(2, 2, c);
+      const st = stepPx(c);
+      const nf = numFontMax(t.pxW, t.pxH);
+      const valueW = monoTextPx('5.00', nf);
+      const h = numberHits(t, { st, nf, valueW, wide: false });
+      for (const m of [h.minus, h.plus]) {
+        const s = size(st, st, m);
+        expect(s.w, `stepper width at c=${c}`).toBeGreaterThanOrEqual(40);
+        expect(s.h, `stepper height at c=${c}`).toBeGreaterThanOrEqual(40);
+        expect(m.top).toBeLessThanOrEqual(1); // the value sits right above: never over it
+      }
+      expect(h.minus.right + h.plus.left).toBeLessThanOrEqual(6); // the steppers' 6 px gap, shared
+      expect(h.value.bottom).toBeLessThanOrEqual(1); // the value never reaches down over the steppers
+      expect(size(valueW, nf, h.value).w).toBeGreaterThanOrEqual(40);
+    }
+  });
+  it('a wide number tile: steppers beside the value, each margin stops halfway to it', () => {
+    const t = tileAt(3, 2, 40);
+    const st = stepPx(40);
+    const nf = 20;
+    const h = numberHits(t, { st, nf, valueW: monoTextPx('5.00', nf), wide: true });
+    expect(h.minus.right).toBeLessThanOrEqual(3);
+    expect(h.plus.left).toBeLessThanOrEqual(3);
+    expect(h.value.left + h.value.right).toBeLessThanOrEqual(6);
+    for (const m of [h.minus, h.plus]) expect(Math.min(size(st, st, m).w, size(st, st, m).h)).toBeGreaterThanOrEqual(40);
+  });
+  it('a switch reaches 40 px at every touch cell, also in a one-cell tile', () => {
+    for (const c of CELLS) {
+      for (const [w, h] of [
+        [2, 2],
+        [2, 1],
+        [1, 1]
+      ] as const) {
+        const sw = switchPx(c);
+        const s = size(sw.w, sw.h, centredPartHit(tileAt(w, h, c), sw.w, sw.h));
+        expect(Math.min(s.w, s.h), `switch ${w}×${h} at c=${c}`).toBeGreaterThanOrEqual(40);
+      }
+    }
+  });
+  it('a one-row pill / field / action reaches 40 px through its margin; a two-row one needs none', () => {
+    for (const c of CELLS) {
+      const one = tileAt(2, 1, c);
+      const ctlH = touchCtlHeight(c, one.pxH, 0);
+      expect(size(one.pxW - 8, ctlH, centredPartHit(one, one.pxW - 8, ctlH)).h, `one-row at c=${c}`).toBeGreaterThanOrEqual(40);
+      const two = tileAt(2, 2, c);
+      const ctl2 = touchCtlHeight(c, two.pxH, labelRowPx(two.lf));
+      expect(ctl2).toBe(40);
+      expect(centredPartHit(two, two.pxW - 8, ctl2)).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    }
+  });
+  it('a search-result tile uses its wider edge strip and still reaches 40 px', () => {
+    const t = { pxW: 84, pxH: 40, c: 40, g: 4, lf: 11, showLabel: false, edge: STANDALONE_EDGE };
+    const ctlH = touchCtlHeight(40, 40, 0, STANDALONE_EDGE);
+    expect(size(84 - 14, ctlH, centredPartHit(t, 84 - 14, ctlH)).h).toBeGreaterThanOrEqual(40);
+  });
+  it('the fader value button grows until its margin above makes 40 px, never reaching down over the track', () => {
+    for (const c of CELLS) {
+      const t = tileAt(2, 4, c);
+      const lf = labelPx(c);
+      const w = monoTextPx('5.00', lf) + 8;
+      const f = faderValueHit(t, w, lf + 4);
+      expect(f.minH).toBeGreaterThan(lf + 4);
+      expect(f.hit.bottom).toBeLessThanOrEqual(2);
+      const s = size(w, f.minH, f.hit);
+      expect(Math.min(s.w, s.h), `fader value at c=${c}`).toBeGreaterThanOrEqual(40);
+    }
+  });
+  it('the slider value button reaches 40 px and stops halfway to the track', () => {
+    for (const c of CELLS) {
+      const t = tileAt(6, 1, c);
+      const lf = labelPx(c);
+      const w = monoTextPx('5.00', lf) + 8;
+      const m = sliderValueHit(t, w, lf + 4);
+      expect(m.left).toBeLessThanOrEqual(5);
+      const s = size(w, lf + 4, m);
+      expect(Math.min(s.w, s.h), `slider value at c=${c}`).toBeGreaterThanOrEqual(40);
+    }
+  });
+});
+
+describe('arrange room on the tablet (auto-maximize)', () => {
+  const c = 35;
+  const g = 4;
+  const need = ARRANGE_MIN_ROWS * (2 * c + g) + 2 * PAD_Y;
+  const base = { deviceClass: 'tablet', c, g, hasPanel: true, maximized: false };
+  it('asks for the panel to be maximized when fewer than three knob rows fit', () => {
+    expect(ARRANGE_MIN_ROWS).toBe(3);
+    expect(arrangeWantsMaximize({ ...base, bodyH: 124 })).toBe(true); // the 1024×768 tablet: 1.6 rows
+    expect(arrangeWantsMaximize({ ...base, bodyH: need - 1 })).toBe(true);
+    expect(arrangeWantsMaximize({ ...base, bodyH: need })).toBe(false);
+  });
+  it('never on another device class, without a panel, when it is maximized already, or before a measure', () => {
+    expect(arrangeWantsMaximize({ ...base, bodyH: 124, deviceClass: 'desktop' })).toBe(false);
+    expect(arrangeWantsMaximize({ ...base, bodyH: 124, deviceClass: 'phone' })).toBe(false);
+    expect(arrangeWantsMaximize({ ...base, bodyH: 124, hasPanel: false })).toBe(false);
+    expect(arrangeWantsMaximize({ ...base, bodyH: 124, maximized: true })).toBe(false);
+    expect(arrangeWantsMaximize({ ...base, bodyH: 0 })).toBe(false);
+  });
+});
+
+describe('revealScroll (the select list follows its focused option)', () => {
+  it('leaves a visible row alone', () => expect(revealScroll(0, 230, 40, 40)).toBe(0));
+  it('scrolls just far enough down or up', () => {
+    expect(revealScroll(0, 230, 246, 40)).toBe(56);
+    expect(revealScroll(120, 230, 46, 40)).toBe(46);
+  });
+  it('shows the top of a row taller than the list', () => expect(revealScroll(0, 30, 100, 40)).toBe(100));
+});
+
+describe('itemScrollTarget (stacked pages: a jump to a control)', () => {
+  const s = [
+    { page: 'A', start: 0, size: 1200 },
+    { page: 'B', start: 1200, size: 900 },
+    { page: 'C', start: 2100, size: 200 }
+  ];
+  it('shows the page start while the item is in view with it, else the item near the top', () => {
+    expect(itemScrollTarget(s, 'B', 100, 84, 400)).toBe(1200); // in the first screen of its page
+    expect(itemScrollTarget(s, 'B', 700, 84, 400)).toBe(1200 + 700 - SEC_HEAD);
+    expect(itemScrollTarget(s, 'A', 380, 84, 400)).toBe(380 - SEC_HEAD); // would be cut at the bottom
+  });
+  it('is clamped to the scroll range; an unknown page gives null', () => {
+    expect(itemScrollTarget(s, 'C', 150, 40, 400)).toBe(2300 - 400);
+    expect(itemScrollTarget(s, 'Nope', 0, 40, 400)).toBeNull();
   });
 });
 
@@ -495,5 +713,18 @@ describe('hover actions (⚡ / ∿) only where they leave the control free', () 
     expect(tileContentBox('switch', { pxW: 84, pxH: 84, c: 40, lf: 11, showLabel: true })).toEqual({ w: 42, h: 24 + 15 });
     expect(tileContentBox('button', { pxW: 84, pxH: 40, c: 40, lf: 11, showLabel: false })).toEqual({ w: 84, h: 29 });
     expect(tileContentBox('meter', { pxW: 84, pxH: 172, c: 40, lf: 11, showLabel: true })).toEqual({ w: 84, h: 172 });
+  });
+  it('uses the rendered control height: a touch-sized pill leaves no room for the hover actions where the normal one did', () => {
+    const c = 48;
+    const pxW = pxOf(2, c, 4);
+    const pxH = pxOf(2, c, 4);
+    const lf = labelPx(c);
+    const d = { pxW, pxH, c, lf, showLabel: true };
+    expect(tileContentBox('button', d).h).toBe(ctlHeightPx(c) + labelRowPx(lf));
+    const touch = touchCtlHeight(c, pxH, labelRowPx(lf));
+    expect(touch).toBe(40);
+    expect(tileContentBox('button', { ...d, ctlH: touch }).h).toBe(40 + labelRowPx(lf));
+    expect(hoverActionsFit('button', 2, pxW, pxH, hoverActionPx(c), tileContentBox('button', d))).toBe(true);
+    expect(hoverActionsFit('button', 2, pxW, pxH, hoverActionPx(c), tileContentBox('button', { ...d, ctlH: touch }))).toBe(false);
   });
 });

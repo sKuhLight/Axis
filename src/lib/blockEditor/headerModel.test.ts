@@ -5,6 +5,7 @@ import {
   HEADER_ONE_ROW_MIN_W,
   HEADER_PARTS,
   HEADER_TINY_W,
+  HEADER_XS_W,
   SEARCH_FIELD_MIN_W,
   headerFit,
   headerOrder,
@@ -76,11 +77,14 @@ describe('familyLabel ("Save as default for …")', () => {
 
 describe('headerFit / stateLabels', () => {
   it('search field vs icon, narrow and tiny labels', () => {
-    expect(headerFit(SEARCH_FIELD_MIN_W)).toEqual({ searchField: true, narrow: true, tiny: false });
+    expect(headerFit(SEARCH_FIELD_MIN_W)).toEqual({ searchField: true, narrow: true, tiny: false, xs: false });
     expect(headerFit(SEARCH_FIELD_MIN_W - 1).searchField).toBe(false);
     expect(headerFit(HEADER_NARROW_W)).toMatchObject({ narrow: false });
-    expect(headerFit(HEADER_TINY_W - 1)).toEqual({ searchField: false, narrow: true, tiny: true });
-    expect(headerFit(0)).toEqual({ searchField: true, narrow: false, tiny: false });
+    expect(headerFit(HEADER_TINY_W - 1)).toEqual({ searchField: false, narrow: true, tiny: true, xs: false });
+    expect(headerFit(390)).toMatchObject({ tiny: true, xs: false });
+    expect(headerFit(HEADER_XS_W - 1)).toMatchObject({ tiny: true, xs: true });
+    expect(headerFit(360).xs).toBe(true);
+    expect(headerFit(0)).toEqual({ searchField: true, narrow: false, tiny: false, xs: false });
   });
   it('segment labels follow the width and the bypass state', () => {
     expect(stateLabels(1300, false)).toEqual({ engaged: 'Engaged', mute: 'Mute', scene: 'Scene Ignore' });

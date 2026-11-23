@@ -7,6 +7,7 @@ import type { EQBand } from '../EQGraph.svelte';
 import type { EnumParam, LiveMonitor, NamedParam } from '../types';
 import type { BeItem } from './boardModel';
 import type { BeCtl } from './catalog';
+import type { Axis } from './touchGesture';
 
 /** Drop preview of an arrange drag: where the item would land, and whether it may. */
 export interface BeGhost {
@@ -29,15 +30,22 @@ export interface BeHost {
   /** Item whose value is being typed, and the text typed so far. */
   readonly editingId: string | null;
   editBuf: string;
-  /** Item whose select popover is open. */
+  /** Item whose select popover is open, and the popover's id (the field's `aria-controls`). */
   readonly openSelectId: string | null;
+  readonly selectMenuId: string;
   /** Item being moved in arrange mode. */
   readonly dragId: string | null;
   /** Arrange: the selected item (outline, w×h, corner handle) and the one being resized at its corner. */
   readonly selectedId: string | null;
   readonly resizingId: string | null;
-  /** Arrange on a touch device class (tablet): ≥ 40 px targets. */
+  /** Arrange on a touch device class (tablet): the 40 px corner handle. */
   readonly touchArrange: boolean;
+  /** Touch device classes (phone, tablet — every class but the desktop): ≥ 40 px touch targets on the tiles
+   *  and in the select list. */
+  readonly touchTargets: boolean;
+  /** The axis the board scrolls along (top strip: x; side stack and the phone layout: y). Touch changes
+   *  values along the other one (touchGesture.ts; a pen behaves like the mouse). */
+  readonly scrollAxis: Axis;
   /** A workbench with the pin action is around. */
   readonly canPin: boolean;
   readonly eqBands: EQBand[];

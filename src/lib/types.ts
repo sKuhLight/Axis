@@ -124,7 +124,7 @@ export interface BlockParams {
   named: NamedParam[];
   enums: EnumParam[];
   type: { value: number; name: string } | null;
-  /** Device-authentic editor pages (seeds the ControlSurface "Default" layout). */
+  /** Device-authentic editor pages (seeds the Block Editor's "Default" layout). */
   layout?: DeviceLayout;
 }
 

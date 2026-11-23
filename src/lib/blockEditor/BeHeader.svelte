@@ -206,6 +206,7 @@
   class:two={rows === 2}
   class:compact={!block}
   class:tiny={fit.tiny}
+  class:xs={fit.xs}
   class:phone
   class:hasend={!!end}
   data-be-head
@@ -295,6 +296,14 @@
   }
   .two.tiny .be-chip {
     min-width: 116px;
+  }
+  /* a 360 px phone: tighter segments and a chip that may shrink a little more */
+  .two.xs .be-chip {
+    min-width: 100px;
+  }
+  .tiny.xs .be-seg {
+    padding: 0 6px;
+    gap: 4px;
   }
   /* a phone with a close button (monolith sheet): the chip takes row one beside ✕ */
   .two.tiny.hasend .be-chip {

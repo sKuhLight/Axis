@@ -8,7 +8,7 @@
   // workbench pin paths (⚡ click / press-drag, 380 ms hold-drag).
   // All device reads / writes go through getEditorSurface() (live editor or offline convert buffer);
   // boards persist per block family, profile and device class (BeState → boardPersistence).
-  import { untrack, type Snippet } from 'svelte';
+  import { tick, untrack, type Snippet } from 'svelte';
   import { getEditorSurface } from '../editorSurface';
   import type { EQBand } from '../EQGraph.svelte';
   import ModifierFlyout from '../ModifierFlyout.svelte';
@@ -95,6 +95,7 @@
   } from './pinDrag';
   import {
     activeAfterScroll,
+    arrangeWantsMaximize,
     dragNorm,
     highlightedPages,
     isPinnableKind,
@@ -102,11 +103,13 @@
     layoutBoardPages,
     NUDGE_STEP,
     pagePinIds,
+    revealScroll,
     sharedCell,
     waveBars,
     type BoardPage
   } from './boardView';
   import { formatCentre, formatFull, parseTyped, stepNorm } from './valueFormat';
+  import { isDirect, isValueView, lockGesture, restoreOnCancel, scrollAxisOf, trackNorm, valueAxis, valueDelta, type Axis, type GestureLock } from './touchGesture';
 
   let {
     slug = '',
@@ -225,7 +228,13 @@
   /** Editor width (the side navigation and the header row break depend on it, not on the board's). */
   let rootW = $state(0);
   const prefs = $derived(be.prefs);
+  /** Navigation of the header (tabs vs the side list). */
   const nav = $derived(effectiveNav(prefs.nav, rootW));
+  /** How the board lays the pages out: as the navigation, except on the phone layout, whose pages
+   *  (re-wrapped to 8 cells: at most four knobs a row) always stack and scroll vertically — the header tabs
+   *  still navigate them. Reading the phone view never writes a board (display positions only). */
+  const phoneBoard = $derived(isPhone && !be.editMode);
+  const boardNav = $derived<BeNav>(phoneBoard ? 'side' : nav);
   /** The side list can take effect at this editor width (the ⋯ menu offers it). */
   const sideFits = $derived(rootW === 0 || rootW >= SIDE_NAV_MIN_W);
   /** Side page list width at this editor width. */
@@ -244,11 +253,11 @@
     if (!b) return [];
     return b.pageOrder.map((page) => ({ page, items: pageItems(b, page).filter((it) => isDivider(it) || catByKey.has(it.key)) }));
   });
-  const layoutBase = $derived({ bodyW, bodyH, nav, density: prefs.density });
+  const layoutBase = $derived({ bodyW, bodyH, nav: boardNav, density: prefs.density, phone: phoneBoard });
   const layouts = $derived(layoutBoardPages(pages, { ...layoutBase, editMode: be.editMode, frozenCell: be.frozenCell ?? undefined }));
   const liveCell = (): number | null => sharedCell(layoutBoardPages(pages, { ...layoutBase, editMode: false }));
   const layoutSig = $derived(
-    nav + '|' + prefs.density + '|' + pages.map((p) => (layouts[p.page] ? `${layouts[p.page]!.c}:${layouts[p.page]!.W}:${layouts[p.page]!.H}` : '')).join(',')
+    boardNav + '|' + prefs.density + '|' + pages.map((p) => (layouts[p.page] ? `${layouts[p.page]!.c}:${layouts[p.page]!.W}:${layouts[p.page]!.H}` : '')).join(',')
   );
 
   // ── visible / active page ──
@@ -280,12 +289,16 @@
     holdActive(lockMs);
     requestAnimationFrame(() => boardRef?.scrollToPage(page, smooth));
   }
-  function goPage(pg: string) {
+  /** Show a page (a tab, a jump); with `itemId` the board scrolls to that item of it (stacked pages). */
+  function goPage(pg: string, itemId: string | null = null) {
     resultsOpen = false; // the board is what a page tab points at
     be.setPage(pg);
     sel = null;
     editingId = null;
-    scrollSoon(pg, true, 800);
+    if (itemId) {
+      holdActive(800);
+      requestAnimationFrame(() => boardRef?.scrollToItem(pg, itemId, true));
+    } else scrollSoon(pg, true, 800);
     flashPage = pg;
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = setTimeout(() => (flashPage = null), 900);
@@ -299,7 +312,7 @@
   // a navigation switch keeps the current page in view
   let lastNav = '';
   $effect(() => {
-    const n = nav;
+    const n = boardNav;
     if (lastNav && n !== lastNav) {
       const pg = untrack(() => be.board?.page);
       if (pg) scrollSoon(pg, false, 500);
@@ -349,6 +362,33 @@
     renamingPage = null;
     editingId = null;
     sel = null;
+    if (on) void roomForArrange();
+    else restoreAfterArrange();
+  }
+  /** The workbench panel the editor sits in (null in the monolith, or outside a panel). */
+  function hostPanelId(): string | null {
+    return rootEl?.closest<HTMLElement>('[data-panel]')?.dataset.panel ?? null;
+  }
+  /** The panel the editor maximized itself for Arrange (restored on Done only then). */
+  let autoMaximized: string | null = null;
+  /** Tablet: Arrange in a board shorter than three knob rows maximizes the hosting workbench panel (the
+   *  arrange bar and the hidden grid map strip measured first). A panel the user maximized stays as it is. */
+  async function roomForArrange() {
+    await tick(); // the arrange bar is in, the grid map strip out
+    const ctl = workbench?.controller;
+    const panel = hostPanelId();
+    const L = be.board ? layouts[be.board.page] : undefined;
+    if (!be.editMode || !ctl || !panel || !L) return;
+    const want = arrangeWantsMaximize({ deviceClass, bodyH: boardRef?.clientHeight() ?? bodyH, c: L.c, g: L.g, hasPanel: true, maximized: ctl.maximizedPanelId === panel });
+    if (!want) return;
+    autoMaximized = panel;
+    ctl.setMaximizedPanel(panel);
+  }
+  function restoreAfterArrange() {
+    const ctl = workbench?.controller;
+    const panel = autoMaximized;
+    autoMaximized = null;
+    if (ctl && panel && ctl.maximizedPanelId === panel) ctl.setMaximizedPanel(null);
   }
   // The cell is frozen while arranging (a drag never sees the grid change under it); a new panel width
   // (maximize, a split resize) freezes it again at the new fitted size between gestures — a width change
@@ -419,8 +459,9 @@
       return;
     }
     resultsOpen = false;
-    goPage(pg);
-    flashId = itemIdOn(b, pg, key);
+    const id = itemIdOn(b, pg, key);
+    goPage(pg, id);
+    flashId = id;
     if (flashItemTimer) clearTimeout(flashItemTimer);
     flashItemTimer = setTimeout(() => (flashId = null), 1400);
   }
@@ -491,43 +532,127 @@
   }
 
   // gestures (plain refs; not reactive)
-  type ValueDrag = { pid: number; itemId: string; sx: number; sy: number; ly: number; n: number; moved: boolean; clickVal: boolean; ctl: BeCtl };
+  // A value drag: mouse and pen — a knob / number dragged vertically (faders / sliders follow their track:
+  // `tk`); touch — any continuous control, along the axis the board does not scroll (touchGesture.ts),
+  // decided once the drag leaves the slop: a drag along the scroll axis is a scroll and changes nothing,
+  // a tap on a fader / slider track sets the tapped value, a tap on the value types it.
+  // One value gesture at a time, owned by its pointer: another finger's moves, release and cancel never
+  // reach it, and a press while another pointer drags is ignored.
+  type ValueDrag = {
+    /** The pointer that owns the drag. */
+    pointerId: number;
+    pid: number;
+    itemId: string;
+    sx: number;
+    sy: number;
+    lx: number;
+    ly: number;
+    n: number;
+    /** The value when the press began (a touch drag the browser takes over right away goes back to it). */
+    start: number;
+    moved: boolean;
+    clickVal: boolean;
+    ctl: BeCtl;
+    direct: boolean;
+    axis: Axis;
+    /** touch: undecided (null) until the drag leaves the slop; mouse / pen: always 'value'. */
+    lock: GestureLock | null;
+    /** When a touch drag locked to 'value' (ms). */
+    lockedAt: number;
+    /** touch pressed on a fader / slider track: where a tap sets the value. */
+    track: { rect: DOMRect; vertical: boolean } | null;
+    tipEl: HTMLElement;
+  };
   let vd: ValueDrag | null = null;
-  let tk: { pid: number; rect: DOMRect; vertical: boolean } | null = null;
+  let tk: { pointerId: number; pid: number; rect: DOMRect; vertical: boolean } | null = null;
+  /** The pointer of the running value gesture (drag or track), if any. */
+  const valueOwner = (): number | null => vd?.pointerId ?? tk?.pointerId ?? null;
+  /** Another pointer owns a value gesture: this one starts none. */
+  const ownedByOther = (pointerId: number): boolean => {
+    const o = valueOwner();
+    return o != null && o !== pointerId;
+  };
 
   function tileDown(e: PointerEvent, item: BeItem, ctl: BeCtl | undefined, page: string, tile: HTMLElement) {
     if (be.editMode) {
       arr.tileDown(e, item, page, tile);
       return;
     }
-    if (!ctl || ctl.kind !== 'cont' || isDivider(item) || (item.view !== 'knob' && item.view !== 'number')) return;
-    if (e.button !== 0 || editingId === item.id) return;
+    if (!ctl || isDivider(item) || !isValueView(ctl.kind, item.view)) return;
+    if (e.button !== 0 || editingId === item.id || ownedByOther(e.pointerId)) return;
+    const direct = isDirect(e.pointerType);
+    if (!direct && item.view !== 'knob' && item.view !== 'number') return; // mouse / pen follow a fader / slider track
     e.stopPropagation();
+    const target = e.target as HTMLElement | null;
+    const trackEl = direct ? target?.closest?.<HTMLElement>('.be-vtrack, .be-htrack') : null;
+    // tiles of the flat search results scroll with their list (vertically), the board's with the board
+    const scroll: Axis = tile.closest('[data-be-results]') ? 'y' : scrollAxisOf(boardNav);
+    const n = knobById.get(ctl.id)?.norm ?? 0;
     vd = {
+      pointerId: e.pointerId,
       pid: ctl.id,
       itemId: item.id,
       sx: e.clientX,
       sy: e.clientY,
+      lx: e.clientX,
       ly: e.clientY,
-      n: knobById.get(ctl.id)?.norm ?? 0,
+      n,
+      start: n,
       moved: false,
-      clickVal: !!(e.target as HTMLElement | null)?.closest?.('[data-be-value]'),
-      ctl
+      clickVal: !!target?.closest?.('[data-be-value]'),
+      ctl,
+      direct,
+      axis: valueAxis(item.view, e.pointerType, scroll),
+      lock: direct ? null : 'value',
+      lockedAt: 0,
+      track: trackEl ? { rect: trackEl.getBoundingClientRect(), vertical: trackEl.classList.contains('be-vtrack') } : null,
+      tipEl: tile.querySelector<HTMLElement>('.be-dial, .be-nval, .be-vtrack, .be-htrack') ?? tile
     };
+    if (direct) return; // the bubble shows once the drag is a value drag
     adjusting = true;
-    tipAt(tile.querySelector<HTMLElement>('.be-dial, .be-nval') ?? tile, ctl.id);
+    tipAt(vd.tipEl, ctl.id);
   }
+  /** Mouse or pen on a fader / slider track: the value follows the pointer (touch goes through tileDown). */
   function trackDown(e: PointerEvent, ctl: BeCtl, vertical: boolean) {
-    if (be.editMode || e.button !== 0) return;
+    if (be.editMode || e.button !== 0 || isDirect(e.pointerType) || ownedByOther(e.pointerId)) return;
     e.stopPropagation();
-    tk = { pid: ctl.id, rect: (e.currentTarget as HTMLElement).getBoundingClientRect(), vertical };
+    tk = { pointerId: e.pointerId, pid: ctl.id, rect: (e.currentTarget as HTMLElement).getBoundingClientRect(), vertical };
     trackMove(e);
   }
   function trackMove(e: PointerEvent) {
     const t = tk;
     if (!t) return;
-    const frac = t.vertical ? 1 - (e.clientY - t.rect.top) / t.rect.height : (e.clientX - t.rect.left) / t.rect.width;
-    setNorm(t.pid, clamp01(frac));
+    setNorm(t.pid, trackNorm(e.clientX, e.clientY, t.rect, t.vertical));
+  }
+  /** A pointer move of a value drag. */
+  function valueMove(e: PointerEvent, v: ValueDrag) {
+    if (v.direct) {
+      if (!v.lock) {
+        const lock = lockGesture(e.clientX - v.sx, e.clientY - v.sy, v.axis);
+        if (!lock) return; // still a tap
+        if (lock === 'scroll') {
+          // a swipe along the scroll axis: the board scrolls (the browser pans and cancels), no value changes
+          vd = null;
+          return;
+        }
+        v.lock = lock;
+        v.lockedAt = Date.now();
+        v.moved = true;
+        v.lx = e.clientX;
+        v.ly = e.clientY;
+        adjusting = true;
+        tipAt(v.tipEl, v.pid);
+        return;
+      }
+    } else if (!v.moved) {
+      if (Math.abs(e.clientY - v.sy) + Math.abs(e.clientX - v.sx) < 3) return;
+      v.moved = true;
+    }
+    e.preventDefault();
+    v.n = dragNorm(v.n, valueDelta(e.clientX - v.lx, e.clientY - v.ly, v.axis), e.shiftKey);
+    v.lx = e.clientX;
+    v.ly = e.clientY;
+    setNorm(v.pid, v.n);
   }
   function valueKey(e: KeyboardEvent, ctl: BeCtl, itemId: string) {
     if (be.editMode || (e.target as HTMLElement | null)?.tagName === 'INPUT') return;
@@ -546,6 +671,27 @@
 
   /** Items drawn right now: dividers, and controls whose key the catalog lists. */
   const isDrawn = (it: BeItem): boolean => isDivider(it) || catByKey.has(it.key);
+  /** The pointer of the running gesture — a value drag or track, or a pin hold / ⚡ press / pin drag (mouse,
+   *  pen) — if any. */
+  const gestureOwner = (): number | null => valueOwner() ?? pinDrag?.pointerId ?? pinPressAt?.pointerId ?? pinHold?.pointerId ?? null;
+  /** The browser took a pointer (a pan, a pinch): only that pointer's gesture ends — never another
+   *  finger's value drag (Arrange cancels its own gestures, per pointer as well). A touch value drag
+   *  the browser takes right after it locked goes back to its start value (touchGesture restoreOnCancel). */
+  function cancelPointer(e: PointerEvent) {
+    const v = vd;
+    if (v && v.pointerId === e.pointerId) {
+      vd = null;
+      adjusting = false;
+      if (tip) tip = null;
+      const back = v.direct ? restoreOnCancel(v, Date.now(), v.n) : null;
+      if (back != null) setNorm(v.pid, back);
+    }
+    if (tk && tk.pointerId === e.pointerId) tk = null;
+    if (pinDrag && pinDrag.pointerId === e.pointerId) pinDrag = null;
+    if (pinPressAt && pinPressAt.pointerId === e.pointerId) pinPressAt = null;
+    if (pinHold && pinHold.pointerId === e.pointerId) cancelPinHold();
+  }
+  /** Stop every gesture (a menu opens over the board, another block). */
   function cancelGestures() {
     vd = null;
     tk = null;
@@ -559,6 +705,8 @@
 
   $effect(() => {
     const onMove = (e: PointerEvent) => {
+      const owner = gestureOwner();
+      if (owner != null && e.pointerId !== owner) return; // another finger: never part of this gesture
       if (pinDrag) {
         e.preventDefault();
         pinDrag = { ...pinDrag, x: e.clientX, y: e.clientY, target: resolvePinTarget(e.clientX, e.clientY) };
@@ -570,7 +718,7 @@
         if (exceedsPinHold(pinPressAt.x, pinPressAt.y, e.clientX, e.clientY, PIN_PRESS_DRAG)) {
           const c = pinPressAt.c;
           pinPressAt = null;
-          beginPinDrag(c, e.clientX, e.clientY);
+          beginPinDrag(c, e.clientX, e.clientY, e.pointerId);
         }
         return;
       }
@@ -580,16 +728,11 @@
         trackMove(e);
         return;
       }
-      if (vd) {
-        if (!vd.moved && Math.abs(e.clientY - vd.sy) + Math.abs(e.clientX - vd.sx) < 3) return;
-        vd.moved = true;
-        e.preventDefault();
-        vd.n = dragNorm(vd.n, vd.ly - e.clientY, e.shiftKey);
-        vd.ly = e.clientY;
-        setNorm(vd.pid, vd.n);
-      }
+      if (vd) valueMove(e, vd);
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
+      const owner = gestureOwner();
+      if (owner != null && e.pointerId !== owner) return; // another finger lifted: this gesture goes on
       if (pinDrag) {
         const pin = pinDrag;
         pinDrag = null;
@@ -606,16 +749,18 @@
         vd = null;
         adjusting = false;
         if (tip) tip = null;
-        if (!v.moved && v.clickVal) startType(v.itemId, v.ctl);
+        if (v.moved) return;
+        if (v.track) setNorm(v.pid, trackNorm(v.sx, v.sy, v.track.rect, v.track.vertical)); // a tap on a track
+        else if (v.clickVal) startType(v.itemId, v.ctl);
       }
     };
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', cancelGestures);
+    window.addEventListener('pointercancel', cancelPointer);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', cancelGestures);
+      window.removeEventListener('pointercancel', cancelPointer);
     };
   });
 
@@ -734,8 +879,14 @@
       : []
   );
 
-  // ── select popover: measured from the trigger, zoom-safe, closes on reflow / scroll ──
-  let sel = $state<{ id: string; enumId: number; left: number; top: number; width: number; up: boolean } | null>(null);
+  // ── select popover: measured from the trigger, zoom-safe, closes on reflow / scroll; a listbox the
+  //    keyboard walks (↑ / ↓ / Home / End, Enter picks, Escape closes back to the field) ──
+  const uid = $props.id();
+  const selMenuId = `be-sel-${uid}`;
+  let sel = $state<{ id: string; enumId: number; left: number; top: number; width: number; up: boolean; trigger: HTMLElement } | null>(null);
+  let selMenuEl = $state<HTMLElement | null>(null);
+  /** The option that holds the list's one tab stop (roving tabindex): the focused one, else the current. */
+  let selFocus = $state<number | null>(null);
   const selEnum = $derived(sel ? enumById.get(sel.enumId) : undefined);
   function openSelect(e: MouseEvent, itemId: string, ctl: BeCtl) {
     if (be.editMode) return;
@@ -743,11 +894,50 @@
       sel = null;
       return;
     }
-    const t = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const trigger = e.currentTarget as HTMLElement;
+    const t = trigger.getBoundingClientRect();
     const z = zoom();
     const below = window.innerHeight - t.bottom;
     const up = below < 240 && t.top > below;
-    sel = { id: itemId, enumId: ctl.id, left: t.left / z, top: (up ? t.top - 2 : t.bottom + 2) / z, width: Math.max(t.width / z, 160), up };
+    selFocus = null;
+    sel = { id: itemId, enumId: ctl.id, left: t.left / z, top: (up ? t.top - 2 : t.bottom + 2) / z, width: Math.max(t.width / z, 160), up, trigger };
+  }
+  function closeSelect(focusField: boolean) {
+    const t = sel?.trigger;
+    sel = null;
+    if (focusField) t?.focus({ preventScroll: true });
+  }
+  /** Focus an option and scroll the list (only) as far as needed to show it. */
+  function focusOption(list: HTMLElement, opt: HTMLElement | null | undefined) {
+    if (!opt) return;
+    opt.focus({ preventScroll: true });
+    list.scrollTop = revealScroll(list.scrollTop, list.clientHeight, opt.offsetTop, opt.offsetHeight);
+  }
+  // the open popover takes the focus on its current option (the first one when none is current)
+  $effect(() => {
+    const el = selMenuEl;
+    if (!el) return;
+    untrack(() => focusOption(el, el.querySelector<HTMLElement>('[aria-selected="true"]') ?? el.querySelector<HTMLElement>('[role="option"]')));
+  });
+  function selKey(e: KeyboardEvent) {
+    const list = e.currentTarget as HTMLElement;
+    const opts = Array.from(list.querySelectorAll<HTMLElement>('[role="option"]'));
+    const i = opts.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number) => focusOption(list, opts[Math.max(0, Math.min(opts.length - 1, n))]);
+    if (e.key === 'Escape') closeSelect(true);
+    else if (e.key === 'ArrowDown') go(i + 1);
+    else if (e.key === 'ArrowUp') go(i < 0 ? opts.length - 1 : i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(opts.length - 1);
+    else {
+      // Tab: the list closes back to its field and the key goes on from there (to the next / previous
+      // stop after the field) — no preventDefault
+      if (e.key === 'Tab') closeSelect(true);
+      return;
+    }
+    // the popover owns these keys: none reaches the board, the arrange keys or the app's Escape chain
+    e.preventDefault();
+    e.stopPropagation();
   }
   $effect(() => {
     void layoutSig;
@@ -861,10 +1051,10 @@
 
   // hold-to-drag pin (mouse / pen): a still hold arms a pointer drag onto a panel, tab bar or dock edge;
   // a press on the tile's ⚡ starts the same drag after a few px of movement (no hold)
-  let pinHold: { c: BeCtl; x: number; y: number } | null = null;
+  let pinHold: { pointerId: number; c: BeCtl; x: number; y: number } | null = null;
   let pinHoldTimer: ReturnType<typeof setTimeout> | null = null;
-  let pinPressAt: { c: BeCtl; x: number; y: number } | null = null;
-  let pinDrag = $state<{ c: BeCtl; source: WorkbenchParameterSource; x: number; y: number; target: PinTarget | null } | null>(null);
+  let pinPressAt: { pointerId: number; c: BeCtl; x: number; y: number } | null = null;
+  let pinDrag = $state<{ pointerId: number; c: BeCtl; source: WorkbenchParameterSource; x: number; y: number; target: PinTarget | null } | null>(null);
   let pinLayerEl = $state<HTMLElement | null>(null);
   // the fixed layer's px are layout px under an ancestor zoom while pointer coords are visual
   const pinZoom = $derived.by(() => {
@@ -873,16 +1063,21 @@
     const visual = pinLayerEl.getBoundingClientRect().width;
     return visual > 0 ? visual / pinLayerEl.offsetWidth : 1;
   });
+  /** The pointer of the latest press on a tile (its long-press release is the one whose click is swallowed). */
+  let pressPointer = -1;
+  /** Capture phase of every press on a tile (outside Arrange): the press pointer, and the hold-to-drag pin. */
   function pinArm(e: PointerEvent, c: BeCtl) {
+    pressPointer = e.pointerId;
     if (!workbenchCanPin || be.editMode || !pinnable(c)) return;
     if (e.pointerType === 'touch' || e.button !== 0) return; // touch = long-press menu
-    pinHold = { c, x: e.clientX, y: e.clientY };
+    if (ownedByOther(e.pointerId)) return;
+    pinHold = { pointerId: e.pointerId, c, x: e.clientX, y: e.clientY };
     if (pinHoldTimer) clearTimeout(pinHoldTimer);
     pinHoldTimer = setTimeout(() => {
       pinHoldTimer = null;
       const h = pinHold;
       pinHold = null;
-      if (h && !pinDrag) beginPinDrag(h.c, h.x, h.y);
+      if (h && !pinDrag) beginPinDrag(h.c, h.x, h.y, h.pointerId);
     }, PIN_HOLD_MS);
   }
   function cancelPinHold() {
@@ -899,7 +1094,7 @@
     if (!workbenchCanPin || !pinnable(c) || e.button !== 0) return;
     e.preventDefault(); // no focus ring / text selection; the click still follows
     cancelPinHold(); // armed by the tile's capture handler
-    pinPressAt = { c, x: e.clientX, y: e.clientY };
+    pinPressAt = { pointerId: e.pointerId, c, x: e.clientX, y: e.clientY };
   }
   // no timer outlives the editor (a hold that crosses a block switch must not fire on a gone instance)
   $effect(() => () => {
@@ -909,7 +1104,7 @@
     if (flashItemTimer) clearTimeout(flashItemTimer);
     flashItemTimer = null;
   });
-  function beginPinDrag(c: BeCtl, x: number, y: number) {
+  function beginPinDrag(c: BeCtl, x: number, y: number, pointerId: number) {
     const source = parameterSourceForControl(c);
     if (!source) return;
     // the same press may have armed a value adjust + bubble: drop them (nothing was written yet)
@@ -918,7 +1113,7 @@
     adjusting = false;
     if (tip) tip = null;
     ctxMenu = null;
-    pinDrag = { c, source, x, y, target: resolvePinTarget(x, y) };
+    pinDrag = { pointerId, c, source, x, y, target: resolvePinTarget(x, y) };
   }
   function dropPin(pin: { c: BeCtl; source: WorkbenchParameterSource; target: PinTarget | null }) {
     const { c, source, target } = pin;
@@ -948,6 +1143,34 @@
     };
     window.addEventListener('click', swallow, true);
     setTimeout(() => window.removeEventListener('click', swallow, true), 350);
+  }
+  /** The finger that held a long-press is still down: the click its release may produce (a browser that
+   *  saw no long-press of its own sends one) must not land on the menu's scrim and close the menu again.
+   *  Only that click: the release of THIS pointer arms it, and a new press (a quick tap on a menu row)
+   *  or 350 ms disarm it — the next click is swallowed only when it comes straight from the release. */
+  function suppressClickAfterRelease(pointerId: number) {
+    if (typeof window === 'undefined') return;
+    const done = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return; // another finger's release
+      window.removeEventListener('pointerup', done, true);
+      window.removeEventListener('pointercancel', done, true);
+      if (e.type !== 'pointerup') return;
+      const off = () => {
+        window.removeEventListener('click', swallow, true);
+        window.removeEventListener('pointerdown', off, true);
+        clearTimeout(timer);
+      };
+      const swallow = (ev: MouseEvent) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        off();
+      };
+      window.addEventListener('click', swallow, true);
+      window.addEventListener('pointerdown', off, true);
+      const timer = setTimeout(off, 350);
+    };
+    window.addEventListener('pointerup', done, true);
+    window.addEventListener('pointercancel', done, true);
   }
 
   // ── control menu: right-click, long-press (touch), Shift+F10 / the ContextMenu key on a focused tile ──
@@ -1021,7 +1244,7 @@
    *  arranging, during the pen's hold-drag or a ⚡ press, or once a value drag moved. */
   function ctxHold(item: BeItem, c: BeCtl, at: WorkbenchMenuPosition) {
     if (!longPressOpensMenu({ editMode: be.editMode, pinDrag: !!pinDrag, pinPress: !!pinPressAt, arrange: arr.busy, valueMoved: !!vd?.moved })) return;
-    openCtx(item, c, at);
+    if (openCtx(item, c, at)) suppressClickAfterRelease(pressPointer);
   }
   // a menu whose rows are gone (the control left the catalog, the board reloaded) closes for good
   $effect(() => {
@@ -1182,6 +1405,7 @@
     get openSelectId() {
       return sel?.id ?? null;
     },
+    selectMenuId: selMenuId,
     get dragId() {
       return arr.drag?.id ?? null;
     },
@@ -1193,6 +1417,12 @@
     },
     get touchArrange() {
       return deviceClass === 'tablet';
+    },
+    get touchTargets() {
+      return deviceClass !== 'desktop';
+    },
+    get scrollAxis() {
+      return scrollAxisOf(boardNav);
     },
     get canPin() {
       return workbenchCanPin;
@@ -1308,7 +1538,8 @@
     />
   {/snippet}
 
-  {@render belowHeader?.()}
+  <!-- the grid map strip makes room for the arrange bar while arranging -->
+  {#if !be.editMode}{@render belowHeader?.()}{/if}
 
   {#if showMessage}
     <div class="be-msg" data-be-message><p>{message}</p></div>
@@ -1369,7 +1600,8 @@
         bind:this={boardRef}
         {pages}
         {layouts}
-        {nav}
+        nav={boardNav}
+        phone={phoneBoard}
         editMode={be.editMode}
         {highlight}
         {active}
@@ -1437,7 +1669,21 @@
       {@const en = selEnum}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="be-selbg" onpointerdown={() => (sel = null)}></div>
-      <div class="be-selmenu" class:up={sel.up} role="listbox" data-be-select-menu style:left="{sel.left}px" style:top="{sel.top}px" style:width="{sel.width}px">
+      <div
+        bind:this={selMenuEl}
+        id={selMenuId}
+        class="be-selmenu"
+        class:up={sel.up}
+        class:touch={host.touchTargets}
+        role="listbox"
+        tabindex="-1"
+        aria-label={catByKey.get(`e${en.id}`)?.label ?? en.name}
+        data-be-select-menu
+        style:left="{sel.left}px"
+        style:top="{sel.top}px"
+        style:width="{sel.width}px"
+        onkeydown={selKey}
+      >
         {#each en.options as o (o.value)}
           <button
             class="be-selopt"
@@ -1445,10 +1691,12 @@
             type="button"
             role="option"
             aria-selected={o.value === en.value}
+            tabindex={o.value === (selFocus ?? en.value) ? 0 : -1}
             data-be-option={o.label}
+            onfocus={() => (selFocus = o.value)}
             onclick={() => {
               editor.setEnum(en, o.value);
-              sel = null;
+              closeSelect(true);
             }}>{o.label}</button
           >
         {/each}
@@ -1652,6 +1900,17 @@
   }
   .be-selopt:hover {
     background: var(--surface2);
+  }
+  /* phone / tablet: 40 px rows */
+  .be-selmenu.touch .be-selopt {
+    min-height: 40px;
+  }
+  .be-selopt:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .be-selmenu:focus {
+    outline: none;
   }
   .be-selopt.on {
     color: var(--accentbright);

@@ -21,6 +21,8 @@ import {
   movePage,
   moveToPage,
   normalizeBoard,
+  PHONE_COLS,
+  phoneWrap,
   reflowPack,
   removeItem,
   renamePage,
@@ -239,6 +241,285 @@ describe('reflowPack', () => {
   it('caps widths at the column count', () => {
     const r = reflowPack([{ id: 'e', key: 'eq', view: 'eq', x: 0, y: 0, w: 8, h: 4 }], 3);
     expect(r.pos.e).toEqual({ x: 0, y: 0, w: 3, h: 4 });
+  });
+});
+
+describe('phoneWrap (phone layout: at most four knobs a row)', () => {
+  const vdiv = (id: string, x: number, y: number, h = 2): BeDivider => ({ id, kind: 'vdiv', x, y, w: 1, h });
+  const ctl = (id: string, view: BeControl['view'], x: number, y: number, w: number, h: number): BeControl => ({ id, key: id, view, x, y, w, h });
+  const row = (prefix: string, n: number, y: number): BeControl[] => Array.from({ length: n }, (_, i) => knob(`${prefix}${i}`, `k${prefix}${i}`, i * 2, y));
+  /** Wrap and check: nothing overlaps, everything inside the phone page and the reported rows. */
+  const placedOk = (list: readonly BeItem[], cols = PHONE_COLS) => {
+    const r = phoneWrap(list, cols);
+    const rects = Object.values(r.pos);
+    expect(overlapFree(rects.map((p, i): BeControl => ({ id: String(i), key: 'x', view: 'knob', ...p })))).toBe(true);
+    for (const p of rects) {
+      expect(p.x).toBeGreaterThanOrEqual(0);
+      expect(p.x + p.w).toBeLessThanOrEqual(cols);
+      expect(p.y + p.h).toBeLessThanOrEqual(r.rows);
+    }
+    return r;
+  };
+  /** Number of the given items per visual line (by their top row), top to bottom. */
+  const perLine = (pos: Record<string, { y: number }>, ids: string[]): number[] => {
+    const m = new Map<number, number>();
+    for (const id of ids) m.set(pos[id]!.y, (m.get(pos[id]!.y) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([, n]) => n);
+  };
+
+  it('is 8 cells wide', () => expect(PHONE_COLS).toBe(8));
+
+  it('wraps a 12-knob row into three rows of four, in reading order', () => {
+    const list = row('a', 12, 0);
+    const r = placedOk(list);
+    expect(r.rows).toBe(6);
+    list.forEach((k, i) => expect(r.pos[k.id]).toEqual({ x: (i % 4) * 2, y: Math.floor(i / 4) * 2, w: 2, h: 2 }));
+    expect(perLine(r.pos, list.map((k) => k.id))).toEqual([4, 4, 4]);
+  });
+
+  it('keeps rows faithful: each desktop row wraps on its own, rows stay in order', () => {
+    const list = [...row('a', 6, 0), ...row('b', 6, 2)];
+    const r = placedOk(list);
+    expect(perLine(r.pos, list.map((k) => k.id))).toEqual([4, 2, 4, 2]);
+    expect(r.pos.a4).toMatchObject({ x: 0, y: 2 });
+    expect(r.pos.b0).toMatchObject({ x: 0, y: 4 }); // row b starts on a fresh line under row a
+    expect(r.rows).toBe(8);
+  });
+
+  it('keeps inner gaps and drops a leading indent', () => {
+    // knobs at 2, 4, 8 and 16: chunks [2, 10) and [16, 18)
+    const list = [knob('a', 'k1', 2, 0), knob('b', 'k2', 4, 0), knob('c', 'k3', 8, 0), knob('d', 'k4', 16, 0)];
+    const r = placedOk(list);
+    expect(r.pos.a).toMatchObject({ x: 0, y: 0 });
+    expect(r.pos.b).toMatchObject({ x: 2, y: 0 });
+    expect(r.pos.c).toMatchObject({ x: 6, y: 0 }); // the empty slot between b and c stays
+    expect(r.pos.d).toMatchObject({ x: 0, y: 2 });
+  });
+
+  it('gives faders, selects and sliders their width; wider controls take the 8 cells', () => {
+    const list = [
+      ctl('kn', 'knob', 0, 0, 2, 2),
+      ctl('fa', 'fader', 2, 0, 2, 4),
+      ctl('se', 'select', 4, 0, 2, 2),
+      ctl('sl', 'slider', 6, 0, 6, 1),
+      ctl('eq', 'eq', 0, 4, 12, 5),
+      ctl('lg', 'slider', 0, 9, 10, 1)
+    ];
+    const r = placedOk(list);
+    expect(r.pos.kn).toEqual({ x: 0, y: 0, w: 2, h: 2 });
+    expect(r.pos.fa).toEqual({ x: 2, y: 0, w: 2, h: 4 }); // the fader stays beside the knob
+    expect(r.pos.se).toEqual({ x: 4, y: 0, w: 2, h: 2 });
+    expect(r.pos.sl).toEqual({ x: 0, y: 4, w: 6, h: 1 }); // cut before the slider (it would cross the 8th cell)
+    expect(r.pos.eq).toEqual({ x: 0, y: 5, w: 8, h: 5 });
+    expect(r.pos.lg).toEqual({ x: 0, y: 10, w: 8, h: 1 });
+    expect(r.rows).toBe(11);
+  });
+
+  it('runs a section divider across the 8 cells and keeps it over the controls it heads', () => {
+    const list: BeItem[] = [...row('a', 6, 0), hdiv('mix', 0, 2, 24, 'Mixer'), ...row('m', 6, 3)];
+    const r = placedOk(list);
+    expect(r.pos.mix).toEqual({ x: 0, y: 4, w: 8, h: 1 });
+    expect(r.pos.m0).toMatchObject({ x: 0, y: 5 });
+    expect(r.pos.m4).toMatchObject({ x: 0, y: 7 });
+    expect(r.rows).toBe(9);
+  });
+
+  it('keeps titles over their groups (positioned device page) and widens them to the phone page', () => {
+    // GAIN over Drive, TONE over Bass..Presence, OUTPUT over Master + Bright (a slice-6 positioned page)
+    const list: BeItem[] = [
+      hdiv('gain', 0, 0, 4, 'GAIN'),
+      hdiv('tone', 4, 0, 8, 'TONE'),
+      hdiv('out', 14, 0, 6, 'OUTPUT'),
+      knob('drive', 'k0', 0, 1),
+      knob('bass', 'k1', 4, 1),
+      knob('mid', 'k2', 6, 1),
+      knob('treble', 'k3', 8, 1),
+      knob('pres', 'k4', 10, 1),
+      knob('master', 'k5', 14, 1),
+      ctl('bright', 'switch', 16, 1, 2, 2)
+    ];
+    const r = placedOk(list);
+    expect(r.pos.gain).toEqual({ x: 0, y: 0, w: 8, h: 1 });
+    expect(r.pos.drive).toEqual({ x: 0, y: 1, w: 2, h: 2 });
+    expect(r.pos.tone).toEqual({ x: 0, y: 3, w: 8, h: 1 });
+    expect([r.pos.bass, r.pos.mid, r.pos.treble, r.pos.pres].map((p) => [p!.x, p!.y])).toEqual([
+      [0, 4],
+      [2, 4],
+      [4, 4],
+      [6, 4]
+    ]);
+    expect(r.pos.out).toEqual({ x: 0, y: 6, w: 8, h: 1 });
+    expect(r.pos.master).toMatchObject({ x: 0, y: 7 });
+    expect(r.pos.bright).toMatchObject({ x: 2, y: 7 });
+    expect(r.rows).toBe(9);
+  });
+
+  describe('titled groups taller than one row (REG#3)', () => {
+    // GAIN / TONE / OUTPUT titles on line 0, a knob row on line 1 and a second one on line 3
+    const titled = (knobTop: number, second: number): BeItem[] => [
+      hdiv('gain', 0, 0, 4, 'GAIN'),
+      hdiv('tone', 4, 0, 8, 'TONE'),
+      hdiv('out', 14, 0, 6, 'OUTPUT'),
+      knob('drive', 'k0', 0, knobTop),
+      knob('bass', 'k1', 4, knobTop),
+      knob('mid', 'k2', 6, knobTop),
+      knob('treble', 'k3', 8, knobTop),
+      knob('pres', 'k4', 10, knobTop),
+      knob('master', 'k5', 14, knobTop),
+      ctl('bright', 'switch', 16, knobTop, 2, 2),
+      knob('gain2', 'k6', 0, second),
+      knob('depth', 'k7', 4, second),
+      knob('tone2', 'k8', 6, second),
+      knob('out2', 'k9', 14, second)
+    ];
+    /** Every title sits over all the rows of its group and above the next title. */
+    const grouped = (pos: Record<string, { y: number; h: number }>) => {
+      const groups: [string, string[]][] = [
+        ['gain', ['drive', 'gain2']],
+        ['tone', ['bass', 'mid', 'treble', 'pres', 'depth', 'tone2']],
+        ['out', ['master', 'bright', 'out2']]
+      ];
+      groups.forEach(([title, ids], i) => {
+        const t = pos[title]!;
+        const next = groups[i + 1] ? pos[groups[i + 1]![0]]!.y : Infinity;
+        for (const id of ids) {
+          expect(pos[id]!.y, `${id} under ${title}`).toBeGreaterThan(t.y);
+          expect(pos[id]!.y + pos[id]!.h, `${id} above the next title`).toBeLessThanOrEqual(next);
+        }
+      });
+    };
+    it('a title stays over both rows of its group; the next section is not interleaved', () => {
+      const r = placedOk(titled(1, 3));
+      grouped(r.pos);
+      expect(r.pos.gain).toEqual({ x: 0, y: 0, w: 8, h: 1 });
+      expect(r.pos.drive).toEqual({ x: 0, y: 1, w: 2, h: 2 });
+      expect(r.pos.gain2).toEqual({ x: 0, y: 3, w: 2, h: 2 });
+      expect(r.pos.tone).toEqual({ x: 0, y: 5, w: 8, h: 1 });
+      expect([r.pos.bass, r.pos.mid, r.pos.treble, r.pos.pres].map((p) => [p!.x, p!.y])).toEqual([
+        [0, 6],
+        [2, 6],
+        [4, 6],
+        [6, 6]
+      ]);
+      expect([r.pos.depth, r.pos.tone2].map((p) => [p!.x, p!.y])).toEqual([
+        [0, 8],
+        [2, 8]
+      ]);
+      expect(r.pos.out).toEqual({ x: 0, y: 10, w: 8, h: 1 });
+      expect(r.pos.master).toMatchObject({ x: 0, y: 11 });
+      expect(r.pos.bright).toMatchObject({ x: 2, y: 11 });
+      expect(r.pos.out2).toMatchObject({ x: 0, y: 13 });
+      expect(r.rows).toBe(15);
+    });
+    it('a blank line between the titles and their rows: still title over group (the blank line kept)', () => {
+      const r = placedOk(titled(2, 4));
+      grouped(r.pos);
+      expect(r.pos.gain).toMatchObject({ y: 0 });
+      expect(r.pos.drive).toMatchObject({ x: 0, y: 2 });
+      expect(r.pos.gain2).toMatchObject({ x: 0, y: 4 });
+      expect(r.pos.tone).toMatchObject({ y: 6 });
+      expect(r.pos.bass).toMatchObject({ x: 0, y: 8 });
+    });
+    it('a group ends at an empty line: the rows after it are a section of their own', () => {
+      const r = placedOk(titled(1, 4)); // line 3 empty: the second row is no longer the groups'
+      for (const id of ['gain2', 'depth', 'tone2', 'out2']) expect(r.pos[id]!.y, id).toBeGreaterThan(r.pos.bright!.y);
+    });
+    it('a group ends at the next divider line, which heads the rows under it', () => {
+      const list: BeItem[] = [hdiv('t', 0, 0, 24, 'GAIN'), ...row('a', 6, 1), hdiv('mix', 0, 3, 24, 'Mixer'), ...row('m', 6, 4)];
+      const r = placedOk(list);
+      expect(r.pos.t).toMatchObject({ y: 0 });
+      expect(r.pos.a4).toMatchObject({ x: 0, y: 3 });
+      expect(r.pos.mix).toEqual({ x: 0, y: 5, w: 8, h: 1 });
+      expect(r.pos.m0).toMatchObject({ x: 0, y: 6 });
+      expect(r.pos.m4).toMatchObject({ x: 0, y: 8 });
+    });
+  });
+
+  it('fuzz: no overlap, inside 8 cells, at most four knobs a visual row, deterministic, the input untouched', () => {
+    let seed = 11;
+    const rnd = (n: number) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
+    const views: BeControl['view'][] = ['knob', 'knob', 'knob', 'fader', 'slider', 'number', 'button', 'switch', 'select', 'eq', 'action', 'meter', 'wave'];
+    for (let iter = 0; iter < 400; iter++) {
+      const raw: BeItem[] = [];
+      const n = 1 + rnd(30);
+      for (let i = 0; i < n; i++) {
+        const view = views[rnd(views.length)]!;
+        const sp = BE_SPEC[view];
+        raw.push({ id: `c${i}`, key: `k${i}`, view, x: rnd(24), y: rnd(20), w: sp.w, h: sp.h });
+      }
+      for (let i = rnd(6); i > 0; i--) raw.push(hdiv(`h${i}`, rnd(20), rnd(20), 2 + rnd(22), rnd(2) ? 'T' : undefined));
+      for (let i = rnd(3); i > 0; i--) raw.push(vdiv(`v${i}`, rnd(24), rnd(20), 2 + rnd(4)));
+      const keys = raw.filter((it): it is BeControl => !isDivider(it)).map((it) => it.key);
+      const list = normalizeBoard(board({ P: raw }), keys).boards.P!;
+      const before = JSON.stringify(list);
+      const r = placedOk(list);
+      expect(phoneWrap(list)).toEqual(r);
+      expect(JSON.stringify(list)).toBe(before);
+      const tops = new Map<number, number>();
+      for (const it of list) {
+        const p = r.pos[it.id];
+        if (!isDivider(it)) {
+          expect(p, `control ${it.id} drawn`).toBeDefined();
+          expect(p!.w).toBe(Math.min(it.w, PHONE_COLS));
+          expect(p!.h).toBe(it.h);
+          if (it.view === 'knob') tops.set(p!.y, (tops.get(p!.y) ?? 0) + 1);
+        } else if (it.kind === 'hdiv') expect(p, `divider ${it.id} drawn`).toBeDefined();
+      }
+      for (const k of tops.values()) expect(k).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('never widens a divider into the next one on its line', () => {
+    const list: BeItem[] = [hdiv('a', 0, 0, 2, 'A'), hdiv('b', 4, 0, 2, 'B'), knob('x', 'k1', 0, 1), knob('y', 'k2', 4, 1)];
+    const r = placedOk(list);
+    expect(r.pos.a).toEqual({ x: 0, y: 0, w: 4, h: 1 });
+    expect(r.pos.b).toEqual({ x: 4, y: 0, w: 4, h: 1 });
+  });
+
+  it('keeps a vertical divider between controls and leaves it out at a chunk edge', () => {
+    const inside = placedOk([knob('a', 'k1', 0, 0), knob('b', 'k2', 2, 0), vdiv('v', 4, 0), knob('c', 'k3', 5, 0), knob('d', 'k4', 7, 0)]);
+    expect(inside.pos.v).toEqual({ x: 4, y: 0, w: 1, h: 2 });
+    expect(inside.pos.d).toMatchObject({ x: 0, y: 2 });
+    const edge = placedOk([...row('a', 4, 0), vdiv('v', 8, 0), knob('c', 'k3', 9, 0), knob('d', 'k4', 11, 0)]);
+    expect(edge.pos.v).toBeUndefined();
+    expect(edge.pos.c).toMatchObject({ x: 0, y: 2 });
+    expect(edge.pos.d).toMatchObject({ x: 2, y: 2 });
+  });
+
+  it('keeps empty lines between rows', () => {
+    const r = placedOk([knob('a', 'k1', 0, 0), knob('b', 'k2', 0, 4)]);
+    expect(r.pos.b).toMatchObject({ x: 0, y: 4 });
+  });
+
+  it('never overlaps, also when chained items leave no clean cut', () => {
+    // two knob rows offset by one cell: every column is straddled, so the band is cut hard
+    const list = [...row('a', 6, 0), ...[1, 3, 5, 7, 9].map((x, i) => knob(`b${i}`, `kb${i}`, x, 1))];
+    const r = placedOk(list);
+    expect(Object.keys(r.pos)).toHaveLength(list.length);
+  });
+
+  it('is deterministic, total and leaves the board alone; a page that fits keeps its shape', () => {
+    let seed = 7;
+    const rnd = (n: number) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
+    const views: BeControl['view'][] = ['knob', 'fader', 'select', 'slider', 'switch', 'eq', 'meter'];
+    const raw: BeItem[] = [];
+    for (let i = 0; i < 40; i++) {
+      const view = views[rnd(views.length)]!;
+      const sp = BE_SPEC[view];
+      raw.push({ id: `c${i}`, key: `k${i}`, view, x: rnd(24), y: rnd(20), w: sp.w, h: sp.h });
+    }
+    for (let i = 0; i < 4; i++) raw.push(hdiv(`h${i}`, 0, rnd(20), 2 + rnd(22)));
+    const keys = raw.filter((it): it is BeControl => !isDivider(it)).map((it) => it.key);
+    const list = normalizeBoard(board({ P: raw }), keys).boards.P!;
+    const before = JSON.stringify(list);
+    const a = placedOk(list);
+    expect(phoneWrap(list)).toEqual(a);
+    expect(JSON.stringify(list)).toBe(before);
+    for (const it of list) expect(a.pos[it.id]).toBeDefined(); // no vertical dividers here: everything is drawn
+    const narrow = [knob('a', 'k1', 0, 0), knob('b', 'k2', 4, 0), ctl('f', 'fader', 6, 0, 2, 4)];
+    const n = phoneWrap(narrow);
+    for (const it of narrow) expect(n.pos[it.id]).toEqual({ x: it.x, y: it.y, w: it.w, h: it.h });
+    expect(phoneWrap([])).toEqual({ pos: {}, rows: 1 });
   });
 });
 
