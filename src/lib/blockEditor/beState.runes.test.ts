@@ -1,7 +1,7 @@
 // BeState is a rune module (`$state`), so it runs in the `runes` project (client-mode compile).
 import { describe, expect, it } from 'vitest';
 import { BeState, emptyBoard, type BeSource, type BeStorage } from './beState.svelte';
-import { boardKey, legacyBoardKey, legacyMetaKey, legacySingleKey, metaKey, type KeyValueStore } from './boardPersistence';
+import { boardDiffersFromSeed, boardKey, legacyBoardKey, legacyMetaKey, legacySingleKey, metaKey, seedKey, type KeyValueStore } from './boardPersistence';
 import { buildCatalog, type BeCtl } from './catalog';
 import { addControl, moveItem, type BeBoard } from './boardModel';
 
@@ -297,5 +297,145 @@ describe('BeState legacy hand-over (previous editor keys)', () => {
     expect(again.board!.boards.Gig![0]).toMatchObject({ key: 'k0', x: 10, y: 2 });
     expect(pagesOf(again, 'Studio')).toEqual(['Desk']);
     expect(pagesOf(again, 'Default')).toEqual(['Old']);
+  });
+});
+
+describe('BeState layout status, resets and the default for the type', () => {
+  const differs = (st: BeState) => boardDiffersFromSeed(st.board!, st.seed!);
+
+  it('the seed is the device layout until a default is saved; a change makes the layout custom', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    expect(st.userSeed).toBe(false);
+    expect(st.seed?.pageOrder).toEqual(['One', 'Two']);
+    expect(differs(st)).toBe(false);
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    expect(differs(st)).toBe(true);
+    // a page switch is navigation, not a change
+    st.setPage('Two');
+    expect(differs(st)).toBe(true);
+    st.resetAll();
+    expect(differs(st)).toBe(false);
+    expect(st.board!.page).toBe('Two');
+    expect(new BeState(m.store).sync(src())).toBe(true);
+  });
+
+  it('reset this page puts only the current page back and saves', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    let b = moveItem(st.board!, 'w0.k0', 'One', 0, 4).board;
+    b = addControl(b, 'Two', { key: 'k1', view: 'knob' }).board;
+    st.commit(b);
+    st.setPage('Two');
+    st.resetPage();
+    expect(st.board!.boards.Two!.map((i) => (i as { key: string }).key)).toEqual(['bypass']);
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 4 }); // the other page keeps its change
+    expect(differs(st)).toBe(true);
+    st.setPage('One');
+    st.resetPage();
+    expect(differs(st)).toBe(false);
+    const again = new BeState(m.store);
+    again.sync(src());
+    expect(find(again.board, 'One', 'w0.k0')).toMatchObject({ y: 0 });
+  });
+
+  it('save as default: stored per family, the seed of every profile, used before the device layout', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.saveAsDefault();
+    expect(st.userSeed).toBe(true);
+    expect(m.data.has(seedKey('Amp'))).toBe(true);
+    expect(differs(st)).toBe(false); // the layout now equals its seed
+    // a new copy and the Blank profile
+    st.addProfile();
+    expect(differs(st)).toBe(false);
+    st.setProfile('Blank');
+    expect(st.seed!.pageOrder).toEqual(['Page 1']);
+    // a type change re-seeds Default from the saved default, not from the device layout
+    st.setProfile('Default');
+    const cat = catalog();
+    st.sync(src({ variantSig: 'OTHER', deviceSeed: () => seedFrom(cat, 'OTHER') }));
+    expect(st.source).toBe('user-seed');
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 4 });
+    // reset all goes back to the saved default; reset to device to the device layout
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 8).board);
+    st.resetAll();
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 4 });
+    st.resetToDevice();
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 0 });
+    expect(differs(st)).toBe(true);
+    // forgetting the default makes the device layout the seed again
+    st.forgetDefault();
+    expect(st.userSeed).toBe(false);
+    expect(m.data.has(seedKey('Amp'))).toBe(false);
+    expect(differs(st)).toBe(false);
+  });
+
+  it('reset this page leaves an unchanged page alone (no write)', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.setPage('Two'); // unchanged page
+    const writes = m.writes.length;
+    expect(st.resetPage()).toBe(false);
+    expect(m.writes.length).toBe(writes);
+    st.setPage('One');
+    expect(st.resetPage()).toBe(true);
+  });
+
+  it('a board loaded from the saved default: loading writes nothing; forgetting the default shows the device layout without writing', () => {
+    const m = memStore();
+    const first = new BeState(m.store);
+    first.sync(src());
+    first.commit(moveItem(first.board!, 'w0.k0', 'One', 0, 4).board);
+    first.saveAsDefault();
+    // a fresh family state (other storage keys gone): Default loads from the saved default
+    const m2 = memStore();
+    m2.data.set(seedKey('Amp'), m.data.get(seedKey('Amp'))!);
+    const st = new BeState(m2.store);
+    st.sync(src());
+    expect(st.source).toBe('user-seed');
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 4 });
+    expect(m2.writes).toEqual([]);
+    st.setPage('Two');
+    st.forgetDefault();
+    expect(m2.writes).toEqual(['-' + seedKey('Amp')]); // only the default itself goes
+    expect(st.source).toBe('seed');
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 0 }); // the device layout, as a remount would show
+    expect(st.board!.page).toBe('Two');
+    expect(differs(st)).toBe(false);
+  });
+
+  it('forgetting the default keeps a board the profile already saved', () => {
+    const m = memStore();
+    const st = new BeState(m.store);
+    st.sync(src());
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 4).board);
+    st.saveAsDefault();
+    st.commit(moveItem(st.board!, 'w0.k0', 'One', 0, 6).board);
+    expect(st.source).toBe('desktop');
+    st.forgetDefault();
+    expect(find(st.board, 'One', 'w0.k0')).toMatchObject({ y: 6 });
+  });
+
+  it('saving the default of a family that still reads the previous editor keys carries them over first', () => {
+    const m = memStore();
+    m.data.set(legacyMetaKey('Amp'), JSON.stringify({ active: 'Live', names: ['Default', 'Blank', 'Live'] }));
+    m.data.set(legacyBoardKey('Amp', 'Live'), JSON.stringify({ pageOrder: ['Gig'], page: 'Gig', boards: { Gig: [{ id: 'w', key: 'k0', view: 'knob', x: 1, y: 0, w: 1, h: 1 }] } }));
+    const st = new BeState(m.store);
+    st.sync(src());
+    expect(st.source).toBe('legacy');
+    expect(m.writes).toEqual([]);
+    st.saveAsDefault();
+    expect(m.data.has(boardKey('Amp', 'Live', 'desktop'))).toBe(true);
+    const again = new BeState(m.store);
+    again.sync(src());
+    expect(again.profile).toBe('Live');
+    expect(again.board!.pageOrder).toEqual(['Gig']);
   });
 });

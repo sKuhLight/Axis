@@ -3,8 +3,10 @@ import {
   boardDiffersFromSeed,
   boardKey,
   carryLegacyBoards,
+  clearUserSeed,
   DEFAULT_PREFS,
   deviceClassFrom,
+  hasUserSeed,
   isFamilyMigrated,
   legacyBoardKey,
   markFamilyMigrated,
@@ -12,7 +14,9 @@ import {
   legacySingleKey,
   loadBoard,
   loadMeta,
+  loadSeed,
   metaKey,
+  pageDiffersFromSeed,
   prefsFor,
   saveBoard,
   saveMeta,
@@ -381,6 +385,53 @@ describe('load → save → load round trips', () => {
   });
 });
 
+describe('save as default for the type (family seed)', () => {
+  it('loadSeed: the user seed first (not for Blank), else the built-in seed; normalized and stamped', () => {
+    const st = memory();
+    expect(loadSeed({ ...base, storage: st, profile: 'Default' })).toMatchObject({ source: 'seed' });
+    saveUserSeed(st, 'amp', mk('Mine', 'old'));
+    const r = loadSeed({ ...base, storage: st, profile: 'Default' });
+    expect(r.source).toBe('user-seed');
+    expect(r.board.pageOrder).toEqual(['Mine']);
+    expect(r.board.variantSig).toBe('v1sig'); // a Default seed adopts the current variant
+    expect(loadSeed({ ...base, storage: st, profile: 'Layout 1' }).board.variantSig).toBeUndefined();
+    expect(loadSeed({ ...base, storage: st, profile: 'Blank', seed: mk('Empty') }).source).toBe('seed');
+    // only keys the catalog lists (and block-level ones) survive normalization
+    const odd: BeBoard = { v: 2, pageOrder: ['X'], page: 'X', boards: { X: [{ id: 'g', key: 'gone', view: 'knob', x: 0, y: 0, w: 2, h: 2 }] } };
+    saveUserSeed(st, 'amp', odd);
+    expect(loadSeed({ ...base, storage: st, profile: 'Default' }).board.boards.X).toEqual([]);
+  });
+
+  it('fallback order on load: own class → desktop → user seed → device seed', () => {
+    const st = memory();
+    saveUserSeed(st, 'amp', mk('UserSeed'));
+    expect(loadBoard({ ...base, storage: st, profile: 'Default', deviceClass: 'tablet' }).source).toBe('user-seed');
+    st.set(boardKey('amp', 'Default', 'desktop'), JSON.stringify(mk('Desk', 'v1sig')));
+    expect(loadBoard({ ...base, storage: st, profile: 'Default', deviceClass: 'tablet' }).source).toBe('desktop');
+    st.set(boardKey('amp', 'Default', 'tablet'), JSON.stringify(mk('Tab', 'v1sig')));
+    expect(loadBoard({ ...base, storage: st, profile: 'Default', deviceClass: 'tablet' }).source).toBe('own');
+    // a type change (other variant) skips the stored Default boards and lands on the user seed
+    expect(loadBoard({ ...base, storage: st, profile: 'Default', deviceClass: 'tablet', variantSig: 'v2sig' }).source).toBe('user-seed');
+  });
+
+  it('hasUserSeed / clearUserSeed', () => {
+    const st = memory();
+    expect(hasUserSeed(st, 'amp')).toBe(false);
+    saveUserSeed(st, 'amp', mk('S'));
+    expect(hasUserSeed(st, 'amp')).toBe(true);
+    const removed: string[] = [];
+    clearUserSeed({ ...st, remove: (k: string) => { removed.push(k); delete st.data[k]; } }, 'amp');
+    expect(removed).toEqual([seedKey('amp')]);
+    expect(hasUserSeed(st, 'amp')).toBe(false);
+    // a store without remove blanks the key instead
+    saveUserSeed(st, 'amp', mk('S'));
+    clearUserSeed(st, 'amp');
+    expect(st.data[seedKey('amp')]).toBe('');
+    expect(hasUserSeed(st, 'amp')).toBe(false);
+    expect(loadSeed({ ...base, storage: st, profile: 'Default' }).source).toBe('seed');
+  });
+});
+
 describe('boardDiffersFromSeed', () => {
   const s: BeBoard = {
     v: 2,
@@ -416,6 +467,25 @@ describe('boardDiffersFromSeed', () => {
     const relabel = { ...s, boards: { ...s.boards, B: [{ id: 'd', kind: 'hdiv' as const, x: 0, y: 0, w: 6, h: 1, label: 'X' }] } };
     expect(boardDiffersFromSeed(relabel, s)).toBe(true);
     expect(boardDiffersFromSeed({ ...s, pageOrder: ['B', 'A'] }, s)).toBe(true);
+  });
+  it('per page: only the named page counts; a page the seed lacks counts as empty there', () => {
+    const moved = { ...s, boards: { ...s.boards, A: [s.boards.A![0]!, { ...s.boards.A![1]!, x: 4 }] } };
+    expect(pageDiffersFromSeed(moved, s, 'A')).toBe(true);
+    expect(pageDiffersFromSeed(moved, s, 'B')).toBe(false);
+    const extra: BeBoard = { ...s, pageOrder: [...s.pageOrder, 'Mine'], boards: { ...s.boards, Mine: [] } };
+    expect(pageDiffersFromSeed(extra, s, 'Mine')).toBe(false); // empty, as in the seed (absent)
+    const filled: BeBoard = { ...extra, boards: { ...extra.boards, Mine: [{ id: 'm', key: 'k1', view: 'knob', x: 0, y: 0, w: 2, h: 2 }] } };
+    expect(pageDiffersFromSeed(filled, s, 'Mine')).toBe(true);
+    expect(pageDiffersFromSeed(filled, s, 'Mine', new Set(['k2']))).toBe(false);
+  });
+  it('with the catalog keys, controls the catalog does not list are ignored on both sides', () => {
+    const withMeter: BeBoard = { ...s, boards: { ...s.boards, B: [...s.boards.B!, { id: 'm', key: 'meter', view: 'meter', x: 6, y: 0, w: 1, h: 4 }] } };
+    expect(boardDiffersFromSeed(withMeter, s)).toBe(true);
+    expect(boardDiffersFromSeed(withMeter, s, new Set(['k1', 'k2']))).toBe(false);
+    expect(boardDiffersFromSeed(withMeter, s, new Set(['k1', 'k2', 'meter']))).toBe(true);
+    // dividers always count
+    const noDiv: BeBoard = { ...s, boards: { ...s.boards, B: [] } };
+    expect(boardDiffersFromSeed(noDiv, s, new Set(['k1', 'k2']))).toBe(true);
   });
 });
 

@@ -2,7 +2,9 @@
   // Full-view rail screen for a virtual effect (Setup / Controllers / Modifier / FC). It's the same
   // control board as a block's (the Block Editor surface), pointed at effectId 1/2/3/199 — device-authentic
   // editor pages come from the served layout, reads/writes go through the normal param path, and the
-  // board is stored under the same keys the Block Editor uses for that slug.
+  // board is stored under the same keys the Block Editor uses for that slug. Without a grid block the
+  // surface shows its compact row (page tabs · search · ⋯) instead of the Block Editor header, so Arrange,
+  // Top / Side, control size, layout profiles and the search stay reachable here.
   import { editor } from './editor.svelte';
   import BeSurface from './blockEditor/BeSurface.svelte';
 
@@ -34,7 +36,7 @@
       <div class="msg"><p>No parameters available for {editor.virtual.name}.</p></div>
     {:else}
       <div class="vbody">
-        <BeSurface slug={editor.virtual.slug} {accent} />
+        <BeSurface slug={editor.virtual.slug} {accent} typeName={editor.virtual.name} />
       </div>
     {/if}
   </section>

@@ -73,6 +73,19 @@ export function catFor(pack: string | null, baseName?: string): CatEntry {
   return FALLBACK;
 }
 
+/** "MultiComp" → "Multi Comp". */
+const spaced = (name: string): string => name.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+
+/** Name of a block family in text ("Save as default for …"): the short label, unless another family
+ *  shares it (Comp / MultiComp), then the spaced pack name; a block outside the catalog uses its pack
+ *  or base name, else "this block". */
+export function familyLabel(pack: string | null | undefined, baseName?: string): string {
+  const cat = catFor(pack ?? null, baseName);
+  if (cat === FALLBACK) return spaced(pack || baseName || '') || 'this block';
+  const shared = Object.keys(CATALOG).filter((k) => CATALOG[k]!.short === cat.short).length > 1;
+  return shared && pack ? spaced(pack) : cat.short;
+}
+
 /** Darken (p<0) / lighten (p>0) a #rrggbb hex by fraction |p|. Ported from the prototype's shade(). */
 export function shade(hex: string, p: number): string {
   const n = parseInt(hex.slice(1), 16);

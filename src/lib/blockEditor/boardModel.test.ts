@@ -23,6 +23,7 @@ import {
   reflowPack,
   removeItem,
   renamePage,
+  resetPageFrom,
   resizeItem,
   rotateDivider,
   sequentialIdGen,
@@ -628,5 +629,43 @@ describe('cross-page move drops the source row', () => {
     expect('row' in locate(r.board, 'a')!.item).toBe(false);
     const same = moveItem(b, 'a', 'A', 2, 0);
     expect(locate(same.board, 'a')!.item).toMatchObject({ row: 3 });
+  });
+});
+
+describe('resetPageFrom', () => {
+  const seed: BeBoard = {
+    v: 2,
+    pageOrder: ['A', 'B'],
+    page: 'A',
+    boards: { A: [knob('a1', 'k1', 0, 0), knob('a2', 'k2', 2, 0)], B: [knob('b1', 'k3', 0, 0)] }
+  };
+  it('puts the seed page back and leaves the other pages, the order and the current page alone', () => {
+    const cur: BeBoard = {
+      v: 2,
+      pageOrder: ['B', 'A', 'Mine'],
+      page: 'B',
+      boards: { A: [knob('a1', 'k1', 6, 2)], B: [knob('b1', 'k3', 4, 0), knob('bx', 'k4', 0, 0)], Mine: [knob('m', 'k5', 0, 0)] }
+    };
+    const r = resetPageFrom(cur, seed, 'A', sequentialIdGen('n'));
+    expect(r.ok).toBe(true);
+    expect(r.board.boards.A).toEqual(seed.boards.A);
+    expect(r.board.boards.A).not.toBe(seed.boards.A);
+    expect(r.board.boards.B).toBe(cur.boards.B);
+    expect(r.board.pageOrder).toEqual(['B', 'A', 'Mine']);
+    expect(r.board.page).toBe('B');
+  });
+  it('a page the seed does not have becomes empty; a missing page fails', () => {
+    const cur: BeBoard = { v: 2, pageOrder: ['A', 'Mine'], page: 'Mine', boards: { A: [], Mine: [knob('m', 'k5', 0, 0)] } };
+    expect(resetPageFrom(cur, seed, 'Mine').board.boards.Mine).toEqual([]);
+    expect(resetPageFrom(cur, seed, 'Nope')).toMatchObject({ ok: false, reason: 'missing' });
+  });
+  it('a seed item whose id now lives on another page gets a fresh id', () => {
+    // a1 was moved from A to B by the user
+    const cur: BeBoard = { v: 2, pageOrder: ['A', 'B'], page: 'A', boards: { A: [], B: [knob('a1', 'k1', 4, 0)] } };
+    const r = resetPageFrom(cur, seed, 'A', sequentialIdGen('n'));
+    const ids = r.board.boards.A!.map((i) => i.id);
+    expect(ids).not.toContain('a1');
+    expect(ids).toContain('a2');
+    expect(new Set([...ids, ...r.board.boards.B!.map((i) => i.id)]).size).toBe(3);
   });
 });

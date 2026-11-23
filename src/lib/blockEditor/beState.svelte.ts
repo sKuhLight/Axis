@@ -9,25 +9,34 @@
 //     legacy keys are never read again);
 //   - nothing loads while the catalog is still trivially empty (only the always-present bypass entry);
 //   - a reload happens when the family, the catalog's key set, the device-layout variant, the device
-//     class or the remote revision changes. A reload of the same family keeps the page the user is on.
+//     class or the remote revision changes. A reload of the same family keeps the page the user is on;
+//   - every load also resolves the active profile's seed (the family's "default for this type" board,
+//     else the device layout / curated fallback; Blank: an empty board) — the layout status compares
+//     against it, and "Reset this page" / "Reset all pages" go back to it.
 // Covered by beState.runes.test.ts.
 
 import {
   BLOCK_LEVEL_KEYS,
   normalizeBoard,
+  resetPageFrom,
   type BeBoard
 } from './boardModel';
 import {
   BLANK_PROFILE,
   boardKey,
   carryLegacyBoards,
+  clearUserSeed,
   DEFAULT_PROFILE,
   DEVICE_CLASSES,
+  hasUserSeed,
   loadBoard,
   loadMeta,
+  loadSeed,
+  pageDiffersFromSeed,
   prefsFor,
   saveBoard,
   saveMeta,
+  saveUserSeed,
   withPrefs,
   type BeMeta,
   type BoardSource,
@@ -69,6 +78,10 @@ export class BeState {
   meta = $state.raw<BeMeta>(defaultMeta());
   /** Where the current board came from (own key, desktop fallback, seed, …). */
   source = $state<BoardSource | null>(null);
+  /** The active profile's seed (normalized), or null before the first load. Replaced, never mutated. */
+  seed = $state.raw<BeBoard | null>(null);
+  /** The family has a "default for this type" board. */
+  userSeed = $state(false);
   /** Bumped when a load should bring the stored current page into view (new family / profile). */
   loads = $state(0);
   /** Arrange mode (interim) and the cell size frozen while arranging. */
@@ -121,8 +134,25 @@ export class BeState {
     else this.loads++;
     this.board = board;
     this.source = source;
+    this.#refreshSeed();
     if (!sameFamily) this.setEditMode(false);
     return true;
+  }
+
+  /** Resolve the active profile's seed (after a load, a profile switch or a change of the family seed). */
+  #refreshSeed(): void {
+    const src = this.#src;
+    if (!src) return;
+    this.userSeed = hasUserSeed(this.#storage, src.slug);
+    this.seed = loadSeed({
+      storage: this.#storage,
+      slug: src.slug,
+      profile: this.meta.active,
+      catalogKeys: src.catalog.map((c) => c.key),
+      seed: this.#seedFor(this.meta.active),
+      variantSig: src.variantSig,
+      viewsByKey: viewsByKey(src.catalog)
+    }).board;
   }
 
   #seedFor(profile: string): BeBoard {
@@ -165,6 +195,8 @@ export class BeState {
     if (!src) return;
     this.#carryLegacy();
     saveBoard({ storage: this.#storage, slug: src.slug, profile: this.meta.active, deviceClass: src.deviceClass, board });
+    // the board now lives under the own device-class key
+    this.source = src.deviceClass === 'desktop' ? 'desktop' : 'own';
   }
 
   #saveMeta(meta: BeMeta): void {
@@ -237,6 +269,7 @@ export class BeState {
     const { board, source } = this.#load(name);
     this.board = board;
     this.source = source;
+    this.#refreshSeed();
     this.loads++;
   }
 
@@ -251,6 +284,7 @@ export class BeState {
     this.board = copy;
     this.source = 'own';
     this.#save(copy);
+    this.#refreshSeed();
     return name;
   }
 
@@ -265,8 +299,61 @@ export class BeState {
       const { board, source } = this.#load(DEFAULT_PROFILE);
       this.board = board;
       this.source = source;
+      this.#refreshSeed();
       this.loads++;
     }
+  }
+
+  /** Reset the current page to the profile's seed (its page of the same name, else empty) and save;
+   *  false (and no write) when the page already equals it. */
+  resetPage(): boolean {
+    const b = this.board;
+    const seed = this.seed;
+    const src = this.#src;
+    if (!src || !b || !seed) return false;
+    // an unchanged page is left alone (no write)
+    if (!pageDiffersFromSeed(b, seed, b.page, new Set(src.catalog.map((c) => c.key)))) return false;
+    const r = resetPageFrom(b, seed, b.page);
+    if (r.ok) this.commit(r.board);
+    return r.ok;
+  }
+
+  /** Reset every page to the profile's seed (the saved default for the type, else the device layout;
+   *  Blank: empty) and save. The current page stays when the seed has it. */
+  resetAll(): void {
+    const b = this.board;
+    const seed = this.seed;
+    if (!this.#src || !seed) return;
+    const page = b && seed.pageOrder.includes(b.page) ? b.page : seed.page;
+    this.commit({ ...JSON.parse(JSON.stringify(seed)), page } as BeBoard);
+  }
+
+  /** Save the current board as the family's "default for this type" (F8: per block family): profiles
+   *  without a board of their own, and a Default re-seeded by a type change, start from it. */
+  saveAsDefault(): void {
+    const src = this.#src;
+    const b = this.board;
+    if (!src || !b) return;
+    this.#carryLegacy();
+    saveUserSeed(this.#storage, src.slug, b);
+    this.#refreshSeed();
+  }
+
+  /** Forget the family's "default for this type": the device layout seeds again. */
+  forgetDefault(): void {
+    const src = this.#src;
+    if (!src) return;
+    clearUserSeed(this.#storage, src.slug);
+    // a board still showing the forgotten default (nothing stored for the profile yet) goes back to
+    // what the profile loads now — the device layout — without writing anything
+    if (this.source === 'user-seed') {
+      const keep = this.board?.page;
+      let { board, source } = this.#load(this.meta.active);
+      if (keep && board.pageOrder.includes(keep)) board = board.page === keep ? board : { ...board, page: keep };
+      this.board = board;
+      this.source = source;
+    }
+    this.#refreshSeed();
   }
 
   /** Re-seed the active profile from the device layout (discard customization) and save it. */

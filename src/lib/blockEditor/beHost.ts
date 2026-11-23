@@ -21,6 +21,8 @@ export interface BeGhost {
 export interface BeHost {
   // ── reads ──
   readonly editMode: boolean;
+  /** Tile flashed after a "Find a control…" jump. */
+  readonly flashId: string | null;
   readonly isPhone: boolean;
   /** Category accent for components that take a colour value (EQ graph). */
   readonly accent: string;

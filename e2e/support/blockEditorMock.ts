@@ -129,11 +129,57 @@ export interface ParamWrite {
 
 export interface BlockEditorMock {
   writes: ParamWrite[];
+  /** Captured channel switches of the amp (`POST /preset/blocks/<eid>/channel`). */
+  channelWrites: string[];
+  /** Captured bypass writes of the amp (`POST /preset/blocks/<eid>/bypass`). */
+  bypassWrites: boolean[];
+  /** Captured bypass writes of every block, by effect id. */
+  bypassByEid: Record<number, boolean[]>;
 }
 
+export interface BlockEditorMockOptions {
+  /** Give the amp block channels, starting on this one (its live state then comes from /preset/blocks
+   *  and /preset/scene-state and follows the captured channel / bypass writes). */
+  channel?: string;
+  /** Three more blocks beside the amp: a cab at (0,1) (`CAB_EID`), a block without a parameter pack
+   *  at (0,2) (`NOPACK_EID`) and a block whose parameters fail to read at (0,3) (`ERROR_EID`). */
+  extraBlocks?: boolean;
+}
+
+export const CAB_EID = 101;
+export const NOPACK_EID = 102;
+export const ERROR_EID = 103;
+const EXTRA_CELLS = [
+  { row: 0, col: 1, effectId: CAB_EID, name: 'Cab 1', slug: 'Cab', isShunt: false, routeFlag: 0, fromRows: [0] },
+  { row: 0, col: 2, effectId: NOPACK_EID, name: 'Mystery 1', slug: null, isShunt: false, routeFlag: 0, fromRows: [0] },
+  { row: 0, col: 3, effectId: ERROR_EID, name: 'Drive 1', slug: 'Drive', isShunt: false, routeFlag: 0, fromRows: [0] }
+];
+const CAB_PARAMS = {
+  block: 'Cab',
+  slug: 'cab',
+  page: 1,
+  named: [knob(8, 'Level', 0.5), knob(9, 'Pan'), knob(10, 'Low Cut', 0.2)],
+  enums: [],
+  type: null
+};
+const CAB_STATE = {
+  modeParam: 0,
+  mode: { value: 0, label: 'Legacy' },
+  modeOptions: [
+    { value: 0, label: 'Legacy' },
+    { value: 1, label: 'DynaCab' }
+  ],
+  bankOptions: ['FACTORY 1'],
+  dynaOptions: [],
+  slots: [{ slot: 1, bankParam: 1, irParam: 2, dynaParam: 3, bank: { value: 0, label: 'FACTORY 1' }, irIndex: 4, irName: '4x12 Green', dyna: { value: 0, label: '' } }]
+};
+
 /** Install the mocked backend and boot a clean workbench with the amp block on the grid. */
-export async function bootBlockEditorMock(page: Page): Promise<BlockEditorMock> {
-  const mock: BlockEditorMock = { writes: [] };
+export async function bootBlockEditorMock(page: Page, opts: BlockEditorMockOptions = {}): Promise<BlockEditorMock> {
+  const mock: BlockEditorMock = { writes: [], channelWrites: [], bypassWrites: [], bypassByEid: {} };
+  const grid = opts.extraBlocks ? { ...GRID, cells: [...GRID.cells, ...EXTRA_CELLS] } : GRID;
+  const live = { bypassed: false, channel: opts.channel ?? null };
+  const blockState = () => [{ slug: 'Amp', name: 'Amp 1', effectId: AMP_EID, row: 0, col: 0, fromRows: [], bypassed: live.bypassed, channel: live.channel }];
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   await page.route('**/api/**', async (route) => {
     const req = route.request();
@@ -141,8 +187,32 @@ export async function bootBlockEditorMock(page: Page): Promise<BlockEditorMock> 
     if (path === '/device') return json(route, DEVICE);
     if (path === '/device/detect') return json(route, DETECT);
     if (path === '/healthz') return json(route, { ok: true, api: { version: 2 }, device: 'FM3' });
-    if (path === '/preset/grid') return json(route, GRID);
-    if (path === '/preset/blocks') return json(route, []);
+    if (path === '/preset/grid') return json(route, grid);
+    if (path === '/preset/blocks') return json(route, opts.channel ? blockState() : []);
+    if (path === '/preset/scene-state' && opts.channel) return json(route, blockState().map(({ effectId, bypassed, channel }) => ({ effectId, bypassed, channel })));
+    if (path === `/preset/blocks/${AMP_EID}/channel` && req.method() === 'POST') {
+      const body = req.postDataJSON() as { channel: string };
+      mock.channelWrites.push(body.channel);
+      live.channel = body.channel;
+      return json(route, { ok: true });
+    }
+    const byp = /^\/preset\/blocks\/(\d+)\/bypass$/.exec(path);
+    if (byp && req.method() === 'POST') {
+      const eid = Number(byp[1]);
+      const body = req.postDataJSON() as { bypassed: boolean };
+      (mock.bypassByEid[eid] ??= []).push(body.bypassed);
+      if (eid === AMP_EID) {
+        mock.bypassWrites.push(body.bypassed);
+        live.bypassed = body.bypassed;
+      }
+      return json(route, { ok: true });
+    }
+    if (opts.extraBlocks) {
+      if (path === `/preset/blocks/${CAB_EID}/params`) return json(route, CAB_PARAMS);
+      if (path === `/preset/blocks/${CAB_EID}/cab`) return json(route, CAB_STATE);
+      if (path === '/cab/irs') return json(route, { 'FACTORY 1': ['4x12 Green', '2x12 Blue'] });
+      if (path === `/preset/blocks/${ERROR_EID}/params`) return json(route, { error: 'unknown block' }, 404); // 4xx: a read error without the failure reporter
+    }
     if (path === '/ports') return json(route, { chosen: null, override: null, profileOverride: null, ports: [] });
     if (path === `/preset/blocks/${AMP_EID}/params`) return json(route, AMP_PARAMS);
     const w = new RegExp(`^/preset/blocks/${AMP_EID}/params/(\\d+)$`).exec(path);
@@ -152,6 +222,11 @@ export async function bootBlockEditorMock(page: Page): Promise<BlockEditorMock> 
       return json(route, { ok: true });
     }
     if (path.startsWith('/help/')) return json(route, null, 404); // no parameter help copy
+    if (/^\/blocks\/[^/]+\/types$/.test(path))
+      return json(route, [
+        { value: 7, name: 'Plexi 100W', manufacturer: null, basedOn: null },
+        { value: 8, name: 'Recto Orange', manufacturer: null, basedOn: null }
+      ]);
     if (path === '/preset/monitors/live') return json(route, [{ effectId: AMP_EID, family: 'AMP', paramName: 'AMP_OUTPUT', role: 'level', norm: 0.62, db: -20 }]);
     return json(route, {});
   });
@@ -166,4 +241,44 @@ export async function openAmpEditor(page: Page): Promise<void> {
   await page.locator('[data-idx="0,0"].cell.block').click();
   await expect(page.locator('[data-be-board]')).toBeVisible();
   await expect(page.locator('[data-be-key="k0"]').first()).toBeVisible();
+}
+
+// ── the header's ⋯ menu (rows carry `be-mi-<id>` classes, see src/lib/blockEditor/moreMenu.ts) ──
+
+/** Open the ⋯ menu of the (first) Block Editor surface and return it. */
+export async function openMore(page: Page, scope = page.locator('body')) {
+  await scope.locator('[data-be-more]').first().click();
+  const menu = page.getByRole('menu', { name: 'Block and layout options' });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** Pick a ⋯ row by its id (`arrange`, `nav-side`, `size-l`, `new-copy`, …); confirms when it asks. */
+export async function pickMore(page: Page, id: string, opts: { confirm?: boolean; scope?: ReturnType<Page['locator']> } = {}) {
+  const menu = await openMore(page, opts.scope);
+  await menu.locator(`.be-mi-${id}`).click();
+  if (opts.confirm) await menu.locator('[data-menu-confirm]').click();
+  await expect(menu).toHaveCount(0);
+}
+
+const exact = (text: string) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+
+/** A profile row of the open ⋯ menu by its name (the label, without its hint). */
+export const profileRow = (menu: ReturnType<Page['locator']>, name: string) =>
+  menu.locator('.be-mi-profile').filter({ has: menu.page().locator('span:not(.aw-menu-check)', { hasText: exact(name) }) });
+
+/** Pick a layout profile from the ⋯ menu. */
+export async function pickProfile(page: Page, name: string) {
+  const menu = await openMore(page);
+  await profileRow(menu, name).click();
+  await expect(menu).toHaveCount(0);
+}
+
+/** The active layout profile, read from the ⋯ menu (opened, then closed). */
+export async function checkedProfile(page: Page): Promise<string> {
+  const menu = await openMore(page);
+  const label = (await menu.locator('.be-mi-profile[aria-checked="true"] span:not(.aw-menu-check)').first().textContent())?.trim() ?? '';
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  return label;
 }

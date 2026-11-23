@@ -117,6 +117,7 @@
   class:eq={view === 'eq'}
   class:standalone
   class:dragging={host.dragId === item.id}
+  class:flash={!standalone && host.flashId === item.id}
   data-be-item={item.id}
   data-be-key={key || null}
   data-be-view={view}
@@ -363,6 +364,23 @@
 </div>
 
 <style>
+  /* a "Find a control…" jump points at its tile */
+  .be-tile.flash {
+    animation: beTileFlash 1.4s ease;
+  }
+  @keyframes beTileFlash {
+    0%,
+    55% {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    100% {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
   .be-tile {
     position: relative;
     min-width: 0;

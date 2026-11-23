@@ -1,11 +1,12 @@
 <script lang="ts">
-  // Block Editor surface (board model v2): the board of a block's controls with every page at once
-  // (top strip or side stack), always fitted to the panel, plus the interim chrome around it — tab row
-  // (search, page tabs, navigation / control-size toggles, layout profiles, Arrange), arrange bar and
-  // "Add control" tray, value bubble, select popover, modifier flyout and the workbench pin paths.
+  // Block Editor surface (board model v2): the header (type chip, page tabs, "Find a control…",
+  // Engaged | Mute | Scene Ignore, the ⋯ menu — or, without a block, the compact row of the virtual-effect
+  // screens), the side page list, and the board of a block's controls with every page at once (top strip
+  // or side stack), always fitted to the panel; plus the interim arrange bar and "Add control" tray,
+  // value bubble, select popover, flat search results, modifier flyout and the workbench pin paths.
   // All device reads / writes go through getEditorSurface() (live editor or offline convert buffer);
   // boards persist per block family, profile and device class (BeState → boardPersistence).
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { getEditorSurface } from '../editorSurface';
   import type { EQBand } from '../EQGraph.svelte';
   import ModifierFlyout from '../ModifierFlyout.svelte';
@@ -34,6 +35,14 @@
   import { axisBlockEditorModifierController } from '../axis-workbench/blockEditor/blockEditorModifierController';
   import BeBoard from './BeBoard.svelte';
   import BeControl from './BeControl.svelte';
+  import BeFind from './BeFind.svelte';
+  import BeHeader from './BeHeader.svelte';
+  import BeMoreMenu from './BeMoreMenu.svelte';
+  import BePageNav from './BePageNav.svelte';
+  import { findGroups, flatMatches, itemIdOn, jumpPage, type FindFilter } from './findControls';
+  import { beLayer } from './overlayLayer';
+  import type { BeBlockChrome } from './headerModel';
+  import { buildMoreMenu } from './moreMenu';
   import { setBeHost, type BeGhost, type BeHost } from './beHost';
   import { BeState } from './beState.svelte';
   import { trackDeviceClass } from './deviceClass.svelte';
@@ -56,7 +65,7 @@
     type BeControl as BeControlItem,
     type BeItem
   } from './boardModel';
-  import { BLANK_PROFILE, DEFAULT_PROFILE } from './boardPersistence';
+  import { boardDiffersFromSeed, pageDiffersFromSeed } from './boardPersistence';
   import { buildCatalog, type BeCtl, type BeKind } from './catalog';
   import { buildCuratedBoardV2, buildDeviceLayoutBoardV2 } from './deviceLayoutBoardV2';
   import { exceedsPinHold, PIN_HOLD_MS, resolvePinTarget, type PinTarget } from './pinDrag';
@@ -87,8 +96,36 @@
     eqBands = [] as EQBand[],
     eqGainRange = 20,
     eqTitle = 'EQ',
-    hideIds = [] as number[]
-  }: { slug?: string; accent?: string; eqBands?: EQBand[]; eqGainRange?: number; eqTitle?: string; hideIds?: number[] } = $props();
+    hideIds = [] as number[],
+    block = null,
+    typeName = '',
+    status = 'ready',
+    message = '',
+    belowHeader = undefined,
+    headerEnd = undefined,
+    resetKey = ''
+  }: {
+    slug?: string;
+    accent?: string;
+    eqBands?: EQBand[];
+    eqGainRange?: number;
+    eqTitle?: string;
+    hideIds?: number[];
+    /** A grid block's header data and actions; null = the compact row (virtual-effect screens). */
+    block?: BeBlockChrome | null;
+    /** Name in "Save as default for …" when there is no block (the screen's name). */
+    typeName?: string;
+    /** Parameter state of the block: the board loads only when ready; otherwise `message` shows in the
+     *  board area (while reloading a block that already has a board, the board stays). */
+    status?: 'ready' | 'loading' | 'error' | 'nopack';
+    message?: string;
+    /** Under the header (the grid map strip). */
+    belowHeader?: Snippet;
+    /** End of the header row (the monolith's close button). */
+    headerEnd?: Snippet;
+    /** Identity of the block shown (another block = a fresh editor view: no search, no arrange, …). */
+    resetKey?: string;
+  } = $props();
 
   const editor = getEditorSurface();
   const workbench = getOptionalWorkbenchContext();
@@ -149,6 +186,7 @@
   }
   $effect(() => {
     const src = { slug, deviceClass, catalog, variantSig, deviceSeed, rev: surfRev() };
+    if (status !== 'ready') return; // the parameters of another block / channel may still be in place
     untrack(() => {
       // a (re)load can swap the board under the scroll position: keep its stored page active until the
       // load effect below has brought it into view
@@ -159,11 +197,22 @@
   // ── layout ──
   let bodyW = $state(0);
   let bodyH = $state(0);
+  /** Editor width (the side navigation and the header row break depend on it, not on the board's). */
+  let rootW = $state(0);
   const prefs = $derived(be.prefs);
-  const nav = $derived(effectiveNav(prefs.nav, bodyW));
-  /** The Top / Side toggle only shows where the side navigation can take effect (or is the stored choice). */
-  const navToggle = $derived(bodyW === 0 || bodyW >= SIDE_NAV_MIN_W || prefs.nav === 'side');
+  const nav = $derived(effectiveNav(prefs.nav, rootW));
+  /** The side list can take effect at this editor width (the ⋯ menu offers it). */
+  const sideFits = $derived(rootW === 0 || rootW >= SIDE_NAV_MIN_W);
+  /** Side page list width at this editor width. */
+  const listW = $derived(rootW >= 1000 ? 172 : rootW >= 760 ? 148 : 128);
   const board = $derived(be.board);
+  /** The block whose parameters the board last loaded with (a reload of the same block keeps its board). */
+  let readyKey = $state<string | null>(null);
+  $effect(() => {
+    if (status === 'ready') readyKey = resetKey;
+  });
+  /** The board area shows the status message instead of the board. */
+  const showMessage = $derived(status === 'nopack' || status === 'error' || (status === 'loading' && (!board || readyKey !== resetKey)));
   /** Items drawn per page: dividers, and controls whose key the catalog lists right now. */
   const pages = $derived.by<BoardPage[]>(() => {
     const b = board;
@@ -207,6 +256,7 @@
     requestAnimationFrame(() => boardRef?.scrollToPage(page, smooth));
   }
   function goPage(pg: string) {
+    resultsOpen = false; // the board is what a page tab points at
     be.setPage(pg);
     sel = null;
     editingId = null;
@@ -234,6 +284,7 @@
 
   // ── arrange mode (interim) ──
   function setEdit(on: boolean) {
+    if (on) resultsOpen = false; // arranging needs the board
     if (on === be.editMode) return;
     // arranging widens every page to the full 24 cells: keep the current page in view across the switch
     const pg = be.board?.page;
@@ -245,14 +296,16 @@
     editingId = null;
     sel = null;
   }
-  // arrange is a desktop affordance (never on the phone layout); a search shows live results instead
+  // arrange is a desktop affordance (never on the phone layout); a search ends it
   $effect(() => {
     if (isPhone && be.editMode) untrack(() => setEdit(false));
   });
   let q = $state('');
-  const searching = $derived(q.trim().length > 0);
+  let findFilter = $state<FindFilter>('all');
+  /** The flat, operable search results replace the board ("Show all" / Enter). */
+  let resultsOpen = $state(false);
   $effect(() => {
-    if (searching && be.editMode) untrack(() => setEdit(false));
+    if (resultsOpen && be.editMode) untrack(() => setEdit(false));
   });
   function setNav(n: BeNav) {
     holdActive(500);
@@ -265,11 +318,46 @@
     be.refreeze(liveCell());
   }
 
+  // ── find a control (F5): popover groups; Enter / "Show all" = the flat results ──
+  let findOpen = $state(false);
+  const findList = $derived(findOpen ? findGroups(catalog, board, q, findFilter) : []);
+  const catKeys = $derived(new Set(catalog.map((c) => c.key)));
+  function findPreview(key: string): string {
+    const c = catByKey.get(key);
+    if (!c) return '';
+    if (c.kind === 'cont') {
+      const p = knobById.get(c.id);
+      return p ? formatCentre(p) : '';
+    }
+    if (c.kind === 'toggle' || c.kind === 'select') {
+      const e = enumById.get(c.id);
+      return e?.options.find((o) => o.value === e.value)?.label ?? '';
+    }
+    return '';
+  }
+  let flashId = $state<string | null>(null);
+  let flashItemTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Jump to a control: its page scrolls into view and the tile flashes. */
+  function jumpTo(key: string, page?: string) {
+    const b = be.board;
+    const label = catByKey.get(key)?.label ?? key;
+    const pg = jumpPage(b, key, page);
+    if (!b || !pg) {
+      editor.showToast(`“${label}” is on no page — Show all to use it`, 'var(--textdim)');
+      return;
+    }
+    resultsOpen = false;
+    goPage(pg);
+    flashId = itemIdOn(b, pg, key);
+    if (flashItemTimer) clearTimeout(flashItemTimer);
+    flashItemTimer = setTimeout(() => (flashId = null), 1400);
+  }
+  function findPin(key: string) {
+    const c = catByKey.get(key);
+    if (c) void pinControlToWorkbench(c);
+  }
   // ── search results (flat, live, each control in its configured view) ──
-  const matches = $derived.by(() => {
-    const s = q.trim().toLowerCase();
-    return s ? catalog.filter((c) => c.kind !== 'eq' && c.label.toLowerCase().includes(s)) : [];
-  });
+  const matches = $derived(resultsOpen ? flatMatches(catalog, q, findFilter, board) : []);
   const viewByKey = $derived.by(() => {
     const m = new Map<string, BeControlItem['view']>();
     const b = board;
@@ -629,38 +717,108 @@
     else editor.showToast('No room for that control here', 'var(--danger)');
   }
 
-  // ── layout profiles (Default = device-authentic, Blank, custom copies) ──
-  let profMenuOpen = $state(false);
-  let profMenuPos = $state<{ top: number; right: number } | null>(null);
-  function toggleProfMenu(e: MouseEvent) {
-    if (profMenuOpen) {
-      profMenuOpen = false;
-      return;
-    }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const z = zoom();
-    profMenuPos = { top: (r.bottom + 4) / z, right: Math.max(8, (window.innerWidth - r.right) / z) };
-    profMenuOpen = true;
-  }
+  // ── layout profiles (Default = device-authentic, Blank, custom copies) and the layout status ──
   function setProfile(name: string) {
-    profMenuOpen = false;
     holdActive(400);
     be.setProfile(name);
   }
   function addProfile() {
-    profMenuOpen = false;
     holdActive(400);
-    be.addProfile();
+    const name = be.addProfile();
+    if (name) editor.showToast(`New layout “${name}”`, 'var(--accent)');
   }
   function deleteProfile(name: string) {
     holdActive(400);
     be.deleteProfile(name);
   }
-  function resetToDevice() {
-    profMenuOpen = false;
-    holdActive(400);
-    be.resetToDevice();
-  }
+  /** The active layout differs from its seed (amber dot on ⋯, "Custom"); only drawn controls count. */
+  const custom = $derived(!!board && !!be.seed && boardDiffersFromSeed(board, be.seed, catKeys));
+  const pageCustom = $derived(!!board && !!be.seed && pageDiffersFromSeed(board, be.seed, board.page, catKeys));
+  const pageInSeed = $derived(!!board && !!be.seed && be.seed.pageOrder.includes(board.page));
+  const saveName = $derived(block?.family || typeName || slug || 'this block');
+
+  // another block: a fresh view of the editor (the surface and the grid map strip stay mounted)
+  let lastResetKey = untrack(() => resetKey);
+  $effect(() => {
+    const k = resetKey;
+    untrack(() => {
+      if (k === lastResetKey) return;
+      lastResetKey = k;
+      setEdit(false);
+      q = '';
+      resultsOpen = false;
+      findOpen = false;
+      moreOpen = false;
+      renamingPage = null;
+      sel = null;
+      editingId = null;
+      flashId = null;
+      modOpen = false;
+      closePinMenu();
+      cancelGestures();
+    });
+  });
+
+  // ── ⋯ menu ──
+  let moreOpen = $state(false);
+  let moreAnchor = $state<HTMLElement | null>(null);
+  const moreItems = $derived(
+    moreOpen
+      ? buildMoreMenu(
+          {
+            deviceClass,
+            editMode: be.editMode,
+            nav: prefs.nav,
+            sideFits,
+            density: prefs.density,
+            profiles: be.profileNames,
+            profile: be.profile,
+            custom,
+            page: board?.page ?? '',
+            pageCustom,
+            pageInSeed,
+            hasBoard: !!board,
+            hasUserSeed: be.userSeed,
+            typeName: saveName,
+            block: block ? { isCab: block.isCab, canRetype: !!block.pack, gridMapShown: block.gridMapShown } : null
+          },
+          {
+            arrange: (on) => setEdit(on),
+            nav: setNav,
+            density: setDensity,
+            profile: setProfile,
+            resetPage: () => {
+              holdActive(400);
+              const pg = be.board?.page ?? 'Page';
+              if (be.resetPage()) editor.showToast(`“${pg}” reset`, 'var(--accent)');
+            },
+            resetAll: () => {
+              holdActive(400);
+              be.resetAll();
+              editor.showToast('All pages reset', 'var(--accent)');
+            },
+            resetDevice: () => {
+              holdActive(400);
+              be.resetToDevice();
+              editor.showToast('Reset to the device layout', 'var(--accent)');
+            },
+            newCopy: addProfile,
+            deleteCopy: deleteProfile,
+            saveDefault: () => {
+              be.saveAsDefault();
+              editor.showToast(`Saved as the default layout for ${saveName}`, 'var(--accent)');
+            },
+            forgetDefault: () => {
+              be.forgetDefault();
+              editor.showToast(`${saveName} starts from the device layout again`, 'var(--accent)');
+            },
+            changeType: () => block?.onType(),
+            gridMap: (show) => block?.onGridMap(show),
+            remove: () => block?.onRemove()
+          }
+        )
+      : []
+  );
 
   // ── select popover: measured from the trigger, zoom-safe, closes on reflow / scroll ──
   let sel = $state<{ id: string; enumId: number; left: number; top: number; width: number; up: boolean } | null>(null);
@@ -782,6 +940,8 @@
     cancelPinHold();
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = null;
+    if (flashItemTimer) clearTimeout(flashItemTimer);
+    flashItemTimer = null;
   });
   function startPinDrag() {
     if (!pinHold) return;
@@ -870,6 +1030,9 @@
   const host: BeHost = {
     get editMode() {
       return be.editMode;
+    },
+    get flashId() {
+      return flashId;
     },
     get isPhone() {
       return isPhone;
@@ -973,89 +1136,66 @@
   const RESULT_GAP = 4;
 </script>
 
-<div class="be-root" class:phone={isPhone} bind:this={rootEl}>
-  <!-- tab row: search, page tabs, navigation / control size, layout profile, arrange (interim chrome) -->
-  <div class="be-tabs">
-    <div class="be-search" class:active={searching}>
-      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.8 10.8 L14.5 14.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
-      <input class="be-searchin" placeholder="Find a control…" aria-label="Find a control" bind:value={q} />
-      {#if searching}<button class="be-searchx" type="button" aria-label="Clear search" onclick={() => (q = '')}>✕</button>{/if}
-    </div>
-    {#if !searching}
-      {#if board}
-        <div class="be-pagetabs" role="tablist" aria-label="Pages">
-          {#each board.pageOrder as pg (pg)}
-            {#if renamingPage === pg}
-              <input
-                class="be-tab edit"
-                value={pg}
-                aria-label="Page name"
-                use:focusEl
-                onkeydown={(e) => (e.key === 'Enter' ? e.currentTarget.blur() : e.key === 'Escape' ? (renamingPage = null) : null)}
-                onblur={(e) => (renamingPage === pg ? renamePage(pg, e.currentTarget.value) : null)}
-              />
-            {:else}
-              <button
-                class="be-tab"
-                class:on={pg === board.page}
-                class:vis={highlight.has(pg)}
-                type="button"
-                role="tab"
-                aria-selected={pg === board.page}
-                data-be-tab={pg}
-                data-visible={highlight.has(pg) ? 'true' : 'false'}
-                data-active={pg === board.page ? 'true' : 'false'}
-                title={be.editMode ? 'Double-click to rename' : `Show ${pg}`}
-                onclick={() => goPage(pg)}
-                ondblclick={() => be.editMode && (renamingPage = pg)}>{pg}</button
-              >
-            {/if}
-          {/each}
-          {#if be.editMode}
-            <button class="be-tab add" type="button" title="Add page" aria-label="Add page" onclick={addPage}>＋</button>
-          {/if}
-        </div>
-      {/if}
-      <span class="be-tabsp"></span>
-      {#if navToggle}
-      <div class="be-seg" role="group" aria-label="Page navigation">
-        <button type="button" class:on={prefs.nav === 'top'} data-be-nav="top" aria-pressed={prefs.nav === 'top'} title="Pages side by side" onclick={() => setNav('top')}>Top</button>
-        <button
-          type="button"
-          class:on={prefs.nav === 'side'}
-          data-be-nav="side"
-          aria-pressed={prefs.nav === 'side'}
-          title={nav === 'side' || prefs.nav !== 'side' ? 'Pages stacked' : 'Pages stacked — needs a wider editor'}
-          onclick={() => setNav('side')}>Side</button
-        >
-      </div>
-      {/if}
-      <div class="be-seg" role="group" aria-label="Control size">
-        {#each ['s', 'm', 'l'] as const as d (d)}
-          <button type="button" class:on={prefs.density === d} data-be-density={d} aria-pressed={prefs.density === d} title={d === 's' ? 'Compact' : d === 'm' ? 'Normal' : 'Large'} onclick={() => setDensity(d)}>{d.toUpperCase()}</button>
-        {/each}
-      </div>
-      <div class="be-profwrap">
-        <button class="be-profbtn" class:on={profMenuOpen} type="button" title="Layout profile" onclick={toggleProfMenu}>
-          <span class="be-profic">▤</span><span class="be-profname">{be.profile}</span><span class="be-profcaret">▾</span>
-        </button>
-      </div>
-      {#if !isPhone}
-        <button class="be-arrange" class:on={be.editMode} type="button" data-be-arrange title="Lock = use · Unlock = arrange" onclick={() => setEdit(!be.editMode)}>
-          <span>{be.editMode ? '🔓' : '🔒'}</span>{be.editMode ? 'Arranging' : 'Arrange'}
-        </button>
-      {/if}
-    {/if}
-  </div>
+<div class="be-root" class:phone={isPhone} bind:this={rootEl} bind:clientWidth={rootW}>
+  <BeHeader
+    {block}
+    {nav}
+    phone={isPhone}
+    pages={board?.pageOrder ?? []}
+    {active}
+    {highlight}
+    editMode={be.editMode}
+    renaming={renamingPage}
+    onGo={goPage}
+    onStartRename={(pg) => (renamingPage = pg)}
+    onRename={renamePage}
+    onCancelRename={() => (renamingPage = null)}
+    onAdd={addPage}
+    {moreOpen}
+    moreDot={custom}
+    bind:moreAnchor
+    onMore={() => (moreOpen = !moreOpen)}
+    search={findField}
+    end={headerEnd}
+  />
+  {#snippet findField(iconOnly: boolean)}
+    <BeFind
+      bind:query={q}
+      bind:filter={findFilter}
+      bind:open={findOpen}
+      {iconOnly}
+      touch={isPhone}
+      groups={findList}
+      current={board?.page ?? ''}
+      canPin={workbenchCanPin}
+      {resultsOpen}
+      preview={findPreview}
+      onJump={jumpTo}
+      onPin={findPin}
+      onShowAll={() => (resultsOpen = true)}
+      onCloseResults={() => (resultsOpen = false)}
+      onOpen={() => setEdit(false)}
+    />
+  {/snippet}
 
-  {#if searching}
-    <!-- live search results: every matching control, flat, each in its configured view -->
-    <div class="be-results">
+  {@render belowHeader?.()}
+
+  {#if showMessage}
+    <div class="be-msg" data-be-message><p>{message}</p></div>
+  {:else if resultsOpen}
+    <!-- flat search results: every matching control, each in its configured view, operable in place -->
+    <div class="be-resbar">
+      <span class="be-restag">RESULTS</span>
+      <span class="be-resnote">{matches.length} control{matches.length === 1 ? '' : 's'}{q.trim() ? ` matching “${q.trim()}”` : ''}</span>
+      <span class="be-absp"></span>
+      <button class="be-abbtn" type="button" data-be-results-close onclick={() => (resultsOpen = false)}>✕ Back to the board</button>
+    </div>
+    <div class="be-results" data-be-results>
       {#each matches as c (c.key)}
         {@const it = resultItem(c)}
         <BeControl item={it} ctl={c} pos={it} c={RESULT_CELL} g={RESULT_GAP} standalone />
       {/each}
-      {#if matches.length === 0}<div class="be-nores">No controls match “{q}”.</div>{/if}
+      {#if matches.length === 0}<div class="be-nores">No controls match “{q.trim()}”.</div>{/if}
     </div>
   {:else}
     {#if be.editMode}
@@ -1070,10 +1210,27 @@
           {be.autoPack ? '⊞ Auto-pack' : '⊡ Free'}
         </button>
         <button class="be-abbtn" type="button" onclick={tidyUp}>⤢ Tidy up</button>
+        <button class="be-abbtn done" type="button" data-be-arrange-done title="Finish arranging" onclick={() => setEdit(false)}>✓ Done</button>
       </div>
     {/if}
 
-    <div class="be-body">
+    <div class="be-body" class:side={nav === 'side'}>
+      {#if nav === 'side' && board}
+        <BePageNav
+          variant="list"
+          pages={board.pageOrder}
+          {active}
+          {highlight}
+          editMode={be.editMode}
+          renaming={renamingPage}
+          width={listW}
+          onGo={goPage}
+          onStartRename={(pg) => (renamingPage = pg)}
+          onRename={renamePage}
+          onCancelRename={() => (renamingPage = null)}
+          onAdd={addPage}
+        />
+      {/if}
       <BeBoard
         bind:this={boardRef}
         {pages}
@@ -1117,87 +1274,78 @@
   {/if}
 </div>
 
-<!-- layout profile menu (fixed: escapes the tab row's clipping) -->
-{#if profMenuOpen}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="be-profmenu" style:top="{profMenuPos?.top ?? 100}px" style:right="{profMenuPos?.right ?? 8}px" onpointerleave={() => (profMenuOpen = false)}>
-    {#each be.profileNames as p (p)}
-      <div class="be-profitem-row">
-        <button class="be-profitem" class:on={p === be.profile} type="button" onclick={() => setProfile(p)}>
-          <span class="be-piname">{p === DEFAULT_PROFILE ? '✦ Default' : p === BLANK_PROFILE ? '▢ Blank' : p}</span>
-          {#if p === DEFAULT_PROFILE}<span class="be-pihint">device</span>{/if}
-        </button>
-        {#if p !== DEFAULT_PROFILE && p !== BLANK_PROFILE}
-          <button class="be-pidel" type="button" title="Delete layout" aria-label="Delete layout {p}" onclick={() => deleteProfile(p)}>✕</button>
-        {/if}
-      </div>
-    {/each}
-    <div class="be-profsep"></div>
-    <button class="be-profitem act" type="button" onclick={addProfile}>＋ New layout (copy)</button>
-    <button class="be-profitem act" type="button" title="Discard customization, reseed from the device layout" onclick={resetToDevice}>↺ Reset to device</button>
-  </div>
-{/if}
+<!-- floating parts: one fixed layer in the OVERLAY band, the pin-drag chip in the DRAG band; in the
+     workbench both move to the shell root (overlayLayer.ts). Inside a layer the parts order themselves
+     with small local z-indexes. -->
+<div class="be-layer-src">
+  <div class="be-layer" use:beLayer={'overlay'}>
+    <!-- ⋯ menu: arrange · navigation · control size · layout · block (opens under the trigger) -->
+    <BeMoreMenu open={moreOpen} items={moreItems} anchor={moreAnchor} touch={isPhone} onClose={() => (moreOpen = false)} />
 
-<!-- value bubble: full value with unit, above everything -->
-{#if tip}
-  <div class="be-tip" style:left="{tip.cx}px" style:top="{tip.cy}px">{tipValue ? formatFull(tipValue) : '–'}</div>
-{/if}
-
-<!-- select popover -->
-{#if sel && selEnum}
-  {@const en = selEnum}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="be-selbg" onpointerdown={() => (sel = null)}></div>
-  <div class="be-selmenu" class:up={sel.up} role="listbox" data-be-select-menu style:left="{sel.left}px" style:top="{sel.top}px" style:width="{sel.width}px">
-    {#each en.options as o (o.value)}
-      <button
-        class="be-selopt"
-        class:on={o.value === en.value}
-        type="button"
-        role="option"
-        aria-selected={o.value === en.value}
-        data-be-option={o.label}
-        onclick={() => {
-          editor.setEnum(en, o.value);
-          sel = null;
-        }}>{o.label}</button
-      >
-    {/each}
-  </div>
-{/if}
-
-<!-- modifier editor flyout (opened from a control's ∿ badge) -->
-<ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
-
-<!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to the hold-drag -->
-{#if workbenchCanPin}
-  <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
-{/if}
-
-<!-- hold-to-drag pin overlay: inert, so elementFromPoint reaches the real drop zones -->
-{#if pinDrag}
-  <div class="be-pinlayer" bind:this={pinLayerEl}>
-    {#if pinDrag.target}
-      <div
-        class="be-pinhi"
-        style:left="{pinDrag.target.rect.left / pinZoom}px"
-        style:top="{pinDrag.target.rect.top / pinZoom}px"
-        style:width="{pinDrag.target.rect.width / pinZoom}px"
-        style:height="{pinDrag.target.rect.height / pinZoom}px"
-      ></div>
+    <!-- value bubble: full value with unit, above the other floating parts -->
+    {#if tip}
+      <div class="be-tip" style:left="{tip.cx}px" style:top="{tip.cy}px">{tipValue ? formatFull(tipValue) : '–'}</div>
     {/if}
-    <div class="be-pinchip" class:reject={!pinDrag.target} style:transform="translate({(pinDrag.x + 12) / pinZoom}px, {(pinDrag.y + 12) / pinZoom}px)">
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <span class="be-pinglyph">{@html paramChipGlyph(pinDrag.c.kind)}</span>
-      <span class="be-pinname">{pinDrag.c.label}</span>
-      {#if pinDrag.target}
-        <span class="be-pintarget">{pinDrag.target.label}</span>
-      {:else}
-        <span class="be-pintarget reject">⊘ hold &amp; drag to a panel</span>
-      {/if}
-    </div>
+
+    <!-- select popover -->
+    {#if sel && selEnum}
+      {@const en = selEnum}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="be-selbg" onpointerdown={() => (sel = null)}></div>
+      <div class="be-selmenu" class:up={sel.up} role="listbox" data-be-select-menu style:left="{sel.left}px" style:top="{sel.top}px" style:width="{sel.width}px">
+        {#each en.options as o (o.value)}
+          <button
+            class="be-selopt"
+            class:on={o.value === en.value}
+            type="button"
+            role="option"
+            aria-selected={o.value === en.value}
+            data-be-option={o.label}
+            onclick={() => {
+              editor.setEnum(en, o.value);
+              sel = null;
+            }}>{o.label}</button
+          >
+        {/each}
+      </div>
+    {/if}
+
+    <!-- modifier editor flyout (opened from a control's ∿ badge) -->
+    <ModifierFlyout open={modOpen} label={modLabel} targetEffectId={modTargetEid} targetParam={modTargetParam} onClose={() => (modOpen = false)} />
+
+    <!-- pin-to-panel menu: touch (long-press) + mouse (right-click) alternative to the hold-drag -->
+    {#if workbenchCanPin}
+      <ContextMenu open={pinMenuOpen} position={pinMenuPos} items={pinMenuItems} label="Pin to custom panel" onClose={closePinMenu} />
+    {/if}
   </div>
-{/if}
+
+  <!-- hold-to-drag pin overlay: inert, so elementFromPoint reaches the real drop zones -->
+  <div class="be-layer" use:beLayer={'drag'}>
+    {#if pinDrag}
+      <div class="be-pinlayer" bind:this={pinLayerEl}>
+        {#if pinDrag.target}
+          <div
+            class="be-pinhi"
+            style:left="{pinDrag.target.rect.left / pinZoom}px"
+            style:top="{pinDrag.target.rect.top / pinZoom}px"
+            style:width="{pinDrag.target.rect.width / pinZoom}px"
+            style:height="{pinDrag.target.rect.height / pinZoom}px"
+          ></div>
+        {/if}
+        <div class="be-pinchip" class:reject={!pinDrag.target} style:transform="translate({(pinDrag.x + 12) / pinZoom}px, {(pinDrag.y + 12) / pinZoom}px)">
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+          <span class="be-pinglyph">{@html paramChipGlyph(pinDrag.c.kind)}</span>
+          <span class="be-pinname">{pinDrag.c.label}</span>
+          {#if pinDrag.target}
+            <span class="be-pintarget">{pinDrag.target.label}</span>
+          {:else}
+            <span class="be-pintarget reject">⊘ hold &amp; drag to a panel</span>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </div>
+</div>
 
 <style>
   .be-root {
@@ -1213,266 +1361,53 @@
     flex: 1;
     min-height: 0;
     display: flex;
+    /* in-panel z-indexes (tiles, reflow hint) stay local to the board */
+    isolation: isolate;
+  }
+  .be-layer-src {
+    display: contents;
+  }
+  /* a floating layer: a fixed, zero-size box; its band comes from overlayLayer.ts */
+  .be-layer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
   }
 
-  /* ── tab row ── */
-  .be-tabs {
+  .be-body.side {
+    flex-direction: row;
+  }
+  .be-msg {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    color: var(--textdim);
+    font: 500 13px/1.5 var(--font-ui);
+    text-align: center;
+  }
+
+  /* ── flat search results bar ── */
+  .be-resbar {
     flex: none;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px 8px;
-    padding: 6px 12px 4px;
-  }
-  /* phone device class: search + control size + layout on the first line, the page tabs wrap below */
-  .be-root.phone .be-search {
-    flex: 1 1 130px;
-  }
-  .be-root.phone .be-pagetabs {
-    order: 2;
-    flex-basis: 100%;
-  }
-  .be-root.phone .be-tabsp {
-    display: none;
-  }
-  .be-search {
-    flex: none;
-    display: flex;
-    align-items: center;
     gap: 8px;
-    height: 30px;
-    min-width: 140px;
-    padding: 0 10px;
-    border-radius: 9px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    color: var(--textfaint);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--surface2);
   }
-  .be-search.active {
-    flex: 1;
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .be-searchin {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    border: 0;
-    outline: none;
-    color: var(--text);
-    font: 500 13px/1 var(--font-ui);
-  }
-  .be-searchx {
-    flex: none;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    border: 0;
-    background: var(--surface2);
-    color: var(--text2);
-    cursor: pointer;
-    font-size: 11px;
-  }
-  .be-pagetabs {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 9px;
-    background: var(--input);
-    border: 1px solid var(--border);
-  }
-  .be-tab {
-    flex: none;
-    height: 24px;
-    padding: 0 11px;
-    border-radius: 7px;
-    border: 0;
-    cursor: pointer;
-    white-space: nowrap;
-    background: transparent;
-    color: var(--textdim);
-    font: 600 12.5px/1 var(--font-ui);
-    transition: background 0.12s, color 0.12s;
-  }
-  .be-tab:hover {
-    color: var(--text);
-  }
-  .be-tab.vis {
-    color: var(--accentbright);
-    background: var(--accent-tint);
-    box-shadow: inset 0 0 0 1px var(--accent-border);
-  }
-  .be-tab.on {
-    color: var(--amber);
-    background: var(--amber-tint);
-    box-shadow: inset 0 0 0 1px var(--amber-border);
-  }
-  .be-tab.add {
-    color: var(--accentbright);
-    font-size: 15px;
-    padding: 0 9px;
-  }
-  .be-tab.edit {
-    width: 110px;
-    background: var(--bg2);
-    border: 1px solid var(--accent);
-    color: var(--amber);
-    outline: none;
-    cursor: text;
-  }
-  .be-tabsp {
-    flex: 1;
-  }
-  .be-seg {
-    flex: none;
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 9px;
-    background: var(--input);
-    border: 1px solid var(--border);
-  }
-  .be-seg button {
-    height: 24px;
-    min-width: 28px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: 7px;
-    cursor: pointer;
-    background: transparent;
-    color: var(--textdim);
-    font: 600 11.5px/1 var(--font-mono);
-  }
-  .be-seg button.on {
-    color: var(--accentbright);
-    background: var(--accent-tint);
-    box-shadow: inset 0 0 0 1px var(--accent-border);
-  }
-  .be-profwrap {
-    position: relative;
-    flex: none;
-  }
-  .be-profbtn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 10px;
-    border-radius: 9px;
-    cursor: pointer;
-    white-space: nowrap;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    color: var(--text2);
-    font: 700 12px/1 var(--font-ui);
-  }
-  .be-profbtn.on,
-  .be-profbtn:hover {
-    border-color: var(--blue);
-    color: var(--text);
-  }
-  .be-profic,
-  .be-profcaret {
-    opacity: 0.7;
-  }
-  .be-profcaret {
-    font-size: 9px;
-  }
-  .be-profname {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .be-arrange {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    height: 30px;
-    padding: 0 12px;
-    border-radius: 9px;
-    cursor: pointer;
-    white-space: nowrap;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    color: var(--textdim);
-    font: 700 12px/1 var(--font-ui);
-  }
-  .be-arrange.on {
-    background: var(--accent-tint);
-    border-color: var(--accent);
+  .be-restag {
+    font: 700 9.5px/1 var(--font-mono);
+    letter-spacing: 0.14em;
     color: var(--accentbright);
   }
-  .be-profmenu {
-    position: fixed;
-    z-index: 80;
-    min-width: 210px;
-    padding: 5px;
-    background: var(--surface);
-    border: 1px solid var(--border2);
-    border-radius: 12px;
-    box-shadow: 0 14px 36px color-mix(in srgb, var(--bg) 70%, transparent);
-  }
-  .be-profitem-row {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .be-profitem {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text2);
-    font: 600 13px/1.2 var(--font-ui);
-    text-align: left;
-    cursor: pointer;
-  }
-  .be-profitem:hover {
-    background: var(--surface2);
-  }
-  .be-profitem.on {
-    color: var(--text);
-    background: color-mix(in srgb, var(--blue) 14%, transparent);
-  }
-  .be-profitem.act {
+  .be-resnote {
+    font: 500 11.5px/1.3 var(--font-ui);
     color: var(--textdim);
-    font-weight: 500;
-  }
-  .be-piname {
-    flex: 1;
-  }
-  .be-pihint {
-    font-size: 10px;
-    color: var(--textfaint);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .be-pidel {
-    flex: none;
-    padding: 4px 7px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--textfaint);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .be-pidel:hover {
-    color: var(--danger);
-    background: var(--danger-tint);
-  }
-  .be-profsep {
-    height: 1px;
-    margin: 5px 2px;
-    background: var(--border2);
   }
 
   /* ── arrange bar + tray (interim) ── */
@@ -1513,6 +1448,12 @@
     background: var(--accent-tint);
     border-color: var(--accent);
     color: var(--accentbright);
+  }
+  .be-abbtn.done {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accentink);
+    font-weight: 700;
   }
   .be-tray {
     flex: none;
@@ -1593,6 +1534,7 @@
 
   /* ── search results ── */
   .be-results {
+    isolation: isolate;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -1617,7 +1559,7 @@
   /* ── value bubble ── */
   .be-tip {
     position: fixed;
-    z-index: 9999;
+    z-index: 3;
     transform: translate(-50%, calc(-100% - 11px));
     padding: 7px 12px;
     border-radius: 10px;
@@ -1643,11 +1585,11 @@
   .be-selbg {
     position: fixed;
     inset: 0;
-    z-index: 9997;
+    z-index: 1;
   }
   .be-selmenu {
     position: fixed;
-    z-index: 9998;
+    z-index: 2;
     max-height: 230px;
     overflow-y: auto;
     padding: 6px;
@@ -1684,7 +1626,7 @@
   .be-pinlayer {
     position: fixed;
     inset: 0;
-    z-index: 10000;
+    z-index: 1;
     pointer-events: none;
   }
   .be-pinhi {

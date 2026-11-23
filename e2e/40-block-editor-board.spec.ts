@@ -1,10 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
-import { bootBlockEditorMock, openAmpEditor, type BlockEditorMock } from './support/blockEditorMock';
+import { bootBlockEditorMock, checkedProfile, openAmpEditor, openMore, pickMore, pickProfile, type BlockEditorMock } from './support/blockEditorMock';
 import { clickNav } from './support/workbench';
 
 // Block Editor rework, slice 2 (AXIS-75): the board shows every page at once (top strip / side stack),
 // always fitted to the panel, with value gestures on every view and the interim arrange mode on the
 // v2 board model. Driven against a fully mocked backend (support/blockEditorMock.ts) — no device.
+// Since slice 3 (AXIS-76) Top / Side, control size, layout profiles and Arrange live in the header's ⋯
+// menu (spec 41 covers the header itself); the assertions here are unchanged.
 
 const board = (page: Page) => page.locator('[data-be-board]');
 const tile = (page: Page, key: string) => page.locator(`[data-be-key="${key}"]`).first();
@@ -64,7 +66,7 @@ test.describe('Block Editor board (slice 2)', () => {
     await expect(page.locator('[data-be-tab="Authentic"]')).toHaveAttribute('data-active', 'true');
 
     // the side navigation scrolls vertically to the page
-    await page.locator('[data-be-nav="side"]').click();
+    await pickMore(page, 'nav-side');
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
     await page.locator('[data-be-tab="EQ"]').click();
     await expect(page.locator('section[data-be-page="EQ"]')).toBeInViewport({ ratio: 0.9 });
@@ -134,7 +136,7 @@ test.describe('Block Editor board (slice 2)', () => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
 
-    await page.locator('[data-be-nav="side"]').click();
+    await pickMore(page, 'nav-side');
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
     const a = (await page.locator('section[data-be-page="Authentic"]').boundingBox())!;
     const b = (await page.locator('section[data-be-page="Preamp"]').boundingBox())!;
@@ -145,14 +147,15 @@ test.describe('Block Editor board (slice 2)', () => {
     await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
     await openAmpEditor(page);
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
-    await expect(page.locator('[data-be-nav="side"]')).toHaveAttribute('aria-pressed', 'true');
+    const menu = await openMore(page);
+    await expect(menu.locator('.be-mi-nav-side')).toHaveAttribute('aria-checked', 'true');
   });
 
   test('arrange: a control dragged to a free spot stays there after a reload', async ({ page }) => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
 
-    await page.locator('[data-be-arrange]').click();
+    await pickMore(page, 'arrange');
     const grid = page.locator('[data-be-grid][data-page="Authentic"]');
     await expect(grid).toHaveAttribute('data-cols', '24');
     const g = (await grid.boundingBox())!;
@@ -199,19 +202,20 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
     await expect(dyn).toHaveAttribute('data-active', 'true');
     await expect(sec).toBeInViewport({ ratio: 0.5 });
 
-    await page.locator('[data-be-nav="side"]').click();
+    await pickMore(page, 'nav-side');
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
     await expect(sec).toBeInViewport({ ratio: 0.5 });
     await page.waitForTimeout(700); // past the hold after the switch: scroll reports apply again
     await expect(dyn).toHaveAttribute('data-active', 'true');
 
-    await page.locator('[data-be-density="l"]').click();
-    await expect(page.locator('[data-be-density="l"]')).toHaveAttribute('aria-pressed', 'true');
+    await pickMore(page, 'size-l');
+    await expect((await openMore(page)).locator('.be-mi-size-l')).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
     await expect(sec).toBeInViewport({ ratio: 0.5 });
     await page.waitForTimeout(700);
     await expect(dyn).toHaveAttribute('data-active', 'true');
 
-    await page.locator('[data-be-nav="top"]').click();
+    await pickMore(page, 'nav-top');
     await expect(board(page)).toHaveAttribute('data-nav', 'top');
     await expect(sec).toBeInViewport({ ratio: 0.5 });
     await page.waitForTimeout(700);
@@ -220,7 +224,7 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
     await page.reload();
     await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
     await openAmpEditor(page);
-    await expect(page.locator('[data-be-density="l"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect((await openMore(page)).locator('.be-mi-size-l')).toHaveAttribute('aria-checked', 'true');
   });
 
   test('a click on a value and a click away writes nothing', async ({ page }) => {
@@ -229,7 +233,7 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
     const value = tile(page, 'k3').locator('[data-be-value]');
     await value.click();
     await expect(tile(page, 'k3').locator('input.be-vin')).toBeFocused();
-    await page.locator('.be-searchin').click(); // the input loses focus with its text untouched
+    await page.locator('[data-be-find-input]').click(); // the input loses focus with its text untouched
     await expect(tile(page, 'k3').locator('input.be-vin')).toHaveCount(0);
     // the same with Enter on the untouched text
     await value.click();
@@ -253,25 +257,23 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
     await page.reload();
     await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
     await openAmpEditor(page);
-    await expect(page.locator('.be-profname')).toHaveText('Live');
+    expect(await checkedProfile(page)).toBe('Live');
     await expect(page.locator('[data-be-tab]')).toHaveText(['Gig']);
     await expect(tile(page, 'k3')).toHaveAttribute('data-be-x', '2');
 
     // the first write (Top/Side) must not cost any other profile its board
-    await page.locator('[data-be-nav="side"]').click();
+    await pickMore(page, 'nav-side');
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
     await page.reload();
     await expect(page.locator('[data-idx="0,0"].cell.block')).toBeVisible();
     await openAmpEditor(page);
     await expect(board(page)).toHaveAttribute('data-nav', 'side');
-    await expect(page.locator('.be-profname')).toHaveText('Live');
+    expect(await checkedProfile(page)).toBe('Live');
     await expect(page.locator('[data-be-tab]')).toHaveText(['Gig']);
     await expect(tile(page, 'k3')).toHaveAttribute('data-be-x', '2');
-    await page.locator('.be-profbtn').click();
-    await page.locator('.be-profitem', { hasText: 'Studio' }).click();
+    await pickProfile(page, 'Studio');
     await expect(page.locator('[data-be-tab]')).toHaveText(['Desk']);
-    await page.locator('.be-profbtn').click();
-    await page.locator('.be-profitem', { hasText: 'Default' }).click();
+    await pickProfile(page, 'Default');
     await expect(page.locator('[data-be-tab="Authentic"]')).toBeVisible();
     // the previous editor's keys are still there (never deleted)
     const kept = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('axs.surface.doc') || '{}')).filter((k) => k.startsWith('axs.surface3.')));
@@ -281,25 +283,25 @@ test.describe('Block Editor board (slice 2): keeping the page, stored boards, ph
   test('the Arrange button of an empty page starts arranging', async ({ page }) => {
     await bootBlockEditorMock(page);
     await openAmpEditor(page);
-    await page.locator('.be-profbtn').click();
-    await page.locator('.be-profitem', { hasText: 'Blank' }).click();
+    await pickProfile(page, 'Blank');
     const hint = page.locator('[data-be-empty]');
     await expect(hint).toContainText('This page is empty.');
     await hint.getByRole('button', { name: /Arrange/ }).click();
-    await expect(page.locator('[data-be-arrange]')).toContainText('Arranging');
+    await expect(page.locator('[data-be-arrange-done]')).toBeVisible();
     await expect(page.locator('[data-be-grid][data-page="Page 1"]')).toHaveAttribute('data-cols', '24');
   });
 
-  test('phone width: no Top/Side toggle (the editor is narrower than 560 px) and no Arrange', async ({ page }) => {
+  test('phone width: no Top/Side choice (the editor is narrower than 560 px) and no Arrange', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await bootBlockEditorMock(page);
     // a tap near the corner selects the block (its centre holds the bypass dot)
     await page.locator('[data-idx="0,0"].cell.block').click({ position: { x: 6, y: 6 } });
     await expect(board(page)).toBeVisible();
     await expect(page.locator('[data-be-key="k0"]').first()).toBeVisible();
-    await expect(page.locator('[data-be-density="m"]')).toBeVisible();
-    await expect(page.locator('[data-be-nav]')).toHaveCount(0);
-    await expect(page.locator('[data-be-arrange]')).toHaveCount(0);
+    const menu = await openMore(page);
+    await expect(menu.locator('.be-mi-size-m')).toBeVisible();
+    await expect(menu.locator('.be-mi-nav-top, .be-mi-nav-side')).toHaveCount(0);
+    await expect(menu.locator('.be-mi-arrange')).toHaveCount(0);
   });
 
   test('the Setup screen (virtual effect) uses the same board', async ({ page }) => {

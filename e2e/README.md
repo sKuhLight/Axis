@@ -171,12 +171,33 @@ knob drag / click-to-type / arrow keys write the parameter (a click on a value a
 select popover and switch, side navigation persisted across a reload, an arrange drag persisted across a
 reload, a later page kept active through Top/Side and S/M/L (control size persisted), boards of the
 previous editor (seeded `axs.surface3.*` keys) surviving the first change, the empty page's Arrange
-button, the phone width without Top/Side and Arrange, and the Setup screen on the same board.
+button, the phone width without Top/Side and Arrange, and the Setup screen on the same board (since slice 3
+these steps go through the header's ⋯ menu).
+**41-block-editor-header** — the header and its ⋯ menu: the channel letter of the type chip unfolds A–D and a
+pick writes the channel (mocked `POST …/channel`), the Engaged segment writes bypass / engage while Mute and
+Scene Ignore stay "coming soon" toasts, Top / Side via ⋯ kept after a reload (the side list has no heading and
+no counts), reset this page / new copy / profile switch / delete copy, the amber "custom" dot appearing after a
+change and leaving after "Reset all pages", save as default for the type, the type chip and "Change type…"
+opening the model palette, the search popover jumping to a control with "Show all" / Enter opening the flat
+results (and ending Arrange), one header row at the default 1440 px panel and two at 1100 px, the grid map
+shown / hidden via ⋯, "Remove block from grid" with its inline confirm, and the Setup screen's compact row
+with the same ⋯ menu; review round: Escape inside the popover / channel letters stays there (a maximized
+panel stays maximized), Tab passes through the header without opening the popover or ending Arrange (one-row
+and two-row Tab order), page tab and Arrange while the flat results show, ⚡ pin from the popover, Unused
+carried into "Show all", a cab chip opening the cab picker, no-pack / read-error states with a usable header,
+and "Clear this page" on a page outside the default layout (mock option `extraBlocks`).
 **42-block-editor-pin** — the board's own pin paths with real pointer input: a held knob dragged onto a
 custom panel is collected there, and the right-click pin menu lists the panels and pins to the picked one.
 Board selectors: `[data-be-board]` (`data-nav`), `section[data-be-page]`, `[data-be-grid]`, `[data-be-item]` /
-`[data-be-key]` / `[data-be-view]` / `data-be-x|y`, `[data-be-tab]` (`data-visible`, `data-active`),
-`[data-be-nav]`, `[data-be-density]`, `[data-be-arrange]`, `[data-be-select-menu]`, `[data-be-empty]`.
+`[data-be-key]` / `[data-be-view]` / `data-be-x|y`, `[data-be-tab]` (`data-visible`, `data-active`; header tabs
+and side list alike, `[data-be-pagenav="tabs|list"]`), `[data-be-select-menu]`, `[data-be-empty]`,
+`[data-be-arrange-done]`. Header selectors: `[data-be-head]` (`data-be-head-rows`), `[data-be-chip]`,
+`[data-be-type]`, `[data-be-channel-toggle]` / `[data-be-channel]`, `[data-be-engaged]`, `[data-be-mute]`,
+`[data-be-scene]`, `[data-be-more]` (`data-custom`) / `[data-be-more-dot]`, `[data-be-find-input]`,
+`[data-be-find]` / `[data-be-find-row]` / `[data-be-find-all]`, `[data-be-results]` / `[data-be-results-close]`.
+⋯ rows carry `be-mi-<id>` classes (`arrange`, `nav-top|side`, `size-s|m|l`, `profile`, `reset-page`,
+`reset-all`, `new-copy`, `delete-copy`, `save-default`, `change-type`, `grid-map`, `remove`, …); helpers
+`openMore` / `pickMore` / `pickProfile` / `checkedProfile` live in `support/blockEditorMock.ts`.
 
 ## Ignore these generated artifacts
 

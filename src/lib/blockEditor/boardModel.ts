@@ -584,6 +584,22 @@ export function movePage(board: BeBoard, page: string, delta: number): BeBoard {
   return { ...board, pageOrder: order };
 }
 
+/** Reset one page to its seed: the page gets the seed's items for the page of the same name (copies),
+ *  or none when the seed has no such page. Seed items whose id is already used on another page of the
+ *  board get a fresh id. The other pages, the page order and the current page stay as they are. */
+export function resetPageFrom(board: BeBoard, seed: BeBoard, page: string, idGen: BeIdGen = defaultIdGen): BeOpResult {
+  if (!board.pageOrder.includes(page)) return fail(board, 'missing');
+  const used = new Set<string>();
+  for (const pg of board.pageOrder) if (pg !== page) for (const it of pageItems(board, pg)) used.add(it.id);
+  const list = pageItems(seed, page).map((it) => {
+    let id = it.id;
+    while (!id || used.has(id)) id = idGen();
+    used.add(id);
+    return { ...it, id };
+  });
+  return ok(writePage(board, page, list));
+}
+
 /** Delete a page. The last remaining page is never deleted. */
 export function deletePage(board: BeBoard, page: string): BeOpResult {
   const i = board.pageOrder.indexOf(page);

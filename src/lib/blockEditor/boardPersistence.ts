@@ -169,25 +169,40 @@ export function loadBoard(input: LoadBoardInput): { board: BeBoard; source: Boar
   };
   const isDefault = profile === DEFAULT_PROFILE;
   const stale = (b: BeBoard) => isDefault && !!sig && b.variantSig !== sig;
-  const stamp = (b: BeBoard): BeBoard => (isDefault && sig ? { ...b, variantSig: sig } : b);
 
-  const chain: [BoardSource, KeyValueStore, string, boolean][] = [];
-  if (deviceClass !== 'desktop') chain.push(['own', storage, boardKey(slug, profile, deviceClass), true]);
-  chain.push(['desktop', storage, boardKey(slug, profile, 'desktop'), true]);
+  const chain: [BoardSource, KeyValueStore, string][] = [];
+  if (deviceClass !== 'desktop') chain.push(['own', storage, boardKey(slug, profile, deviceClass)]);
+  chain.push(['desktop', storage, boardKey(slug, profile, 'desktop')]);
   if (!isFamilyMigrated(storage, slug)) {
-    chain.push(['legacy', storage, legacyBoardKey(slug, profile), true]);
+    chain.push(['legacy', storage, legacyBoardKey(slug, profile)]);
     // The pre-profile board never carried a variant fingerprint, so it only applies while there is no
     // device layout (the previous editor dropped it after one save in that case anyway).
-    if (isDefault) chain.push(['legacy-single', input.legacyStorage ?? storage, legacySingleKey(slug), true]);
+    if (isDefault) chain.push(['legacy-single', input.legacyStorage ?? storage, legacySingleKey(slug)]);
   }
-  if (profile !== BLANK_PROFILE) chain.push(['user-seed', storage, seedKey(slug), false]);
+  // then the seed: the user's family seed, else the built-in one (loadSeed)
 
-  for (const [source, st, key, checkSig] of chain) {
+  for (const [source, st, key] of chain) {
     const b = read(st, key);
-    if (!b || (checkSig && stale(b))) continue;
-    return { board: norm(checkSig ? b : stamp(b)), source };
+    if (!b || stale(b)) continue;
+    return { board: norm(b), source };
   }
-  return { board: norm(stamp(input.seed)), source: 'seed' };
+  return loadSeed({ ...input, catalogKeys: keys });
+}
+
+/** A layout profile's seed — what it shows before (or after a reset of) any change: the user's family
+ *  seed ("Save as default for …", not for `Blank`), else the built-in `seed`. Normalized like loadBoard;
+ *  a `Default` seed adopts the current variant. */
+export function loadSeed(input: Omit<LoadBoardInput, 'deviceClass' | 'legacyStorage'>): { board: BeBoard; source: 'user-seed' | 'seed' } {
+  const keys = input.catalogKeys instanceof Set ? input.catalogKeys : new Set(input.catalogKeys);
+  const sig = input.variantSig ?? input.seed.variantSig ?? '';
+  const stamp = (b: BeBoard): BeBoard => (input.profile === DEFAULT_PROFILE && sig ? { ...b, variantSig: sig } : b);
+  const norm = (b: BeBoard) => normalizeBoard(stamp(b), keys, { viewsByKey: input.viewsByKey, keepKeys: BLOCK_LEVEL_KEYS });
+  if (input.profile !== BLANK_PROFILE) {
+    const raw = safeGet(input.storage, seedKey(input.slug));
+    const user = raw ? parseStoredBoard(raw) : null;
+    if (user) return { board: norm(user), source: 'user-seed' };
+  }
+  return { board: norm(input.seed), source: 'seed' };
 }
 
 export interface CarryLegacyInput extends Omit<LoadBoardInput, 'profile' | 'deviceClass' | 'seed'> {
@@ -228,19 +243,42 @@ export function saveUserSeed(storage: KeyValueStore, slug: string, board: BeBoar
   markFamilyMigrated(storage, slug);
 }
 
-/** Structural fingerprint of a board: page order plus each page's items, ignoring ids, item order,
- *  the current page, the variant fingerprint and source rows. */
-function boardShape(b: BeBoard): string {
-  const pages = b.pageOrder.map((pg) => {
-    const items = pageItems(b, pg).map((it: BeItem) =>
-      isDivider(it) ? `d:${it.kind}:${it.x},${it.y},${it.w},${it.h}:${it.label ?? ''}` : `c:${it.key}:${it.view}:${it.x},${it.y},${it.w},${it.h}`
-    );
-    return [pg, items.sort()];
-  });
-  return JSON.stringify(pages);
+/** True when the family has a readable "default for this block type" board. */
+export function hasUserSeed(storage: KeyValueStore, slug: string): boolean {
+  const raw = safeGet(storage, seedKey(slug));
+  return !!raw && parseStoredBoard(raw) != null;
 }
 
-/** True when a board differs from its seed (layout status "Custom" rather than "Default"). */
-export function boardDiffersFromSeed(board: BeBoard, seed: BeBoard): boolean {
-  return boardShape(board) !== boardShape(seed);
+/** Forget the family's "default for this block type" board (the device layout seeds again). */
+export function clearUserSeed(storage: KeyValueStore & { remove?(key: string): void }, slug: string): void {
+  if (storage.remove) storage.remove(seedKey(slug));
+  else storage.set(seedKey(slug), '');
+}
+
+/** Structural fingerprint of a board: page order plus each page's items, ignoring ids, item order,
+ *  the current page, the variant fingerprint and source rows. With `keys`, controls whose key is not in
+ *  it are left out (kept, not drawn block-level controls). */
+function pageShape(b: BeBoard, pg: string, keys?: ReadonlySet<string>): string[] {
+  return pageItems(b, pg)
+    .filter((it: BeItem) => isDivider(it) || !keys || keys.has(it.key))
+    .map((it: BeItem) =>
+      isDivider(it) ? `d:${it.kind}:${it.x},${it.y},${it.w},${it.h}:${it.label ?? ''}` : `c:${it.key}:${it.view}:${it.x},${it.y},${it.w},${it.h}`
+    )
+    .sort();
+}
+function boardShape(b: BeBoard, keys?: ReadonlySet<string>): string {
+  return JSON.stringify(b.pageOrder.map((pg) => [pg, pageShape(b, pg, keys)]));
+}
+
+/** True when one page differs from the seed's page of the same name (a page the seed does not have
+ *  counts as empty there), with the same catalog-key filter as boardDiffersFromSeed. */
+export function pageDiffersFromSeed(board: BeBoard, seed: BeBoard, page: string, keys?: ReadonlySet<string>): boolean {
+  return JSON.stringify(pageShape(board, page, keys)) !== JSON.stringify(seed.pageOrder.includes(page) ? pageShape(seed, page, keys) : []);
+}
+
+/** True when a board differs from its seed (layout status "Custom" rather than "Default"). Pass the
+ *  catalog's keys to ignore controls the catalog does not list right now (they are kept in storage but
+ *  not drawn, and may still be missing from a freshly built seed). */
+export function boardDiffersFromSeed(board: BeBoard, seed: BeBoard, keys?: ReadonlySet<string>): boolean {
+  return boardShape(board, keys) !== boardShape(seed, keys);
 }
