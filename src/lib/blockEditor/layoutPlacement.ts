@@ -60,7 +60,7 @@
 // result is already normal (no overlaps, sizes within limits), so `normalizeBoard` leaves it unchanged.
 // Pure (layoutPlacement.test.ts).
 
-import { resolveControl } from '../deviceLayoutBoard';
+import { isForeignControl, resolveControl, type LayoutOwner } from '../deviceLayoutBoard';
 import type { LayoutControl, LayoutRow } from '../types';
 import {
   bbox,
@@ -175,15 +175,16 @@ export interface LayoutEntry extends ParsedPlacement {
   text?: string;
 }
 
-/** A label widget bound to a live parameter of the block (it then stays a control). */
-const boundToParam = (c: LayoutControl, byKey: ReadonlyMap<string, BeCtl>): boolean =>
-  typeof c.paramId === 'number' && (byKey.has(`k${c.paramId}`) || byKey.has(`e${c.paramId}`));
+/** A label widget bound to a live parameter of the block (it then stays a control). A control of another
+ *  block (`isForeignControl`) is never bound to the open block's param with the same id. */
+const boundToParam = (c: LayoutControl, byKey: ReadonlyMap<string, BeCtl>, owner: LayoutOwner): boolean =>
+  typeof c.paramId === 'number' && !isForeignControl(c, owner) && (byKey.has(`k${c.paramId}`) || byKey.has(`e${c.paramId}`));
 /** Title labels: the section titles, and the bold headings ("CAB 1", "LAYOUT") unless they show a live
  *  parameter of the block. Other label widgets (slider ticks, cab names, menu arrows…) are gaps. Whether
  *  a positioned title really heads controls is decided where it is placed. */
-const isTitleLabel = (c: LayoutControl, byKey: ReadonlyMap<string, BeCtl>): boolean => {
+const isTitleLabel = (c: LayoutControl, byKey: ReadonlyMap<string, BeCtl>, owner: LayoutOwner): boolean => {
   const raw = c.rawWidget ?? '';
-  return /^sectionlabel/i.test(raw) || (/^labelbold$/i.test(raw) && !boundToParam(c, byKey));
+  return /^sectionlabel/i.test(raw) || (/^labelbold$/i.test(raw) && !boundToParam(c, byKey, owner));
 };
 const isSeparator = (c: LayoutControl): boolean => /^labelsep[ae]rator/i.test(c.rawWidget ?? '');
 const titleText = (s: string): string => s.replace(/\s+/g, ' ').trim();
@@ -191,8 +192,9 @@ const titleText = (s: string): string => s.replace(/\s+/g, ' ').trim();
 export const MAX_TITLE_CHARS = 24;
 
 /** Resolve one page's rows: tiles (a catalog key + view; a key appears once per page, a repeat is a
- *  gap), titles, separators and gaps. */
-export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: ReadonlyMap<string, BeCtl>): LayoutEntry[] {
+ *  gap), titles, separators and gaps. `owner` = the open block, for the cross-block guard (a control
+ *  of another block is a gap). */
+export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: ReadonlyMap<string, BeCtl>, owner: LayoutOwner = {}): LayoutEntry[] {
   const out: LayoutEntry[] = [];
   const seen = new Set<string>();
   (Array.isArray(rows) ? rows : []).forEach((row, rowIndex) => {
@@ -200,7 +202,7 @@ export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: Reado
     for (const ctl of Array.isArray(row?.controls) ? row.controls : []) {
       if (!ctl || typeof ctl !== 'object') continue;
       const base = { ...readPlacement(ctl), row: rowIndex, section, index: out.length };
-      if (isTitleLabel(ctl, byKey)) {
+      if (isTitleLabel(ctl, byKey, owner)) {
         const text = titleText(typeof ctl.label === 'string' ? ctl.label : '');
         out.push(text && text.length <= MAX_TITLE_CHARS ? { ...base, kind: 'label', text } : { ...base, kind: 'gap' });
         continue;
@@ -209,7 +211,7 @@ export function pageEntries(rows: readonly LayoutRow[] | undefined, byKey: Reado
         out.push({ ...base, kind: 'sep' });
         continue;
       }
-      const r = resolveControl(ctl, byKey);
+      const r = resolveControl(ctl, byKey, owner);
       const cat = r === 'gap' ? undefined : byKey.get(r.key);
       if (r === 'gap' || !cat || seen.has(r.key)) {
         out.push({ ...base, kind: 'gap' });

@@ -8,7 +8,10 @@
 //   pre-v2 — no regression) and only refine the VIEW when the layout's widget hint is meaningful
 //   (slider/number for a continuous param, switch/button for a toggle). Controls with no live parameter
 //   fall back to the block's meter / bypass / EQ catalog entries where they exist, else a gap (spacers,
-//   labels, and params the device didn't surface).
+//   labels, and params the device didn't surface). A control that belongs to ANOTHER block (a cross-block
+//   ref: Controllers › Modifiers, Tempo/Pitch, CS per Scene, …) is always a gap unless the server names
+//   its owner by effect id and that is the open block (`isForeignControl`): its paramId is in the
+//   owner's id space and must never bind to the open block's param with the same number.
 // - `layoutVariantSig`: the served layout variant's fingerprint (re-seeds the Default board on a type
 //   change).
 // UI-free (no Svelte), unit-tested in deviceLayoutBoard.test.ts.
@@ -67,10 +70,33 @@ function viewForWidget(widget: string, base: BoardCtl): string {
 
 export type Resolved = { key: string; view: string } | 'gap';
 
+/** What the open block is, for the cross-block guard. */
+export interface LayoutOwner {
+  /** Effect id of the block being edited (null/undefined = unknown: no cross-block ref can bind). */
+  effectId?: number | null;
+  /** Resolve as versions before the guard did (a cross-block ref binds by its bare paramId). ONLY for
+   *  recognising a stored Default board that is still exactly such an old built-in seed (boardPersistence
+   *  `previousSeed`), so it follows the current, guarded seed. Never for anything that is drawn. */
+  legacyUnguarded?: boolean;
+}
+
+/** True when a layout control belongs to another block than the open one: it carries a cross-block ref
+ *  whose owner is not proven to be the open block (no `effectId`, or a different one). Such a control
+ *  never binds to a catalog entry of the open block. */
+export function isForeignControl(ctl: LayoutControl, owner: LayoutOwner = {}): boolean {
+  if (owner.legacyUnguarded) return false;
+  const x = (ctl as { crossBlock?: unknown }).crossBlock;
+  if (x == null || typeof x !== 'object') return false;
+  const ownerId = (x as { effectId?: unknown }).effectId;
+  return !(typeof ownerId === 'number' && typeof owner.effectId === 'number' && ownerId === owner.effectId);
+}
+
 /** Resolve one layout control to a catalog key + view, or `'gap'` (advance the cursor, draw nothing —
- *  spacers, labels, and parameters the device did not surface as a knob/enum). */
-export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, BoardCtl>): Resolved {
+ *  spacers, labels, parameters the device did not surface as a knob/enum, and controls of another block
+ *  (`isForeignControl`)). */
+export function resolveControl(ctl: LayoutControl, byKey: ReadonlyMap<string, BoardCtl>, owner: LayoutOwner = {}): Resolved {
   if (ctl.widget === 'spacer') return 'gap';
+  if (isForeignControl(ctl, owner)) return 'gap';
   // A live param → its catalog entry (knob `k<id>` or enum `e<id>`), refined by the widget hint.
   if (ctl.paramId != null) {
     const knobKey = `k${ctl.paramId}`;

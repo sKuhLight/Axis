@@ -359,6 +359,18 @@ describe('positioned pages', () => {
     expect(pageEntries([row([ctl('label', null, undefined, 'labelSliderTicks', '0 5 10'), knob(0)])], noEq).map((e) => e.kind)).toEqual(['gap', 'tile']);
   });
 
+  it('controls of another block (cross-block refs) are gaps; a bold heading bound to one is a title (AXIS-93)', () => {
+    const xref = (c: LayoutControl): LayoutControl => ({ ...c, crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: c.paramName, paramId: c.paramId } });
+    // pid 3 / 5 also exist in the open block's catalog: the refs must not bind to them
+    expect(entriesOf([row([knob(0), xref(knob(3)), xref(drop(41))])]).map((e) => e.kind)).toEqual(['tile', 'gap', 'gap']);
+    const heading = xref(ctl('label', 5, undefined, 'labelBold', 'Level'));
+    expect(entriesOf([row([heading, knob(0)])]).map((e) => [e.kind, e.text ?? e.key])).toEqual([['label', 'Level'], ['tile', 'k0']]);
+    // the owner named by effect id and equal to the open block: binds as before
+    const own = { ...knob(3), crossBlock: { effect: 'ID_X', effectId: 46, family: 'X', paramName: 'P_3', paramId: 3 } };
+    expect(pageEntries([row([own])], byKey, { effectId: 46 }).map((e) => e.key)).toEqual(['k3']);
+    expect(pageEntries([row([own])], byKey, { effectId: 47 }).map((e) => e.kind)).toEqual(['gap']);
+  });
+
   it('separators: a vertical divider in the free column between two groups, all of a line or none, heights down to the minimum', () => {
     const items = place([row([knob(0, at(305, 50)), knob(1, at(397, 50)), sep(at(520, 50)), knob(2, at(535, 50)), knob(3, at(627, 50)), sep(at(750, 50)), knob(4, at(765, 50))])]);
     expect(pos(items, 'k2')).toEqual({ x: 5, y: 0 });

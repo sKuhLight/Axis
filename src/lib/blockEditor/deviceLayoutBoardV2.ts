@@ -17,7 +17,7 @@
 // previous default.
 // Pure (deviceLayoutBoardV2.test.ts).
 
-import { layoutVariantSig, resolveControl } from '../deviceLayoutBoard';
+import { layoutVariantSig, resolveControl, type LayoutOwner } from '../deviceLayoutBoard';
 import type { DeviceLayout, LayoutPage } from '../types';
 import { bbox, BE_SPEC, findFree, isBeView, MAXC, type BeBoard, type BeControl, type BeItem, type BeView } from './boardModel';
 import type { BeCtl } from './catalog';
@@ -48,7 +48,7 @@ function packSequential(ctls: readonly BeCtl[], pageIndex: number): BeControl[] 
 }
 
 /** The previous default of one page: rows only (no placement data, no dividers), a gap = one knob slot. */
-function rowFlowPage(pg: LayoutPage, byKey: ReadonlyMap<string, BeCtl>, pageIndex: number): BeControl[] {
+function rowFlowPage(pg: LayoutPage, byKey: ReadonlyMap<string, BeCtl>, pageIndex: number, owner: LayoutOwner): BeControl[] {
   const items: BeControl[] = [];
   const seen = new Set<string>();
   let gridY = 0;
@@ -57,7 +57,7 @@ function rowFlowPage(pg: LayoutPage, byKey: ReadonlyMap<string, BeCtl>, pageInde
     let rowH = 1;
     let placed = false;
     for (const ctl of row.controls ?? []) {
-      const r = resolveControl(ctl, byKey);
+      const r = resolveControl(ctl, byKey, owner);
       const base = r === 'gap' ? undefined : byKey.get(r.key);
       if (r === 'gap' || !base || seen.has(r.key)) {
         x += GAP_CELLS; // keep the slot so neighbours stay aligned
@@ -86,14 +86,20 @@ export interface DeviceLayoutBoardOptions {
   rowFlowOnly?: boolean;
   /** Told how every page was laid out (diagnostics and tests). */
   onPage?: (page: string, mode: PageMode) => void;
+  /** Effect id of the open block: a control of another block (a cross-block ref) binds only when the
+   *  server names this block as its owner; otherwise it is a gap (deviceLayoutBoard `isForeignControl`). */
+  effectId?: number | null;
+  /** With `rowFlowOnly`: build the previous default exactly as those versions did, cross-block refs bound
+   *  by their bare paramId (no guard) — only to recognise an untouched stored Default board. */
+  legacyUnguarded?: boolean;
 }
 
 /** True when the device layout has a control the catalog can show (the default board then comes from
  *  it; otherwise the curated fallback is used). */
-export function hasDeviceLayoutBoard(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[]): boolean {
+export function hasDeviceLayoutBoard(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], owner: LayoutOwner = {}): boolean {
   if (!layout?.pages?.length) return false;
   const byKey = new Map(catalog.map((c) => [c.key, c]));
-  return layout.pages.some((pg) => !!pg && (pg.rows ?? []).some((r) => (r?.controls ?? []).some((c) => !!c && resolveControl(c, byKey) !== 'gap')));
+  return layout.pages.some((pg) => !!pg && (pg.rows ?? []).some((r) => (r?.controls ?? []).some((c) => !!c && resolveControl(c, byKey, owner) !== 'gap')));
 }
 
 /** Height of the tallest page of a board (cells). */
@@ -104,6 +110,7 @@ const tallestPage = (b: BeBoard | null): number => (b ? Math.max(0, ...b.pageOrd
 export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined, catalog: readonly BeCtl[], opts: DeviceLayoutBoardOptions = {}): BeBoard | null {
   if (!layout?.pages?.length) return null;
   const byKey = new Map(catalog.map((c) => [c.key, c]));
+  const owner: LayoutOwner = { effectId: opts.effectId, legacyUnguarded: !!opts.rowFlowOnly && !!opts.legacyUnguarded };
 
   // page names key the board, so a layout that repeats a name gets a numeric suffix
   const used = new Set<string>();
@@ -115,10 +122,10 @@ export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined
   };
 
   const pages = layout.pages.filter((pg): pg is LayoutPage => !!pg && typeof pg === 'object');
-  const entries = opts.rowFlowOnly ? [] : pages.map((pg) => pageEntries(pg.rows, byKey));
+  const entries = opts.rowFlowOnly ? [] : pages.map((pg) => pageEntries(pg.rows, byKey, owner));
   const layoutPitch = opts.rowFlowOnly ? null : measureLayoutPitch(entries.map(pitchSamples));
   // the previous default's tallest page: no page may get taller (one cell size for every page)
-  const budget = opts.rowFlowOnly ? 0 : tallestPage(buildDeviceLayoutBoardV2(layout, catalog, { rowFlowOnly: true }));
+  const budget = opts.rowFlowOnly ? 0 : tallestPage(buildDeviceLayoutBoardV2(layout, catalog, { rowFlowOnly: true, effectId: opts.effectId }));
 
   const boards: Record<string, BeItem[]> = {};
   const pageOrder: string[] = [];
@@ -126,8 +133,8 @@ export function buildDeviceLayoutBoardV2(layout: DeviceLayout | null | undefined
     const pageIndex = pageOrder.length;
     let items: BeItem[];
     let mode: PageMode = 'rows-only';
-    if (opts.rowFlowOnly) items = rowFlowPage(pg, byKey, pageIndex);
-    else ({ items, mode } = fitLayoutPage(entries[i]!, { pageIndex, layoutPitch }, budget, () => rowFlowPage(pg, byKey, pageIndex)));
+    if (opts.rowFlowOnly) items = rowFlowPage(pg, byKey, pageIndex, owner);
+    else ({ items, mode } = fitLayoutPage(entries[i]!, { pageIndex, layoutPitch }, budget, () => rowFlowPage(pg, byKey, pageIndex, owner)));
     if (!items.some((it) => 'key' in it)) return;
     const name = uniqName(pg.name?.trim() || `Page ${pageOrder.length + 1}`);
     boards[name] = items;

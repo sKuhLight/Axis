@@ -2602,3 +2602,26 @@ Gates (fix round):
 - Chromium e2e, full suite (`PW_PORT=5197`): 246/246 (BE-8 239; spec 41 27 → 33, spec 44 21 → 22). Flake check `41-block-editor-header` + `44-block-editor-touch` with `--repeat-each=3`: 165/165. (An earlier repeat run had one failure, 161/162: the Bypass mode test opened the board's select while the Preamp tab's smooth scroll was still running, and the select closes on scroll; spec 41 now waits for the board to rest after a tab click, `gotoPage`.)
 - Stack: forgefx-midi `npm run build && npm test` 99/99 suites (+ browser-safe, catalog, cache checks); ForgeFX `npm run typecheck && npm test` 40/40 suites (+ browser-safe).
 - Screenshots (mocked amp, not committed) in `<scratchpad>/be-blockstate/` (retaken): desktop 1440 header with Scene Ignore on and the Bypass mode menu (channel B), the muting mode engaged / bypassed, the pending re-read after a channel switch (state kept, disabled), caps off, the firmware gate, tablet 1100 header (40 px targets), phone 390 header + the ⋯ ▸ Bypass mode submenu, phone 500 (Bypass mode in ⋯, readable chip) and 540 ("Mute FX Out" in the header, one row).
+
+## ROUND BE-8b — cross-block layout controls stay gaps (AXIS-93)
+
+Branch `feature/block-editor-rework`, on top of ROUND BE-8. A device-layout control can belong to ANOTHER block than the one being edited (a cross-block ref: Controllers › Modifiers, Tempo/Pitch with the global metronome, CS per Scene, the Output block's config rows, …). Its `paramId` is in the owner's id space, but `resolveControl` ignored `crossBlock`, so such a control was seeded onto the open block's param that happens to carry the same number — a tile at the wrong place, under the wrong caption, writing a different parameter than the layout meant.
+
+### What changed
+- `deviceLayoutBoard.ts`: new `isForeignControl(ctl, owner)` — a control with a `crossBlock` is foreign unless the ref names its owner by `effectId` AND that is the open block. `resolveControl(ctl, byKey, owner)` returns a gap for a foreign control first (also no fall-back to the open block's meter / bypass / EQ entries). Controls without `crossBlock` (or `crossBlock: null`) resolve exactly as before.
+- `types.ts`: `LayoutCrossBlock` now matches what the server sends — `effect: string` (the editor's owner token, e.g. `ID_GLOBAL`), optional `effectId?: number` (not sent yet), `family: string | null`, `paramId` documented as the owner's id. The old comment ("rendered live via the pinned-param hydration") was wrong and is gone.
+- The same guard in every consumer of layout controls: the v2 seed (`deviceLayoutBoardV2.ts`: positioned and rows-only builds, the height budget, `hasDeviceLayoutBoard`) and `layoutPlacement.ts` `pageEntries` (tiles, and `boundToParam`: a bold heading that names a foreign param is a title, not a control). `BeSurface.svelte` passes the open block's effect id (`editor.selected?.effectId`).
+- Stored boards: the persistence layer recognises an untouched stored Default board by comparing it with the previous rows-only seed. Those earlier versions had no guard, so `previousSeed` is built with `legacyUnguarded: true` (rows-only only; never drawn): a stored board that is still exactly that old seed follows the current, guarded seed; any board the user changed keeps its content.
+
+### Decisions
+- With today's servers (owner token only, no effect id) every cross-block ref is a gap: it keeps its slot so its neighbours stay aligned, and a page of refs only (e.g. Controllers › Modifiers, CS per Scene) is not shown. Binding them live needs the server to resolve the owner's effect id (research phase P6); the type and the guard are ready for it (`effectId` equal to the open block → binds as a normal control).
+- The params a ref used to occupy are still on the board: a catalog entry no layout control places goes to the trailing "More" page as before.
+
+### Tests
+- Vitest: `deviceLayoutBoard.test.ts` +6 (a ref whose pid exists in the open block stays a gap; no meter / bypass / EQ fall-back; a matching effect id binds; a different owner or an unknown open block stays a gap; no / null `crossBlock` unchanged; `legacyUnguarded`), `deviceLayoutBoardV2.test.ts` +5 (positioned and rows-only seeds keep the slot, a refs-only page is not shown, the open block's id alone binds nothing, a matching owner binds, `hasDeviceLayoutBoard` ignores refs, the legacy previous seed), `layoutPlacement.test.ts` +1 (refs are gaps, a bold heading on a ref is a title, owner matching).
+- Probe (not committed, over the served gen-3 layouts with the server's knob / enum sets as the catalog): cross-block controls bound to an open-block param before → after: FM3 38 → 0, FM9 36 → 0, Axe-Fx III 36 → 0 over every layout variant (default variant only: 35 / 32 / 32 → 0); all of them CONTROLLERS (Modifiers, CS per Scene, Tempo) plus OUTPUT (3–4).
+
+### Gates
+- `npm run check`: 0 errors, 0 warnings.
+- `npm test`: 2591 passed (169 files) (BE-8 fix round 2579; +12).
+- Chromium e2e (`PW_PORT=5197`) specs 17 / 40 / 44 (the device-layout ones): 38/38. No e2e mock carries cross-block controls, so no expectation changed.

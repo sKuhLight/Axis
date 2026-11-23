@@ -192,6 +192,55 @@ describe('buildDeviceLayoutBoardV2', () => {
     expect(hasDeviceLayoutBoard(layout([{ name: 'X', rows: [{ controls: [ctl('spacer', null), ctl('knob', 77, 'Gone')] }] }]), catalog)).toBe(false);
     expect(hasDeviceLayoutBoard(null, catalog)).toBe(false);
   });
+
+  // ── controls of another block (AXIS-93): never seeded onto the open block's same-numbered params ──
+  describe('cross-block refs', () => {
+    const xref = (paramId: number, label: string, effectId?: number): LayoutControl =>
+      ctl('knob', paramId, label, {
+        crossBlock: { effect: 'ID_GLOBAL', family: 'GLOBAL', paramName: `GLOBAL_${label.toUpperCase()}`, paramId, ...(effectId != null ? { effectId } : {}) }
+      });
+    // pid 0 / 5 are ALSO params of the open block (Threshold / Level): the ref must not bind to them
+    const mixed = layout([
+      { name: 'Main', rows: [{ controls: [ctl('knob', 1, 'Ratio'), xref(0, 'Metronome'), ctl('knob', 5, 'Level')] }] },
+      { name: 'Global', rows: [{ controls: [xref(0, 'Metronome'), xref(5, 'Volume')] }] }
+    ]);
+
+    it('a ref stays a gap (keeps its slot) in the positioned and the rows-only default', () => {
+      for (const b of [buildDeviceLayoutBoardV2(mixed, catalog)!, buildDeviceLayoutBoardV2(mixed, catalog, { rowFlowOnly: true })!]) {
+        const M = b.boards.Main!;
+        expect(find(M, 'k1')).toMatchObject({ x: 0 });
+        expect(find(M, 'k5')).toMatchObject({ x: 2 + GAP_CELLS }); // the ref left its slot empty
+        expect(M.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+        // a page of refs only has nothing to show (k0 ends up on More with the other unplaced entries)
+        expect(b.pageOrder).not.toContain('Global');
+        expect(b.boards.More!.some((i) => 'key' in i && i.key === 'k0')).toBe(true);
+      }
+    });
+
+    it('the open block’s effect id alone does not bind a ref without one', () => {
+      expect(buildDeviceLayoutBoardV2(mixed, catalog, { effectId: 46 })!.boards.Main!.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+    });
+
+    it('a ref naming the open block by effect id binds', () => {
+      const own = layout([{ name: 'Main', rows: [{ controls: [ctl('knob', 1, 'Ratio'), xref(0, 'Threshold', 46)] }] }]);
+      expect(find(buildDeviceLayoutBoardV2(own, catalog, { effectId: 46 })!.boards.Main!, 'k0')).toMatchObject({ x: 2 });
+      expect(buildDeviceLayoutBoardV2(own, catalog, { effectId: 47 })!.boards.Main!.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+    });
+
+    it('hasDeviceLayoutBoard ignores refs', () => {
+      const refsOnly = layout([{ name: 'Global', rows: [{ controls: [xref(0, 'Metronome'), xref(5, 'Volume')] }] }]);
+      expect(hasDeviceLayoutBoard(refsOnly, catalog)).toBe(false);
+      expect(buildDeviceLayoutBoardV2(refsOnly, catalog)).toBeNull();
+    });
+
+    it('legacyUnguarded rebuilds the previous rows-only default exactly as before the guard', () => {
+      const legacy = buildDeviceLayoutBoardV2(mixed, catalog, { rowFlowOnly: true, legacyUnguarded: true })!;
+      expect(find(legacy.boards.Main!, 'k0')).toMatchObject({ x: 2 });
+      expect(legacy.pageOrder).toContain('Global');
+      // only together with rowFlowOnly: a drawn board is always guarded
+      expect(buildDeviceLayoutBoardV2(mixed, catalog, { legacyUnguarded: true })!.boards.Main!.some((i) => 'key' in i && i.key === 'k0')).toBe(false);
+    });
+  });
 });
 
 describe('buildCuratedBoardV2', () => {

@@ -55,13 +55,20 @@ export type LayoutWidget =
   | 'readout'
   | 'unknown';
 
-/** A layout control that binds to a DIFFERENT block than the one being edited (rendered live via the
- *  pinned-param hydration when `paramId` resolves; display-only otherwise). */
+/** A layout control that belongs to a DIFFERENT block than the one being edited (the global metronome on
+ *  a Tempo page, a modifier's source on the Controllers' Modifiers page, …). Its `paramId` is in the
+ *  OWNER's id space, so it must never bind to the open block's param with the same id: the Block Editor
+ *  draws it as a gap unless `effectId` is present and is the open block (deviceLayoutBoard.ts
+ *  `isForeignControl`). Today's servers send only the `effect` token. */
 export interface LayoutCrossBlock {
-  /** Effect id of the block that owns the parameter. */
-  effect: number;
-  family: string;
+  /** The device editor's token for the owning effect (e.g. `ID_GLOBAL`, `ID_MODIFIER1`). */
+  effect: string;
+  /** Effect id of the owning block, when the server resolves it (not sent yet). */
+  effectId?: number;
+  /** Catalog family of the referenced parameter, or null. */
+  family: string | null;
   paramName: string | null;
+  /** paramId in the OWNER's id space, or null. */
   paramId: number | null;
 }
 

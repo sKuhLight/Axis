@@ -202,15 +202,22 @@
     set: () => {}
   };
   const be = new BeState({ get: surfGet, set: surfSet, remove: surfRemove }, legacyStorage);
+  /** The open block, for the cross-block guard: a layout control of another block never binds to this
+   *  block's param with the same id (deviceLayoutBoard `isForeignControl`). */
+  const layoutOwnerEid = $derived(editor.selected?.effectId ?? null);
   function deviceSeed(): BoardModel {
-    return buildDeviceLayoutBoardV2(editor.blockLayout, catalog) ?? buildCuratedBoardV2(catalog, new Set(idealIds(editor.params)));
+    return (
+      buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { effectId: layoutOwnerEid }) ??
+      buildCuratedBoardV2(catalog, new Set(idealIds(editor.params)))
+    );
   }
   /** The built-in seed comes from the device layout (else the curated fallback; the ⋯ wording follows). */
-  const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog));
-  /** The device default as earlier versions built it (rows only): a stored Default board still equal to
-   *  it follows the positioned default (boardPersistence `previousSeed`; built only when needed). */
+  const hasDeviceLayout = $derived(hasDeviceLayoutBoard(editor.blockLayout, catalog, { effectId: layoutOwnerEid }));
+  /** The device default as earlier versions built it (rows only, cross-block refs still bound by their bare
+   *  paramId — those versions had no guard): a stored Default board still equal to it follows the
+   *  positioned, guarded default (boardPersistence `previousSeed`; built only when needed). */
   function previousSeed(): BoardModel | null {
-    return buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { rowFlowOnly: true });
+    return buildDeviceLayoutBoardV2(editor.blockLayout, catalog, { rowFlowOnly: true, legacyUnguarded: true });
   }
   $effect(() => {
     const src = { slug, deviceClass, catalog, variantSig, deviceSeed, previousSeed, rev: surfRev() };
